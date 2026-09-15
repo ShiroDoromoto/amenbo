@@ -94,11 +94,12 @@ function TalkWindow() {
   // here leaves the same way: the two faces are in two windows, and neither can reach the other
   // (`crate::windows::talk_raise`). What is left to do here is hand it down, because what to do
   // about a folder — open a pane or go to the one already in it — is the face's own
-  // (`./shell/TerminalFace`).
+  // (`./shell/TerminalFace`). An ask that names a pane instead of a folder travels the same road and
+  // is handed down the same way (`AMB-D-897`).
   //
   // `nth` is what makes the same folder pressed twice two answers, the way it does on the board: a
   // second press is a reader saying it again, not a state that has not moved.
-  const [openIn, setOpenIn] = useState<{ project: number; dir: string; nth: number } | null>(null);
+  const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; nth: number } | null>(null);
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;

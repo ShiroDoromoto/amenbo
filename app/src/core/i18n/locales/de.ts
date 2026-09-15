@@ -305,6 +305,8 @@ export const de: Translation = {
     "attach.removeConfirm": "Anhang „{name}“ entfernen?", "attach.notLocal": "Noch nicht auf diesem Gerät (das Holen kommt später)",
     "attach.unsupported": "Für diesen Typ gibt es keine Vorschau", "attach.link": "Link",
     "attach.failed": "Der Anhang ist fehlgeschlagen",
+    "madeIn.section": "Erstellt in", "madeIn.unnamed": "Ein unbenannter Bereich",
+    "madeIn.go": "Zurück in diesen Bereich",
     "commit.section": "Commits", "commit.add": "SHA festhalten", "commit.none": "Keine Commits festgehalten",
     "commit.placeholder": "Commit-SHA (vollständig — 40 oder 64 Hex-Stellen)",
     "commit.record": "Festhalten", "commit.copy": "SHA kopieren", "commit.copied": "Kopiert",
@@ -561,6 +563,7 @@ export const de: Translation = {
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",
 
     "face.endedGeminiUnset": "Für Gemini CLI ist keine Authentifizierungsmethode festgelegt. Der genannte Pfad gehört nur zu diesem Bereich und verschwindet mit ihm — festzulegen ist sie in deiner eigenen ~/.gemini/settings.json.",
+    "face.noWayBack": "Dieses Gespräch lässt sich nicht mehr öffnen.",
     "face.projects": "Projekte",
     "face.railFolders": "Ordner",
     "face.tabsCompact": "Namen ausblenden",

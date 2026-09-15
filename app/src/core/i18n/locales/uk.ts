@@ -310,6 +310,8 @@ export const uk: Translation = {
     "attach.removeConfirm": "Прибрати вкладення «{name}»?", "attach.notLocal": "Ще не зберігається на цьому пристрої (завантаження буде згодом)",
     "attach.unsupported": "Попередній перегляд для цього типу не підтримується", "attach.link": "Посилання",
     "attach.failed": "Не вдалося прикріпити",
+    "madeIn.section": "Створено в", "madeIn.unnamed": "Панель без назви",
+    "madeIn.go": "Повернутися до цієї панелі",
     "commit.section": "Коміти", "commit.add": "Записати SHA", "commit.none": "Записаних комітів немає",
     "commit.placeholder": "SHA коміта (повний — 40 або 64 шістнадцяткові цифри)",
     "commit.record": "Записати", "commit.copy": "Скопіювати SHA", "commit.copied": "Скопійовано",
@@ -572,6 +574,7 @@ export const uk: Translation = {
     "face.ended": "Програму в цьому терміналі завершено.",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задано спосіб автентифікації. Вказаний шлях належить лише цій панелі й зникне разом із нею — задати його потрібно у вашому власному ~/.gemini/settings.json.",
+    "face.noWayBack": "Цю розмову більше не відкрити.",
     "face.projects": "Проєкти",
     "face.railFolders": "Теки",
     "face.tabsCompact": "Приховувати назви",

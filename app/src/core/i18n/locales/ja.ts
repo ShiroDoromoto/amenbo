@@ -306,6 +306,8 @@ export const ja: Translation = {
     "attach.removeConfirm": "添付「{name}」を取り除きますか？", "attach.notLocal": "この端末に未取得（取得は今後対応）",
     "attach.unsupported": "プレビュー未対応の形式です", "attach.link": "リンク",
     "attach.failed": "添付に失敗しました",
+    "madeIn.section": "作ったペイン", "madeIn.unnamed": "名前のないペイン",
+    "madeIn.go": "このペインへ戻る",
     "commit.section": "コミット", "commit.add": "SHA を記録", "commit.none": "記録されたコミットはありません",
     "commit.placeholder": "コミット SHA（完全形・40 桁 または 64 桁 hex）",
     "commit.record": "記録", "commit.copy": "SHA をコピー", "commit.copied": "コピーしました",
@@ -563,6 +565,7 @@ export const ja: Translation = {
     "face.ended": "この端末のプログラムは終了しました。",
 
     "face.endedGeminiUnset": "Gemini CLI に認証方法が設定されていません。画面のパスはこのペイン専用で一緒に捨てられるので、直すのはご自分の ~/.gemini/settings.json です。",
+    "face.noWayBack": "この会話はもう開けません。",
     "face.projects": "プロジェクト",
     "face.railFolders": "フォルダ",
     "face.tabsCompact": "名前を隠す",

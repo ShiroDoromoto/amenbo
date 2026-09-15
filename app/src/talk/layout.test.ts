@@ -52,6 +52,14 @@ describe("a place is made by opening one", () => {
     expect(made.layout.focus).toBe("3");
     expect(made.layout.page).toBe(2);
   });
+
+  // A pane opened again from a record comes back under the id it had (`AMB-D-897`): that id is what
+  // a provider's own home is named after, so a new one would be a different place.
+  it("takes the id it is given, for a pane being opened again under its own", () => {
+    const made = openedFrame(withPanes(2), 1, "/work/1", false, "a-pane-that-was");
+    expect(made.frame.id).toBe("a-pane-that-was");
+    expect(made.layout.focus).toBe("a-pane-that-was");
+  });
 });
 
 describe("a page with room says so, and a full one says nothing", () => {

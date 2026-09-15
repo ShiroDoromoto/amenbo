@@ -63,6 +63,17 @@ pub struct TalkFace {
     /// What was last written to the store, so a write is made only where something it holds has
     /// actually moved.
     kept: Mutex<Option<SavedLayout>>,
+    /// The way back a record put on a frame, for a pane being opened again from one (`AMB-D-897`).
+    ///
+    /// **It is held apart from [`hints`](Self::hints) because it is not this run's answer.** What is
+    /// in `hints` was written as a pane started here, and is read back beside the pane's own row; what
+    /// is in here came off a task or a decision, names a pane that is no longer on the screen, and is
+    /// waiting for the pane to be opened again under that same id.
+    ///
+    /// **It is taken rather than read** ([`taken_from_a_record`](Self::taken_from_a_record)): a record
+    /// is answered for once, by the pane the press opened. A second pane in the same frame is a pane
+    /// of its own and has this run's answer to go on.
+    reopening: Mutex<BTreeMap<String, String>>,
     /// Whether the panes the store kept have been read back into the two maps above. Once, per run:
     /// both windows read the arrangement as they come up, and a second reading would put a name back
     /// over one a person had changed in between.
@@ -197,6 +208,30 @@ impl TalkFace {
         if let Err(e) = keep(self, &layout) {
             log::warn!("could not write down the way back into frame {frame}: {e:?}");
         }
+    }
+
+    /// Put the way back a record holds onto the frame it names, for a face about to open that pane
+    /// again (`AMB-D-897`, `crate::commands::task_pane_opens_again`).
+    ///
+    /// Nothing is checked and nothing is started: the pane is the window's to open, and which
+    /// provider is opened in it is the person's. **The record does not name one** — it holds the
+    /// pane, what it was called and the way back into it, and never which of the six was answering
+    /// there. So the handle is put down for whatever opens in that frame, and a provider it does not
+    /// belong to refuses it in the same breath — which is the one way a reader can tell a
+    /// conversation that is gone from one that is still there ([`gave_up`](Self::gave_up)).
+    pub fn opens_again(&self, pane: &str, handle: String) {
+        self.reopening.lock().expect("reopening lock").insert(pane.to_string(), handle);
+    }
+
+    /// The way back a record put on this frame, taken off as the pane opens (`AMB-D-897`).
+    ///
+    /// **It is not asked about the provider** the way [`comes_back_on`](Self::comes_back_on) is,
+    /// because the record it came from does not name one. What that costs is a handle handed to a
+    /// provider that did not issue it, which is refused at once and taken back
+    /// ([`gave_up`](Self::gave_up)); what asking would cost is every reopen refusing itself, since
+    /// there is no answer to ask for.
+    pub fn taken_from_a_record(&self, frame: &str) -> Option<String> {
+        self.reopening.lock().expect("reopening lock").remove(frame)
     }
 
     /// Take back the way into a frame, where what was written down leads nowhere
@@ -572,6 +607,33 @@ mod tests {
         let hints = face.hints.lock().unwrap();
         assert_eq!(hints.get("1").map(String::as_str), Some("0f9c"));
         assert_eq!(hints.get("2"), None);
+    }
+
+    /// A way back put on a frame off a record is answered for once — by the pane the press opened,
+    /// and not by whatever opens in that frame afterwards (`AMB-D-897`).
+    #[test]
+    fn a_way_back_off_a_record_is_taken_once() {
+        let face = TalkFace::default();
+        face.opens_again("a-pane-that-was", "0f9c".to_string());
+
+        assert_eq!(face.taken_from_a_record("a-pane-that-was").as_deref(), Some("0f9c"));
+        assert_eq!(face.taken_from_a_record("a-pane-that-was"), None);
+        // And a frame nobody put one on has nothing to take.
+        assert_eq!(face.taken_from_a_record("some-other-pane"), None);
+    }
+
+    /// It is not asked about a provider, where a handle this run wrote is: a record names the pane
+    /// and the way back into it, and never which of the six was answering there.
+    #[test]
+    fn a_way_back_off_a_record_outlives_the_frame_leaving_the_arrangement() {
+        let face = TalkFace::default();
+        face.opens_again("a-pane-that-was", "0f9c".to_string());
+
+        // The pane it names is the one that is *not* on the screen — that is what it is for. So the
+        // letting go that clears a closed pane's handle must not reach it.
+        forget_dropped(&face, &layout(vec![frame("1", Some("claude"))]));
+
+        assert_eq!(face.taken_from_a_record("a-pane-that-was").as_deref(), Some("0f9c"));
     }
 
     /// A pane the arrangement no longer has is also a pane whose name goes with it, and the frames

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
+import { MadeIn } from "../components/MadeIn";
 import { CommentRow } from "../components/CommentRow";
 import { getSnapshot, inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
 import { axesFor } from "../core/appliesTo";
@@ -12,11 +13,12 @@ import {
   fetchDecisionDimensions, rejectDecision, reopenDecision, removeDecisionComment, setDecisionDimensionValue,
   supersedeDecision, unlinkDecisionEdge, unsetDecisionDimensionValue,
 } from "../core/mutations";
-import { useDecision, useDecisionComments, useDecisionPage } from "../core/reads";
+import { useDecision, useDecisionComments, useDecisionMadeIn, useDecisionPage } from "../core/reads";
 import {
   EDGE_KINDS, edgeCandidates, edgeRows, promotesToAccepted, standingOn, type EdgeKind, type EdgeRow,
 } from "../core/decisionEdges";
 import { confirmDialog } from "../core/dialog";
+import { invoke } from "../core/ipc";
 import { isClosed } from "../core/status";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { errText, exactLabel, formatNumber, statusLabel, t, tf } from "../core/i18n";
@@ -43,10 +45,13 @@ function statusColor(s: DecisionStatus): string {
  * confirmation with a reason field.
  */
 export function DecisionDetailPane({
-  decisionId, onOpenTask, onOpenDecision, focusCommentAt, editCommentAt,
+  decisionId, onOpenTask, onOpenDecision, onGoToPane, focusCommentAt, editCommentAt,
 }: {
   decisionId: number;
   onOpenTask?: (id: number) => void;
+  /** Go to the pane this decision was made in, opening it again where it is gone (`AMB-D-897`).
+   *  Absent outside the shell, where there is no terminal face to go to. */
+  onGoToPane?: (project: number, pane: string) => void;
   /** Opens the decision on the other end of an edge — superseded, amended or built on (mirrors onOpenTask). */
   onOpenDecision?: (id: number) => void;
   /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same decision again and again. undefined = an ordinary selection. */
@@ -55,6 +60,7 @@ export function DecisionDetailPane({
   editCommentAt?: { commentId: number; nonce: number };
 }) {
   const d = useDecision(decisionId);
+  const madeIn = useDecisionMadeIn(inTauri() ? decisionId : null);
   // The comment thread exists only under Tauri (the browser mock has no decisions); posting refetches via the WriteAck.
   const comments = useDecisionComments(inTauri() ? decisionId : null);
   const [comment, setComment] = useState("");
@@ -305,6 +311,18 @@ export function DecisionDetailPane({
           <Attachments target="decision" targetId={d.id} />
 
           <div className="detail__sep" />
+
+          {madeIn && onGoToPane && d.project && (
+            <>
+              <MadeIn
+                made={madeIn}
+                project={Number(d.project.id)}
+                openAgain={() => invoke("decision_pane_opens_again", { decisionId })}
+                onGoToPane={onGoToPane}
+              />
+              <div className="detail__sep" />
+            </>
+          )}
 
           <div>
             <div className="detail__section-h">{t("dec.comments")} · <Icon name="comment" size="md" /> {formatNumber(comments.length)}</div>

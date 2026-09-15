@@ -327,6 +327,8 @@ const ui = {
   "attach.removeConfirm": "Remove attachment “{name}”?", "attach.notLocal": "Not stored on this device yet (fetch coming later)",
   "attach.unsupported": "Preview not supported for this type", "attach.link": "Link",
   "attach.failed": "Attachment failed",
+  "madeIn.section": "Made in", "madeIn.unnamed": "An unnamed pane",
+  "madeIn.go": "Go back into this pane",
   "commit.section": "Commits", "commit.add": "Record SHA", "commit.none": "No commits recorded",
   "commit.placeholder": "Commit SHA (full — 40 or 64 hex digits)",
   "commit.record": "Record", "commit.copy": "Copy SHA", "commit.copied": "Copied",
@@ -637,6 +639,7 @@ const ui = {
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
   "face.ended": "The program in this terminal has exited.",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
+  "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",
   // The rail's two halves: the lists, and the folder tree that moved there off the other side of the
   // panes (`AMB-D-835`). Each word names what its half holds rather than what pressing it does, because

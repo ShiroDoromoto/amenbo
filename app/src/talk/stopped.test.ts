@@ -37,4 +37,19 @@ describe("why a pane says the program stopped", () => {
   it("says nothing where there is no status to read", () => {
     expect(whyItStopped("gemini-cli", null)).toBeNull();
   });
+
+  // A pane opened again on the way back a record held, refused by the provider that never issued it
+  // (`AMB-D-897`). Every provider refuses in its own words and with its own number, so the number is
+  // no use here — what says it is the host, which knows what the pane was opened on.
+  it("says the conversation is gone where the way back a record held led nowhere", () => {
+    expect(whyItStopped("claude-code", 1, true)).toBe("face.noWayBack");
+    expect(whyItStopped(null, null, true)).toBe("face.noWayBack");
+  });
+
+  // And it leads: a pane that was opened on a record's way back and stopped is about that, whatever
+  // else the number would have been worth a word for.
+  it("says that before anything the number would have said", () => {
+    expect(whyItStopped("gemini-cli", 41, true)).toBe("face.noWayBack");
+    expect(whyItStopped("gemini-cli", 41, false)).toBe("face.endedGeminiUnset");
+  });
 });

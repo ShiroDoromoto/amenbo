@@ -449,12 +449,12 @@ export function TerminalPane({
       // is made (`./FolderChoice`) — so there is no choice for the frame to report.
       chose: () => {},
       said: (statement) => on.current.onSaid(statement),
-      closed: (session, code) => {
+      closed: (session, code, noWayBack) => {
         plate.closed();
         setEnded(true);
         // What the program was is taken off the pane a line below, so why it stopped is settled here
         // while the two are still together.
-        setStopped(whyItStopped(inPaneRef.current, code));
+        setStopped(whyItStopped(inPaneRef.current, code, noWayBack));
         setLive(null);
         setInPane(null);
         inPaneRef.current = null;

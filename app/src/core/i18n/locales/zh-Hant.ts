@@ -305,6 +305,8 @@ export const zhHant: Translation = {
     "attach.removeConfirm": "移除附件「{name}」？", "attach.notLocal": "尚未存在這台裝置上（取得功能稍後提供）",
     "attach.unsupported": "這個類型不支援預覽", "attach.link": "連結",
     "attach.failed": "加入附件失敗",
+    "madeIn.section": "建立於", "madeIn.unnamed": "未命名的窗格",
+    "madeIn.go": "回到這個窗格",
     "commit.section": "提交", "commit.add": "記錄 SHA", "commit.none": "沒有記錄任何提交",
     "commit.placeholder": "提交 SHA（完整——40 或 64 位十六進位）",
     "commit.record": "記錄", "commit.copy": "複製 SHA", "commit.copied": "已複製",
@@ -556,6 +558,7 @@ export const zhHant: Translation = {
     "face.ended": "此終端機中的程式已結束。",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未設定驗證方式。它列出的路徑只屬於此窗格，會隨之捨棄——要設定的是你自己的 ~/.gemini/settings.json。",
+    "face.noWayBack": "這段對話已經打不開了。",
     "face.projects": "專案",
     "face.railFolders": "資料夾",
     "face.tabsCompact": "隱藏名稱",

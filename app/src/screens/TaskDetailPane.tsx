@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { Commits } from "../components/Commits";
+import { MadeIn } from "../components/MadeIn";
 import { CommentRow } from "../components/CommentRow";
 import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
-import { useTask } from "../core/reads";
+import { useTask, useTaskMadeIn } from "../core/reads";
 import { addComment as mutAddComment, editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
@@ -15,6 +16,7 @@ import {
 } from "../components/atoms";
 import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { invoke } from "../core/ipc";
 import { useRefNav } from "../core/refNav";
 import { axesFor } from "../core/appliesTo";
 import { DimensionField } from "../components/DimensionField";
@@ -52,13 +54,16 @@ const COMMENT_PAGE = 20; // Bounded memory: how many comments render initially (
  * produces it.
  */
 export function TaskDetailPane({
-  taskId, onDeleted, onDirtyChange, onSelectDecision, focusCommentAt, editCommentAt,
+  taskId, onDeleted, onDirtyChange, onSelectDecision, onGoToPane, focusCommentAt, editCommentAt,
 }: {
   taskId: number;
   onDeleted?: () => void;
   /** Report unsaved input to the parent (AppShell), which guards against discarding it on outside-click / cross. */
   onDirtyChange?: (dirty: boolean) => void;
   onSelectDecision?: (id: number) => void;
+  /** Go to the pane this task was made in, opening it again where it is gone (`AMB-D-897`). Absent
+   *  outside the shell, where there is no terminal face to go to. */
+  onGoToPane?: (project: number, pane: string) => void;
   /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
   focusCommentAt?: number;
   /** The comment to open in edit mode when opened via the pencil in the activity feed. The nonce lets the same comment be re-opened; if it is an old comment, the render window (commentLimit) widens to reach its row. */
@@ -83,6 +88,7 @@ export function TaskDetailPane({
   const [taskActivity, setTaskActivity] = useState<ActivityItem[] | null>(null);
   const [dimValues, setDimValues] = useState<Record<number, number[]>>({});
   const task = useTask(taskId);
+  const madeIn = useTaskMadeIn(taskId);
   const commentCount = task?.comments ?? 0; // Grows on a post, which is what triggers the refetch
   useEffect(() => {
     if (!inTauri()) { setTaskActivity(null); return; }
@@ -474,6 +480,18 @@ export function TaskDetailPane({
           {inTauri() && <Commits taskId={taskId} />}
 
           <div className="detail__sep" />
+
+          {madeIn && onGoToPane && task.projectId !== null && (
+            <>
+              <MadeIn
+                made={madeIn}
+                project={task.projectId}
+                openAgain={() => invoke("task_pane_opens_again", { taskId })}
+                onGoToPane={onGoToPane}
+              />
+              <div className="detail__sep" />
+            </>
+          )}
 
           <div>
             <div className="detail__section-h">{t("detail.activityCategory")} · <Icon name="comment" size="md" /> {task.comments}</div>

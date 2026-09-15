@@ -420,15 +420,20 @@ export function newFrameId(): string {
  * It is called once the folder has been answered for — a pane is made by opening one, so there is no
  * moment where a frame exists with the question still on it. The new pane is the one being worked in
  * and the screen moves to the page it landed on, because a person who opened a pane is looking at it.
+ *
+ * **`id` is the one place a frame does not name itself.** A pane being opened again from a record
+ * comes back under the id it had (`AMB-D-897`): the id is what a provider's own home is named after,
+ * so a place opened again under a new one would be a different place (`crate::pane_home`).
  */
 export function openedFrame(
   layout: Layout,
   project: number,
   folder: string | null,
   composeOpen = false,
+  id = newFrameId(),
 ): { layout: Layout; frame: Frame } {
   const frame: Frame = {
-    id: newFrameId(),
+    id,
     project,
     session: null,
     folder,

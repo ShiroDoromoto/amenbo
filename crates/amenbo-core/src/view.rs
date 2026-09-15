@@ -209,6 +209,42 @@ pub struct ClassifiedAs {
     pub value: String,
 }
 
+/// The session a task or a decision was made in, as a page shows it (`AMB-D-897`) — `null` for a
+/// record made outside the talk window, and for everything filed before the row existed.
+///
+/// The three are read in turn, and each answers where the one before it cannot: the pane while it is
+/// open, the handle where it has been closed but the conversation is still there, and the name where
+/// neither can be reached — which is the question this was raised for, answerable even when nothing
+/// can be opened ([`crate::model::TaskMadeIn`]).
+///
+/// **The handle is carried as it was written and read no further.** What shape it takes is the
+/// provider's — a session id for most of them, a path for one — so a face that tried to make more of
+/// it than "the word to hand back" would be reading a shape nobody promised it.
+#[derive(Clone, Debug, Serialize)]
+pub struct MadeInView {
+    /// The id of the pane it was made in.
+    pub pane: String,
+    /// What that pane was called at the time, or `null` for a pane nobody had named — which is also
+    /// what a pane the arrangement no longer holds a row for reads as.
+    pub pane_name: Option<String>,
+    /// The handle that pane's provider is resumed from, or `null` for a pane there was no way back
+    /// into.
+    pub pane_resume: Option<String>,
+}
+
+impl From<crate::model::TaskMadeIn> for MadeInView {
+    fn from(m: crate::model::TaskMadeIn) -> Self {
+        MadeInView { pane: m.pane, pane_name: m.pane_name, pane_resume: m.pane_resume }
+    }
+}
+
+impl From<crate::model::DecisionMadeIn> for MadeInView {
+    fn from(m: crate::model::DecisionMadeIn) -> Self {
+        MadeInView { pane: m.pane, pane_name: m.pane_name, pane_resume: m.pane_resume }
+    }
+}
+
+
 /// The full-field shape of a task, as returned by `task show`.
 #[derive(Clone, Debug, Serialize)]
 pub struct TaskDetail {
@@ -257,6 +293,8 @@ pub struct TaskDetail {
     /// finishing this task unblocks (empty means nothing waits on it).
     pub blocks: Vec<TaskRef>,
     pub num_comments: usize,
+    /// The session this was filed from ([`MadeInView`]), or `null` where no pane made it.
+    pub made_in: Option<MadeInView>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -333,6 +371,8 @@ pub struct DecisionDetail {
     pub decided_by: Option<Ref>,
     /// The live tasks linked to it (id + title + status).
     pub linked_tasks: Vec<LinkedTaskRef>,
+    /// The session this was recorded from ([`MadeInView`]), or `null` where no pane made it.
+    pub made_in: Option<MadeInView>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

@@ -362,3 +362,43 @@ fn a_record_filed_outside_a_pane_carries_no_session_at_all() {
     assert_eq!(made_in.pane_name, None, "there is no row to read a name off");
     assert_eq!(made_in.pane_resume.as_deref(), Some("0f9c"));
 }
+
+/// `task show` and `decision show` say which session made the record — the reading that lets the
+/// question be answered from a terminal, without opening the window (`AMB-D-897`).
+///
+/// The text line folds away where no pane made it, the way `folder:` does; `--json` carries the key
+/// either way, so a reader parsing it never has to tell "made outside a pane" from "this build does
+/// not say".
+#[test]
+fn the_pages_say_which_session_made_the_record() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+    name_the_pane(&cli, "pane-a", "移行を書いている窓");
+    let env = made_in_env("pane-a", "0f9c");
+
+    let tid = id_str(&cli.json_env(&env, &["task", "add", "--title", "ペインのついたタスク", "--project", &pid, "--json"])["task"]["id"]);
+    let did = id_str(&cli.json_env(&env, &["decision", "add", "--title", "ペインのついた決定", "--body", "結論", "--project", &pid, "--json"])["decision"]["id"]);
+
+    let (stdout, _) = cli.run(&["task", "show", &tid]);
+    assert!(
+        stdout.contains("made in: 移行を書いている窓 (pane-a)"),
+        "the name leads and the id follows it: {stdout}",
+    );
+    let (stdout, _) = cli.run(&["decision", "show", &did]);
+    assert!(stdout.contains("made in: 移行を書いている窓 (pane-a)"), "and the decision's page says it too: {stdout}");
+
+    let made_in = &cli.json(&["task", "show", &tid, "--json"])["made_in"];
+    assert_eq!(made_in["pane"], "pane-a");
+    assert_eq!(made_in["pane_name"], "移行を書いている窓");
+    assert_eq!(made_in["pane_resume"], "0f9c", "the handle is carried as it was written");
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["made_in"]["pane"], "pane-a");
+
+    // Filed at a plain terminal: no line on the page, and a key that is there and null.
+    let outside = id_str(&cli.json(&["task", "add", "--title", "窓の外で立てたタスク", "--project", &pid, "--json"])["task"]["id"]);
+    let (stdout, _) = cli.run(&["task", "show", &outside]);
+    assert!(!stdout.contains("made in:"), "no session made it, so the line is not there: {stdout}");
+    let shown = cli.json(&["task", "show", &outside, "--json"]);
+    assert!(shown.get("made_in").is_some(), "the key is written whatever the answer");
+    assert!(shown["made_in"].is_null(), "and it is null: {shown}");
+}

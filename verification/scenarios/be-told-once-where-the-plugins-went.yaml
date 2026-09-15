@@ -26,10 +26,12 @@
 # been told something the store does not know they were. So the app is ended and opened again on the
 # same store, and the band does not come back. That is the whole of "once".
 #
-# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# ── The two roads are the same goal and not the same shape ───────────────────────────────────────
 # The terminal is owed the same sentence and takes its own turn, but it says it on the way past —
-# beside whatever command was typed — with nothing to press and no band to stand. There is no op for
-# reading what a command said beside its answer, so that half is not a road here yet.
+# beside whatever command was typed — with nothing to press and no band to stand. So the screen road
+# is four moves (read it, put it away, end the app, read again) and the terminal road is two: a
+# command typed is both the saying and the turn being taken, and what the second reading proves is
+# that the turn is gone.
 id: be-told-once-where-the-plugins-went
 title: The app says once where the plugins went, and putting the band away is what records it
 description: >
@@ -37,7 +39,9 @@ description: >
   the handover carried three plugins and their notification settings into opens the app, and the band
   saying the plugins are part of Amenbo now is standing across it with nothing pressed to bring it up,
   naming what this device had. Putting it away takes it off the screen — and the app ended and opened
-  again on the same store comes up without it, which is the record the press was for.
+  again on the same store comes up without it, which is the record the press was for. A terminal on
+  the same device is told the same thing beside the answer to whatever is typed next, and is not told
+  it again by the command after that.
 
 given:
   # The upgrade this reader came through. Three of the four, so the band draws the Viewer's line and
@@ -51,6 +55,27 @@ given:
       targets: 2
       projects: 3
       viewer: true
+
+steps_cli:
+  # The next thing typed. The sentence rides on the answer to it rather than on a screen of its own,
+  # and the names are this device's — the same three the band would draw.
+  - type: assert
+    domain: store
+    op: advice
+    with:
+      present: true
+      shows: slack, viewer, worktree
+
+  # And the one after it is not told again. There was no press here: the turn was taken by the typing
+  # above, which is the whole of "once" on this side. The reading names the same sentence rather than
+  # asking for silence, since a terminal has other things it may say on the way past and none of them
+  # is this one.
+  - type: assert
+    domain: store
+    op: advice
+    with:
+      present: false
+      shows: slack, viewer, worktree
 
 steps_gui:
   # The arrival, read before a finger has touched anything: coming up unasked is the whole of what the

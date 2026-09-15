@@ -32,6 +32,9 @@ vi.mock("../core/reads", () => ({
   useDecision: () => DECISION,
   useDecisionComments: () => [],
   useDecisionPage: () => [],
+  // Nothing here was made in a pane, so the row the detail pane draws off it never appears
+  // (`../components/MadeIn`).
+  useDecisionMadeIn: () => null,
 }));
 vi.mock("../core/snapshot", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/snapshot")>();

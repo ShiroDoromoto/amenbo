@@ -195,8 +195,13 @@ export function TerminalFace({
    * another one afterwards, so an ask that did not say which project it is about is one this face
    * would have to guess at — and a guess here is a pane put under the wrong project for good
    * (`AMB-T-3708`).
+   *
+   * **`pane` is an ask about a place rather than a folder** — the pane a task or a decision was made
+   * in (`AMB-D-897`). It carries no folder, because the record it came off holds none: the place is
+   * gone to where it is on the screen, and opened again under that same id where it is not, at which
+   * point it is asked where it works the way every new pane is (`./EmptySlot`).
    */
-  openIn?: { project: number; dir: string; nth: number } | null;
+  openIn?: { project: number; dir?: string; pane?: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // The reading column itself, so a press can be told apart from one inside it (`isBlankSpaceClose`).
@@ -726,7 +731,22 @@ export function TerminalFace({
   // it.
   useEffect(() => {
     if (!settled || !openIn) return;
-    const { project, dir } = openIn;
+    const { project, dir, pane } = openIn;
+    // An ask that names a pane is answered here and goes no further: what it is about is a place, and
+    // whether that place is on the screen is this layout's answer alone — no folder to check against
+    // the project's bindings, because the record it came off holds none (`AMB-D-897`).
+    if (pane) {
+      setLayout((was) => {
+        if (was.frames.some((one) => one.id === pane)) return focusOn(was, pane);
+        // Opened again under the same id, which is what keeps a provider pointed at a home of its own
+        // pointed at the same one (`crate::pane_home`). It is not started: the record names neither
+        // the folder nor the provider, and both are asked for on the empty frame the way they are for
+        // any pane (`./EmptySlot`).
+        return openedFrame(was, project, null, composeStartsOpen(), pane).layout;
+      });
+      return;
+    }
+    if (dir === undefined) return;
     let alive = true;
     void fetchBoundFolders(project)
       .then((folders) => {

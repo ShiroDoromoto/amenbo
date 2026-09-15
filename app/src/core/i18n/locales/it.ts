@@ -309,6 +309,8 @@ export const it: Translation = {
     "attach.removeConfirm": "Togliere l'allegato «{name}»?", "attach.notLocal": "Non ancora su questo dispositivo (il recupero arriverà più avanti)",
     "attach.unsupported": "Nessuna anteprima per questo tipo", "attach.link": "Collegamento",
     "attach.failed": "L'allegato non è riuscito",
+    "madeIn.section": "Creato in", "madeIn.unnamed": "Un riquadro senza nome",
+    "madeIn.go": "Torna in questo riquadro",
     "commit.section": "Commit", "commit.add": "Registra lo SHA", "commit.none": "Nessun commit registrato",
     "commit.placeholder": "SHA del commit (completo — 40 o 64 cifre esadecimali)",
     "commit.record": "Registra", "commit.copy": "Copia lo SHA", "commit.copied": "Copiato",
@@ -568,6 +570,7 @@ export const it: Translation = {
     "face.ended": "Il programma di questo terminale è terminato.",
 
     "face.endedGeminiUnset": "Per Gemini CLI non è impostato alcun metodo di autenticazione. Il percorso indicato appartiene solo a questo riquadro e sparisce con esso: quello da modificare è il tuo ~/.gemini/settings.json.",
+    "face.noWayBack": "Questa conversazione non si può più aprire.",
     "face.projects": "Progetti",
     "face.railFolders": "Cartelle",
     "face.tabsCompact": "Nascondi i nomi",

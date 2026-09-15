@@ -309,6 +309,8 @@ export const fr: Translation = {
     "attach.removeConfirm": "Retirer la pièce jointe « {name} » ?", "attach.notLocal": "Pas encore sur cet appareil (la récupération viendra plus tard)",
     "attach.unsupported": "Pas d'aperçu pour ce type", "attach.link": "Lien",
     "attach.failed": "La pièce jointe a échoué",
+    "madeIn.section": "Créé dans", "madeIn.unnamed": "Un volet sans nom",
+    "madeIn.go": "Revenir dans ce volet",
     "commit.section": "Commits", "commit.add": "Enregistrer un SHA", "commit.none": "Aucun commit enregistré",
     "commit.placeholder": "SHA du commit (complet — 40 ou 64 chiffres hexadécimaux)",
     "commit.record": "Enregistrer", "commit.copy": "Copier le SHA", "commit.copied": "Copié",
@@ -568,6 +570,7 @@ export const fr: Translation = {
     "face.ended": "Le programme de ce terminal s'est arrêté.",
 
     "face.endedGeminiUnset": "Aucune méthode d'authentification n'est définie pour Gemini CLI. Le chemin indiqué appartient à ce volet et disparaît avec lui — celui à modifier est votre propre ~/.gemini/settings.json.",
+    "face.noWayBack": "Cette conversation ne peut plus être ouverte.",
     "face.projects": "Projets",
     "face.railFolders": "Dossiers",
     "face.tabsCompact": "Masquer les noms",

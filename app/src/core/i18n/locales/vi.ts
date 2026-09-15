@@ -307,6 +307,8 @@ export const vi: Translation = {
     "attach.removeConfirm": "Bỏ tệp đính kèm “{name}”?", "attach.notLocal": "Chưa có trên thiết bị này (việc tải về sẽ có sau)",
     "attach.unsupported": "Không xem trước được kiểu này", "attach.link": "Liên kết",
     "attach.failed": "Đính kèm thất bại",
+    "madeIn.section": "Được tạo trong", "madeIn.unnamed": "Một khung chưa đặt tên",
+    "madeIn.go": "Quay lại khung này",
     "commit.section": "Commit", "commit.add": "Ghi SHA", "commit.none": "Chưa ghi commit nào",
     "commit.placeholder": "SHA của commit (đầy đủ — 40 hoặc 64 chữ số hex)",
     "commit.record": "Ghi", "commit.copy": "Chép SHA", "commit.copied": "Đã chép",
@@ -559,6 +561,7 @@ export const vi: Translation = {
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
 
     "face.endedGeminiUnset": "Gemini CLI chưa được đặt phương thức xác thực. Đường dẫn được nêu chỉ thuộc về khung này và sẽ mất theo nó — tệp cần đặt là ~/.gemini/settings.json của riêng bạn.",
+    "face.noWayBack": "Không thể mở lại cuộc trò chuyện này.",
     "face.projects": "Dự án",
     "face.railFolders": "Thư mục",
     "face.tabsCompact": "Ẩn tên",

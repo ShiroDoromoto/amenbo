@@ -22,7 +22,7 @@ import { addDays } from "./calendar";
 import { DUE_OVERDUE, DUE_TODAY, DUE_TOMORROW, DUE_WINDOWS, type DueCounts } from "./due";
 import { isClosed } from "./status";
 import type { TaskCard } from "../mock/types";
-import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, SearchHitDto, SearchResultDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
+import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, MadeInDto, SearchHitDto, SearchResultDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
 
 // "Today" for the browser mock only. On the Tauri path core's today() resolves due:today, so this is unused.
 const TODAY = "2026-06-21";
@@ -529,6 +529,44 @@ export function useTaskCommits(taskId: number | null): TaskCommit[] {
     () => (taskId !== null ? fetchTaskCommits(taskId) : Promise.resolve([])),
   );
   return data ?? [];
+}
+
+/** The session a task or a decision was made in (generated DTO) — the pane, and what it was called then. */
+export type MadeIn = MadeInDto;
+
+/** Fetch the pane a task was made in (Tauri: `task_made_in`; browser: none). */
+export async function fetchTaskMadeIn(taskId: number): Promise<MadeIn | null> {
+  if (inTauri()) return invoke<MadeInDto | null>("task_made_in", { taskId });
+  return null;
+}
+
+/** Fetch the pane a decision was made in (Tauri: `decision_made_in`; browser: none). */
+export async function fetchDecisionMadeIn(decisionId: number): Promise<MadeIn | null> {
+  if (inTauri()) return invoke<MadeInDto | null>("decision_made_in", { decisionId });
+  return null;
+}
+
+/**
+ * Subscribing read of the pane a task was made in.
+ *
+ * It is written once, in the same transaction as the task, and never again — so nothing invalidates
+ * it and the row is drawn from the first read for as long as the pane is open.
+ */
+export function useTaskMadeIn(taskId: number | null): MadeIn | null {
+  const { data } = useQuery<MadeIn | null>(
+    ["madeIn", "task", taskId],
+    () => (taskId !== null ? fetchTaskMadeIn(taskId) : Promise.resolve(null)),
+  );
+  return data ?? null;
+}
+
+/** The decision's side of {@link useTaskMadeIn}. */
+export function useDecisionMadeIn(decisionId: number | null): MadeIn | null {
+  const { data } = useQuery<MadeIn | null>(
+    ["madeIn", "decision", decisionId],
+    () => (decisionId !== null ? fetchDecisionMadeIn(decisionId) : Promise.resolve(null)),
+  );
+  return data ?? null;
 }
 
 /** Pull a bounded candidate set (at most SUPERSET_CAP), the raw material the inbox is refined from. */

@@ -310,6 +310,8 @@ export const ptBR: Translation = {
     "attach.removeConfirm": "Remover o anexo “{name}”?", "attach.notLocal": "Ainda não está neste dispositivo (buscar vem depois)",
     "attach.unsupported": "Sem pré-visualização para este tipo", "attach.link": "Link",
     "attach.failed": "O anexo falhou",
+    "madeIn.section": "Criado em", "madeIn.unnamed": "Um painel sem nome",
+    "madeIn.go": "Voltar para este painel",
     "commit.section": "Commits", "commit.add": "Registrar SHA", "commit.none": "Nenhum commit registrado",
     "commit.placeholder": "SHA do commit (completo — 40 ou 64 dígitos hexadecimais)",
     "commit.record": "Registrar", "commit.copy": "Copiar o SHA", "commit.copied": "Copiado",
@@ -569,6 +571,7 @@ export const ptBR: Translation = {
     "face.ended": "O programa deste terminal foi encerrado.",
 
     "face.endedGeminiUnset": "O Gemini CLI não tem um método de autenticação definido. O caminho indicado pertence apenas a este painel e some com ele — o arquivo a editar é o seu próprio ~/.gemini/settings.json.",
+    "face.noWayBack": "Esta conversa não pode mais ser aberta.",
     "face.projects": "Projetos",
     "face.railFolders": "Pastas",
     "face.tabsCompact": "Ocultar os nomes",

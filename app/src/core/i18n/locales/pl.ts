@@ -310,6 +310,8 @@ export const pl: Translation = {
     "attach.removeConfirm": "Usunąć załącznik „{name}”?", "attach.notLocal": "Jeszcze nie na tym urządzeniu (pobieranie pojawi się później)",
     "attach.unsupported": "Podgląd tego typu nie jest obsługiwany", "attach.link": "Odnośnik",
     "attach.failed": "Załączanie nie powiodło się",
+    "madeIn.section": "Utworzono w", "madeIn.unnamed": "Panel bez nazwy",
+    "madeIn.go": "Wróć do tego panelu",
     "commit.section": "Commity", "commit.add": "Zapisz SHA", "commit.none": "Brak zapisanych commitów",
     "commit.placeholder": "SHA commita (pełne — 40 lub 64 cyfry szesnastkowe)",
     "commit.record": "Zapisz", "commit.copy": "Skopiuj SHA", "commit.copied": "Skopiowano",
@@ -572,6 +574,7 @@ export const pl: Translation = {
     "face.ended": "Program w tym terminalu zakończył działanie.",
 
     "face.endedGeminiUnset": "Dla Gemini CLI nie ustawiono metody uwierzytelniania. Podana ścieżka należy tylko do tego panelu i znika wraz z nim — ustaw ją we własnym pliku ~/.gemini/settings.json.",
+    "face.noWayBack": "Tej rozmowy nie da się już otworzyć.",
     "face.projects": "Projekty",
     "face.railFolders": "Foldery",
     "face.tabsCompact": "Ukryj nazwy",

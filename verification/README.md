@@ -1477,6 +1477,10 @@ fails** — that is the regression it exists to catch — and being refused for 
 fails too, since a different guard is not the one the line is about. A refused operation produces
 nothing, so it takes no `as:`.
 
+It goes **under `with:`**, beside the op's other arguments, and a hand that puts it one level out —
+on the step itself — is told so when the file is read. Dropped instead, the line would run as an
+ordinary step and the road would go green on a guard it never reached.
+
 A screen has no exit status to compare, so on a `steps_gui` road the word changes the **instruction**: it
 tells the operator that being turned away is the step going right rather than their own hand going wrong,
 and the shot they leave is the screen carrying the refusal. Which guard refused is then read by the assert

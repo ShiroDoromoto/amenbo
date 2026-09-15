@@ -793,6 +793,15 @@ pub const STEPS: &[Step] = &[
         // is what moves them.
         apply: Apply::Custom(rename_the_outbox),
     },
+    Step {
+        to: 45,
+        name: "draw each pane's id afresh as a UUID, and move the homes held under the old ones",
+        // `AMB-D-897`: a counted id is only as unique as the count it came from, and that count sat
+        // in the same row as the panes — so a row that would not parse took the count down with it
+        // and the next run began at "1" again, onto ids a name and a way back into a session were
+        // already held against (`AMB-T-4843`).
+        apply: Apply::Custom(draw_the_pane_ids_afresh),
+    },
 ];
 
 /// v43: take the plugin mechanism's tables and its execution log away (`AMB-D-884`).
@@ -845,6 +854,75 @@ fn rename_the_outbox(ctx: &Ctx<'_>) -> Result<()> {
              WHERE key = 'plugin_dispatch_cursor_face';
          UPDATE store_meta SET key = 'outbox_truncated_through'
              WHERE key = 'plugin_outbox_truncated_through';",
+    )?;
+    Ok(())
+}
+
+/// v45: the panes' ids stop being counted and start being drawn (`AMB-D-897`, `AMB-T-4843`).
+///
+/// Every id in the kept arrangement is replaced with a version 4 UUID, once. What the old numbers
+/// cost is in the step's note above; what they cannot do afterwards is collide, whatever becomes of
+/// the row they were kept beside.
+///
+/// **The two per-pane homes move with them.** Codex and Gemini come back by the directory they run
+/// in, and that directory is named by the pane's id (`app/src-tauri/src/pane_home.rs`) — an id
+/// rewritten on its own would leave each of those panes opening an empty conversation, with the one
+/// the reader was in left under a name nothing claims. The two names are spelled here in frozen
+/// text, as every step's are: what they are called tomorrow is that file's to say, and what they
+/// were called when this ran is this step's to remember.
+///
+/// **The handle on those two rows moves with the directory.** What they come back by *is* that
+/// path, so a row left naming the old one would send the pane to a directory that is no longer
+/// there. The other four come back by a session id, which carries nothing of the pane's id and is
+/// left alone — which is what the separator before the old name is asked about.
+///
+/// **What will not move is let go rather than raised.** A home that cannot be renamed costs one
+/// pane its way back; a step that failed over it would cost the reader the whole arrangement. The
+/// row is rewritten either way, so the ids and the directories cannot end up half converted in
+/// opposite directions.
+fn draw_the_pane_ids_afresh(ctx: &Ctx<'_>) -> Result<()> {
+    // The key the talk window's arrangement is kept under, and the two directories its panes' homes
+    // sit in — all three as they were spelled when this step was written.
+    const LAYOUT: &str = "talk.layout";
+    const HOMES: &[&str] = &["codex-homes", "gemini-homes"];
+
+    let kept: Option<String> = ctx
+        .tx
+        .query_row("SELECT value FROM store_meta WHERE key = ?1", [LAYOUT], |row| row.get(0))
+        .optional()?;
+    // A store that never laid a window out, and one whose row will not parse, both have nothing to
+    // convert: the window reads such a row as no arrangement at all and lays itself out afresh.
+    let Some(Ok(mut row)) = kept.map(|json| serde_json::from_str::<serde_json::Value>(&json)) else {
+        return Ok(());
+    };
+    let Some(panes) = row.get_mut("panes").and_then(|panes| panes.as_array_mut()) else {
+        return Ok(());
+    };
+    for pane in panes {
+        let Some(was) = pane.get("id").and_then(|id| id.as_str()).map(str::to_owned) else {
+            continue;
+        };
+        let now = crate::harness::uuid_v4();
+        for homes in HOMES {
+            let root = ctx.base_dir.join(homes);
+            if root.join(&was).is_dir() {
+                let _ = std::fs::rename(root.join(&was), root.join(&now));
+            }
+        }
+        if let Some(head) = pane
+            .get("resume")
+            .and_then(|resume| resume.as_str())
+            .and_then(|resume| resume.strip_suffix(&was))
+            .filter(|head| head.ends_with('/') || head.ends_with('\\'))
+            .map(str::to_owned)
+        {
+            pane["resume"] = serde_json::Value::String(format!("{head}{now}"));
+        }
+        pane["id"] = serde_json::Value::String(now);
+    }
+    ctx.tx.execute(
+        "UPDATE store_meta SET value = ?2 WHERE key = ?1",
+        rusqlite::params![LAYOUT, row.to_string()],
     )?;
     Ok(())
 }
@@ -4307,6 +4385,76 @@ mod tests {
             .query_row("SELECT MAX(id) FROM outbox", [], |r| r.get(0))
             .unwrap();
         assert_eq!(next, 18, "the id the table had reached is still the one the next event comes after");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+    /// v45 in full: the panes kept in the arrangement come out with drawn ids, and the home each of
+    /// the two place-resumed providers was running in comes out under the same new name. A home left
+    /// behind would be the pane's conversation, standing under a number nothing claims any more —
+    /// and the pane itself opening an empty one beside it.
+    #[test]
+    fn the_panes_are_drawn_afresh_and_their_homes_move_with_them() {
+        let dir = scratch("pane-ids");
+        let engine = store_at(&dir, 44);
+        engine
+            .set_meta(
+                "talk.layout",
+                Some(
+                    r#"{"project":1,"panes":[
+                        {"id":"1","project":1,"agent":"codex-cli","resume":"/data/codex-homes/1"},
+                        {"id":"2","project":1,"agent":"gemini-cli","resume":"/data/gemini-homes/2"},
+                        {"id":"3","project":1,"agent":"claude-code","resume":"0f9c-3"}]}"#,
+                ),
+            )
+            .unwrap();
+        std::fs::create_dir_all(dir.join("codex-homes/1")).unwrap();
+        std::fs::write(dir.join("codex-homes/1/auth.json"), "{}").unwrap();
+        std::fs::create_dir_all(dir.join("gemini-homes/2/.gemini")).unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
+        let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
+        let ids: Vec<String> = row["panes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|pane| pane["id"].as_str().unwrap().to_string())
+            .collect();
+        for id in &ids {
+            assert_eq!(id.len(), 36, "a pane's id is a UUID now, not a count: {id}");
+            assert_eq!(id.matches('-').count(), 4, "{id}");
+        }
+        assert_ne!(ids[0], ids[1], "and each pane is drawn its own");
+
+        assert!(
+            dir.join("codex-homes").join(&ids[0]).join("auth.json").is_file(),
+            "the home the first pane was running in is under its new name, with what was in it",
+        );
+        assert!(!dir.join("codex-homes/1").exists(), "and nothing is left under the old one");
+        assert!(dir.join("gemini-homes").join(&ids[1]).join(".gemini").is_dir());
+        assert!(!dir.join("gemini-homes/2").exists());
+
+        // The way back for those two *is* the path of that directory, so it moves with the name.
+        let resume = |at: usize| row["panes"][at]["resume"].as_str().unwrap().to_string();
+        assert_eq!(resume(0), format!("/data/codex-homes/{}", ids[0]));
+        assert_eq!(resume(1), format!("/data/gemini-homes/{}", ids[1]));
+        // And a handle that is a session id rather than a place is left as it was, however it ends.
+        assert_eq!(resume(2), "0f9c-3", "a session id carries nothing of the pane's id");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A machine that never opened the talk window has no row to convert, and one whose row will not
+    /// parse has nothing readable in it — neither is a reason to refuse the rest of the chain.
+    #[test]
+    fn a_store_with_no_arrangement_to_draw_passes_the_step() {
+        let dir = scratch("pane-ids-none");
+        let engine = store_at(&dir, 44);
+        engine.set_meta("talk.layout", Some("{not json")).unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.get_meta("talk.layout").unwrap().as_deref(), Some("{not json"));
         std::fs::remove_dir_all(&dir).ok();
     }
 }

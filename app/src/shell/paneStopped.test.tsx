@@ -64,6 +64,7 @@ async function pane(): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: "1",
+      hue: 199,
       project: 1,
       names: new Map(),
       start: { cwd: "/work/here" },

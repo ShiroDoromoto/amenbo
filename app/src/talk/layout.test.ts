@@ -1,5 +1,5 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACROSS, acrossIn, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, DEFAULT_ORIENT,
   EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, movedWithin, openedFrame, openedIn,
@@ -15,6 +15,23 @@ function withPanes(n: number, count: Layout["count"] = 2, project = 1): Layout {
   for (let i = 0; i < n; i++) layout = openedFrame(layout, project, `/work/${project}`).layout;
   return layout;
 }
+
+/**
+ * The drawing, seeded back to the count it replaced.
+ *
+ * A pane's id is drawn rather than counted (`newFrameId`), so nothing here could name a pane by the
+ * order it was opened in — which is the one thing every case below does. Seeding it is what lets
+ * them go on saying "2" and meaning the second pane opened. What a real id looks like is that
+ * function's business; what is pinned here is the arrangement around it.
+ */
+let drawn = 0;
+
+beforeEach(() => {
+  drawn = 0;
+  vi.stubGlobal("crypto", { randomUUID: () => String(++drawn) });
+});
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("a place is made by opening one", () => {
   it("has no panes at all until something is opened", () => {
@@ -142,7 +159,11 @@ describe("a frame is a place, not a process", () => {
   it("never hands a retired id out again — a name is kept against it", () => {
     const four = withPanes(4);
     const ended = closedIn(openedIn(four, "1", "s1", null, null), "s1");
-    expect(openedFrame(ended, 1, "/w").frame.id).toBe("5");
+    // Against the real drawing, not the seeded count: what is pinned here is that the id of a pane
+    // whose session ended cannot come back on a fresh one, and a counter would say so of itself.
+    vi.unstubAllGlobals();
+    const made = openedFrame(ended, 1, "/w").frame.id;
+    expect(ended.frames.map((one) => one.id)).not.toContain(made);
   });
 });
 
@@ -157,8 +178,13 @@ describe("closing a pane takes the place away", () => {
   });
 
   it("does not hand the closed pane's id out again", () => {
-    const left = closedFrame(withPanes(2), "2");
-    expect(openedFrame(left, 1, "/w").frame.id).toBe("3");
+    const two = withPanes(2);
+    const left = closedFrame(two, "2");
+    // The real drawing again (`never hands a retired id out again`): the pane is gone from the
+    // arrangement, so nothing in the arrangement could tell a fresh id from the one it had.
+    vi.unstubAllGlobals();
+    const made = openedFrame(left, 1, "/w").frame.id;
+    expect(two.frames.map((one) => one.id)).not.toContain(made);
   });
 
   it("leaves the reader on whatever moved into its place", () => {
@@ -211,7 +237,7 @@ describe("where a pane works", () => {
         inserted: [],
         composeOpen: false,
       },
-    ], nextId: 2 }, "1", "s1", null, "claude");
+    ] }, "1", "s1", null, "claude");
     // What is running comes off the session as well, and by the same reasoning: a pane that adopted
     // one never asked for it.
     expect(adopted.frames[0]!.agent).toBe("claude");
@@ -327,8 +353,8 @@ describe("the count is the most a page draws", () => {
     expect(restored({ ...kept, count: 8, splits: { 1: { count: 8 } } }, null).count).toBe(8);
     // And an arrangement written before the answers were kept by project is read off the pair
     // beside them, which is all it has.
-    expect(restored({ count: 5, nextId: 1, project: 1, frames: [] }, null).count).toBe(DEFAULT_COUNT);
-    expect(restored({ count: 8, nextId: 1, project: 1, frames: [] }, null).count).toBe(8);
+    expect(restored({ count: 5, project: 1, frames: [] }, null).count).toBe(DEFAULT_COUNT);
+    expect(restored({ count: 8, project: 1, frames: [] }, null).count).toBe(8);
   });
 });
 
@@ -375,7 +401,6 @@ describe("an arrangement kept between runs", () => {
   it("comes back as places to open a terminal in, each in its own project", () => {
     const back = restored({
       count: 4,
-      nextId: 3,
       frames: [{ id: "1", project: 7, folder: "/work/repo" }, { id: "2", project: 8 }],
     }, null);
     expect(back.count).toBe(4);
@@ -392,7 +417,6 @@ describe("an arrangement kept between runs", () => {
     // says what was in it, and the window is what decides to start one again (`AMB-T-4641`).
     const back = restored({
       count: 2,
-      nextId: 3,
       project: 1,
       frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude" }],
     }, 1);
@@ -400,7 +424,7 @@ describe("an arrangement kept between runs", () => {
     expect(back.frames[0]!.session).toBeNull();
     // And a pane that was at a plain prompt has nothing to name, which is not the same as a pane
     // nobody can account for.
-    const bare = restored({ count: 2, nextId: 3, frames: [{ id: "1", project: 1 }] }, 1);
+    const bare = restored({ count: 2, frames: [{ id: "1", project: 1 }] }, 1);
     expect(bare.frames[0]!.agent).toBeNull();
   });
 
@@ -409,7 +433,6 @@ describe("an arrangement kept between runs", () => {
     // (`AMB-D-869`), and every other place is drawn with the way in on it.
     const back = restored({
       count: 2,
-      nextId: 3,
       project: 1,
       frames: [
         { id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true },
@@ -426,7 +449,6 @@ describe("an arrangement kept between runs", () => {
     // read as a second reason to start something there.
     const back = restored({
       count: 2,
-      nextId: 2,
       project: 1,
       frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true }],
     }, 1);
@@ -437,25 +459,30 @@ describe("an arrangement kept between runs", () => {
   });
 
   it("puts a pane whose project nothing recorded where the person is looking", () => {
-    const back = restored({ count: 2, nextId: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5);
+    const back = restored({ count: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5);
     expect(back.frames[0]!.project).toBe(5);
   });
 
   it("has nowhere to put one when the window is on no project either", () => {
-    expect(restored({ count: 2, nextId: 2, frames: [{ id: "1" }] }, null).frames).toHaveLength(0);
+    expect(restored({ count: 2, frames: [{ id: "1" }] }, null).frames).toHaveLength(0);
   });
 
   it("hands the next frame an id no name is already on", () => {
-    // An arrangement whose `nextId` is behind its own frames — an older build, or a hand-over nobody
-    // can vouch for — must not let a fresh frame take the name of one that came with it.
-    const back = restored({ count: 2, nextId: 1, frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null);
-    expect(openedFrame(back, 1, "/w").frame.id).toBe("8");
+    // The ids an arrangement comes back with are whatever was written down — an older build's
+    // counted ones, or a hand-over nobody can vouch for — and a fresh frame must not take one of
+    // them. Drawing the id is what settles that without reading them at all (`AMB-D-897`), so this
+    // is the real drawing rather than the seeded count, whose next value is one of the two below.
+    const back = restored({ count: 2, frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null);
+    vi.unstubAllGlobals();
+    const made = openedFrame(back, 1, "/w").frame.id;
+    expect(back.frames.map((one) => one.id)).not.toContain(made);
+    expect(openedFrame(back, 1, "/w").frame.id).not.toBe(made);
   });
 
   it("brings the split back with no frames to draw it with", () => {
     // A device where nothing was ever opened: what came back is the split the person chose, and it
     // is the empty face, laid out the way they laid it out.
-    const back = restored({ count: 4, nextId: 1, project: 3, frames: [] }, 3);
+    const back = restored({ count: 4, project: 3, frames: [] }, 3);
     expect(back.count).toBe(4);
     expect(back.frames).toHaveLength(0);
     expect(back.project).toBe(3);
@@ -652,7 +679,7 @@ describe("what is written in the box under a pane", () => {
   });
 
   it("is nothing in a place an arrangement carrying no draft is restored into", () => {
-    const bare = restored({ count: 1, nextId: 2, project: 1, frames: [{ id: "1", project: 1 }] }, 1);
+    const bare = restored({ count: 1, project: 1, frames: [{ id: "1", project: 1 }] }, 1);
     expect(bare.frames[0]!.written).toBe("");
   });
 
@@ -708,7 +735,7 @@ describe("whether the box under a pane is open", () => {
   // A row written before this was kept has no answer of its own. What it opens on is this machine's
   // habit, which is what every pane opened on until then (`../core/composeStartsOpen`).
   it("opens on the habit where a row from an older build has no answer", () => {
-    const older = { count: 2 as const, nextId: 2, project: 1, frames: [{ id: "1", project: 1 }] };
+    const older = { count: 2 as const, project: 1, frames: [{ id: "1", project: 1 }] };
     expect(restored(older, null).frames[0]?.composeOpen).toBe(false);
     expect(restored(older, null, true).frames[0]?.composeOpen).toBe(true);
   });
@@ -780,7 +807,6 @@ describe("what Amenbo put into the box under a pane", () => {
   it("comes back only where the body it was put into came too", () => {
     const back = restored({
       count: 1,
-      nextId: 2,
       project: 1,
       frames: [{ id: "1", project: 1, inserted: [PICTURE] }],
     }, 1);

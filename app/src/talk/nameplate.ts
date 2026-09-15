@@ -17,8 +17,6 @@
 // events, so what is under it goes on being a terminal. It is dropped by a pointer resting on the row
 // and by the keyboard reaching the controls beside it — the row itself is no tab stop.
 
-import { hueOf } from "./moving";
-
 /** Which of the lamp's two faces it is showing. */
 export type Face =
   /** Output is arriving. A glow, held still, in the pane's own hue. */
@@ -30,8 +28,8 @@ export type Face =
 
 /** The lamp in front of the name: which pane this is, and which face it is on (`./moving`). */
 export type Dot = {
-  /** The frame the row belongs to. Its hue is what tells one pane from another. */
-  readonly frame: string;
+  /** The hue this pane is drawn in — what tells one pane on a page from the next (`hueOf`). */
+  readonly hue: number;
   /** Which of the two it is showing. */
   readonly face: Face;
 };
@@ -98,7 +96,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
       peek.hidden = true;
       return;
     }
-    dot.style.setProperty("--dot-hue", String(hueOf(plate.dot.frame)));
+    dot.style.setProperty("--dot-hue", String(plate.dot.hue));
     dot.dataset.face = plate.dot.face;
     name.textContent = plate.name ?? "";
     // And the same name again, unelided, in the panel that drops under the header. **The row carries

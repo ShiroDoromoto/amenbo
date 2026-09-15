@@ -26,21 +26,24 @@
  *  reader is still looking at it. */
 export const STILL_AFTER_MS = 1500;
 
-/** How many hues there are to tell panes apart with — a screenful, which is the most that are ever
- *  side by side (`./layout`). */
+/** How many hues there are to tell panes apart with. Four is what a page is split into before the
+ *  two counts that go past it (`./layout`), where the colours come round again. */
 const HUES = [199, 152, 32, 280];
 
 /**
- * The hue a frame's dot is drawn in.
+ * The hue the dot of the pane in slot `at` is drawn in, counted from 0 along the page.
  *
  * **Hue says which pane, never what is happening in it** — that is the glow's, and the two must not
- * be read for each other. Frames on one page are consecutive, so taking the id in turn gives every
- * pane on a screen a different colour without anything having to know what else is on it.
+ * be read for each other. Taking the slot in turn is what gives the panes beside each other colours
+ * of their own; a page split past four comes round and draws two of them the same.
  *
+ * **It is the place and not the pane's id** (`AMB-D-897`). An id is drawn now rather than counted,
+ * so no two of them run on from each other — read for a hue, a screenful of panes would come out one
+ * colour. Both faces that draw a dot know which slot they are drawing (`../shell/TerminalFace`,
+ * `../shell/PaneOrder`), so the place is the thing to ask.
  */
-export function hueOf(frame: string): number {
-  const n = Number(frame);
-  return HUES[(Number.isFinite(n) ? Math.abs(Math.trunc(n)) : 0) % HUES.length]!;
+export function hueOf(at: number): number {
+  return HUES[(Number.isInteger(at) ? Math.abs(at) : 0) % HUES.length]!;
 }
 
 /** Whether a pane counts as moving: something arrived, and not long enough ago to have settled. */

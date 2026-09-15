@@ -11,9 +11,10 @@
 // when one ends, which is what lets a pane keep its last output on the screen and what lets a name
 // outlive the session that earned it (`./frames`). **A place outlives the app as well**: what is kept
 // between runs is the split, the project and a row a pane — where it works, what was started in it,
-// what it is called and the handle it is resumed from (`AMB-D-869`). Ids are handed out once and
-// never reused, in this run or the next: a name and a way back into a session are both held against
-// the id, so a reused one would put them on a place neither belongs to.
+// what it is called and the handle it is resumed from (`AMB-D-869`). **An id is drawn rather than
+// counted** (`newFrameId`, `AMB-D-897`): a name and a way back into a session are both held against
+// it, so an id handed out twice would put them on a place neither belongs to — which is what a count
+// kept in the same row as the panes could not rule out.
 //
 // **A place is made by opening one, and by nothing else.** A place somebody started making and walked
 // away from is a box nobody can say anything about, so the folder is answered first
@@ -138,7 +139,7 @@ const UNANSWERED: Split = { count: DEFAULT_COUNT, orient: DEFAULT_ORIENT };
  * window is drawing the face writes it, and the one the terminal is split out into reads it as it
  * comes up (`app/src-tauri/src/frames.rs`).
  *
- * **What outlives the run is the splits, `project`, `nextId` and the panes** (`AMB-D-869`). So an
+ * **What outlives the run is the splits, `project` and the panes** (`AMB-D-869`). So an
  * arrangement read at the start of a run comes back with the places the reader left, on the project
  * they were looking at, at the split that project was left at — and with nothing running in any of
  * them, because a session is a process and that one has ended.
@@ -154,10 +155,6 @@ export type SavedLayout = {
    *  is not in it: what is kept is the answers, and a row for every project a reader ever walked
    *  through would say nothing about most of them. */
   splits?: Record<string, { count: number; orient?: Orient }>;
-  /** The next id to hand out. It goes up across runs as well as within one — what a pane is called
-   *  and the way back into its session are held against its id, so a number handed out twice would
-   *  put them on a place neither belongs to (`app/src-tauri/src/frames.rs`). */
-  nextId: number;
   /** The project whose panes the face was showing. It answers for the window the terminal was split
    *  out into, which has no ledger to have taken one from — and only where the arrangement came back
    *  with no panes in it, since a pane names its own project (`../shell/TerminalFace`). */
@@ -187,7 +184,8 @@ export type SavedLayout = {
 
 /** One place a terminal is drawn, whether or not one is running in it. */
 export type Frame = {
-  /** Handed out once and never reused — the id `./frames` keeps this frame's name against. */
+  /** Drawn once and never handed out again (`newFrameId`) — the id `./frames` keeps this frame's
+   *  name against. */
   readonly id: string;
   /** The project this pane is one of. It is settled when the pane is made and never changes: a pane
    *  that could move between projects would be the one thing the rail promises cannot happen. */
@@ -275,8 +273,6 @@ export type Frame = {
 /** The arrangement of the terminal face, as it stands. */
 export type Layout = {
   readonly frames: readonly Frame[];
-  /** The next id to hand out. Frames are never renumbered, so this only ever goes up. */
-  readonly nextId: number;
   /** How many panes a page of the project on the screen holds — that project's own answer, or what
    *  a project nobody has answered for is drawn at (`splits`). */
   readonly count: Count;
@@ -314,7 +310,6 @@ export type Layout = {
 
 export const EMPTY_LAYOUT: Layout = {
   frames: [],
-  nextId: 1,
   count: DEFAULT_COUNT,
   orient: DEFAULT_ORIENT,
   splits: {},
@@ -401,6 +396,25 @@ function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame)
 }
 
 /**
+ * A frame id, drawn afresh.
+ *
+ * **Drawn and not counted** (`AMB-D-897`). A count has to be kept somewhere to be counted from, and
+ * the only place it could be kept was the row the panes are in — so an arrangement that would not
+ * parse was dropped whole and the count began at the first id again, onto ids a pane's name and the
+ * way back into its session were already held against. Sixteen bytes of the machine's randomness
+ * cannot do that, whatever becomes of the row.
+ *
+ * What comes out is a UUID and not merely something unique: that is the shape the host reads a
+ * pane's home by (`app/src-tauri/src/pane_home.rs`), and the same one it writes a session handle in
+ * (`amenbo_core::harness::uuid_v4`). The window is served over a scheme the host registers as a
+ * secure one, which is what `randomUUID` is offered by — the same thing the clipboard is read
+ * through on Linux (`../core/clipFiles`).
+ */
+export function newFrameId(): string {
+  return crypto.randomUUID();
+}
+
+/**
  * Make a place for a terminal in this project, and answer with the layout and the frame.
  *
  * It is called once the folder has been answered for — a pane is made by opening one, so there is no
@@ -414,7 +428,7 @@ export function openedFrame(
   composeOpen = false,
 ): { layout: Layout; frame: Frame } {
   const frame: Frame = {
-    id: String(layout.nextId),
+    id: newFrameId(),
     project,
     session: null,
     folder,
@@ -431,7 +445,6 @@ export function openedFrame(
   const next: Layout = {
     ...layout,
     frames: [...layout.frames, frame],
-    nextId: layout.nextId + 1,
     project,
     // The page asked for has a pane on it now, so it is a page like any other (`addPane`).
     adding: false,
@@ -734,7 +747,6 @@ export function laidOut(layout: Layout): SavedLayout {
   ] as const);
   return {
     count: layout.count,
-    nextId: layout.nextId,
     ...(layout.orient === DEFAULT_ORIENT ? {} : { orient: layout.orient }),
     ...(splits.length === 0 ? {} : { splits: Object.fromEntries(splits) }),
     ...(layout.project === null ? {} : { project: layout.project }),
@@ -816,10 +828,6 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
   };
   return {
     frames,
-    // Ids are never reused, so the next one has to clear every frame that came with the arrangement
-    // — one written by a newer build, or an id list nobody can vouch for, must not hand a fresh
-    // frame the name of one already up.
-    nextId: Math.max(saved.nextId, ...frames.map((frame) => Number(frame.id) + 1 || 0)),
     count: opening.count,
     orient: opening.orient,
     splits,

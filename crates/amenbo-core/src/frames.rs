@@ -165,7 +165,7 @@ pub struct Split {
 /// **A project nobody has split is absent rather than written at a default.** What is kept is an
 /// answer somebody gave, and a row that carried every project the store has would grow with the
 /// store while saying nothing about most of them.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedLayout {
     /// The project whose panes the face was showing. `None` is a machine where the face has not been
@@ -178,34 +178,6 @@ pub struct SavedLayout {
     /// The panes, in the order they were opened ([`SavedPane`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub panes: Vec<SavedPane>,
-    /// The id to hand out to the next pane opened.
-    ///
-    /// **It is kept because the ids are.** A pane's row is found again by its id, and a run that
-    /// began handing them out from the first would give a fresh pane the id of one that was closed
-    /// before the app went down — along with whatever is still lying about under that id
-    /// (`AMB-T-4640`). So the count goes up across runs and never back.
-    #[serde(default = "first_id")]
-    pub next_id: u32,
-}
-
-/// The id a store that has never opened a pane hands out first, and what a row written before the
-/// ids were kept reads as: there is nothing behind it to collide with.
-fn first_id() -> u32 {
-    1
-}
-
-/// A machine that has laid nothing out: no project, no answer about a split, no places — and the
-/// first id still to hand out, because an id is a count of what has been opened rather than a field
-/// that starts empty.
-impl Default for SavedLayout {
-    fn default() -> Self {
-        Self {
-            project: None,
-            splits: BTreeMap::new(),
-            panes: Vec::new(),
-            next_id: first_id(),
-        }
-    }
 }
 
 /// One pane's row: where it works, what was started in it, what it is called, and the way back into
@@ -218,7 +190,14 @@ impl Default for SavedLayout {
 #[serde(rename_all = "camelCase")]
 pub struct SavedPane {
     /// The id this pane was handed when it was opened, which is what its name and its handle are held
-    /// against ([`SavedLayout::next_id`]).
+    /// against — a version 4 UUID, drawn by the window that opened the pane
+    /// (`app/src/talk/layout.ts`).
+    ///
+    /// **It is drawn and not counted** (`AMB-D-897`). A counted id is only ever as unique as the
+    /// count it came from, and that count was kept in this same row: a row that would not parse was
+    /// dropped whole, and the run after it began at the first id again — onto ids a pane's name, the
+    /// way back into its session and the home still lying about under it were already held against
+    /// (`AMB-T-4640`). A drawn id collides with none of that, whatever becomes of the row.
     pub id: String,
     /// The project it is one of. A pane is a project's from the moment it is made and never moves
     /// between them, so it comes back under the same one.
@@ -322,8 +301,6 @@ struct Row {
     splits: BTreeMap<u32, Split>,
     #[serde(default)]
     panes: Vec<SavedPane>,
-    #[serde(default = "first_id")]
-    next_id: u32,
     /// The one split an older build wrote. `None` in anything this build has written.
     #[serde(default)]
     count: Option<u32>,
@@ -353,14 +330,7 @@ pub fn saved_layout(engine: &StoreEngine) -> Result<Option<SavedLayout>> {
     if let (true, Some(count), Some(project)) = (splits.is_empty(), row.count, row.project) {
         splits.insert(project, Split { count, orient: row.orient });
     }
-    // Whatever the row says, the next id clears every pane in it: an id handed out twice would put one
-    // pane's name, and the way back into another one's session, on a place neither belongs to.
-    let next_id = row
-        .panes
-        .iter()
-        .filter_map(|pane| pane.id.parse::<u32>().ok())
-        .fold(row.next_id, |next, id| next.max(id + 1));
-    Ok(Some(SavedLayout { project: row.project, splits, panes: row.panes, next_id }))
+    Ok(Some(SavedLayout { project: row.project, splits, panes: row.panes }))
 }
 
 /// Keep what outlives the run. It is written as the window is changed rather than as it closes: a
@@ -451,7 +421,7 @@ mod tests {
             project: Some(1),
             splits: BTreeMap::from([(1, Split { count: 4, orient: Orient::Across })]),
             panes: vec![SavedPane {
-                id: "2".into(),
+                id: "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114".into(),
                 project: 1,
                 folder: Some("/work/repo".into()),
                 agent: Some("claude".into()),
@@ -460,7 +430,6 @@ mod tests {
                 model: Some("opus".into()),
                 compose_open: Some(true),
             }],
-            next_id: 3,
         };
         save_layout(&engine, &kept).unwrap();
 
@@ -479,7 +448,7 @@ mod tests {
             project: Some(1),
             splits: BTreeMap::new(),
             panes: vec![SavedPane {
-                id: "1".into(),
+                id: "1f0b6d92-8c47-4a10-b3e5-5d9a7c204e6b".into(),
                 project: 1,
                 folder: Some("/work/repo".into()),
                 agent: None,
@@ -488,7 +457,6 @@ mod tests {
                 model: None,
                 compose_open: None,
             }],
-            next_id: 2,
         };
         save_layout(&engine, &kept).unwrap();
 
@@ -504,43 +472,23 @@ mod tests {
         assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
     }
 
-    /// The id handed out next clears every pane in the row, whichever of the two says the higher
-    /// number: a reused id would put one pane's name, and the way back into another's session, on a
-    /// place neither belongs to.
+    /// The count an older build kept beside the panes is read straight past, and goes with the next
+    /// write: ids are drawn now, so a number saying which one to hand out next names nothing.
     #[test]
-    fn the_next_id_clears_every_pane_that_came_back() {
+    fn the_count_an_older_build_kept_is_read_past_and_written_out() {
         let engine = StoreEngine::open_in_memory().unwrap();
-        let pane = |id: &str| SavedPane {
-            id: id.into(),
-            project: 1,
-            folder: None,
-            agent: None,
-            name: None,
-            resume: None,
-            model: None,
-            compose_open: None,
-        };
         engine
             .set_meta(
                 LAYOUT_META,
-                Some(r#"{"project":1,"nextId":2,"panes":[{"id":"5","project":1}]}"#),
+                Some(r#"{"project":1,"nextId":9,"panes":[{"id":"5","project":1}]}"#),
             )
             .unwrap();
         let back = saved_layout(&engine).unwrap().expect("the arrangement");
-        assert_eq!(back.next_id, 6, "a row that undercounts its own panes is answered past");
+        assert_eq!(back.panes.len(), 1, "the pane it kept comes back");
 
-        save_layout(
-            &engine,
-            &SavedLayout {
-                project: Some(1),
-                splits: BTreeMap::new(),
-                panes: vec![pane("2")],
-                next_id: 9,
-            },
-        )
-        .unwrap();
-        let back = saved_layout(&engine).unwrap().expect("the arrangement");
-        assert_eq!(back.next_id, 9, "and one that counts past them keeps its count");
+        save_layout(&engine, &back).unwrap();
+        let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
+        assert!(!written.contains("nextId"), "and the count is not written again: {written}");
     }
 
     /// An arrangement an older build wrote still reads: the frames beside it are read past rather
@@ -566,7 +514,6 @@ mod tests {
                 // Its places are read past: what it kept of one is a folder under an id its own run
                 // began handing out from the first, with nothing to say about what was in it.
                 panes: Vec::new(),
-                next_id: 3,
             })
         );
     }
@@ -579,7 +526,7 @@ mod tests {
         engine.set_meta(LAYOUT_META, Some(r#"{"count":4}"#)).unwrap();
         assert_eq!(
             saved_layout(&engine).unwrap(),
-            Some(SavedLayout { project: None, splits: BTreeMap::new(), panes: Vec::new(), next_id: 1 })
+            Some(SavedLayout { project: None, splits: BTreeMap::new(), panes: Vec::new() })
         );
     }
 

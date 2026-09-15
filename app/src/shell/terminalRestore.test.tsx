@@ -133,7 +133,7 @@ beforeEach(async () => {
   hoisted.answer = null;
   // A device where the split and the project are all there is to come back to: nothing was open when
   // the last run ended, so the arrangement names no place (`../talk/layout`).
-  hoisted.saved = { count: 4, nextId: 1, project: 1, frames: [] };
+  hoisted.saved = { count: 4, project: 1, frames: [] };
   await mount();
 });
 
@@ -164,7 +164,7 @@ describe("the first window of a run", () => {
     // yet — in the other window, the panes it was split out of.
     expect(hoisted.kept).toHaveLength(0);
     await answered();
-    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ count: 4, nextId: 1, project: 1, frames: [] });
+    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ count: 4, project: 1, frames: [] });
   });
 
   it("comes up with the way in and nothing running where nothing was kept at all", async () => {
@@ -184,7 +184,6 @@ describe("a window that reads an arrangement with panes in it", () => {
     container.remove();
     hoisted.saved = {
       count: 2,
-      nextId: 3,
       project: 1,
       frames: [
         { id: "1", project: 1, folder: "/work/repo" },
@@ -232,7 +231,6 @@ describe("a window that reads an arrangement with panes in it", () => {
     // on naming what was there before it (`../talk/layout`).
     expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({
       count: 2,
-      nextId: 3,
       project: 1,
       frames: [
         // And which way the box under each was left, written both ways round: a row without it is a

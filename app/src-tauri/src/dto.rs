@@ -2142,11 +2142,6 @@ pub struct TalkLayoutDto {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[ts(optional, type = "Record<string, SplitDto>")]
     pub(crate) splits: std::collections::BTreeMap<u32, SplitDto>,
-    /// The next frame id to hand out. Ids are never reused — not within a run, and not across one:
-    /// what a pane is called and the way back into its session are both held against its id, so a
-    /// number handed out twice would put one pane's session behind another's name
-    /// (`amenbo_core::frames::SavedLayout::next_id`).
-    pub(crate) next_id: u32,
     /// The project whose panes the face was showing. It is what the window the terminal is split out
     /// into opens as, where the arrangement came with no panes to name one — which is every window
     /// that comes up after a run (`app/src/shell/TerminalFace.tsx`); absent where nothing has told

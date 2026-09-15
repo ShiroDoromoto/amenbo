@@ -104,6 +104,7 @@ function Window() {
   hoisted.held = written;
   return createElement(TerminalPane, {
     frame: "1",
+    hue: 199,
     project: 3,
     names: new Map(),
     start: { cwd: "/work/here" },

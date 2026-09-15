@@ -1501,6 +1501,14 @@ impl Instructor {
                     return Err(format!("action `nudge-answer` does not know the answer `{other}`"))
                 }
             },
+            // The band saying where the plugins went, put away. It carries one control and asks
+            // nothing, so the line says which control rather than which answer — and it says what the
+            // press is for, because the putting away is the thing under test: the window is marked
+            // told by this press, and a band that went away over a write the store refused would be
+            // the failure a road here exists to catch.
+            (Domain::Store, "handover-away") =>
+                "In the band saying the plugins are part of Amenbo now, press the control that puts it away — the one at its right-hand end, which is the only thing on it to press. The band goes once the store has taken the record of it; one that stays up with a line of its own underneath has not been recorded, and that is what the step after this reads."
+                    .to_string(),
             // The language the interface is read in, changed where a reader changes it. The step names
             // the code the store keeps rather than the word standing in the list, which is each
             // language's own name for itself — a table the harness would then hold a second copy of,
@@ -3249,6 +3257,26 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // The band saying where the plugins went. It came up by itself on a device the handover
+            // ran on, and there is only one of it, so nothing names it but its place across the app.
+            //
+            // The plugin names are the one thing on it the line may quote: those are the plugins' own
+            // names and read the same in every language, where the sentences around them are the
+            // interface's own and belong to whatever the machine is set to.
+            (Domain::Store, "handover") => {
+                let naming = match with.get("names").and_then(|v| v.as_str()) {
+                    Some(names) => format!(" — and that it names the plugins this device had: \"{names}\""),
+                    None => String::new(),
+                };
+                match present(with) {
+                    true => format!(
+                        "Confirm the band saying the plugins are part of Amenbo now is standing across the app — it came up by itself, with nothing pressed to bring it up{naming}."
+                    ),
+                    false => {
+                        "Confirm no band about the plugins is anywhere on the screen.".to_string()
+                    }
+                }
+            }
             // The bar above the app. Nothing is pulled down for it: the reading is taken off the
             // app's own menu tree, which carries the items of a menu nobody has opened, and the shot
             // beside it is the screen the operator was standing at.

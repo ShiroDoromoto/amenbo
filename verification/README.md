@@ -1363,6 +1363,14 @@ a moment before the run. `store worn-in` is how much Amenbo has been used on thi
 could only have done over days; `tick deferred` is a day having passed — or not — since the band was
 put off, which no run can wait out, the band being judged once at launch.
 
+`store carried-in` is on it for a reason of its own: what it stands up is **the build before this
+one**. The handover that took mail, slack, viewer and worktree into the body leaves an account of what
+it carried, and every surface reads that account to know it owes a person the sentence saying where
+their plugins went. Nothing under test writes one — the step that would is the upgrade itself — so a
+road that meant to earn it would have to be two builds long, with the plugins installed on the first.
+The premise writes the account the way the migration writes it, and the road opens where a person who
+upgraded opens.
+
 `store nothing-raised` is on it for a third reason again: what it stands up is an **absence**. The
 driver raises a project as it boots, because a store has to have somewhere to file what a premise
 stands up — so the moment a road declares a world at all, there is a project on the screen it was

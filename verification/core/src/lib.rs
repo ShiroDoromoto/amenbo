@@ -14,8 +14,9 @@
 //! declaration to disagree with the steps.
 //!
 //! Two layers of checking, both surfaced as clear failures:
-//!   * [`load_str`] / [`load_file`] — the YAML must parse into the typed model
-//!     (`deny_unknown_fields` catches misspelled keys).
+//!   * [`load_str`] / [`load_file`] — the YAML must parse into the typed model. A key nothing takes
+//!     is named rather than dropped, on the scenario by `deny_unknown_fields` and on a step by
+//!     [`RawStep`], which gathers the leftovers the attribute cannot reach.
 //!   * [`Scenario::validate`] — the semantic pass, run over each driver's steps on its own:
 //!     known ops only, required args present, each arg of the type its op takes, and every
 //!     `target:` resolving to an earlier `as:` binding in the same list.
@@ -90,8 +91,12 @@ impl Driver {
 
 /// One step. `type` selects the variant; every step names the [`Domain`] object it
 /// touches and the `op` performed on it.
+///
+/// A key the step does not take is refused rather than dropped, by way of [`RawStep`] — serde has no
+/// `deny_unknown_fields` for the variants of an internally tagged enum, so the leftover keys are
+/// gathered there and named.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", try_from = "RawStep")]
 pub enum Step {
     /// A domain operation that changes state — or, with `refused:` among its args, one the
     /// scenario says Amenbo will turn away.
@@ -126,6 +131,77 @@ pub enum Step {
         #[serde(default)]
         window: Option<String>,
     },
+}
+
+/// A step as it is written, before the loader has looked at whether every key on it is one a step
+/// takes. The named fields are [`Step`]'s own; `rest` is everything else on the mapping, which is
+/// what [`Step`]'s conversion refuses on.
+///
+/// It exists because the alternative silently loses work: a `refused:` written one level out — beside
+/// `with` instead of inside it — was read as no refusal at all, so the step ran as an ordinary one
+/// and the road went green on a guard it never reached.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum RawStep {
+    Action {
+        domain: Domain,
+        op: String,
+        #[serde(default)]
+        with: Args,
+        #[serde(default)]
+        window: Option<String>,
+        #[serde(default, rename = "as")]
+        bind: Option<String>,
+        #[serde(flatten)]
+        rest: Args,
+    },
+    Assert {
+        domain: Domain,
+        op: String,
+        #[serde(default)]
+        with: Args,
+        #[serde(default)]
+        window: Option<String>,
+        #[serde(flatten)]
+        rest: Args,
+    },
+}
+
+impl TryFrom<RawStep> for Step {
+    type Error = String;
+
+    fn try_from(raw: RawStep) -> Result<Self, Self::Error> {
+        match raw {
+            RawStep::Action { domain, op, with, window, bind, rest } => {
+                refuse_stray_keys(&rest, "an action")?;
+                Ok(Step::Action { domain, op, with, window, bind })
+            }
+            RawStep::Assert { domain, op, with, window, rest } => {
+                refuse_stray_keys(&rest, "an assert")?;
+                Ok(Step::Assert { domain, op, with, window })
+            }
+        }
+    }
+}
+
+/// Refuse the keys a step was written with that a step does not take. `type` is not among them: the
+/// tag is taken out before the remainder is gathered.
+///
+/// The op's own arguments are the common mistake, and they get their own sentence — one level out is
+/// exactly where a hand reaches for `refused:` — because "unknown key" alone leaves the writer
+/// looking for a typo in a word that is spelled correctly.
+fn refuse_stray_keys(rest: &Args, what: &str) -> Result<(), String> {
+    let stray: Vec<&str> = rest.keys().map(String::as_str).collect();
+    if stray.is_empty() {
+        return Ok(());
+    }
+    let named = stray.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ");
+    let hint = if stray.contains(&"refused") {
+        " — `refused` is an argument of the op, so it goes under `with:`"
+    } else {
+        " — an op's arguments go under `with:`"
+    };
+    Err(format!("{what} step does not take {named}{hint}"))
 }
 
 impl Step {
@@ -4324,6 +4400,42 @@ steps_cli:
     with: { target: held, status: in_progress, refused: already_reserved }
 "#;
         load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    /// The mistake this guards is not a typo: `refused` is spelled correctly, one level out from
+    /// where the driver reads it. Dropped, the step ran as an ordinary one and the road passed a
+    /// guard it never reached.
+    #[test]
+    fn a_refusal_written_outside_with_is_a_parse_error() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    refused: already_reserved
+"#;
+        let e = load_str(yaml).unwrap_err().to_string();
+        assert!(e.contains("`refused`"), "the key is named: {e}");
+        assert!(e.contains("`with:`"), "and so is where it belongs: {e}");
+    }
+
+    #[test]
+    fn a_stray_key_on_an_assert_is_a_parse_error() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: assert
+    domain: task
+    op: found
+    with: { title: T }
+    as: held
+"#;
+        let e = load_str(yaml).unwrap_err().to_string();
+        assert!(e.contains("`as`"), "an assert produces nothing to bind: {e}");
     }
 
     /// The code is the whole of it: a refusal on some other ground is a different guard, so the

@@ -694,6 +694,16 @@ const REGISTRY: &[OpSpec] = &[
     // `launches` is written to the tally as it stands, and `days` spreads the records already in the
     // store back over that many separate days (the store has to hold at least that many).
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "worn-in", required: &["launches", "days"], refs: &[], strings: &[], binds: false },
+    // A device the plugins were taken into on the way to this build. What the migration
+    // leaves behind is one account of what it carried, and every road about the sentence a person is
+    // owed opens on that account already lying there — nothing this build does writes one, since the
+    // step that would is the upgrade itself, and an upgrade is not a move any road has.
+    //
+    // It is the reach `worn-in` makes: a row Amenbo writes itself, written by the driver because the
+    // only thing that would otherwise write it is a day in the past. `plugins` names which of the four
+    // this device had, comma-separated in the order the migration takes them; `targets` and `projects`
+    // are how much of the notification settings came across, and `viewer` whether the Viewer did.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "carried-in", required: &["plugins"], refs: &[], strings: &["plugins"], binds: false },
     // A machine nobody has raised anything on. The driver raises a project as it boots — the store
     // has to have somewhere to file what a premise stands up — so a road that opens on the screen a
     // first-time reader meets could not be given a world at all: the moment it declared one, there
@@ -713,6 +723,15 @@ const REGISTRY: &[OpSpec] = &[
     // registers this machine's login with the OS, which is the one piece of state no throwaway store
     // can hold and no run can hand back — that half is walked on real machines instead.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nudge-answer", required: &["nudge", "answer"], refs: &[], strings: &["nudge", "answer"], binds: false },
+    // The band saying where the plugins went, put away. It takes no answer — nothing is being asked —
+    // so the press is the whole of the op, and what makes it worth a step of its own is that the
+    // putting away is what records the turn: the window is marked told by this press and by nothing
+    // else, and a band dismissed over a store that refused the write stays up with the reason on it
+    // (`app/src/components/HandoverBanner.tsx`).
+    //
+    // A screen road alone. The terminal says the same sentence, but it says it on the way past —
+    // beside whatever command was typed — and takes its own turn with no press to make.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "handover-away", required: &[], refs: &[], strings: &[], binds: false },
     // The app ended and opened again on the same store. It is not a move on a screen at all: it is a
     // run of Amenbo going out and another coming up, which is the one gap a road cannot otherwise
     // reach and the only place several promises are kept. What a person set and comes back to is
@@ -1145,6 +1164,15 @@ const REGISTRY: &[OpSpec] = &[
     // and it is what the reading is matched against: the id is the name the build declares the nudge
     // under, it never reaches a screen, and a line naming only that could not be judged from a shot.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "nudge", required: &["nudge", "present", "shows"], refs: &[], strings: &["nudge", "shows"], binds: false },
+    // Whether the band saying where the plugins went is standing across the app. A screen road alone,
+    // for the reason the nudge's is. There is only one such band, so `present` alone picks it out and
+    // no id is named.
+    //
+    // `names` is the plugin list the band should be drawing, and it is the one thing on it a road may
+    // read: those are the plugins' own names, the same in every language, where the sentences around
+    // them are the interface's own and belong to whatever language the machine is set to. Left out,
+    // the reading is that the band is there at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "handover", required: &["present"], refs: &[], strings: &["names"], binds: false },
     // What the app's own menu bar carries — a heading, or a word inside one of the menus under it.
     // `shows` is that word and `present` says which way it is read, the same pair every reading takes.
     //
@@ -3258,6 +3286,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.
     (Domain::Store, "worn-in"),
+    // And a device the plugins were taken into on the way here. It is out of reach for the same
+    // reason one step further back: what writes the account is the upgrade from the build before
+    // this one, so a road could only earn it by being two builds long.
+    (Domain::Store, "carried-in"),
     // And a device nothing has been raised on at all, which is the world every road about the screen
     // a first-time reader meets opens on. It is here for the state it leaves rather than for the act,
     // the way `folder unbind` is: what the driver does to have somewhere to file a premise is itself

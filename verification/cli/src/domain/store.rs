@@ -76,6 +76,22 @@ impl Driver<'_> {
                 let worn = wear_in(&self.session.home, launches, days)?;
                 Ok(Outcome::action(worn))
             }
+            // A device the plugins were taken into on the way to this build. The account the handover
+            // migration leaves is what every surface reads to know it owes the sentence, and no
+            // command writes one: the step that would is the upgrade itself. So it is written here,
+            // in the shape that side freezes (`amenbo_core::handover`) — the same reach `worn-in`
+            // makes, and nothing Amenbo would not have written itself.
+            "carried-in" => {
+                let plugins = req_str(with, "plugins")?;
+                let carried = carry_in(
+                    &self.session.home,
+                    plugins,
+                    with.get("targets").and_then(serde_yaml::Value::as_i64).unwrap_or(0),
+                    with.get("projects").and_then(serde_yaml::Value::as_i64).unwrap_or(0),
+                    opt_bool(with, "viewer").unwrap_or(false),
+                )?;
+                Ok(Outcome::action(carried))
+            }
             // Take the device back to a machine nobody has raised anything on. The driver raises a
             // project as it boots — the store has to have somewhere to file what a premise stands up
             // — so this is the only way a premise reaches a store holding none, and a road that opens
@@ -446,6 +462,61 @@ fn wear_in(home: &Path, launches: i64, days: i64) -> Result<String, String> {
     ))
 }
 
+/// Where the handover migration leaves its account. Frozen text on that side too
+/// (`amenbo_core::handover`), so the two spellings have to be kept in step by hand — a row under
+/// another name reads as a device no handover ran on, and the roads that open on one would go green
+/// against a build that draws no band at all.
+const CARRIED_IN_KEY: &str = "plugins_carried_in";
+
+/// Write the account of what the handover carried, the way the migration writes it. The plugin names
+/// are the scenario's own words, split on commas and trimmed; `told` starts empty, since the whole
+/// point of the world is that neither surface has had its turn.
+fn carry_in(
+    home: &Path,
+    plugins: &str,
+    targets: i64,
+    projects: i64,
+    viewer: bool,
+) -> Result<String, String> {
+    let db = home.join(STORE_FILE);
+    if !db.is_file() {
+        return Err(format!(
+            "there is no store at {} yet — `carried-in` writes into one, so a premise that raises anything comes first",
+            db.display()
+        ));
+    }
+    let names: Vec<&str> = plugins.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+    if names.is_empty() {
+        return Err("`carried-in` takes at least one plugin name — a device that had none carried \
+                    nothing in and is owed no sentence"
+            .to_string());
+    }
+    if targets < 0 || projects < 0 {
+        return Err("`carried-in` counts what came across, so neither count may be negative".to_string());
+    }
+    let account = serde_json::json!({
+        "plugins": names,
+        "targets": targets,
+        "projects": projects,
+        "viewer": viewer,
+        "told": [],
+    });
+    let conn = rusqlite::Connection::open(&db)
+        .map_err(|e| format!("could not open the store at {}: {e}", db.display()))?;
+    conn.execute(
+        "INSERT OR REPLACE INTO store_meta (key, value) VALUES (?1, ?2)",
+        rusqlite::params![CARRIED_IN_KEY, account.to_string()],
+    )
+    .map_err(|e| format!("could not write what the handover carried: {e}"))?;
+
+    Ok(format!(
+        "took the device through the handover: {} came in, {targets} connection(s) and {projects} \
+         project(s) with them, the Viewer {}",
+        names.join(", "),
+        if viewer { "among them" } else { "not among them" }
+    ))
+}
+
 /// Backdate every blob file two hours, comfortably past the hour a young blob is spared for.
 fn age_files_in(dir: &Path) -> Result<usize, String> {
     let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
@@ -526,6 +597,75 @@ mod worn_in_tests {
     fn a_home_with_no_store_yet_is_refused() {
         let session = crate::scratch::session("worn-in-test", false).expect("a throwaway home");
         let err = wear_in(&session.home, 5, 3).expect_err("there is nothing to wear in");
+        assert!(err.contains("no store"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod carried_in_tests {
+    use super::*;
+
+    /// A home with a store in it holding the one table the account is written to. The rest of the
+    /// schema is the shipped build's business, for the reason `worn-in`'s fixture leaves it alone.
+    fn a_store() -> crate::scratch::Session {
+        let session = crate::scratch::session("carried-in-test", false).expect("a throwaway home");
+        let conn =
+            rusqlite::Connection::open(session.home.join(STORE_FILE)).expect("a store to open");
+        conn.execute_batch("CREATE TABLE store_meta (key TEXT PRIMARY KEY, value TEXT);")
+            .expect("the one table this reaches into");
+        session
+    }
+
+    fn account(home: &Path) -> serde_json::Value {
+        let conn = rusqlite::Connection::open(home.join(STORE_FILE)).expect("a store to open");
+        let raw: String = conn
+            .query_row("SELECT value FROM store_meta WHERE key = ?1", [CARRIED_IN_KEY], |r| r.get(0))
+            .expect("the account the handover left");
+        serde_json::from_str(&raw).expect("the shape the other side reads")
+    }
+
+    /// The whole of what the premise claims: which plugins came in, how much came with them, and
+    /// that neither surface has said it yet — the last being what makes a band come up at all.
+    #[test]
+    fn the_account_is_written_in_the_shape_the_surfaces_read() {
+        let session = a_store();
+        carry_in(&session.home, "slack, viewer, worktree", 2, 3, true).expect("a device upgraded");
+
+        let held = account(&session.home);
+        assert_eq!(held["plugins"], serde_json::json!(["slack", "viewer", "worktree"]));
+        assert_eq!(held["targets"], 2);
+        assert_eq!(held["projects"], 3);
+        assert_eq!(held["viewer"], true);
+        assert_eq!(held["told"], serde_json::json!([]), "neither surface has had its turn");
+    }
+
+    /// A device that had one plugin and no settings to carry writes the counts it actually has: the
+    /// lines held behind them are the ones a band about a shelf with nothing on it would invent.
+    #[test]
+    fn a_device_that_carried_nothing_else_says_so() {
+        let session = a_store();
+        carry_in(&session.home, "worktree", 0, 0, false).expect("a device upgraded");
+
+        let held = account(&session.home);
+        assert_eq!(held["plugins"], serde_json::json!(["worktree"]));
+        assert_eq!(held["targets"], 0);
+        assert_eq!(held["viewer"], false);
+    }
+
+    /// No plugin named is refused rather than written as an empty account: a road standing on one
+    /// would be watching for a band the build is right not to draw.
+    #[test]
+    fn a_device_that_had_none_is_refused() {
+        let session = a_store();
+        let err = carry_in(&session.home, " , ", 0, 0, false).expect_err("there is nothing to carry");
+        assert!(err.contains("at least one plugin"), "{err}");
+    }
+
+    /// And a home with no store in it yet, which is what a premise that put this first would meet.
+    #[test]
+    fn a_home_with_no_store_yet_is_refused() {
+        let session = crate::scratch::session("carried-in-test", false).expect("a throwaway home");
+        let err = carry_in(&session.home, "mail", 0, 0, false).expect_err("there is nothing to write into");
         assert!(err.contains("no store"), "{err}");
     }
 }

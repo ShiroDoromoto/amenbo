@@ -20,7 +20,7 @@ use crate::model::{
     ActorKind, AttachmentTarget, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind,
     DecisionStatus, DecisionTaskLink,
 };
-use crate::ops::{emit_create, emit_update, Noun};
+use crate::ops::{emit_create, emit_update, MadeIn, Noun};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -87,6 +87,9 @@ pub struct NewDecision {
     pub body: String,
     /// The resolved project id: a decision always lives under a project and never multi-homes.
     pub project_id: i64,
+    /// The session this was recorded from ([`MadeIn`], `AMB-D-897`), or `None` for a decision recorded
+    /// outside the talk window. Stated by the caller; the create reads nothing of where it was typed.
+    pub made_in: Option<MadeIn>,
 }
 
 /// Create a decision as `Proposed` (under discussion), assigning the conversational number (`D-N`)
@@ -117,6 +120,23 @@ pub fn add(tx: &WriteTx<'_>, input: NewDecision) -> Result<Decision> {
         updated_at: now,
     };
     emit_create(tx, record::decision(&decision))?;
+    // The session it was recorded from, in the same transaction as the decision (`AMB-D-897`) — the
+    // question it answers is which session made this one, and a row written after the commit would be
+    // absent from exactly the decisions whose creating process stopped in between.
+    if let Some(made_in) = input.made_in {
+        emit_create(
+            tx,
+            record::decision_made_in(&crate::model::DecisionMadeIn {
+                id: read::next_id(tx.conn(), "decision_made_in")?,
+                decision_id: decision.id,
+                pane: made_in.pane,
+                pane_name: made_in.pane_name,
+                pane_resume: made_in.pane_resume,
+                created_at: now,
+                updated_at: now,
+            }),
+        )?;
+    }
     Ok(decision)
 }
 
@@ -701,6 +721,7 @@ mod tests {
                 title: title.to_string(),
                 body: "結論と根拠".to_string(),
                 project_id: pid,
+                made_in: None,
             },
         )
         .unwrap()
@@ -1097,12 +1118,14 @@ mod tests {
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
             project_id: pid,
+            made_in: None,
         }).unwrap();
         accept(tx, d1.id, None).unwrap();
         let _d2 = add(tx, NewDecision {
             title: "OSS は英語表記".to_string(),
             body: "README とコミットは英語".to_string(),
             project_id: pid,
+            made_in: None,
         }).unwrap(); // still Proposed
 
         // status:accepted matches d1 alone.
@@ -1147,6 +1170,7 @@ mod tests {
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
             project_id: pid,
+            made_in: None,
         }).unwrap();
         add_comment(tx, d.id, ActorKind::Ai, "計測してから設計する方針で合意").unwrap();
         // A second decision with the term nowhere, to prove the filter still narrows.
@@ -1154,6 +1178,7 @@ mod tests {
             title: "OSS は英語表記".to_string(),
             body: "README とコミットは英語".to_string(),
             project_id: pid,
+            made_in: None,
         }).unwrap();
 
         let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
@@ -1188,9 +1213,11 @@ mod tests {
         let pid = mk_project(tx, "amenbo 開発");
         let first = add(tx, NewDecision {
             title: "先の決定".to_string(), body: String::new(), project_id: pid,
+            made_in: None,
         }).unwrap();
         let second = add(tx, NewDecision {
             title: "後の決定".to_string(), body: String::new(), project_id: pid,
+            made_in: None,
         }).unwrap();
 
         let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
@@ -1221,12 +1248,14 @@ mod tests {
             title: "the store is the truth".to_string(),
             body: String::new(),
             project_id: pid,
+            made_in: None,
         }).unwrap();
         add_comment(tx, d.id, ActorKind::Ai, "measured first, designed after").unwrap();
         add(tx, NewDecision {
             title: "commits are English".to_string(),
             body: String::new(),
             project_id: pid,
+            made_in: None,
         }).unwrap();
 
         let list = |params: DecisionListParams| {
@@ -1265,6 +1294,7 @@ mod tests {
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
             project_id: pid,
+            made_in: None,
         })
         .unwrap();
 
@@ -1317,11 +1347,13 @@ mod tests {
             title: "  ".to_string(),
             body: String::new(),
             project_id: pid,
+            made_in: None,
         }).is_err());
         assert!(add(tx, NewDecision {
             title: "x".to_string(),
             body: String::new(),
             project_id: 999_999,
+            made_in: None,
         }).is_err());
     }
 
@@ -1973,27 +2005,65 @@ mod tests {
         assert!(decisions_for_task(tx, t).is_empty());
     }
 
+    /// A pane, as a create is handed one.
+    fn a_pane() -> MadeIn {
+        MadeIn {
+            pane: "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114".to_string(),
+            pane_name: Some("移行を書いている窓".into()),
+            pane_resume: Some("0f9c".into()),
+        }
+    }
+
+    /// The create writes the session it was recorded from, and writes it whole (`AMB-D-897`).
+    #[test]
+    fn add_records_the_session_it_was_made_in() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = add(
+            tx,
+            NewDecision {
+                title: "ペインのついた決定".to_string(),
+                body: "結論と根拠".to_string(),
+                project_id: pid,
+                made_in: Some(a_pane()),
+            },
+        )
+        .unwrap();
+
+        let made_in = read::decision_made_in(tx.conn(), d.id).unwrap().expect("the pane's row");
+        assert_eq!(made_in.decision_id, d.id);
+        assert_eq!(made_in.pane, "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114");
+        assert_eq!(made_in.pane_name.as_deref(), Some("移行を書いている窓"));
+        assert_eq!(made_in.pane_resume.as_deref(), Some("0f9c"));
+    }
+
+    /// A decision recorded outside the talk window leaves no row — there is no pane to name, and a row
+    /// carrying nothing would read as a session that cannot be found.
+    #[test]
+    fn add_outside_a_pane_writes_no_row() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = new_decision(tx, pid, "窓の外で書いた決定");
+        assert!(read::decision_made_in(tx.conn(), d.id).unwrap().is_none());
+    }
+
     /// The session a decision was made in goes with the decision (`AMB-D-897`) — the task side's twin
     /// (`ops::task`), and `RESTRICT` for the same reason: a row left behind stops the delete.
-    ///
-    /// Put here by hand because nothing writes one yet; the sweep arrives with the table rather than
-    /// after it.
     #[test]
     fn delete_takes_the_pane_it_was_made_in_with_it() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
-        let d = new_decision(tx, pid, "ペインのついた決定");
-        crate::ops::emit_create(
+        let d = add(
             tx,
-            crate::store_engine::record::decision_made_in(&crate::model::DecisionMadeIn {
-                id: read::next_id(tx.conn(), "decision_made_in").unwrap(),
-                decision_id: d.id,
-                pane: "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114".to_string(),
-                pane_name: Some("the migration".into()),
-                pane_resume: Some("0f9c".into()),
-                ..Default::default()
-            }),
+            NewDecision {
+                title: "ペインのついた決定".to_string(),
+                body: "結論と根拠".to_string(),
+                project_id: pid,
+                made_in: Some(a_pane()),
+            },
         )
         .unwrap();
         assert!(read::decision_made_in(tx.conn(), d.id).unwrap().is_some());

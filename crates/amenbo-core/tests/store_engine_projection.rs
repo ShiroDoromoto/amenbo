@@ -53,6 +53,7 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap()
                 .id;

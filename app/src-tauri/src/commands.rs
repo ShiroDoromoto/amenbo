@@ -1533,6 +1533,7 @@ pub fn task_add(
             notes: notes.unwrap_or_default(),
             created_by_kind: Some(ActorKind::Human),
             at_binding_id: None,
+            made_in: None,
         })?;
         emit(store, t.id, amenbo_core::activity_log::event::task_created(&t.title));
         Ok(t.id)
@@ -2013,6 +2014,7 @@ pub fn decision_add(
         // half-classified decision behind.
         let d = store.add_decision_with_dimensions(amenbo_core::ops::decision::NewDecision {
             title, body: body.unwrap_or_default(), project_id,
+            made_in: None,
         }, &dimension_value_ids.unwrap_or_default())?;
         // The proposal is a moment, and the column cannot hold it (`AMB-T-3639`). A line that could
         // not be written is not a decision that was not made: the ledger is not the record.
@@ -2143,6 +2145,7 @@ pub fn decision_promote(comment_id: i64, title: String) -> Result<WriteAck, CmdE
             .ok_or_else(|| "the comment's task belongs to no project".to_string())?;
         let d = store.add_decision(amenbo_core::ops::decision::NewDecision {
             title, body, project_id,
+            made_in: None,
         })?;
         let did = d.id;
         let _ = store.add_decision_system_event(
@@ -4946,6 +4949,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap();
         }
@@ -5012,6 +5016,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap();
         }
@@ -5035,6 +5040,7 @@ pub(crate) mod tests {
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),
                 at_binding_id: None,
+                made_in: None,
             })
             .expect("a write still lands after the sidecars were cleared");
 
@@ -5099,6 +5105,7 @@ pub(crate) mod tests {
             title: title.to_string(),
             body: body.to_string(),
             project_id,
+            made_in: None,
         };
         // The term is in neither title nor body — only in a comment, which is what the client-side search
         // could not see.
@@ -5150,6 +5157,7 @@ pub(crate) mod tests {
                     notes: notes.into(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap()
                 .id
@@ -5205,6 +5213,7 @@ pub(crate) mod tests {
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Ai),
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap()
             .id;
@@ -5256,6 +5265,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap()
                 .id;
@@ -6749,6 +6759,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap();
                 if i == 4 {
@@ -6819,6 +6830,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap();
                 ids.push(t.id);
@@ -6860,6 +6872,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap()
                 .id
@@ -7058,6 +7071,7 @@ pub(crate) mod tests {
                         notes: "本文".into(),
                         created_by_kind: Some(ActorKind::Human),
                         at_binding_id: None,
+                        made_in: None,
                     })
                     .unwrap()
                     .id;
@@ -7075,6 +7089,7 @@ pub(crate) mod tests {
                     title: "方針X".into(),
                     body: "理由".into(),
                     project_id: p.id,
+                    made_in: None,
                 })
                 .unwrap();
             store.link_decision(d.id, a).unwrap();
@@ -7084,6 +7099,7 @@ pub(crate) mod tests {
                     title: "方針Y".into(),
                     body: "改訂".into(),
                     project_id: p.id,
+                    made_in: None,
                 })
                 .unwrap();
             store.supersede_decision(d2.id, d.id, Some(me.clone()), ActorKind::Human).unwrap();
@@ -7092,6 +7108,7 @@ pub(crate) mod tests {
                     title: "方針Y改".into(),
                     body: "一部改訂".into(),
                     project_id: p.id,
+                    made_in: None,
                 })
                 .unwrap();
             store.amend_decision(d3.id, d2.id).unwrap();

@@ -39,6 +39,7 @@ fn hydrated(s: &Store) -> Database {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             },
         );
 
@@ -65,6 +66,7 @@ fn hydrated(s: &Store) -> Database {
                 notes: "n".to_string(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
             s.add_task_comment(t.id, crate::model::ActorKind::Human, "hi").unwrap();
@@ -103,6 +105,7 @@ fn hydrated(s: &Store) -> Database {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
             t.id
@@ -139,6 +142,7 @@ fn hydrated(s: &Store) -> Database {
                     notes: String::new(),
                     created_by_kind: None,
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap()
                 .id
@@ -204,6 +208,7 @@ fn hydrated(s: &Store) -> Database {
             notes: String::new(),
             created_by_kind: None,
             at_binding_id: None,
+            made_in: None,
         });
         s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
         s.add_task_comment(t.id, crate::model::ActorKind::Human, "コメント").unwrap();
@@ -255,6 +260,7 @@ fn hydrated(s: &Store) -> Database {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    made_in: None,
                 })
                 .unwrap();
             }
@@ -367,6 +373,7 @@ fn task(title: &str, project_id: Option<i64>) -> NewTask {
         notes: String::new(),
         created_by_kind: None,
         at_binding_id: None,
+        made_in: None,
     }
 }
 
@@ -1012,7 +1019,12 @@ fn a_value_named_at_creation_lands_with_the_task_and_beats_the_default() {
 }
 
 fn new_decision(title: &str, project_id: i64) -> crate::ops::decision::NewDecision {
-    crate::ops::decision::NewDecision { title: title.into(), body: String::new(), project_id }
+    crate::ops::decision::NewDecision {
+        title: title.into(),
+        body: String::new(),
+        project_id,
+        made_in: None,
+    }
 }
 
 /// A decision picks up the time-axis default the way a task does: the era containing today lands on the
@@ -1277,6 +1289,7 @@ fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
             title: "どちらの道を採るか".to_string(),
             body: String::new(),
             project_id: pid,
+            made_in: None,
         })
         .unwrap();
     s.add_decision_system_event(

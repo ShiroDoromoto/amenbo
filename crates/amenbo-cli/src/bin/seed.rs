@@ -92,6 +92,7 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
             notes: format!("scale-test seed task index={i}"),
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id: None,
+            made_in: None,
         })?;
         store.set_task_dimension_value(task.id, value_id)?;
         summary.tasks += 1;

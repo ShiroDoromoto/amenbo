@@ -69,6 +69,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             let t = store.add_task_with_dimensions(ops::task::NewTask {
                 title, project_id: Some(project_id), due_on, start_on, priority, notes,
                 created_by_kind: Some(flags.facet()?), at_binding_id,
+                made_in: None,
             }, &dimension_values).map_err(CliError::from)?;
             emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two

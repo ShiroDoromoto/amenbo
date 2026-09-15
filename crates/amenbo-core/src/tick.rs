@@ -609,6 +609,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: Some(crate::model::ActorKind::Human),
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap()
             .id

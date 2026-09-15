@@ -37,6 +37,7 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
         notes: String::new(),
         created_by_kind: Some(ActorKind::Ai),
         at_binding_id: None,
+        made_in: None,
     }
 }
 
@@ -55,6 +56,7 @@ fn new_decision(title: &str, project_id: i64) -> amenbo_core::ops::decision::New
         title: title.to_string(),
         body: String::new(),
         project_id,
+        made_in: None,
     }
 }
 

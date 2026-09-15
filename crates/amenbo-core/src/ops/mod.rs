@@ -41,6 +41,45 @@ use crate::model::AttachmentTarget;
 use crate::order::key_between;
 use crate::store_engine::{Record, WriteTx};
 
+/// The session a task or a decision was made in, as it is handed to the create (`AMB-D-897`) — the
+/// pane it was typed in, what that pane was called at the time, and the handle its conversation is
+/// resumed from. It becomes a [`crate::model::TaskMadeIn`] or a [`crate::model::DecisionMadeIn`] row
+/// written in the same transaction as the record it belongs to.
+///
+/// **The create does not go looking for it.** The values arrive from whoever typed the command and
+/// from nowhere else: read inside the create, they would be read from whatever process happened to be
+/// running — a GUI started from a pane would then stamp that pane on every task made in it, and a test
+/// could not set them at all, the environment being one thing a whole test binary shares (`AMB-D-897`).
+///
+/// `None` on the create is a record made outside the talk window, and it writes no row.
+#[derive(Clone, Debug)]
+pub struct MadeIn {
+    /// The id of the pane it was made in ([`crate::frames::SavedPane::id`]).
+    pub pane: String,
+    /// What that pane was called at the time, or `None` for a pane nobody had named.
+    pub pane_name: Option<String>,
+    /// The handle that pane's provider is resumed from ([`crate::frames::SavedPane::resume`]), or
+    /// `None` for a pane there is no way back into.
+    pub pane_resume: Option<String>,
+}
+
+impl MadeIn {
+    /// The three values as a caller reads them off the environment, or `None` where there is no pane
+    /// to name — which is every `amenbo` typed outside the talk window.
+    ///
+    /// **A blank pane is no pane.** A variable can be inherited set to nothing, and a row carrying an
+    /// empty id is worse than no row: it is read back as a session that existed and cannot be found,
+    /// where the absent row correctly says the record was made outside the window.
+    pub fn from_pane(
+        pane: Option<String>,
+        pane_name: Option<String>,
+        pane_resume: Option<String>,
+    ) -> Option<Self> {
+        let pane = pane.filter(|p| !p.trim().is_empty())?;
+        Some(MadeIn { pane, pane_name, pane_resume })
+    }
+}
+
 /// **A project boundary is a context boundary.** Rejects any edge that spans projects — decision↔decision
 /// (supersedes / amends / builds_on), decision↔task, task↔task (dependency). Each project is worked by its
 /// own AI agent, and an agent assembles its context by **following the references it can follow**. A
@@ -176,6 +215,7 @@ pub(crate) mod test_support {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             },
         )
         .expect("add task")
@@ -193,6 +233,7 @@ pub(crate) mod test_support {
                 title: title.to_string(),
                 body: String::new(),
                 project_id,
+                made_in: None,
             },
         )
         .expect("add decision")
@@ -225,7 +266,7 @@ mod cross_project_tests {
     fn mk_decision(tx: &WriteTx<'_>, project_id: i64, title: &str) -> i64 {
         super::decision::add(
             tx,
-            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new() },
+            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new(), made_in: None },
         )
         .expect("add decision")
         .id
@@ -346,6 +387,29 @@ mod cross_project_tests {
     }
 }
 
+/// The session a record was made in, as the create is handed it (`AMB-D-897`).
+#[cfg(test)]
+mod made_in_tests {
+    use super::MadeIn;
+
+    /// The door [`MadeIn::from_pane`] holds: a pane names a session, and nothing else does.
+    #[test]
+    fn a_blank_pane_is_no_pane() {
+        assert!(
+            MadeIn::from_pane(None, Some("名前".into()), Some("0f9c".into())).is_none(),
+            "outside the talk window there is no pane, whatever else was handed along",
+        );
+        assert!(
+            MadeIn::from_pane(Some("   ".into()), None, None).is_none(),
+            "a variable inherited set to nothing is not a pane either",
+        );
+        let made_in =
+            MadeIn::from_pane(Some("7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114".into()), None, None)
+                .expect("a pane with neither a name nor a way back is still a pane");
+        assert_eq!(made_in.pane, "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114");
+    }
+}
+
 /// A delete op takes its own children — every row that stands for a concept goes through code, and the
 /// database is left nothing to sweep behind it (`AMB-D-403`).
 #[cfg(test)]
@@ -378,7 +442,7 @@ mod delete_children_tests {
     fn mk_decision(tx: &WriteTx<'_>, project_id: i64, title: &str) -> i64 {
         super::decision::add(
             tx,
-            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new() },
+            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new(), made_in: None },
         )
         .expect("add decision")
         .id

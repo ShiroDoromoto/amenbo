@@ -478,7 +478,10 @@ function rowsOf(term: Terminal): Rows {
 // Show the record on the board. The window it is read in belongs to the same process and not to this
 // webview, so raising it is the host's (`crate::windows::show_ref`); a failure leaves the pane exactly
 // as it was, which is the honest outcome for a click that could not be carried out.
-function showRef(space: RefSpace, num: number): void {
+//
+// Exported because a ref drawn in the pane is not the only one that opens this way: the band under the
+// pane lists what the session has filed, and a press there lands on the same record (`AMB-D-897`).
+export function showRef(space: RefSpace, num: number): void {
   void invoke("show_ref", { kind: space, id: num }).catch(() => {});
 }
 

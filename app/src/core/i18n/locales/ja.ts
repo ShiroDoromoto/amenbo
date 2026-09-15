@@ -625,6 +625,7 @@ export const ja: Translation = {
     "face.composeSendKeys": "送信（{keys}）",
     "face.composeOpen": "書く欄を開く",
     "face.composeFold": "書く欄を畳む",
+    "face.madeHere": "このセッションが作ったもの",
     "files.side": "メモとファイル",
     "files.memo": "メモ",
     "files.memoTyping": "入力中",

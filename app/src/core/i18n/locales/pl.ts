@@ -634,6 +634,7 @@ export const pl: Translation = {
     "face.composeSendKeys": "Wyślij ({keys})",
     "face.composeOpen": "Otwórz pole do pisania",
     "face.composeFold": "Zwiń pole do pisania",
+    "face.madeHere": "Co utworzyła ta sesja",
     "files.side": "Notatki i pliki",
     "files.memo": "Notatki",
     "files.memoTyping": "Pisanie",

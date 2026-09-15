@@ -47,9 +47,11 @@ fn say(flags: &Flags, surface: &Surface, statement: Statement) -> Result<i32, Cl
 fn said(statement: &Statement) -> String {
     match statement {
         Statement::Name(text) => format!("this pane is now called “{text}”"),
-        // Not a verb anyone types: `amenbo agent` leaves it on its own (`AMB-D-805`), so no route
-        // through `talk` ever reaches this line.
+        // Neither of these is a verb anyone types: `amenbo agent` leaves one on its own
+        // (`AMB-D-805`) and a create leaves the other (`AMB-D-897`), so no route through `talk` ever
+        // reaches these two lines.
         Statement::Briefed => "read the canon".to_string(),
+        Statement::Made { side, id } => format!("filed a {} ({id})", side.word()),
     }
 }
 

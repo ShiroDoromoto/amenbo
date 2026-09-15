@@ -585,6 +585,27 @@ input[type="color"] {
    something is written in it, because it is saying the same thing from the outside. */
 .panerow__fold--holding, .panerow__fold--holding:hover { color: var(--c-accent); }
 
+/* How much this session has filed, beside the press that folds the box (`../shell/PaneMade`). It
+   holds no room of its own: a session that has filed nothing draws nothing here, and the band keeps
+   its height from the fold press either way (`AMB-D-889`). */
+.maderow {
+  flex: 0 1 auto;
+  display: flex; align-items: center;
+  min-width: 0;
+}
+/* The count, drawn as a word rather than as a button, for the reason the model beside it is: this
+   stands under a terminal, and a filled control there would read as part of what the program is
+   drawing. It is cut rather than wrapped — the band is one line, and a pane in a face split four
+   ways is narrow. */
+.maderow__count {
+  min-width: 0;
+  padding: var(--s-1) 0;
+  border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.maderow__count:hover { color: var(--c-text); }
+
 /* Where the model the program is answering on is moved (`../shell/PaneModel`). `position: relative`
    is what the popover above is placed against — it opens upwards, because this is already at the
    bottom of the pane. */

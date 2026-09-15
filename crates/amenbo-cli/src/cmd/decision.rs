@@ -50,6 +50,9 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             // The proposal is a moment, and the column cannot hold it: `status` says a decision is
             // proposed and `status_changed_at` is overwritten by the verdict (`AMB-T-3639`).
             emit_decision_event(store, flags, d.id, activity_log::event::decision_proposed(&d.title));
+            // And the pane it was typed in is told, for the reason `task add` says it there
+            // (`AMB-D-897`).
+            amenbo_core::session::made(amenbo_core::session::Side::Decision, d.id);
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
             let mut resource = serde_json::to_value(&detail).unwrap();
@@ -345,6 +348,10 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             // written where the two roads meet rather than on each of them (`AMB-T-3639`).
             let title = store.decision_detail(did).map_err(CliError::from)?.title;
             emit_decision_event(store, flags, did, activity_log::event::decision_proposed(&title));
+            // The pane is told here for the same reason the line above is written here: a decision
+            // raised out of a comment was filed from this pane as much as one typed outright, and a
+            // count that passed over one road would be short by exactly the decisions taken on it.
+            amenbo_core::session::made(amenbo_core::session::Side::Decision, did);
             let detail = store.decision_detail(did).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             let unmet = unmet_on_new_decision(store, did, &mut resource)?;

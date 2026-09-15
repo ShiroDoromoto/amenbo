@@ -630,6 +630,7 @@ export const fr: Translation = {
     "face.composeSendKeys": "Envoyer ({keys})",
     "face.composeOpen": "Ouvrir la zone d'écriture",
     "face.composeFold": "Replier la zone d'écriture",
+    "face.madeHere": "Ce que cette session a créé",
     "files.side": "Notes et fichiers",
     "files.memo": "Notes",
     "files.memoTyping": "Saisie en cours",

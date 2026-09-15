@@ -74,6 +74,10 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 made_in,
             }, &dimension_values).map_err(CliError::from)?;
             emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
+            // And the pane it was typed in is told, where it was typed in one (`AMB-D-897`). Left
+            // after the create rather than with it: what the band under the pane counts is a task
+            // that exists, and a drop box that cannot be written to must not take one away.
+            amenbo_core::session::made(amenbo_core::session::Side::Task, t.id);
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two
             // logical operations and therefore two transactions, so the add survives a failing assign.
             if let Some(kind) = assignee_kind {

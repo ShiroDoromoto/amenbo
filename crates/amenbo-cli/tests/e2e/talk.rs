@@ -362,3 +362,68 @@ fn a_record_filed_outside_a_pane_carries_no_session_at_all() {
     assert_eq!(made_in.pane_name, None, "there is no row to read a name off");
     assert_eq!(made_in.pane_resume.as_deref(), Some("0f9c"));
 }
+
+/// The other statement nobody speaks: a create leaves a note saying what it filed, so the band under
+/// the pane can count this session's own work while it is still running (`AMB-D-897`).
+///
+/// **It is the command running that is counted**, which is the footing the briefed mark stands on and
+/// the one `AMB-D-862` left the row on: an AI's own account of what it had done was taken off this
+/// screen, and a count made of the same account would put it back.
+#[test]
+fn a_create_leaves_the_pane_a_note_of_what_it_filed() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+    let dir = amenbo_scratch::scratch("talk-made");
+    let pane = in_a_pane(&dir);
+
+    let t = cli.json_env(&pane_env(&pane), &["task", "add", "--title", "帯に出す件数", "--project", &pid, "--json"]);
+    let task = id_str(&t["task"]["id"]);
+    let d = cli.json_env(&pane_env(&pane), &["decision", "add", "--title", "帯に出す決定", "--body", "結論", "--project", &pid, "--json"]);
+    let decision = id_str(&d["decision"]["id"]);
+    // A decision raised out of a comment was filed from this pane as much as one typed outright.
+    let c = cli.json_env(&pane_env(&pane), &["comment", "add", &task, "--text", "これは決定だ", "--json"]);
+    let cid = id_str(&c["comment"]["id"]);
+    let p = cli.json_env(&pane_env(&pane), &["decision", "promote", &cid, "--title", "昇格した決定", "--json"]);
+    let promoted = id_str(&p["decision"]["id"]);
+
+    let said = statements(&dir);
+    let made: Vec<&serde_json::Value> = said.iter().filter(|s| s["verb"] == "made").collect();
+    assert_eq!(
+        made.iter()
+            .map(|s| format!("{}:{}", s["kind"].as_str().unwrap_or_default(), s["id"]))
+            .collect::<Vec<_>>(),
+        vec![format!("task:{task}"), format!("decision:{decision}"), format!("decision:{promoted}")],
+        "each create says which space it filed in and what number it got: {made:?}",
+    );
+    assert!(
+        made.iter().all(|s| s["session"] == "pane-1" && s["text"].is_null()),
+        "each says which pane it was typed in, and carries no line: {made:?}",
+    );
+}
+
+/// Outside a pane there is nobody to tell, and a create is a create either way: `task add` answers as
+/// it always did and leaves nothing anywhere. A comment is not a create, so it leaves nothing even
+/// inside one — what the band counts is the records a session filed.
+#[test]
+fn a_create_outside_a_pane_leaves_nothing_and_a_comment_is_not_one() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+    let dir = amenbo_scratch::scratch("talk-made-outside");
+    let pane = in_a_pane(&dir);
+
+    let t = cli.json(&["task", "add", "--title", "窓の外で立てたタスク", "--project", &pid, "--json"]);
+    assert!(
+        !dir.exists() || statements(&dir).is_empty(),
+        "a plain terminal is no pane, so there is no band to tell",
+    );
+
+    let id = id_str(&t["task"]["id"]);
+    cli.json_env(&pane_env(&pane), &["comment", "add", &id, "--text", "話の続き", "--json"]);
+    assert!(
+        statements(&dir).iter().all(|s| s["verb"] != "made"),
+        "and a comment files no record: {:?}",
+        statements(&dir),
+    );
+}

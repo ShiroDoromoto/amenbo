@@ -47,7 +47,7 @@ use tauri::{Emitter, Manager};
 
 use amenbo_core::harness::Handle;
 
-use crate::dto::{PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionSaidDto};
+use crate::dto::{PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionMadeDto, SessionSaidDto};
 use crate::error::CmdError;
 use crate::launch;
 
@@ -404,13 +404,14 @@ impl Pane {
     /// Take in one statement on its way to the window.
     ///
     /// One of them is the pane's own business as well as the person's: the fact that `amenbo agent`
-    /// ran here. Every other verb passes straight through — a name is the frame being named, and the
-    /// frame is the window's.
+    /// ran here. Every other verb passes straight through — a name is the frame being named, and a
+    /// record filed from here is counted under the pane on the screen, and both of those are the
+    /// window's.
     fn take_in(&self, said: &amenbo_core::session::Said) {
         use amenbo_core::session::Statement;
         match &said.statement {
             Statement::Briefed => self.briefed.store(true, Ordering::Relaxed),
-            Statement::Name(_) => {}
+            Statement::Name(_) | Statement::Made { .. } => {}
         }
     }
 
@@ -1470,12 +1471,15 @@ impl SessionSaidDto {
     fn of(session: &str, said: amenbo_core::session::Said) -> Self {
         use amenbo_core::session::Statement;
         let verb = said.statement.verb();
-        let text = match said.statement {
-            Statement::Name(text) => Some(text),
+        let (text, made) = match said.statement {
+            Statement::Name(text) => (Some(text), None),
             // The fact is the whole of it, so there is no line to draw (`AMB-D-805`).
-            Statement::Briefed => None,
+            Statement::Briefed => (None, None),
+            // No line either: what the band under the pane draws is a count of these and what it
+            // opens is the record, so the record is what travels (`AMB-D-897`).
+            Statement::Made { side, id } => (None, Some(SessionMadeDto { kind: side.word(), id })),
         };
-        SessionSaidDto { session: session.to_string(), verb, at: said.at, cwd: said.cwd, text }
+        SessionSaidDto { session: session.to_string(), verb, at: said.at, cwd: said.cwd, text, made }
     }
 }
 

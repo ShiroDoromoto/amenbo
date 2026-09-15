@@ -621,6 +621,7 @@ export const id: Translation = {
     "face.composeSendKeys": "Kirim ({keys})",
     "face.composeOpen": "Buka kotak untuk menulis",
     "face.composeFold": "Tutup kotak tulis",
+    "face.madeHere": "Yang dibuat sesi ini",
     "files.side": "Catatan dan berkas",
     "files.memo": "Catatan",
     "files.memoTyping": "Mengetik",

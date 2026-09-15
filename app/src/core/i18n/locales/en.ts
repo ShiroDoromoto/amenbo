@@ -752,6 +752,11 @@ const ui = {
   // words are the only place the difference is said.
   "face.composeOpen": "Open the box to write in",
   "face.composeFold": "Fold the box away",
+  // The other thing on that band: how much this session has filed, and behind it the records
+  // themselves (`AMB-D-897`, `../../../shell/PaneMade`). The count is written by `act.nTasks`
+  // and `act.nDecisions`, which are already the pair for saying it — this is what the press
+  // stands for, said where a reader stops on it.
+  "face.madeHere": "What this session has filed",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel

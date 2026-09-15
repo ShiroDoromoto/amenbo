@@ -34,9 +34,6 @@
 //! [`crate::outbox_drive`], which walks it once for everything that observes a write, hands each row on,
 //! and trims what it read — all on one transaction. What any *one* of those observers still owes is its
 //! own business, so reclaiming this table is bounded by the walk alone, never by how fast any reader runs.
-//!
-//! The table is spelled `plugin_outbox`, from when the only reader was the plugin dispatcher. The name is
-//! stored data, so it stays as written until something else makes a migration worth it.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -50,7 +47,7 @@ use super::sql::{Delete, Expr, Pred, Select, Sort, Sql};
 /// survives until it has been fanned out onto the queues of everyone who observes it, not merely until a
 /// window slides past it). A store that has never trimmed carries no row, which reads back as `0` — the
 /// same answer, said by the absence.
-pub(crate) const META_OUTBOX_TRUNCATED_THROUGH: &str = "plugin_outbox_truncated_through";
+pub(crate) const META_OUTBOX_TRUNCATED_THROUGH: &str = "outbox_truncated_through";
 
 /// One semantic event to append to the outbox — the fields a fired event carries, minus the payload
 /// version constant. The caller (an ops write point) has already classified the change into its event
@@ -59,8 +56,8 @@ pub(crate) const META_OUTBOX_TRUNCATED_THROUGH: &str = "plugin_outbox_truncated_
 /// from the caller's own strings without owning them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventRow<'a> {
-    /// The event's namespace name, e.g. `task.status_changed` — opaque to the store, dispatched on by a
-    /// plugin.
+    /// The event's namespace name, e.g. `task.status_changed` — opaque to the store, dispatched on by
+    /// whatever observes a write.
     pub event: &'a str,
     /// The affected record's id — the conversational number a reader knows it by (a task, a decision, a
     /// comment).
@@ -90,7 +87,7 @@ pub struct EventRow<'a> {
 /// to `&Connection`), so it lands with the operation's other writes — see
 /// [`super::write::WriteTx::emit_event`], the only caller.
 pub(super) fn append(conn: &Connection, ev: &EventRow<'_>) -> Result<()> {
-    let out = col::plugin_outbox::ALL;
+    let out = col::outbox::ALL;
     super::sql::Insert::into(out.table)
         .set(out.event, ev.event)
         .set(out.record_id, ev.record_id)
@@ -165,7 +162,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
     if after_id < truncated_through {
         return Ok(OutboxSlice::Gap);
     }
-    let out = col::plugin_outbox::ALL;
+    let out = col::outbox::ALL;
     // One row past the page, so "is there more?" costs no second query.
     let mut sel = Select::new();
     let (id, event, record_id, actor, at, new_state, project, record, parent) = (
@@ -209,7 +206,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
 /// The outbox's newest id — the cursor a dispatcher starts from when it only wants what fires *next*
 /// (a fresh install, or a resync after a [`OutboxSlice::Gap`]). `0` on an empty outbox.
 pub fn outbox_head(conn: &Connection) -> Result<i64> {
-    let out = col::plugin_outbox::ALL;
+    let out = col::outbox::ALL;
     let mut sel = Select::new();
     // An aggregate over no rows is `NULL`, and an empty outbox's head is `0`.
     let head = sel.expr::<i64>(format!("COALESCE(MAX({}), 0)", out.id.to_sql()));
@@ -227,9 +224,10 @@ pub fn outbox_head(conn: &Connection) -> Result<i64> {
 /// count-based window slides past them, consumed or not, because a stale GUI cache re-reads on a gap and
 /// loses nothing that matters. An observation event dropped before anyone was offered it is a hook that
 /// never fired, so retention here is gated on the *fan-out*, never on age or count — an event survives
-/// until it is on the queue of every plugin that observes it, which is precisely what the caller's
-/// transaction makes true before it calls this. What happens after that is each queue's business
-/// (`AMB-D-399`): a plugin that has not run yet still holds its rows, and this table no longer waits on it.
+/// until the walk has handed it to everything that observes a write, which is precisely what the caller's
+/// transaction makes true before it calls this. What happens after that is each observer's business
+/// (`AMB-D-399`, `AMB-D-901`): an observer that has not finished still owes its own work, and this table
+/// no longer waits on it.
 /// `through <= 0` (a fan-out that copied nothing) trims nothing.
 ///
 /// Runs on the caller's transaction so the delete and the watermark land together or not at all: a
@@ -241,7 +239,7 @@ pub fn trim_fanned_out(conn: &Connection, through: i64) -> Result<usize> {
     if through <= 0 {
         return Ok(0);
     }
-    let out = col::plugin_outbox::ALL;
+    let out = col::outbox::ALL;
     let removed = Delete::from(out.table)
         .filter(Pred::cmp(out.id, "<=", through))
         .sql()
@@ -326,8 +324,8 @@ mod tests {
         assert_eq!(drain_all(&e)[0].new_state, None);
     }
 
-    /// The emit rides the caller's transaction: a rolled-back operation leaves no event, so a plugin
-    /// never sees a change that did not commit.
+    /// The emit rides the caller's transaction: a rolled-back operation leaves no event, so nothing
+    /// observing a write ever sees a change that did not commit.
     #[test]
     fn a_rolled_back_operation_emits_no_event() {
         let e = StoreEngine::open_in_memory().unwrap();

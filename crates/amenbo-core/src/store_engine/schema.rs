@@ -1031,9 +1031,6 @@ plain_tables! {
     /// has walked it ([`crate::outbox_drive`], `AMB-D-901`), so nothing here is trimmed on the "consumed or
     /// not" basis the feed uses.
     ///
-    /// The table is spelled `plugin_outbox`, from when the only reader was the plugin dispatcher. The name
-    /// is stored data, so it stays as written until something else makes a migration worth it.
-    ///
     /// `project` is the one thing here the event did not carry on its own: the project the record was in
     /// **at the moment the event was appended** (`AMB-D-405`), which is what a project's reporting is
     /// routed on. It is stamped rather than looked up later because the
@@ -1056,7 +1053,7 @@ plain_tables! {
     /// that hears only "comment 5 is gone" cannot say where it was; this is the one relation a deletion
     /// cannot be asked for afterwards. `NULL` on an event whose record has no parent, and on one from
     /// before the column.
-    plugin_outbox {
+    outbox {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         event: text,
         record_id: bigint,

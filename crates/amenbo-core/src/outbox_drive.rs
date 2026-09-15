@@ -51,17 +51,13 @@ const PAGE: i64 = 256;
 /// ([`META_OUTBOX_TRUNCATED_THROUGH`](crate::store_engine::outbox) — that is the producer's low-water mark;
 /// this is the consumer's high-water mark) and from the change feed's own cursor (a different consumer,
 /// `AMB-D-367`). A store that has never persisted one carries no row, which reads back as `0`.
-///
-/// The spelling is the one already in every store, from when the only reader was the plugin dispatcher.
-/// Renaming it would be a migration for a name and nothing else, so it stays as written.
-pub const CURSOR_META: &str = "plugin_dispatch_cursor";
+pub const CURSOR_META: &str = "outbox_cursor";
 
 /// The `store_meta` key holding which [`Face`] last advanced [`CURSOR_META`] — written beside the cursor,
 /// on the same transaction, so the two never disagree. It is **diagnostic only**: the cursor's meaning does
 /// not depend on it, and nothing branches on it. When a double send or a miss is being chased, it is what
-/// says which face carried a span, to line the store up against this machine's logs (`AMB-D-361`). Its
-/// spelling is historical for the reason [`CURSOR_META`]'s is.
-pub const CURSOR_FACE_META: &str = "plugin_dispatch_cursor_face";
+/// says which face carried a span, to line the store up against this machine's logs (`AMB-D-361`).
+pub const CURSOR_FACE_META: &str = "outbox_cursor_face";
 
 /// **Which face is driving** (`AMB-D-383`) — the short-lived CLI a person or their AI runs, or the
 /// long-lived GUI.

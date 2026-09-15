@@ -777,10 +777,21 @@ pub const STEPS: &[Step] = &[
         // naming them would be naming what is already gone.
         //
         // **`plugin_outbox` stays**, name and all: the drive at the write seam walks it for the
-        // notifications (`AMB-D-901`), and only its spelling is the mechanism's.
+        // notifications (`AMB-D-901`), and only its spelling is the mechanism's. v44 below is where that
+        // spelling goes.
         //
         // The execution log goes here too — a file rather than a table, which is why this is not SQL.
         apply: Apply::Custom(drop_the_plugin_mechanism),
+    },
+    Step {
+        to: 44,
+        name: "rename the outbox and its three keys — the mechanism they were spelled for is gone",
+        // `AMB-D-901` left the spelling where it was: the names were stored data, and the mechanism they
+        // came from was still standing. `AMB-T-4770` took it away, so `plugin_outbox`,
+        // `plugin_dispatch_cursor`, `plugin_dispatch_cursor_face` and `plugin_outbox_truncated_through`
+        // now name a reader that does not exist. The table and the three keys are the store's, and this
+        // is what moves them.
+        apply: Apply::Custom(rename_the_outbox),
     },
 ];
 
@@ -801,6 +812,40 @@ fn drop_the_plugin_mechanism(ctx: &Ctx<'_>) -> Result<()> {
     for name in ["plugin-runs.jsonl", "plugin-runs.jsonl.lock"] {
         let _ = std::fs::remove_file(ctx.base_dir.join(name));
     }
+    Ok(())
+}
+
+/// v44: spell the outbox and its cursors for what reads them (`AMB-D-901`, `AMB-T-4770`).
+///
+/// **The genesis table is dropped before the rename, and that is the whole reason this is not one
+/// `ALTER TABLE`.** Genesis is `CREATE TABLE IF NOT EXISTS` over today's registry and runs before this
+/// chain on every open, so a store arriving here already carries an `outbox` — created empty moments ago,
+/// since nothing writes between genesis and the chain — and `ALTER TABLE … RENAME TO outbox` would fail
+/// on a name already taken. Dropping it first is what leaves the rename a rename: the rows, the
+/// `AUTOINCREMENT` high-water mark in `sqlite_sequence` and the reader's cursor all stay the numbers they
+/// were, which is what keeps a drive mid-walk from reading its own store as a gap.
+///
+/// A store below v4 predates the outbox entirely and has nothing under the old name — genesis gave it
+/// today's `outbox` and there is nothing to carry, so the rename is skipped and the keys, which such a
+/// store never wrote either, simply match nothing.
+fn rename_the_outbox(ctx: &Ctx<'_>) -> Result<()> {
+    if table_is_here(ctx.tx, "plugin_outbox")? {
+        ctx.tx.execute_batch(
+            "DROP TABLE IF EXISTS outbox;
+             ALTER TABLE plugin_outbox RENAME TO outbox;",
+        )?;
+    }
+    // Frozen text, like every step's: the three keys the store had then. A plain `UPDATE` and not an
+    // upsert — the new spellings are written by builds from this version on, and those have already run
+    // this step, so there is nothing here for them to collide with.
+    ctx.tx.execute_batch(
+        "UPDATE store_meta SET key = 'outbox_cursor'
+             WHERE key = 'plugin_dispatch_cursor';
+         UPDATE store_meta SET key = 'outbox_cursor_face'
+             WHERE key = 'plugin_dispatch_cursor_face';
+         UPDATE store_meta SET key = 'outbox_truncated_through'
+             WHERE key = 'plugin_outbox_truncated_through';",
+    )?;
     Ok(())
 }
 
@@ -1400,7 +1445,15 @@ fn table_is_here(tx: &rusqlite::Transaction<'_>, table: &str) -> Result<bool> {
 /// stores. The probe is what makes one step serve both shapes: the store that has the column was born with
 /// it, and the store that does not is the one this step exists for. Same shape as v6's, for the same
 /// reason.
+///
+/// **The table itself is probed too**, as [`add_queue_project`]'s is. Since v44 the outbox is spelled
+/// `outbox`, so genesis no longer hands a store older than the table one under this name — a store below
+/// v4 arrives here with no `plugin_outbox` at all, and the column it would gain is already on the
+/// `outbox` genesis gave it.
 fn add_outbox_project(ctx: &Ctx<'_>) -> Result<()> {
+    if !table_is_here(ctx.tx, "plugin_outbox")? {
+        return Ok(());
+    }
     let held: i64 = ctx.tx.query_row(
         "SELECT COUNT(*) FROM pragma_table_info('plugin_outbox') WHERE name = 'project'",
         [],
@@ -3085,7 +3138,7 @@ mod tests {
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         let rows: Vec<(i64, String, Option<i64>)> = {
             let conn = engine.conn();
-            let mut stmt = conn.prepare("SELECT id, event, project FROM plugin_outbox ORDER BY id").unwrap();
+            let mut stmt = conn.prepare("SELECT id, event, project FROM outbox ORDER BY id").unwrap();
             let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
             rows.filter_map(|r| r.ok()).collect()
         };
@@ -3097,7 +3150,7 @@ mod tests {
         engine
             .conn()
             .execute(
-                "INSERT INTO plugin_outbox (event, record_id, actor, at, project)
+                "INSERT INTO outbox (event, record_id, actor, at, project)
                      VALUES ('task.created', 9, 'ai', '2026-07-26T09:00:02Z', 3)",
                 [],
             )
@@ -4191,5 +4244,69 @@ mod tests {
             );
             std::fs::remove_dir_all(&dir).ok();
         }
+    }
+
+    /// v44 in full, on the shape v43 left behind: an outbox under the mechanism's spelling, with an event
+    /// in it and all three of its `store_meta` keys written beside it. The rename must be a rename —
+    /// the row, the id it was numbered with and the high-water mark the next id comes from all stay what
+    /// they were, and each key's value arrives under the new spelling with nothing left at the old one. A
+    /// cursor left behind would read back as a drive that had walked nothing, and every event still in
+    /// the table would be carried out a second time.
+    #[test]
+    fn the_outbox_and_its_cursors_lose_the_mechanisms_spelling() {
+        let dir = scratch("outbox-rename");
+        let engine = store_at(&dir, 43);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO plugin_outbox (id, event, record_id, actor, at, project)
+                     VALUES (17, 'task.done', 9, 'ai', '2026-09-15T09:00:00Z', 3);
+                 INSERT INTO store_meta (key, value) VALUES
+                     ('plugin_dispatch_cursor', '17'),
+                     ('plugin_dispatch_cursor_face', 'cli'),
+                     ('plugin_outbox_truncated_through', '4');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert!(
+            !table_is_here(&engine.conn().unchecked_transaction().unwrap(), "plugin_outbox").unwrap(),
+            "nothing is left under the old name for a later reader to find",
+        );
+        let row: (i64, String, i64, Option<i64>) = engine
+            .conn()
+            .query_row("SELECT id, event, record_id, project FROM outbox", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .expect("the event that was in the outbox is in the outbox");
+        assert_eq!(row, (17, "task.done".to_string(), 9, Some(3)));
+        for (key, value) in [
+            (crate::outbox_drive::CURSOR_META, "17"),
+            (crate::outbox_drive::CURSOR_FACE_META, "cli"),
+            ("outbox_truncated_through", "4"),
+        ] {
+            assert_eq!(engine.get_meta(key).unwrap().as_deref(), Some(value), "{key} carries what it held");
+        }
+        for gone in
+            ["plugin_dispatch_cursor", "plugin_dispatch_cursor_face", "plugin_outbox_truncated_through"]
+        {
+            assert_eq!(engine.get_meta(gone).unwrap(), None, "{gone} is not left standing beside its heir");
+        }
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO outbox (event, record_id, actor, at) \
+                 VALUES ('task.created', 10, 'ai', '2026-09-15T09:00:01Z')",
+                [],
+            )
+            .unwrap();
+        let next: i64 = engine
+            .conn()
+            .query_row("SELECT MAX(id) FROM outbox", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(next, 18, "the id the table had reached is still the one the next event comes after");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

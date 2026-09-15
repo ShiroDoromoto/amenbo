@@ -446,6 +446,18 @@ impl Store {
         Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
     }
 
+    /// The session a task was made in, or `None` for one nobody made in a pane (`AMB-D-897`). Read
+    /// from a table no road out of the store carries: a pane is this machine's, and on another device
+    /// there would be nothing here to open.
+    pub fn task_made_in(&self, task_id: i64) -> Result<Option<crate::model::TaskMadeIn>> {
+        Ok(crate::store_engine::read::task_made_in(self.engine.conn(), task_id)?)
+    }
+
+    /// The decision's side of [`task_made_in`](Self::task_made_in).
+    pub fn decision_made_in(&self, decision_id: i64) -> Result<Option<crate::model::DecisionMadeIn>> {
+        Ok(crate::store_engine::read::decision_made_in(self.engine.conn(), decision_id)?)
+    }
+
     /// One of Amenbo's own secret fields at this layer, or `None` when it is unset (`AMB-D-884`) — read
     /// from the table no road out of the store carries. The only caller that wants the plaintext is the
     /// feature connecting with it; a face asks whether it is set and stops there.

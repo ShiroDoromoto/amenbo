@@ -487,6 +487,9 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for commit_id in read::task_commit_ids(tx.conn(), id)? {
         tx.delete_record("task_commit", commit_id)?;
     }
+    if let Some(made_in_id) = read::task_made_in_id(tx.conn(), id)? {
+        tx.delete_record("task_made_in", made_in_id)?;
+    }
     for assignment_id in read::assignment_ids_of_task(tx.conn(), id)? {
         tx.delete_record("task_dimension_value", assignment_id)?;
     }
@@ -1461,6 +1464,43 @@ mod tests {
             // table holds).
             assert_eq!(read::comment_list(tx.conn(), survivor).unwrap().len(), 1);
             assert_eq!(read::all_task_comments(tx.conn()).unwrap().len(), 1, "deletion leaves no orphans");
+        });
+    }
+
+    /// The session a task was made in goes with the task (`AMB-D-897`). The reference is `RESTRICT`,
+    /// so a row left behind would not orphan anything — it would stop the delete, which is worse: the
+    /// task could not be removed at all.
+    ///
+    /// The row is put here by hand because nothing writes one yet — that is the next task's, and the
+    /// sweep is this table's, so it arrives with it rather than after it.
+    #[test]
+    fn delete_takes_the_pane_the_task_was_made_in_with_it() {
+        with_tx(|tx| {
+            let tid = mk_task(tx, "消えるタスク");
+            let survivor = mk_task(tx, "残るタスク");
+            for (id, pane) in [(tid, "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114"), (survivor, "1f0b6d92-8c47-4a10-b3e5-5d9a7c204e6b")] {
+                crate::ops::emit_create(
+                    tx,
+                    crate::store_engine::record::task_made_in(&crate::model::TaskMadeIn {
+                        id: read::next_id(tx.conn(), "task_made_in").unwrap(),
+                        task_id: id,
+                        pane: pane.to_string(),
+                        pane_name: Some("the migration".into()),
+                        pane_resume: None,
+                        ..Default::default()
+                    }),
+                )
+                .unwrap();
+            }
+
+            delete(tx, tid).unwrap();
+
+            assert!(read::task(tx.conn(), tid).unwrap().is_none(), "the task's row itself goes");
+            assert!(read::task_made_in(tx.conn(), tid).unwrap().is_none(), "and the pane goes with it");
+            assert!(
+                read::task_made_in(tx.conn(), survivor).unwrap().is_some(),
+                "the other task's is untouched",
+            );
         });
     }
 

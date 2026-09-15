@@ -802,6 +802,42 @@ pub const STEPS: &[Step] = &[
         // already held against (`AMB-T-4843`).
         apply: Apply::Custom(draw_the_pane_ids_afresh),
     },
+    Step {
+        to: 46,
+        name: "add task_made_in and decision_made_in, the session a task or a decision was made in",
+        // `AMB-D-897`. The genesis batch creates a table an older store is missing at open, so this DDL
+        // has usually run before the chain reaches here — writing it down anyway is what makes the chain
+        // say when the tables arrived, rather than leaving a reader of the frozen shapes to guess.
+        //
+        // **Unseeded, and there is nothing to seed them from.** What pane a task was made in was never
+        // written anywhere, so every task that already exists has no row here — which is the same thing
+        // a task made outside the talk window has, and reads the same way.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS task_made_in (\
+               id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+               task_id BIGINT NOT NULL DEFAULT 0 REFERENCES task(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+               pane TEXT NOT NULL DEFAULT '', \
+               pane_name TEXT, \
+               pane_resume TEXT, \
+               created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+               updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')\
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS task_made_in_by_task ON task_made_in(task_id);
+             CREATE TABLE IF NOT EXISTS decision_made_in (\
+               id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+               decision_id BIGINT NOT NULL DEFAULT 0 REFERENCES decision(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+               pane TEXT NOT NULL DEFAULT '', \
+               pane_name TEXT, \
+               pane_resume TEXT, \
+               created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+               updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')\
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS decision_made_in_by_decision \
+               ON decision_made_in(decision_id);",
+        ),
+    },
 ];
 
 /// v43: take the plugin mechanism's tables and its execution log away (`AMB-D-884`).
@@ -4440,6 +4476,42 @@ mod tests {
         assert_eq!(resume(1), format!("/data/gemini-homes/{}", ids[1]));
         // And a handle that is a session id rather than a place is left as it was, however it ends.
         assert_eq!(resume(2), "0f9c-3", "a session id carries nothing of the pane's id");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v46: the two tables the session a task or a decision was made in is kept in, on a store that
+    /// predates them. Genesis usually gets there first, so what this asks is that the chain lands on
+    /// the same shape either way — the unique index included, which is what says one owner has at most
+    /// one answer.
+    #[test]
+    fn the_chain_gives_a_store_the_tables_a_pane_is_recorded_in() {
+        let dir = scratch("made-in");
+        let engine = store_at(&dir, 45);
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let tx = engine.conn().unchecked_transaction().unwrap();
+        for (table, owner, index) in [
+            ("task_made_in", "task_id", "task_made_in_by_task"),
+            ("decision_made_in", "decision_id", "decision_made_in_by_decision"),
+        ] {
+            assert!(table_is_here(&tx, table).unwrap(), "{table}");
+            let cols = column_names(&tx, table).unwrap();
+            for name in [owner, "pane", "pane_name", "pane_resume"] {
+                assert!(cols.iter().any(|c| c == name), "{table}.{name}");
+            }
+            let unique: bool = tx
+                .prepare("SELECT \"unique\" FROM pragma_index_list(?1) WHERE name = ?2")
+                .unwrap()
+                .query_row(rusqlite::params![table, index], |r| r.get(0))
+                .unwrap();
+            assert!(unique, "{index} is what says one owner has at most one answer");
+            let rows: i64 = tx
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(rows, 0, "{table}: there is nothing to seed it from");
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

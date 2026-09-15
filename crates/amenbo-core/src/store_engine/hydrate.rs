@@ -29,11 +29,11 @@ use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
-    DecisionStatus, DecisionTaskLink,
+    DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
     DimensionRole, DimensionValue, NotifyKind, NotifyTarget, Priority,
     ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, SecretArea,
-    Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
+    Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency, TaskMadeIn,
     TaskDimensionValue, TaskStatus, View,
 };
 use crate::time::Timestamp;
@@ -191,6 +191,34 @@ pub(super) fn task_commit_row(r: &Row) -> rusqlite::Result<TaskCommit> {
         task_id: get(r, C.task_id)?,
         sha: get(r, C.sha)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn task_made_in_row(r: &Row) -> rusqlite::Result<TaskMadeIn> {
+    const C: col::task_made_in::Cols = col::task_made_in::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(TaskMadeIn {
+        id: get(r, C.id)?,
+        task_id: get(r, C.task_id)?,
+        pane: get(r, C.pane)?,
+        pane_name: get(r, C.pane_name)?,
+        pane_resume: get(r, C.pane_resume)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn decision_made_in_row(r: &Row) -> rusqlite::Result<DecisionMadeIn> {
+    const C: col::decision_made_in::Cols = col::decision_made_in::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(DecisionMadeIn {
+        id: get(r, C.id)?,
+        decision_id: get(r, C.decision_id)?,
+        pane: get(r, C.pane)?,
+        pane_name: get(r, C.pane_name)?,
+        pane_resume: get(r, C.pane_resume)?,
         created_at,
         updated_at,
     })

@@ -57,6 +57,11 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   decision_edge: ["decisions"],
   decision_dimension_value: ["decisions"], // what a decision is classified as, on its own pane
   decision_task_link: ["tasks", "decisions"], // shows on both (a task's decision badge, a decision's linked tasks)
+  // The session a task or a decision was made in (`AMB-D-897`). It is drawn on the owner's detail
+  // pane, so it folds to the owner's scope — and it is written once, in the same transaction as the
+  // owner, so the fold costs nothing that creation was not already paying.
+  task_made_in: ["tasks"],
+  decision_made_in: ["decisions"],
   attachment: ["attachments"],
   project: ["projects"],
   // Amenbo's own credentials (`AMB-D-884`). The value is never drawn; what is drawn is whether one is

@@ -299,6 +299,8 @@ pub const WITHHELD_ON_THE_WAY_OUT: &[&str] =
         "binding_project_dir",
         "hook_optout",
         "harness_consent",
+        "task_made_in",
+        "decision_made_in",
     ];
 
 /// The registry a road out walks: every dataset except [`WITHHELD_ON_THE_WAY_OUT`]. One list, walked by

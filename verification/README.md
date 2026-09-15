@@ -1305,7 +1305,7 @@ the operator happened to be looking at. On the decision side `narrowed` is the s
 the screen composes it press by press and reads what is left.
 
 A record's own page carries one more row than the store's fields account for: the session it was made
-in. Three entries answer for it, all on the decision side. `decision create-in-pane` records the
+in. `decision create-in-pane` records the
 decision **inside a pane**, and it is a separate op from `decision create` because that is the whole
 of what it proves: the row is written only where the create ran with the pane's own variables around
 it, so a decision made anywhere else leaves none. Its `shows` names which pane, and the two roads read
@@ -1322,6 +1322,14 @@ prints the id alone and the id is minted by the run — so what is asked there i
 naming the pane the create was typed in. `present: false` is the other half on either face.
 `press-made-in` is the press, screen-only, and where it landed is read by the step after it
 (`terminal worked-in`): a press cannot say of itself which pane it went to.
+
+`task create-in-pane` is the same create on the task side, and is there for the second thing a pane
+writes: the band under it, which counts what the session in it has filed. `terminal made` reads that
+count — `tasks` and `decisions` apart, because the band names them apart, and both at zero saying the
+band draws no count at all rather than a count of none. `open-made` presses it, which puts the records
+themselves on the screen, and `press-made` presses one of them, landing where a ref drawn in the pane
+would. All three are the screen's alone: the tally lives as long as the window and a terminal keeps
+none.
 
 ### `given:` — the world a road starts from
 

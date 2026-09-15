@@ -1027,6 +1027,15 @@ impl Instructor {
             (Domain::Task, "create") => {
                 format!("Create a task titled \"{}\" on the board.", req(with, "title")?)
             }
+            // The same task, typed at a shell inside a pane — the twin of the decision's, and written
+            // out for the same reason: what the band under the pane counts, and what the record keeps
+            // of where it came from, are written only where the line ran with the pane's own variables
+            // around it.
+            (Domain::Task, "create-in-pane") => format!(
+                "In {}, type `amenbo task add --title \"{}\" --actor ai` and run it. Leave what is already on the pane where it is — do not clear it — and confirm the line comes back saying the task was filed.",
+                named_pane(with),
+                req(with, "title")?
+            ),
             // The one premise a reader settles where it is reported: the row that says the creation is
             // still open is the row carrying the button that ends it, so the move is opening the task
             // and pressing it rather than going anywhere else for it.
@@ -2340,6 +2349,18 @@ impl Instructor {
             // it names one, the address travels beside the words rather than in them and the words are
             // what is on the screen to press. The line says the address out loud in both, because what
             // the step after this reads is the browser standing at that one and not at a near miss.
+            // The band's count pressed, and one of the refs behind it. The count is named by what it
+            // is rather than by the words on it: what it reads is the interface's own, in the run's
+            // language, so an operator sent to press a phrase would be sent to press a translation.
+            (Domain::Terminal, "open-made") => format!(
+                "Under {}, on the band below the terminal, press what says how much this session has filed — the count of tasks and decisions, beside the controls for the box and the model. A list of what it filed opens at the press.",
+                named_pane(with)
+            ),
+            (Domain::Terminal, "press-made") => format!(
+                "In the list the count opened, press the row for the {} \"{}\" — the rows carry refs rather than titles, so read the number off the record and press the row carrying it.",
+                self.target_noun(with),
+                self.target_label(with)
+            ),
             (Domain::Terminal, "press-url") => match arg_str(with, "shows") {
                 None => format!(
                     "In the pane, press the address {} where the output drew it — the characters themselves, which the pane offers as a link.",
@@ -4066,6 +4087,26 @@ impl Instructor {
             // Which pane the reader is in, read as one thing off two marks. The frame says the face's
             // answer and the cursor says the browser's, and a road that read only the first would go
             // green on a pane that is drawn picked out and takes none of the typing.
+            // What the band says this session has filed. Read as numbers and not as a phrase: the words
+            // beside them are the interface's own and are drawn in whatever language the run is in, so
+            // what the operator is asked for is how many of each the row names. Both at zero is the
+            // other reading entirely — a band with nothing on it, rather than a band saying none.
+            (Domain::Terminal, "made") => {
+                let tasks = count(with, "tasks")?;
+                let decisions = count(with, "decisions")?;
+                match (tasks, decisions) {
+                    (0, 0) => format!(
+                        "On the band below {}, confirm there is no count at all — nothing saying what this session has filed, and nothing to press where it would stand. The rest of the band is where it was.",
+                        named_pane(with)
+                    ),
+                    _ => format!(
+                        "On the band below {}, read what says how much this session has filed and confirm it names {} and {}. The words beside the numbers are the interface's own, in the run's language — what is being read is how many of each, and which of the two each number is for.",
+                        named_pane(with),
+                        counted("task", tasks),
+                        counted("decision", decisions)
+                    ),
+                }
+            }
             (Domain::Terminal, "worked-in") => format!(
                 "Confirm the pane showing \"{}\" is the one being worked in: its frame is the one drawn picked out from the rest, and the block where you would type in it is filled in — the pane the keyboard is not in draws that block as an outline.",
                 req(with, "shows")?
@@ -4579,6 +4620,15 @@ fn named_pane(with: &Args) -> String {
     match arg_str(with, "shows") {
         Some(shows) => format!("the pane showing \"{shows}\""),
         None => "the pane".to_string(),
+    }
+}
+
+/// How many of one kind, written the way an instruction says it: "no tasks", "one task", "3 tasks".
+fn counted(noun: &str, n: u64) -> String {
+    match n {
+        0 => format!("no {noun}s"),
+        1 => format!("one {noun}"),
+        n => format!("{n} {noun}s"),
     }
 }
 

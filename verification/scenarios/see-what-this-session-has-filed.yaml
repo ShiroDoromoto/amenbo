@@ -1,0 +1,179 @@
+# The band under a pane says how much the session in it has filed, and the records are behind it.
+#
+# **It is the running session's own tally, and the other half of a question already answered once.** A
+# record's own page says which session made it, read afterwards, off the record. This is read while
+# the session runs, off the pane — how much it has filed so far, and a way to whichever one of them
+# the reader wants open.
+#
+# ── Why the records are filed at a shell in the pane ─────────────────────────────────────────────
+# The band counts commands that ran. Each record reaches it as a note the create left in that pane's
+# drop box on its way out, and a create only leaves one where it ran with the pane's own variables
+# around it — so a task filed on the board is not counted, and could not be.
+#
+# ── Why both kinds ──────────────────────────────────────────────────────────────────────────────
+# The band names tasks and decisions apart. A road that filed one kind would be walked green by a
+# build that counted everything into one total and named it after whichever kind it saw first.
+#
+# ── Why the count is read before anything is filed ──────────────────────────────────────────────
+# A session that has filed nothing draws no count at all, rather than a count of none. That is the
+# reading the road opens with, and it is not the same claim as the two after it: a band that drew a
+# zero would be a row telling a reader something they did not ask about, on every pane they ever open.
+#
+# ── Why the terminal is ended and another opened ────────────────────────────────────────────────
+# The tally belongs to the session and not to the place. A pane outlives the terminals opened in it,
+# so a count that survived one ending would be a count of what somebody else's session filed —
+# attributed, on the screen, to whoever is sitting there now.
+#
+# ── What is not read here ───────────────────────────────────────────────────────────────────────
+# Nothing of this is in the store, so no step asks the store for it. What the band holds dies with the
+# window, which is the whole of what it is: the durable half is the row on the record, and the road
+# that walks that one is `go-back-into-the-session-a-record-was-made-in`.
+id: see-what-this-session-has-filed
+title: The band under a pane counts what the session in it has filed, and opens any of them
+description: >
+  Open a pane and confirm the band under it says nothing yet. File a task and a decision at the shell
+  in it: the band names one of each. Press the count — the records are listed behind it — and press
+  one, which opens it where a ref drawn in the pane would. Then end the terminal and open another in
+  the same pane: the count starts again at nothing, the tally having belonged to the session and not
+  to the place.
+
+given:
+  # One project with one folder, so nothing is asked about where a pane works — that question is
+  # another road's (`open-a-pane-where-a-project-keeps-more-than-one-folder`).
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: slipway
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # pane below has to be this project's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and the two
+  # creates below have to be run rather than asked for.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the session is running in
+
+  # Nothing filed, nothing said. Read before anything is created, because afterwards there is no way
+  # back to a session that has filed nothing.
+  - type: assert
+    domain: terminal
+    op: made
+    with:
+      tasks: 0
+      decisions: 0
+      shows: SCENARIO the pane the session is running in
+
+  - type: action
+    domain: task
+    op: create-in-pane
+    with:
+      title: SCENARIO Reseal the cold frames before the first frost
+      shows: SCENARIO the pane the session is running in
+    as: frames
+
+  # The remark the record keeps to itself, and the whole of what says where the press at the end
+  # landed: the list that leads there carries refs and the board behind it carries the title, so a
+  # reading on either would pass over a press that opened nothing.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: frames
+      notes: SCENARIO the north wall glass was reglazed the winter before last
+
+  # Back to the pane. Setting the remark was a move on the ledger, and the create below is typed at
+  # the shell — the two faces are a press apart and a road that did not make it would be asking for a
+  # pane that is not on the screen.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: decision
+    op: create-in-pane
+    with:
+      title: SCENARIO Buy the glazing putty by the case from now on
+      shows: SCENARIO the pane the session is running in
+    as: putty
+
+  - type: assert
+    domain: terminal
+    op: made
+    with:
+      tasks: 1
+      decisions: 1
+      shows: SCENARIO the pane the session is running in
+
+  - type: action
+    domain: terminal
+    op: open-made
+    with:
+      shows: SCENARIO the pane the session is running in
+
+  - type: action
+    domain: terminal
+    op: press-made
+    with:
+      target: frames
+
+  # Where that press lands: the record itself, on the face records are read on.
+  - type: assert
+    domain: task
+    op: opened
+    with:
+      target: frames
+      shows: SCENARIO the north wall glass was reglazed the winter before last
+
+  # And the tally is the session's. The pane is the same place afterwards — its line is still on the
+  # screen above the new prompt — and what the band counted went with the terminal that filed it.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: end-pane
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: assert
+    domain: terminal
+    op: made
+    with:
+      tasks: 0
+      decisions: 0
+      shows: SCENARIO the pane the session is running in

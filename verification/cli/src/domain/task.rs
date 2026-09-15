@@ -35,6 +35,28 @@ impl Driver<'_> {
                 }
                 Ok(Outcome::action(format!("created task {id} `{title}` in project {pid}")))
             }
+            // The same create, typed inside a pane. What parts it from the one above is the
+            // environment and nothing else: a window puts the pane's id and the way back into its
+            // conversation on every terminal it opens, and a create reads them there. `shows` is a
+            // handle here rather than anything on a screen — the driver stands a pane up under those
+            // words and mints what the window would have set.
+            "create-in-pane" => {
+                let title = req_str(with, "title")?;
+                let pane = self.pane(req_str(with, "shows")?);
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?,
+                    None => self.standing_project()?,
+                }
+                .to_string();
+                let v = self.typed_in(pane, |d| {
+                    d.run_json(&["task", "add", "--title", title, "--project", &pid, "--json"])
+                })?;
+                let id = v["task"]["id"].as_i64().ok_or("task add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("filed task {id} `{title}` in a pane")))
+            }
             // The second stage of the creation, run as the caller runs it — as its own command, once
             // the task is written. Idempotent on the binary's side, so a road that walks it twice is
             // reporting a no-op rather than failing.

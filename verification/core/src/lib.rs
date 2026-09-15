@@ -420,6 +420,16 @@ const REGISTRY: &[OpSpec] = &[
     // nothing else: nobody is being asked to approve it, so there is nothing further for a step to
     // say, and it binds nothing because the task it finishes was bound where it was created.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "finish-creating", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The task side of `decision create-in-pane`, and the same op for the same reason: what a record
+    // keeps of the session that made it, and what the band under a pane counts, are both written only
+    // where the create ran with the pane's own variables around it. A task filed on the board is
+    // neither recorded nor counted, so a road that means to read either has to say where the line was
+    // typed. `shows` names the pane exactly as the decision's twin does.
+    //
+    // It does **not** finish the creation. A task filed at a shell is a task still being written, the
+    // same as one filed anywhere else, and a road that wanted it reservable walks `finish-creating`
+    // above like every other.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create-in-pane", required: &["title", "shows"], refs: &[], strings: &["title", "shows"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
     // Posting binds the comment, since editing, removing and promoting one all name it afterwards.
     // `mentions` names a record whose **number** is written into the text, after the words the step
@@ -2480,6 +2490,27 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // What the band under a pane says the session in it has filed — the running tally, which is a
+    // different question from the row on a record and is answered in a different place. The row says
+    // where one record came from and is read afterwards, off the record; this says how much this
+    // session has filed and is read while it runs, off the pane.
+    //
+    // `tasks` and `decisions` are counted separately because the band names them separately, and a
+    // build that counted both into one total would answer a step naming only a sum. Both at zero is
+    // the reading that says the band draws **no count at all**: a session that has filed nothing has
+    // nothing to say, and a row that drew a zero would be a row saying something.
+    //
+    // A screen road alone. The tally is drawn under a pane and lives as long as the window does; a
+    // terminal keeps none, and what a reader asks there is `task list`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "made", required: &["tasks", "decisions"], refs: &[], strings: &["shows"], binds: false },
+    // The count pressed, which is what puts the records themselves on the screen: the band carries a
+    // number because that is what a reader watching a session wants, and the refs behind it are for
+    // the reader who wants one of them open.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-made", required: &[], refs: &[], strings: &["shows"], binds: false },
+    // And one of those refs pressed. The record is named rather than spelled out, for the reason every
+    // `target` is — the run mints the number — and what it opens is the screen a ref drawn in the pane
+    // opens, which is what the step after it reads.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-made", required: &["target"], refs: &["target"], strings: &["shows"], binds: false },
     // Which pane of the page is the one being worked in, named the way every other pane step names
     // one. Two things are read at once because they are one fact to a reader: the frame drawn picked
     // out from the others, and the keyboard being in that pane rather than in the one they came from.

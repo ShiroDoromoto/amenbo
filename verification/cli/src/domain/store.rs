@@ -278,6 +278,47 @@ impl Driver<'_> {
                 let v = self.run_json(&["update", "--print", "--json"])?;
                 judge_field("the update check", with, &v)
             }
+            // What a command said beside its answer. Every other reading here asks the store a
+            // question; this one asks what the person at the keyboard was told on the way past, and
+            // stderr is where the build puts it.
+            //
+            // `status` is the command typed, being what somebody opening Amenbo again asks first and
+            // taking nothing from the road to ask it. It is typed for real, and an advisory a build
+            // says once is said by this typing — which is the point rather than a cost, since "once"
+            // is exactly what the road after this one reads.
+            //
+            // The plain face is the only one that carries advisories: `--json` output is for a
+            // machine, and the build holds the person's turn back rather than spending it on one
+            // (`announce_the_handover`, `crates/amenbo-cli/src/main.rs`).
+            "advice" => {
+                let present = req_bool(with, "present")?;
+                let out = self.invoke(&["status"])?;
+                if !out.status.success() {
+                    return Err(format!(
+                        "`amenbo status` failed: {}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ));
+                }
+                // Named text rather than "did it say anything": a terminal has other advisories it
+                // may put on the way past, and a road asking for silence would be asking about those
+                // too.
+                let needle = req_str(with, "shows")?;
+                if needle.is_empty() {
+                    return Err("`shows` names nothing to look for".to_string());
+                }
+                let said = String::from_utf8_lossy(&out.stderr);
+                let found = said.contains(needle);
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "`amenbo status` {} `{needle}` beside its answer (expected {}, {})",
+                        if found { "said" } else { "said nothing carrying" },
+                        if present { "it to" } else { "it not to" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             _ => Err(unmapped(Domain::Store, op)),
         }
     }

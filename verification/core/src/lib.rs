@@ -1249,6 +1249,22 @@ const REGISTRY: &[OpSpec] = &[
     // them are the interface's own and belong to whatever language the machine is set to. Left out,
     // the reading is that the band is there at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "handover", required: &["present"], refs: &[], strings: &["names"], binds: false },
+    // What a command said **beside its answer** — the advisory a terminal puts on stderr on the way
+    // past, which is where the same sentence about the plugins is said to a person who types rather
+    // than presses. `shows` is the text it must carry and `present` says which way it is read.
+    //
+    // **A terminal road alone**, and the one reading whose act and reading are the same move: a
+    // screen stands the sentence up and waits, so a road there reads a window that is already
+    // holding it, while a terminal says it on the way through a command and is done. So this reading
+    // types one — and the turn the build takes is taken by that typing, which is what lets the road
+    // ask a second time and be told nothing.
+    //
+    // The words are quoted here, where a screen road would not quote the interface's own: the
+    // terminal's advisories are the build's English and are not translated, so there is no language
+    // for a road to be wrong about. `shows` is named either way rather than optional — a terminal
+    // has other advisories it may put on the way past, so a road asking whether *anything* was said
+    // would be asking about those too.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "advice", required: &["present", "shows"], refs: &[], strings: &["shows"], binds: false },
     // What the app's own menu bar carries — a heading, or a word inside one of the menus under it.
     // `shows` is that word and `present` says which way it is read, the same pair every reading takes.
     //

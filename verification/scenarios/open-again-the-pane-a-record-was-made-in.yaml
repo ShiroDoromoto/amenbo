@@ -1,0 +1,213 @@
+# The pane a record was made in is gone, and pressing its name opens that same pane again.
+#
+# **The question is asked by somebody who closed the pane and then read the record it left** — a
+# decision standing in the ledger, made in a session that is not on the screen any more. What answers
+# it is the name the record kept, and a press that puts the pane back rather than offering a new one.
+#
+# ── Why this is a road of its own ────────────────────────────────────────────────────────────────
+# The press has three landings and the road beside this one walks the first: a pane still on the
+# screen is gone to. The other two start from a pane that is gone, and neither can be reached without
+# taking one away first — which is what this road does before it presses.
+#
+# ── What the row says once the pane is gone ─────────────────────────────────────────────────────
+# The row prefers the name the pane goes by now, because a pane still open may have been renamed and
+# the name a reader can look for is the one on the screen (`app/src/components/MadeIn.tsx`). A pane
+# that is gone is on no screen, and what is left is the name it was called when the record was
+# written. The two are told apart here by renaming the pane between the create and the removal: read
+# after that, a build that had kept the later name would be naming a session by a word the record
+# never held.
+#
+# ── Why the same pane and not a new one ─────────────────────────────────────────────────────────
+# A pane opened again carries the id it had, which is what keeps a provider pointed at a home of its
+# own pointed at the same one (`app/src-tauri/src/pane_home.rs`) — and it is the one thing a press
+# that merely opened a terminal would look identical to. So the road reads it from the far end: the
+# pane is named again once it is back, and the record's own row is read a second time. The row finds
+# a live name only where the pane it names is the pane on the screen, so a fresh id would leave that
+# last reading on the name the record kept instead.
+#
+# ── Why the reopened pane is asked what to run ──────────────────────────────────────────────────
+# The record holds the pane, its name and the way back, and never the folder or the provider
+# (`amenbo_core::model::TaskMadeIn`), so the frame comes back with nothing started in it and what
+# runs there is chosen the way it is for any pane (`app/src/shell/EmptySlot.tsx`). A project keeping
+# one folder settles the other half without asking, which is why this road's project keeps one: what
+# is under test is the pane coming back, not the question about where it works — that one is
+# `open-a-pane-where-a-project-keeps-more-than-one-folder`'s.
+#
+# ── Why one pane ────────────────────────────────────────────────────────────────────────────────
+# The road beside this one walks two, because which pane a press landed in is only a question where
+# there are several. Here the pane the press is about does not exist when it is pressed, and a page
+# asked for one is what makes what turns up on it unmistakable: a full page draws no way in beside
+# its frame, so the box the road goes on to work in is the only box there is.
+#
+# ── What this road stops short of ───────────────────────────────────────────────────────────────
+# The third landing is a way back the provider no longer honours: the pane opens, the program ends
+# moments later, and the face says the conversation cannot be opened again. A record only carries a
+# way back when it was made in a pane that had one, and a way back belongs to an agent — while what a
+# road can type a create into is a plain shell, which has none. So that landing needs a pane a road
+# can both run a command in and resume, and there is no such pane to stand up today.
+id: open-again-the-pane-a-record-was-made-in
+title: A record whose pane is gone names it by the name it kept, and the press puts that same pane back
+description: >
+  Open a pane, record a decision at the shell in it, rename it, and then take the pane away. Open the
+  decision on the ledger: the row saying which session made it carries the name the pane had when the
+  record was written, which is what is left once there is no pane to read a name off. Press it, and a
+  pane is standing on the terminal face again. Open a shell in it, give it a new name, and read the
+  record's row once more — it carries that new name, which it can only do where the pane that came
+  back is the pane the record names.
+
+given:
+  # One folder, so that a pane opened again settles where it works without being asked. Which folder
+  # a pane runs in is a question only where a project keeps several, and that question is another
+  # road's (`open-a-pane-where-a-project-keeps-more-than-one-folder`).
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+      dir: workshop
+    as: workshop
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # pane below has to be this project's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Workshop
+
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  # The pane the decision is made in. Down to a plain shell, because what an agent does with a line
+  # typed at it is the agent's own and the create below has to be run rather than asked for.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the decision was written in
+
+  # The name the record keeps. It is given before the create, since what is written down is whatever
+  # the pane was called at the moment the line was run.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the potting shed
+      shows: SCENARIO the pane the decision was written in
+
+  - type: action
+    domain: decision
+    op: create-in-pane
+    with:
+      title: SCENARIO Reglaze the north wall before the first frost
+      shows: SCENARIO the pane the decision was written in
+    as: reglaze
+
+  # And a name the record does not hold. While the pane is open this is what its row would draw; the
+  # step below takes the pane away, and with it every name but the one that was written down.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the far bench
+      shows: SCENARIO the pane the decision was written in
+
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: SCENARIO the pane the decision was written in
+
+  # Nothing is standing, which is what makes everything after the press a reading of the press: the
+  # page is bare first, so whatever the road works in below came from the row that was pressed.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: decision
+    op: open-face
+
+  # The name the record kept, which is the half of the row that only shows where the pane is gone.
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: reglaze
+      shows: SCENARIO the potting shed
+
+  - type: action
+    domain: decision
+    op: press-made-in
+    with:
+      target: reglaze
+
+  # What the press left is not counted here. A frame put back has never been opened, so what stands
+  # on the page is a box with a way in on it — and telling that from the empty frame beside it is a
+  # judgement rather than a reading. The page is asked for one pane, so there is no frame beside it
+  # to be told from: the box the shell below is opened in is the only one on the page, and a press
+  # that opened nothing is caught at the end of the road rather than here.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane opened again
+
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the shed reopened
+      shows: SCENARIO the pane opened again
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: decision
+    op: open-face
+
+  # The reading the whole road is for: the row draws a name off a pane on the screen, and the pane on
+  # the screen answers to the id the record holds. A pane opened under a fresh id would be a pane the
+  # record cannot find, and this row would be back on the name it kept.
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: reglaze
+      shows: SCENARIO the shed reopened

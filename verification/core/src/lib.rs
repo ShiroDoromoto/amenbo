@@ -1227,7 +1227,9 @@ const REGISTRY: &[OpSpec] = &[
     // `shows` is the screen's: the name expected on the row. **It is the name the pane goes by now** —
     // a pane renamed since the record was written is found among the panes under the new name, and the
     // old one would send a reader looking for a row that is not on the screen
-    // (`app/src/components/MadeIn.tsx`).
+    // (`app/src/components/MadeIn.tsx`). **Where the pane is gone it is the name the record kept**,
+    // which is the same rule read from its other end: there is no pane to be called anything today, so
+    // what the row draws is what it was called when the record was written.
     //
     // `pane` is the terminal's, and it is the handle `create-in-pane` stood the pane up under. No name
     // reaches a road there: what a pane is called is kept on the pane's own row, which the window

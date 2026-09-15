@@ -268,3 +268,97 @@ fn a_mark_that_cannot_be_left_does_not_fail_the_read() {
     assert_eq!(code, 0, "the canon is still answered: {stdout}");
     assert!(stdout.contains("agentCycle"), "and it is the whole answer: {stdout}");
 }
+
+/// The store this harness's runs write to, opened here so a table no command reads back yet can still
+/// be asserted on. `task show` and `decision show` grow that reading next (`AMB-D-897`).
+fn store_of(cli: &Cli) -> amenbo_core::Store {
+    amenbo_core::Store::open_at(amenbo_core::config::Paths::at(cli.home.clone())).expect("the store")
+}
+
+/// Name `pane` in the arrangement this device keeps, the way the window does as it draws one.
+fn name_the_pane(cli: &Cli, pane: &str, name: &str) {
+    let store = store_of(cli);
+    store
+        .save_layout(&amenbo_core::frames::SavedLayout {
+            project: None,
+            splits: Default::default(),
+            panes: vec![amenbo_core::frames::SavedPane {
+                id: pane.to_string(),
+                project: 1,
+                folder: None,
+                agent: None,
+                name: Some(amenbo_core::frames::FrameName {
+                    name: name.to_string(),
+                    by: amenbo_core::frames::NamedBy::Session,
+                }),
+                resume: None,
+                model: None,
+                compose_open: None,
+            }],
+        })
+        .expect("the arrangement");
+}
+
+/// The two variables a pane's terminal carries, as `run_env` takes them.
+fn made_in_env<'a>(pane: &'a str, resume: &'a str) -> Vec<(&'a str, &'a str)> {
+    vec![("AMENBO_PANE", pane), ("AMENBO_PANE_RESUME", resume)]
+}
+
+/// A task and a decision filed from a pane remember which one (`AMB-D-897`). Driven as a process
+/// because the whole of it turns on what the run was launched with: the window sets the pane's id and
+/// the way back into its conversation on the terminal, and an agent types `amenbo` several levels
+/// deep inside that.
+#[test]
+fn a_record_filed_in_a_pane_remembers_the_session_it_was_made_in() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+    name_the_pane(&cli, "pane-a", "移行を書いている窓");
+
+    let env = made_in_env("pane-a", "0f9c");
+    let t = cli.json_env(&env, &["task", "add", "--title", "ペインのついたタスク", "--project", &pid, "--json"]);
+    let tid: i64 = id_str(&t["task"]["id"]).parse().unwrap();
+    let d = cli.json_env(&env, &["decision", "add", "--title", "ペインのついた決定", "--body", "結論", "--project", &pid, "--json"]);
+    let did: i64 = id_str(&d["decision"]["id"]).parse().unwrap();
+
+    let store = store_of(&cli);
+    let made_in = store.task_made_in(tid).unwrap().expect("the task's pane");
+    assert_eq!(made_in.pane, "pane-a");
+    assert_eq!(made_in.pane_resume.as_deref(), Some("0f9c"), "the way back came off the environment");
+    assert_eq!(
+        made_in.pane_name.as_deref(),
+        Some("移行を書いている窓"),
+        "and the name off the pane's own row, which is the one place it is written",
+    );
+    let made_in = store.decision_made_in(did).unwrap().expect("the decision's pane");
+    assert_eq!(made_in.pane, "pane-a");
+    assert_eq!(made_in.pane_name.as_deref(), Some("移行を書いている窓"));
+}
+
+/// Outside a pane there is nothing to name, and a row naming a session nobody can reach is worse than
+/// none: what is filed at a plain terminal carries no row at all (`AMB-D-897`). A pane whose row the
+/// arrangement does not hold loses the name and keeps the rest — the id and the way back are what take
+/// a reader back to the session.
+#[test]
+fn a_record_filed_outside_a_pane_carries_no_session_at_all() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+
+    let t = cli.json(&["task", "add", "--title", "窓の外で立てたタスク", "--project", &pid, "--json"]);
+    let outside: i64 = id_str(&t["task"]["id"]).parse().unwrap();
+    // A variable inherited set to nothing is not a pane either.
+    let t = cli.json_env(&made_in_env("", ""), &["task", "add", "--title", "空の変数", "--project", &pid, "--json"]);
+    let blank: i64 = id_str(&t["task"]["id"]).parse().unwrap();
+    // A pane the arrangement has no row for: named it cannot be, reached it still can.
+    let t = cli.json_env(&made_in_env("pane-z", "0f9c"), &["task", "add", "--title", "行の無いペイン", "--project", &pid, "--json"]);
+    let unnamed: i64 = id_str(&t["task"]["id"]).parse().unwrap();
+
+    let store = store_of(&cli);
+    assert!(store.task_made_in(outside).unwrap().is_none(), "a plain terminal is no pane");
+    assert!(store.task_made_in(blank).unwrap().is_none(), "and neither is a blank one");
+    let made_in = store.task_made_in(unnamed).unwrap().expect("the pane is still named by its id");
+    assert_eq!(made_in.pane, "pane-z");
+    assert_eq!(made_in.pane_name, None, "there is no row to read a name off");
+    assert_eq!(made_in.pane_resume.as_deref(), Some("0f9c"));
+}

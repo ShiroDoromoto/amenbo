@@ -15,7 +15,7 @@ use crate::cmd::decision::decision_ref_name;
 use crate::cmd::guard::guard_ai_task_delete;
 use crate::cmd::labels::{decision_label, task_label};
 use crate::cmd::outbox::{emit_event, emit_unblocks, newly_ready_or_warn};
-use crate::cmd::place::{project_or_bound, resolve_bound_folder, resolve_dim_pairs};
+use crate::cmd::place::{made_in, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
 use crate::cmd::premise::{attach_premise_change, premise_change, premise_change_lines, premise_change_when, warn_if_premise_added_to_reserved, warn_premise_change};
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
 
@@ -66,10 +66,12 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 Some(ref folder) => Some(resolve_bound_folder(store, project_id, folder)?),
                 None => None,
             };
+            // Read before the create and handed to it, never read inside it (`AMB-D-897`).
+            let made_in = made_in(store);
             let t = store.add_task_with_dimensions(ops::task::NewTask {
                 title, project_id: Some(project_id), due_on, start_on, priority, notes,
                 created_by_kind: Some(flags.facet()?), at_binding_id,
-                made_in: None,
+                made_in,
             }, &dimension_values).map_err(CliError::from)?;
             emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two

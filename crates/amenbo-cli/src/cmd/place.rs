@@ -3,7 +3,9 @@
 
 use amenbo_core::Store;
 use amenbo_core::config::Paths;
+use amenbo_core::env;
 use amenbo_core::model::ClassifiedSide;
+use amenbo_core::ops::MadeIn;
 
 use crate::PROJECT_OVERRIDE;
 use crate::cli::*;
@@ -252,10 +254,36 @@ pub(crate) fn project_name(store: &Store, project_id: Option<i64>) -> Result<Opt
     Ok(store.project(pid).map_err(CliError::from)?.map(|p| p.name))
 }
 
+/// The pane this command was typed in, as a create takes it (`AMB-D-897`), or `None` for an `amenbo`
+/// typed anywhere else — which writes no row at all.
+///
+/// **Two of the three come off the environment and the third does not.** The window sets the pane's id
+/// and the way back into its conversation on every terminal it opens, and they are inherited however
+/// many processes deep this one is ([`amenbo_core::session::PANE_VAR`]). What the pane is *called* is
+/// set by whoever named it and is kept on the pane's own row, so it is read from there by the id.
+pub(crate) fn made_in(store: &Store) -> Option<MadeIn> {
+    let mut made_in = MadeIn::from_pane(env::pane(), None, env::pane_resume())?;
+    made_in.pane_name = pane_name(store, &made_in.pane);
+    Some(made_in)
+}
+
+/// What the pane `pane` is called, or `None` where the row cannot say.
+///
+/// **A name that cannot be read costs the name and nothing else**: the id and the way back still go
+/// down, which is what takes a reader back to the session. There are two ways to get nothing here and
+/// they read alike — a pane nobody has named, and a name given in this very run that the window has
+/// not written down yet ([`amenbo_core::frames::FrameNames`]).
+fn pane_name(store: &Store, pane: &str) -> Option<String> {
+    let layout = store.saved_layout().ok().flatten()?;
+    let row = layout.panes.into_iter().find(|p| p.id == pane)?;
+    Some(row.name?.name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use amenbo_core::binding::SlugMismatch;
+    use amenbo_core::frames::{FrameName, NamedBy, SavedLayout, SavedPane};
 
     /// The warning names each side where the reader expects it: the slug the pointer carries as the
     /// project it claims to name, the project its id really names, and that project's own slug. Getting
@@ -283,5 +311,45 @@ mod tests {
             actual: None,
         });
         assert!(none.contains("but AMB-P-2 is '(no slug)'"), "{none}");
+    }
+
+    /// One store of this test's own, with `panes` laid out in it.
+    fn store_with_panes(panes: Vec<SavedPane>) -> Store {
+        let store = Store::open_at(Paths::at(amenbo_scratch::scratch("place"))).expect("a store");
+        store
+            .save_layout(&SavedLayout { project: None, splits: Default::default(), panes })
+            .expect("the arrangement");
+        store
+    }
+
+    /// A pane as the window writes one down, named or not.
+    fn pane(id: &str, name: Option<&str>) -> SavedPane {
+        SavedPane {
+            id: id.to_string(),
+            project: 1,
+            folder: None,
+            agent: None,
+            name: name.map(|name| FrameName { name: name.to_string(), by: NamedBy::Session }),
+            resume: None,
+            model: None,
+            compose_open: None,
+        }
+    }
+
+    /// The name goes on the record by the id the environment carried, and the three ways to have no
+    /// name read alike — an unnamed pane, an id no row holds, and a machine with no arrangement kept
+    /// at all. None of them is a refusal: the id and the way back are what take a reader back to the
+    /// session, and they go down either way (`AMB-D-897`).
+    #[test]
+    fn a_panes_name_is_read_off_its_own_row() {
+        let store = store_with_panes(vec![pane("pane-a", Some("移行を書いている窓")), pane("pane-b", None)]);
+        assert_eq!(pane_name(&store, "pane-a").as_deref(), Some("移行を書いている窓"));
+        assert_eq!(pane_name(&store, "pane-b"), None, "a pane nobody has named");
+        assert_eq!(pane_name(&store, "pane-c"), None, "an id no row holds");
+        assert_eq!(
+            pane_name(&store_with_panes(Vec::new()), "pane-a"),
+            None,
+            "a machine that has kept no arrangement",
+        );
     }
 }

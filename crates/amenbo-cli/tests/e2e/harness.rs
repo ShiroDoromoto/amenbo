@@ -224,6 +224,14 @@ impl Cli {
         (String::from_utf8_lossy(&out.stdout).to_string(), exit_code(&out))
     }
 
+    /// [`Cli::run_env`] with `--json`, parsed — for what a run is launched with deciding what it
+    /// writes, not merely whether it refuses.
+    pub(crate) fn json_env(&self, env: &[(&str, &str)], args: &[&str]) -> Value {
+        let (stdout, code) = self.run_env(env, args);
+        assert_eq!(code, 0, "command {args:?} exited non-zero: {stdout}");
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
+    }
+
     /// Run the binary with extra environment on top of the harness's, and return (stderr, exit_code) —
     /// [`Cli::run_env`]'s reading for the paths that refuse.
     pub(crate) fn run_env_err(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {

@@ -1533,6 +1533,9 @@ pub fn task_add(
             notes: notes.unwrap_or_default(),
             created_by_kind: Some(ActorKind::Human),
             at_binding_id: None,
+            // No pane made this: the window is where a person files a task, not a session
+            // (`AMB-D-897`). A GUI opened from inside a pane inherits that pane's variables, which
+            // is exactly why the create is handed this rather than reading it.
             made_in: None,
         })?;
         emit(store, t.id, amenbo_core::activity_log::event::task_created(&t.title));
@@ -2014,6 +2017,7 @@ pub fn decision_add(
         // half-classified decision behind.
         let d = store.add_decision_with_dimensions(amenbo_core::ops::decision::NewDecision {
             title, body: body.unwrap_or_default(), project_id,
+            // No pane made this, for the reason written on `task_add` (`AMB-D-897`).
             made_in: None,
         }, &dimension_value_ids.unwrap_or_default())?;
         // The proposal is a moment, and the column cannot hold it (`AMB-T-3639`). A line that could

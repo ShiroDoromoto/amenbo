@@ -874,6 +874,13 @@ impl Instructor {
             (Domain::Task, "opened") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
+            // The pane's name off the row a record keeps it on. It is the road's own word, so a reading
+            // finds it there and nowhere in the interface around it — which is also what lets the
+            // absent half be read: a record made on the board draws no such row, so the name is on none
+            // of the face.
+            (Domain::Decision, "made-in") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             // The word the menu bar is asked for, matched against the bar's own listing rather than
             // against the shot (`reads_the_menu`).
             (Domain::Store, "menu-reads") => {
@@ -1116,6 +1123,19 @@ impl Instructor {
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
+            // The same record, typed at a shell inside a pane. It is written out rather than folded into
+            // the create above because what it proves is where it was typed: the variables that say
+            // which pane this is are on the terminals the window opens and nowhere else, so a form
+            // filled in on the board and a line run in a pane leave two different records.
+            //
+            // The pane is not cleared first, unlike `terminal run`'s. The words a road typed into it
+            // are how every step below names it, and a create that wiped them would take the road's own
+            // way of pointing at a pane off the screen.
+            (Domain::Decision, "create-in-pane") => format!(
+                "In {}, type `amenbo decision add --title \"{}\" --actor ai` and run it. Leave what is already on the pane where it is — do not clear it — and confirm the line comes back saying the decision was recorded.",
+                named_pane(with),
+                req(with, "title")?
+            ),
             // Settling a decision, from its own pane. Unlike the creation the task pane holds shut, this
             // button is live and the refusal comes back from the press — so the line sends a reader to
             // press it, and what the road reads is the sentence that comes back and the decision left
@@ -1318,6 +1338,13 @@ impl Instructor {
                 "Press the control that opens this project's decision records, beside the views its tasks are read on."
                     .to_string()
             }
+            // The way back into the session that wrote the record. The row is pressed on the record's own
+            // page, and the press leaves the ledger behind — so the step says only what was pressed, and
+            // where it landed is the reading after it.
+            (Domain::Decision, "press-made-in") => format!(
+                "Open the decision \"{}\" and press the row under the heading that says which session made it — the one drawn with a keyboard beside a name.",
+                self.target_label(with)
+            ),
             (Domain::Project, "open") => format!(
                 "Open the project \"{}\" again, from the list of projects.",
                 req(with, "project")?
@@ -3520,6 +3547,22 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // Which session the record says it was made in. Both halves read the pane's **name** rather
+            // than the heading over it: the heading is a word of the interface's and is drawn in
+            // whatever language the run is in, while the name is the road's own and is on that row and
+            // nowhere else on the face.
+            (Domain::Decision, "made-in") => match present(with) {
+                true => format!(
+                    "Open the decision \"{}\" and confirm the row saying which session made it carries \"{}\".",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Open the decision \"{}\" and confirm no session is named: \"{}\" is nowhere on its face, and neither is a row offering a way back into one.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+            },
             // Whether a side is offered the category at all, read where the offer actually stands: the
             // control a record's own pane keeps per category. The manager lists a narrowed category
             // like any other — being defined is not being offered — so the manager is the one screen

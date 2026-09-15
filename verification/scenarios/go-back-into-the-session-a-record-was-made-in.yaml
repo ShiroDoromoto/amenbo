@@ -1,0 +1,198 @@
+# A decision says which session wrote it, and pressing that name goes back into the pane.
+#
+# **The question is asked by somebody reading a record nobody remembers making** — a decision that
+# turned up in the ledger with no account of where it came from. What answers it is a row on the
+# record's own page naming the pane it was made in, and a press on that row going there.
+#
+# ── Why the record is made at a shell in the pane ────────────────────────────────────────────────
+# The row is written only where the create was run with the pane's own variables around it, and the
+# window sets those on the terminals it opens and nowhere else. So the road types the create in a
+# pane rather than filling in the form on the board — and the form is walked too, a step further
+# down, because a record made there has to leave no row at all.
+#
+# ── Why two panes ───────────────────────────────────────────────────────────────────────────────
+# What is under test is *which* pane the press lands in. On a page with one pane, a press that
+# landed anywhere at all would read green, and so would a face that simply turned to the terminal.
+# Each pane carries the reader's own line, which is how the step at the end says which one took the
+# keyboard.
+#
+# ── Why the pane is renamed before the row is read ───────────────────────────────────────────────
+# The record keeps the name the pane had when it was written, and the row draws the name the pane
+# goes by **now** — a pane still open is found among the panes, and the name a reader can look for is
+# the one on its row today (`app/src/components/MadeIn.tsx`). Renaming it between the create and the
+# reading is the only way to tell those two apart: read after a rename, the old name would send a
+# reader hunting a row that is not on the screen.
+#
+# ── Why a decision, and not a task ──────────────────────────────────────────────────────────────
+# The row is on a task's page too and the mechanism under it is one, so the task side would be this
+# road with the noun changed. The decision is what is walked because it is the case the row was made
+# for: a record standing in the ledger that nobody remembers writing.
+#
+# ── What this road stops short of ───────────────────────────────────────────────────────────────
+# There is no `steps_cli`. The CLI driver runs the shipped binary in a folder of its own, with none of
+# the variables that say which pane this is, so a create it made would leave no row to read — and a
+# press is not something a terminal has. Giving the driver those variables is work of its own, and is
+# waiting on this file.
+#
+# The press has three landings and this road walks the first. A pane still on the screen is gone to;
+# one that is not is opened again under the same id; and a conversation the provider no longer has
+# ends moments after it is reopened. The two that start from a pane that is gone need a road that
+# takes a pane away before it presses, and that road is waiting on this one.
+id: go-back-into-the-session-a-record-was-made-in
+title: A decision names the session that made it, and the name is pressed to get back into that pane
+description: >
+  Open two panes, put a line into each, and record a decision at the shell in the first one. Rename
+  that pane, then go to the ledger and open the decision: the row saying which session made it
+  carries the pane's name as it reads today. Press it — the terminal face comes up with that pane
+  being worked in, and not the one beside it. Record a second decision on the board instead, and its
+  page names no session at all.
+
+given:
+  # The folder is named on the create rather than bound afterwards, so the project keeps exactly one:
+  # which folder a pane works in is a question only where there are several, and that question is
+  # another road's (`open-a-pane-where-a-project-keeps-more-than-one-folder`).
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+      dir: workshop
+    as: workshop
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # panes below have to be this project's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Workshop
+
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  # The pane the decision is made in. Down to a plain shell, because what an agent does with a line
+  # typed at it is the agent's own and the create below has to be run rather than asked for.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the decision was written in
+
+  # The name the record keeps. It is given before the create, since what is written down is whatever
+  # the pane was called at the moment the line was run.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the potting shed
+      shows: SCENARIO the pane the decision was written in
+
+  - type: action
+    domain: decision
+    op: create-in-pane
+    with:
+      title: SCENARIO Reglaze the north wall before the first frost
+      shows: SCENARIO the pane the decision was written in
+    as: reglaze
+
+  # And the name the row will draw. The record still holds "the potting shed"; a reader looking among
+  # the panes today finds this one, so this is what the row has to say.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the far bench
+      shows: SCENARIO the pane the decision was written in
+
+  # The other pane, and the one the reader is standing in when they press. Its line is what makes the
+  # reading at the end a reading of which pane took the keyboard.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the reader was sitting in
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: decision
+    op: open-face
+
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: reglaze
+      shows: SCENARIO the far bench
+
+  - type: action
+    domain: decision
+    op: press-made-in
+    with:
+      target: reglaze
+
+  # Where the press landed: the terminal face, at the pane the decision was written in — with the
+  # frame drawn picked out and the keyboard in it. The reader was in the other pane a step ago, so a
+  # press that only turned the face would leave this reading on the wrong line.
+  - type: assert
+    domain: terminal
+    op: worked-in
+    with:
+      shows: SCENARIO the pane the decision was written in
+
+  # The other half, and the one that keeps a build drawing the row on everything from reading green:
+  # a decision recorded on the board was made at no pane, so its page names none.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO Order the glazing putty before the shop closes
+    as: putty
+
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: putty
+      shows: SCENARIO the far bench
+      present: false

@@ -1304,6 +1304,18 @@ the operator happened to be looking at. On the decision side `narrowed` is the s
 `listed` asks the terminal — the terminal carries the whole narrowing as one `--filter` line, where
 the screen composes it press by press and reads what is left.
 
+A record's own page carries one more row than the store's fields account for: the session it was made
+in. Three entries answer for it, all on the decision side. `decision create-in-pane` records the
+decision at a shell **inside a pane**, naming which pane the way every pane step does — by the words a
+road typed into it — and it is a separate op from `decision create` because that is the whole of what
+it proves: the row is written only where the create ran with the pane's own variables around it, so a
+decision made on the board leaves none. Unlike `terminal run` it does not clear the pane
+first, the road's own words there being how the steps after it say which pane they mean. `made-in`
+reads the name on that row — the name the pane goes by **now**, since a pane still open is found among
+the panes under whatever it is called today — and `present: false` is the other half, walked on a
+record made anywhere else. `press-made-in` is the press, and where it landed is read by the step after
+it (`terminal worked-in`): a press cannot say of itself which pane it went to.
+
 ### `given:` — the world a road starts from
 
 Some roads stand on records the road itself never makes: a device already set up to report

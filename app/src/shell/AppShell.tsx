@@ -462,19 +462,26 @@ export function AppShell() {
     };
   }, [navTo]);
 
-  // A ref clicked in a pane of the talk window. The host has already brought this window forward and
-  // settled what was clicked (`crate::windows::show_ref`); what is left is the move this shell alone
-  // knows how to make, and it is the same one an in-body ref makes — down to the unsaved-input
-  // confirmation, which a ref arriving from the other window has no more right to walk past than one
-  // clicked here.
+  // A ref followed out of a pane — drawn in the terminal itself, or listed on the band under it
+  // (`AMB-D-897`). The host has already brought this window forward and settled what was clicked
+  // (`crate::windows::show_ref`); what is left is the move this shell alone knows how to make, and it
+  // is the same one an in-body ref makes — down to the unsaved-input confirmation, which a ref
+  // arriving from the other window has no more right to walk past than one clicked here.
+  //
+  // **And the ledger is put up, because the pane it came from may be a face of this window.** Split
+  // out, the pane is in the other window and this one was already showing the ledger; in one window
+  // the two are faces of the same window, and a selection made behind the terminal face is a press
+  // that opened nothing anybody can see. It is the move the file face beside the panes already makes
+  // for the refs it draws (`../files/FilesPanel`, `AMB-D-747`) — and it is made only where the
+  // selection actually happened, so a discard the reader refused does not move them off their pane.
   useEffect(() => {
     if (!inTauri()) return;
     let unlisten: (() => void) | undefined;
     let disposed = false;
     void import("@tauri-apps/api/event")
       .then(({ listen }) => listen<RefTargetDto>("ref-activated", ({ payload }) => {
-        if (payload.kind === "task") void selectTask(payload.id);
-        else void selectDecision(payload.id);
+        const selected = payload.kind === "task" ? selectTask(payload.id) : selectDecision(payload.id);
+        void selected.then((went) => { if (went) setFace("tasks"); });
       }))
       .then((un) => {
         if (disposed) un();

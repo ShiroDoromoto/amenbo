@@ -620,6 +620,7 @@ export const ko: Translation = {
     "face.composeSendKeys": "보내기 ({keys})",
     "face.composeOpen": "쓰는 칸 열기",
     "face.composeFold": "쓰는 칸 접기",
+    "face.madeHere": "이 세션이 만든 것",
     "files.side": "메모와 파일",
     "files.memo": "메모",
     "files.memoTyping": "입력 중",

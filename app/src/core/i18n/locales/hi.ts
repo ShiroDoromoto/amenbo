@@ -622,6 +622,7 @@ export const hi: Translation = {
     "face.composeSendKeys": "भेजें ({keys})",
     "face.composeOpen": "लिखने का बॉक्स खोलें",
     "face.composeFold": "बॉक्स समेटें",
+    "face.madeHere": "इस सत्र ने क्या बनाया",
     "files.side": "नोट और फ़ाइलें",
     "files.memo": "नोट",
     "files.memoTyping": "टाइप हो रहा है",

@@ -621,6 +621,7 @@ export const zhHans: Translation = {
     "face.composeSendKeys": "发送（{keys}）",
     "face.composeOpen": "打开输入框",
     "face.composeFold": "收起输入框",
+    "face.madeHere": "本次会话创建的内容",
     // The draft page and the notes field a task or a project carries are named with different
     // words here. One Chinese word names a slip written on, another names a field of remarks,
     // and neither stretches over both — so these are left apart rather than made to match the

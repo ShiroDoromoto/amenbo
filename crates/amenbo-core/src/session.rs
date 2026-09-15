@@ -2,8 +2,9 @@
 //! inside the talk window's terminal (`AMB-D-749`).
 //!
 //! **It is spoken as `amenbo talk <verb>`** (`AMB-D-757`) — the window's own name, so the boundary and
-//! the namespace are the same word. One thing in here is not spoken: the mark `amenbo agent` leaves to
-//! say it was run here ([`briefed`], `AMB-D-805`).
+//! the namespace are the same word. Two things in here are not spoken, and neither is an AI's account
+//! of anything: the mark `amenbo agent` leaves to say it was run here ([`briefed`], `AMB-D-805`), and
+//! the note a create leaves to say a record was filed from this pane ([`made`], `AMB-D-897`).
 //!
 //! Everything else Amenbo does lands in the store, means the same wherever it is typed, and is still
 //! true tomorrow. Nothing here is. A session is the terminal it runs in — it has no existence outside
@@ -113,9 +114,10 @@ fn from_parts(session: Option<String>, dir: Option<std::ffi::OsString>) -> Optio
 /// that declaration says something the app cannot stand behind. What the AI is doing now is not among
 /// them either: the terminal is already showing it.
 ///
-/// [`Statement::Briefed`] is the one that is not spoken. It says the same kind of thing about the same
-/// session and travels the same drop box, so it belongs to this vocabulary; what it does not have is a
-/// verb anyone types, because the act it reports is the typing of another command.
+/// [`Statement::Briefed`] and [`Statement::Made`] are the two that are not spoken. They say the same
+/// kind of thing about the same session and travel the same drop box, so they belong to this
+/// vocabulary; what they do not have is a verb anyone types, because the act each reports is the
+/// typing of another command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
     /// Name this pane. The name sticks to the frame, not to the process in it. Owed — the folder a
@@ -124,6 +126,51 @@ pub enum Statement {
     /// The AI in this pane has run `amenbo agent`, so it has read the canon and knows Amenbo is here
     /// (`AMB-D-805`). Left by [`briefed`] rather than said, and carrying nothing but the fact.
     Briefed,
+    /// A task or a decision was filed from this pane, as its side and its number (`AMB-D-897`). Left
+    /// by [`made`] rather than said: what it reports is a create that ran, which is the same kind of
+    /// fact as [`Statement::Briefed`] and not an AI's account of its own work.
+    ///
+    /// **The row the store keeps is the other half of this and neither replaces the other**
+    /// ([`crate::ops::MadeIn`]). That one is read afterwards, off a record, and says which session
+    /// filed it; this one is read while the session is running, by the window drawing it, and is gone
+    /// with the window.
+    Made {
+        /// Which of the two spaces the record is in.
+        side: Side,
+        /// Its number, which is what a reader presses to open it.
+        id: i64,
+    },
+}
+
+/// Which of the two record spaces a [`Statement::Made`] is about.
+///
+/// It is the surface layer's own two-valued word rather than a model type, because what travels here
+/// is the word in the file: a reader on the other side of an update branches on it, and a spelling
+/// that moved with a refactor somewhere else would take that branch with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Task,
+    Decision,
+}
+
+impl Side {
+    /// The word this side travels as, and the one the window branches on.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Side::Task => "task",
+            Side::Decision => "decision",
+        }
+    }
+
+    /// The side that word names, or `None` for anything else — which is read the way an unknown verb
+    /// is, by passing the statement over rather than guessing at a space.
+    fn of_word(word: &str) -> Option<Side> {
+        match word {
+            "task" => Some(Side::Task),
+            "decision" => Some(Side::Decision),
+            _ => None,
+        }
+    }
 }
 
 impl Statement {
@@ -133,6 +180,7 @@ impl Statement {
         match self {
             Statement::Name(_) => "name",
             Statement::Briefed => "briefed",
+            Statement::Made { .. } => "made",
         }
     }
 
@@ -143,6 +191,10 @@ impl Statement {
             // The fact is the whole of it: the verb says what happened and the fields every statement
             // carries say in which pane and when.
             Statement::Briefed => json!({}),
+            // The record, as the two things it takes to open one. The title is not among them: it is
+            // the store's and can be edited a minute later, and what this is read for is a count and
+            // a way in (`AMB-D-897`).
+            Statement::Made { side, id } => json!({ "kind": side.word(), "id": id }),
         }
     }
 }
@@ -201,6 +253,20 @@ pub fn say(surface: &Surface, statement: &Statement) -> Result<PathBuf> {
 pub fn briefed() {
     let Some(surface) = surface() else { return };
     let _ = say(&surface, &Statement::Briefed);
+}
+
+/// Leave the note that a record was just filed from here, if here is a pane at all (`AMB-D-897`).
+///
+/// **What it reports is that the command ran**, which is the same footing [`briefed`] stands on: a
+/// count made of an AI's word for what it had done would be a number the window cannot stand behind
+/// (`AMB-D-862`).
+///
+/// **Nothing about it is owed to the caller.** It is left after the create has landed, so a drop box
+/// that cannot be written to costs the pane its count and costs the record nothing — failing the
+/// create here would take away a task that already exists.
+pub fn made(side: Side, id: i64) {
+    let Some(surface) = surface() else { return };
+    let _ = say(&surface, &Statement::Made { side, id });
 }
 
 /// The file one statement is left in. It sorts in the order statements were made: a fixed-width instant
@@ -270,6 +336,10 @@ impl Said {
         let statement = match v["verb"].as_str()? {
             "name" => Statement::Name(text()?),
             "briefed" => Statement::Briefed,
+            "made" => Statement::Made {
+                side: Side::of_word(v["kind"].as_str()?)?,
+                id: v["id"].as_i64()?,
+            },
             _ => return None,
         };
         Some(Said {
@@ -372,8 +442,8 @@ mod tests {
         said.iter()
             .map(|s| match &s.statement {
                 Statement::Name(t) => t.clone(),
-                // Nothing was said; the mark is not one of the spoken verbs.
-                Statement::Briefed => String::new(),
+                // Nothing was said; neither of these is one of the spoken verbs.
+                Statement::Briefed | Statement::Made { .. } => String::new(),
             })
             .collect()
     }
@@ -481,6 +551,43 @@ mod tests {
             said.iter().map(|s| s.statement.clone()).collect::<Vec<_>>(),
             vec![Statement::Briefed],
             "the window's own reader hands it over with the rest: {said:?}",
+        );
+    }
+
+    /// The note a create leaves says which space the record is in and what its number is — the two
+    /// things it takes to open one — and comes back through the same reader as everything else.
+    ///
+    /// A word for a space this reader does not have is passed over rather than read as the other one:
+    /// a count is one thing, and a press that opened a decision where a task was named would be
+    /// another.
+    #[test]
+    fn the_note_a_create_leaves_carries_the_record_it_filed() {
+        let dir = amenbo_scratch::scratch("session-made");
+        let s = surface_at(&dir);
+        let path = say(&s, &Statement::Made { side: Side::Task, id: 4849 }).expect("written");
+
+        let v: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).expect("valid JSON");
+        assert_eq!(v["verb"], "made");
+        assert_eq!(v["kind"], "task", "the space it is in, as the word the window branches on");
+        assert_eq!(v["id"], 4849, "and the number a reader presses");
+
+        say(&s, &Statement::Made { side: Side::Decision, id: 897 }).expect("written");
+        // A space this reader has no word for, left by a later version of the CLI.
+        fs::write(
+            dir.join("99999999999999999999-1-0000.json"),
+            json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-09-15T00:00:00Z", "verb": "made", "kind": "sketch", "id": 1 })
+                .to_string(),
+        )
+        .unwrap();
+
+        let said = said_after(&dir, None).expect("read back");
+        assert_eq!(
+            said.iter().map(|s| s.statement.clone()).collect::<Vec<_>>(),
+            vec![
+                Statement::Made { side: Side::Task, id: 4849 },
+                Statement::Made { side: Side::Decision, id: 897 },
+            ],
+            "both sides come back as themselves, and the space nobody knows is passed over: {said:?}",
         );
     }
 

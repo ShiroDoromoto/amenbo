@@ -637,6 +637,7 @@ export const uk: Translation = {
     "face.composeSendKeys": "Надіслати ({keys})",
     "face.composeOpen": "Відкрити поле для введення",
     "face.composeFold": "Згорнути поле введення",
+    "face.madeHere": "Що створила ця сесія",
     "files.side": "Нотатки і файли",
     "files.memo": "Нотатки",
     "files.memoTyping": "Набір",

@@ -1596,7 +1596,8 @@ pub struct WakeDto {
 ///
 /// It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
 /// Every spoken verb carries one line, which is `text`; `briefed` is not spoken and carries none
-/// (`AMB-D-805`).
+/// (`AMB-D-805`), and `made` is not spoken either and carries the record it filed instead
+/// (`AMB-D-897`).
 // Clone for the same reason `PtyChunkDto` is: `emit_to` takes its payload by value.
 #[derive(Clone, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -1604,7 +1605,7 @@ pub struct WakeDto {
 pub struct SessionSaidDto {
     /// The pane it was said in — the same id the terminal was opened under.
     pub(crate) session: String,
-    #[ts(type = "\"name\" | \"briefed\"")]
+    #[ts(type = "\"name\" | \"briefed\" | \"made\"")]
     pub(crate) verb: &'static str,
     /// When it was said (RFC3339 UTC).
     pub(crate) at: String,
@@ -1617,6 +1618,28 @@ pub struct SessionSaidDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) text: Option<String>,
+    /// The record a `made` statement says was filed from this pane, and `None` on every other verb.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) made: Option<SessionMadeDto>,
+}
+
+/// A record a create left the pane a note about (`AMB-D-897`) — the two things it takes to open one.
+///
+/// **A pair rather than two fields beside the line**: the space and the number mean nothing apart,
+/// and a verb carrying one of them would be a statement the band could count and not open.
+// Clone for the same reason [`SessionSaidDto`] is: `emit_to` takes its payload by value.
+#[derive(Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMadeDto {
+    /// Which of the two spaces it is in.
+    #[ts(type = "\"task\" | \"decision\"")]
+    pub(crate) kind: &'static str,
+    /// Its number, which is what the press opens. `number` on the TS side, like every other id the
+    /// webview draws: a `bigint` cannot be written into a ref or handed to the command that opens one.
+    #[ts(type = "number")]
+    pub(crate) id: i64,
 }
 
 /// What one frame of the talk window is called, and who called it that — which is what says whether

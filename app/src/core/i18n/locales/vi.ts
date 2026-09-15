@@ -624,6 +624,7 @@ export const vi: Translation = {
     "face.composeSendKeys": "Gửi ({keys})",
     "face.composeOpen": "Mở ô để viết",
     "face.composeFold": "Thu ô viết",
+    "face.madeHere": "Những gì phiên này đã tạo",
     "files.side": "Ghi chú và tệp",
     "files.memo": "Ghi chú",
     "files.memoTyping": "Đang nhập",

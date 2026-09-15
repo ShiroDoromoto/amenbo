@@ -1750,17 +1750,35 @@ priority?: string,
 labels: Array<SearchLabelDto>, };
 
 /**
+ * A record a create left the pane a note about (`AMB-D-897`) — the two things it takes to open one.
+ *
+ * **A pair rather than two fields beside the line**: the space and the number mean nothing apart,
+ * and a verb carrying one of them would be a statement the band could count and not open.
+ */
+export type SessionMadeDto = { 
+/**
+ * Which of the two spaces it is in.
+ */
+kind: "task" | "decision", 
+/**
+ * Its number, which is what the press opens. `number` on the TS side, like every other id the
+ * webview draws: a `bigint` cannot be written into a ref or handed to the command that opens one.
+ */
+id: number, };
+
+/**
  * One thing an AI said about the session it is running in, on its way to the pane drawing it.
  *
  * It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
  * Every spoken verb carries one line, which is `text`; `briefed` is not spoken and carries none
- * (`AMB-D-805`).
+ * (`AMB-D-805`), and `made` is not spoken either and carries the record it filed instead
+ * (`AMB-D-897`).
  */
 export type SessionSaidDto = { 
 /**
  * The pane it was said in — the same id the terminal was opened under.
  */
-session: string, verb: "name" | "briefed", 
+session: string, verb: "name" | "briefed" | "made", 
 /**
  * When it was said (RFC3339 UTC).
  */
@@ -1773,7 +1791,11 @@ cwd?: string,
 /**
  * The line said.
  */
-text?: string, };
+text?: string, 
+/**
+ * The record a `made` statement says was filed from this pane, and `None` on every other verb.
+ */
+made?: SessionMadeDto, };
 
 /**
  * The slug in `.amenbo` disagrees with what the store actually holds

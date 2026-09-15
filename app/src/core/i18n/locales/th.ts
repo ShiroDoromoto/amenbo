@@ -624,6 +624,7 @@ export const th: Translation = {
     "face.composeSendKeys": "ส่ง ({keys})",
     "face.composeOpen": "เปิดช่องสำหรับเขียน",
     "face.composeFold": "พับช่องเขียน",
+    "face.madeHere": "สิ่งที่เซสชันนี้สร้างไว้",
     "files.side": "บันทึกและไฟล์",
     "files.memo": "บันทึก",
     "files.memoTyping": "กำลังพิมพ์",

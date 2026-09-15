@@ -22,6 +22,7 @@ import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/
 import { pushNotice } from "../core/notice";
 import { setComposeStartsOpen } from "../core/composeStartsOpen";
 import { Menu, MenuItem } from "../components/Menu";
+import { PaneMade, type Made } from "./PaneMade";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto } from "../bindings/bindings";
@@ -186,6 +187,10 @@ export function TerminalPane({
   // Where the row's menu was opened, while it is open. It is placed at the press rather than under
   // the button for the reason every other menu in the app is (`../components/Menu`).
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  // What the session in this pane has filed, in the order it filed them (`./PaneMade`). It is held
+  // here and nowhere else: the notes are this terminal's, and a count written down would outlive the
+  // session it is a count of (`AMB-D-897`).
+  const [made, setMade] = useState<Made[]>([]);
   // Whether a drag from outside is over this pane. It is the whole of the receiving surface: nothing
   // is drawn until something is being carried, and what is carried is only known while it hangs there.
   const [handing, setHanding] = useState(false);
@@ -433,6 +438,9 @@ export function TerminalPane({
         // the one this slot was handed.
         plate.opened(where ?? start.cwd ?? null);
         setLive(session);
+        // What the band counts belongs to the session and not to the place: a pane opened again is a
+        // new session, and the records the last one filed are not this one's (`./PaneMade`).
+        setMade([]);
         setInPane(running);
         inPaneRef.current = running;
         // Where the terminal actually runs and what is in it, neither of which is always what this
@@ -448,7 +456,16 @@ export function TerminalPane({
       // Nothing on this face is opened without a folder — the question is answered before the pane
       // is made (`./FolderChoice`) — so there is no choice for the frame to report.
       chose: () => {},
-      said: (statement) => on.current.onSaid(statement),
+      said: (statement) => {
+        // The band's own half of a statement, taken on the way past. One record is one entry however
+        // many times it arrives: a count that went up twice for one `task add` would be a number the
+        // pane cannot stand behind, which is the whole point of counting commands that ran.
+        if (statement.made) {
+          const one = { space: statement.made.kind, num: statement.made.id };
+          setMade((was) => was.some((h) => h.space === one.space && h.num === one.num) ? was : [...was, one]);
+        }
+        on.current.onSaid(statement);
+      },
       closed: (session, code, noWayBack) => {
         plate.closed();
         setEnded(true);
@@ -856,6 +873,7 @@ export function TerminalPane({
             >
               <Icon name="keyboard" />
             </button>
+            <PaneMade made={made} />
             <PaneModel frame={frame} session={live} agent={inPane} />
           </div>
         )}

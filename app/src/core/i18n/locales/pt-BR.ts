@@ -634,6 +634,7 @@ export const ptBR: Translation = {
     "face.composeSendKeys": "Enviar ({keys})",
     "face.composeOpen": "Abrir a caixa para escrever",
     "face.composeFold": "Recolher a caixa",
+    "face.madeHere": "O que esta sessão criou",
     "files.side": "Anotações e arquivos",
     "files.memo": "Anotações",
     "files.memoTyping": "Digitando",

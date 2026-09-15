@@ -27,8 +27,6 @@ use std::process::Command;
 
 use amenbo_scenario::{Args, BoundKind, Domain, Scenario, Step};
 
-use crate::domain::plugin::StoodCatalog;
-
 /// Load, isolate, execute, judge — one scenario against one binary. `Err` is an execution error
 /// (the scenario would not load, the binary is not one a run may drive, it would not run); a
 /// scenario that ran but had a failing assert comes back as an `Ok(Report)` with `passed == false`.
@@ -81,16 +79,12 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
 ///
 /// This is the other driver's way in. The GUI harness stands its world up here rather than through a
 /// vocabulary of its own, because what a premise names are the same ops the CLI road names, and two
-/// spellings of `plugin install` would drift the moment one of them learned something.
+/// spellings of `task create` would drift the moment one of them learned something.
 ///
 /// The CLI road does not come through here, and that is not an oversight: it stands its premise up in
 /// the very driver that then walks it ([`run_scenario`]), which is the only way the names a premise
 /// binds are still in hand when the road calls them. A screen run has no such need — the hands that
 /// walk it are a person's.
-///
-/// What comes back is held rather than dropped, and that is not a formality: part of a world can be
-/// a thing that only stands while something holds it — a catalog the premise put on the loopback
-/// answers for exactly as long as this does.
 ///
 /// `fixtures` says where the files a premise copies are, for a caller that is not standing in this
 /// repository — the GUI harness runs inside a VM, where this crate's compile-time path names nothing.
@@ -115,9 +109,8 @@ pub fn stand_world<'a>(
 /// A world that has been stood up, and is standing for as long as this is held.
 pub struct World<'a> {
     stood: Vec<String>,
-    /// The driver that stood the world up, kept for two reasons. It owns what a premise put on the
-    /// loopback, so dropping it would close the port a registration is pinned to while the run is
-    /// still pointed at it; and it is the way back into the store afterwards ([`World::read`]).
+    /// The driver that stood the world up, kept as the way back into the store afterwards
+    /// ([`World::read`]).
     driver: Driver<'a>,
 }
 
@@ -183,10 +176,6 @@ pub(crate) struct Driver<'a> {
     /// reference rather than as a number. Recorded beside the binding rather than on it: every other
     /// op takes the id itself, and only the classification doors ask which kind it is.
     bound_kinds: HashMap<String, BoundKind>,
-    /// What the last `plugin run` came back with. A command face's return value is its own stdout
-    /// and is deliberately kept out of the execution log, so this is the only place a later step can
-    /// read it from — which is why the assert that reads it has to follow its call.
-    last_run: Option<serde_json::Value>,
     /// What the last `unbind` answered. Kept for the reason the line above is: how many folders the
     /// project has left is part of that answer, and afterwards there is only the state it left —
     /// which reads the same whether the answer mentioned it or not.
@@ -199,26 +188,13 @@ pub(crate) struct Driver<'a> {
     /// placed again is a path that leads somewhere, which is the very state the road took away.
     moved: HashMap<String, std::path::PathBuf>,
     /// What the last `worktree start` wrote to stdout — the one `cd` line that is its whole return
-    /// value. Kept for the reason [`Driver::last_run`] is: a return value is not a state, so the only
-    /// place a later step can read it is here, and the assert that reads it has to follow its call.
+    /// value. A return value is not a state, so the only place a later step can read it is here, and
+    /// the assert that reads it has to follow its call.
     last_worktree: Option<String>,
-    /// What the last `plugin flush` reported. Kept for the same reason as the line above: what a
-    /// flush got through, and which queues it stepped around, is said once as it returns and is
-    /// nowhere to be read afterwards — the store shows the state, not who declined to touch it.
-    last_flush: Option<serde_json::Value>,
     /// The files the `store` actions wrote, under the same names. A scenario has one binding
     /// namespace — the loader keeps it unique across all of them — and which map a name lands in
     /// follows from the op that bound it: nothing in the store is a path, and no archive is an id.
     artifacts: HashMap<String, std::path::PathBuf>,
-    /// The numbers a `store` action read back, under the names their steps bound. The third thing an
-    /// `as:` can hold, and apart from the other two for the reason they are apart from each other:
-    /// which map a name lands in follows from the op that bound it, and a version is neither a row in
-    /// the store nor a file on disk.
-    numbers: HashMap<String, i64>,
-    /// The catalogs the run stood up itself, under the names their steps bound. They are held here
-    /// for the length of the scenario because a host answers only while it is alive: dropping one
-    /// after the step that made it would leave every later step pointed at a closed port.
-    catalogs: HashMap<String, StoodCatalog>,
     /// The MCP server a road stood up, held for the length of that road. It is one because a server
     /// serves one folder and a road walks one — and it is held rather than started per step because a
     /// conversation is what the protocol has: dropping it between steps would leave every later one
@@ -275,15 +251,11 @@ impl<'a> Driver<'a> {
             project_id: 0,
             bindings: HashMap::new(),
             bound_kinds: HashMap::new(),
-            last_run: None,
             last_unbind: None,
             last_rebind: None,
             moved: HashMap::new(),
             last_worktree: None,
-            last_flush: None,
             artifacts: HashMap::new(),
-            numbers: HashMap::new(),
-            catalogs: HashMap::new(),
             server: None,
             tick_at_start: false,
             refusal: None,
@@ -460,14 +432,6 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    /// Run for what it *wrote to stdout* — the shape a command takes when its stdout is the document
-    /// rather than a report about one (`sync snapshot`). The bytes come back unread: what they hold is
-    /// the step's business, and treating a document as text here would put an encoding between a
-    /// carrier's file and the file this run judges.
-    fn run_stdout(&self, args: &[&str]) -> Result<Vec<u8>, String> {
-        self.run_stdout_in(&self.session.cwd, args)
-    }
-
     /// The same, from a chosen folder — for a command whose answer is about the repository it is
     /// typed in rather than about the store.
     fn run_stdout_in(&self, cwd: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
@@ -603,7 +567,6 @@ impl<'a> Driver<'a> {
             Domain::Folder => self.folder_action(op, with, bind),
             Domain::Attachment => self.attachment_action(domain, op, with, bind),
             Domain::Repo => self.repo_action(op, with),
-            Domain::Plugin => self.plugin_action(op, with, bind),
             Domain::Mcp => self.mcp_action(op, with),
             // Nothing here writes a registration into the machine the gate is running on — see
             // `domain::tick`. The one action the wake-up carries is a premise's reach into the
@@ -625,12 +588,12 @@ impl<'a> Driver<'a> {
         }
     }
 
-    /// Judge an assert by handing it to the domain that answers for it. Two ops are named for what
-    /// they are about rather than for a domain of their own: a document Amenbo handed out — an
-    /// export's archive, a carrier's snapshot — is read for whatever kind of row is looked for in it.
+    /// Judge an assert by handing it to the domain that answers for it. One op is named for what it
+    /// is about rather than for a domain of its own: the archive an export handed out is read for
+    /// whatever kind of row is looked for in it.
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<Outcome, String> {
-        if op == "exported" || op == "synced" {
-            return self.judge_carried(domain, op, with);
+        if op == "exported" {
+            return self.judge_carried(domain, with);
         }
         match domain {
             Domain::Task => self.task_assert(op, with),
@@ -644,7 +607,6 @@ impl<'a> Driver<'a> {
             Domain::Folder => self.folder_assert(op, with),
             Domain::Attachment => self.attachment_assert(op, with),
             Domain::Repo => self.repo_assert(op, with),
-            Domain::Plugin => self.plugin_assert(op, with),
             Domain::Mcp => self.mcp_assert(op, with),
             Domain::Tick => self.tick_assert(op, with),
             // The screen's alone, the same way its actions are.
@@ -675,26 +637,6 @@ impl<'a> Driver<'a> {
         self.artifacts.insert(name, path);
     }
 
-    /// Record a number an action read back, under the name a later step will ask for it by. A step
-    /// that binds nothing still gets a slot, so nothing is silently dropped on the way.
-    fn remember_number(&mut self, bind: Option<&str>, kind: &str, value: i64) {
-        let name = match bind {
-            Some(name) => name.to_string(),
-            None => format!("{kind}-{}", self.numbers.len()),
-        };
-        self.numbers.insert(name, value);
-    }
-
-    /// Resolve a name to the number an earlier `store` action read. As with a file, the loader proved
-    /// the name resolves to an earlier `as:`, so what is left here is a name bound by an op that
-    /// produced something else.
-    fn number_ref(&self, with: &Args, key: &str) -> Result<i64, String> {
-        let name = req_str(with, key)?;
-        self.numbers.get(name).copied().ok_or_else(|| {
-            format!("`{key}: {name}` names no number a `store` action read in this run")
-        })
-    }
-
     /// Resolve a name to the file an earlier `store` action wrote. The loader proved the name
     /// resolves to an earlier `as:`, so what is left to catch here is a name bound by an op that
     /// produced an object rather than a file.
@@ -718,34 +660,6 @@ impl<'a> Driver<'a> {
         self.session
             .folder(name)
             .map_err(|e| format!("could not make the folder `{name}`: {e}"))
-    }
-
-    /// Where to stand for a step that names a `project:` — the folder this run linked to it when the
-    /// premise raised it. Some of what Amenbo holds is held per project, and a terminal says which
-    /// project it means by standing in a folder bound to that one; there is no flag for it. A step
-    /// that names none gets `None`, which is the run's own working directory: bound to nothing, and
-    /// so answering to the store's default project.
-    ///
-    /// The binding is read back before the folder is handed over. A folder that answers with another
-    /// project — or with none, which is what a name no `project create` ever raised leaves behind —
-    /// would take the command somewhere quietly and leave the road reading the wrong crossing, which
-    /// is the whole reason a step gets to name one.
-    fn project_folder(&self, with: &Args) -> Result<Option<PathBuf>, String> {
-        let Some(name) = with.get("project") else { return Ok(None) };
-        let name = name.as_str().ok_or("arg `project` must be a string")?;
-        let dir = self.folder_named(&crate::domain::project::folder_name(name))?;
-        let v = self.run_json_in(&dir, &["bind", "--json"])?;
-        match v["binding"]["project_name"].as_str() {
-            Some(bound) if bound == name => Ok(Some(dir)),
-            other => Err(format!(
-                "`project: {name}` names no folder this run stands in — {} is bound to {}",
-                dir.display(),
-                match other {
-                    Some(bound) => format!("`{bound}`"),
-                    None => "no project".to_string(),
-                }
-            )),
-        }
     }
 
     /// Resolve a step's `target:` to the id an earlier action bound. The loader already proved

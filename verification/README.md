@@ -94,13 +94,6 @@ network. Exit code is the machine signal — `0`
 when every assert passes, non-zero on any failed assert or execution error — so the runner reads it
 directly. `--keep` leaves the throwaway store in place for inspection.
 
-**One thing does leave the box.** `plugin install` resolves the official catalog over the network,
-picks this platform's asset and verifies its signature against the key built into the binary — a
-layer that exists only in a shipped build, and one no local fixture can stand in for without the
-run reading green over the very thing it exists to catch. The plugin scenarios therefore need
-the network and an intact catalog — the ones that install one, and the one that reads the browsing
-view back — and they are the only ones that do.
-
 **Two things are on the far side of a line this gate does not cross, and neither is a gap.** Sending
 a notification needs a channel somebody owns and a relay that would take it, and standing the
 Viewer's server up builds in a Cloudflare account somebody owns off an API token for it. A gate that
@@ -108,43 +101,8 @@ reached either would hold a release on whose account it was, on what it cost, an
 party answered today. So both domains walk everything up to that line and stop there — the checks
 that read settings without a message leaving, and the roads a device with no Viewer server still has.
 
-The loopback is the other side of that. A third-party catalog is trusted on the signing key it
-publishes beside its `catalog.json`, and a key is *served*, never written down — so a scenario that
-walks the pin (`plugin catalog-stand`) has the run publish a catalog of its own on a port, and names
-it by the `as:` binding rather than by a URL it could not have known. `catalog-rotate-key` serves the
-other of two keys from the same address, which is a publisher rotating theirs as Amenbo sees it. The
-host is `amenbo-static-host`, shared with the main workspace's own tests.
-
-What that catalog puts on its shelf is the scenario's to write, under `offers:` — the one arg written
-as a list of rows rather than as a word. Each row is the words a catalog's own documents carry: the
-`name` it is fetched and badged by, the `desc` drawn under it, the `claims_official` badge it is not
-entitled to (a shelf anyone may publish into holds no review, so seeing the merge clear that claim
-needs one to have been made), and the one `setting` its author declares under the `label` a form
-shows. Naming no rows is an empty shelf, which is what a road about the trust root alone wants. A
-registration takes a `name:` for the same reason the rows are named at all: a catalog registered
-without one is called after the host of its URL, and a loopback address with a port picked this run
-is nothing a road can read a row's provenance back by. Nothing on such a shelf installs — the rows
-carry no asset, and an install is walked against the real catalog, whose signature is the layer no
-fixture can stand in for.
-
-A row may also carry `about:` — what its author wrote about the plugin at length, which is the body an
-opened panel is read by — and `translated:`, the same `desc`, `about` and `label` as its author wrote
-them in other languages, keyed by language code. What the shelf then publishes is the shape a real
-catalog publishes, which is two shapes rather than one. The lines go beside the list, one
-`catalog.<lang>.json` per language, so a reader fetches their own and nobody pays for the other
-eighteen; the description text and the labels go inside each row's own detail document, every language
-at once, so a panel and a form already fetched follow a language change with no request behind it. That
-split is the reason to write a row this way rather than to stand a shelf per language: what a screen
-road has to be able to see is a listing redrawn from a document fetched for the new language, and a
-panel redrawn from one nobody fetched again. A language no row drew a *line* in gets no document, and
-the 404 the fetch meets is the answer a reader of an untranslated language already gets — so the
-fallback is walked by leaving a row, or a whole shelf, untranslated rather than by breaking anything.
-A row that carries no `about:` at all is the other fallback, one layer up: its panel is drawn from the
-README of the repository every stood row names, which is where a plugin's description came from before
-authors had anywhere else to write one.
-
 Each op the driver maps is an arm in its domain's module under `cli/src/domain/` — `task depend` in
-`task.rs`, `plugin install` in `plugin.rs` — and an op that is in the scenario registry but not yet
+`task.rs`, `notify carry` in `notify.rs` — and an op that is in the scenario registry but not yet
 mapped fails loudly rather than passing silently. `cli/src/lib.rs` keeps only what every arm stands
 on (the isolated session, the one invocation, the bindings, the report) and hands each step to the
 domain it names, so "how is this op driven?" is answered by opening one file.
@@ -670,41 +628,10 @@ and it earns the two things a note never can: the screen it arrives at is shot, 
 road is evidence rather than something taken on trust, and the assert after it cannot be reached by a
 hand tidying the screen while the run is held. The screen roads are written that way: `link-a-folder`
 walks the arrival screen, the card, the picker and the board it lands on,
-`say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in,
-`learn-a-plugin-reads-more-than-this-project` walks two rows on that same screen for the one thing a
-declaration says and a switch cannot — a plugin declared the machine's says in words that it reads the
-whole device, and the plugin beside it that declared nothing says nothing —
-`put-a-device-wide-plugin-to-work` walks that first plugin's one row all the way through — the mark it
-wears, the settings opened inside it, the press, and then a project's own settings offering no second
-switch for it —
-`put-a-plugin-to-work-from-the-project` walks the same crossing from the other face — the arrival, the
-picker that draws the row, and the switch inside it —
-`fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the
-settings opened inside it and the press that then goes through,
-`learn-why-a-plugin-will-not-turn-on` walks the gate that turns on the author's own judgement — the two
-sentences a refusing check puts on the form after a save, the value staying saved and the plugin staying on
-under them, and the same check standing in front of the switch when it is pressed again —
-`see-only-the-settings-that-apply` walks the same form one layer up — the candidate an author withheld,
-the field that candidate gates and the operation acting on it, each absent until the answer above it is
-given, and the field and its button arriving together —
-`choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
-the button back to the author's default, `press-what-a-plugin-offers-to-do` walks the other half of that
-same form — the operation its author declared, drawn but unpressable while the gate is shut, the box it
-asks for coming up at the press, the author's own line coming back with what was typed in it, the
-second press finding that box empty again, and the button beside it asking for a credential through a box
-that draws none of it back — `finish-writing-a-task-before-anyone-takes-it` walks the one
+`finish-writing-a-task-before-anyone-takes-it` walks the one
 premise a reader settles where it is reported — the card drawn while its creation is still open, and
-the button inside it that ends the creation, `read-a-plugin-in-your-own-language` walks a listing
-across a language change — the line one author wrote in the reader's language, the row beside it whose
-author wrote none, the shelf that published no document for that language at all, and the panel whose
-label came down with every language inside it — `read-a-plugins-form-in-your-own-language` walks the
-same change on the other side of an install, where the words were never published anywhere and so
-cannot have been fetched: the field translated, the field beside it that is not, and the candidate drawn
-under one set of words while storing the value it always stored — `learn-what-a-plugin-does-before-installing-it`
-walks the third of those doors, the panel an opened row is read by: the author's own description standing
-there with no README beside it, the same description again after a language change, the row whose author
-wrote one language keeping it unmarked, and the row nobody described at all falling back to the
-repository's README — `see-a-tasks-classification-on-the-board` walks what a card says of how its task
+the button inside it that ends the creation,
+`see-a-tasks-classification-on-the-board` walks what a card says of how its task
 is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
 project put on the card, and nothing at all from the axis beside it that did not ask —
 `answer-one-category-with-several-values` walks the same board over a category one task answers twice:
@@ -752,18 +679,17 @@ A scenario is an `id`, a human `title`, an optional `description`, an optional `
 the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
+`comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` /
 `mcp` / `tick` / `terminal` / `files` / `notify` / `viewer`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
 `target:`.
 
-The last four are not things filed in a store: `store` is this device's Amenbo itself — its
+Three of those are not things filed in a store: `store` is this device's Amenbo itself — its
 settings, the identity it answers `whoami` with, the build in place, and the store as a whole
 (`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
-`.amenbo` names, `repo` is the folder the run works in as a place with files and a git history, and
-`plugin` is what is installed on the machine, whose gate is open, and what the execution log kept.
+`.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what
@@ -780,26 +706,13 @@ vanished`'s `gone:`, `folder repointed`'s `previously:` — to say which binding
 it would put back the very path the move took away, which is the whole state those steps are about.
 Those names are answered from what the run moved instead. A folder name also travels outside the
 `folder` domain: `task update`'s `at:` and `task worked-in`'s `dir:` name which of a project's folders
-a task is worked in, and are placed and read the same way the `folder` steps' are. A **plugin** is
-named the way the catalog names it (`name: worktree`), which is what every one of its commands takes.
-
-`plugin run` is the one place where a step's arguments are not Amenbo's. Everything after the
-plugin's name belongs to the plugin, so `command:` is the word its own face takes, `task:` hands it
-the id of a task an earlier step created, and `args:` carries anything else through verbatim. The
-value that comes back is read by the `returned` assert, which has to **follow its call**: a command
-face's return value is its own stdout and is deliberately not written to the execution log, so
-nothing else can go and fetch it afterwards.
+a task is worked in, and are placed and read the same way the `folder` steps' are.
 
 A **`store` action that writes a file** binds it through the same `as:` an object is bound by, and
 what the name then holds is the file: `restore` names the archive it puts back the way any step names
 an earlier result, so a mistyped name is a lint failure and not a driver hunting for a file nobody
 wrote. The files land in the run's own throwaway space and go with it.
 
-A **`store` action that reads a number** binds the number itself, which is the third thing a name can
-hold. `sync-version` is the one: what a carrier watches is a value, not a row and not a file, and the
-only thing a later step can say about it is that it moved or did not (`store version`'s `since:` and
-`moved:`). Which of the three maps a name lands in follows from the op that bound it, as it does for
-the other two.
 
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
@@ -1305,64 +1218,8 @@ a pointer whose id and slug both check out is the one nothing but the name can t
 left holding once the store that answered for it goes — a channel wiped, a throwaway store dropped.
 It is made the same way and for the same reason: the run's own pointer with the number moved past
 anything a run hands out, so the shape and the store's name are still this build's and the number is
-the whole of what leads nowhere.
-`plugin stale-manifest` leaves an installed plugin recording a
-build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
-build, and an asset is trusted only by the key of the catalog that served it, so there is no second
-build to install first and no way to sign one into existence. Three of the `plugin declare-…` ops put a setting into what an
-installed plugin says it takes: what a plugin takes is the author's word, Amenbo never invents a field,
-and **no plugin in the official catalog declares one at all** — so every road through `plugin config`
-would go unwalked until one does. `declare-setting` writes the plain kind, the line a reader types and
-reads back; `declare-secret` writes the flag that sends a value down the other road, which fails
-silently and in plain text; `declare-choice` writes a setting whose answers the author listed, and the
-default that stands until someone gives one, which is what keeps a choice made, a choice declined and a
-question nobody has answered apart. Any of the three also takes `translated:` — the words that field
-carries in the author's other languages, keyed by language code: the `label` a form draws it under, and
-for a choice the `options` its candidates are, keyed by the value each one stores. They land where an
-install puts what a catalog published, beside the manifest rather than in it, which is what a form reads
-and why one follows a reader changing language with nothing fetched. No published plugin declares a
-setting, so none has one translated either — both halves are out of reach for the one reason, and are
-written by the one door. Any of the three takes `required: true`, the flag that says the
-plugin cannot work without an answer — the fail-closed enable is refused while the crossing holds none,
-and no published plugin declares that either. `declare-action` is the fourth of that family and writes what the
-author offers to *do* from that same form — the button, the one value it asks for at the press, and whether
-that value is one the author called a credential — which
-no published plugin declares either, so the operation is a face no install reaches; `plugin press-program`
-stands the program behind it in, since an operation is code being run and what the form draws is one line
-of what that code said. `declare-check` writes the other half of that block — the judgement an author has
-raised on the values before a gate opens on them — and `plugin check-program` answers it, `ok:` being the
-scenario's to choose, since what a road about a gate wants is the same values turned away and then let
-through. A plugin has one program, so those two stand-ins replace whatever stood there before, each other
-included — but they do not need each other: `press-program` answers a check with a yes on the stream a
-press never reads, so a settings block carrying both halves is walked by standing in that one, and
-`check-program` is what a road reaches for when the verdict itself is under test. `press-program` also
-takes `writes:` and `writes_value:`, which leave the press storing one of the plugin's own settings back
-through `plugin config set` — the door a plugin's own value arrives by, and the only one a field its
-author marked `readonly` has. A road that names neither gets the program as it was, writing nothing. `plugin declare-scope` writes the layer the author
-declared — one project's rows, or the device's — which is the same kind of word and unreachable for the
-same reason: a manifest saying nothing means `project`, and every published plugin says nothing, so the
-road a machine-wide plugin walks (one enable, one window on the whole device) exists only once this is
-written. `plugin slow-program` leaves an installed plugin
-taking seconds to answer, which is the only way a queue holds anything to read: a row leaves the moment
-its plugin replies, so the backlog `plugin log` reports is the window a slow plugin holds open, and
-every plugin the catalog publishes answers in the time a process takes to start. `plugin echo-program`
-leaves one answering with the config it was handed, which is the only witness a setting's delivery has:
-it travels on the child process — as an environment variable for a secret, in the stdin document for
-everything else — and the published plugins use their settings rather than report them.
-`plugin read-back-program` leaves one calling Amenbo back, which is the only witness the read-back
-route has: an event names a record and carries none of it, so the content is fetched by running the
-binary with the store and the window Amenbo handed over — and the published plugins work everything
-out from the repository they are called in, asking Amenbo nothing. `plugin unbadge` takes the catalog's badge off an installed
-plugin, which is the only way a road meets a stranger's: the badge is the catalog's to grant and an
-author who could write it onto themselves would be the reason it is worth nothing, so every plugin
-the official catalog serves arrives with it and no install reaches the state a user is in the moment
-they install from anywhere else. `plugin installed-dir` shuts what
-is installed away and gives it back, which is the only way a write's delivery is left standing:
-delivery rides along with the write that caused it, so a push made by hand carries something only
-where that drive never ran — and Amenbo skips it exactly when the installed plugins will not read.
-They are the
-same idea as `repo write-file`: the
-state on disk a scenario has to arrive at, and cannot reach by using Amenbo, the driver makes. Reach
+the whole of what leads nowhere. They are the same idea as `repo write-file`: the state on disk a
+scenario has to arrive at, and cannot reach by using Amenbo, the driver makes. Reach
 for one only when the line under test is what Amenbo does about that state.
 
 One of them puts nothing wrong — it puts time. `store worn-in` leaves the store reading as one
@@ -1414,22 +1271,7 @@ rather than an error. The `store doctor` assert reads its verdict through `ok`, 
 most of what doctor raises is a warning, and a warning leaves `ok` alone. A `store snapshot` assert
 takes `absent: <text>` when what is under test is something that must **not** have left the store: what
 Amenbo handed out is read as bytes — one file for a backup, the whole folder for an export — and the
-word is looked for verbatim, which needs no reading of the layout around it. A `plugin config` assert
-takes `secret: true` for the same kind of question one tier up: the read says the setting is a secret,
-and does not hand the value over with it. It takes `state:` for the question a value cannot answer for
-itself — `chosen`, `none` or `unanswered` — since a choice answered with none of its candidates and one
-nobody has answered both hold no chosen value, and only the second follows the author's default.
-And it takes `holds:` on a screen road for the plainest reading of all — a typed line standing in the box a
-form draws it in, which is what a road asks after something that could have taken it away. That one is the
-screen's alone, `equals` being how the same value is read where there is no box.
-Both it and the `plugin config-set` beside it take `project:`, the crossing the value is held at — a
-setting belongs to one, and a terminal says which by standing in a folder bound to it, so the driver
-stands in that project's folder before it types. Naming none is the folder the run itself works from,
-which answers to the project Amenbo raised for it; a premise that leaves it out while the road reads
-the value at a crossing of its own writes somewhere neither road then looks. That word is the
-terminal's alone — on screen the row the settings are opened inside has already answered it, and the
-GUI harness turns it away — and it travels as a word rather than as a binding, so a test over the
-scenario set holds it to a project something raised, the way the one that opens a project is held.
+word is looked for verbatim, which needs no reading of the layout around it.
 A `dimension listed` assert takes `side: task` / `decision` for a question its plain form cannot put:
 not whether the axis is defined but whether that side is offered it at all, which an axis narrowed with
 `dimension applies-to` stops being while staying on every listing. It takes `target:`
@@ -1464,8 +1306,8 @@ the screen composes it press by press and reads what is left.
 
 ### `given:` — the world a road starts from
 
-Some roads stand on records the road itself never makes: a plugin already installed, a catalog
-already registered, a project that is simply there. Left unwritten, that is a precondition living in
+Some roads stand on records the road itself never makes: a device already set up to report
+somewhere, a folder already linked, a project that is simply there. Left unwritten, that is a precondition living in
 whoever prepared the screen last — an operator reading the file cannot tell what to put in place,
 and no driver can put it there for them.
 
@@ -1475,7 +1317,7 @@ one of its roads:
 
 ```yaml
 given:
-  - { type: action, domain: plugin, op: install, with: { name: worktree } }
+  - { type: action, domain: folder, op: init, with: { dir: shared } }
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
 steps_gui:
   - { type: assert, domain: task, op: listed, with: { filter: "status:todo", target: seed, present: true } }
@@ -1761,26 +1603,6 @@ and what Amenbo owns there is the wording, which is held up without leaving this
 settles this one is not; the instruction asks the attending AI for that picture instead. It is walked once
 a release, and going further — the app's own AI making a task through the server — is a round trip walked
 once and not per release, what is on the far side of it being somebody else's product.
-
-Reading what a plugin's own check said about its settings (`plugin checked`) is one road's for a reason of
-its own: the verdict's sentences are the author's and are drawn on the settings form, while a terminal
-meets the same refusal as an error code on the enable it turned away — which is what the `refused:` on that
-step already reads.
-
-Pressing an operation a plugin's author put on its settings form, answering what that press asks for, and
-reading the line it left, the box it asked in and the button before the gate was open (`plugin press` /
-`press-answer` / `press-said` / `press-asks` / `press-shut`), are one road's for a reason of their own: a
-terminal reaches the same author's code through `plugin run`, which names the call itself, takes whatever
-arguments are typed after it, and answers with a return value — so what is under test here, a press
-choosing among the calls a manifest declared and asking for what that one needs, has no terminal to walk.
-
-Changing the language the interface is read in, and reading the words a plugin's own text reaches a
-reader as (`store set-language` / `plugin line` / `plugin asks`), are one road's for a different reason:
-the setting is reachable from a terminal, but nothing a terminal prints is drawn in it. What the CLI
-answers is English whatever the setting says, so a road that changed it there would be moving a value
-nothing it could then read depends on — and the sentences this is about are drawn in one place. `line`
-is the one under a market row's name, `asks` the one a settings form draws a field, or one of a choice's
-answers, under.
 
 Giving a project the image it shows for itself, taking that image away, and reading which of the two
 the square holds (`project set-icon` / `clear-icon` / `icon`), are one road's for the plainest reason

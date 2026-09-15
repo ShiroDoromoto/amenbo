@@ -39,8 +39,8 @@ pub struct Scenario {
     #[serde(default)]
     pub description: Option<String>,
     /// The world that has to be standing before any road is walked — the records a road takes for
-    /// granted and does not make: a project that is already there, a catalog already registered, a
-    /// plugin already installed, a folder already linked. Written as actions, and left to the driver
+    /// granted and does not make: a project that is already there, a folder already linked, a device
+    /// already set up to report somewhere. Written as actions, and left to the driver
     /// to stand up before it starts, so an operator reads what a screen needs rather than guessing
     /// it. What it may not carry is the screen's own moves: those are what a road is for, and a
     /// premise that carried them would verify itself.
@@ -240,9 +240,6 @@ pub enum Domain {
     /// The working folder Amenbo is used from, rather than anything in the store: the files a person
     /// has lying there, and the git repository the lint hooks stand in front of the commits of.
     Repo,
-    /// A plugin on this machine: what is installed, whose gate is open, what a call returned, and
-    /// what the execution log kept. Named by the name it carries in the catalog, never by a binding.
-    Plugin,
     /// Amenbo reached the other way round: a server the host of an AI starts, spoken to over
     /// JSON-RPC rather than typed at. A domain of its own because what a road walks here is the
     /// protocol — a server standing for one folder, the tools it publishes, and what a call through
@@ -474,9 +471,8 @@ const REGISTRY: &[OpSpec] = &[
     // bound to a deleted project are released with it, so a scenario naming this op is asking about the
     // teardown as much as about the row.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "delete", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // Standing on the screen a project keeps for itself, which is one of the two faces a project ×
-    // plugin crossing is read from. The project is named rather than bound, for the reason `enable-in`'s
-    // is: the world a plugin road wants is stood up outside the run, so there is no earlier step to have
+    // Standing on the screen a project keeps for itself. The project is named rather than bound: the
+    // world such a road wants is often stood up outside the run, so there is no earlier step to have
     // made this project.
     //
     // A screen road alone. A terminal is already standing in a project — the folder it is run from says
@@ -632,13 +628,6 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "export", required: &[], refs: &[], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "backup", required: &[], refs: &[], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "restore", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // The road out for something that keeps a copy of this store elsewhere, in the two faces it is
-    // used in. `sync-version` asks the one number the window is at, and binds **the number** rather
-    // than a file — a third thing an `as:` can hold, alongside an object's id and an archive's path,
-    // and the only shape in which a road can say later that it moved (or did not). `sync-snapshot`
-    // writes the whole window as one document and binds that, the way `export` binds what it wrote.
-    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "sync-version", required: &[], refs: &[], strings: &[], binds: true },
-    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "sync-snapshot", required: &[], refs: &[], strings: &[], binds: true },
     // Erasing content from the truth source itself: a comment goes in full, a decision keeps its
     // number and loses its body to the replacement text.
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "hard-erase", required: &["target"], refs: &["target"], strings: &[], binds: false },
@@ -1025,341 +1014,6 @@ const REGISTRY: &[OpSpec] = &[
     // this reads is settings lying on the machine, which is this domain's, and the family it belongs
     // beside is the wiring text one screen over.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "mcp-open", required: &[], refs: &[], strings: &[], binds: false },
-    // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
-    // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
-    // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
-    // hands it the id of a task an earlier step created, and `args` carries anything else verbatim.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "install", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "uninstall", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "run", required: &["name", "command"], refs: &["task"], strings: &["name", "command"], binds: false },
-    // Push what is waiting on the queues through, here and now. Delivery otherwise rides along with
-    // whatever was being done, so this is the door for a backlog that has stopped moving — and, like
-    // `plugin run`, what it reports is read by an assert that has to follow it (`flushed`).
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "flush", required: &[], refs: &[], strings: &[], binds: false },
-    // Moving an installed plugin onto the build the catalog publishes, and back off it again. `update`
-    // re-walks the install door over the new asset and retains the build it replaced; `rollback` puts
-    // that retained pair back, and consumes it, so a second one has nothing to return to.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "update", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "rollback", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // An installed plugin left recording a build the catalog has moved past. What Amenbo calls an update
-    // is the installed manifest's checksum differing from the catalog's, and a scenario cannot reach that
-    // state by using Amenbo: the catalog publishes one build, and the trust model means no other one can
-    // be signed into existence to install first. So the driver writes the disagreement, and the real
-    // catalog is the build that is moved to — the same idea as `folder legacy-pointer`.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "stale-manifest", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // An installed plugin declaring the plainest setting there is: a line the reader types, kept in the
-    // ordinary store and read back as it was written. The same reason the two below it exist reaches this
-    // one first — **no plugin in the official catalog declares any setting at all**, so a road that fills
-    // one in has nothing to fill in until the driver writes the declaration. It is the shape most of what
-    // `plugin config` does is about, and the only one the two below cannot stand in for: a secret is never
-    // read back, and a choice answers with candidates rather than with what was typed.
-    //
-    // `required: true` writes the flag that says the plugin cannot work without an answer, which is what
-    // an enable at a crossing holding no value for it is refused over. It is a word on this declaration
-    // rather than an op of its own: the field written is the same field, and what the flag changes is
-    // what Amenbo then does about an empty one.
-    //
-    // `readonly: true` writes the flag that says the value is the plugin's own to fill in and not the
-    // user's. It is a word on this declaration for the reason `required` is: the field
-    // written is the same field, and what the flag changes is what the faces then do about it — a form
-    // draws the value with no box and no button, while the write door stays open, since that door is how
-    // the plugin's own value arrives.
-    //
-    // `translated` writes the words the author put on that same field in other languages, keyed by
-    // language code — the `label` a form draws it under, and for a choice the `options` its candidates
-    // are drawn under, keyed by the value each one stores. It goes where an install puts what a catalog
-    // published, beside the manifest rather than in it, so a form reads it the way it reads a real one.
-    // No published plugin declares a setting at all, so no published plugin has one translated either:
-    // both halves are unreachable for the same reason and are written by the same door.
-    //
-    // `when_field` and `when_has` are the condition an author put on that setting — the
-    // setting whose answer decides whether this one is drawn, and the value looked for among its answers.
-    // The pair is two words rather than one nested block for the reason `ask`/`ask_label` is: a step's
-    // `with` is a flat mapping of words, and a condition written as a list of objects inside one is a
-    // shape no other op here takes. The platform half of a `when` has no word at all — a road conditioned
-    // on the OS walks differently on each runner, which is a scenario that proves something different
-    // depending on where it ran.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label", "when_field", "when_has"], binds: false },
-    // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
-    // is the author's word and Amenbo never invents one, so the only honest way to reach this state is
-    // for a plugin that declares one to be published — and no plugin in the official catalog does. The
-    // secret route (off the store, off every backup, injected as an environment variable) is the half
-    // of `plugin config` that fails silently and in plain text, so it is not left unwalked until one
-    // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
-    // writes the disagreement it needs. Everything after it is Amenbo's own doing.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
-    // An installed plugin whose author wrote a part into its `config` list for Amenbo to *draw* — a
-    // caption, a way to the page that issues a value, a code to hold a phone up to.
-    // Written onto the installed manifest for the reason every declaration here is: which parts a plugin
-    // draws is its author's word, and no plugin in the official catalog writes one, so a road about a
-    // form that says something before anybody has filled anything in has no other way to be standing in
-    // front of one. `kind` is the part, `value` the string it carries — for a `list`, its lines joined by
-    // commas — and `label` the words on a `link`'s button.
-    //
-    // Where it lands in the list is where it is drawn, so a road walks the declarations in the order it
-    // wants them read: a `declare-part` between two `declare-setting`s is a part between two boxes.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-part", required: &["name", "kind", "value"], refs: &[], strings: &["name", "kind", "value", "label"], binds: false },
-    // An installed plugin declaring a setting whose answers its author listed, and the one that stands
-    // while nobody has answered. Same reason as `declare-secret`: which settings a plugin takes is the
-    // author's word, and no plugin in the official catalog offers candidates — so the half of
-    // `plugin config` that keeps three answers apart (a choice made, none of them chosen, nobody asked
-    // yet) would go unwalked until one does. `options` is the candidates as their stored values, joined
-    // by commas the way an answer is; `default` is a subset of them, and leaving it out is the other
-    // shape a choice comes in. `translated` is the same word it is on `declare-setting`, and this is
-    // where its `options` half has anything to translate.
-    // `when_field` / `when_has` are the same pair `declare-setting` takes, and they land on the choice
-    // itself — a candidate's own condition is written where the candidate is, which is `candidate_when_*`.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-choice", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "label", "options", "default", "when_field", "when_has", "candidate", "candidate_when_field", "candidate_when_has"], binds: false },
-    // An installed plugin declaring an operation a reader may press on its settings form. Same reason as
-    // the three above it, one door further along: what that form offers is the author's word, and no
-    // plugin in the official catalog declares a settings block at all — so the button, and the value a
-    // press asks for, are states no install reaches. `cmd` is the call the press raises and `label` the
-    // words the button is drawn under; `ask` names the one value asked at the press, under the words
-    // `ask_label`, and leaving it out is the other shape an operation comes in — a button that runs the
-    // moment it is pressed. `ask_secret` is the author saying that value is a credential, which is a word
-    // on this declaration rather than an op of its own: the field written is the same field, and what the
-    // flag changes is how the form draws the box in front of it.
-    // `when_field` / `when_has` are the same pair the settings take: someone who chose
-    // iCloud has no use for a button that raises a Cloudflare tunnel, and a form that hides that
-    // transport's fields while keeping its button leaves a step nobody can follow.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-action", required: &["name", "cmd", "label"], refs: &[], strings: &["name", "cmd", "label", "ask", "ask_label", "when_field", "when_has"], binds: false },
-    // And the other half of that same block: the check an author has raised on the values before a gate
-    // opens on them. It is written onto what is installed for the reason its neighbours are — no plugin in
-    // the official catalog declares a settings block — so a gate that turns on somebody else's judgement
-    // is a door no install reaches. `cmd` is the call the check raises.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-check", required: &["name", "cmd"], refs: &[], strings: &["name", "cmd"], binds: false },
-    // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
-    // plugin says for itself is written in its manifest and Amenbo invents none of it, so this is the
-    // author's block arriving the only way it can — written onto the installed manifest, the way
-    // `declare-secret` writes a declaration no published plugin carries. Which is also why the scenario
-    // does not read the catalog's own wording back: an author may reword their block any day, and a line
-    // asserting today's sentence would go red on a change Amenbo had no part in. `when` is the occasion;
-    // `cmd` and `does` are one call, which is enough to see the calling form Amenbo puts in front of it.
-    // `steps` is where that call says it is a tool — the ids of Amenbo's own steps, comma-separated, the
-    // way an author writes them. It is the author's word too, and no published plugin writes one yet, so
-    // the road to a step carrying a tool is only walkable once a block here declares it.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does", "steps"], binds: false },
-    // An installed plugin declaring the layer it lives at — one project's rows, or the device's.
-    // Same reason as the declarations above it: the layer is the author's word, a manifest
-    // saying nothing means `project`, and **every plugin the official catalog serves says nothing** — so
-    // the device layer is a state no install reaches, and the road a machine-wide plugin walks is only
-    // walkable once this writes the declaration onto the installed manifest. Everything after it is
-    // Amenbo's own: which rows the enable opens, and how wide a window the run is handed.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-scope", required: &["name", "scope"], refs: &[], strings: &["name", "scope"], binds: false },
-    // An installed plugin that is nobody's but its author's. The badge is the catalog's to grant and no
-    // author can write it onto themselves, which is what makes it the one thing Amenbo can safely split
-    // a stranger from a colleague by — and it is also why a road cannot reach a stranger by installing
-    // one: every plugin the official catalog serves comes back badged. So the badge is taken off the
-    // installed manifest here, the way `declare-agent` writes the block onto it, and what follows is the
-    // state a user reaches the moment they install from anywhere else.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "unbadge", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // An installed plugin whose program answers with the secrets it was handed. A secret travels to a
-    // run as an environment variable on the child process — off argv, off the log, out of the store —
-    // so the only place it can be seen arriving is inside the run, and only a plugin willing to say
-    // what it was given can say it. None of the published ones is (they use their settings, they do
-    // not report them), so the driver stands one in that prints its injected config and nothing else.
-    // What it reads back is Amenbo's own doing: which value, at which tier, and whether there is one
-    // left at all.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "echo-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // An installed plugin whose program answers a press with a line of its own. An operation raised from
-    // the settings form has no return value: what the form draws afterwards is the author's first line on
-    // stderr, and the value that press asked for reaches the run as an environment variable and is kept
-    // nowhere. Both are only visible from inside the run, and only a program willing to say what it was
-    // handed can say either — which no published plugin is, none of them declaring an operation at all.
-    // So the driver stands one in that writes its one line, naming what it was asked for.
-    //
-    // It also answers a check with a yes, on the stream the press never looks at: a press draws stderr
-    // and discards stdout, a check reads stdout and only logs stderr. A plugin has one program, so a
-    // settings block carrying both halves — a check before the gate and a button behind it — is walked
-    // by standing in this one. `check-program` is what a road reaches for when the *verdict* is the
-    // thing under test, since that is the half this cannot vary.
-    //
-    // `writes` and `writes_value` leave it writing one of its own settings back on every press, through
-    // `plugin config set` — the door a plugin's own value arrives by, and the only one there
-    // is for a field its author marked `readonly`. That is the whole of what a `setup` does: it works
-    // something out — an address it registered, a key it generated — and puts it where the form will draw
-    // it. Naming neither leaves the program as it was, writing nothing. The value is not read back from
-    // in here: what says the write landed is the field on the form afterwards, which is the reading the
-    // road is about, and the program says so on its own line only when the write was refused.
-    //
-    // `shows` and `shows_value` are the other half of what a run may answer with: the kind
-    // of part and the string it carries, with `shows_label` for the words on a `link`'s button. A press
-    // has no return value a form reads otherwise, so a road about a QR coming back from a `setup` has
-    // nothing to look at without this — and the picture is Amenbo's to draw, which is exactly the claim
-    // the road exists to hold.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name", "writes", "writes_value", "shows", "shows_value", "shows_label"], binds: false },
-    // An installed plugin whose program answers the check with a verdict. Whether the values are usable is
-    // the author's judgement and Amenbo makes none of its own, so the only thing that can say no is a
-    // program that says it — and no published plugin declares a check to answer at all. `ok` is that
-    // judgement, which the road picks rather than the program: the same values are the ones a fixed answer
-    // could never turn away and then let through. `message` is the sentence for the head of the form and
-    // `field_message` the one drawn beside the setting `field` names, both being the author's own words,
-    // which is what a road reads back to know whose sentence reached the screen.
-    //
-    // A plugin has one program, so this stands in for whatever was standing there before — `press-program`
-    // included, whose own yes it replaces. A road reaches here when the verdict is what it is about, and
-    // for `press-program` when the settings block is walked with the check simply passing.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "check-program", required: &["name", "ok"], refs: &[], strings: &["name", "message", "field", "field_message"], binds: false },
-    // An installed plugin whose program calls Amenbo back. A payload names a record and carries none of
-    // it, so the route to the content is the binary itself, run from inside the plugin with the store and
-    // the window Amenbo put in its environment — and no plugin in the official catalog takes it (the one
-    // published there works out everything it does from the repository it is called in). So the only
-    // witness that the environment really arrives, that a call made through it needs no facet, and that
-    // the window is what bounds it, is a plugin that makes the call: the driver stands one in, the way
-    // `echo-program` stands in the only witness an injected secret has. Its faces are `read` and `write`,
-    // each taking the id of a task an earlier step bound and handing everything under `args` to Amenbo
-    // verbatim — so the call under test is written in the scenario rather than buried in the driver.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "read-back-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // An installed plugin that takes `seconds` to answer. A queue only holds rows while its plugin is
-    // still on one — the runner takes the row off the moment the plugin replies, whichever end it
-    // reached — so a backlog is not a state a scenario can arrive at by using Amenbo: it would be
-    // racing the runner it just started. Every plugin the catalog publishes answers in the time a
-    // process takes to start, and slowness is exactly what the backlog display exists to diagnose, so
-    // the driver leaves one answering slowly, the way `declare-secret` writes a declaration no
-    // published plugin carries. `seconds` is the window the asserts after it have to read in.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "slow-program", required: &["name", "seconds"], refs: &[], strings: &["name"], binds: false },
-    // Whether Amenbo can read what is installed at all — the one way to leave a write's delivery
-    // standing. Delivery rides along with the write that caused it, so anything a scenario writes is
-    // carried out before the next step: a push by hand has something to carry only where that drive
-    // never happened. Amenbo skips it when the installed plugins will not read, since it will not walk
-    // its cursor past events a subscriber list it could not resolve was never offered — so the event
-    // stays where the write appended it, queued to nobody, with no runner started. `readable` is both
-    // halves: `false` leaves the next write undelivered, `true` gives the directory back, which
-    // whatever reads or delivers afterwards needs.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "installed-dir", required: &["readable"], refs: &[], strings: &[], binds: false },
-    // What an installed plugin is told, for one crossing. `key` is a setting its author declared; an
-    // empty value is how one is taken back, which is why it is a value here and not an op of its own.
-    //
-    // `project` is the crossing the value belongs to. A setting is held per project, and a terminal
-    // says which project it is writing for by standing in a folder bound to it — there is no flag for
-    // it — so the driver stands in that project's folder before it types. Naming none is the folder
-    // the run itself works from, which is bound to nothing and so answers to the store's default
-    // project: the right silence for a road that only needs a value somewhere, and the wrong one for a
-    // road whose crossing is named elsewhere, where a write nobody placed lands out of its sight.
-    // A screen never names it: the row a form is opened inside has already answered which crossing is
-    // being written, so the GUI driver turns the word away.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], strings: &["name", "key", "value", "project"], binds: false },
-    // A catalog of the run's own, answering on the loopback for as long as the scenario lasts.
-    // Registering one is a trust decision taken on the key it publishes beside its `catalog.json`,
-    // and a key is only published by something that answers on a port — no URL a scenario can write
-    // down serves one, so the run stands the catalog it is about to trust.
-    // `publishes_key` is the trust half: a catalog that publishes none is the other side of the rule,
-    // browsable and uninstallable. `offers` is the shelf — the rows this catalog's own document
-    // carries, each written as the words that document holds (`name`, `desc`, the `claims_official`
-    // badge it is not entitled to, the `about` its author describes it at length in, and the one
-    // `setting` its author declares, under the `label` a form shows). Naming none is an empty shelf,
-    // which is what a road about the trust root alone wants. It is the only arg written as a list of
-    // rows, and the loader checks it as one.
-    // A row may also carry `translated` — the same `desc`, `about` and `label` as its author wrote
-    // them in other languages, keyed by language code. The three are then published the way a real
-    // catalog publishes them: the lines beside the list as one document per language, the description
-    // text and the labels inside the row's own detail document, every language at once. A language no
-    // row drew a *line* in gets no document, which is the 404 a reader of an untranslated language
-    // meets — a row translated at length alone leaves none, since that half never travelled that way.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-stand", required: &["publishes_key"], refs: &[], strings: &[], binds: true },
-    // The same catalog, publishing a different key than the one pinned on it — a publisher rotating
-    // their key, which is the event the pin exists to meet.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-rotate-key", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // The catalogs a browse reads. A third-party one is named by the URL of its `catalog.json`, and
-    // that URL is the handle for taking it back off again — there is nothing else to name it by.
-    // A catalog the run stood up has no URL to write down (its port is handed out at run time), so
-    // it is named by the `as:` binding instead: one of `url` / `target`, which the driver settles
-    // since neither alone can be required here.
-    // `name` is what the shelf is called on screen, and what a row coming off it is badged with. A
-    // registration that gives none is called after the host of its URL — which for a catalog the run
-    // stood up is an address with a port picked this run, and so is nothing a road can read back.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &[], refs: &["target"], strings: &["url", "name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-remove", required: &[], refs: &["target"], strings: &["url"], binds: false },
-    // Opening one row of the browsing view — the move between the list and the panel under it, which
-    // is a move only a screen has. It names the shelf as well as the plugin because a name is a
-    // catalog's to give and two of them may serve one: which row is opened is the whole question the
-    // panel after it answers.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-entry", required: &["name", "source"], refs: &[], strings: &["name", "source"], binds: false },
-    // The switch as a screen draws it: one project at a time, each one named. `enable-in` picks a
-    // project from those offered beside the row — and picking one *is* the enable, since turning a
-    // plugin on is itself the permission to run its code, so there is no second question under the
-    // picker. `disable-in` shuts the gate for one of the projects the row names, leaving whatever else
-    // it names still firing.
-    //
-    // A screen road alone, and not by omission: a plugin has one switch, and a terminal says which
-    // project it is moving by standing in a folder bound to that project. There is no flag for another
-    // one — so `enable` / `disable` are the terminal's road to this same act, and naming the project in
-    // the step is the screen's.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
-    // The same switch for a plugin its author declared the machine's: it crosses no
-    // project, so its row is the device's own and there is no name to give one. Pressing it is the
-    // consent to let the plugin read every project on the machine — one act, because the declaration
-    // already settled what the one switch means.
-    //
-    // A step of its own rather than `enable-in` with the project left out, for the reason the two rows
-    // are different rows: a road that named no project would be read as one that forgot to.
-    //
-    // A screen road alone, and not by omission: a terminal moves this same gate with `plugin enable`,
-    // which needs no word for the layer at all — the declaration picks it. A screen has two kinds of
-    // row and which one is pressed is the whole question, so the word is the screen's to need.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-on-device", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // The settings of that same row, opened inside it. It is `open-config-in-row`'s sibling and exists
-    // for the same reason: a form reached from the row needs no layer answered, and one reached anywhere
-    // else would be asking what the row has already said.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-config-on-device", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // Drawing the crossing and nothing else: the picker beside the rows puts one there, and leaves the
-    // switch in it where it was. It is a step of its own rather than the first half of `enable-in`
-    // because what it leaves behind is a state worth reading — a row standing with the plugin still off
-    // — and a road that only ever draws a row on its way to turning one on has nowhere to read it.
-    //
-    // A screen road alone, like the switch it stands next to: a terminal has no picker, and nothing to
-    // draw a row on.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "draw-crossing", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
-    // Opening the settings a crossing holds, inside that crossing's own row. It is the move a refusal
-    // leaves a person needing: an enable turned away for want of a value is turned away about one
-    // crossing, and the row that said so is where the value goes in. Which project the form writes for is
-    // therefore never asked — the row has answered it — and a step that names the crossing is naming the
-    // row, not a second picker.
-    //
-    // A screen road alone: a terminal writes the value with a command that names the setting, so there is
-    // no form to open and nowhere for one to be opened inside.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-config-in-row", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
-    // A setting offering candidates, as the form answers it: a box per candidate, and a button under
-    // the field. `config-choose` leaves the named ones ticked and every other one clear;
-    // `config-choose-none` clears them all, which is the answer that is not the same as never having
-    // been asked; `config-restore-default` presses the button, which is the door back to what the
-    // author put behind the field.
-    //
-    // A screen road alone, for the reason `enable-in` is: a terminal answers this setting by writing
-    // the value down (`config-set`), and a form has boxes and a button where the value would be — the
-    // three answers are one string apiece to type, and three different moves to make.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-choose", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "options"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-choose-none", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-restore-default", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
-    // The operations an author put on that same form, as a screen has them. `press` presses the button
-    // drawn under the words it was declared with — which raises the call outright where it asks for
-    // nothing, and otherwise opens the boxes it asks for, empty every time; `press-answer` fills the one
-    // box and lets the run go, which is the second half of a press and a move of its own.
-    //
-    // A screen road alone, for the reason `config-choose` is one: a terminal reaches the author's code
-    // with `plugin run`, which names the call itself and hands it whatever arguments were typed. What is
-    // under test here is the door that does neither — the press chooses among the calls the manifest
-    // declared, and the value it needs is asked at the press and kept nowhere afterwards.
-    // What the author asked to have drawn, read off the form. `kind` is which part, and
-    // `value` the string it carries where an eye can read one back — the words on a `link`'s button, the
-    // line a `text` is, the address beside a `copy`. A `qr` names none: what is on the screen is a
-    // picture, and the whole claim is that Amenbo drew it rather than the author handing one over.
-    //
-    // `above` names a setting this part has to stand over, and it is the claim the manifest half of the
-    // vocabulary exists for: where a part sits is what it is for. A way to the page that issues a token
-    // belongs over the box the token goes in, and a build that drew every part in a block of its own —
-    // before the fields, or after them — would pass a read of the words and lose the whole point of
-    // writing one into a manifest.
-    //
-    // A screen road alone, for the reason the press it stands beside is one: none of this reaches a
-    // terminal. `plugin run` hands a caller the plugin's stdout verbatim and draws nothing, and the
-    // author's words are the settings form's alone — they reach the screen and nowhere else.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "drawn", required: &["name", "kind"], refs: &[], strings: &["name", "kind", "value", "above"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-answer", required: &["name", "label", "value"], refs: &[], strings: &["name", "label", "value"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // A listing that is **turned away** rather than answered. It is a verdict of its own and not a
@@ -1473,15 +1127,6 @@ const REGISTRY: &[OpSpec] = &[
     // word that must not be in them — the one question about a file Amenbo hands out that needs no
     // reading of its layout, and the only way to say a secret really stayed out of it.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &["absent", "contains"], binds: false },
-    // What the number a carrier asks for did between two steps. `since` names the version an earlier
-    // `sync-version` bound, and `moved` is the whole question: a write inside the window moves it, and
-    // anything else leaves it alone. It is asked as *moved or not* rather than as a value, because the
-    // number itself means nothing outside the store that issued it — only that it is another one does.
-    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "version", required: &["since", "moved"], refs: &["since"], strings: &[], binds: false },
-    // Whether an object is in the snapshot a carrier was handed — `exported`'s question, put to the
-    // other document. `from` names what a `sync-snapshot` bound, and `present: false` asks the half the
-    // window exists for: that what lies outside it did **not** travel.
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "synced", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
@@ -1723,25 +1368,6 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone, and a `Review` it could be nothing else than: what stands on the shot is a
     // picture, and a reading answers which words are on one.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "icon", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // The same crossing `plugin fires-in` reads, read from the other face: there a plugin's rows are
-    // its projects, here a project's rows are its plugins.
-    //
-    // `state` and not a yes/no, for the reason `plugin config`'s is: this face has three states and a
-    // truth value has two. A row that is not there at all and a row standing with the plugin off are
-    // different screens — and telling them apart is the whole point, since the picker here draws the
-    // row rather than turning anything on, so a person who pressed it and reads "not on" has to be able
-    // to see that something did happen. `absent` is no row, `drawn` a row with the plugin off in it,
-    // `firing` a row saying the plugin is on.
-    //
-    // `device` is the fourth, and it is not a state of a crossing at all: a plugin its author declared
-    // the machine's crosses no project, so this face names it and offers nothing to press.
-    // It is told apart from `absent` because the two differ where it matters — an absent row is one the
-    // picker here offers to draw, and this one is not on that list and never will be.
-    //
-    // A screen road alone, and a `Review` like `fires-in`: whether the plugin is on here is drawn as a
-    // button, and a button's label is a word of the interface — so what separates `drawn` from `firing`
-    // is not something the presence of text on a shot can settle.
-    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // Whether the axis is offered as a way to cut the board into columns. Not whether it is defined —
     // `dimension listed` asks that, and an axis that admits several values at once is defined exactly
     // as much as ever. What it is not is a way to say where a task *is*: a task
@@ -1850,7 +1476,7 @@ const REGISTRY: &[OpSpec] = &[
     // back, so a count that refused would force an order rather than protect anything — and what
     // stands in for the refusal is the answer saying what is left. `left: 0` is that line under test.
     //
-    // It has to **follow its unbind**, the way `plugin returned` follows its call: the count is part
+    // It has to **follow its unbind**, the way every assert on a return value follows its call: the count is part
     // of what that command answered, and afterwards there is only the state it left, which reads the
     // same whether the answer said anything about it or not. The reading is taken on the number and
     // not on the sentence beside it: the same fact is published both ways on purpose, so that a
@@ -1954,276 +1580,6 @@ const REGISTRY: &[OpSpec] = &[
     // the side of every screen, and a reading says which words are on a shot and not which part of
     // it they came from — so the card is what an eye is shown, and the shot is what it is closed by.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "open-existing", required: &["project"], refs: &[], strings: &["project"], binds: false },
-    // What is on this machine and whose gate is open (`enabled` asks the gate; without it the
-    // question is only whether the plugin is there at all), what the last call returned on its own
-    // stdout, and what the execution log kept of a run.
-    // `desc` asks whether the author's one required sentence is readable here — not what it says. The
-    // wording is the author's and they may change it any day, while where it is readable is Amenbo's
-    // and is the whole of what the split between a colleague's plugin and a stranger's decides.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // The layer its author declared, said in words on the row where the plugin is managed. What one
-    // press of a gate consents to comes from that declaration and from nothing the reader sets, so the
-    // sentence is the whole of how they learn it: a plugin declared the machine's reads every project
-    // on the device. `scope` is which of the two the row has to be saying — `machine` for the sentence,
-    // `project` for the ordinary case, which says nothing because there is nothing out of the ordinary
-    // to say.
-    //
-    // GUI only, and not by omission: what a manifest declares is already readable from a terminal, and
-    // that read is exactly what a build which never drew the sentence would leave untouched — so the
-    // screen is the only witness that the declaration reached the person pressing the switch.
-    //
-    // A `Review`, for the reason `settings-in` is: the sentence is a word of the interface, in whatever
-    // language the app is in, and the plugin's own name is on the row either way — so neither state is
-    // one the presence of text can settle.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "layer", required: &["name", "scope"], refs: &[], strings: &["name", "scope"], binds: false },
-    // One project a row names among those the plugin fires in — or, with `present: false`, one it does
-    // not. The question is asked a project at a time because that is what a list can be wrong about: a
-    // gate read as a single yes/no hides a plugin still firing where nobody is looking, and what has to
-    // be true after one project's gate is shut is an answer about the project left alone.
-    //
-    // A screen road alone, like the moves it reads after. A row names every project wherever it is
-    // read, but a terminal can only put one name on it — the switch it moves is the one belonging to
-    // the folder it stands in — so the state this is about, a plugin on in more than one project, is
-    // reachable on the screen's road and on no other.
-    //
-    // A `Review` rather than a reading, for the reason `folder open-existing` is: the list of projects
-    // runs down the side of every screen, and a reading answers which words are on a shot and never
-    // which part of it they came from — so finding the name proves nothing about the row.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "fires-in", required: &["name", "project", "present"], refs: &[], strings: &["name", "project"], binds: false },
-    // The same reading for the one gate a machine-wide plugin has. It names no project
-    // because there is none to name: what is open is the device's, and reading a project list for it
-    // would answer "nowhere" for something firing on the whole machine.
-    //
-    // A screen road alone, and not by omission: what `plugin list` reports of this gate is a line of
-    // text a build could keep answering while the row that moves it was never drawn — which is the state
-    // this exists to close.
-    //
-    // A `Review`, for the reason `fires-in` is one tier along: what tells an open gate from a shut one is
-    // the word on the button standing in the row, which is a word of the interface.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "fires-on-device", required: &["name", "present"], refs: &[], strings: &["name"], binds: false },
-    // What that same row says about the settings kept there — `settings-in`'s sibling, with the same
-    // three states and for the same reasons: `required-empty` is the mark worn before anything is
-    // pressed, `open` is the form standing inside the row asking for no layer, and `filled` is the row
-    // saying the value is in.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "settings-on-device", required: &["name", "state"], refs: &[], strings: &["name", "state"], binds: false },
-    // What the last call handed back. `contains` is the word to find in it; `present: false` puts the
-    // same question the other way, which is how a road says a value the window shuts out did not come
-    // back in what a plugin was handed.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], strings: &["contains"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], strings: &["name", "outcome"], binds: false },
-    // What one plugin's queue owes, and whether anything is working it. The execution log
-    // answers for what ran; this answers for what has not — and the two questions have to be asked
-    // together, since what never ran wrote no line to read. `count` is how many events are waiting,
-    // and `running` whether a runner still holds the lease: the same count with and without one are
-    // different diagnoses (a plugin taking its time, against a queue nobody is on).
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "waiting", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // What the flush just before it got through: `delivered` is how many events came off the queues it
-    // worked, and `held` names a plugin whose queue it left to the runner already on it. The second is
-    // the half a state read cannot answer — a queue still standing looks the same whether the flush
-    // stepped around it or was never run at all — which is why the report is read rather than the store.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "flushed", required: &["delivered"], refs: &[], strings: &["held"], binds: false },
-    // Whether the catalog holds a different build of an installed plugin — the question `update --check`
-    // answers, and the only way to read from outside which build a machine is on (a manifest carries no
-    // version number, so there is no number to compare).
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "outdated", required: &["name", "present"], refs: &[], strings: &["name"], binds: false },
-    // A setting read back as this project holds it — `equals` for the value, or `set: false` to ask
-    // that it holds none. `secret: true` asks the other thing a read of a secret has to be true of:
-    // that it says so, and that the value does not come out with it. `state` asks which of the three
-    // answers a field holds (`chosen` / `none` / `unanswered`), which is the one question a value
-    // cannot answer for itself: a choice answered with none of them and one nobody has answered both
-    // read as no value chosen, and only the second follows the author's default. The screen asks that
-    // same question of the settings form — which boxes are ticked, and which of the three the field
-    // says it is holding — so `state` is what a road there is written on, with `equals` naming the
-    // candidates a chosen one leaves ticked.
-    //
-    // `readonly: true` is the one reading only a screen has, so the CLI driver turns it
-    // away rather than passing over it: what it asks is that the value is shown with no box to type in
-    // and no button to take it back, and a terminal has neither to withhold. It reads `equals` as the
-    // value that has to be standing there — the point of the reading is the value being there and being
-    // out of reach, which an empty field would prove for the wrong reason.
-    // `holds` is the reading only a screen has beside `readonly`, and it is a word of its own rather than
-    // the `equals` a choice takes: what it asks is that a typed line is standing in its box, which is what
-    // a road wants after something that could have taken it away — a check that refused the values a save
-    // had already written. A terminal reads that same value with `equals` and has no box to draw it in, so
-    // the CLI driver turns this one away rather than answering a question it was not asked.
-    //
-    // `project` names the crossing the value is read from, and it is the same word `config-set` takes,
-    // for the same reason: down this pipe the read is a command typed somewhere, and where it is typed
-    // is what decides which project answers. A road that named the crossing on the way in and left it
-    // unnamed here would be asking the default project about a value it was never told.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state", "holds", "project"], binds: false },
-    // The other half of that same form, asked apart from it the way a row's line is asked apart from
-    // its badge: not what the field holds, but the words it is drawn under. `label` is those words,
-    // written out — the author's, in whichever language they wrote them and the reader is in — and
-    // `candidate` moves the reading one level down, to the words one of a choice's answers is drawn
-    // under, named by the value it stores rather than by what it says.
-    //
-    // Quoted whole rather than asked about, for the reason the row's line is: what a reader is shown
-    // when their language is untranslated is the author's base wording, unmarked, so the only thing
-    // that tells the two apart is which of them is standing there.
-    //
-    // A screen road alone, and not by omission. A form is a screen; `plugin config` in a terminal
-    // answers with values and never draws a label, and what it does print is English whatever the
-    // reader's language says.
-    //
-    // `present: false` is the other half of the same reading, and the half a condition needs
-    // a setting whose condition does not hold is not drawn greyed or drawn empty, it is not on
-    // the form — so what proves the condition is that its words are nowhere on the screen. Absent, the
-    // step reads the way every one of these read before there was anything to hide.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "asks", required: &["name", "key", "label"], refs: &[], strings: &["name", "key", "label", "candidate"], binds: false },
-    // Whether the settings form is offering one of the author's operations at all. It is a
-    // reading apart from `press-shut`, which is about a button that *is* drawn and cannot be pressed: a
-    // condition that does not hold takes the button off the form, and "drawn but refusing" and "not there"
-    // are the two states a reader has to be able to tell apart.
-    //
-    // A screen road alone, like the three presses below it: a terminal has `plugin run`, which takes any
-    // call the plugin answers whether or not a form would have drawn a button for it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "offers", required: &["name", "label", "present"], refs: &[], strings: &["name", "label"], binds: false },
-    // The three readings a pressed operation leaves, each asked apart from the others because each is a
-    // different promise. `press-said` is the line the run left on the form — the author's own words,
-    // quoted whole the way a row's line is, since what a build could draw instead is Amenbo's own sentence
-    // and nothing on the screen says which of the two is standing there. `press-asks` is the box in front
-    // of that: the words the press asks under, and that it is holding nothing — which on a second press is
-    // the whole of what "handed to this run and kept nowhere" looks like from outside. `press-shut` is the
-    // button before the gate is open: drawn where it will be, and refusing the hand.
-    //
-    // A screen road alone, all three. What a terminal has instead is `plugin run`, whose answer is a
-    // return value on stdout rather than a line beside a button, which asks for nothing at the press, and
-    // which is refused with a code rather than by a control that cannot be used.
-    // What the author's check said, where a reader meets it: one sentence at the head of the settings form,
-    // and one beside each box the verdict named. `key` picks which of the two is being read — named, it is
-    // the line under that setting; left out, the one over the whole form. Both are quoted whole for the
-    // reason a row's line is: where the check said nothing Amenbo draws a sentence of its own in the same
-    // place, and the screen does not say which of the two is standing there.
-    //
-    // A screen road alone. A terminal meets the same verdict as the reason an enable was refused, which is
-    // read by the `refused:` code on the enable itself — a code being what a driver comparing exit statuses
-    // can hold, and the author's sentences being deliberately kept off that face.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "checked", required: &["name", "text"], refs: &[], strings: &["name", "text", "key"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-said", required: &["name", "text"], refs: &[], strings: &["name", "text"], binds: false },
-    // `press-asks` takes `secret: true` for the box an author marked a credential: what is read then is
-    // the same emptiness plus the one thing a screen does about the flag — the characters are not drawn
-    // back at whoever typed them.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-asks", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-shut", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
-    // What a crossing's row says about the settings kept there, which is a reading of the row and not of
-    // one field: the mark a crossing wears while it owes a value, the form standing open inside the row,
-    // and the row saying a value is held. Whether the plugin fires there is the other reading of the same
-    // row, and the two are asked apart — an enable refused for want of a value leaves a row that is
-    // marked and off, and one word could not say both halves of that.
-    //
-    // Three screens rather than two, for the reason the row's other reading has three: `required-empty`
-    // is the mark, worn before anything is pressed, since a warning that arrives only after the refusal
-    // arrives too late; `open` is the settings standing open in that same row, asking for no project,
-    // which is the whole of what reaching them from the row means; `filled` is the row saying the value
-    // is in, and saying nothing about it that a value standing there has made untrue — the refusal an
-    // enable met names what was missing when the switch was pressed, and it does not outlive the filling.
-    //
-    // A screen road alone, and a `Review` on every state. The marks are words of the interface, and what
-    // `open` turns on is a picker that is *not* there — a reading answers which words are on a shot, so
-    // neither is something it can settle.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "settings-in", required: &["name", "project", "state"], refs: &[], strings: &["name", "project", "state"], binds: false },
-    // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
-    // could reach it, and — `pinned_key` — whether a key of its is what plugins from it would be
-    // trusted on. The last is the half that decides installability rather than visibility, and it is
-    // asked as a yes/no because the fingerprint itself belongs to whichever key the driver stood the
-    // catalog on, and no scenario is written against one driver's key.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "catalog", required: &[], refs: &["target"], strings: &["url"], binds: false },
-    // One row of the browsing view: which catalog served the entry (`source`) and whether it wears
-    // the official badge (`official`). The two are one question — the badge is the official index's
-    // to grant, so an entry a registered catalog serves must read as that shelf's name however
-    // loudly its own document claims otherwise, and the merge is what makes that true.
-    //
-    // There is no CLI here on purpose rather than by omission: `plugin catalog list` answers per
-    // catalog, `plugin list` per installed manifest, and an entry's own claim reaches a person only
-    // through the market screen. That is why the scenario carrying this is written for the screen.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "browsed", required: &["name", "source", "official"], refs: &[], strings: &["name", "source"], binds: false },
-    // The other question about that same row, asked apart from it: the one line drawn under the
-    // name, and which language it is in. The badge says which shelf served the row; this says
-    // whether what the shelf published in the reader's language is what reached them. One word
-    // could not carry both, and a row badged right in the wrong language is exactly the state a
-    // build breaks into.
-    //
-    // `desc` is the line the step expects, written out. It is the author's own sentence — not a
-    // phrase of the interface — so a reading can be held to it, and holding it to the sentence
-    // rather than to "is it translated" is the point: the fallback to the base line is silent by
-    // design, so nothing on the screen distinguishes a line drawn in English because the author wrote
-    // none from one drawn in English because the fetch never happened. What tells them apart is which
-    // of the two sentences is standing there.
-    //
-    // A screen road alone, and not by omission: what a terminal prints is English whatever the
-    // reader's language says, so the line this is about is drawn in one place.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "line", required: &["name", "desc"], refs: &[], strings: &["name", "desc"], binds: false },
-    // One row opened, and what the catalog's own detail document says installing it would mean. A
-    // catalog is served as two documents, and the detail is fetched only when someone opens a row —
-    // from whichever catalog served that row, which is the reach a merged view has to get right and
-    // the list alone never exercises.
-    //
-    // `declares` is one line of that document the panel prints back: an event the plugin is woken
-    // for, or the label of a setting it will ask for. Both are the author's own words, which is what
-    // makes them readable — everything else on the panel is either the entry (which the list already
-    // held) or a phrase of the interface, and neither says which document was fetched.
-    //
-    // GUI only, for the same reason `browsed` is: no CLI reads a catalog's detail document. `plugin
-    // list` answers per installed manifest, and installing off a registered catalog needs a signed
-    // asset — so before an install, the panel is where the declaration is.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "detail", required: &["name", "source", "declares"], refs: &[], strings: &["name", "source", "declares"], binds: false },
-    // The body of that same panel — the one block of prose a reader actually reads the plugin by. It
-    // is one of two things and never both: the description its author wrote, in the reader's language
-    // where they wrote one, or — for a plugin that describes itself nowhere — the README off the
-    // repository, which is English whoever is reading.
-    //
-    // `text` is the words the step expects to find there, and `present: false` is how it says which of
-    // the two is *not* standing. Both are needed, because the panel names neither: nothing above the
-    // prose says whether it came from the catalog or from GitHub, and nothing marks a description drawn
-    // in English because its author wrote no other. What tells all of that apart is which words are
-    // there — so a road quotes them, and quotes the words it must not find beside them.
-    //
-    // GUI only, for the reason `detail` is: no CLI draws a catalog's detail document, and none fetches
-    // a README at all.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "body", required: &["name", "source", "text"], refs: &[], strings: &["name", "source", "text"], binds: false },
-    // What an AI is told about this plugin where it reads how to work in this folder — the `plugins` key
-    // of the entry point. `present` is whether the plugin is offered there at all, which is the gate's
-    // answer and not the install's: an installed plugin nobody switched on is one a call would refuse,
-    // and naming it would spend a reader's turn learning what Amenbo already knew.
-    //
-    // `when` is the author's own line, read back to prove it is relayed rather than paraphrased. `cmd` is
-    // the author's own command face, and what is checked is what Amenbo puts *in front* of it — the
-    // calling form is assembled from the name read off disk, so what an AI receives is a line it can
-    // type. The command word itself is left out of the step: a build reached by another name hands out
-    // lines naming it, and that is the point rather than a mismatch.
-    //
-    // `because` is for the other half of the key: when nothing is offered, the entry point says which
-    // empty-handed state this is, and a reader who cannot tell "nothing installed" from "nothing
-    // switched on here" cannot tell which move would fix it. It is matched as a fragment rather than a
-    // sentence — what is under test is that the right state is named, not today's wording, which Amenbo
-    // is free to reword without breaking a promise. Whichever reading a step asks for, the document is
-    // held to its own floor first: a reason stands exactly where there is nothing to list.
-    //
-    // A CLI road alone: the entry point is a document for whoever drives the terminal, and no screen
-    // prints it.
-    // `absent` is the reading the other three cannot give: naming a field asks what it says, and a field
-    // that is not there says nothing to compare. It takes the field names a step expects to find nothing
-    // under, comma-separated — what an author wrote and this reader does not get, whether because the
-    // author is a stranger or because what they wrote no longer passes the rules.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd", "because", "absent"], binds: false },
-    // The other half of the same document: a step of Amenbo's own working cycle, and whether this
-    // plugin's call is hanging on it. The two shelves are kept apart on purpose — a step's body is
-    // Amenbo's own and a plugin's sentences stay in its entry — so what crosses is the line to type and
-    // the id the author named it by, and this is the reading that says the join really happened.
-    //
-    // `step` is that id (`<run>.<step>`, as the author writes it) and `cmd` the call's own face, since
-    // what hangs there is the calling form Amenbo builds, not the bare subcommand. `present: false` is
-    // the reading with more work to do: a step nobody named, and a ref naming a step this build does not
-    // have, both leave a document where nothing hung — which is what says an unknown ref costs a reader
-    // one absent line and nothing else.
-    //
-    // A CLI road alone, like `at-entry` and for the same reason: no screen prints this document.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-step", required: &["name", "step", "cmd", "present"], refs: &[], strings: &["name", "step", "cmd"], binds: false },
-    // The author's own door, before anything is installed anywhere: a manifest file is held up to the
-    // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
-    // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "validated", required: &["path", "ok"], refs: &[], strings: &["path", "problem"], binds: false },
     // Amenbo spoken to rather than typed at. A host starts one server for a set of folders, and
     // everything after that goes over the two streams — so the road is the protocol's shape rather
     // than the store's: stand a server, read what it publishes, call through it, read what came back.
@@ -2238,7 +1594,7 @@ const REGISTRY: &[OpSpec] = &[
     // given — the spelling says so rather than leaving a road to imply it.
     OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "serve", required: &["dirs"], refs: &[], strings: &[], binds: false },
     // `call` is a tool called by name, in the folder `dir` names, with the words the caller sends
-    // under it — `args` verbatim, the way `plugin run` carries a plugin's own. The folder is required
+    // under it — `args` verbatim. The folder is required
     // here because it is required there: every tool takes one and none of them defaults it, so a road
     // that left it out would be walking a call no host can make. Naming one the server was not given
     // is a road too — the answer is out of reach, and that is a document like any other. What comes
@@ -2309,8 +1665,8 @@ const REGISTRY: &[OpSpec] = &[
     // `tick install`, which asks nothing — so the CLI driver never meets them as steps.
     //
     // Whether the band is standing. It comes up only while three conditions hold together — the
-    // device unanswered, a dated task still open, a plugin subscribed to `task.due` enabled
-    // somewhere — so the `present: false` half is what a road reads after any one of the three has
+    // device unanswered, a dated task still open, some project reporting `task.due` somewhere it can
+    // reach — so the `present: false` half is what a road reads after any one of the three has
     // gone, and the road that proves the gate is the one that takes a single condition away.
     OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "banner", required: &["present"], refs: &[], strings: &[], binds: false },
     // The answer given on it. It travels as a value rather than in the op's name, the way a consent
@@ -3962,45 +3318,18 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // road: what reaches it is an entry in a settings file, so nothing in the store arrives there
     // either. A screen road that opens on such a folder has no other way to be standing in one.
     (Domain::Repo, "mcp-reach"),
-    // A catalog registered and a plugin already on the machine. Both are worlds a screen only reads:
-    // the browsing view draws rows a catalog served, and a plugin's row is there once one is
-    // installed. Standing a catalog of the run's own comes with them, since a catalog is trusted on
-    // the key it serves and there is no other way to have one to register.
-    (Domain::Plugin, "catalog-stand"),
-    (Domain::Plugin, "catalog-add"),
-    (Domain::Plugin, "install"),
-    (Domain::Plugin, "enable"),
-    // And what an installed plugin says it takes. Which settings a plugin declares is its author's
-    // word, no published one declares any, and a screen road about answering them has to find them
-    // already declared — the declaration is the world, and the answering is the road.
-    (Domain::Plugin, "declare-setting"),
-    (Domain::Plugin, "declare-choice"),
-    // And what it asks Amenbo to *draw* between them. Same reason twice over: no published
-    // plugin writes one, and what the road is about is a form that already says something before anybody
-    // has typed anything — so the writing is the world and the reading is the road.
-    (Domain::Plugin, "declare-part"),
-    // And what it offers to *do* from that same form, with the program that answers a press. The
-    // declaration is the world for the same reason a setting's is — no published plugin carries one — and
-    // the program comes with it: an operation is code being run, so a road that pressed a button no
-    // stand-in was answering would be reading whatever the real plugin happened to say.
-    (Domain::Plugin, "declare-action"),
-    (Domain::Plugin, "press-program"),
-    // And the check it raises before a gate opens, with the program that answers it. Same pair and the
-    // same reason: the declaration is the author's word, and a road that pressed a switch with nothing
-    // standing in would be judged by whatever the real plugin thought of the values.
-    (Domain::Plugin, "declare-check"),
-    (Domain::Plugin, "check-program"),
-    // And a value already filled in for one of them. Answering a setting is a road of its own and is
-    // deliberately not one a premise walks — except that a setting the author marked `readonly` is not
-    // answered by anybody a road can be: the value is the plugin's own, written back through
-    // `plugin config set`, and the screen's whole promise about it is that it offers no way
-    // to type one or to take one away. A form with nothing in the field would draw no button either, and
-    // would prove that promise for the wrong reason.
-    (Domain::Plugin, "config-set"),
-    // And the layer it says it lives at, for that same reason one line further out: the layer is the
-    // author's word too, every plugin the official catalog serves declares none, and a screen road
-    // about reading the layer off a row has to find a row that already declares one.
-    (Domain::Plugin, "declare-scope"),
+    // A device that would carry a notification, and a project that has picked it up. It is a world a
+    // road about the hourly check's band opens on rather than one it walks: the band is judged once at
+    // launch, and its third condition is that some project reports somewhere it can reach — so the
+    // shelf row, its credential and the project's selection are all standing before there is a screen
+    // to read. Setting a project up to report is a road of its own
+    // (`report-this-projects-work-to-a-channel`), and walking it here would prove that road rather
+    // than this one. Nothing sends: no step of any of these reaches the network.
+    (Domain::Notify, "raise"),
+    (Domain::Notify, "connect"),
+    (Domain::Notify, "report"),
+    (Domain::Notify, "carry"),
+    (Domain::Notify, "choose"),
     // The tick's band already put off. What it stands up is a day having passed — or not — since
     // "later" was pressed, and no run earns that: the band is judged once at launch, so the press
     // and the judgement it gates can never be in the same run. The same kind of reach as
@@ -4030,150 +3359,6 @@ fn takes_a_query(domain: Domain, op: &str) -> bool {
         (domain, op),
         (Domain::Task, "narrow" | "open-hit" | "found") | (Domain::Decision, "narrow" | "found")
     )
-}
-
-/// What is wrong with an `offers:` value, if anything — the rows a stood catalog publishes.
-///
-/// Two words are a row's floor: the `name` it is fetched and badged by, and the `desc` a row draws
-/// under it. The rest is optional, and each is held to its own shape — a `claims_official` that
-/// arrived as the word "true" would be a badge nobody claimed, and a `label` that arrived as a
-/// number would reach a form as one.
-///
-/// `translated` is the same row in the author's other languages, keyed by language code, and it is
-/// checked against the base row rather than on its own: translating a `label` on an entry that
-/// declares no `setting` publishes a label for a field nobody will see, and translating an `about`
-/// on an entry that describes itself nowhere is the text Amenbo's own manifest check refuses — both
-/// being the same mistake one language along.
-fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
-    let Some(rows) = value.as_sequence() else {
-        return vec!["`offers` must be a list of the entries this catalog serves".to_string()];
-    };
-    let mut problems = Vec::new();
-    for (n, row) in rows.iter().enumerate() {
-        let at_row = |m: String| format!("`offers` entry {}: {m}", n + 1);
-        if row.as_mapping().is_none() {
-            problems.push(at_row("must be a mapping of the fields a catalog entry carries".into()));
-            continue;
-        }
-        for key in ["name", "desc"] {
-            match row.get(key) {
-                Some(v) if v.as_str().is_some() => {}
-                Some(_) => problems.push(at_row(format!("`{key}` must be a string"))),
-                None => problems.push(at_row(format!("missing required field `{key}`"))),
-            }
-        }
-        for key in ["about", "setting", "label"] {
-            if row.get(key).is_some_and(|v| v.as_str().is_none()) {
-                problems.push(at_row(format!("`{key}` must be a string")));
-            }
-        }
-        if row.get("claims_official").is_some_and(|v| v.as_bool().is_none()) {
-            problems.push(at_row("`claims_official` must be a boolean".into()));
-        }
-        // A label with nothing to label is a field that never reaches a form: the key is what a
-        // setting is declared under, and naming only its display text declares nothing.
-        if row.get("label").is_some() && row.get("setting").is_none() {
-            problems.push(at_row("`label` names a `setting`, so one has to be declared".into()));
-        }
-        problems.extend(translated_problems(row).into_iter().map(at_row));
-    }
-    problems
-}
-
-/// What is wrong with a declaration's `translated` block — the words a form's field carries in the
-/// author's other languages.
-///
-/// It is keyed by language code, and each language holds the `label` the field is drawn under and the
-/// `options` its candidates are, keyed by the value each candidate stores. Keying the candidates by
-/// value rather than by position is the same rule the published form obeys: an author reordering their
-/// list would otherwise silently move every language's words onto the wrong answer.
-fn declared_translations_problems(block: &serde_yaml::Value) -> Vec<String> {
-    let Some(langs) = block.as_mapping() else {
-        return vec!["`translated` must be a mapping of language code to the words in it".to_string()];
-    };
-    let mut problems = Vec::new();
-    for (lang, words) in langs {
-        let Some(lang) = lang.as_str() else {
-            problems.push("`translated` is keyed by language code, which is a string".to_string());
-            continue;
-        };
-        let Some(words) = words.as_mapping() else {
-            problems.push(format!("`translated.{lang}` must be a mapping of the words written in it"));
-            continue;
-        };
-        if words.get("label").is_some_and(|v| v.as_str().is_none()) {
-            problems.push(format!("`translated.{lang}.label` must be a string"));
-        }
-        match words.get("options") {
-            None => {}
-            Some(o) => match o.as_mapping() {
-                None => problems.push(format!(
-                    "`translated.{lang}.options` must be a mapping of a candidate's stored value to the words it is drawn under"
-                )),
-                Some(candidates) => {
-                    for (value, shown) in candidates {
-                        if value.as_str().is_none() || shown.as_str().is_none() {
-                            problems.push(format!(
-                                "`translated.{lang}.options` maps a candidate's stored value to its words, and both are strings"
-                            ));
-                        }
-                    }
-                }
-            },
-        }
-        if words.get("label").is_none() && words.get("options").is_none() {
-            problems.push(format!("`translated.{lang}` translates nothing — name a `label`, some `options`, or both"));
-        }
-    }
-    problems
-}
-
-/// What is wrong with one row's `translated` block — the same row in the author's other languages.
-///
-/// It is a mapping keyed by language code, and each language holds the words a translation is made
-/// of: the `desc` a row draws, the `about` an opened panel is read by, and the `label` its one
-/// setting is shown under. Naming none of them is a language that translates nothing, which is a
-/// document published for no reason — so it is caught here rather than serving an empty answer to a
-/// reader who then sees English and cannot tell why.
-fn translated_problems(row: &serde_yaml::Value) -> Vec<String> {
-    let Some(block) = row.get("translated") else { return Vec::new() };
-    let Some(langs) = block.as_mapping() else {
-        return vec!["`translated` must be a mapping of language code to the words in it".to_string()];
-    };
-    let mut problems = Vec::new();
-    for (lang, words) in langs {
-        let Some(lang) = lang.as_str() else {
-            problems.push("`translated` is keyed by language code, which is a string".to_string());
-            continue;
-        };
-        let Some(_) = words.as_mapping() else {
-            problems.push(format!("`translated.{lang}` must be a mapping of the words written in it"));
-            continue;
-        };
-        for key in ["desc", "about", "label"] {
-            if words.get(key).is_some_and(|v| v.as_str().is_none()) {
-                problems.push(format!("`translated.{lang}.{key}` must be a string"));
-            }
-        }
-        if words.get("label").is_some() && row.get("setting").is_none() {
-            problems.push(format!(
-                "`translated.{lang}.label` names a `setting`, so one has to be declared"
-            ));
-        }
-        // The same rule Amenbo holds a real manifest to: there is nothing to translate where the
-        // author described the plugin in no language at all.
-        if words.get("about").is_some() && row.get("about").is_none() {
-            problems.push(format!(
-                "`translated.{lang}.about` translates an `about`, so one has to be written"
-            ));
-        }
-        if ["desc", "about", "label"].iter().all(|key| words.get(key).is_none()) {
-            problems.push(format!(
-                "`translated.{lang}` translates nothing — name a `desc`, an `about`, a `label`, or any of them"
-            ));
-        }
-    }
-    problems
 }
 
 // ---------------------------------------------------------------------------
@@ -4405,14 +3590,12 @@ impl Scenario {
             }
 
             // The yes/no args are booleans wherever they appear: `present` asks whether something is
-            // there, `ok` what verdict a check is expected to come back with, `running` whether
-            // anything is working a queue, `required` whether a declared setting is one its plugin
-            // cannot work without, `away` whether a word said in a pane is armed and left behind,
-            // `folded` whether the ref being pressed in a pane is one the fold broke across two
-            // rows, `asks` whether the press that opens a pane meets the question of which folder
-            // rather than a pane, the two key questions whether a catalog serves a signing key and
-            // whether one of its is pinned, and `first` whether a hit stands at the top of the
-            // answer rather than merely somewhere in it.
+            // there, `ok` what verdict a check is expected to come back with, `required` whether an
+            // axis is one no record may leave empty, `away` whether a word said in a pane is armed
+            // and left behind, `folded` whether the ref being pressed in a pane is one the fold broke
+            // across two rows, `asks` whether the press that opens a pane meets the question of which
+            // folder rather than a pane, and `first` whether a hit stands at the top of the answer
+            // rather than merely somewhere in it.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -4450,13 +3633,10 @@ impl Scenario {
                 "present",
                 "ok",
                 "force",
-                "running",
                 "required",
                 "away",
                 "folded",
                 "asks",
-                "publishes_key",
-                "pinned_key",
                 "first",
             ] {
                 if let Some(v) = step.with().get(key) {
@@ -4485,30 +3665,6 @@ impl Scenario {
                     }
                 }
             }
-
-            // The shelf a stood catalog serves — the one arg written as a list of rows rather than
-            // as a word. Its rows are a document's fields, not Amenbo's arguments, so the loader
-            // reads them here instead of through `strings`: a row is where a typo would otherwise
-            // travel all the way to a catalog served with a blank line under a name.
-            if let Some(v) = step.with().get("offers") {
-                for problem in offers_problems(v) {
-                    errs.push(at(i, problem));
-                }
-            }
-
-            // The words a declaration carries in the author's other languages — the same kind of
-            // arg one tier in, and read here for the same reason: what it holds is a form's fields,
-            // not Amenbo's arguments, so `strings` has no shape to hold it to. A row's `offers`
-            // carries its own copy of this, checked against the row it sits on; here there is no row
-            // to check against, so the shape is the whole of what can be said.
-            if let Some(v) = step.with().get("translated") {
-                if step.domain() == Domain::Plugin && step.op().starts_with("declare-") {
-                    for problem in declared_translations_problems(v) {
-                        errs.push(at(i, problem));
-                    }
-                }
-            }
-
             // A step that says its operation will be turned away. It is an action's word — an
             // assert already comes back with a verdict of its own — and what it names is the code
             // the refusal has to carry, so a step written against one guard cannot pass on another
@@ -5144,24 +4300,6 @@ steps_cli:
         assert!(errs.iter().any(|e| e.message.contains("`ok` must be a boolean")));
     }
 
-    /// `required` says whether a declared setting is one its plugin cannot work without, and a word that
-    /// merely reads like a yes would reach the manifest as text rather than as the flag an enable is
-    /// refused over.
-    #[test]
-    fn a_non_boolean_required_flag_is_rejected() {
-        let yaml = r#"
-id: x
-title: y
-steps_cli:
-  - type: action
-    domain: plugin
-    op: declare-setting
-    with: { name: worktree, key: base, required: "yes" }
-"#;
-        let errs = load_str(yaml).unwrap().validate().unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`required` must be a boolean")));
-    }
-
     /// The refusal vocabulary: an action may declare that Amenbo will turn it away, and the code it
     /// will be turned away with. The op and its args are the ordinary ones — what is under test is
     /// the guard in front of them, not a second spelling of the command.
@@ -5429,140 +4567,6 @@ steps_gui:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.to_string().starts_with("given step 1:")), "{errs:?}");
-    }
-
-    /// The shelf a stood catalog serves is the one arg written as rows, and a row is where a typo
-    /// would otherwise travel all the way to a catalog served with a blank line under a name.
-    #[test]
-    fn a_shelf_row_is_held_to_the_words_a_catalog_entry_carries() {
-        let stand = |offers: &str| {
-            let yaml = format!(
-                r#"
-id: x
-title: y
-steps_cli:
-  - type: action
-    domain: plugin
-    op: catalog-stand
-    with:
-      publishes_key: true
-      offers:
-{offers}
-    as: shelf
-"#
-            );
-            load_str(&yaml).unwrap().validate()
-        };
-
-        let errs = stand("        - { desc: a row with no name }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("missing required field `name`")), "{errs:?}");
-
-        let errs = stand("        - { name: standup }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("missing required field `desc`")), "{errs:?}");
-
-        // A badge is claimed or it is not, and the word "true" is neither.
-        let errs = stand("        - { name: standup, desc: d, claims_official: \"true\" }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`claims_official` must be a boolean")), "{errs:?}");
-
-        // Display text with no field under it declares nothing, so it never reaches a form.
-        let errs = stand("        - { name: standup, desc: d, label: Channel webhook }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`label` names a `setting`")), "{errs:?}");
-
-        assert!(stand("        - { name: standup, desc: d, setting: channel, label: Channel webhook }").is_ok());
-
-        // The same row in another language is held to the same shape, and to the base row beside it:
-        // a label translated onto an entry declaring no setting is a label no form will ever show.
-        let errs = stand("        - { name: standup, desc: d, translated: { de: { label: Beschriftung } } }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de.label` names a `setting`")), "{errs:?}");
-
-        let errs = stand("        - { name: standup, desc: d, translated: { de: { desc: 12 } } }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de.desc` must be a string")), "{errs:?}");
-
-        // And the text an opened panel is read by, held the same way its line is — including to the
-        // base row, which is where Amenbo's own manifest check holds it too.
-        let errs = stand("        - { name: standup, desc: d, about: 12 }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`about` must be a string")), "{errs:?}");
-
-        let errs = stand("        - { name: standup, desc: d, translated: { de: { about: Beschreibung } } }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de.about` translates an `about`")), "{errs:?}");
-
-        assert!(stand("        - { name: standup, desc: d, about: What it does, translated: { de: { about: Was es tut } } }").is_ok());
-
-        // A language that translates none of the words is a document published with nothing in it.
-        let errs = stand("        - { name: standup, desc: d, translated: { de: {} } }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de` translates nothing")), "{errs:?}");
-
-        let errs = stand("        - { name: standup, desc: d, translated: de }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated` must be a mapping")), "{errs:?}");
-
-        assert!(
-            stand(
-                "        - { name: standup, desc: d, setting: channel, label: L, translated: { de: { desc: Beschreibung, label: Beschriftung } } }"
-            )
-            .is_ok()
-        );
-    }
-
-    /// The words a declared field carries in another language are held to their own shape, for the
-    /// reason a shelf's rows are: they are a form's fields rather than Amenbo's arguments, so nothing
-    /// else would catch a typo before it reached a screen as a blank.
-    #[test]
-    fn a_declarations_other_languages_are_held_to_the_shape_a_form_reads() {
-        let declare = |translated: &str| {
-            let yaml = format!(
-                r#"
-id: x
-title: y
-steps_gui:
-  - type: action
-    domain: plugin
-    op: declare-setting
-    with:
-      name: worktree
-      key: base
-      label: Base branch
-{translated}
-"#
-            );
-            load_str(&yaml).unwrap().validate()
-        };
-
-        let errs = declare("      translated: de").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated` must be a mapping")), "{errs:?}");
-
-        let errs = declare("      translated: { de: { label: 12 } }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de.label` must be a string")), "{errs:?}");
-
-        // A candidate's words are keyed by the value it stores, so a list has nowhere to say which is which.
-        let errs = declare("      translated: { de: { options: [Aufgabe erledigt] } }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de.options` must be a mapping")), "{errs:?}");
-
-        let errs = declare("      translated: { de: {} }").unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`translated.de` translates nothing")), "{errs:?}");
-
-        assert!(declare("      translated: { de: { label: Basis-Branch } }").is_ok());
-        assert!(
-            declare("      translated: { de: { label: Ereignisse, options: { task.done: Aufgabe erledigt } } }")
-                .is_ok()
-        );
-    }
-
-    /// A shelf is a list of rows. Written as one word it would reach the driver as a catalog offering
-    /// nothing, which reads exactly like a scenario that meant to offer nothing.
-    #[test]
-    fn a_shelf_written_as_one_word_is_rejected() {
-        let yaml = r#"
-id: x
-title: y
-steps_cli:
-  - type: action
-    domain: plugin
-    op: catalog-stand
-    with: { publishes_key: true, offers: standup }
-    as: shelf
-"#;
-        let errs = load_str(yaml).unwrap().validate().unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("`offers` must be a list")), "{errs:?}");
     }
 
     /// The kind a binding carries, and the spelling it turns into. A driver that got this backwards

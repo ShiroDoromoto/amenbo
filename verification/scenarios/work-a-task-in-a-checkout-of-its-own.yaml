@@ -1,6 +1,6 @@
 # Two sessions working two tasks share one working tree unless somebody cuts a second one, and the
 # reservation does not stop that: what it guards is the task's status, not the files. So Amenbo cuts
-# the checkout itself — one command in, one command out, and no plugin to install first.
+# the checkout itself — one command in, one command out, and nothing to set up first.
 #
 # This is a road the shipped build is the only honest place to walk. Everything it proves happens on
 # a real repository: a directory has to appear beside it, a branch has to exist in it, and the fold

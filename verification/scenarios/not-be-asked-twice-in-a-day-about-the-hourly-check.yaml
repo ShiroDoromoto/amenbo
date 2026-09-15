@@ -26,8 +26,8 @@ description: >
 
 given:
   # The band's two standing conditions, so the absence reads against a gate that would otherwise be
-  # open: a dated task still open, and the official `task.due` subscriber enabled in this run's own
-  # project (installed over the network on purpose — see `put-a-plugin-on-the-machine.yaml`).
+  # open: a dated task still open, and this run's own project reporting `task.due` to a connection on
+  # this device's shelf.
   - type: action
     domain: task
     op: create
@@ -48,28 +48,44 @@ given:
       target: dated
       due: "+7d"
 
+  # The carrier. The band's third condition is that some project reports `task.due` somewhere it can
+  # reach, so the world raises a connection on this device's shelf, writes its credential, and has
+  # this run's own project pick it up and tick the event. Nothing is ever sent and nothing reaches the
+  # network: standing a premise up must not knock on anybody's door.
   - type: action
-    domain: plugin
-    op: install
+    domain: notify
+    op: raise
     with:
-      name: slack
-
-  # Since v6 the plugin declares `webhook_url` as a setting it cannot be enabled without, and its
-  # own check reads the value's shape — so the world hands it one shaped like a real hook. Nothing
-  # is ever sent: standing a premise up must not knock on anybody's door.
-  - type: action
-    domain: plugin
-    op: config-set
-    with:
-      name: slack
-      key: webhook_url
-      value: https://hooks.slack.com/services/T0/B0/x
+      kind: slack
+      name: SCENARIO SEED — where the due warning would go
+    as: carrier
 
   - type: action
-    domain: plugin
-    op: enable
+    domain: notify
+    op: connect
     with:
-      name: slack
+      target: carrier
+      secret: https://hooks.slack.com/services/T00SCENARIO/B00SCENARIO/notarealwebhookvalue
+
+  - type: action
+    domain: notify
+    op: report
+    with:
+      on: true
+
+  - type: action
+    domain: notify
+    op: carry
+    with:
+      target: carrier
+      on: true
+
+  - type: action
+    domain: notify
+    op: choose
+    with:
+      event: task.due
+      on: true
 
   # And the press, already made this morning: "later" written as today. The launch below is the
   # second time today the question could have been put, which is the whole of what is under test.

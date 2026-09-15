@@ -68,7 +68,7 @@ use crate::plugin_trust::effective_enabled_in;
 use crate::store::Store;
 
 /// What the execution log records in the `event` column for a command run. Not one of the v1 event names
-/// ([`V1_EVENTS`](crate::plugin_payload::V1_EVENTS), all of them dotted) — nothing fired this run, a caller
+/// ([`V1_EVENTS`](crate::lifecycle::V1_EVENTS), all of them dotted) — nothing fired this run, a caller
 /// asked for it — so the log stays readable as "which face was this" without pretending an event happened.
 pub const LOG_EVENT: &str = "command";
 

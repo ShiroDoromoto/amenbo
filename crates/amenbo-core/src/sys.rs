@@ -3,6 +3,20 @@
 use std::ffi::OsStr;
 use std::process::Command;
 
+/// Collect `child` on a thread of its own — what a caller that starts a process and walks away owes it.
+///
+/// Amenbo starts a few processes it deliberately does not wait for: a notification sender, a Viewer
+/// carrier, a plugin runner. A parent that never waits leaves a zombie behind on Unix for as long as *it*
+/// lives, and a long-lived face starts one on every write, so they would pile up. This waits instead of the
+/// caller: it blocks in `waitpid` and nothing else, holds no store and no lock, and if the parent exits
+/// first (the short-lived face's ordinary case) it goes with it and the child is reparented, still running.
+/// What it is emphatically not is a wait the caller makes — that is the whole of what it removes.
+pub fn reap(mut child: std::process::Child) {
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
 /// A [`Command`] that never flashes a console window on Windows.
 ///
 /// A GUI process has no console of its own, so when it spawns a console program — git, powershell, cmd —

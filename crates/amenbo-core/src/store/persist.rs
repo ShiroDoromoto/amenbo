@@ -74,7 +74,7 @@ fn emit(
 /// The scope is **one record**. A task that takes its comments down with it does not fold them in here:
 /// each is its own deletion event, and folding would say the same thing twice in two shapes.
 fn gone_record(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<String>> {
-    use crate::plugin_payload::name as ev;
+    use crate::lifecycle::name as ev;
     use crate::store_engine::read;
     let conn = tx.conn();
     let shape = match event {
@@ -97,7 +97,7 @@ fn gone_record(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<S
 ///
 /// The task events name no parent: a task is read back by its own id, and what it belongs to comes with it.
 fn parent_of(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<i64>> {
-    use crate::plugin_payload::name as ev;
+    use crate::lifecycle::name as ev;
     use crate::store_engine::read;
     match event {
         ev::COMMENT_ADDED | ev::COMMENT_REMOVED => {
@@ -129,7 +129,7 @@ fn to_json<T: serde::Serialize>(record: &T) -> Option<String> {
 /// moves in between from sending its older events to its new home. `None` is a real answer: a record in no
 /// project has no project, and an event stamped `None` reaches only the plugins that are not scoped to one.
 fn project_of(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<i64>> {
-    use crate::plugin_payload::name as ev;
+    use crate::lifecycle::name as ev;
     use crate::store_engine::read;
     let conn = tx.conn();
     match event {
@@ -170,9 +170,9 @@ fn emit_task_status(
     }
     let at = task.updated_at.to_rfc3339_z();
     let (event, new_state) = match task.status {
-        crate::model::TaskStatus::Done => (crate::plugin_payload::name::TASK_DONE, None),
-        crate::model::TaskStatus::Rejected => (crate::plugin_payload::name::TASK_REJECTED, None),
-        _ => (crate::plugin_payload::name::TASK_STATUS_CHANGED, Some(task.status.as_str())),
+        crate::model::TaskStatus::Done => (crate::lifecycle::name::TASK_DONE, None),
+        crate::model::TaskStatus::Rejected => (crate::lifecycle::name::TASK_REJECTED, None),
+        _ => (crate::lifecycle::name::TASK_STATUS_CHANGED, Some(task.status.as_str())),
     };
     emit(tx, event, task.id, actor, &at, new_state)
 }
@@ -193,7 +193,7 @@ fn emit_task_assigned(
     let at = task.updated_at.to_rfc3339_z();
     emit(
         tx,
-        crate::plugin_payload::name::TASK_ASSIGNED,
+        crate::lifecycle::name::TASK_ASSIGNED,
         task.id,
         actor,
         &at,
@@ -219,7 +219,7 @@ fn emit_task_moved(
         .and_then(|p| p.slug)
         .unwrap_or_default();
     let at = task.updated_at.to_rfc3339_z();
-    emit(tx, crate::plugin_payload::name::TASK_MOVED, task.id, actor, &at, Some(&slug))
+    emit(tx, crate::lifecycle::name::TASK_MOVED, task.id, actor, &at, Some(&slug))
 }
 
 /// A decision verdict event (`decision.accepted` / `decision.rejected`). The name is the whole state, so
@@ -254,7 +254,7 @@ fn emit_task_created(
         return Ok(());
     }
     let at = task.updated_at.to_rfc3339_z();
-    emit(tx, crate::plugin_payload::name::TASK_CREATED, task.id, actor, &at, None)
+    emit(tx, crate::lifecycle::name::TASK_CREATED, task.id, actor, &at, None)
 }
 
 /// `task.deleted`: a task was hard-deleted (`AMB-D-367`). The name is the whole state (no `new`) and
@@ -273,7 +273,7 @@ fn emit_task_deleted(
     actor: crate::model::ActorKind,
     at: &str,
 ) -> Result<()> {
-    emit(tx, crate::plugin_payload::name::TASK_DELETED, id, actor, at, None)
+    emit(tx, crate::lifecycle::name::TASK_DELETED, id, actor, at, None)
 }
 
 /// `comment.added`: a comment was added to a task (`AMB-D-367`). `id` is the comment's own id and the
@@ -285,7 +285,7 @@ fn emit_comment_added(
     actor: crate::model::ActorKind,
 ) -> Result<()> {
     let at = comment.created_at.to_rfc3339_z();
-    emit(tx, crate::plugin_payload::name::COMMENT_ADDED, comment.id, actor, &at, None)
+    emit(tx, crate::lifecycle::name::COMMENT_ADDED, comment.id, actor, &at, None)
 }
 
 /// `comment.removed`: a task comment was hard-deleted (`AMB-D-401`). `id` is the comment's own — the same
@@ -302,7 +302,7 @@ fn emit_comment_removed(
     actor: crate::model::ActorKind,
     at: &str,
 ) -> Result<()> {
-    emit(tx, crate::plugin_payload::name::COMMENT_REMOVED, id, actor, at, None)
+    emit(tx, crate::lifecycle::name::COMMENT_REMOVED, id, actor, at, None)
 }
 
 /// Everything one task's removal is observed as: a `comment.removed` for each comment the cascade carries
@@ -1359,7 +1359,7 @@ impl Store {
         self.write_one(&[WriteTarget::Decision(id)], |tx| {
             let (decision, changed) = crate::ops::decision::accept(tx, id, decided_by)?;
             if changed {
-                emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_ACCEPTED, actor)?;
+                emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
             }
             Ok((decision, changed))
         })
@@ -1376,7 +1376,7 @@ impl Store {
         self.write_one(&[WriteTarget::Decision(id)], |tx| {
             let (decision, changed) = crate::ops::decision::reject(tx, id)?;
             if changed {
-                emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_REJECTED, actor)?;
+                emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_REJECTED, actor)?;
             }
             Ok((decision, changed))
         })
@@ -1408,7 +1408,7 @@ impl Store {
                 let (decision, changed, promoted) =
                     crate::ops::decision::supersede(tx, new_id, old_id, decided_by)?;
                 if promoted {
-                    emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_ACCEPTED, actor)?;
+                    emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
                 }
                 Ok((decision, changed))
             },

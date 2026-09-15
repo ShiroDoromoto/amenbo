@@ -1,6 +1,6 @@
 //! The GUI's mount of the single observation-hook dispatcher — the **long-lived face** (`AMB-D-367`).
 //!
-//! The cursor is not this module's to hold. Core's [`drive_persisted`](amenbo_core::plugin_drive) reads it
+//! The cursor is not this module's to hold. Core's [`outbox_drive`](amenbo_core::outbox_drive) reads it
 //! from the store, delivers what committed since, and stores where it advanced to; both faces drive that
 //! same one (`AMB-D-380`). A session cursor kept here instead left the events this process delivered still
 //! standing in the outbox, so the next `amenbo` command on the command line fired them a second time — one
@@ -26,7 +26,7 @@
 //! Nothing here fails a command. A store that will not answer, a plugins directory that will not read: the
 //! mutation is already committed, so the dispatcher warns and the next write tries again.
 
-use amenbo_core::plugin_drive::Face;
+use amenbo_core::outbox_drive::Face;
 use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::{plugin_installed, Store};
 
@@ -91,7 +91,7 @@ pub fn drive(store: &Store) {
     // The returned `Delivered` is dropped here: the runners it names are processes of their own, and this
     // face never had a `reply:true` subscriber to surface (`AMB-D-383`). The cursor it advanced to is
     // already stored.
-    if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
+    if let Err(e) = store.drive_delivery(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
         log::warn!("could not dispatch the plugin observation hooks: {e}");
     }
 }
@@ -122,7 +122,7 @@ pub fn resume() {
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, &store);
-    if let Err(e) = store.resume_plugin_delivery(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
+    if let Err(e) = store.resume_delivery(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
         log::warn!("could not resume the plugin observation hooks: {e}");
     }
     // The Viewer's half of the same kick (`AMB-D-884`). A carrier that died between reading the backlog
@@ -137,7 +137,7 @@ mod tests {
     use super::*;
     use amenbo_core::config::Paths;
     use amenbo_core::model::{ActorKind, View};
-    use amenbo_core::plugin_drive::persisted_cursor;
+    use amenbo_core::outbox_drive::persisted_cursor;
 
     fn temp_store(tag: &str) -> Store {
         Store::open_at(Paths::at(amenbo_scratch::scratch(tag))).unwrap()

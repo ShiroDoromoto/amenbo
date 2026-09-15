@@ -2,64 +2,59 @@
 //! fired plugin hooks (`AMB-D-367`), in the two layers `AMB-D-399` splits it into.
 //!
 //! The pieces this joins already exist: ops write points append semantic events to the transactional
-//! [`outbox`](crate::store_engine::outbox) (`AMB-D-367`); [`Payload`] is the wire shape a plugin receives
+//! [`outbox`](crate::store_engine::outbox) (`AMB-D-367`); [`crate::outbox_drive`] walks that outbox once,
+//! for every reader at once, and reclaims what it read; [`Payload`] is the wire shape a plugin receives
 //! (`AMB-D-348`); [`plugin_hooks::run_queued`](crate::plugin_hooks::run_queued) runs one hook and records
 //! it, warning on anything but a clean exit and failing nobody (`AMB-D-352`). What sits between them is two
 //! steps, not one:
 //!
-//! 1. **[`fan_out`] — from what happened to what is to do.** It drains the outbox past a cursor, asks a
-//!    [`Subscribers`] who observes each event, copies the event onto the
-//!    [queue](crate::store_engine::queue::QueueRow) of every plugin that does, and deletes the outbox rows it copied
-//!    — all on the caller's transaction, so nothing is copied twice and nothing is reclaimed uncopied.
+//! 1. **[`fan_out_row`] — from what happened to what is to do.** For each row the walk hands it, it asks a
+//!    [`Subscribers`] who observes that event and copies the row onto the
+//!    [queue](crate::store_engine::queue::QueueRow) of every plugin that does — on the walk's own
+//!    transaction, the same one the reclaim rides, so nothing is copied twice and nothing is reclaimed
+//!    uncopied.
 //! 2. **The runners — from what is to do to what ran.** One per plugin ([`crate::plugin_runner`]) reads its
 //!    own queue from the head and takes each row off it once the plugin has replied; [`hook_for`] is the
 //!    half that lives here, turning one row back into that plugin's invocation.
 //!
-//! The split is what keeps the outbox clear of the slowest plugin: reclaiming it waits on the fan-out,
-//! which runs at the store's speed, rather than on whether some plugin's subprocess has run yet. A stalled
-//! plugin backs up its own queue and nothing else (`AMB-D-399`).
+//! The split is what keeps the outbox clear of the slowest plugin: reclaiming it waits on the walk, which
+//! runs at the store's speed, rather than on whether some plugin's subprocess has run yet. A stalled plugin
+//! backs up its own queue and nothing else (`AMB-D-399`).
 //!
-//! **Stateless, cursor owned by the caller** (`AMB-D-367`). Like [`events_since`], this holds no cursor of
-//! its own: [`fan_out`] takes the caller's cursor and returns the one to store next — the cursor being
-//! *how far the outbox has been fanned out*, not how far any plugin has got (each queue says that for
-//! itself). The single dispatcher keeps *one* cursor, persisted in the store and shared by both faces
-//! (`AMB-D-380`); that mounting, and the transaction the fan-out rides, is the caller's
-//! ([`crate::plugin_drive`]).
+//! **Nothing here holds a cursor, or reads the outbox.** Plugins are one of the things a write is carried
+//! out to and not the only one, so the walk and the cursor it advances belong to neither
+//! ([`crate::outbox_drive`], `AMB-D-380`); what a plugin still *owes* is its own queue's business, which is
+//! a different question and answered per plugin.
 //!
-//! **Who subscribes is a seam, asked once.** [`fan_out`] asks a [`Subscribers`] which plugins observe an
-//! event; it does not itself know what is installed or enabled. The real resolver is
+//! **Who subscribes is a seam, asked once.** [`fan_out_row`] asks a [`Subscribers`] which plugins observe
+//! an event; it does not itself know what is installed or enabled. The real resolver is
 //! [`EnabledSubscribers`](crate::plugin_subscribe::EnabledSubscribers), which the install≠enable lifecycle
 //! supplies (`AMB-T-2032`) and each face mounts over the installed set: only an *enabled*, subscribed
 //! plugin is queued (`AMB-D-351`). [`NoSubscribers`] is the empty stand-in for a face that mounts no
-//! resolver at all — the fan-out then queues nothing and still advances the cursor. A runner asks the same
-//! resolver for one named plugin ([`Subscribers::resolve_one`]), because a queued row carries the plugin's
-//! *name*, never the invocation to run it: what a plugin's config resolves to is read when it runs.
+//! resolver at all — the fan-out then queues nothing, and the walk still advances the cursor. A runner asks
+//! the same resolver for one named plugin ([`Subscribers::resolve_one`]), because a queued row carries the
+//! plugin's *name*, never the invocation to run it: what a plugin's config resolves to is read when it runs.
 //!
 //! **Most hooks are fired and forgotten; a reply is not** (`AMB-D-383`). Both halves carry the driving
 //! [`Face`], and a subscription fires only on a face it declares — which is why a queued row records the
 //! face it was resolved on. A `reply:true` hook — the worktree advice, only ever resolved on the CLI face —
 //! is the one exception to fire-and-forget, and the one thing that never joins a queue: its stderr is the
-//! answer a caller is waiting on *now*, so [`fan_out`] hands it back on [`FannedOut::replies`] for the
-//! caller to run synchronously ([`run_replies`]) once the transaction has committed. Every other hook stays
+//! answer a caller is waiting on *now*, so it comes back on [`FannedOut::replies`] for the caller to run
+//! synchronously ([`run_replies`]) once the transaction has committed. Every other hook stays
 //! fire-and-forget, its output landing only in the execution log.
 //!
 //! **Delivery is best-effort** (`AMB-D-352`). Generation is leak-free (the event landed in the same
 //! transaction as its cause), but firing is after the fact: a hook that will not spawn, exits non-zero, or
-//! overruns its timeout is a warning and nothing more. And if retention (`AMB-T-2021`) has trimmed past the
-//! caller's cursor, the lost span cannot be replayed — [`fan_out`] resyncs the cursor to the head and
-//! reports [`FannedOut::gapped`] rather than pretend nothing fired.
+//! overruns its timeout is a warning and nothing more. And a span retention took before the walk reached it
+//! (`AMB-T-2021`) cannot be replayed — the walk resyncs and says so, rather than pretend nothing fired.
 
 use crate::error::Result;
+use crate::outbox_drive::Face;
 use crate::plugin_exec::PluginInvocation;
 use crate::plugin_hooks::{Hook, REPLY_TIMEOUT};
-use crate::plugin_manifest::Face;
 use crate::plugin_payload::Payload;
-use crate::store_engine::{events_since, outbox_head, queue, OutboxSlice, WriteTx};
-
-/// How many events one [`fan_out`] call drains per page. A dispatcher fired after each write sees one
-/// event at a time; this only bounds a catch-up drain after downtime, so it is generous — the page cost is
-/// one query, not one process.
-const DELIVER_PAGE: i64 = 256;
+use crate::store_engine::outbox::OutboxRow;
+use crate::store_engine::{queue, WriteTx};
 
 /// One resolved subscriber: the plugin to fire and its non-secret config to hand it alongside the event.
 ///
@@ -85,7 +80,7 @@ pub struct Subscriber {
     /// plugin has no text settings — the runner then adds no `config` key at all.
     pub config: serde_json::Map<String, serde_json::Value>,
     /// Whether this subscription's output is relayed to the caller (`AMB-D-383`). `true` is the worktree
-    /// advice case: [`fan_out`] hands it back rather than queueing it, and [`run_replies`] runs it
+    /// advice case: [`fan_out_row`] hands it back rather than queueing it, and [`run_replies`] runs it
     /// **synchronously** under a short bound and carries its stderr back on [`Delivered::replies`]. Only
     /// ever `true` on the CLI face — the resolver already filtered on the driving face, and the validator
     /// pins `reply:true` to `faces:[cli]`, so a GUI drive never resolves a replying subscriber.
@@ -116,7 +111,7 @@ pub struct Reply {
 
 /// Resolves which plugins observe an event — the seam the enable lifecycle fills (`AMB-T-1975`).
 ///
-/// Given an event name (one of [`crate::plugin_payload::V1_EVENTS`]) and the project it happened in,
+/// Given an event name (one of [`crate::lifecycle::V1_EVENTS`]) and the project it happened in,
 /// return one [`Subscriber`] per enabled, subscribed plugin: its program, whatever the resolver injects
 /// alongside (secret config as env vars, `AMB-T-2016`), and its non-secret config for the payload's
 /// `config` key. The resolver does **not** set the payload event fields — this module composes the stdin
@@ -214,166 +209,87 @@ pub struct Delivered {
     /// never queued. The cursor is resynced to the head. A caller may log this (`AMB-D-361`); delivery being
     /// best-effort, it is not an error (`AMB-D-352`).
     pub gapped: bool,
-    /// **Every event this drive walked** — the fan-out's [`FannedOut::seen`], carried out so the caller can
-    /// hand it to whatever else observes a write (`AMB-D-885`). Empty on a pass that read nothing, and on a
-    /// retention gap.
+    /// **Every event this drive walked** — the walk's [`Walked::seen`](crate::outbox_drive::Walked::seen),
+    /// carried out so the caller can hand it to whatever else observes a write (`AMB-D-885`). Empty on a
+    /// pass that read nothing, and on a retention gap.
     pub seen: Vec<crate::notify_dispatch::Happened>,
 }
 
-/// What one [`fan_out`] pass moved: how far it read, how much it queued, the replying hooks it could not
-/// queue, and whether it hit a retention gap.
-#[must_use = "store the cursor, run the replies, and then run the queues"]
+/// What a fan-out put somewhere across one walk of the outbox — the accumulator [`fan_out_row`] fills.
+///
+/// How far the walk got, and what it saw, are the walk's answer ([`Walked`](crate::outbox_drive::Walked));
+/// this is only the plugins' share of it.
+#[must_use = "run the replies, and then run the queues"]
+#[derive(Default)]
 pub struct FannedOut {
-    /// The cursor to store for the next pass — the id of the last outbox event copied, or the outbox head
-    /// when a gap forced a resync. Equal to the cursor passed in when nothing was there to read.
-    pub cursor: i64,
-    /// How many queue rows were written — the events copied, times the plugins that observe each. `0` with
-    /// a moved cursor is the ordinary case of an event nobody subscribes to.
+    /// How many queue rows were written — the events copied, times the plugins that observe each. `0` after
+    /// a walk that moved is the ordinary case of events nobody subscribes to.
     pub queued: usize,
     /// The `reply:true` hooks, payload already on stdin, for the caller to run **after the transaction
     /// commits** ([`run_replies`]). They are not queued: a reply is the answer a caller is waiting on now,
     /// and a queue is for work that outlives this run (`AMB-D-383`).
     pub replies: Vec<Hook>,
-    /// Retention had trimmed past the cursor: nothing was queued for the lost span, and the cursor is
-    /// resynced to the head.
-    pub gapped: bool,
-    /// **Every event this pass walked**, recognised ones only, in the order they fired — handed on rather
-    /// than left to be read again (`AMB-D-885`).
-    ///
-    /// The outbox is reclaimed on the same transaction that queues, so a second reader coming back for
-    /// these afterwards would find them gone; and giving it a cursor of its own would mean the reclaim
-    /// could only run once both had passed, which is a coupling neither reader asked for. So the walk is
-    /// made once and what it saw is carried out. Who does what with them is the caller's
-    /// ([`crate::notify_dispatch`]); nothing here knows a notification exists.
-    pub seen: Vec<crate::notify_dispatch::Happened>,
 }
 
-/// **Fan out** the outbox onto the subscribed plugins' queues — the first layer of delivery (`AMB-D-399`).
+/// **Fan one outbox row out** onto the queues of the plugins that observe it — the first layer of delivery
+/// (`AMB-D-399`), a row at a time.
 ///
-/// Drains every event past `cursor`, asks `subs` who observes it, and writes one queue row per subscriber,
-/// then deletes the outbox rows it copied (through [`trim_fanned_out`](crate::store_engine::outbox)). All of
-/// it runs on `tx`, the caller's transaction: a copy and the reclaim of what it copied commit together, so
-/// no event is written to a queue twice and none is reclaimed before it was copied. The caller stores
-/// [`FannedOut::cursor`] on that same transaction, which is what makes the whole step one atom.
+/// The walk that reads the outbox is [`crate::outbox_drive::walk`], and this is what it hands each row to.
+/// `event` is the catalog name the walk recognised the row by, and `row` is the row as stored. Everything
+/// runs on `tx`, the walk's transaction: a copy and the reclaim of what it copied commit together, so no
+/// event is written to a queue twice and none is reclaimed before it was copied.
 ///
-/// A row this Amenbo does not recognise (an event outside the v1 catalog, an unparseable actor/time) is
-/// warned about and skipped, and the cursor still walks past it. On a retention gap the cursor is resynced
-/// to the head and nothing is queued for the lost span (see [`FannedOut::gapped`]).
-///
-/// `face` is the face driving this pass (`AMB-D-383`): it is handed to [`Subscribers::resolve`] so only the
+/// `face` is the face driving this walk (`AMB-D-383`): it is handed to [`Subscribers::resolve`] so only the
 /// subscriptions declaring this face are queued, and it is **recorded on each queue row**, so the runner
 /// resolves the plugin on the face the subscription was for rather than on whichever face gets to the row.
-/// A `reply:true` subscriber is the one thing not queued — it comes back on [`FannedOut::replies`] for the
-/// caller to run once this transaction has committed.
-///
-/// `log` is the execution log (`AMB-D-361`), used here for the one thing this step alone knows: a gap. A gap
-/// queues nothing and therefore leaves no run to look at, so the line it writes is the only trace a reader
-/// can find that events went undelivered. `None` records nothing, which is what a test of the fan-out itself
-/// wants.
-pub fn fan_out(
+/// A `reply:true` subscriber is the one thing not queued — it goes on [`FannedOut::replies`] for the caller
+/// to run once the transaction has committed.
+pub fn fan_out_row(
     tx: &WriteTx<'_>,
-    cursor: i64,
+    row: &OutboxRow,
+    event: &'static str,
     subs: &dyn Subscribers,
     face: Face,
-    log: Option<&std::path::Path>,
-) -> Result<FannedOut> {
-    let conn = tx.conn();
-    let mut cursor = cursor;
-    let mut queued = 0usize;
-    let mut replies: Vec<Hook> = Vec::new();
-    let mut seen: Vec<crate::notify_dispatch::Happened> = Vec::new();
-    loop {
-        match events_since(conn, cursor, DELIVER_PAGE)? {
-            OutboxSlice::Gap => {
-                // Retention passed the cursor; the lost events cannot be replayed. Resync to the head and
-                // queue nothing for the gap — delivery is best-effort (`AMB-D-352`). A gap can only surface
-                // on the first page (the cursor only ever moves forward), so nothing has been written yet.
-                // It is recorded here rather than left to the caller: this is where the fact is known, and
-                // a silently dropped span is precisely what the log exists to make visible (`AMB-D-361`).
-                if let Some(path) = log {
-                    crate::plugin_log::record_gap(path);
-                }
-                return Ok(FannedOut {
-                    cursor: outbox_head(conn)?,
-                    queued: 0,
-                    replies: Vec::new(),
-                    gapped: true,
-                    seen: Vec::new(),
-                });
-            }
-            OutboxSlice::Events { rows, more } => {
-                for row in &rows {
-                    cursor = row.id;
-                    let Some(payload) = Payload::from_outbox_row(row) else {
-                        tracing::warn!(
-                            event = %row.event,
-                            id = row.record_id,
-                            "unrecognised plugin outbox event; skipped"
-                        );
-                        continue;
-                    };
-                    // Which project the event happened in, read off the row (`AMB-D-405`) — the emit door
-                    // stamped it, so nothing is looked up here. That is what makes a deletion routable at
-                    // all: the record it names is gone by now, and a task that has moved since would
-                    // otherwise route its older events to its new home. `None` is a real answer (a record
-                    // in no project, or a row from before the column), and a resolver that needs a project
-                    // fires nothing without one (`AMB-D-434`).
-                    // Carried before the subscribers are asked, because it is not their answer: an event
-                    // nobody observes is still an event a project may report.
-                    seen.push(crate::notify_dispatch::Happened {
-                        event: row.event.clone(),
-                        record_id: row.record_id,
-                        project: row.project,
-                        actor: row.actor.clone(),
-                        new_state: row.new_state.clone(),
-                        parent: row.parent,
-                    });
-                    for sub in subs.resolve(payload.event, row.project, face) {
-                        if sub.reply {
-                            // A replying hook (CLI-only, `AMB-D-383`) never joins a queue: its stderr is the
-                            // advice the caller is waiting on, and a queue is for work that outlives this
-                            // run. Its stdin is composed here, where the payload and the resolved config are
-                            // both in hand, and the caller runs it once this transaction has committed —
-                            // holding the write lock across a subprocess is what queueing exists to avoid.
-                            let json = with_config(&payload, sub.config)?;
-                            replies.push(Hook::new(
-                                sub.plugin,
-                                payload.event,
-                                sub.invocation.stdin_json(json),
-                            ));
-                            continue;
-                        }
-                        // The row is copied as it stands — the store classifies none of these strings, and
-                        // the project rides along so the runner never has to ask the record again
-                        // (`AMB-D-405`) — with the two things the queue adds: whose work it is, and the
-                        // face it was resolved on.
-                        tx.queue_event(&queue::QueuedEvent {
-                            plugin: &sub.plugin,
-                            face: face.as_str(),
-                            event: &row.event,
-                            record_id: row.record_id,
-                            actor: &row.actor,
-                            at: &row.at,
-                            new_state: row.new_state.as_deref(),
-                            project: row.project,
-                            record: row.record.as_deref(),
-                            parent: row.parent,
-                        })?;
-                        queued += 1;
-                    }
-                }
-                if !more {
-                    break;
-                }
-            }
+    out: &mut FannedOut,
+) -> Result<()> {
+    // Which project the event happened in is read off the row (`AMB-D-405`) — the emit door stamped it, so
+    // nothing is looked up here. That is what makes a deletion routable at all: the record it names is gone
+    // by now, and a task that has moved since would otherwise route its older events to its new home.
+    // `None` is a real answer, and a resolver that needs a project fires nothing without one (`AMB-D-434`).
+    for sub in subs.resolve(event, row.project, face) {
+        if sub.reply {
+            // A replying hook (CLI-only, `AMB-D-383`) never joins a queue: its stderr is the advice the
+            // caller is waiting on, and a queue is for work that outlives this run. Its stdin is composed
+            // here, where the payload and the resolved config are both in hand, and the caller runs it once
+            // this transaction has committed — holding the write lock across a subprocess is what queueing
+            // exists to avoid. A row whose payload will not rebuild fires nothing rather than an invented
+            // one; the walk has already carried the fact of it to everyone else.
+            let Some(payload) = Payload::from_outbox_row(row) else {
+                tracing::warn!(event, id = row.record_id, "a replying hook's payload would not rebuild; skipped");
+                continue;
+            };
+            let json = with_config(&payload, sub.config)?;
+            out.replies.push(Hook::new(sub.plugin, payload.event, sub.invocation.stdin_json(json)));
+            continue;
         }
+        // The row is copied as it stands — the store classifies none of these strings, and the project
+        // rides along so the runner never has to ask the record again (`AMB-D-405`) — with the two things
+        // the queue adds: whose work it is, and the face it was resolved on.
+        tx.queue_event(&queue::QueuedEvent {
+            plugin: &sub.plugin,
+            face: face.as_str(),
+            event: &row.event,
+            record_id: row.record_id,
+            actor: &row.actor,
+            at: &row.at,
+            new_state: row.new_state.as_deref(),
+            project: row.project,
+            record: row.record.as_deref(),
+            parent: row.parent,
+        })?;
+        out.queued += 1;
     }
-    // Everything through `cursor` is now on the queue of everyone who observes it, so the outbox is free of
-    // it — on this same transaction, so the copy and the reclaim are one atom. This is the whole of what
-    // `AMB-D-399` moves off the plugins' critical path: the outbox is reclaimed at the fan-out's speed, not
-    // at the slowest plugin's.
-    crate::store_engine::outbox::trim_fanned_out(conn, cursor)?;
-    Ok(FannedOut { cursor, queued, replies, gapped: false, seen })
+    Ok(())
 }
 
 /// Run the `reply:true` hooks a fan-out could not queue, and collect what they said (`AMB-D-383`).
@@ -485,14 +401,15 @@ mod tests {
         gapped: bool,
     }
 
-    /// One whole pass over a store: fan out on a transaction, run the replies it handed back, then drain
-    /// every queue the way a runner does — what [`crate::plugin_drive::drive_persisted`] does, minus the
-    /// persisted cursor and minus the threads. Both halves have to line up for anything to run, which is
-    /// what most of these tests are about; the tests that are about one half call [`fan_out`] or
-    /// [`hook_for`] directly. Each row is run where it is read, on this thread, so a test that looks at what
-    /// a plugin actually received has it by the time it looks. The draining is deliberately not a runner
-    /// ([`crate::plugin_runner`]): a runner's own loop, its lease and its leaving are tested where they
-    /// live, and what is under test here is which hook a queued row comes back as.
+    /// One whole pass over a store: walk the outbox onto the queues on a transaction, run the replies it
+    /// handed back, then drain every queue the way a runner does — what
+    /// [`crate::plugin_drive::drive_persisted`] does, minus the persisted cursor and minus the threads. Both
+    /// halves have to line up for anything to run, which is what most of these tests are about; the tests
+    /// that are about one half call [`fan`] or [`hook_for`] directly. Each row is run where it is read, on
+    /// this thread, so a test that looks at what a plugin actually received has it by the time it looks. The
+    /// draining is deliberately not a runner ([`crate::plugin_runner`]): a runner's own loop, its lease and
+    /// its leaving are tested where they live, and what is under test here is which hook a queued row comes
+    /// back as.
     fn deliver(
         e: &StoreEngine,
         cursor: i64,
@@ -500,9 +417,7 @@ mod tests {
         face: Face,
         log: Option<&std::path::Path>,
     ) -> Result<Pass> {
-        let tx = e.write()?;
-        let fanned = fan_out(&tx, cursor, subs, face, log)?;
-        tx.commit()?;
+        let (walked, fanned) = fan_at(e, cursor, subs, face)?;
         let replies = run_replies(fanned.replies, log);
         let mut ran = Vec::new();
         for plugin in queue::queued_plugins(e.conn())? {
@@ -514,16 +429,34 @@ mod tests {
                 }
             }
         }
-        Ok(Pass { cursor: fanned.cursor, ran, replies, gapped: fanned.gapped })
+        Ok(Pass { cursor: walked.cursor, ran, replies, gapped: walked.gapped })
     }
 
-    /// Fan out on its own transaction — for the tests that look at what landed on the queues, rather than at
-    /// what ran.
-    fn fan(e: &StoreEngine, cursor: i64, subs: &dyn Subscribers, face: Face) -> FannedOut {
-        let tx = e.write().unwrap();
-        let fanned = fan_out(&tx, cursor, subs, face, None).unwrap();
-        tx.commit().unwrap();
-        fanned
+    /// Walk the outbox onto the queues on a transaction of its own — for the tests that look at what landed
+    /// on the queues, rather than at what ran.
+    fn fan_at(
+        e: &StoreEngine,
+        cursor: i64,
+        subs: &dyn Subscribers,
+        face: Face,
+    ) -> Result<(crate::outbox_drive::Walked, FannedOut)> {
+        let tx = e.write()?;
+        let mut fanned = FannedOut::default();
+        let walked = crate::outbox_drive::walk(&tx, cursor, None, |tx, row, event| {
+            fan_out_row(tx, row, event, subs, face, &mut fanned)
+        })?;
+        tx.commit()?;
+        Ok((walked, fanned))
+    }
+
+    /// The same, unwrapped — what most of the fan-out tests want.
+    fn fan(
+        e: &StoreEngine,
+        cursor: i64,
+        subs: &dyn Subscribers,
+        face: Face,
+    ) -> (crate::outbox_drive::Walked, FannedOut) {
+        fan_at(e, cursor, subs, face).unwrap()
     }
 
     /// A resolver that fires one fixed invocation for each of the named events, and nothing for the rest.
@@ -638,30 +571,6 @@ mod tests {
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(d.cursor, 2, "the cursor resyncs to the head");
         assert!(d.ran.is_empty(), "the lost span is not replayed");
-    }
-
-    /// A gap fires nothing, so it leaves no run to look at: the one line it does leave in the execution log
-    /// is the only trace a reader can find that events went undelivered (`AMB-D-361`).
-    #[test]
-    fn a_retention_gap_is_recorded_in_the_execution_log() {
-        let e = StoreEngine::open_in_memory().unwrap();
-        emit(&e, "task.created", 1, None);
-        let tx = e.write().unwrap();
-        tx.set_meta(crate::store_engine::outbox::META_OUTBOX_TRUNCATED_THROUGH, Some("1")).unwrap();
-        tx.commit().unwrap();
-
-        let dir = amenbo_scratch::scratch("dispatch-gap-log");
-        let log = dir.join(crate::plugin_log::FILE_NAME);
-        let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
-        let d = deliver(&e, 0, &subs, Face::Cli, Some(&log)).unwrap();
-        assert!(d.gapped);
-
-        let lines = crate::plugin_log::read(&log);
-        assert_eq!(lines.len(), 1, "the gap is one line");
-        assert_eq!(lines[0].outcome, crate::plugin_log::Outcome::Gap);
-        assert_eq!(lines[0].plugin, "", "no plugin ran, so none is named");
-
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// `with_config` folds a plugin's text config under `config`, adds no key when the config is empty (so a
@@ -811,8 +720,8 @@ mod tests {
         emit(&e, "task.status_changed", 2, Some("in_progress"));
 
         let subs = Many { plugins: vec!["slack", "email"], invocation: bogus() };
-        let fanned = fan(&e, 0, &subs, Face::Cli);
-        assert_eq!(fanned.cursor, 2, "the cursor walks to the head of the outbox");
+        let (walked, fanned) = fan(&e, 0, &subs, Face::Cli);
+        assert_eq!(walked.cursor, 2, "the cursor walks to the head of the outbox");
         assert_eq!(fanned.queued, 4, "two events × two subscribers");
 
         for plugin in ["slack", "email"] {
@@ -934,7 +843,7 @@ mod tests {
         emit_in(&e, "task.created", 7, 3);
 
         let subs = InProject { project: 3, invocation: bogus() };
-        assert_eq!(fan(&e, 0, &subs, Face::Cli).queued, 1);
+        assert_eq!(fan(&e, 0, &subs, Face::Cli).1.queued, 1);
         let rows = queued_for(e.conn(), "scoped", 10).unwrap();
         assert_eq!(rows[0].project, Some(3), "the queue row carries the project it was fanned out for");
         assert!(hook_for(&subs, &rows[0]).unwrap().is_some(), "and the runner resolves on it");

@@ -11,8 +11,9 @@
 //! and are deliberately kept apart here, because what each one promises is different.
 
 use amenbo_core::config::Paths;
+use amenbo_core::lifecycle::name;
 use amenbo_core::model::ActorKind;
-use amenbo_core::plugin_payload::{name, Payload};
+use amenbo_core::plugin_payload::Payload;
 use amenbo_core::store_engine::outbox::{events_since, outbox_head, OutboxRow, OutboxSlice};
 use amenbo_core::Store;
 

@@ -316,7 +316,7 @@ impl<'a> WriteTx<'a> {
     /// reading it back apart is the payload mapping's.
     fn signal_change(&self, project: i64, version: i64, at: &str) -> Result<()> {
         self.emit_event(&super::outbox::EventRow {
-            event: crate::plugin_payload::name::STORE_CHANGED,
+            event: crate::lifecycle::name::STORE_CHANGED,
             record_id: project,
             actor: "",
             at,

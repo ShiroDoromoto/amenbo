@@ -1,12 +1,13 @@
-//! The **plugin observation outbox** — the transactional event log a plugin's dispatcher drains.
+//! The **observation outbox** — the transactional event log a write leaves behind for whoever is carrying
+//! it out.
 //!
-//! Amenbo fires *semantic* lifecycle events at the edge of a plugin — `task.created`,
-//! `task.status_changed`, `comment.added` and their kin (see [`crate::plugin_payload`]). Those events
-//! are carried on this outbox, a table separate in every way from the [`change_feed`](super::read):
+//! Amenbo fires *semantic* lifecycle events — `task.created`, `task.status_changed`, `comment.added` and
+//! their kin ([`crate::lifecycle`]). Those events are carried on this outbox, a table separate in every way
+//! from the [`change_feed`](super::read):
 //!
 //! - **Why not the feed.** The change feed is SQLite's `update_hook` reported as `(dataset, row_id,
 //!   op)` — no actor, no old value, no new value (`AMB-D-348`). That is enough for the GUI to invalidate
-//!   a stale query, but not to fire a plugin event: an `update` splits into six different events (a
+//!   a stale query, but not to say what happened: an `update` splits into six different events (a
 //!   status change vs. a completion vs. a reassignment vs. a move) that only the *new state* tells apart,
 //!   and every event needs the **actor** the feed structurally cannot hold. The information the split
 //!   turns on exists only at the ops write moment (`AMB-D-367`).
@@ -15,23 +16,28 @@
 //!   it already holds (its operation kind, the actor, the record's new state) and calls
 //!   [`super::write::WriteTx::emit_event`], which appends the row **inside the same transaction**. So the
 //!   event lands with the write that caused it, or not at all — generation is leak-free, even though
-//!   *delivery* (the dispatcher firing hooks) is best-effort and after the fact (`AMB-D-352`).
+//!   *carrying it out* (a notification posted, a hook fired) is best-effort and after the fact
+//!   (`AMB-D-352`).
 //! - **The store interprets none of it.** The columns are opaque strings and ids: this module writes
 //!   and reads them, and never classifies. Which event name a change is, what its new state means, and
 //!   which project the record was in (`AMB-D-405`) are all the caller's — the mapping that fills those in
-//!   sits above this seam. The project is stamped here rather than read back at delivery because it is a
+//!   sits above this seam. The project is stamped here rather than read back later because it is a
 //!   fact about the moment, not a classification: the record may have moved since, or be gone.
 //!
 //! The read half is [`events_since`] — a **pure query** with a cursor, the outbox's counterpart to
 //! [`super::read::changes_since`]. It is the one thing shared with the feed's shape and for the same
 //! reason: a reader that has been away drains in pages, and a cursor that has fallen behind retention is
-//! told [`OutboxSlice::Gap`] rather than handed a silent empty page. Each consumer keeps its **own**
-//! cursor and reads independently; the query holds no state of its own.
+//! told [`OutboxSlice::Gap`] rather than handed a silent empty page. The query holds no state of its own —
+//! the cursor is the caller's.
 //!
-//! **This table is the record of what happened, and nothing else** (`AMB-D-399`). What each plugin still
-//! *owes* is its own [queue](super::queue)'s business, and the only reader here is the fan-out that copies
-//! rows onto those queues: it drains this log, writes the copies, and trims what it copied, all on one
-//! transaction. So reclaiming this table is bounded by the fan-out alone, never by how fast a plugin runs.
+//! **This table is the record of what happened, and nothing else** (`AMB-D-399`). Its one reader is
+//! [`crate::outbox_drive`], which walks it once for everything that observes a write, hands each row on,
+//! and trims what it read — all on one transaction. What any *one* of those observers still owes is its
+//! own business: a plugin's is its [queue](super::queue)'s, so reclaiming this table is bounded by the walk
+//! alone, never by how fast any reader runs.
+//!
+//! The table is spelled `plugin_outbox`, from when the only reader was the plugin dispatcher. The name is
+//! stored data, so it stays as written until something else makes a migration worth it.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -214,7 +220,7 @@ pub fn outbox_head(conn: &Connection) -> Result<i64> {
 }
 
 /// Reclaim what has been fanned out — the outbox's retention (`AMB-D-367`, `AMB-D-399`). Everything at or
-/// below `through` (the fan-out's high-water mark, the persisted [`crate::plugin_drive::CURSOR_META`]) is
+/// below `through` (the walk's high-water mark, the persisted [`crate::outbox_drive::CURSOR_META`]) is
 /// removed, and the watermark [`events_since`] reads to answer [`OutboxSlice::Gap`] is advanced to
 /// `through`. Returns how many rows were removed.
 ///

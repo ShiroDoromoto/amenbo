@@ -3,12 +3,12 @@
 //!
 //! The events are already on the outbox: every write point appends one inside its transaction
 //! (`AMB-D-367`), and the tick puts the day's due warnings there too ([`crate::due`]). So nothing new is
-//! collected here — what a pass walks is what the plugin fan-out just walked, handed over rather than read
-//! a second time, which is what keeps one reclaim from outrunning the other reader.
+//! collected here — what a pass words is what the drive's one walk saw ([`crate::outbox_drive`]), handed
+//! over rather than read a second time, which is what keeps one reclaim from outrunning another reader.
 //!
 //! **The network is never on the write's path.** A pass turns events into messages and hands them to a
-//! process of its own ([`Dispatcher`]), exactly as a plugin runner is started ([`crate::plugin_runner`]):
-//! whatever the person was doing returns without waiting on a relay that may be minutes away.
+//! process of its own ([`Dispatcher`]): whatever the person was doing returns without waiting on a relay
+//! that may be minutes away.
 //!
 //! **A burst is one message.** Events are grouped by project and by target, so ten writes in a row reach a
 //! channel as ten lines under one heading rather than as ten messages — and a project that reports through
@@ -20,7 +20,8 @@
 //!
 //! **A message that will not go is dropped** (`AMB-D-352`). Nothing is retried and nothing is queued for a
 //! later attempt: a notification is worth telling now, and a channel catching up on yesterday's burst is
-//! worse than one that missed it. What failed is written to the execution log (`AMB-D-361`).
+//! worse than one that missed it. What failed is written to the delivery log ([`crate::delivery_log`],
+//! `AMB-D-361`).
 //!
 //! **A line names the record and not its title.** The ref is what a reader searches for, and it is a length
 //! that can be reckoned with; a title is whatever somebody typed, and a subject that has to cut one says
@@ -31,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::model::{NotifyKind, ProjectNotify};
 use crate::notify_wording::{self, Said};
-use crate::plugin_payload::name;
+use crate::lifecycle::name;
 use crate::store::Store;
 
 /// How many events one pass carries into messages.
@@ -47,7 +48,7 @@ pub const PASS_LIMIT: usize = 200;
 /// these at all (`AMB-D-405`, `AMB-D-407`): by the time anybody looks, the record may have moved or gone.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Happened {
-    /// One of [`crate::plugin_payload::V1_EVENTS`].
+    /// One of [`crate::lifecycle::V1_EVENTS`].
     pub event: String,
     /// The affected record's id.
     pub record_id: i64,
@@ -253,8 +254,7 @@ fn state(language: &str, happened: &Happened) -> Option<String> {
     }
 }
 
-/// How a face hands a pass's messages to a process of its own — the seam [`crate::plugin_runner`] answers
-/// for a plugin runner.
+/// How a face hands a pass's messages to a process of its own.
 ///
 /// It answers one question and returns: *post these, and do not make me wait*. An `Err` means no process
 /// started, which under `AMB-D-352` is a dropped message and a line in the log — not a failed write.
@@ -300,7 +300,7 @@ impl Dispatcher for SelfDispatcher {
         if let Some(mut stdin) = child.stdin.take() {
             stdin.write_all(&written)?;
         }
-        crate::plugin_runner::reap(child);
+        crate::sys::reap(child);
         Ok(())
     }
 }
@@ -356,8 +356,7 @@ fn post(store: &Store, message: &Message) -> Result<()> {
 /// **The sender process's whole life** — open the store it was handed, read the messages off stdin, post
 /// them, exit.
 ///
-/// The store is named rather than resolved, for the reason a plugin runner's is
-/// ([`crate::plugin_runner::run_process`]): it must post through the connections of the store its parent
+/// The store is named rather than resolved: it must post through the connections of the store its parent
 /// drove, not whichever one its own working directory would resolve to.
 ///
 /// Nothing here is reported to a caller — there is none. A store that will not open, a stdin that is not
@@ -447,7 +446,7 @@ mod tests {
         let target = store.notify_target_add(NotifyKind::Slack, "team").unwrap();
         store.project_notify_set_enabled(project.id, true).unwrap();
         store.project_notify_select_target(project.id, target.id).unwrap();
-        for event in crate::plugin_payload::V1_EVENTS {
+        for event in crate::lifecycle::V1_EVENTS {
             if event != name::STORE_CHANGED {
                 store.project_notify_set_event(project.id, event, true).unwrap();
             }
@@ -559,13 +558,13 @@ mod tests {
         };
         store.send_notifications(&[message]);
 
-        let lines = crate::plugin_log::read(&store.paths.plugin_log_file());
+        let lines = crate::delivery_log::read(&store.paths.delivery_log_file());
         let refused: Vec<_> = lines
             .iter()
-            .filter(|l| l.outcome == crate::plugin_log::Outcome::Refused)
+            .filter(|l| l.outcome == crate::delivery_log::Outcome::Refused)
             .collect();
         assert_eq!(refused.len(), 1, "{lines:?}");
-        assert!(refused[0].stderr.contains(&target.to_string()), "{:?}", refused[0].stderr);
+        assert!(refused[0].why.contains(&target.to_string()), "{:?}", refused[0].why);
     }
 
     /// **The whole chain, from a write to a line in the log.** The pieces are tested apart above; this is
@@ -577,7 +576,7 @@ mod tests {
     fn a_write_reaches_the_shelf_through_the_drive() {
         use crate::model::ActorKind;
         use crate::ops::task::NewTask;
-        use crate::plugin_drive::Face;
+        use crate::outbox_drive::Face;
 
         let (mut store, project, target) = store_that_reports();
         let task = store
@@ -598,17 +597,17 @@ mod tests {
 
         let installed = crate::plugin_installed::installed(&store.paths).unwrap();
         let subs = crate::plugin_subscribe::EnabledSubscribers::new(&installed, &store);
-        let flushed = store.flush_plugin_delivery(Face::Cli, &subs).unwrap();
+        let flushed = store.flush_delivery(Face::Cli, &subs).unwrap();
         assert!(!flushed.delivered.seen.is_empty(), "the drive walked nothing");
 
         // The target holds no webhook, so the post is refused — and a refusal is the trace that says the
         // message was built, addressed and handed over.
-        let refused: Vec<_> = crate::plugin_log::read(&store.paths.plugin_log_file())
+        let refused: Vec<_> = crate::delivery_log::read(&store.paths.delivery_log_file())
             .into_iter()
-            .filter(|l| l.outcome == crate::plugin_log::Outcome::Refused)
+            .filter(|l| l.outcome == crate::delivery_log::Outcome::Refused)
             .collect();
         assert_eq!(refused.len(), 1, "{refused:?}");
-        assert!(refused[0].stderr.contains(&target.to_string()), "{:?}", refused[0].stderr);
+        assert!(refused[0].why.contains(&target.to_string()), "{:?}", refused[0].why);
     }
 
     /// A status is said the way Amenbo says it; a project's slug is the store's own value and passes

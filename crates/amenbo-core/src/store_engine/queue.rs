@@ -17,7 +17,7 @@
 //!
 //! This module is the table's read/write half and nothing more: it stores the wire fields as the opaque
 //! strings the outbox stores, and classifies none of them. Who is subscribed
-//! ([`plugin_dispatch::fan_out`](crate::plugin_dispatch::fan_out)) and who runs a queue are above this
+//! ([`plugin_dispatch::fan_out_row`](crate::plugin_dispatch::fan_out_row)) and who runs a queue are above this
 //! seam.
 
 use std::collections::HashMap;

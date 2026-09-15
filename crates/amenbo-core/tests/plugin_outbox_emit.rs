@@ -74,7 +74,7 @@ fn since(store: &Store, after: i64) -> Vec<OutboxRow> {
     match events_since(store.read_model().conn(), after, 10_000).unwrap() {
         OutboxSlice::Events { rows, .. } => rows
             .into_iter()
-            .filter(|r| r.event != amenbo_core::plugin_payload::name::STORE_CHANGED)
+            .filter(|r| r.event != amenbo_core::lifecycle::name::STORE_CHANGED)
             .collect(),
         OutboxSlice::Gap => panic!("nothing was trimmed, so there is no gap"),
     }

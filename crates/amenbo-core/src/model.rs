@@ -616,7 +616,7 @@ pub struct ProjectNotifyTarget {
 }
 
 /// **An event this project reports** (`AMB-D-885`) — one row per `(project, event)`, naming one of the
-/// thirteen in [`crate::plugin_payload::V1_EVENTS`] that say what happened. Six of them are what a
+/// thirteen in [`crate::lifecycle::V1_EVENTS`] that say what happened. Six of them are what a
 /// project starts with (`AMB-D-714`).
 ///
 /// `store.changed` is not among the thirteen and is refused here: it says only that *something* moved,
@@ -628,7 +628,7 @@ pub struct ProjectNotifyTarget {
 pub struct ProjectNotifyEvent {
     pub id: i64,
     pub project_id: i64,
-    /// The event's name, as [`crate::plugin_payload::name`] spells it (`task.done`). Text rather than a
+    /// The event's name, as [`crate::lifecycle::name`] spells it (`task.done`). Text rather than a
     /// fourth copy of the catalog: the names are one versioned set that belongs to `plugin_payload`, the
     /// column's `CHECK` states which of them this column admits, and `ops::notify` holds the two to each
     /// other.

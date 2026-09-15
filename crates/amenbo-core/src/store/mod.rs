@@ -227,26 +227,30 @@ impl Store {
         crate::overview::mark_mailbox_seen(&self.engine, at)
     }
 
-    // ── Plugin observation dispatch (mounting the dispatcher at the write seam) ─────
+    // ── Carrying a write out (mounting the outbox drive at the write seam) ─────────
     //
-    // The ops write points appended semantic events to the outbox inside their transactions (`AMB-D-367`);
-    // these are the caller `AMB-D-367` hands the cursor to — the single dispatcher's mount. The cursor is
-    // owned here, not by the dispatcher's own halves, and both faces share the one persisted cursor
-    // (`AMB-D-380`; see `crate::plugin_drive`).
+    // The ops write points appended semantic events to the outbox inside their transactions
+    // (`AMB-D-367`); these are the mount that walks them. The cursor is owned by the walk, not by any one
+    // of its readers, and both faces share the one persisted cursor (`AMB-D-380`; see
+    // `crate::outbox_drive`). What the walk saw goes to the notifications here and to the plugins'
+    // queues inside the drive — one walk, however many observers.
 
-    /// Drive the plugin observation dispatcher once from the **persisted** cursor — the mount both faces
-    /// use (`AMB-D-380`). Reads the stored cursor, fans everything committed since onto the queues of the
-    /// plugins that observe it, persists where it got to so the next drive — in either face — continues
-    /// past it, and then launches the runners (`AMB-D-399`). `face` selects which subscriptions resolve and
-    /// is recorded beside the cursor for diagnosis. `runner_argv` is how **this face** re-runs itself as a
-    /// runner process (`AMB-T-2175`) — the face owns the spelling of its own entry point, and this hands it
-    /// the store to work. The returned [`Delivered`](crate::plugin_dispatch::Delivered) names the runners it
+    /// Carry a write out once from the **persisted** cursor — the mount both faces use (`AMB-D-380`).
+    ///
+    /// Walks everything committed since the stored cursor, hands each event to the plugins that observe it
+    /// and to whatever the projects report, persists where it got to so the next drive — in either face —
+    /// continues past it, and then launches the runners (`AMB-D-399`). `face` selects which subscriptions
+    /// resolve and is recorded beside the cursor for diagnosis. `runner_argv` is how **this face** re-runs
+    /// itself as a runner process (`AMB-T-2175`) and `notify_argv` how it re-runs itself as a notification
+    /// sender (`AMB-D-885`) — the face owns the spelling of its own entry points, and this hands each the
+    /// store to work. The returned [`Delivered`](crate::plugin_dispatch::Delivered) names the runners it
     /// launched, carries the replies to surface, and says whether a retention gap was hit; there is nothing
-    /// in it to wait for. The cursor is already stored on return. Every run, and a gap, land in this
-    /// machine's execution log (`AMB-D-361`) — the store knows where that file is, so no face has to name it.
-    pub fn drive_plugins_persisted(
+    /// in it to wait for. The cursor is already stored on return. Every run lands in this machine's
+    /// execution log and every gap in its delivery log (`AMB-D-361`) — the store knows where both files
+    /// are, so no face has to name them.
+    pub fn drive_delivery(
         &self,
-        face: crate::plugin_drive::Face,
+        face: crate::outbox_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
         runner_argv: &[&str],
         notify_argv: &[&str],
@@ -261,21 +265,22 @@ impl Store {
             subs,
             Some(&launcher),
             Some(&self.paths.plugin_log_file()),
+            Some(&self.paths.delivery_log_file()),
         )?;
         self.hand_notifications_over(&delivered.seen, notify_argv);
         Ok(delivered)
     }
 
-    /// Drive the dispatcher **only if a previous run left delivery unfinished** — the startup kick both
-    /// faces make (`AMB-D-399`, [`plugin_drive::resume_persisted`](crate::plugin_drive::resume_persisted)).
+    /// Drive **only if a previous run left the carrying unfinished** — the startup kick both faces make
+    /// (`AMB-D-399`, [`plugin_drive::resume_persisted`](crate::plugin_drive::resume_persisted)).
     ///
-    /// Same drive, same cursor, same runner entry point as the write seam above; what differs is when it is
-    /// worth making. A face reaches this on every start, reads included, so it asks first — two reads — and
+    /// Same walk, same cursor, same entry points as the write seam above; what differs is when it is worth
+    /// making. A face reaches this on every start, reads included, so it asks first — two reads — and
     /// returns `None` when there was nothing standing, taking no write lock at all. `Some` carries what the
     /// drive moved, exactly as the write seam's does.
-    pub fn resume_plugin_delivery(
+    pub fn resume_delivery(
         &self,
-        face: crate::plugin_drive::Face,
+        face: crate::outbox_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
         runner_argv: &[&str],
         notify_argv: &[&str],
@@ -288,6 +293,7 @@ impl Store {
             subs,
             Some(&launcher),
             Some(&self.paths.plugin_log_file()),
+            Some(&self.paths.delivery_log_file()),
         )?;
         if let Some(delivered) = &delivered {
             self.hand_notifications_over(&delivered.seen, notify_argv);
@@ -295,17 +301,17 @@ impl Store {
         Ok(delivered)
     }
 
-    /// Drive delivery and work every queue **to its end, in this process** — the flush a caller asks for on
-    /// purpose (`AMB-T-2470`, [`plugin_drive::flush_persisted`](crate::plugin_drive::flush_persisted)).
+    /// Drive and work every queue **to its end, in this process** — the flush a caller asks for on purpose
+    /// (`AMB-T-2470`, [`plugin_drive::flush_persisted`](crate::plugin_drive::flush_persisted)).
     ///
-    /// Same cursor and same fan-out as the two mounts above; what differs is that no runner process is
-    /// started — the queues are worked here, so this returns only once they are empty (or a runner stopped
-    /// short) and can say how much left each one. There is no `runner_argv` for that reason: nothing re-runs
-    /// this executable, so no face has to name its own entry point. A queue a live runner already holds is
-    /// left to it and reported by nobody here.
-    pub fn flush_plugin_delivery(
+    /// Same cursor and same walk as the two mounts above; what differs is that no process is started — the
+    /// queues are worked here and the notifications posted here, so this returns only once they are done
+    /// (or a runner stopped short) and can say how much left each queue. There is no `runner_argv` or
+    /// `notify_argv` for that reason: nothing re-runs this executable, so no face has to name its own entry
+    /// points. A queue a live runner already holds is left to it and reported by nobody here.
+    pub fn flush_delivery(
         &self,
-        face: crate::plugin_drive::Face,
+        face: crate::outbox_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
     ) -> Result<crate::plugin_drive::Flushed> {
         let flushed = crate::plugin_drive::flush_persisted(
@@ -313,6 +319,7 @@ impl Store {
             face,
             subs,
             Some(&self.paths.plugin_log_file()),
+            Some(&self.paths.delivery_log_file()),
         )?;
         // The flush is the one mount that does the work rather than starting it, so the notifications go
         // out here too — a caller asking for a flush is asking for it to have happened, and a process
@@ -472,9 +479,9 @@ impl Store {
     /// stdio and nobody waiting on it, so a line there is the only trace a person chasing "why did nothing
     /// arrive" can find.
     pub fn send_notifications(&self, messages: &[crate::notify_dispatch::Message]) {
-        let log = self.paths.plugin_log_file();
+        let log = self.paths.delivery_log_file();
         for (target, why) in crate::notify_dispatch::deliver(self, messages) {
-            crate::plugin_log::record_refused(&log, &format!("notification target {target}: {why}"));
+            crate::delivery_log::record_refused(&log, &format!("notification target {target}: {why}"));
             tracing::warn!(target, why, "a notification was refused and is dropped");
         }
     }

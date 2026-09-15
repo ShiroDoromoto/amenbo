@@ -23,7 +23,7 @@
 //! read out of the same dictionary, so the two halves of one message cannot end up in two languages.
 
 use crate::notify_wording_table::{Wording, WORDINGS};
-use crate::plugin_payload::name;
+use crate::lifecycle::name;
 
 /// The language every other one is read against: the one that is always complete. A code this build
 /// has never heard of falls back to it whole, and a key nobody has translated falls back to it on its
@@ -34,7 +34,7 @@ const FALLBACK: &str = "en";
 /// What a line is filled in from: the event, and the three things a sentence may name.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Said<'a> {
-    /// One of [`crate::plugin_payload::V1_EVENTS`].
+    /// One of [`crate::lifecycle::V1_EVENTS`].
     pub event: &'a str,
     /// Whoever drove the write, by the name they go by. Empty on the two events nobody drove.
     pub who: &'a str,
@@ -202,7 +202,7 @@ fn lookup(pairs: &'static [(&'static str, &'static str)], key: &str) -> Option<&
 mod tests {
     use super::*;
     use crate::config::LANGUAGES;
-    use crate::plugin_payload::V1_EVENTS;
+    use crate::lifecycle::V1_EVENTS;
 
     /// Every language Amenbo is read in has a row, and every row says every one of the thirteen.
     /// A language added to the dictionary and not regenerated here would write its lines in English

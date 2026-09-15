@@ -1,7 +1,7 @@
 //! Driving the plugin dispatcher around a write. The CLI is a short-lived process, so the
 //! observations a command appends to the outbox are delivered at the write seam it makes here.
 
-use amenbo_core::plugin_drive::Face;
+use amenbo_core::outbox_drive::Face;
 use amenbo_core::plugin_installed;
 use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::{activity_log, Store};
@@ -46,7 +46,7 @@ pub(crate) fn with_dispatch(
     // phone is now behind (`AMB-D-884`). It is a process, so this waits for none of it.
     store.set_the_viewer_off(CARRIER_ARGV);
     dispatch(store, |store, subs| {
-        store.drive_plugins_persisted(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV).map(Some)
+        store.drive_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV).map(Some)
     });
     Ok(code)
 }
@@ -57,9 +57,9 @@ pub(crate) fn with_dispatch(
 /// would otherwise carry those rows out may be days away.
 ///
 /// It costs a command with nothing pending two reads and no write lock — the guard is core's
-/// ([`Store::resume_plugin_delivery`]), so both faces make the same judgement.
+/// ([`Store::resume_delivery`]), so both faces make the same judgement.
 pub(crate) fn resume_dispatch(store: &Store) {
-    dispatch(store, |store, subs| store.resume_plugin_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV));
+    dispatch(store, |store, subs| store.resume_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV));
 }
 
 /// Carry what a carrier read out and never placed (`AMB-D-884`) — the Viewer's half of the same startup.

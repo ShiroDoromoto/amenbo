@@ -48,7 +48,7 @@ pub const REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 /// execution log) say *slack failed on task.created* rather than *a program at this path failed*.
 ///
 /// The event is `&'static str` because it always is one — the dispatcher only ever fires the contract's
-/// own names ([`V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) — which also makes a hook trivially
+/// own names ([`V1_EVENTS`](crate::lifecycle::V1_EVENTS)) — which also makes a hook trivially
 /// movable onto its own thread.
 #[derive(Debug, Clone)]
 pub struct Hook {

@@ -254,43 +254,13 @@ impl Scope {
     }
 }
 
-/// **Which face fires a hook** (`AMB-D-383`) — the short-lived CLI a person or their AI drives, or the
-/// long-lived GUI.
+/// **Which face fires a hook** (`AMB-D-383`) — re-exported, not declared here.
 ///
-/// A subscription declares the faces it fires on ([`EventSubscription::faces`]); the dispatcher also stamps
-/// the face that drove it beside the shared cursor ([`plugin_drive`](crate::plugin_drive), `AMB-D-380`).
-/// The two are one vocabulary, so the type lives here with the rest of the manifest shape and
-/// `plugin_drive` re-exports it rather than declaring a second enum of the same values.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Face {
-    /// The command face — the CLI a person or their AI runs, and the one face a `reply` hook may fire on,
-    /// since it is the only one with a caller waiting to read the reply (`AMB-D-383`).
-    Cli,
-    /// The long-lived GUI.
-    Gui,
-}
-
-impl Face {
-    /// The wire token, matching how the face is spelled in a manifest and beside the dispatch cursor.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Face::Cli => "cli",
-            Face::Gui => "gui",
-        }
-    }
-
-    /// The inverse of [`as_str`](Face::as_str) — for reading a face back out of a plain string that never
-    /// went through serde, which is how it is stored beside the dispatch cursor (`AMB-D-380`). A token
-    /// outside the vocabulary is `None`: a stamp this build cannot read is no answer, not a wrong one.
-    pub fn parse(s: &str) -> Option<Face> {
-        match s {
-            "cli" => Some(Face::Cli),
-            "gui" => Some(Face::Gui),
-            _ => None,
-        }
-    }
-}
+/// A subscription declares the faces it fires on ([`EventSubscription::faces`]), and the drive stamps the
+/// face that made it beside the shared cursor ([`outbox_drive`](crate::outbox_drive), `AMB-D-380`). The two
+/// are one vocabulary, so the type lives with the drive and the manifest shape borrows it rather than
+/// declaring a second enum of the same values.
+pub use crate::outbox_drive::Face;
 
 /// The faces a subscription fires on when it declares none: **both** (`AMB-D-383`). A bare event-name
 /// string and an object that omits `faces` mean the same thing — a notification-style hook that fires
@@ -316,7 +286,7 @@ fn default_faces() -> Vec<Face> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventSubscription {
     /// The event name this fires for — one of
-    /// [`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS). That it names a real event is the
+    /// [`lifecycle::V1_EVENTS`](crate::lifecycle::V1_EVENTS). That it names a real event is the
     /// validator's to enforce; an unrecognised name is inert here, since only catalog events are ever fired.
     pub event: String,
     /// The faces this hook fires on. Default — an omitted key, or the bare-string form — is both.
@@ -556,7 +526,7 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
     /// The observation events this plugin subscribes to — each an [`EventSubscription`] naming a v1 event
-    /// ([`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) and how its hook fires. The
+    /// ([`lifecycle::V1_EVENTS`](crate::lifecycle::V1_EVENTS)) and how its hook fires. The
     /// subscription resolver (`AMB-D-367`, `AMB-T-2032`) fires an enabled plugin only for an event whose
     /// name appears here, so a plugin with no `events` observes nothing — a command-only plugin declares an
     /// empty list. A subscription may be a bare event-name string (the notification default: both faces, no

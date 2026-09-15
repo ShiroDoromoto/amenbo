@@ -60,13 +60,13 @@ fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
     id
 }
 
-/// A page read the way a carrier reads it — through the window it was launched to observe, which is the
-/// only reach that asks about one project rather than the whole device. `with_reach` consumes, so this
+/// A page read the way a carrier reads it — through a reach closed to one project, which is the only
+/// reach that asks about one project rather than about the whole device. `with_reach` consumes, so this
 /// reads through a clone of the open rather than narrowing the caller's.
 fn read(store: &Store, project: i64, after: i64, limit: i64) -> SyncChanges {
     Store::open_at(store.paths.clone())
         .unwrap()
-        .with_reach(Reach::window(project))
+        .with_reach(Reach::binding(project))
         .sync_changes(after, limit)
         .unwrap()
 }

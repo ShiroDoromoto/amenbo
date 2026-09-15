@@ -29,15 +29,8 @@ fn default_export_dir() -> String {
 /// as "you cannot export". Instead the destination is chosen for it and the export goes to a file, which
 /// returns only a path and a count. What the AI can then do with that file is raw file access, which Amenbo
 /// does not stop.
-///
-/// **A plugin's window is refused the command outright** (`Reach::refuse_whole_device`, `AMB-D-406`). The
-/// reasoning above turns on whose data is being taken out: an AI acts for the user whose device this is,
-/// so narrowing its door is enough. A plugin moves to no other tool, and the window it reads through was
-/// fixed by the runner that launched it — so the whole device is not a wider reading of what it was
-/// launched to observe, it is the way around it.
 pub(crate) fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliError> {
     use amenbo_core::export;
-    store.reach().refuse_whole_device("export").map_err(CliError::from)?;
     let out = match out {
         Some(path) => Some(path),
         None if store.reach().project().is_some() => Some(default_export_dir()),
@@ -95,21 +88,13 @@ pub(crate) fn export(store: &Store, flags: &Flags, out: Option<String>) -> Resul
     Ok(0)
 }
 
-
-
-
-
 /// Backup: stream a verified snapshot of this device's store into one `.amenbo-backup` archive at `path`.
 /// A destination is required (the archive is a deliberate, self-placed disaster-recovery file), so an
 /// omitted `path` is refused with a hint.
 ///
-/// **A plugin's window is refused it** (`Reach::refuse_whole_device`, `AMB-D-406`): the archive holds every
-/// project on the device, so writing one is the whole store leaving through a door that was opened to
-/// observe a single project. `AMB-D-224` allowed it to the AI facet as the disaster recovery an agent is
-/// there to run, which is not work a plugin was launched for.
-pub(crate) fn run_backup(store: &Store, flags: &Flags, path: Option<String>) -> Result<i32, CliError> {
+/// `AMB-D-224` allowed it to the AI facet as the disaster recovery an agent is there to run.
+pub(crate) fn run_backup(flags: &Flags, path: Option<String>) -> Result<i32, CliError> {
     use amenbo_core::archive;
-    store.reach().refuse_whole_device("backup").map_err(CliError::from)?;
     let Some(path) = path else {
         return Err(CliError {
             code: "missing_required_flag",

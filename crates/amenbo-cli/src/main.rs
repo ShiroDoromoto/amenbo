@@ -1222,7 +1222,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Decision { sub } => return with_dispatch(&mut store, |s| decision(s, flags, sub)),
         Command::Attach { sub } => return attach(&mut store, flags, sub),
         Command::Export { out } => return export(&store, flags, out),
-        Command::Backup { path } => return run_backup(&store, flags, path),
+        Command::Backup { path } => return run_backup(flags, path),
         Command::HardErase { sub } => return hard_erase(&mut store, flags, sub),
         Command::Restore { .. } => {
             unreachable!("handled before open")

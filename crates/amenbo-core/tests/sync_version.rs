@@ -52,13 +52,13 @@ fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
     id
 }
 
-/// One project's version, asked the way a plugin's window asks it — through a closed reach, which is the
-/// only way to ask for a project rather than for the whole device.
+/// One project's version, asked through a closed reach — the only way to ask for a project rather than
+/// for the whole device.
 fn version_of(store: &Store, project: i64) -> i64 {
     // `with_reach` consumes, so this reads through a clone of the open rather than narrowing the caller's.
     Store::open_at(store.paths.clone())
         .unwrap()
-        .with_reach(Reach::window(project))
+        .with_reach(Reach::binding(project))
         .sync_version()
         .unwrap()
 }

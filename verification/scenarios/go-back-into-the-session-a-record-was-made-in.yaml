@@ -28,24 +28,32 @@
 # road with the noun changed. The decision is what is walked because it is the case the row was made
 # for: a record standing in the ledger that nobody remembers writing.
 #
-# ── What this road stops short of ───────────────────────────────────────────────────────────────
-# There is no `steps_cli`. The CLI driver runs the shipped binary in a folder of its own, with none of
-# the variables that say which pane this is, so a create it made would leave no row to read — and a
-# press is not something a terminal has. Giving the driver those variables is work of its own, and is
-# waiting on this file.
+# ── What the terminal's road can reach, and what it cannot ──────────────────────────────────────
+# A terminal has no row to press, so its half of the goal is the telling: a reader types
+# `decision show` and is told which session wrote it. Two things are out of reach there. The pane's
+# **name** is kept on the pane's own row, which the window writes and a terminal never does, so the
+# line prints the id alone — and an id is minted by the run, so what the road asks is that the record
+# names the pane the create was typed in rather than naming any particular one. The driver stands the
+# panes up itself, setting what a window sets on the terminals it opens.
 #
+# It walks two panes for the same reason the screen's road does: a build that wrote one pane's id onto
+# everything would read green against a road that only ever opened one.
+#
+# ── What this road stops short of ───────────────────────────────────────────────────────────────
 # The press has three landings and this road walks the first. A pane still on the screen is gone to;
 # one that is not is opened again under the same id; and a conversation the provider no longer has
 # ends moments after it is reopened. The two that start from a pane that is gone need a road that
 # takes a pane away before it presses, and that road is waiting on this one.
 id: go-back-into-the-session-a-record-was-made-in
-title: A decision names the session that made it, and the name is pressed to get back into that pane
+title: A decision says which session made it, and on the screen that is a press back into the pane
 description: >
-  Open two panes, put a line into each, and record a decision at the shell in the first one. Rename
-  that pane, then go to the ledger and open the decision: the row saying which session made it
-  carries the pane's name as it reads today. Press it — the terminal face comes up with that pane
-  being worked in, and not the one beside it. Record a second decision on the board instead, and its
-  page names no session at all.
+  On the screen: open two panes, put a line into each, and record a decision at the shell in the
+  first one. Rename that pane, then go to the ledger and open the decision — the row saying which
+  session made it carries the pane's name as it reads today. Press it, and the terminal face comes up
+  with that pane being worked in, not the one beside it. At a terminal: record a decision in each of
+  two panes and ask for each back, and each names the pane it was typed in, with the way back into
+  that conversation beside it. Either way, a decision recorded outside a pane names no session at
+  all.
 
 given:
   # The folder is named on the create rather than bound afterwards, so the project keeps exactly one:
@@ -58,6 +66,57 @@ given:
       name: Workshop
       dir: workshop
     as: workshop
+
+steps_cli:
+  # Two panes, each with a decision of its own. What a pane is here is a handle: the driver stands one
+  # up under those words and sets what a window would have set on a terminal it opened.
+  - type: action
+    domain: decision
+    op: create-in-pane
+    with:
+      title: SCENARIO Reglaze the north wall before the first frost
+      shows: the potting shed
+    as: reglaze
+
+  - type: action
+    domain: decision
+    op: create-in-pane
+    with:
+      title: SCENARIO Rehang the shutters on the south side
+      shows: the far bench
+    as: shutters
+
+  # Each names its own. A build that wrote whichever pane it last saw would answer one of these two
+  # and not both.
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: reglaze
+      pane: the potting shed
+
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: shutters
+      pane: the far bench
+
+  # And one typed at a terminal that is nobody's pane, which is where every `amenbo` outside the
+  # window is run: nothing is written down, so there is nothing to tell.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO Order the glazing putty before the shop closes
+    as: putty
+
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: putty
+      present: false
 
 steps_gui:
   - type: action

@@ -33,6 +33,29 @@ impl Driver<'_> {
                 }
                 Ok(Outcome::action(format!("created decision {id} `{title}`")))
             }
+            // The same create, typed inside a pane. What parts it from the one above is the
+            // environment and nothing else: a window puts the pane's id and the way back into its
+            // conversation on every terminal it opens, and a create reads them there — so a road that
+            // means to read the row afterwards has to say the line was run in one.
+            //
+            // `shows` is a handle rather than anything on a screen. There is no screen here, so the
+            // driver stands a pane up under those words and mints what the window would have set.
+            "create-in-pane" => {
+                let title = req_str(with, "title")?;
+                let pane = self.pane(req_str(with, "shows")?);
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?.to_string(),
+                    None => self.standing_project()?.to_string(),
+                };
+                let v = self.typed_in(pane, |d| {
+                    d.run_json(&["decision", "add", "--title", title, "--project", &pid, "--json"])
+                })?;
+                let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("recorded decision {id} `{title}` in a pane")))
+            }
             "edit" => {
                 let target = self.resolve(with)?;
                 let body = req_str(with, "body")?;
@@ -149,6 +172,54 @@ impl Driver<'_> {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
                 judge_field(&format!("decision {target}"), with, &v)
+            }
+            // Which session the record says it was made in. What is asked here is identity and not a
+            // name: what a pane is called is kept on the pane's own row, which the window writes and a
+            // terminal never does, so the line prints the id alone — and the id is the run's, which no
+            // road can spell. `pane` names the handle the create was typed under, and the driver holds
+            // both ends of that.
+            //
+            // The way back is read beside it. It is written down for one purpose — opening the
+            // conversation again — so a row that kept the pane and lost the handle would read as a way
+            // back that is not one.
+            "made-in" => {
+                let target = self.resolve(with)?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
+                let made = v.get("made_in").filter(|m| !m.is_null());
+                let Some(made) = made else {
+                    return Ok(Outcome::assert(
+                        !present,
+                        format!(
+                            "decision {target} names no session (expected {}, {})",
+                            if present { "one" } else { "none" },
+                            if present { "MISMATCH" } else { "as expected" }
+                        ),
+                    ));
+                };
+                if !present {
+                    return Ok(Outcome::assert(
+                        false,
+                        format!(
+                            "decision {target} names the session `{}` where it had to name none (MISMATCH)",
+                            made["pane"].as_str().unwrap_or("?")
+                        ),
+                    ));
+                }
+                let pane = self.known_pane(req_str(with, "pane")?)?;
+                let same = made["pane"].as_str() == Some(pane.id.as_str());
+                let way_back = made["pane_resume"].as_str() == Some(pane.resume.as_str());
+                Ok(Outcome::assert(
+                    same && way_back,
+                    format!(
+                        "decision {target} names the session `{}` with the way back `{}` (expected `{}` / `{}`, {})",
+                        made["pane"].as_str().unwrap_or("?"),
+                        made["pane_resume"].as_str().unwrap_or("?"),
+                        pane.id,
+                        pane.resume,
+                        if same && way_back { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
             }
             "listed" => {
                 let target = self.resolve(with)?;

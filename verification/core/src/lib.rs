@@ -674,12 +674,13 @@ const REGISTRY: &[OpSpec] = &[
     // and nothing else does (`amenbo_core::session::PANE_VAR`) — so a create made on the
     // board leaves no such row, and a road that means to read one has to say it was typed in a pane.
     //
-    // `shows` is which pane, named the way every pane step names one: by the words a road typed into it
-    // earlier. The pane is left as it was found, with those words still on it, because the steps after
-    // this one say which pane they mean the same way.
-    //
-    // A screen road alone, for now. The CLI driver runs the shipped binary in a folder and has no pane
-    // to run it in, so a `steps_cli` written here would walk a create with none of what it is about.
+    // `shows` is which pane, and the two roads read it differently because a pane is a different thing
+    // to each. On the screen it is the words a road typed into that pane earlier, the way every pane
+    // step names one — and the pane is left as it was found, with those words still on it, because the
+    // steps after this one point at it the same way. At a terminal there is no pane on any screen, so
+    // the words are a handle: the driver stands one up under them, mints the id and the way back the
+    // window would have set, and puts them in the environment the create reads. Naming the same handle
+    // twice is the same pane both times, which is what lets a road walk two of them.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create-in-pane", required: &["title", "shows"], refs: &[], strings: &["title", "shows"], binds: true },
     // Onto the face a project's decisions are read on, which sits beside the views its tasks are read
     // on rather than under them: a decision is not a task drawn another way. A road that wants to read
@@ -1220,13 +1221,24 @@ const REGISTRY: &[OpSpec] = &[
     // What that row carries, which is a name and never an id: a reader who cannot get back to the pane
     // still has something to read, and that is the whole of why the name is kept beside the way back.
     //
-    // `shows` is the name expected on it. **It is the name the pane goes by now**, where the pane is
-    // still open — a pane renamed since the record was written is found among the panes under the new
-    // name, and the old one would send a reader looking for a row that is not on the screen
-    // (`app/src/components/MadeIn.tsx`). `present: false` is the other half, and the road that walks it
-    // is one where the record was made somewhere other than a pane: the board writes no such row, so
-    // the name is nowhere on that record's face.
-    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "made-in", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
+    // **Each road brings its own key, and neither is required of both**, because what can be asked is
+    // not the same on the two faces.
+    //
+    // `shows` is the screen's: the name expected on the row. **It is the name the pane goes by now** —
+    // a pane renamed since the record was written is found among the panes under the new name, and the
+    // old one would send a reader looking for a row that is not on the screen
+    // (`app/src/components/MadeIn.tsx`).
+    //
+    // `pane` is the terminal's, and it is the handle `create-in-pane` stood the pane up under. No name
+    // reaches a road there: what a pane is called is kept on the pane's own row, which the window
+    // writes and a terminal never does, so `decision show` prints the id alone — and an id is minted by
+    // the run, which no road can spell. So what is asked instead is identity: the record names the pane
+    // the create was typed in, which the driver knows both halves of.
+    //
+    // `present: false` is the other half on either face, and the road that walks it is one where the
+    // record was made outside a pane: nothing is written down, so the row is not drawn and the line is
+    // not printed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "made-in", required: &["target"], refs: &["target"], strings: &["shows", "pane"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // The row the panel left standing, and the fold it folded into — the decision-side twins of the
     // board's `narrowed` / `filters-folded`, and separate for the same reason the moves are. `listed`

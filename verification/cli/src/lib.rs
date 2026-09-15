@@ -224,6 +224,29 @@ pub(crate) struct Driver<'a> {
     /// the project the boot raised, and deleting a project releases every folder pointing at it —
     /// the run's own included. Those two ops are exactly the ones a road walks on that world.
     own_pointer: String,
+    /// The panes a road stood up, under the handles it calls them by. A terminal has no pane on any
+    /// screen, so what a road names is a handle and what answers to it is minted here: the id the
+    /// window would have given the frame, and the way back into the conversation it would have been
+    /// carrying. Kept so that naming the handle twice is the same pane both times — a road that walked
+    /// two panes could otherwise not say which of them a record came out of.
+    panes: HashMap<String, Pane>,
+    /// The pane the invocation being issued is typed inside, put up around that one call the way
+    /// [`Driver::refusal`] is. It is read where the command is built, so an arm that runs something in
+    /// a pane says so once rather than assembling an environment of its own.
+    in_pane: Option<Pane>,
+}
+
+/// A pane the run stood up for a road: what the window would have set on a terminal it opened.
+///
+/// Both halves are minted rather than written down by the road. The id is the window's own and a road
+/// cannot spell one the run will make; the way back is the provider's word for a conversation, which
+/// means nothing to anybody but that provider. What a road holds is the handle the two are kept under.
+#[derive(Clone, Debug)]
+pub(crate) struct Pane {
+    /// What the window calls the frame — the value `AMENBO_PANE` carries.
+    id: String,
+    /// The handle the provider is resumed from — the value `AMENBO_PANE_RESUME` carries.
+    resume: String,
 }
 
 /// What an expected refusal travels back on. A refusal has to reach [`Driver::refused`] from
@@ -261,6 +284,8 @@ impl<'a> Driver<'a> {
             refusal: None,
             fixtures: fixtures.unwrap_or_else(amenbo_scenario::fixtures_dir),
             own_pointer: String::new(),
+            panes: HashMap::new(),
+            in_pane: None,
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]
@@ -286,6 +311,62 @@ impl<'a> Driver<'a> {
         }
     }
 
+    /// The pane a road calls `handle`, standing one up the first time it is named.
+    ///
+    /// The id is shaped like the one a window writes — a v4 UUID, which is what a frame has been named
+    /// by since ids stopped being a count — because what is under test is a build reading the values a
+    /// real window sets, and a value of a shape no window writes would be a weaker reading for no
+    /// gain. It is derived from the
+    /// handle so a road that names one twice gets one pane, and nothing here needs a source of
+    /// randomness.
+    fn pane(&mut self, handle: &str) -> Pane {
+        if let Some(pane) = self.panes.get(handle) {
+            return pane.clone();
+        }
+        let h = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            handle.hash(&mut hasher);
+            hasher.finish()
+        };
+        let pane = Pane {
+            id: format!(
+                "{:08x}-{:04x}-4{:03x}-a{:03x}-{:012x}",
+                h as u32,
+                (h >> 32) as u16,
+                (h >> 48) as u16 & 0x0fff,
+                h as u16 & 0x0fff,
+                h & 0xffff_ffff_ffff
+            ),
+            resume: format!("scenario-conversation-{h:016x}"),
+        };
+        self.panes.insert(handle.to_string(), pane.clone());
+        pane
+    }
+
+    /// The pane a road already stood up under `handle`, for the reads that ask about one. It never
+    /// stands one up: an assert that minted a pane would be an assert inventing the very thing it is
+    /// checking against, and would pass on a road whose create was typed somewhere else entirely.
+    fn known_pane(&self, handle: &str) -> Result<&Pane, String> {
+        self.panes.get(handle).ok_or_else(|| {
+            format!("no pane has been stood up under `{handle}` — a road asks about one it opened")
+        })
+    }
+
+    /// Run one call as though it were typed inside `pane`, and put the environment back afterwards.
+    /// It is written as a wrapper for the reason [`Driver::refused`] is: the state is up for exactly
+    /// one invocation, and an arm that set it by hand could leave it up over the next one.
+    fn typed_in<T>(
+        &mut self,
+        pane: Pane,
+        run: impl FnOnce(&mut Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.in_pane = Some(pane);
+        let out = run(self);
+        self.in_pane = None;
+        out
+    }
+
     /// Spawn the shipped binary in the isolated store, from a chosen folder. Every call goes
     /// through here, so the isolation is stated once and cannot be forgotten by an arm that builds
     /// its own command. Where the command stands is itself an input for anything to do with binding
@@ -304,6 +385,14 @@ impl<'a> Driver<'a> {
             .env("AMENBO_HOME", &self.session.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("NO_COLOR", "1");
+        // What the window puts on every terminal it opens, on the one call a step says is typed inside
+        // a pane. The names are spelled here rather than taken from Amenbo's own constants because this
+        // workspace drives the shipped binary as a black box and depends on none of its crates — which
+        // is also what the reading is worth: a build that stopped answering to these names would have
+        // stopped answering to what a real window sets.
+        if let Some(pane) = &self.in_pane {
+            cmd.env("AMENBO_PANE", &pane.id).env("AMENBO_PANE_RESUME", &pane.resume);
+        }
         cmd.output().map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
     }
 

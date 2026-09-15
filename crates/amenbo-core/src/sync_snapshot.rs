@@ -1,6 +1,6 @@
-//! Sync snapshot — the one instant of a project a carrier plugin takes off this device.
+//! Sync snapshot — the one instant of a project a carrier takes off this device.
 //!
-//! A plugin that carries Amenbo's data outward (a viewer, an audit trail, a mirror in another tool)
+//! A carrier that takes Amenbo's data outward (a viewer, an audit trail, a mirror in another tool)
 //! resends **everything** each time (`AMB-D-583`), so what it needs is not a diff but one whole,
 //! internally consistent picture of what it may see. That is this module, and it is a road of its own
 //! rather than a flag on an existing one (`AMB-D-581`): `export` is the whole device on its way to
@@ -10,12 +10,12 @@
 //! Three things make the picture safe to hand out, and each is enforced here rather than trusted to the
 //! caller:
 //!
-//! - **It closes on the window.** A plugin observes one project (`AMB-D-434`), so the snapshot carries
+//! - **It closes on the window.** A reach closed to one project (`AMB-D-434`) makes the snapshot carry
 //!   that project and nothing else — every table narrowed by [`project_predicate`], and a join row only
 //!   when **both** of its ends are inside. A consumer therefore never holds a reference it cannot
 //!   resolve, and never learns that another project exists. A reach that is open ([`Reach::All`] — a
 //!   human, the GUI) narrows nothing and takes the device.
-//! - **It withholds the plugin secrets.** The same line `export` draws, drawn by the same list
+//! - **It withholds what stays on this device.** The same line `export` draws, drawn by the same list
 //!   ([`crate::export::WITHHELD_ON_THE_WAY_OUT`]) rather than a second one beside it.
 //! - **It is one instant.** Every table is read inside a single read transaction, so a write landing
 //!   mid-stream cannot put a comment in the snapshot whose task is not — the tearing that nothing in the
@@ -167,11 +167,6 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "task" => "project_id = ?1",
         "decision" => "project_id = ?1",
         "dimension" => "project_id = ?1",
-        // A device-layer row's key is NULL (`AMB-D-601`), and `project_id = ?1` is never true of NULL — so
-        // it stays home, which is the right answer twice over: it is no project's content, and a window
-        // closed to one project is exactly the reader that must not learn what the whole device holds.
-        "plugin_config" => "project_id = ?1",
-        "plugin_enable" => "project_id = ?1",
         // What a project says about its own notifications (`AMB-D-885`): whether it notifies, and which
         // of the thirteen it reports. The shelf it sends through is the device's and never travels
         // (`export::WITHHELD_ON_THE_WAY_OUT`), so neither does the selection that names it.
@@ -258,7 +253,7 @@ fn window_scope(reach: Reach, datasets: &[&'static Dataset]) -> Result<Option<Sc
 /// migration, no `Database` hydrate) and every table read from **one** transaction, so what lands is one
 /// instant rather than several.
 pub fn stream_from(db_path: &Path, reach: Reach, w: &mut impl Write) -> Result<()> {
-    // The registry every road out walks: each dataset but the plugin secrets.
+    // The registry every road out walks: each dataset but the ones that stay on this device.
     let datasets = export::datasets_carried_out();
     let scope = window_scope(reach, &datasets)?;
 
@@ -333,7 +328,7 @@ pub const RECORDS_PER_READ: usize = 500;
 /// [`FeedRow::dataset`](crate::store_engine::read::FeedRow::dataset)), so what a carrier read off the
 /// ledger is what it passes here. A key no carried dataset answers to is refused rather than served
 /// empty: an empty answer would read as "those rows are gone" and a carrier would delete what it holds.
-/// The plugin secrets are refused by the same line, being on no road out at all
+/// What stays on this device is refused by the same line, being on no road out at all
 /// ([`export::WITHHELD_ON_THE_WAY_OUT`]).
 ///
 /// **The window is the snapshot's, drawn by the snapshot's own [`project_predicate`].** An id outside it
@@ -516,7 +511,7 @@ mod tests {
             (mine, theirs)
         };
 
-        let doc = take(&store_file(&dir), Reach::window(mine));
+        let doc = take(&store_file(&dir), Reach::binding(mine));
         assert_eq!(doc["amenbo_sync"]["format"], SNAPSHOT_FORMAT);
         assert_eq!(doc["amenbo_sync"]["format_version"], SNAPSHOT_VERSION);
         assert_eq!(doc["amenbo_sync"]["project_id"], mine);
@@ -532,7 +527,7 @@ mod tests {
         assert_eq!(comments.len(), 1, "one task in the window, one comment: {comments:?}");
 
         // The same store through the other window is the mirror image.
-        assert_eq!(titles(&take(&store_file(&dir), Reach::window(theirs))), vec!["out of the window"]);
+        assert_eq!(titles(&take(&store_file(&dir), Reach::binding(theirs))), vec!["out of the window"]);
     }
 
     /// A binding reaches one project too, so a snapshot taken through one is closed exactly as far as a
@@ -582,7 +577,7 @@ mod tests {
             mine
         };
 
-        let doc = take(&store_file(&dir), Reach::window(mine));
+        let doc = take(&store_file(&dir), Reach::binding(mine));
         let edges = doc["tables"]["task_dependency"].as_array().unwrap();
         assert_eq!(edges.len(), 1, "only the edge with both ends inside travelled: {edges:?}");
 
@@ -626,7 +621,7 @@ mod tests {
             mine
         };
 
-        let doc = take(&store_file(&dir), Reach::window(mine));
+        let doc = take(&store_file(&dir), Reach::binding(mine));
         let urls: Vec<&str> = doc["tables"]["attachment"]
             .as_array()
             .unwrap()
@@ -664,7 +659,7 @@ mod tests {
         };
 
         let mut buf = Vec::new();
-        stream_from(&store_file(&dir), Reach::window(mine), &mut buf).unwrap();
+        stream_from(&store_file(&dir), Reach::binding(mine), &mut buf).unwrap();
         let raw = String::from_utf8(buf).unwrap();
         assert!(!raw.contains("the bytes"), "the blob's content is not in the document");
         assert!(!raw.contains("export_path"), "there is no directory for a stream to point into");
@@ -724,7 +719,7 @@ mod tests {
                         .unwrap();
                 },
             };
-            stream_from(&db, Reach::window(mine), &mut tap).unwrap();
+            stream_from(&db, Reach::binding(mine), &mut tap).unwrap();
             tap.fired
         };
         assert!(fired, "the tap never reached the seam — the table order changed under it");
@@ -771,7 +766,7 @@ mod tests {
                 fired: false,
                 on: || late = seed_task(&mut writer, Some(mine), "landed mid-stream").0,
             };
-            stream_from(&db, Reach::window(mine), &mut tap).unwrap();
+            stream_from(&db, Reach::binding(mine), &mut tap).unwrap();
             assert!(tap.fired, "the tap never reached the seam — the table order changed under it");
         }
 
@@ -845,7 +840,7 @@ mod tests {
             "the watermark is in force — a cursor below it is a gap",
         );
 
-        let cursor = take(&db, Reach::window(mine))["amenbo_sync"]["cursor"].as_i64().unwrap();
+        let cursor = take(&db, Reach::binding(mine))["amenbo_sync"]["cursor"].as_i64().unwrap();
         assert_eq!(cursor, past_the_window, "the position is lifted to the feed's floor");
         assert!(
             !matches!(
@@ -957,7 +952,7 @@ mod tests {
         let (mine, _) = seed_every_carried_dataset(&dir);
         let db = store_file(&dir);
 
-        let doc = take(&db, Reach::window(mine));
+        let doc = take(&db, Reach::binding(mine));
         for dataset in export::datasets_carried_out() {
             let rows = carried(&doc, dataset.name);
             assert!(
@@ -966,7 +961,7 @@ mod tests {
                  in seed_every_carried_dataset",
                 dataset.name,
             );
-            let read = read_back(&db, Reach::window(mine), dataset.name, &ids_of(&rows));
+            let read = read_back(&db, Reach::binding(mine), dataset.name, &ids_of(&rows));
             assert_eq!(
                 carried(&read, dataset.name),
                 rows,
@@ -993,11 +988,11 @@ mod tests {
         let (mine, theirs) = seed_every_carried_dataset(&dir);
         let db = store_file(&dir);
 
-        let next_door = take(&db, Reach::window(theirs));
+        let next_door = take(&db, Reach::binding(theirs));
         for dataset in export::datasets_carried_out() {
             let ids = ids_of(&carried(&next_door, dataset.name));
             assert!(!ids.is_empty(), "`{}` has nothing next door to ask for", dataset.name);
-            let read = read_back(&db, Reach::window(mine), dataset.name, &ids);
+            let read = read_back(&db, Reach::binding(mine), dataset.name, &ids);
             assert_eq!(
                 carried(&read, dataset.name),
                 Vec::<serde_json::Value>::new(),
@@ -1025,7 +1020,7 @@ mod tests {
         };
         let db = store_file(&dir);
 
-        let read = read_back(&db, Reach::window(mine), "task", &[kept, gone, 900_001]);
+        let read = read_back(&db, Reach::binding(mine), "task", &[kept, gone, 900_001]);
         assert_eq!(ids_of(&carried(&read, "task")), vec![kept], "only what is still there comes back");
     }
 
@@ -1048,25 +1043,25 @@ mod tests {
 
         let full: Vec<i64> = (1..=RECORDS_PER_READ as i64).collect();
         let mut buf = Vec::new();
-        records_from(&db, Reach::window(mine), "task", &full, &mut buf).unwrap();
+        records_from(&db, Reach::binding(mine), "task", &full, &mut buf).unwrap();
 
         let mut over = full.clone();
         over.push(RECORDS_PER_READ as i64 + 1);
         let mut buf = Vec::new();
-        let err = records_from(&db, Reach::window(mine), "task", &over, &mut buf).unwrap_err();
+        let err = records_from(&db, Reach::binding(mine), "task", &over, &mut buf).unwrap_err();
         assert!(err.to_string().contains(&RECORDS_PER_READ.to_string()), "it names the cap: {err}");
         assert!(buf.is_empty(), "a refusal leaves no half-document on the caller's stdout");
 
         // And nothing at all is not a question either: a road that answers ids cannot be asked for a
         // table.
         let mut buf = Vec::new();
-        assert!(records_from(&db, Reach::window(mine), "task", &[], &mut buf).is_err());
+        assert!(records_from(&db, Reach::binding(mine), "task", &[], &mut buf).is_err());
     }
 
-    /// A dataset no road out carries is refused rather than answered empty — including the plugin
-    /// secrets, which are refused by being on no road out at all rather than by a second rule here. An
-    /// empty answer would read as "those records are gone", and a carrier that believed it would delete
-    /// what it holds.
+    /// A dataset no road out carries is refused rather than answered empty — including the credentials
+    /// that stay on this device, which are refused by being on no road out at all rather than by a
+    /// second rule here. An empty answer would read as "those records are gone", and a carrier that
+    /// believed it would delete what it holds.
     #[test]
     fn a_dataset_no_road_out_carries_is_refused() {
         let dir = scratch("read-back-dataset");
@@ -1077,9 +1072,9 @@ mod tests {
         };
         let db = store_file(&dir);
 
-        for name in ["plugin_secret", "secret", "change_feed", "not_a_dataset"] {
+        for name in ["secret", "change_feed", "not_a_dataset"] {
             let mut buf = Vec::new();
-            let err = records_from(&db, Reach::window(mine), name, &[1], &mut buf).unwrap_err();
+            let err = records_from(&db, Reach::binding(mine), name, &[1], &mut buf).unwrap_err();
             assert!(
                 err.to_string().contains("task"),
                 "the refusal says what it does read back, so a caller can correct it: {err}",

@@ -7,13 +7,9 @@
 //!
 //! The type has exactly two values:
 //! - [`Reach::All`] — everything on this machine. **The default for a human** (the overview is the human's
-//!   place to stand), what the GUI runs with, and what a plugin declaring `scope: machine` is launched with
-//!   (`AMB-D-601`: its gate is the device's, and the gate is the window).
-//! - [`Reach::Project`] — one project and nothing else. This is where the **AI facet** (`--actor ai`) lands,
-//!   and also where a `scope: project` plugin calling Amenbo back lands (`AMB-D-406`) — two ways in that
-//!   reach exactly as far as each other. What closed it is carried along ([`Closed`]) for one reason: a
-//!   refusal has to name something the reader can act on, and a plugin's author cannot act on a binding
-//!   they never made.
+//!   place to stand), and what the GUI runs with.
+//! - [`Reach::Project`] — one project and nothing else. This is where the **AI facet** (`--actor ai`)
+//!   lands, and the binding is what puts it there.
 //!
 //! "An AI in an unbound folder" is not a third value but an **error** ([`Reach::for_ai`]). An empty reach
 //! lets no operation through at all, so refusing at the door is both more honest than carrying an empty
@@ -30,10 +26,11 @@
 //!   id directly, and the paths that create new entities — are checked at the single write door
 //!   (`Store::write_one`, via `store::write_reach`).
 //! - An operation whose subject is the **whole device** without naming anything in it (`export` /
-//!   `backup` / `restore`) has no project for either of those to catch, so it asks
-//!   [`Reach::refuse_whole_device`] outright — and gets a different answer for each way a reach was closed
-//!   (`AMB-D-224` ruled all three through for the AI facet; a plugin's window is neither the user taking
-//!   their own data out nor the agent recovering their device).
+//!   `backup` / `restore`) has no project for either of those to catch, and is let through: `AMB-D-224`
+//!   ruled all three in for the AI facet — taking your own data out is the user's right and their AI
+//!   acts for them, and recovery is work an agent is there to run. What that narrowed was the door, not
+//!   the contents: with no destination the export writes a file rather than streaming the device into
+//!   the session.
 //!
 //! Doors alone would spring a leak the day someone adds a surface that queries the engine
 //! (`store_engine::read`) directly: forgetting to declare a scope still compiles, and quietly returns
@@ -53,42 +50,21 @@
 
 use crate::error::{Error, Result};
 
-/// What closed a reach — which decides nothing about how far it reaches, and everything about what a
-/// reader turned away by it can do next.
-///
-/// The two are told apart because their way out is not the same. A binding is in the reader's hands: a
-/// human can run the command, or the work can move to the folder bound to that project. A window is not:
-/// it was fixed by the runner that launched this process, before the plugin's own code ran, and no
-/// argument the plugin passes widens it. Naming the binding at a plugin would send its author looking for
-/// an `.amenbo` that decided nothing here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Closed {
-    /// The folder's `.amenbo`, which is where the AI facet draws its reach from.
-    Binding,
-    /// The window a plugin was launched with (`AMB-D-406`) — the gate it fires through, read back.
-    Window,
-}
-
 /// How far this operation reaches. The default is [`Reach::All`] (humans, the GUI, library use); the AI
-/// facet and a plugin's window are what close it to one project.
+/// facet is what closes it to one project, and the folder's `.amenbo` is what says which.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Reach {
     /// Everything on this machine, across projects.
     #[default]
     All,
-    /// This one project and nothing else, and what closed it to that.
-    Project { id: i64, closed_by: Closed },
+    /// This one project and nothing else.
+    Project { id: i64 },
 }
 
 impl Reach {
     /// A reach closed by the folder's binding — the AI facet's.
     pub fn binding(project: i64) -> Reach {
-        Reach::Project { id: project, closed_by: Closed::Binding }
-    }
-
-    /// A reach closed by the window a plugin was launched with (`AMB-D-406`).
-    pub fn window(project: i64) -> Reach {
-        Reach::Project { id: project, closed_by: Closed::Window }
+        Reach::Project { id: project }
     }
 
     /// Derives an AI facet's reach **from the binding and nothing else**. With no binding the reach is
@@ -129,11 +105,9 @@ impl Reach {
     pub fn narrow(self, requested: Option<i64>) -> Result<Option<i64>> {
         match (self, requested) {
             (Reach::All, r) => Ok(r),
-            (Reach::Project { id, .. }, None) => Ok(Some(id)),
-            (Reach::Project { id, .. }, Some(r)) if r == id => Ok(Some(id)),
-            (Reach::Project { id, closed_by }, Some(r)) => {
-                Err(out_of_reach(&crate::idref::project(r), id, closed_by))
-            }
+            (Reach::Project { id }, None) => Ok(Some(id)),
+            (Reach::Project { id }, Some(r)) if r == id => Ok(Some(id)),
+            (Reach::Project { id }, Some(r)) => Err(out_of_reach(&crate::idref::project(r), id)),
         }
     }
 
@@ -144,51 +118,12 @@ impl Reach {
     pub fn refuse_project_choice(self, what: &str) -> Result<()> {
         match self {
             Reach::All => Ok(()),
-            Reach::Project { id, closed_by } => {
-                let bound = crate::idref::project(id);
-                Err(Error::out_of_reach(match closed_by {
-                    Closed::Binding => format!(
-                        "{what} is for humans — an AI does not pick a project: it works in the one its \
-                         folder's .amenbo names ({bound}), and only there. Drop {what}; the binding \
-                         already scopes this command."
-                    ),
-                    Closed::Window => format!(
-                        "{what} is for humans — a plugin does not pick a project: it reads through the \
-                         window it was launched with ({bound}), and naming one does not widen it. Drop \
-                         {what}; the window already scopes this command."
-                    ),
-                }))
-            }
-        }
-    }
-
-    /// Refuse an operation whose subject is **the whole device** to a reader holding only a window
-    /// (`AMB-D-406`) — reading every project out (`export`, `backup`) or writing over all of them at once
-    /// (`restore`). A window is the gate a plugin fires through, so what it may touch is what it may
-    /// observe, and these are the calls that step past that without ever naming a project for
-    /// [`narrow`](Self::narrow) or [`check`](Self::check) to catch. (`what` is the operation.)
-    ///
-    /// **A binding is let through, and the asymmetry is a ruling rather than an oversight.**
-    /// `AMB-D-224` weighed these same three for the AI facet and allowed them: taking your own data out
-    /// is the user's right, their AI acts for them, and disaster recovery is work an agent is there to
-    /// run. What that decision narrowed was the door, not the contents — with no destination the export
-    /// writes a file instead of streaming the device into the session. A plugin holding one project's
-    /// window is not the user: it migrates nowhere, recovers nothing, and its window was fixed by the
-    /// runner before its own code ran.
-    ///
-    /// A plugin whose author declared `scope: machine` holds no window to step past — it was launched
-    /// reaching the device (`AMB-D-601`), and enabling it was the consent for exactly that — so it lands in
-    /// the first arm with the human and the binding. That is the layer being taken at its word, not a hole:
-    /// this refusal has always asked *how far does this reader reach*, never *what kind of reader is it*.
-    pub fn refuse_whole_device(self, what: &str) -> Result<()> {
-        match self {
-            Reach::All | Reach::Project { closed_by: Closed::Binding, .. } => Ok(()),
-            Reach::Project { id, closed_by: Closed::Window } => {
+            Reach::Project { id } => {
                 let bound = crate::idref::project(id);
                 Err(Error::out_of_reach(format!(
-                    "{what} acts on this whole device, and a plugin reaches only through the window it \
-                     fires in ({bound}) — a window no argument widens. Nothing outside it was yours to \
-                     read or to replace: the ids in the payload name what you were launched for."
+                    "{what} is for humans — an AI does not pick a project: it works in the one its \
+                     folder's .amenbo names ({bound}), and only there. Drop {what}; the binding \
+                     already scopes this command."
                 )))
             }
         }
@@ -198,29 +133,22 @@ impl Reach {
     pub fn check(self, what: &str, project_id: Option<i64>) -> Result<()> {
         match self {
             Reach::All => Ok(()),
-            Reach::Project { id, .. } if project_id == Some(id) => Ok(()),
-            Reach::Project { id, closed_by } => Err(out_of_reach(what, id, closed_by)),
+            Reach::Project { id } if project_id == Some(id) => Ok(()),
+            Reach::Project { id } => Err(out_of_reach(what, id)),
         }
     }
 }
 
 /// The out-of-reach wording. It says "you cannot reach that from here", not "it does not exist" — and it
-/// says it in the terms of whatever closed the reach, since the reader's way out is not the same on both
-/// (see [`Closed`]).
-fn out_of_reach(what: &str, bound: i64, closed_by: Closed) -> Error {
+/// points at the ways out, since a binding is in the reader's hands: a human can run the command, or the
+/// work can move to the folder bound to that project.
+fn out_of_reach(what: &str, bound: i64) -> Error {
     let bound = crate::idref::project(bound);
-    Error::out_of_reach(match closed_by {
-        Closed::Binding => format!(
-            "{what} is outside project {bound}, the project this folder is bound to — an AI reaches \
-             only the project its .amenbo names. Ask a human to run this, or work in the \
-             folder bound to that project."
-        ),
-        Closed::Window => format!(
-            "{what} is outside project {bound}, the project this plugin was launched to observe — a \
-             plugin reads only through the window it fires in, which no argument widens. The ids in \
-             the payload it was handed are inside that project."
-        ),
-    })
+    Error::out_of_reach(format!(
+        "{what} is outside project {bound}, the project this folder is bound to — an AI reaches \
+         only the project its .amenbo names. Ask a human to run this, or work in the \
+         folder bound to that project."
+    ))
 }
 
 /// The wording for an AI running in an unbound folder, in both languages. It says "this folder is bound to
@@ -277,50 +205,5 @@ mod tests {
         assert_eq!(r.check("#2", Some(4)).unwrap_err().code(), "out_of_reach");
         // An unplaced task (belonging to no project) is out of a closed reach as well.
         assert_eq!(r.check("#3", None).unwrap_err().code(), "out_of_reach");
-    }
-
-    /// A window reaches exactly as far as a binding does — and says something else when it turns a reader
-    /// away, because what the reader can do about it is not the same. A plugin's author never made an
-    /// `.amenbo` here and cannot run this as a human: naming either would send them at something that
-    /// decided nothing.
-    #[test]
-    fn a_window_reaches_as_far_as_a_binding_and_is_refused_in_its_own_terms() {
-        let binding = Reach::binding(3);
-        let window = Reach::window(3);
-        assert_eq!(binding.project(), window.project());
-        assert!(window.check("#1", Some(3)).is_ok());
-        assert!(window.allows(Some(3)) && !window.allows(Some(4)) && !window.allows(None));
-        assert_eq!(window.narrow(None).unwrap(), Some(3));
-
-        let refused = window.check("AMB-T-2", Some(4)).unwrap_err();
-        assert_eq!(refused.code(), "out_of_reach");
-        let said = refused.to_string();
-        assert!(said.contains("plugin") && said.contains("AMB-P-3"), "got: {said}");
-        assert!(!said.contains(".amenbo") && !said.contains("human"), "got: {said}");
-
-        // The vocabulary that names a project is refused on both, and points at the one that closed it.
-        let named = window.refuse_project_choice("--project").unwrap_err().to_string();
-        assert!(named.contains("window") && !named.contains(".amenbo"), "got: {named}");
-        assert!(
-            binding.refuse_project_choice("--project").unwrap_err().to_string().contains(".amenbo")
-        );
-    }
-
-    /// Taking the whole device as the subject is the one place the two closed reaches part company. A
-    /// window is refused it — observing one project is the whole of what a plugin was launched for. A
-    /// binding keeps it, because `AMB-D-224` ruled these through for the AI facet: the user's own way out
-    /// of the tool, and the recovery their agent is there to run.
-    #[test]
-    fn only_a_window_is_refused_the_whole_device() {
-        for what in ["export", "backup", "restore"] {
-            assert!(Reach::All.refuse_whole_device(what).is_ok());
-            assert!(Reach::binding(3).refuse_whole_device(what).is_ok());
-
-            let refused = Reach::window(3).refuse_whole_device(what).unwrap_err();
-            assert_eq!(refused.code(), "out_of_reach");
-            let said = refused.to_string();
-            assert!(said.contains(what) && said.contains("plugin"), "got: {said}");
-            assert!(said.contains("AMB-P-3"), "it names the window it was closed to: {said}");
-        }
     }
 }

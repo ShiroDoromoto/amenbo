@@ -195,11 +195,11 @@ fn re_homing_signals_both_projects() {
     assert_eq!(signalled, vec![from.min(to), from.max(to)], "both ends were told");
 }
 
-/// The version a project is at, read the way a plugin's window reads it.
+/// The version a project is at, read through a reach closed to that project.
 fn store_version(store: &Store, project: i64) -> i64 {
     Store::open_at(store.paths.clone())
         .unwrap()
-        .with_reach(amenbo_core::reach::Reach::window(project))
+        .with_reach(amenbo_core::reach::Reach::binding(project))
         .sync_version()
         .unwrap()
 }

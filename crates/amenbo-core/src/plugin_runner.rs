@@ -1,7 +1,7 @@
 //! The **queue runners** — one per plugin, at most one at a time, each working its own queue from the head
 //! (`AMB-D-399`).
 //!
-//! The fan-out ([`plugin_dispatch::fan_out`](crate::plugin_dispatch::fan_out)) left one row per event per
+//! The fan-out ([`plugin_dispatch::fan_out_row`](crate::plugin_dispatch::fan_out_row)) left one row per event per
 //! subscribed plugin. This is what turns those rows into runs, and the shape it takes is what the decision
 //! bought:
 //!
@@ -179,7 +179,7 @@ impl RunnerLauncher for SelfRunner {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
-        reap(child);
+        crate::sys::reap(child);
         Ok(())
     }
 }
@@ -255,19 +255,6 @@ impl RunnerLauncher for HereRunner<'_> {
         });
         Ok(())
     }
-}
-
-/// Collect `child` on a thread of its own — a launcher's only reason to hold a thread at all.
-///
-/// A parent that never waits leaves a zombie behind on Unix for as long as *it* lives, and a long-lived face
-/// drives on every write, so they would pile up. This waits instead of the caller: it blocks in `waitpid` and
-/// nothing else, holds no store and no lock, and if the parent exits first (the short-lived face's ordinary
-/// case) it goes with it and the runner is reparented, still running. What it is emphatically not is a wait
-/// the *drive* makes — that is the whole of what `AMB-T-2175` removes.
-pub(crate) fn reap(mut child: std::process::Child) {
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
 }
 
 /// Work one plugin's queue **in this process**, having been launched as its runner (`AMB-T-2175`) — the body

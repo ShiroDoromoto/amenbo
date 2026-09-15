@@ -21,7 +21,7 @@ use crate::model::{
     NotifyKind, NotifyTarget, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, SecretArea,
 };
 use crate::ops::{emit_create, emit_update, Noun};
-use crate::plugin_payload::{name, V1_EVENTS};
+use crate::lifecycle::{name, V1_EVENTS};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 

@@ -64,7 +64,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::plugin_manifest::{Face, Scope};
+use crate::outbox_drive::Face;
+use crate::plugin_manifest::Scope;
 use crate::plugin_runner::{Waiting, Worked};
 use crate::plugin_subscribe::{EnabledSubscribers, InstalledPlugin};
 use crate::store::Store;
@@ -352,7 +353,7 @@ pub fn banner_shows(store: &Store, today: NaiveDate) -> Result<bool> {
 /// by a set a test wrote.
 fn warning_has_a_carrier(store: &Store, installed: &[InstalledPlugin]) -> Result<bool> {
     for plugin in installed {
-        if !plugin.manifest.events.iter().any(|e| e.event == crate::plugin_payload::name::TASK_DUE) {
+        if !plugin.manifest.events.iter().any(|e| e.event == crate::lifecycle::name::TASK_DUE) {
             continue;
         }
         let declared = plugin.manifest.scope;
@@ -465,7 +466,7 @@ fn run_over(store: &Store, day: NaiveDate, purposes: &[Purpose]) -> Result<Repor
     // working the queues is half of what this process was started for, so it cannot quietly do none of it.
     let installed = crate::plugin_installed::installed(&store.paths)?;
     let subscribers = EnabledSubscribers::new(&installed, store);
-    let flushed = store.flush_plugin_delivery(Face::Cli, &subscribers)?;
+    let flushed = store.flush_delivery(Face::Cli, &subscribers)?;
     report.worked = flushed.worked;
     // What is still standing, minus the queues this tick worked: those are reported by their own counts,
     // and a queue named twice would read as two backlogs.

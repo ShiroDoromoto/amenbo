@@ -937,7 +937,7 @@ datasets! {
     } => "UNIQUE (project_id, target_id)"
 
     // **An event this project reports** (`AMB-D-885`) — one row per `(project, event)`, naming one of the
-    // thirteen in `crate::plugin_payload::V1_EVENTS` that say what happened. Six of them are what a
+    // thirteen in `crate::lifecycle::V1_EVENTS` that say what happened. Six of them are what a
     // project starts with (`AMB-D-714`).
     //
     // `store.changed` is the fourteenth and is not admitted: it says only that *something* moved, which is
@@ -1749,9 +1749,9 @@ mod tests {
             .find(|c| c.name == "event")
             .expect("the column is declared")
             .decl;
-        for event in crate::plugin_payload::V1_EVENTS {
+        for event in crate::lifecycle::V1_EVENTS {
             let named = decl.contains(&format!("'{event}'"));
-            if event == crate::plugin_payload::name::STORE_CHANGED {
+            if event == crate::lifecycle::name::STORE_CHANGED {
                 assert!(!named, "`{event}` is the ledger's signal — no project subscribes to it");
             } else {
                 assert!(named, "`{event}` is in the catalog but not in the column's CHECK");

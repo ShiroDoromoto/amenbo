@@ -466,7 +466,7 @@ fn project_json(store: &Store, project: i64) -> Result<serde_json::Value, CliErr
         .iter()
         .map(|r| r.event.clone())
         .collect();
-    let reportable: Vec<&str> = amenbo_core::plugin_payload::V1_EVENTS
+    let reportable: Vec<&str> = amenbo_core::lifecycle::V1_EVENTS
         .iter()
         .copied()
         .filter(|e| amenbo_core::ops::notify::is_reportable(e))

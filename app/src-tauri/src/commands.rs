@@ -4668,7 +4668,7 @@ pub fn project_notify(project_id: i64) -> Result<ProjectNotifyDto, CmdError> {
 /// The events a project may report, in the catalog's own order. Read off core's list and filtered by
 /// core's own test, so the screen never carries a second copy of the catalog to drift from it.
 fn reportable_events() -> Vec<String> {
-    amenbo_core::plugin_payload::V1_EVENTS
+    amenbo_core::lifecycle::V1_EVENTS
         .iter()
         .filter(|e| amenbo_core::ops::notify::is_reportable(e))
         .map(|e| e.to_string())

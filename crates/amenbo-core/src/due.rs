@@ -12,7 +12,7 @@
 //! by being written twice.
 //!
 //! **Nobody acted, so the events carry no actor.** A day arriving is not a write, and the tick that
-//! noticed it is not an author ([`crate::plugin_payload::name::TASK_DUE`]).
+//! noticed it is not an author ([`crate::lifecycle::name::TASK_DUE`]).
 //!
 //! **A task nobody closes is named again tomorrow.** The turn is per calendar day, not per task
 //! (`AMB-D-708`): what the day mark holds is that this device has warned today, and a day that is still
@@ -20,7 +20,7 @@
 //! message would be a task nobody is reminded of.
 
 use crate::error::Result;
-use crate::plugin_payload::name;
+use crate::lifecycle::name;
 use crate::query::ListParams;
 use crate::store::Store;
 use crate::store_engine::outbox::EventRow;

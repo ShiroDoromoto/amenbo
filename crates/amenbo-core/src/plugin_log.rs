@@ -76,15 +76,6 @@ pub enum Outcome {
     TimedOut,
     /// Never started: the program could not be spawned.
     NotLaunched,
-    /// **Not a run.** Retention had trimmed the outbox past the dispatcher's cursor, so a span of events
-    /// was never delivered to anybody (`Delivered::gapped`, `AMB-D-352`). What was lost cannot be named —
-    /// the events are gone — so the line records that it happened and when, and no more.
-    Gap,
-    /// **Not a run either.** A notification the far side would not take (`AMB-D-885`, `AMB-D-352`) — a
-    /// relay that refused the account, a webhook that answered 404. It is dropped rather than retried, so
-    /// this line is the only trace there is that somebody was not told, which is what makes it belong in
-    /// the same file a gap does: a sender is a detached process with nowhere else to write.
-    Refused,
 }
 
 impl Outcome {
@@ -95,8 +86,6 @@ impl Outcome {
             Outcome::Failed => "failed",
             Outcome::TimedOut => "timed_out",
             Outcome::NotLaunched => "not_launched",
-            Outcome::Gap => "gap",
-            Outcome::Refused => "refused",
         }
     }
 
@@ -107,8 +96,6 @@ impl Outcome {
             "failed" => Some(Outcome::Failed),
             "timed_out" => Some(Outcome::TimedOut),
             "not_launched" => Some(Outcome::NotLaunched),
-            "gap" => Some(Outcome::Gap),
-            "refused" => Some(Outcome::Refused),
             _ => None,
         }
     }
@@ -224,39 +211,6 @@ pub fn record(path: &Path, run: &Run) {
     }
 }
 
-/// Record a delivery gap — events the dispatcher could never deliver because retention passed its cursor
-/// (`AMB-D-361`). It names no plugin, because the lost events were never resolved to one, and no span,
-/// because what was trimmed is gone; the fact and its instant are the whole content.
-pub fn record_gap(path: &Path) {
-    record(
-        path,
-        &Run {
-            plugin: String::new(),
-            event: "",
-            outcome: Outcome::Gap,
-            code: None,
-            elapsed: Duration::ZERO,
-            stderr: String::new(),
-        },
-    );
-}
-
-/// Record a notification the far side would not take (`AMB-D-885`). It names no plugin — there is none —
-/// and the reason is the whole content, because a dropped message leaves nothing else to look at.
-pub fn record_refused(path: &Path, why: &str) {
-    record(
-        path,
-        &Run {
-            plugin: String::new(),
-            event: "",
-            outcome: Outcome::Refused,
-            code: None,
-            elapsed: Duration::ZERO,
-            stderr: why.to_string(),
-        },
-    );
-}
-
 /// Every line of the log, oldest first. A missing file is an empty log (nothing has fired on this machine
 /// yet), not a failure. Reading the whole file is right *here* and nowhere else: the file is bounded by
 /// construction — [`RUNS_PER_PLUGIN`] runs per installed plugin — so "the whole log" is a window already.
@@ -325,7 +279,7 @@ fn trim_locked(path: &Path) -> std::io::Result<()> {
 /// Drop every line of one plugin from the log — the last trace an [`uninstall`](crate::plugin_uninstall)
 /// clears, so nothing of a removed plugin is left behind (`AMB-D-357`). Returns whether any line was
 /// actually removed. A line this build cannot parse is kept: its owner cannot be told, and this removes
-/// only what it is sure belongs to `plugin` (gap lines, owned by no plugin, are kept for the same reason).
+/// only what it is sure belongs to `plugin`.
 ///
 /// Takes the lock **blocking**, unlike [`trim`]: uninstall's contract is to leave nothing behind, so a
 /// purge that skipped under a trim in flight would put the residue straight back — the very bug this closes
@@ -358,7 +312,7 @@ fn forget_locked(path: &Path, plugin: &str) -> std::io::Result<bool> {
     let mut dropped = false;
     for line in text.lines() {
         // Only a line that parses *and* names this plugin goes; everything else — another plugin's runs,
-        // gap lines, an unreadable line — stays exactly as it was.
+        // an unreadable line — stays exactly as it was.
         match parse_line(line) {
             Some(l) if l.plugin == plugin => dropped = true,
             _ => kept.push(line),
@@ -390,8 +344,7 @@ fn lock_blocking(path: &Path) -> Option<TrimLock> {
     }
 }
 
-/// The lines worth keeping, in their original order: the last [`RUNS_PER_PLUGIN`] of each plugin, and the
-/// same number of gap lines (which belong to no plugin and are the rarest thing in the file).
+/// The lines worth keeping, in their original order: the last [`RUNS_PER_PLUGIN`] of each plugin.
 ///
 /// It works on the raw lines rather than parsed [`Line`]s so that a line this build cannot parse is dropped
 /// by the very same pass — the trim is the one place where a file written by another generation is
@@ -493,8 +446,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// The whole vocabulary a hook can end with survives the round trip — including the gap, which names
-    /// no plugin at all.
+    /// The whole vocabulary a hook can end with survives the round trip.
     #[test]
     fn every_outcome_round_trips() {
         let dir = dir("outcomes");
@@ -503,16 +455,9 @@ mod tests {
         for outcome in [Outcome::Ok, Outcome::Failed, Outcome::TimedOut, Outcome::NotLaunched] {
             record(&path, &run("slack", outcome, ""));
         }
-        record_gap(&path);
 
         let got: Vec<Outcome> = read(&path).iter().map(|l| l.outcome).collect();
-        assert_eq!(
-            got,
-            vec![Outcome::Ok, Outcome::Failed, Outcome::TimedOut, Outcome::NotLaunched, Outcome::Gap]
-        );
-        let gap = read(&path).pop().unwrap();
-        assert_eq!(gap.plugin, "", "a gap belongs to no plugin");
-        assert_eq!(gap.code, None);
+        assert_eq!(got, vec![Outcome::Ok, Outcome::Failed, Outcome::TimedOut, Outcome::NotLaunched]);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -611,8 +556,8 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// `forget` clears one plugin's runs and leaves everything else — another plugin's runs, gap lines, and
-    /// even an unreadable line whose owner cannot be told — exactly where they were (`AMB-T-2098`).
+    /// `forget` clears one plugin's runs and leaves everything else — another plugin's runs, and even an
+    /// unreadable line whose owner cannot be told — exactly where they were (`AMB-T-2098`).
     #[test]
     fn forget_purges_one_plugins_runs_and_leaves_the_rest() {
         let dir = dir("forget");
@@ -620,7 +565,6 @@ mod tests {
         record(&path, &run("slack", Outcome::Ok, "first"));
         record(&path, &run("worktree", Outcome::Ok, "neighbour"));
         record(&path, &run("slack", Outcome::Failed, "second"));
-        record_gap(&path);
         // A line no build can parse — its owner is unknowable, so forget must keep it.
         write_line(&path, b"{\"v\":999,\"whose\":\"?\"}\n").unwrap();
 
@@ -628,8 +572,6 @@ mod tests {
 
         assert!(recent(&path, "slack").is_empty(), "slack's runs are gone");
         assert_eq!(recent(&path, "worktree").len(), 1, "the neighbour's run stays");
-        let all = read(&path);
-        assert!(all.iter().any(|l| l.outcome == Outcome::Gap), "the gap line stays");
         // The unreadable line is not parsed by `read`, so count raw lines to prove it survived.
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(raw.contains("\"v\":999"), "the unreadable line is left in place");

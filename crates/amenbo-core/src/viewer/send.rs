@@ -831,7 +831,7 @@ impl Carrier for SelfCarrier {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
-        crate::plugin_runner::reap(child);
+        crate::sys::reap(child);
         Ok(())
     }
 }

@@ -480,6 +480,14 @@ impl Paths {
     pub fn plugin_log_file(&self) -> PathBuf {
         self.base_dir.join(crate::plugin_log::FILE_NAME)
     }
+
+    /// The **delivery log**, `<base>/delivery.jsonl` ([`crate::delivery_log`], `AMB-D-361`): what could not
+    /// be carried out of a write — a notification the far side refused, a span of events retention took
+    /// before anybody walked it. Machine-local and outside every backup and export, for the reason the
+    /// execution log is: it is about what *this* machine could not send.
+    pub fn delivery_log_file(&self) -> PathBuf {
+        self.base_dir.join(crate::delivery_log::FILE_NAME)
+    }
 }
 
 /// Whether `name` is reserved by the plugin disk layout and so cannot name a plugin: the registry cache

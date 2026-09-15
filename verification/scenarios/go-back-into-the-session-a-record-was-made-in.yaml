@@ -43,10 +43,10 @@
 # The press has three landings and this road walks the first. A pane still on the screen is gone to;
 # one that is not is opened again under the same id; and a conversation the provider no longer has
 # ends moments after it is reopened. The two that start from a pane that is gone need a road that
-# takes a pane away before it presses, which is `open-again-the-pane-a-record-was-made-in` — and it
-# walks the second of them. The third is still unwalked: a record carries a way back only where it
-# was made in a pane that had one, and what a road can type a create into is a plain shell, which has
-# none.
+# takes a pane away before it presses: the second is `open-again-the-pane-a-record-was-made-in`, and
+# the third — a way back the provider will not honour — is
+# `be-told-the-conversation-a-record-was-made-in-is-gone`, which makes its record at an agent because
+# a plain shell has no way back to be refused.
 id: go-back-into-the-session-a-record-was-made-in
 title: A decision says which session made it, and on the screen that is a press back into the pane
 description: >

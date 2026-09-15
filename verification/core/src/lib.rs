@@ -1905,6 +1905,19 @@ const REGISTRY: &[OpSpec] = &[
     // another model needs the second, and for two reasons at once: there is no control on a frame
     // whose program has gone, and what says the move arrived is the program that was given it.
     //
+    // `runs` is the third, and it is `reads` with the line carried out after it is printed. What it
+    // buys is a pane of an agent a road can type a command into: the only other pane a road can say
+    // anything in is a plain shell, and a shell is the one pane with no way back into it — so a
+    // record made at one names no session anybody could return to. A road that needs a record made in
+    // a session that can be gone back into stands up this shape and types the create at it.
+    //
+    // `comes-back` is whether one honours a way back it is handed, and it is true unless a road says
+    // otherwise. A stand-in issues no sessions, so every handle it ever sees is one it did not make;
+    // carrying on regardless is what the roads that open the app again and find their panes resumed
+    // read, and `false` is the stand-in that says so and exits at once. That second one is the only
+    // way a road reaches what a pane says when the conversation behind a way back is not there any
+    // more (`app/src/talk/terminal.ts`, `whyItStopped`).
+    //
     // One that stays also **says so when it is stopped**, in a word of its own printed as it goes
     // (`amenbo_verify_cli::domain::terminal`). It is what lets a road read a press that ends a
     // program: a program that died quietly leaves a mark and a fresh prompt, which are the two a
@@ -2018,6 +2031,20 @@ const REGISTRY: &[OpSpec] = &[
     // Opening the candidates, which is the press on the row under the pane. It is its own step
     // because there is a reading between opening and choosing: what the press will put in the pane,
     // and where this machine keeps it afterwards (`switch-says`).
+    // Pressing what opens a pane in a frame that is standing with nothing running in it.
+    //
+    // **It is not the empty frame, and it is the one place that is not.** A frame put back by the row
+    // naming the session a record was made in comes back with no terminal and nothing chosen
+    // (`app/src/shell/TerminalFace.tsx`): the record holds the pane and the way back
+    // into it, and never the folder or the provider, so what stands there is a frame with one control
+    // on it rather than the row `open-start` presses under. Every other way a frame comes to be opens
+    // itself — a pane pressed for on the empty frame, and a place that came back holding a way into
+    // what was running in it.
+    //
+    // **Nothing is chosen here**, which is why it takes nothing: what opens is the folder the project
+    // is bound to and what this machine last opened a pane with. A road that wanted to say either
+    // would be saying it of a frame that was never asked.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-again", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-models", required: &[], refs: &[], strings: &["shows"], binds: false },
     // What the row says a press would do, read before anything is pressed. `command` is the
     // provider's own — `/model` on five of the six — and `keeps` is the file this machine writes the
@@ -2534,7 +2561,14 @@ const REGISTRY: &[OpSpec] = &[
     // pointed at there names *that* path — a directory thrown away with the pane. A reader who
     // follows the message edits a file nobody will read again, so `names` is the file it should have
     // said, and reading it is reading which file was named rather than the sentence around it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "ended", required: &["names"], refs: &[], strings: &["names", "shows"], binds: false },
+    //
+    // **`why` is the second exception, and it is not a file.** A pane opened again on the way back a
+    // record held, whose program then ends in moments, says that the conversation cannot be opened
+    // again — the person pressed to go back into it, and what they are owed is being told it is not
+    // there (`app/src-tauri/src/pty.rs`). `no-way-back` is that reading, and it is the
+    // sentence's own rather than a word a road wrote, so what is confirmed is the line saying it.
+    // Asked for, it is the whole of the reading and `names` is what is *also* true of the line.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "ended", required: &["names"], refs: &[], strings: &["names", "shows", "why"], binds: false },
     // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.

@@ -1,0 +1,181 @@
+# The pane a record was made in is opened again, the conversation behind it is not there, and the
+# pane says so.
+#
+# **The question is asked by somebody who pressed to go back into a session and got a pane that
+# stopped.** What they are owed is being told why: the way back the record held is one the provider
+# will not honour, and without a word for it the pane would have flickered open and closed with
+# nothing on the screen to explain it.
+#
+# ── Which of the three landings this is ─────────────────────────────────────────────────────────
+# The row naming the session a record was made in has three. A pane still on the screen is gone to,
+# which is `go-back-into-the-session-a-record-was-made-in`. A pane that is gone is opened again under
+# the id the record holds, which is `open-again-the-pane-a-record-was-made-in`. This is the third: the
+# pane opens, the way back goes onto its line, and the provider refuses it — so the program ends
+# moments after it started, the handle is taken back, and the pane says the conversation cannot be
+# opened again.
+#
+# ── Why the record has to be made at an agent ───────────────────────────────────────────────────
+# A record carries a way back only where the create was run in a pane that had one, and a plain shell
+# has none: it holds no conversation, so there is nothing to come back to. The two roads before this
+# one made their record at a shell, which is why neither could reach this landing — pressing their
+# row puts the pane back and asks nothing of any provider. So this one stands the
+# machine up with agents that carry out what is typed at them (`can-start`, `then: runs`), and the
+# create is typed at one.
+#
+# ── Why the refusal is stood up and not waited for ──────────────────────────────────────────────
+# A real provider handed a session id it never issued says so and exits, which is the whole mechanism
+# under this landing (`app/src-tauri/src/pty.rs`, `BELIEVED_AFTER`). A stand-in issues no sessions
+# either, so `comes-back: false` is that same answer said out loud: it reads the way back off its own
+# command line and leaves at once. What the road reads is not that line — it is the pane's own
+# sentence about the ending, which is the app's and is the thing under test.
+#
+# ── Why the handle is taken back as well ────────────────────────────────────────────────────────
+# The pane is not left holding a way back that leads nowhere: the run clears it, so the next pane
+# opened there starts a conversation of its own rather than being refused again
+# (`crate::frames::TalkFace::gave_up`). That half is not read here — what a road can see of it is a
+# second press behaving differently, which is a road about the clearing rather than about the telling.
+#
+# ── Why one pane ────────────────────────────────────────────────────────────────────────────────
+# The page is asked for one, so the frame the press puts back is the only box on it and every step
+# after the press means that one. Which pane a press landed in is a question the road beside this one
+# answers, and answering it twice would buy nothing here.
+id: be-told-the-conversation-a-record-was-made-in-is-gone
+title: A record whose conversation the provider no longer has says so when the pane is opened again
+description: >
+  Stand a machine up with agents that run what is typed at them and keep no sessions of their own.
+  Open a pane on one, record a decision at it, and take the pane away. Open the decision on the
+  ledger and press the row saying which session made it: the pane comes back, opens on the way back
+  the record held, and the provider will not have it — so the program ends moments later and the pane
+  says, in words, that this conversation cannot be opened again.
+
+given:
+  # One folder, so a pane opened again settles where it works without being asked — that question is
+  # `open-a-pane-where-a-project-keeps-more-than-one-folder`'s.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+      dir: workshop
+    as: workshop
+
+  # The machine this road needs: agents that carry out what is typed at them, so a create can be run
+  # in one of their panes, and that refuse a way back, so the press at the end meets the answer a
+  # provider gives for a conversation it does not have.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      then: runs
+      comes-back: false
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Workshop
+
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  # Named rather than taken by position, because what this road needs of it is the one thing a
+  # position cannot promise: a provider whose way back is a handle on its line, which is what the
+  # ending below is about (`amenbo_core::harness::Back`).
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Claude Code
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the decision was written in
+
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the potting shed
+      shows: SCENARIO the pane the decision was written in
+
+  # The create, typed at the agent rather than at a shell. This is the whole reason the machine was
+  # stood up the way it was: what the record keeps of a pane is written by the run inside it, and only
+  # a pane with a way back has one to write down.
+  - type: action
+    domain: decision
+    op: create-in-pane
+    with:
+      title: SCENARIO Reglaze the north wall before the first frost
+      shows: SCENARIO the pane the decision was written in
+    as: reglaze
+
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: SCENARIO the pane the decision was written in
+
+  # Nothing is standing, so the frame after the press is the one the press put there.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: decision
+    op: open-face
+
+  - type: assert
+    domain: decision
+    op: made-in
+    with:
+      target: reglaze
+      shows: SCENARIO the potting shed
+
+  - type: action
+    domain: decision
+    op: press-made-in
+    with:
+      target: reglaze
+
+  # The frame is back and nothing is running in it. The press that starts it chooses nothing: the
+  # provider is what this machine last opened a pane with, which is the one picked above, and the way
+  # back is what the record put on the frame.
+  - type: action
+    domain: terminal
+    op: open-again
+
+  # The goal. The program was handed a session it never issued, said so and left within moments, and
+  # what the pane draws is not only that a program ended: it says the conversation is not there to be
+  # opened. A build that let the ending pass as any other would leave a reader looking at a pane that
+  # opened and closed for no reason they can read.
+  - type: assert
+    domain: terminal
+    op: ended
+    with:
+      names: none
+      why: no-way-back

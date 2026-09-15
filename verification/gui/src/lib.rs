@@ -1961,6 +1961,9 @@ impl Instructor {
             // only that it came up: what is *in* it is the next step's, and that is the whole point
             // of parting them — the press is Amenbo acting on what it drew, and the reading is a
             // program saying what it was started with.
+            (Domain::Terminal, "open-again") =>
+                "On the terminal face, find the frame standing with nothing running in it — the box the press put back, which carries one control in the middle of it and no row of things to open with above — and press that control. Choose nothing: there is nothing to choose, the frame having been given the pane and the way back into it and neither the folder nor the provider. A terminal comes up there, in the folder the project is bound to and on whatever this machine last opened a pane with."
+                    .to_string(),
             (Domain::Terminal, "open-start") =>
                 "On the empty frame, press what opens a pane — the press under the rows, the one the frame has been saying would run that line. Choose nothing first: what is on the row of agents and what is named on the model row under it are what the steps before this one set, and pressing anything else now would open the pane on a different answer. A pane comes up in the frame's place, with the program running in it."
                     .to_string(),
@@ -2012,10 +2015,10 @@ impl Instructor {
             (Domain::Terminal, "type-line") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\" — the one the road typed that line into, and not any of the others"),
-                    None => "the pane the step before opened — the box on the page with a prompt and nothing else on it, not the empty frame beside it".to_string(),
+                    None => "the pane the steps before opened — the box on the page with a terminal in it, not the empty frame beside it".to_string(),
                 };
                 format!(
-                    "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, where it is how every step after it says which pane it means.",
+                    "Click into {pane} — then type \"{}\" and press return. Whatever is running there will not know the command, a shell or an agent alike — what the line is for is being on the screen, where it is how every step after it says which pane it means.",
                     req(with, "text")?
                 )
             }
@@ -4114,6 +4117,22 @@ impl Instructor {
             // What the pane says about the ending, read on the line the pane draws for it and never
             // in the program's own output above: the two are a line apart on the screen and a road
             // that took the wrong one would be reading the provider.
+            // The one ending that is not read off what the program left: a pane opened again on the
+            // way back a record held, and a program that ended in moments, says so in a line of the
+            // app's own. It is asked for beside `names`, which stays true of the same
+            // line — what is added is the sentence under it.
+            (Domain::Terminal, "ended") if arg_str(with, "why").is_some() => {
+                match arg_str(with, "why") {
+                    Some("no-way-back") => format!(
+                        "Read what {pane} says now that the program in it has stopped — the pane's own lines about the ending, above where the program was running and not part of what it printed. Confirm it says the program ended, and beside that, in words, that this conversation cannot be opened again. The program's own last line is its own and is not this reading.",
+                        pane = named_pane(with),
+                    ),
+                    other => return Err(format!(
+                        "assert `ended` does not know what `{}` means for why a program stopped — the one reading it has is `no-way-back`",
+                        other.unwrap_or_default()
+                    )),
+                }
+            }
             (Domain::Terminal, "ended") => match req(with, "names")? {
                 "none" => format!(
                     "Read what {pane} says now that the program in it has stopped — the pane's own line about the ending, above where the program was running and not part of what it printed. Confirm it says the program ended and nothing further: no file is named there and no reason is given. Whatever the program itself printed is its own and is not this reading.",

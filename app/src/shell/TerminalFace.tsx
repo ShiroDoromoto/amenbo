@@ -1114,6 +1114,9 @@ export function TerminalFace({
           )}
           onPrefix={setGitPrefix}
           onHandOver={handOver}
+          // The half's own folder, because that is the one its rows are spelled from — and the
+          // reading column is where a conflicted file is settled (`../files/GitPanel`).
+          onRead={gitRoot === null ? undefined : (path) => openFile({ root: gitRoot, path })}
         />
       )}
       picker={layout.project === null ? null : (

@@ -841,12 +841,39 @@ const ui = {
   "settings.restoreAsk": "Before throwing changes away",
   "settings.restoreAskOn": "Ask me",
   "settings.restoreAskOff": "Do not ask me",
-  "settings.restoreAskNote": "A change git has not recorded is nowhere once it is thrown away — this is the one press in the window that nothing undoes.",
+  "settings.restoreAskNote": "A change git has not recorded is nowhere once it is thrown away, and nothing in the window brings it back.",
   "git.branches": "Branches",
   "git.onBranch": "The branch you are on",
   "git.newBranch": "New branch",
   "git.fromBranch": "from {name}",
   "git.branchName": "Name of the new branch",
+  // The second face of the branch list, and what a row of it does. The list is the same names as
+  // the face it was reached from and does the opposite thing to the working tree, so every row here
+  // says what it does rather than leaving it to be known from which face is up.
+  "git.mergeFrom": "Bring a branch in",
+  "git.mergeInto": "into {name}",
+  "git.mergeOne": "Bring in {name}",
+  // A merge underway, drawn under the branch line for the whole of it — including after every
+  // conflict has been settled, when there is no list of them left to say so.
+  "git.merging": "A merge is underway",
+  "git.mergeAbort": "Stop the merge",
+  // What the press costs. A conflict settled by hand and never written down is in no commit and no
+  // reflog, which is why this question stands in front of the press every time.
+  "git.mergeAbortGone": "What has been settled by hand is written down nowhere, and stopping throws it away.",
+  "git.mergeAbortGo": "Stop it",
+  "git.mergeAbortKeep": "Go back",
+  // What the merge could not settle, and the one number on that list git did not give: how many
+  // conflicts are still written into the file. It is counted off the file rather than off the
+  // index, so it falls the moment the file is put right, whoever put it right (`AMB-D-906`, 2-7).
+  // The press beside it is the reader saying so — nothing here stages a conflict by itself.
+  "git.conflicts": "Conflicts",
+  "git.conflictMarks": "{n} marks left",
+  "git.settleOne": "Say it is settled",
+  "git.conflictsLeft": "{n} still to settle",
+  "git.conflictsSettled": "Everything is settled",
+  "git.mergeContinue": "Continue the merge",
+  "git.takeOurs": "Take this branch's side",
+  "git.takeTheirs": "Take the other branch's side",
   // The frame around the question git puts to the person when it needs a password and has no
   // terminal to ask in (`../../../files/GitAsk`, `AMB-D-913`). The question itself is git's own and
   // is drawn as git wrote it, in git's language — none of it is translated here.

@@ -1933,6 +1933,13 @@ pub struct FolderGitDto {
     /// Nothing where the folder is no repository, and where git could not be run at all.
     pub(crate) branch: Option<GitBranchDto>,
     pub(crate) rows: Vec<GitEntryDto>,
+    /// Whether a merge is under way here — git holding a commit it has been told to bring in, and
+    /// waiting to be told the result is settled.
+    ///
+    /// **It is what turns the commit button into the one that ends the merge.** A commit made while
+    /// this is on *is* the merge commit, and the message git has already written for it is the one
+    /// it will use — so the box a reader types into is not drawn over it (`crate::folder_git`).
+    pub(crate) merging: bool,
 }
 
 /// A question git or ssh is waiting on an answer to (`crate::folder_git_askpass`).

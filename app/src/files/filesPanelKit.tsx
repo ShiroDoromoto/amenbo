@@ -216,7 +216,7 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`git:${root}`);
     // The rows are what the tree draws; where the branch stands is the rail's other half and has
     // no reader on this side yet.
-    return { prefix: "", branch: null, rows: hoisted.git[root] ?? [] };
+    return { prefix: "", branch: null, rows: hoisted.git[root] ?? [], merging: false };
   },
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
     hoisted.takers.push(take);

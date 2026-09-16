@@ -1,10 +1,11 @@
 // The reading column: the far side of the terminal face, where a file opened in the rail's tree is
 // read without leaving the window (`AMB-T-3602`).
 //
-// **It draws the file and nothing else.** Finding one is the tree's, and the tree is in the rail on
-// the other side of the panes (`AMB-D-835`); what stands here is the file, the draft page, or the
-// line saying nothing is open. The two used to share this column, and a file being read was drawn
-// over the tree — which is what made picking a second row out impossible once the first was open.
+// **It draws what is read and never what is found.** Finding a file is the tree's, and the tree is
+// in the rail on the other side of the panes (`AMB-D-835`); what stands here is the file, the draft
+// page, the history of the folder the window is on, or the line saying nothing is open. The tree
+// used to share this column, and a file being read was drawn over it — which is what made picking a
+// second row out impossible once the first was open.
 //
 // **The file it draws belongs to the project.** It is opened from a folder the project is bound to,
 // so switching panes does not move it — what changed in the repository is the same question
@@ -31,8 +32,10 @@ import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
 import { FileEditor } from "./FileEditor";
 import { FileDiff } from "./FileDiff";
+import { GitHistory, type At } from "./GitHistory";
 import { MemoPage } from "./MemoPage";
 import { Icon } from "../components/Icon";
+import type { SideTab } from "../talk/columns";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
@@ -67,7 +70,7 @@ export type Typed = { text: string; edited: boolean; seen: string | undefined };
 
 export function FilesPanel({
   projectId, tab, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone, onClose,
-  wide, onWide, onOpenLedger, onHandOver,
+  wide, onWide, gitRoot = null, history = false, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
   projectId: number | null;
@@ -80,9 +83,9 @@ export function FilesPanel({
    * draws the draft page as a tab beside them. What the top row kept is opening the column and
    * closing it (`../shell/TerminalFace`).
    */
-  tab: "files" | "memo";
-  /** Ask for the other half — the tabs, which are the one door to it. */
-  onTab: (tab: "files" | "memo") => void;
+  tab: SideTab;
+  /** Ask for another face — the tabs, which are the one door to each of them. */
+  onTab: (tab: SideTab) => void;
   /**
    * The files this column is holding, in the order they were opened (`AMB-D-835`).
    *
@@ -121,6 +124,11 @@ export function FilesPanel({
    */
   wide: boolean;
   onWide: (want: boolean) => void;
+  /** The folder the window is on, which the history is the history of (`./GitPanel`). */
+  gitRoot?: string | null;
+  /** Whether the history has been pressed for. The column shows nothing about git until it has
+   *  been, so this is what puts its tab in the row (`AMB-D-905`). */
+  history?: boolean;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
   onOpenLedger?: () => void;
   /** Hand the file being read to the pane the reader is working in (`../shell/TerminalFace`). */
@@ -136,6 +144,12 @@ export function FilesPanel({
   // the reader pressed. It is the reader below saying so, on every keystroke it changes on
   // (`FileReader`).
   const [unsaved, setUnsaved] = useState<string | null>(null);
+
+  // How far into the history the reader has gone: the list, one commit, or one file of it. It is
+  // held here rather than in the face below because the key that goes back a layer is this column's
+  // — one press is one layer, and the two under the history's own are this column's width and this
+  // column (`AMB-D-815`, `./GitHistory`).
+  const [at, setAt] = useState<At>(null);
 
   // And the files that are not on top, which the face is holding for them (`Typed`). Each is
   // holding what was in its editor when it left the screen, so several tabs can be marked at once —
@@ -190,7 +204,10 @@ export function FilesPanel({
     // carry the reader a layer past the one they asked for.
     if (trash.asking || (e.target as HTMLElement).closest('[role="menu"]') !== null) return;
     e.preventDefault();
-    if (wide) onWide(false);
+    // The history's own layers come off first, deepest first: the file's patch, then the commit it
+    // came out of, then the list. Only then is there a column to narrow and a column to close.
+    if (tab === "history" && at !== null) setAt(at.path === null ? null : { ...at, path: null });
+    else if (wide) onWide(false);
     else onClose();
   };
 
@@ -198,7 +215,7 @@ export function FilesPanel({
   // can be in — reading a file included — because a column that could only be closed from one of
   // its states is one a reader has to find their way back out of.
   //
-  // **It is the same row in the same place whichever half is up.** The draft page and a file used to
+  // **It is the same row in the same place whichever face is up.** The draft page and a file used to
   // put it at opposite ends of the column, so crossing between them moved everything under it a line
   // up or down, and the way out was somewhere else each time (`AMB-T-4271`).
   //
@@ -226,19 +243,33 @@ export function FilesPanel({
   const tabs = projectId === null ? null : (
     <FileTabs
       open={open}
-      showing={tab === "memo" ? null : reading}
+      showing={tab === "files" ? reading : null}
       unsaved={marked}
       memo={tab === "memo"}
       onMemo={() => onTab("memo")}
-      onPick={(at) => { onTab("files"); onPick(at); }}
-      onCloseTab={(at) => { void letGo(at, () => onCloseTab(at)); }}
+      // Drawn only once somebody has pressed for it: the column says nothing about git until then
+      // (`AMB-D-905`), and a tab standing there would be saying something.
+      history={history ? tab === "history" : null}
+      onHistory={() => onTab("history")}
+      onPick={(one) => { onTab("files"); onPick(one); }}
+      onCloseTab={(one) => { void letGo(one, () => onCloseTab(one)); }}
     />
   );
 
+  if (projectId !== null && tab === "history") {
+    return (
+      <div className="files" tabIndex={-1} onKeyDown={onKey}>
+        {top}
+        {tabs}
+        <GitHistory projectId={projectId} root={gitRoot} at={at} onAt={setAt} />
+      </div>
+    );
+  }
+
   // The draft page is the project's, and a project has one whether or not it is bound to a folder
-  // (`./MemoPage`). So the half that is up is answered first, and only the files half goes on to ask
-  // whether anything is open — a reader with nowhere to read files still has somewhere to write
-  // (`AMB-T-3690`).
+  // (`./MemoPage`); the history is the folder's, and stands whether or not a file is open. So the
+  // face that is up is answered first, and only the files face goes on to ask whether anything is
+  // open — a reader with nowhere to read files still has somewhere to write (`AMB-T-3690`).
   if (projectId !== null && tab === "memo") {
     return (
       <div className="files" tabIndex={-1} onKeyDown={onKey}>
@@ -306,7 +337,7 @@ export function FilesPanel({
  * **The file that comes up brings itself into view.** Marking it and leaving it off the end of the
  * row would be a face saying which tab is on to a reader who cannot see it.
  */
-function FileTabs({ open, showing, unsaved, memo, onMemo, onPick, onCloseTab }: {
+function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, onPick, onCloseTab }: {
   open: readonly OpenFile[];
   showing: OpenFile | null;
   /** The files holding something not on the disk, by their keys (`FilesPanel`). */
@@ -314,6 +345,10 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, onPick, onCloseTab }: 
   /** Whether the draft page is the one on top. */
   memo: boolean;
   onMemo: () => void;
+  /** Whether the history is on top, and `null` where nobody has pressed for it — which is no tab
+   *  at all rather than one standing off (`./GitHistory`). */
+  history: boolean | null;
+  onHistory: () => void;
   onPick: (at: OpenFile) => void;
   onCloseTab: (at: OpenFile) => void;
 }) {
@@ -351,6 +386,19 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, onPick, onCloseTab }: 
             {t("files.memo")}
           </button>
         </span>
+        {/* Next, where it is there at all: what it is about is the folder rather than any one file,
+            so it stands with the draft page and before the files a reader opened. */}
+        {history !== null && (
+          <span className={`files__tab${history ? " files__tab--on" : ""}`}>
+            <button
+              className="files__tabname"
+              aria-current={history ? "true" : undefined}
+              onClick={onHistory}
+            >
+              {t("git.history")}
+            </button>
+          </span>
+        )}
         {open.map((one) => {
           const key = openKey(one);
           return (

@@ -142,8 +142,9 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
  * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
  * the top row and the file face's is on the panel itself, opened again from the same row; either can
  * be dragged wider, as far as leaves the middle a pane's worth of room (`../talk/columns`). What is
- * remembered is the wish, the width and which half of the file face was up — all three being the
- * person's.
+ * remembered is the wish, the width and which face the reading column was on — all three being the
+ * person's. The history is the one face that is not kept: the column says nothing about git until
+ * somebody presses for it (`AMB-D-905`).
  *
  * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
  * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
@@ -234,6 +235,10 @@ export function TerminalFace({
   // column is drawn at is held here and the two halves are worth different widths — a row of git's
   // is a path and a mark and a count, and the whole of it has to fit (`../talk/columns`).
   const [railTab, setRailTabState] = useState<RailTab>(getRailTab);
+  // Whether the history has been pressed for. The column across the panes shows nothing about git
+  // until it has been (`AMB-D-905`), so this is what puts its tab in that column's row — and it is
+  // not kept, because a run nobody asked on should not come up on it.
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Whether the project tabs are drawn compact, and how wide they are while their names are drawn.
   // The column itself is never closed (`./ProjectTabs`); both of these are kept for the device the way
   // the wish above them is, because what the column draws is the same list of projects whichever one
@@ -797,7 +802,25 @@ export function TerminalFace({
 
   const wantSide = useCallback((want: boolean) => {
     setSideShownState(setSideShown(want));
+    // The column closing takes the history's tab out of the row with it. It is a face somebody
+    // pressed for rather than one the column holds, so closing the column is where the press is
+    // spent (`AMB-D-905`, `../files/GitHistory`).
+    if (!want) setHistoryOpen(false);
   }, []);
+
+  /**
+   * Open the history of the folder the window is on, in the column across the panes.
+   *
+   * **Three things at once, because they are one answer**: the column is what draws it, the wide
+   * width is the room a patch is read in, and the tab is what a reader goes back to it by. It is
+   * the same three a file opened from the tree asks for (`openFile`).
+   */
+  const openHistory = useCallback(() => {
+    setHistoryOpen(true);
+    takeTab("history");
+    wantSide(true);
+    setWideState(true);
+  }, [takeTab, wantSide]);
 
   /** Fold the project names away, or bring them back. Kept the same way the wishes above are. */
   const wantCompact = useCallback((want: boolean) => {
@@ -933,6 +956,9 @@ export function TerminalFace({
   // The project's folders as the rail names them, which is what the picker lists and what the tree
   // is rooted in (`../files/sections`).
   const folderRoots = useMemo(() => sectionsOf(bound.all), [bound.all]);
+  // The folder the window is on, read through the same fallback on both sides of the panes: the
+  // rail's git half and the history across from it are two readers of one choice (`AMB-D-905`).
+  const gitRoot = rootShown(folderRoots, pickedRoot)?.path ?? null;
   const page = layout.page;
   const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
@@ -1070,7 +1096,13 @@ export function TerminalFace({
       project={projects.find((one) => one.id === layout.project) ?? null}
       tab={railTab}
       onTab={takeRailTab}
-      git={<GitPanel projectId={layout.project} root={rootShown(folderRoots, pickedRoot)?.path ?? null} />}
+      git={(
+        <GitPanel
+          projectId={layout.project}
+          root={gitRoot}
+          onHistory={openHistory}
+        />
+      )}
       picker={layout.project === null ? null : (
         <RootPick
           projectId={layout.project}
@@ -1220,13 +1252,13 @@ export function TerminalFace({
         )}
         {note !== null && <span className="termface__note">{note}</span>}
         {/* The way to the reading column, at the far end because it is about the other side of the
-            screen. It opens the column and closes it again, and what comes up is the half the
+            screen. It opens the column and closes it again, and what comes up is the face the
             reader left up.
 
-            **Which half is not asked here any more.** The column holds the draft page and the open
-            files on one row of tabs, and that row is the switch: it is the only one of the two that
-            can also say which files are open, and a second control saying half of the same thing
-            leaves a reader looking for the right one (`../files/FilesPanel`). What was here said
+            **Which face is not asked here any more.** The column holds the draft page and the open
+            files on one row of tabs, and that row is the switch: it is the only control that can
+            also say which files are open, and a second one saying half of the same thing leaves a
+            reader looking for the right one (`../files/FilesPanel`). What was here said
             "folder" in one language after the folder had moved to the rail, which is what a control
             drifts into when the thing it opens has changed under it. */}
         <div className="termface__sides">
@@ -1423,6 +1455,8 @@ export function TerminalFace({
               onClose={() => wantSide(false)}
               wide={wide}
               onWide={setWideState}
+              gitRoot={gitRoot}
+              history={historyOpen}
               onHandOver={handOver}
             />
           </div>

@@ -74,9 +74,12 @@ const says = (about: Partial<FolderGitDto>): FolderGitDto => ({
   ...about,
 });
 
-async function draw(at: string | null = ROOT) {
+/** Every press of the way across to the history, so a test can read it back. */
+let opened = 0;
+
+async function draw(at: string | null = ROOT, onHistory?: () => void) {
   await act(async () => {
-    root.render(createElement(GitPanel, { projectId: 1, root: at }));
+    root.render(createElement(GitPanel, { projectId: 1, root: at, onHistory }));
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
@@ -101,6 +104,7 @@ async function press(one: HTMLButtonElement): Promise<void> {
 }
 
 beforeEach(() => {
+  opened = 0;
   hoisted.git = {};
   hoisted.asked = [];
   hoisted.takers = [];
@@ -217,6 +221,25 @@ describe("the rail's git half", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(hoisted.asked).toEqual([ROOT, ROOT]);
+  });
+
+  /// The history is read in the column across the panes, so what stands here is the way to it —
+  /// and nothing of it is asked for until that press is made (`AMB-T-4899`).
+  it("offers the way across to the history, and asks nothing of it here", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw(ROOT, () => { opened += 1; });
+    const across = container.querySelector<HTMLElement>(".gitpanel__open");
+    expect(across?.textContent).toContain(t("git.history"));
+    await act(async () => { across?.click(); });
+    expect(opened).toBe(1);
+  });
+
+  /// Nothing is handed down where there is nowhere for it to open, and a press that reaches nothing
+  /// is not offered.
+  it("offers no way across where there is nowhere to open it", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw();
+    expect(container.querySelector(".gitpanel__open")).toBeNull();
   });
 
   /// The face has not been told which folder it is on yet. Nothing is asked and nothing is said:

@@ -397,10 +397,14 @@ pub fn spec() -> Value {
                  screen and touches no store: nothing said here outlives this window, and none of it \
                  can be said from outside it.",
         "owed": [
-            "Say `name` early, and name the work rather than the place. Left unsaid, the pane is \
-             labelled by its folder — which answers where you are and never which of you: open three \
-             panes on one repository and the person reads the same label three times over, with no \
-             way to tell which one to look at."
+            "Say `name` once the person has spoken their first line, and name the work rather than \
+             the place. Before they speak there is nothing to name but the waiting, and panes named \
+             for that read alike — which is the one thing a name is here to prevent. The name is also \
+             typed into this terminal, so one said while the person is still writing that first line \
+             is read as part of what they are writing. Left unsaid, the pane is labelled by its \
+             folder — which answers where you are and never which of you: open three panes on one \
+             repository and the person reads the same label three times over, with no way to tell \
+             which one to look at."
         ],
         "offered": [],
         "promises": "A statement is information, never a promise. Say what has happened, not what you \
@@ -677,5 +681,20 @@ mod tests {
             spec["offered"].as_array().is_some_and(|o| o.is_empty()),
             "and offers nothing at all: {offered}",
         );
+    }
+
+    /// When the name is owed is part of what is owed. Asking for it early puts it in the window while
+    /// the person is still writing their first line — the name is typed into that same terminal, so it
+    /// is read as part of what they wrote (`AMB-T-4918`) — and there is no work to name yet anyway.
+    #[test]
+    fn the_name_is_owed_after_the_person_has_spoken() {
+        let owed: String = spec()["owed"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|l| l.as_str())
+            .collect();
+        assert!(owed.contains("first line"), "the canon names when the name is owed: {owed}");
+        assert!(!owed.contains("early"), "and no longer asks for it before that: {owed}");
     }
 }

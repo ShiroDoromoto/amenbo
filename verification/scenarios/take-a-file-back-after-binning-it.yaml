@@ -67,6 +67,7 @@ steps_gui:
     op: set
     with:
       position: asks
+      about: bin
 
   # And it stands where it was put. This is the half that was missing until the row existed — the
   # question could only ever be turned off before, so a machine that had it off had no way back.
@@ -75,6 +76,7 @@ steps_gui:
     op: setting
     with:
       position: asks
+      about: bin
 
   - type: action
     domain: terminal
@@ -121,6 +123,7 @@ steps_gui:
     op: answer
     with:
       answer: yes
+      about: bin
 
   # The file that was open has gone, so the column is the list again — standing the way it was left,
   # because the tree is the panel's to hold. Said rather than assumed: a reading that cannot find a

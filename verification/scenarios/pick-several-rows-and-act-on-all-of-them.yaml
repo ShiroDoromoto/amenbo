@@ -288,6 +288,7 @@ steps_gui:
     op: answer
     with:
       answer: "yes"
+      about: bin
 
   - type: assert
     domain: files

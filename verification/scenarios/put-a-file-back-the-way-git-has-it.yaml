@@ -1,0 +1,369 @@
+# A change thrown away from the row that is carrying it, and the file left holding what git recorded.
+#
+# It is the one act this window offers that nothing takes back. A commit, a stash and a branch switch
+# are all still in the reflog afterwards; a change git was never told about is nowhere once this is
+# answered. So the question before it is part of the road rather than a detail of it, and so is the
+# reading afterwards: what a reader asked for is the recorded text back, not a row leaving a list.
+#
+# ── Why the question is walked both ways ─────────────────────────────────────────────────────────
+# The answer that keeps the change is the one the question exists for. Walked only the other way, a
+# build whose question went ahead whatever was pressed would read green — and the reader it would go
+# wrong for is the one who opened the menu by mistake, which is the whole reason the question is
+# there — the bin's own reasoning, applied where there is no bin to fish anything out of.
+#
+# ── Why the machine's habit is moved rather than assumed ─────────────────────────────────────────
+# Whether the panel asks is a habit of the Mac the run is walked on and not something the build
+# decides: the checkbox that turns it off is drawn inside the question it silences, so a road that
+# only pressed the item would read red on a machine where somebody once ticked it and green on the
+# next one. The settings row is moved first, and it is a row of its own beside the bin's — silencing
+# the reversible question says nothing about this one.
+#
+# The road puts it back at the end for the same reason it moved it: leaving a Mac quiet about the one
+# act nothing undoes is a worse thing to leave behind than any verdict this run could file.
+#
+# ── Why the file is read and not only the list ───────────────────────────────────────────────────
+# A build that dropped the row from the list and left the disk alone passes every reading taken on
+# the two lists. So the file is opened afterwards and read for both halves: the sentence git has, and
+# the sentence that was thrown away — the second one absent, because a build that restored nothing
+# would still be drawing it.
+#
+# ── Why a second file is changed ─────────────────────────────────────────────────────────────────
+# Told not to ask again, the panel has to not ask — and that is a different press from the one that
+# was answered, on a row that has not been touched yet. The second file is what the quiet half is
+# walked on, and its row leaving the list with no answer in between is the whole of the reading.
+#
+# ── Why a commit's own rows are read last ────────────────────────────────────────────────────────
+# What a record holds is what was written down, and there is nothing in it to throw away. The item is
+# not drawn there, and a build that drew it anyway would be offering a press with nothing behind it.
+# It is the last step because the menu it reads is left standing: nothing is pressed on it.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. `git restore` at a shell is not this, and Amenbo is the subject of none of
+# it.
+id: put-a-file-back-the-way-git-has-it
+title: Throw a change away from the row carrying it, having been asked first, and find the recorded text back in the file
+description: >
+  Raise a repository holding two recorded files and change both. Open the menu on one of the changed
+  rows: it offers to throw the change away, and the panel asks before it does. Refuse once and the
+  change is still there; go ahead and the row leaves the list and the file reads as git has it. Say
+  not to ask again, and the second row goes on the press alone. A row of the paths one commit touched
+  offers none of this.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # What git has, and what the road is going to ask for back.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+  # And the two changes on top of it, neither of them ever told to git.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are left to fend for themselves
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: sieving.md
+      content: SCENARIO the loam goes into the trays just as it comes
+
+steps_gui:
+  # Whatever this Mac's history, the question is on for this run. It is the first step because
+  # everything after the menu depends on it.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: asks
+      about: restore
+
+  - type: assert
+    domain: files
+    op: setting
+    with:
+      position: asks
+      about: restore
+
+  # Back to the panel, since moving that row is done in the settings and leaves the reader there.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Both rows are carrying something git has not been told about, which is where this road starts.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: changes
+
+  # Read before it is pressed. The half that matters is the one further down, on a commit's own row —
+  # but an absence proves nothing beside a build that draws the item nowhere at all.
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: true
+
+  - type: action
+    domain: files
+    op: restore
+
+  # Refused. This is the answer the question exists for: the reader who opened the menu by mistake.
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: no
+      about: restore
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  # And again, answered the other way.
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: restore
+
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: yes
+      about: restore
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+      present: false
+
+  # The reading the list cannot give. A build that dropped the row and left the disk alone is still
+  # green up to here.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are left to fend for themselves
+      present: false
+
+  - type: action
+    domain: files
+    op: back
+
+  # Told not to ask, on the row that has not been touched yet.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: quiet
+      about: restore
+
+  - type: assert
+    domain: files
+    op: setting
+    with:
+      position: quiet
+      about: restore
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: sieving.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: restore
+
+  # No answer between the press and this reading, which is the whole of what the quiet half says.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: changes
+      present: false
+
+  # The habit put back where it was found. A Mac left quiet about the one act nothing undoes is worse
+  # than anything this run could have proved.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: asks
+      about: restore
+
+  - type: assert
+    domain: files
+    op: setting
+    with:
+      position: asks
+      about: restore
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # And what a record's own rows offer, which is none of this.
+  - type: action
+    domain: files
+    op: history
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: what the road put here before it started
+      section: history
+
+  - type: action
+    domain: files
+    op: history-open
+    with:
+      name: what the road put here before it started
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: touched
+
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: false

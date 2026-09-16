@@ -19,6 +19,7 @@ import type { GitCommitDto, GitFileDto } from "../bindings/bindings";
 import { formatNumber, t } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { folderGitDiff, folderGitLog, folderGitShow, onFolderChanged } from "./folder";
+import { PatchText } from "./PatchText";
 import { FileMenu } from "./FileMenu";
 
 /** Which layer the reader is on: the list, one commit, or one file of it. */
@@ -255,9 +256,8 @@ function Touched({ files, onPath, onHistory }: {
 /**
  * The patch for one path, as git wrote it.
  *
- * **git's own text, coloured by the character it begins each line with.** What a line means is
- * decided where the diff is made, and reading it back into anything else here would be this side
- * deciding it a second time.
+ * The text is drawn by the hand both patch faces are drawn by (`./PatchText`); what is here is the
+ * asking, which is this face's alone — one path of one commit.
  */
 function Patch({ projectId, root, sha, path }: {
   projectId: number;
@@ -275,29 +275,9 @@ function Patch({ projectId, root, sha, path }: {
     return () => { alive = false; };
   }, [projectId, root, sha, path]);
 
-  if (patch === null) return <div className="githist__patch" />;
+  if (patch === null) return <div className="patch" />;
   if (patch === "") return <p className="files__none">{t("git.noPatch")}</p>;
-  return (
-    <pre className="githist__patch">
-      {patch.split("\n").map((line, at) => (
-        // The line's place in the patch, which is the only thing that tells two identical lines
-        // apart — a patch is full of them.
-        // eslint-disable-next-line react/no-array-index-key
-        <span key={at} className={`githist__line githist__line--${kindOf(line)}`}>{line}{"\n"}</span>
-      ))}
-    </pre>
-  );
-}
-
-/** What one line of a patch is, read off the character git begins it with. */
-function kindOf(line: string): "hunk" | "added" | "removed" | "same" {
-  // The heads of the file's own two names begin with the same characters a changed line does, and
-  // they are three of them rather than one — so they are told apart before the single characters.
-  if (line.startsWith("@@")) return "hunk";
-  if (line.startsWith("+++") || line.startsWith("---")) return "hunk";
-  if (line.startsWith("+")) return "added";
-  if (line.startsWith("-")) return "removed";
-  return "same";
+  return <pre className="patch"><PatchText text={patch} /></pre>;
 }
 
 /** The last segment of a path, which is what a row is read by. */

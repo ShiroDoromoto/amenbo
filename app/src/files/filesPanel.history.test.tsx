@@ -84,12 +84,12 @@ describe("the history in the reading column", () => {
     await click(button("lib.rs"));
     await settle();
     expect(hoisted.asked).toContain(`diff:${ROOT}:${A}:app/src/lib.rs`);
-    const lines = [...container.querySelectorAll(".githist__line")].map((one) => one.textContent);
+    const lines = [...container.querySelectorAll(".patch__line")].map((one) => one.textContent);
     expect(lines.join("")).toContain("+is");
     // git's own text, coloured by the character it begins each line with.
-    expect(container.querySelector(".githist__line--added")?.textContent).toContain("+is");
-    expect(container.querySelector(".githist__line--removed")?.textContent).toContain("-was");
-    expect(container.querySelector(".githist__line--hunk")?.textContent).toContain("@@");
+    expect(container.querySelector(".patch__line--added")?.textContent).toContain("+is");
+    expect(container.querySelector(".patch__line--removed")?.textContent).toContain("-was");
+    expect(container.querySelector(".patch__line--hunk")?.textContent).toContain("@@");
   });
 
   /// One press, one layer — and the column's own two are under the face's, not above them.
@@ -102,11 +102,11 @@ describe("the history in the reading column", () => {
     await settle();
     await click(button("lib.rs"));
     await settle();
-    expect(container.querySelector(".githist__patch")).not.toBeNull();
+    expect(container.querySelector(".patch")).not.toBeNull();
 
     await press(column(), "Escape");
     // Back at the commit's own files, not back at the list.
-    expect(container.querySelector(".githist__patch")).toBeNull();
+    expect(container.querySelector(".patch")).toBeNull();
     expect(rows()).toEqual(["lib.rs"]);
 
     await press(column(), "Escape");

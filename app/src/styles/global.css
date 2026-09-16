@@ -1312,18 +1312,41 @@ input[type="color"] {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: right;
 }
-/* git's own text. It is set in the monospace it was written in and left to run off the side rather
-   than wrapped: a patch read with its lines folded is a patch whose columns no longer line up. */
-.githist__patch {
+/* git's own text, wherever it is read (`app/src/files/PatchText.tsx`). It is set in the monospace it
+   was written in and left to run off the side rather than wrapped: a patch read with its lines
+   folded is a patch whose columns no longer line up. */
+.patch {
   flex: 1 1 auto; min-height: 0; margin: 0;
   overflow: auto;
   padding: var(--s-2) 0;
   font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5;
 }
-.githist__line { display: block; padding: 0 var(--s-3); white-space: pre; }
-.githist__line--hunk { color: var(--c-text-muted); background: var(--c-sunken); }
-.githist__line--added { color: var(--c-git-added); }
-.githist__line--removed { color: var(--c-git-modified); }
+.patch__line { display: block; padding: 0 var(--s-3); white-space: pre; }
+.patch__line--hunk { color: var(--c-text-muted); background: var(--c-sunken); }
+.patch__line--added { color: var(--c-git-added); }
+.patch__line--removed { color: var(--c-git-modified); }
+
+/* What the rows picked out in the rail are holding (`app/src/files/GitDiff.tsx`). The face scrolls
+   as one, so several files read as one page a reader goes down — and each patch keeps its own
+   sideways scroll, because how wide a line is, is that file's business and not the next one's. */
+.gitdiff {
+  flex: 1 1 auto; min-width: 0;
+  min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-3);
+}
+.gitdiff__file { min-width: 0; display: flex; flex-direction: column; }
+/* The name stays put while the patch under it is scrolled sideways, so a reader who has run a long
+   line off the side can still see which file they are in. */
+.gitdiff__name {
+  position: sticky; top: 0; z-index: 1;
+  margin: 0; padding: var(--s-1) var(--s-3);
+  background: var(--c-sunken);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-sm); font-weight: 600;
+}
+/* Inside the face, a patch is as tall as it is: the scroll is the face's, and one patch of its own
+   would put a second bar inside the first. */
+.gitdiff .patch { flex: 0 0 auto; overflow-x: auto; overflow-y: hidden; padding: 0; }
 
 /* What the history is narrowed to, over the list (`app/src/files/GitHistory.tsx`). It is not a layer
    and does not read as one: a layer has a way back that closes it, and this has a control that

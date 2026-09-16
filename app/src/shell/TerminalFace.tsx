@@ -28,6 +28,7 @@ import { FilesPanel, openKey, type OpenFile, type Typed } from "../files/FilesPa
 import { FolderTree } from "../files/FolderTree";
 import { GitAsk } from "../files/GitAsk";
 import { GitPanel } from "../files/GitPanel";
+import type { DiffPick } from "../files/GitDiff";
 import { rootShown, sectionsOf } from "../files/sections";
 import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
@@ -244,6 +245,12 @@ export function TerminalFace({
   // of the folder's. It is asked for from a row's own menu, which is in the rail on the other side
   // of the panes, so the face holds it the way it holds which face is up (`../files/GitHistory`).
   const [historyOnly, setHistoryOnly] = useState<{ root: string; path: string } | null>(null);
+  // Whether the patches of the rows picked out in the rail have been pressed for, and what is picked
+  // at this moment. The press is what puts the tab in the column's row; the set is what the face
+  // draws, and it goes on moving under the face while the reader presses other rows
+  // (`../files/GitDiff`). Neither is kept, for the reason the history's press is not.
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffPick, setDiffPick] = useState<DiffPick | null>(null);
   // The front the folder the window is on sits at inside its repository, said as git answers it.
   // Whichever half of the rail is up reads it, so one of the two always has it.
   const [gitPrefix, setGitPrefix] = useState("");
@@ -810,10 +817,13 @@ export function TerminalFace({
 
   const wantSide = useCallback((want: boolean) => {
     setSideShownState(setSideShown(want));
-    // The column closing takes the history's tab out of the row with it. It is a face somebody
+    // The column closing takes both git faces' tabs out of the row with it. Each is a face somebody
     // pressed for rather than one the column holds, so closing the column is where the press is
-    // spent (`AMB-D-905`, `../files/GitHistory`).
-    if (!want) setHistoryOpen(false);
+    // spent (`AMB-D-905`, `../files/GitHistory`, `../files/GitDiff`).
+    if (!want) {
+      setHistoryOpen(false);
+      setDiffOpen(false);
+    }
   }, []);
 
   /**
@@ -827,6 +837,19 @@ export function TerminalFace({
     setHistoryOnly(only);
     setHistoryOpen(true);
     takeTab("history");
+    wantSide(true);
+    setWideState(true);
+  }, [takeTab, wantSide]);
+
+  /**
+   * Read what the rows picked out in the rail are holding, in the column across the panes.
+   *
+   * The same three things the history asks for, and for the same reasons: the column draws it, the
+   * wide width is the room a patch is read in, and the tab is what a reader goes back to it by.
+   */
+  const openDiff = useCallback(() => {
+    setDiffOpen(true);
+    takeTab("diff");
     wantSide(true);
     setWideState(true);
   }, [takeTab, wantSide]);
@@ -1117,6 +1140,8 @@ export function TerminalFace({
           // The half's own folder, because that is the one its rows are spelled from — and the
           // reading column is where a conflicted file is settled (`../files/GitPanel`).
           onRead={gitRoot === null ? undefined : (path) => openFile({ root: gitRoot, path })}
+          onPicked={setDiffPick}
+          onDiff={openDiff}
         />
       )}
       picker={layout.project === null ? null : (
@@ -1482,6 +1507,8 @@ export function TerminalFace({
               gitRoot={historyOnly?.root ?? gitRoot}
               gitPrefix={gitPrefix}
               history={historyOpen}
+              diff={diffOpen}
+              diffPick={diffPick}
               historyOnly={historyOnly?.path ?? null}
               onHistoryOnly={(one) => setHistoryOnly(
                 one === null || gitRoot === null ? null : { root: gitRoot, path: one },

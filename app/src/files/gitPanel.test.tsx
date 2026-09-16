@@ -110,6 +110,7 @@ vi.mock("./folder", () => {
 });
 
 import { GitPanel } from "./GitPanel";
+import type { DiffPick } from "./GitDiff";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,9 +144,13 @@ async function draw(
   at: string | null = ROOT,
   onHistory?: () => void,
   onRead?: (path: string[]) => void,
+  /** The two the reading column hands down: what the set is, and the press that reads it there. */
+  toColumn: { onPicked?: (one: DiffPick | null) => void; onDiff?: () => void } = {},
 ) {
   await act(async () => {
-    root.render(createElement(GitPanel, { projectId: 1, root: at, onHistory, onRead }));
+    root.render(
+      createElement(GitPanel, { projectId: 1, root: at, onHistory, onRead, ...toColumn }),
+    );
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
@@ -1004,5 +1009,79 @@ describe("the rail's git half, with rows picked out", () => {
     await draw();
     expect(allBox(t("git.changes"))).toBeDefined();
     expect(allBox(t("git.staged"))).toBeUndefined();
+  });
+});
+
+/// The set is read on the other side of the panes as well as acted on here: what the rows are
+/// holding is a patch, and a patch wraps (`AMB-D-835`). So what has to be right is that the column
+/// is told which paths and which of git's two halves — and that the press that opens it is a second
+/// one on the row, the way it is in the tree.
+describe("the rail's git half, read across the panes", () => {
+  /** Press a row, the way a reader picking one out does. */
+  const pressRow = (what: Element) => act(async () => {
+    what.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  /** The second press, which is what asks for the patches. */
+  const pressAgain = (what: Element) => act(async () => {
+    what.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    what.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  /** One changed path and one staged one, which is enough to tell the two halves apart. */
+  const both = (): FolderGitDto => says({
+    rows: [
+      row({ path: ["a.rs"], worktree: "M" }),
+      row({ path: ["b.rs"], index: "M" }),
+    ],
+  });
+
+  it("hands up the picked paths, and which of git's two halves they are in", async () => {
+    hoisted.git[ROOT] = both();
+    const seen: (DiffPick | null)[] = [];
+    await draw(ROOT, undefined, undefined, { onPicked: (one) => seen.push(one) });
+    // Nothing is picked out until a row is pressed, and that is what the column is told first.
+    expect(seen[0]).toBeNull();
+
+    await pressRow(rowOf(t("git.changes"), "a.rs"));
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], staged: false });
+
+    // Picking in the other list puts the first set down, and the half travels with the paths.
+    await pressRow(rowOf(t("git.staged"), "b.rs"));
+    expect(seen[seen.length - 1]).toEqual({ paths: [["b.rs"]], staged: true });
+  });
+
+  /// A conflict is neither of the two halves: what this half draws about one is how much of it is
+  /// left, and git answers about an unmerged path with a patch of another kind (`AMB-D-906`, 2-7).
+  it("hands up nothing for a row of what the merge could not settle", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["x.rs"], index: "U", worktree: "U" })] });
+    const seen: (DiffPick | null)[] = [];
+    await draw(ROOT, undefined, undefined, { onPicked: (one) => seen.push(one) });
+    await pressRow(rowOf(t("git.conflicts"), "x.rs"));
+    expect(seen[seen.length - 1]).toBeNull();
+  });
+
+  it("asks for the patches on a second press of the row, and not on the first", async () => {
+    hoisted.git[ROOT] = both();
+    let asked = 0;
+    await draw(ROOT, undefined, undefined, { onDiff: () => { asked += 1; } });
+
+    await pressRow(rowOf(t("git.changes"), "a.rs"));
+    expect(asked).toBe(0);
+
+    await pressAgain(rowOf(t("git.changes"), "a.rs"));
+    expect(asked).toBe(1);
+  });
+
+  /// The box is what the list does to a path. Pressing it twice is staging and unstaging, and a
+  /// reader doing that is not asking to read anything.
+  it("does not ask for them when the box is pressed twice", async () => {
+    hoisted.git[ROOT] = both();
+    let asked = 0;
+    await draw(ROOT, undefined, undefined, { onDiff: () => { asked += 1; } });
+    await pressAgain(box(t("git.changes"), "a.rs"));
+    expect(asked).toBe(0);
   });
 });

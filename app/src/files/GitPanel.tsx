@@ -93,6 +93,7 @@ import { GitBranch } from "./GitBranch";
 import { useRestore } from "./restore";
 import { type GitMark, markOf } from "./gitMark";
 import { type How, kept, keysIn, PICKED_NONE, pick, type Picked, type Which } from "./gitPick";
+import type { DiffPick } from "./GitDiff";
 
 /** What git wrote on the way back from a door of this half, and whether it was a refusal. */
 type Said = { text: string; refused: boolean };
@@ -113,7 +114,9 @@ const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: fal
  * gathers four hundred milliseconds of them into one, and a fetch moves where the branch stands
  * without writing a byte anybody watches — asking outright is one call and says it now.
  */
-export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onRead }: {
+export function GitPanel({
+  projectId, root, onHistory, onPrefix, onHandOver, onRead, onPicked, onDiff,
+}: {
   /** The project the folder is bound to; nothing is drawn without one. */
   projectId: number | null;
   /** The folder the window is on, as its path. */
@@ -136,6 +139,23 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
    * (`AMB-D-906`, 2-7).
    */
   onRead?: (path: string[]) => void;
+  /**
+   * The rows picked out, as the column across the panes reads them — and nothing where the set is
+   * put down or is in the list of what a merge could not settle.
+   *
+   * **It is handed up on every change and not only when the diff is asked for.** What the column
+   * draws is what is picked at this moment: a reader with the patches in front of them who presses
+   * another row is asking to read that one, the way pressing another file in the tree is
+   * (`./GitDiff`, `AMB-D-906`, 2-4).
+   *
+   * **A conflict is not one of them.** Its two lists are what staging and unstaging act on, and a
+   * path a merge left unmerged is one git answers about with a patch of a different kind — this
+   * half draws the count of what is left in it instead (`AMB-D-906`, 2-7).
+   */
+  onPicked?: (picked: DiffPick | null) => void;
+  /** Open what the picked rows are holding, in the column across the panes. Where nothing is handed
+   *  down there is nowhere for it to open, and the press does nothing. */
+  onDiff?: () => void;
 }) {
   const [git, setGit] = useState<FolderGitDto>(NOTHING);
   /** False until the first read comes back. Nothing is drawn before it. */
@@ -255,6 +275,20 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
   useEffect(() => {
     setPicked((now) => kept(now, rowsIn(now.which, git.rows).map(whole)));
   }, [git]);
+
+  // What the column across the panes is holding, handed up as the set moves (`./GitDiff`). It is
+  // built from the rows rather than from the keys alone, so what goes up is paths git is still
+  // naming — a set is held to the list it was picked from, and this is read after that holding.
+  const showing = diffOf(picked, git.rows);
+  // The same set as one word, because the object is rebuilt on every draw and what the column is
+  // being told is which paths, out of which of the two lists.
+  const shown = showing === null
+    ? ""
+    : `${showing.staged}\n${showing.paths.map((one) => one.join("/")).join("\n")}`;
+  useEffect(() => {
+    onPicked?.(showing);
+    // Told by `shown`, which is the set said as a word.
+  }, [shown]);
 
   // Asked each time the list opens, because what is put aside is what is put aside now — and asked
   // again after a door comes back, since taking one out is what the list was opened to do.
@@ -527,6 +561,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         onPicked={setPicked}
         onToggle={(paths) => void ask(() => folderGitUnstage(projectId, root, paths), true)}
         onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
+        onOpen={onDiff}
       />
       <Changes
         what={t("git.changes")}
@@ -539,6 +574,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         onPicked={setPicked}
         onToggle={(paths) => void ask(() => folderGitStage(projectId, root, paths), true)}
         onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
+        onOpen={onDiff}
       />
       {restore.aside}
       {menu !== null && (
@@ -676,6 +712,22 @@ function rowsIn(which: Which | null, rows: GitEntryDto[]): GitEntryDto[] {
 function rowsAbout(rows: GitEntryDto[], picked: string[], path: string[]): string[][] {
   if (!picked.includes(path.join("/"))) return [path];
   return rows.filter((row) => picked.includes(whole(row))).map((row) => row.path);
+}
+
+/**
+ * The picked rows as the column across the panes reads them, or nothing where there is no patch to
+ * read: an empty set, or one in the list of what a merge could not settle.
+ *
+ * Which of git's two answers the set is in *is* the question the column asks git — what the working
+ * tree holds that the index does not, or what the index holds that the last commit does not — so it
+ * travels with the paths rather than being worked out again over there (`crate::folder_git`).
+ */
+function diffOf(picked: Picked, rows: GitEntryDto[]): DiffPick | null {
+  if (picked.which !== "changed" && picked.which !== "staged") return null;
+  const paths = rowsIn(picked.which, rows)
+    .filter((row) => picked.keys.includes(whole(row)))
+    .map((row) => row.path);
+  return paths.length === 0 ? null : { paths, staged: picked.which === "staged" };
 }
 
 /** Which of the three a press is, by what the reader was holding down. Which key takes a row in is
@@ -961,9 +1013,16 @@ function press(e: ReactMouseEvent<HTMLElement>, onPress: (how: How) => void): vo
   onPress(howOf(e));
 }
 
+/** Whether a press landed on the box a row carries, rather than on the row itself. */
+function inBox(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(".gitpanel__check") !== null;
+}
+
 /** One of the two lists, under its name — drawn with nothing in it as well, since which of the two
  *  a path is in is the answer, and a list that disappeared would leave the other unnamed. */
-function Changes({ what, none, rows, staged, running, which, picked, onPicked, onToggle, onMenu }: {
+function Changes({
+  what, none, rows, staged, running, which, picked, onPicked, onToggle, onMenu, onOpen,
+}: {
   what: string;
   none: string;
   rows: GitEntryDto[];
@@ -979,6 +1038,9 @@ function Changes({ what, none, rows, staged, running, which, picked, onPicked, o
   onToggle: (paths: string[][]) => void;
   /** Open the menu this row carries, at the point the pointer was (`./FileMenu`). */
   onMenu: (path: string[], x: number, y: number) => void;
+  /** Read what the picked rows are holding, in the column across the panes. Absent where there is
+   *  nowhere to read it. */
+  onOpen?: () => void;
 }) {
   const on = picking(which, rows, picked, onPicked, onMenu);
   /** What pressing one row's box is about: the set, where that row is in it, and the row alone
@@ -1020,6 +1082,7 @@ function Changes({ what, none, rows, staged, running, which, picked, onPicked, o
                 onPress={(how) => on.press(whole(row), how)}
                 onToggle={() => toggle(whole(row))}
                 onMenu={on.menu}
+                onOpen={onOpen}
               />
             ))}
           </RowList>
@@ -1049,8 +1112,18 @@ function Changes({ what, none, rows, staged, running, which, picked, onPicked, o
  * **The folder holding it is drawn faintly after the name**, not above it. A list of twenty changes
  * broken into a heading per folder is a page rather than a list, and the names are what a reader
  * runs their eye down.
+ *
+ * **A second press reads what the row is holding**, the way a second press on a row of the tree
+ * opens the file (`AMB-D-835`). The first of the two has already put the row in the set — on its
+ * own, where nothing else was picked — so what opens across the panes is what the reader is looking
+ * at (`./GitDiff`). The box is not a way in: pressing it twice is staging and unstaging, and a
+ * reader doing that is not asking to read anything — which is why the second press is turned away
+ * here rather than stopped at the box. The first of the two puts every door of this half down, and
+ * a press on a control that has gone down arrives at the row around it instead.
  */
-function ChangedRow({ row, staged, running, picked, stop, onPress, onToggle, onMenu }: {
+function ChangedRow({
+  row, staged, running, picked, stop, onPress, onToggle, onMenu, onOpen,
+}: {
   row: GitEntryDto;
   staged: boolean;
   running: boolean;
@@ -1063,6 +1136,8 @@ function ChangedRow({ row, staged, running, picked, stop, onPress, onToggle, onM
   /** Press this row's box, which the list reads as being about the set where this row is in it. */
   onToggle: () => void;
   onMenu: (path: string[], x: number, y: number) => void;
+  /** Read what the picked rows are holding. Absent where there is nowhere to read it. */
+  onOpen?: () => void;
 }) {
   const name = row.path[row.path.length - 1] ?? "";
   const holding = row.path.slice(0, -1).join("/");
@@ -1077,6 +1152,7 @@ function ChangedRow({ row, staged, running, picked, stop, onPress, onToggle, onM
       tabIndex={stop ? 0 : -1}
       title={path}
       onClick={(e) => press(e, onPress)}
+      onDoubleClick={(e) => { if (!inBox(e.target)) onOpen?.(); }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.currentTarget.focus();

@@ -10,6 +10,7 @@ import { currentTimeAxisValueId, isTimeAxis } from "../core/timeAxis";
 import { isClosable } from "../core/closable";
 import type { DimensionDto, DimensionValueDto } from "../bindings/bindings";
 import { Icon } from "../components/Icon";
+import { Pager, usePager } from "../components/Pager";
 
 // The management panel for classification (unified dimensions), reached from the board's axis bar as a modal of its
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
@@ -29,7 +30,9 @@ import { Icon } from "../components/Icon";
 // grow the other role's payload in the same place: the button that closes one and opens it again (`AMB-D-829`).
 // This is the one face that shows a closed value at all — the picker hides it, the board drops its column once
 // the last card leaves, and only here can it be brought back. Shows, but folded: the closed values sit behind a
-// button that counts them, so an axis with years of retired values still reads as what it currently offers.
+// button that counts them, so an axis with years of retired values still reads as what it currently offers. The
+// values still on offer are read a page at a time on top of that — the fold bounds what an axis retires, and the
+// page bounds what it offers, neither being a number this panel gets to assume.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
@@ -74,6 +77,14 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
   // The rows on screen. Every value still goes to `siblings` below: what a required axis has left to
   // offer, and where a deleted value's tasks may land, are read off the axis and not off the fold.
   const shown = showClosed ? dim.values : dim.values.filter((v) => !v.closed);
+  // And one page of those at a time. The fold holds the closed values down; nothing holds the open ones
+  // down, and an axis is free to carry hundreds — so the panel draws a page and says which page it is,
+  // the way the flat lists do. Opening the fold is a different list, so it starts at the first page.
+  const pager = usePager(shown, `${dim.id}:${showClosed}`);
+  // Reordering is by the neighbouring row, and a row at either end of a page has a neighbour on the
+  // page next door. So the page follows the value rather than the value leaving the screen: the press
+  // lands where the value is going, which is one place away in `shown`.
+  const follow = (to: number) => pager.setPage(Math.floor(to / pager.pageSize));
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
   }
@@ -190,30 +201,50 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
       />
       <div className={`dimmgr__values ${dim.ordered ? "dimmgr__values--ordered" : ""}`}>
         <span className="faint dimmgr__vlabel">{t("dimmgr.values")}</span>
-        {shown.map((v, i) => (
-          <ValueRow
-            key={v.id}
-            value={v}
-            store={store}
-            projectId={projectId}
-            dimensionId={dim.id}
-            required={dim.required}
-            siblings={dim.values.filter((o) => o.id !== v.id)}
-            ordered={dim.ordered}
-            timeAxis={isTimeAxis(dim)}
-            closable={isClosable(dim)}
-            current={v.id === currentId}
-            // The anchor is the row above and the row below **on screen**, not in the axis. Core takes
-            // any sibling as the anchor (`ops::place`), so a folded axis reorders the way it reads —
-            // the moved value clears the closed ones the fold is hiding in between.
-            onMoveUp={i > 0 ? () => store.moveDimensionValue(v.id, { before: shown[i - 1].id }) : undefined}
-            onMoveDown={
-              i < shown.length - 1
-                ? () => store.moveDimensionValue(v.id, { after: shown[i + 1].id })
-                : undefined
-            }
-          />
-        ))}
+        {pager.pageItems.map((v, i) => {
+          // Where this row stands in the whole of what is shown, which is what the anchors are read
+          // off: taking them off the page would put an arrow at the top and the bottom of every page
+          // and stop the value crossing to the next one.
+          const at = pager.start + i;
+          return (
+            <ValueRow
+              key={v.id}
+              value={v}
+              store={store}
+              projectId={projectId}
+              dimensionId={dim.id}
+              required={dim.required}
+              siblings={dim.values.filter((o) => o.id !== v.id)}
+              ordered={dim.ordered}
+              timeAxis={isTimeAxis(dim)}
+              closable={isClosable(dim)}
+              current={v.id === currentId}
+              // The anchor is the row above and the row below **on screen**, not in the axis. Core takes
+              // any sibling as the anchor (`ops::place`), so a folded axis reorders the way it reads —
+              // the moved value clears the closed ones the fold is hiding in between.
+              onMoveUp={at > 0 ? () => {
+                store.moveDimensionValue(v.id, { before: shown[at - 1].id });
+                follow(at - 1);
+              } : undefined}
+              onMoveDown={
+                at < shown.length - 1
+                  ? () => {
+                      store.moveDimensionValue(v.id, { after: shown[at + 1].id });
+                      follow(at + 1);
+                    }
+                  : undefined
+              }
+            />
+          );
+        })}
+        <Pager
+          page={pager.page}
+          pageCount={pager.pageCount}
+          total={pager.total}
+          start={pager.start}
+          pageSize={pager.pageSize}
+          onPage={pager.setPage}
+        />
         {closedCount > 0 && (
           <button
             className="btn dimmgr__closedfold"

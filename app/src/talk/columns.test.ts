@@ -259,6 +259,14 @@ describe("which half of the file face is up", () => {
     localStorage.setItem("amenbo.termface.sideTab", "tree");
     expect(getSideTab()).toBe("memo");
   });
+
+  /// The column shows nothing about git until somebody presses for it, so a run nobody asked on
+  /// must not come up on the history (`AMB-D-905`).
+  it("answers with the history but does not write it down", () => {
+    setSideTab("files");
+    expect(setSideTab("history")).toBe("history");
+    expect(getSideTab()).toBe("files");
+  });
 });
 
 describe("which half of the rail is up", () => {

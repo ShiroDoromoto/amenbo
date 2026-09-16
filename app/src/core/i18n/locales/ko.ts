@@ -639,6 +639,7 @@ export const ko: Translation = {
     "git.tabFiles": "파일",
     "git.tabGit": "Git",
     "git.noRepo": "이 폴더는 저장소가 아닙니다.",
+    "git.noAnswer": "git이 이 폴더에 대해 답하지 않았습니다.",
     "git.detached": "브랜치에 있지 않습니다",
     "git.ahead": "{n}개 앞",
     "git.behind": "{n}개 뒤",

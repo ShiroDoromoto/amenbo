@@ -652,6 +652,7 @@ export const fr: Translation = {
     "git.tabFiles": "Fichiers",
     "git.tabGit": "Git",
     "git.noRepo": "Ce dossier n'est pas un dépôt.",
+    "git.noAnswer": "git n'a pas répondu au sujet de ce dossier.",
     "git.detached": "Sur aucune branche",
     "git.ahead": "{n} en avance",
     "git.behind": "{n} en retard",

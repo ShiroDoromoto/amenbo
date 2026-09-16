@@ -745,7 +745,17 @@ prefix: string,
 /**
  * Nothing where the folder is no repository, and where git could not be run at all.
  */
-branch: GitBranchDto | null, rows: Array<GitEntryDto>, 
+branch: GitBranchDto | null, 
+/**
+ * What git wrote in refusing to answer about this folder — nothing where it answered.
+ *
+ * **It is what tells a refusal apart from a folder that is no repository.** Both leave
+ * `branch` empty, and the face draws a sentence off that emptiness — so without this one, a
+ * `git status` that came back 128 is drawn as "this folder is not a repository", which is a
+ * thing nobody can act on (`AMB-T-4982`). It is git's own words and is drawn as git wrote
+ * them (`AMB-D-906`, 3-4).
+ */
+said: string | null, rows: Array<GitEntryDto>, 
 /**
  * Whether a merge is under way here — git holding a commit it has been told to bring in, and
  * waiting to be told the result is settled.

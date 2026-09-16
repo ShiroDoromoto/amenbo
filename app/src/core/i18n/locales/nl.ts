@@ -641,6 +641,7 @@ export const nl: Translation = {
     "git.tabFiles": "Bestanden",
     "git.tabGit": "Git",
     "git.noRepo": "Deze map is geen repository.",
+    "git.noAnswer": "git heeft niets over deze map geantwoord.",
     "git.detached": "Op geen enkele branch",
     "git.ahead": "{n} voor",
     "git.behind": "{n} achter",

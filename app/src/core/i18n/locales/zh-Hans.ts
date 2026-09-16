@@ -644,6 +644,7 @@ export const zhHans: Translation = {
     "git.tabFiles": "文件",
     "git.tabGit": "Git",
     "git.noRepo": "这个文件夹不是仓库。",
+    "git.noAnswer": "git 没有回答这个文件夹的情况。",
     "git.detached": "不在任何分支上",
     "git.ahead": "领先 {n} 个",
     "git.behind": "落后 {n} 个",

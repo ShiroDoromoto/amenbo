@@ -643,6 +643,7 @@ export const id: Translation = {
     "git.tabFiles": "Berkas",
     "git.tabGit": "Git",
     "git.noRepo": "Folder ini bukan repositori.",
+    "git.noAnswer": "git tidak menjawab tentang folder ini.",
     "git.detached": "Tidak di cabang mana pun",
     "git.ahead": "{n} di depan",
     "git.behind": "{n} di belakang",

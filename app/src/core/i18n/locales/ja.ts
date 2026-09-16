@@ -647,6 +647,7 @@ export const ja: Translation = {
     "git.tabFiles": "ファイル",
     "git.tabGit": "Git",
     "git.noRepo": "このフォルダはリポジトリではありません。",
+    "git.noAnswer": "git はこのフォルダについて答えませんでした。",
     "git.detached": "ブランチにいません",
     "git.ahead": "{n} 件先",
     "git.behind": "{n} 件後ろ",

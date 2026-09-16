@@ -643,6 +643,7 @@ export const th: Translation = {
     "git.tabFiles": "ไฟล์",
     "git.tabGit": "Git",
     "git.noRepo": "โฟลเดอร์นี้ไม่ใช่ที่เก็บโค้ด",
+    "git.noAnswer": "git ไม่ได้ตอบเกี่ยวกับโฟลเดอร์นี้",
     "git.detached": "ไม่ได้อยู่บนสาขาใด",
     "git.ahead": "นำหน้า {n}",
     "git.behind": "ตามหลัง {n}",

@@ -641,6 +641,7 @@ export const hi: Translation = {
     "git.tabFiles": "फ़ाइलें",
     "git.tabGit": "Git",
     "git.noRepo": "यह फ़ोल्डर रिपॉज़िटरी नहीं है।",
+    "git.noAnswer": "git ने इस फ़ोल्डर के बारे में कोई उत्तर नहीं दिया।",
     "git.detached": "किसी ब्रांच पर नहीं",
     "git.ahead": "{n} आगे",
     "git.behind": "{n} पीछे",

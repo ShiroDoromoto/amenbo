@@ -656,6 +656,7 @@ export const pl: Translation = {
     "git.tabFiles": "Pliki",
     "git.tabGit": "Git",
     "git.noRepo": "Ten folder nie jest repozytorium.",
+    "git.noAnswer": "git nie odpowiedział o tym folderze.",
     "git.detached": "Poza gałęzią",
     "git.ahead": "{n} do przodu",
     "git.behind": "{n} do tyłu",

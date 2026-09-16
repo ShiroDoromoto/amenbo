@@ -132,6 +132,7 @@ const says = (about: Partial<FolderGitDto>): FolderGitDto => ({
   branch: { name: "main", upstream: "origin/main", ahead: 0, behind: 0 },
   rows: [],
   merging: false,
+  said: null,
   ...about,
 });
 
@@ -285,10 +286,24 @@ describe("the rail's git half", () => {
   /// One project in twenty-one on this machine. An empty list there would read as a repository
   /// where nothing has happened.
   it("draws the sentence and nothing else where the folder is no repository", async () => {
-    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [], merging: false };
+    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [], merging: false, said: null };
     await draw();
     expect(container.textContent).toContain(t("git.noRepo"));
     expect(container.querySelector(".gitpanel__section")).toBeNull();
+  });
+
+  /// A repository whose `git status` came back non-zero — the LFS filter a `.gitattributes` names
+  /// is not on the window's `PATH` (`AMB-T-4979` measured it). The branch is empty either way, and
+  /// telling the reader their repository is not one is a falsehood they cannot act on.
+  it("draws what git said where it refused to answer, and not the no-repository sentence", async () => {
+    const refusal = "git-lfs filter-process: git-lfs: command not found\n"
+      + "fatal: the remote end hung up unexpectedly";
+    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [], merging: false, said: refusal };
+    await draw();
+    expect(container.textContent).toContain(refusal);
+    expect(container.textContent).toContain(t("git.noAnswer"));
+    expect(container.textContent).not.toContain(t("git.noRepo"));
+    expect(container.querySelector(".gitpanel__said--refused")).not.toBeNull();
   });
 
   /// Which list a path is in is git's answer and not a reader's sorting: `X` is what the index says

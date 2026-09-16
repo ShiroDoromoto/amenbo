@@ -641,6 +641,7 @@ export const tr: Translation = {
     "git.tabFiles": "Dosyalar",
     "git.tabGit": "Git",
     "git.noRepo": "Bu klasör bir depo değil.",
+    "git.noAnswer": "git bu klasör hakkında yanıt vermedi.",
     "git.detached": "Hiçbir dalda değil",
     "git.ahead": "{n} ileride",
     "git.behind": "{n} geride",

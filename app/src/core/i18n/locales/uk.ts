@@ -656,6 +656,7 @@ export const uk: Translation = {
     "git.tabFiles": "Файли",
     "git.tabGit": "Git",
     "git.noRepo": "Ця тека не є репозиторієм.",
+    "git.noAnswer": "git не відповів про цю теку.",
     "git.detached": "Не на гілці",
     "git.ahead": "Попереду на {n}",
     "git.behind": "Позаду на {n}",

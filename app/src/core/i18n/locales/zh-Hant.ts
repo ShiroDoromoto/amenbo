@@ -644,6 +644,7 @@ export const zhHant: Translation = {
     "git.tabFiles": "檔案",
     "git.tabGit": "Git",
     "git.noRepo": "這個資料夾不是儲存庫。",
+    "git.noAnswer": "git 沒有回答這個資料夾的狀況。",
     "git.detached": "不在任何分支上",
     "git.ahead": "領先 {n} 個",
     "git.behind": "落後 {n} 個",

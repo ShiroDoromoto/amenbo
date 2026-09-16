@@ -3157,6 +3157,28 @@ const REGISTRY: &[OpSpec] = &[
     // walk: what a conflict settled by hand and never recorded is worth is exactly what the question
     // is for, and a question only ever answered one way is half a control.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "merge-abort", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    // ── what is put aside, and taken back out ─────────────────────────────────────────────────────
+    // The list the last of the buttons under the branch line opens, which is the one door on this
+    // half that opens a list rather than doing a thing (`app/src/files/GitPanel.tsx`).
+    //
+    // Only what git already follows goes into a stash here, so a road reaches this at all by having
+    // changed a file git has recorded before — where nothing is followed the row that puts things
+    // aside is not drawn, rather than drawn to come back with git's refusal.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stash", required: &[], refs: &[], strings: &[], binds: false },
+    // Opening that list and stopping there, which the branch's list has no op for and this one needs:
+    // what is put aside is written nowhere else on the face, so a road with no way to hold the list
+    // open has no way to read it. It closes on the next press anywhere outside it and that press
+    // still lands, so a road reads the list and simply goes on.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stash-list", required: &[], refs: &[], strings: &[], binds: false },
+    // One of its rows pressed, which takes that stash back out and drops it. The row is named by the
+    // line git wrote on the stash, for the reason `git-said` is read that way: the name it sits under
+    // is `stash@{0}`, which says where a stash is and not which one it is — the row under that name
+    // is a different stash the moment another is made.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stash-restore", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // And that same line read rather than pressed. `shows` is part of git's own sentence about where
+    // the stash was made — the branch it was made on, and the commit it was made over — so what a
+    // road looks for is English however the interface around it is drawn.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "stashed", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
     // ── what git is told, and what it has written down ────────────────────────────────────────────
     // The half of the panel that is git's is a pair of lists and one press under them: what has

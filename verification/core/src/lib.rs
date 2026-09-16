@@ -3239,20 +3239,26 @@ const REGISTRY: &[OpSpec] = &[
     // comparison screen, and a reader presses whichever of the two is in front of them.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "keep-mine", required: &[], refs: &[], strings: &[], binds: false },
 
-    // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
-    // Where the file face's own settings row stands: whether the panel asks before it bins a row.
-    // The face has one setting, so the row is not named — the way the tick's is not.
+    // ── binning a row, throwing a change away, and the two questions before them ──────────────────
+    // Where the file face's own settings rows stand: whether the panel asks before it bins a row, and
+    // whether it asks before it throws away what git has not recorded. `about` says which of the two,
+    // `bin` or `restore`, because the two rows stand together under the same heading and a step that
+    // named neither would be moving whichever one the operator's eye landed on first.
     //
-    // **This is what lets the question be walked at all.** Whether it is asked is a habit of the
+    // **They are two switches and not one.** A row in the bin comes back and a change git was never
+    // told about does not, so a reader who silenced the reversible question has said nothing about the
+    // other one.
+    //
+    // **This is what lets either question be walked at all.** Whether it is asked is a habit of the
     // machine the run is on, and the checkbox that turns it off is drawn inside the question it
     // silences — so the settings row is the only thing that puts the question back. A road that can
     // move it can put the machine where it needs it and then walk the question, instead of pressing
     // the bin and covering both endings.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position", "about"], refs: &[], strings: &["position", "about"], binds: false },
     // And moving it. `asks` puts the question back, `quiet` takes it away. The positions are named by
     // what each does rather than by the word drawn on the row, since the words are the interface's own
     // and the run's language is whatever the machine is set to.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position", "about"], refs: &[], strings: &["position", "about"], binds: false },
     // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
     // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
     //
@@ -3262,17 +3268,39 @@ const REGISTRY: &[OpSpec] = &[
     // are the same press, which is why they are the same op — what differs is whether a road wrote a
     // step after it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
-    // The question the bin put, answered. `yes` bins the file and `no` leaves it where it is — and
-    // both are a road's to walk, since what the question is for is the second one.
+    // The item on a row's menu that throws away what the working tree has done to that path
+    // (`app/src/files/restore.tsx`). It takes no args because the menu is already standing on the row
+    // it is about, the way the items `hand-over` presses are.
     //
-    // **The checkbox in it is not this op's.** Ticking it would turn the question off for every run
-    // walked on this machine afterwards, which is the state this pair exists to stop being permanent;
+    // **It is the one act this face offers that nothing takes back.** A commit, a stash and a branch
+    // switch are all still in the reflog afterwards, and a change git was never told about is nowhere
+    // once this is answered — which is why the question before it stands by default, and why its
+    // switch is not the bin's.
+    //
+    // **The press is the whole of this step, and the question is the next one**, exactly as the bin's
+    // is. In `asks` the panel puts a question here and this step leaves it standing; in `quiet` the
+    // change goes on the press.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "restore", required: &[], refs: &[], strings: &[], binds: false },
+    // Which of the git items the standing menu draws, read off the menu `menu` opened rather than off
+    // the row under it. `item` names one by what it does rather than by the words on it, for the reason
+    // `door` and `note` are named that way.
+    //
+    // `present: false` is the half this exists for. A row of the paths one commit touched is about what
+    // was written down, and a record has no working tree to throw away — so the item is not drawn
+    // there, and a build that drew it anyway would be offering a press with nothing behind it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "offers", required: &["item", "present"], refs: &[], strings: &["item"], binds: false },
+    // The question one of those two presses put, answered. `yes` goes ahead and `no` leaves things
+    // where they are — and both are a road's to walk, since what a question is for is the second one.
+    // `about` says which of the two questions, for the reason the settings rows are named that way.
+    //
+    // **The checkbox in it is not this op's.** Ticking it would turn that question off for every run
+    // walked on this machine afterwards, which is the state these pairs exist to stop being permanent;
     // a road that wants the panel quiet says so with `set`.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
-    // And taking it back, which on this face means the last press of the bin and nothing else. What
-    // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
-    // line says the key — and says where to be standing, because the column beside this one hears the
-    // same key as its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer", "about"], refs: &[], strings: &["answer", "about"], binds: false },
+    // And taking it back, which on this face means the last press of the bin and nothing else — the
+    // press above it is the one thing here that never comes back. What does it is the key the machine
+    // already undoes with rather than a control Amenbo drew, so the line says the key — and says where
+    // to be standing, because the column beside this one hears the same key as its own.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── picking rows out ──────────────────────────────────────────────────────────────────────────

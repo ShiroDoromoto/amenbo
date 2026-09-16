@@ -812,6 +812,11 @@ impl Instructor {
     /// behind to look for — while the word its absence would be read by (the status it was set to) is
     /// standing on every other card on the board.
     ///
+    /// `files offers` is a `Review` for the same reason one face over, and the row it is read on is what
+    /// makes the absent half worth walking: a commit's own list of paths has nothing to throw away, so
+    /// the item is not drawn there, and the words its absence would be read by are on the menu every
+    /// row of the tree opens.
+    ///
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
     /// was given nor the colour it falls back to puts one there. `terminal tab-icon` is the same
@@ -3068,10 +3073,14 @@ impl Instructor {
             // the way the tick's is: a row read in its new position with nothing written behind it
             // would be evidence of an answer nothing kept.
             (Domain::Files, "set") => match req(with, "position")? {
-                "asks" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel ask."
-                    .to_string(),
-                "quiet" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel not ask."
-                    .to_string(),
+                "asks" => format!(
+                    "In Amenbo's own settings, under the section about files, move the row for the question before {} to the position that has the panel ask.",
+                    question(with)?.0
+                ),
+                "quiet" => format!(
+                    "In Amenbo's own settings, under the section about files, move the row for the question before {} to the position that has the panel not ask.",
+                    question(with)?.0
+                ),
                 other => {
                     return Err(format!("action `set` does not know the position `{other}`"))
                 }
@@ -3083,15 +3092,22 @@ impl Instructor {
             (Domain::Files, "trash") =>
                 "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
-            // And answering it. The two are named by what each does rather than by the words on the
-            // buttons, which are the interface's own.
-            (Domain::Files, "answer") => match req(with, "answer")? {
-                "yes" => "In the question the panel put about binning the file, press the answer that goes ahead and bins it. Leave the box about not asking again unticked."
+            // The item that throws a change away, on the menu a row's right-click put up. The press and
+            // nothing after it, the way the bin's is: in `asks` the panel puts its question here and
+            // the step leaves it standing, because deciding it is `answer`'s.
+            (Domain::Files, "restore") =>
+                "On the menu standing on the row, press the item that throws away what git has not been told about that file. If the panel asks whether to throw the change away, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
-                "no" => "In the question the panel put about binning the file, press the answer that keeps the file where it is. Leave the box about not asking again unticked."
-                    .to_string(),
-                other => {
-                    return Err(format!("action `answer` does not know the answer `{other}`"))
+            // And answering one of those questions. The answers are named by what each does rather
+            // than by the words on the buttons, which are the interface's own.
+            (Domain::Files, "answer") => {
+                let (about, goes, keeps) = question(with)?;
+                match req(with, "answer")? {
+                    "yes" => format!("In the question the panel put about {about}, press the answer that goes ahead: it {goes}. Leave the box about not asking again unticked."),
+                    "no" => format!("In the question the panel put about {about}, press the answer that {keeps}. Leave the box about not asking again unticked."),
+                    other => {
+                        return Err(format!("action `answer` does not know the answer `{other}`"))
+                    }
                 }
             },
             // And taking it back. The key is the machine's own, and the line says where to be standing:
@@ -3910,13 +3926,26 @@ impl Instructor {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
             },
-            // Where the file face's own settings row stands. The positions are named by what each
+            // What a row's menu offers, read rather than pressed. The item is described and never
+            // quoted, its words being the interface's own.
+            (Domain::Files, "offers") => format!(
+                "On the menu standing on the row, confirm {}.",
+                {
+                    let (there, gone) = menu_item(req(with, "item")?)?;
+                    if present(with) { there } else { gone }
+                }
+            ),
+            // Where the file face's own settings rows stand. The positions are named by what each
             // does rather than by the word drawn on the row, since the words are the interface's own.
             (Domain::Files, "setting") => match req(with, "position")? {
-                "asks" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel ask."
-                    .to_string(),
-                "quiet" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel not ask."
-                    .to_string(),
+                "asks" => format!(
+                    "In Amenbo's own settings, under the section about files, confirm the row for the question before {} stands in the position that has the panel ask.",
+                    question(with)?.0
+                ),
+                "quiet" => format!(
+                    "In Amenbo's own settings, under the section about files, confirm the row for the question before {} stands in the position that has the panel not ask.",
+                    question(with)?.0
+                ),
                 other => {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
@@ -5125,6 +5154,48 @@ fn section(with: &Args) -> Result<&'static str, String> {
         )),
         None => Err("arg `section` must say which section".to_string()),
     }
+}
+
+/// Which of the two questions the file face puts before something goes: the one before a row is put
+/// in the machine's bin, and the one before what git has not been told about a file is thrown away.
+/// Named by what is at stake rather than by the words on the row, for [`section`]'s reason.
+///
+/// It is said on every step that touches either — the settings row, the press's own question — because
+/// the two rows stand together under one heading and the two questions read alike. What comes back is
+/// the question, what its yes does, and what its no keeps, since a step naming the question alone
+/// would leave the operator to work out which button was which.
+fn question(with: &Args) -> Result<(&'static str, &'static str, &'static str), String> {
+    match with.get("about").and_then(|v| v.as_str()) {
+        Some("bin") => Ok((
+            "binning a file",
+            "bins the file",
+            "keeps the file where it is",
+        )),
+        Some("restore") => Ok((
+            "throwing away what git has not been told about a file",
+            "throws the change away",
+            "keeps the change",
+        )),
+        Some(other) => Err(format!(
+            "`about` does not know `{other}` — it is bin or restore"
+        )),
+        None => Err("arg `about` must say which of the two questions".to_string()),
+    }
+}
+
+/// One of the git items a row's menu draws, as the phrase for it being there and the phrase for it
+/// not being there. Both halves are written out for [`task_control`]'s reason: an item that is not
+/// drawn leaves no words behind to look for, so the absent half has to say what is not there.
+fn menu_item(item: &str) -> Result<(&'static str, &'static str), String> {
+    Ok(match item {
+        "restore" => (
+            "an item that throws away what git has not been told about that file is there to press",
+            "no item offers to throw away what git has not been told about that file",
+        ),
+        other => return Err(format!(
+            "`item: {other}` is not an item a row's menu keeps (restore)"
+        )),
+    })
 }
 
 /// Which of a Markdown file's two forms a step is about — what the text says, or the text itself.

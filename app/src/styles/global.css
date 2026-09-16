@@ -1017,6 +1017,87 @@ input[type="color"] {
   color: var(--c-git-modified);
 }
 
+/* The two halves of the rail, and the row that swaps them (`app/src/shell/FolderRail.tsx`,
+   `AMB-D-905`). They are drawn as segments of one control rather than as two buttons: what a reader
+   is choosing between is which of two lists the column holds, and a pair that shared no box would
+   read as two things to press. */
+.rail__tabs {
+  display: flex;
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  padding: 2px;
+}
+/* Half the row each, so the pair is one control divided rather than two words of different lengths
+   — and never wrapped: the rail's floor is 120px and a name broken over two lines reads as two
+   controls. */
+.rail__tab {
+  flex: 1 1 0; min-width: 0;
+  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
+  padding: var(--s-1) 0;
+  color: var(--c-text-muted); font: inherit; font-size: var(--fs-xs); line-height: 1.6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.rail__tab:hover { color: var(--c-text); }
+.rail__tab--on {
+  background: var(--c-surface);
+  color: var(--c-text); font-weight: var(--fw-bold);
+}
+
+/* What git says about the folder the window is on (`app/src/files/GitPanel.tsx`). It scrolls in the
+   rail the way the tree does, and stands on the rail's own ground. */
+.gitpanel {
+  flex: 1 1 auto; min-width: 0;
+  min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-3);
+  padding: var(--s-3);
+  font-size: var(--fs-md);
+}
+/* The branch, and how far it stands from the one it is measured by. The name gives way first: a
+   count is two characters and is the half that goes when the column is dragged narrow. */
+.gitpanel__branch { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+.gitpanel__branchname {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+.gitpanel__count { flex: 0 0 auto; color: var(--c-text-muted); font-family: var(--font-mono); }
+.gitpanel__section { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+/* The name of one of git's two answers, with how many are under it. */
+.gitpanel__head {
+  margin: 0; padding: var(--s-2) 0 0;
+  border-top: 1px solid var(--c-rule);
+  color: var(--c-text-muted); font-size: var(--fs-md); font-weight: var(--fw-medium);
+}
+.gitpanel__list { list-style: none; margin: 0; padding: 0; }
+/* One path git named. The mark is set in the same monospaced pair on every row, so the letters make
+   a column a reader can run their eye down — which is what makes a list of twenty legible at all. */
+.gitpanel__row {
+  display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
+  padding: 1px 0;
+}
+.gitpanel__mark {
+  flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: var(--fs-xs);
+  color: var(--git, var(--c-text-muted));
+}
+.gitpanel__name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--git, var(--c-text));
+}
+/* Where it is, after the name rather than over it: a heading per folder would turn a list of
+   changes into a page, and what a reader runs down is the names. */
+.gitpanel__where {
+  min-width: 0; flex: 1 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+  text-align: right;
+}
+/* The same three colours the tree wears, read from the same two letters (`./gitMark`). */
+.gitpanel__row--modified { --git: var(--c-git-modified); }
+.gitpanel__row--added { --git: var(--c-git-added); }
+.gitpanel__row--untracked { --git: var(--c-git-untracked); }
+
 /* ---------- the file face ---------- */
 /* The right side of the terminal face: what changed in the project's folder lately, and the folder
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying

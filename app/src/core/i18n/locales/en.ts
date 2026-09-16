@@ -788,6 +788,16 @@ const ui = {
   "files.folderGone": "This folder is not there any more.",
   "files.rootPick": "Which folder this window is on",
   "files.rootChanged": "Something in here has changed",
+  "git.tabFiles": "Files",
+  "git.tabGit": "Git",
+  "git.noRepo": "This folder is not a repository.",
+  "git.detached": "Not on a branch",
+  "git.ahead": "Ahead by {n}",
+  "git.behind": "Behind by {n}",
+  "git.staged": "Staged",
+  "git.nothingStaged": "Nothing is staged yet.",
+  "git.changes": "Changes",
+  "git.nothingChanged": "Nothing has changed.",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

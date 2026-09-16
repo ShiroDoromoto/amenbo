@@ -5,8 +5,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
-  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, getTabsWidth, PANE_MIN,
-  RAIL_DEFAULT, RAIL_MIN, setRailShown, setRailWidth, setSideNarrow, setSideShown, setSideTab,
+  getRailTab, getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, getTabsWidth,
+  PANE_MIN, RAIL_DEFAULT, RAIL_GIT_DEFAULT, RAIL_MIN, setRailShown, setRailTab, setRailWidth,
+  setSideNarrow, setSideShown, setSideTab,
   setSideWide, setTabsCompact, setTabsWidth, tabsMax, tabsWidth, TABS_COMPACT_WIDTH, TABS_DEFAULT,
   TABS_MIN, railMax, sideNarrowMax, sideWideMax, SIDE_MIN, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT,
 } from "./columns";
@@ -55,6 +56,33 @@ describe("a column's width", () => {
 
   it("holds the floor even on a window with no room for it", () => {
     expect(clampRailWidth(RAIL_MIN)).toBe(RAIL_MIN);
+  });
+
+  /// The rail holds two lists and each is worth a different width: a folder's names are read at the
+  /// left, and a line of git's has to be on the screen whole to say anything (`AMB-D-905`).
+  it("is the rail's half's own, so widening one half leaves the other where it was", () => {
+    expect(getRailWidth(ONE, "files")).toBe(RAIL_DEFAULT);
+    expect(getRailWidth(ONE, "git")).toBe(RAIL_GIT_DEFAULT);
+
+    setRailWidth(ONE, 240, "git");
+    expect(getRailWidth(ONE, "git")).toBe(240);
+    // A person who widened the git half to read a path said nothing about the folder's names.
+    expect(getRailWidth(ONE, "files")).toBe(RAIL_DEFAULT);
+  });
+
+  /// The half is not said by the roads that were written before the rail had two, and what they
+  /// mean is the half it was then.
+  it("is the folder half where no half is said", () => {
+    setRailWidth(ONE, 240);
+    expect(getRailWidth(ONE, "files")).toBe(240);
+    expect(getRailWidth(ONE)).toBe(240);
+  });
+
+  /// Kept per project, the way the widths beside it are: what one project wants beside its panes is
+  /// not what the next does.
+  it("belongs to the project the half was dragged in", () => {
+    setRailWidth(ONE, 240, "git");
+    expect(getRailWidth(TWO, "git")).toBe(RAIL_GIT_DEFAULT);
   });
 });
 
@@ -230,6 +258,26 @@ describe("which half of the file face is up", () => {
     // An older build, or a store edited by hand: a word that is not an answer is not one.
     localStorage.setItem("amenbo.termface.sideTab", "tree");
     expect(getSideTab()).toBe("memo");
+  });
+});
+
+describe("which half of the rail is up", () => {
+  /// What the rail has always drawn. A build that came up on the git half would take away, without
+  /// being asked, the thing every reader of this column already knows is there.
+  it("opens on the folder", () => {
+    expect(getRailTab()).toBe("files");
+  });
+
+  it("comes back as it was left, so the default is only ever the first run's", () => {
+    expect(setRailTab("git")).toBe("git");
+    expect(getRailTab()).toBe("git");
+    setRailTab("files");
+    expect(getRailTab()).toBe("files");
+  });
+
+  it("reads as the folder where what was kept is not one of the two", () => {
+    localStorage.setItem("amenbo.termface.railTab", "history");
+    expect(getRailTab()).toBe("files");
   });
 });
 

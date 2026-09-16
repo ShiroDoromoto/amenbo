@@ -14,8 +14,13 @@ import type { GitEntryDto } from "../bindings/bindings";
 /** The three things a row's colour says. */
 export type GitMark = "modified" | "added" | "untracked";
 
-/** The mark one of git's rows wears, read off the index letter it came with. */
-function markOf(row: GitEntryDto): GitMark {
+/**
+ * The mark one of git's rows wears, read off the index letter it came with.
+ *
+ * It is exported because the rail's git half draws the same rows (`./GitPanel`), and a reader who
+ * has seen a row of the tree go one colour is reading the same answer there.
+ */
+export function markOf(row: GitEntryDto): GitMark {
   if (row.index === "?") return "untracked";
   if (row.index === "A") return "added";
   return "modified";

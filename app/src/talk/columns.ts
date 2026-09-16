@@ -53,21 +53,50 @@
 export const PANE_MIN = 320;
 
 /** The widths kept per project — the project is the last part of the key (`keyOf`). */
-const RAIL_WIDTH = "railWidth";
 const SIDE_NARROW = "sideNarrow";
 const SIDE_WIDE = "sideWide";
 
 /** Kept for the device, so these are whole keys rather than stems. */
 const RAIL_SHOWN = "amenbo.termface.railShown";
+const RAIL_TAB = "amenbo.termface.railTab";
 const SIDE_SHOWN = "amenbo.termface.sideShown";
 const SIDE_TAB = "amenbo.termface.sideTab";
 const TABS_COMPACT = "amenbo.termface.tabsCompact";
 const TABS_WIDTH = "amenbo.termface.tabsWidth";
 
-/** The rail's floor and where it starts — the fixed width it shipped with, so nothing moves until
- *  somebody drags it. */
+/** Which half of the rail is up: the folder's own names, or what git says about it (`AMB-D-905`). */
+export type RailTab = "files" | "git";
+
+/** The rail's floor, which is one number for both halves: what it holds is a column of names either
+ *  way, and a floor per half would be two answers to how narrow a name may be drawn. */
 export const RAIL_MIN = 120;
-export const RAIL_DEFAULT = 160;
+
+/**
+ * Where each half of the rail starts, and the key its width is kept under.
+ *
+ * **Two widths, not one** (`AMB-D-835` does the same for the column on the other side). The names in
+ * a folder are read at the left and go on as far as they go; a line of git's is a path and a mark
+ * and a count, and the whole of it has to be on the screen at once for the row to say anything. What
+ * each half is worth is a different number, and a person who drags one has not said anything about
+ * the other.
+ *
+ * 288px is where the git half starts because that is what the rows in it need, and it is still too
+ * narrow for the history: the subjects in this repository run to a median of 53 characters and 34
+ * fit, so half the list would come back as `Merge pull request #1081 from Shir…` (`AMB-T-4899`).
+ * The history is drawn in the column on the other side of the panes for that reason, and this width
+ * is not an attempt to make room for it.
+ */
+const RAIL_HALF: Record<RailTab, { kept: string; starts: number }> = {
+  files: { kept: "railWidth", starts: 160 },
+  git: { kept: "railGitWidth", starts: 288 },
+};
+
+/** Where the rail's folder half starts — the fixed width it shipped with, so nothing moves until
+ *  somebody drags it. */
+export const RAIL_DEFAULT = RAIL_HALF.files.starts;
+
+/** Where the rail's git half starts. */
+export const RAIL_GIT_DEFAULT = RAIL_HALF.git.starts;
 
 /** The file face's floor and where its narrow width starts, the width it shipped with (16rem). */
 export const SIDE_MIN = 200;
@@ -239,12 +268,20 @@ function keepWidth(
   return taken;
 }
 
-export function getRailWidth(project: number | null, side: number = SIDE_MIN): number {
-  return keptWidth(RAIL_WIDTH, project, RAIL_DEFAULT, (px) => clampRailWidth(px, side));
+/** The width this project was left at for one half of the rail — where that half starts where it
+ *  has been left at nothing. `tab` is the folder half where it is not said, which is the half the
+ *  rail was before it had two. */
+export function getRailWidth(
+  project: number | null, tab: RailTab = "files", side: number = SIDE_MIN,
+): number {
+  const half = RAIL_HALF[tab];
+  return keptWidth(half.kept, project, half.starts, (px) => clampRailWidth(px, side));
 }
 
-export function setRailWidth(project: number | null, px: number, side: number = SIDE_MIN): number {
-  return keepWidth(RAIL_WIDTH, project, px, (one) => clampRailWidth(one, side));
+export function setRailWidth(
+  project: number | null, px: number, tab: RailTab = "files", side: number = SIDE_MIN,
+): number {
+  return keepWidth(RAIL_HALF[tab].kept, project, px, (one) => clampRailWidth(one, side));
 }
 
 export function getSideNarrow(project: number | null, rail: number = RAIL_MIN): number {
@@ -276,6 +313,26 @@ function keepShown(key: string, want: boolean): boolean {
 
 export function getRailShown(): boolean {
   return keptShown(RAIL_SHOWN);
+}
+
+/**
+ * The half of the rail this device had up, or the one it opens on where nothing has been kept.
+ *
+ * **It opens on the folder.** That is what the rail has always drawn, and a build that came up on
+ * the git half would take away, without being asked, the thing every reader of this column already
+ * knows is there. The git half is gone to when somebody wants it.
+ *
+ * Anything else kept reads as the folder, for the reason the other tab's does: the value is one of
+ * two words, and a word from an older build or a hand-edited store is not an answer.
+ */
+export function getRailTab(): RailTab {
+  return kept(RAIL_TAB) === "git" ? "git" : "files";
+}
+
+/** Keep the half that was asked for, and answer with it — a half even where nothing can be kept. */
+export function setRailTab(which: RailTab): RailTab {
+  keep(RAIL_TAB, which);
+  return which;
 }
 
 export function setRailShown(want: boolean): boolean {

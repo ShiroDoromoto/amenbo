@@ -146,11 +146,17 @@ vi.mock("../core/dialog", () => ({
 
 // A file dragged in from the desktop reaches the application, and the page hears about it through
 // this one event (`AMB-D-775`). It is the host's, so the test plays the host.
+//
+// **Letting go takes down that listener and no other.** Subscribing is a promise, so a panel that
+// resubscribes — going to another folder does — has both listeners in the air at once, and the
+// second lands before the first is let go of. A stand-in that cleared the slot whichever listener
+// was let go of would leave the panel with none, and the drop the test made next would reach
+// nobody: a red build about the order two promises settled in (`AMB-T-4928`).
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: async (take: (event: { payload: unknown }) => void) => {
       hoisted.dragging = take;
-      return () => { hoisted.dragging = null; };
+      return () => { if (hoisted.dragging === take) hoisted.dragging = null; };
     },
   }),
 }));

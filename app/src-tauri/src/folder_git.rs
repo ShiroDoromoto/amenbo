@@ -162,9 +162,13 @@ const LOG_FIELDS: &str = "--format=%H%x1f%h%x1f%P%x1f%an%x1f%aI%x1f%s";
 /// The commits behind the folder `root` names, newest first — the whole repository's, or one path's
 /// where `path` names one.
 ///
-/// `path` is spelled from the repository's root, the way git names it and the way a commit's own
-/// files come back (`folder_git_show`). A row of the tree is spelled from the bound folder instead,
-/// so the front `FolderGitDto::prefix` carries goes back on it first.
+/// `path` is spelled from the bound folder, the way every row that offers a file history spells
+/// its own paths — a row of the tree, and a changed path in the rail's git half. git is run in that
+/// folder and measures a pathspec from there, so it is read as written.
+///
+/// **It is not the spelling a commit's own files come back in** (`folder_git_show`), which is the
+/// repository's. Each road takes what the rows that reach it already hold, rather than making one
+/// of them do arithmetic on a path to ask about it.
 ///
 /// **A hundred and no more.** Reading 30 rather than 100 saves nothing that can be measured — what
 /// the call costs is git starting up (`AMB-T-4899`) — and a hundred is the length of a scroll
@@ -182,9 +186,10 @@ pub async fn folder_git_log(
         }
         let mut args = vec!["--no-optional-locks", "log", "--max-count=100", "-z", LOG_FIELDS];
         // After `--`, so a path that begins like an option is read as the path it is.
-        if let Some(path) = path.as_deref() {
+        let spec = path.as_deref().map(here);
+        if let Some(spec) = spec.as_deref() {
             args.push("--");
-            args.push(path);
+            args.push(spec);
         }
         let Some(out) = run(&dir, &args) else { return Ok(Vec::new()) };
         Ok(commits(&out))
@@ -218,6 +223,9 @@ pub async fn folder_git_show(
 
 /// The patch for one path of one commit, as git wrote it.
 ///
+/// `path` is the repository's own spelling, which is what a commit's files come back as
+/// (`folder_git_show`) — see [`whole`] for why that has to be said to git rather than assumed.
+///
 /// It is handed over as git's own text rather than read into rows here: what a diff means is one
 /// answer, and a face that draws it and a face that puts it in front of an editor are reading the
 /// same bytes.
@@ -233,7 +241,8 @@ pub async fn folder_git_diff(
         if repo_of(&dir).is_none() || !is_sha(&sha) {
             return Ok(String::new());
         }
-        Ok(from_first_parent(&dir, &sha, &["--patch"], &["--", &path]).unwrap_or_default())
+        let spec = whole(&path);
+        Ok(from_first_parent(&dir, &sha, &["--patch"], &["--", &spec]).unwrap_or_default())
     })
     .await
 }
@@ -291,6 +300,26 @@ pub async fn folder_git_stashes(
         Ok(run(&dir, &args).map(|out| stashes(&out)).unwrap_or_default())
     })
     .await
+}
+
+/// One path of the bound folder, spelled so git reads it as a path and not as a pattern.
+///
+/// A file called `a[1].txt` otherwise also matches `a1.txt`, which is one file's history drawn
+/// under another's name. Where git measures it from is where git is run, which is that folder.
+fn here(path: &str) -> String {
+    format!(":(literal){path}")
+}
+
+/// One repository-relative path, spelled so git reads it as that path and from that root.
+///
+/// **`top` is what makes the root the repository's.** git measures a pathspec from where it is run,
+/// which here is the bound folder — so a folder bound at `repo/app` asked about `app/main.rs` would
+/// be asked about `repo/app/app/main.rs`, and answer with nothing. What reaches this is a path a
+/// commit named, and a commit names the repository's.
+///
+/// **`literal` is what makes it a path rather than a pattern**, for the reason [`here`] gives.
+fn whole(path: &str) -> String {
+    format!(":(top,literal){path}")
 }
 
 /// Whether a commit is named by something git will read as a commit and not as an option.
@@ -960,6 +989,54 @@ mod tests {
         let patch =
             from_first_parent(&repo, &read[0].sha, &["--patch"], &["--", "first.txt"]).unwrap();
         assert!(patch.contains("+two"), "the line that was added is in the patch git wrote");
+    }
+
+    /// git measures a pathspec from where it is run, which is the bound folder — so a path the
+    /// repository named has to say so, or a folder bound below the root asks about a path that is
+    /// not there.
+    #[test]
+    fn a_path_the_repository_named_is_asked_for_as_the_repositorys_own() {
+        assert_eq!(whole("app/src/main.rs"), ":(top,literal)app/src/main.rs");
+        // And the folder's own spelling is measured from where git is run, which is that folder.
+        assert_eq!(here("src/main.rs"), ":(literal)src/main.rs");
+    }
+
+    /// The whole of it against a real git: a folder bound below its repository's root, asked about
+    /// a path spelled from that root. Without the magic word git measures it from the folder and
+    /// answers about nothing, which is the shape this exists to stop.
+    #[test]
+    fn a_folder_below_its_root_reads_the_history_of_a_path_the_repository_named() {
+        if amenbo_core::sys::git().is_none() {
+            return;
+        }
+        let repo = amenbo_scratch::scratch("app-foldergit-whole");
+        let app = repo.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        run(&repo, &["init", "-q", "-b", "main"]).expect("git init");
+        const WHO: [&str; 4] = ["-c", "user.name=Alice", "-c", "user.email=alice@example.com"];
+        std::fs::write(app.join("main.rs"), "fn main() {}\n").unwrap();
+        run(&repo, &["add", "-A"]).expect("git add");
+        let mut args = WHO.to_vec();
+        args.extend_from_slice(&["commit", "-q", "-m", "the only record"]);
+        run(&repo, &args).expect("the record");
+
+        // The history of one path, asked for from the bound folder in that folder's own spelling.
+        let mut asked =
+            vec!["--no-optional-locks", "log", "--max-count=100", "-z", LOG_FIELDS, "--"];
+        let mine = here("main.rs");
+        asked.push(&mine);
+        let read = commits(&run(&app, &asked).expect("git log"));
+        assert_eq!(read.len(), 1, "the record that touched it, found from a folder below the root");
+        assert_eq!(read[0].subject, "the only record");
+
+        // And the patch for the same file, asked for in the spelling a commit hands back — which
+        // is the repository's, and would name nothing measured from the bound folder.
+        let named = whole("app/main.rs");
+        let patch = from_first_parent(&app, &read[0].sha, &["--patch"], &["--", &named]).unwrap();
+        assert!(patch.contains("+fn main()"), "the line the record added");
+        let missed = from_first_parent(&app, &read[0].sha, &["--patch"], &["--", &here("app/main.rs")])
+            .unwrap();
+        assert!(missed.is_empty(), "the repository's spelling is not the folder's");
     }
 
     /// A folder that is not in a repository, which is most of them.

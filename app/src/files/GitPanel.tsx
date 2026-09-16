@@ -15,6 +15,16 @@
 // twenty-one on this machine, and what the half would otherwise show is a list of nothing, which
 // reads as a repository where nothing has happened.
 //
+// **The three that go out to the remote are run by the window itself**, not written into a pane for
+// the agent to run. What that buys is measured (`AMB-T-4900`): the ssh agent reaches a window opened
+// from the Dock, and HTTPS goes through the credential helper (`./folder`).
+//
+// **Whatever git wrote is drawn as git wrote it, refusal and all** (`AMB-D-906`, 3-4) — not
+// rewritten, not said again in Amenbo's words, and not turned into a code with a template behind it,
+// because a template is a rewriting. What a reader gets here is what they would have got in a
+// terminal. That one line is why every door on this half goes down while one of them is out and
+// comes back up on git's answer, whenever that is.
+//
 // **The two lists are git's own two answers**, not two things a reader has sorted. Every path git
 // names carries a letter for what the index says about it and a letter for what the working tree
 // says, and a path can have something in both — a file changed, staged, and then changed again is
@@ -25,20 +35,20 @@
 // What closes the hole instead is the shape of the call: every commit names its paths, so the
 // pane's half-staged work is not taken along with the reader's — measured at 0 of 3,855 against
 // every single time without it (`AMB-T-4901`).
-//
-// **A refusal is git's own sentence, printed as git wrote it** (`AMB-D-906`, 3-4). It is not
-// rewritten, not said again in Amenbo's words, and not turned into a code with a template behind
-// it, because a template is a rewriting. What a reader gets here is what they would have got in a
-// terminal.
 import { useEffect, useState } from "react";
 import type { FolderGitDto, GitEntryDto, GitStashDto } from "../bindings/bindings";
+import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { errText, t, tf } from "../core/i18n";
 import {
-  folderGitCommit, folderGitStage, folderGitStash, folderGitStashes, folderGitStashPop,
-  folderGitStatus, folderGitUnstage, folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
+  folderGitCommit, folderGitFetch, folderGitPull, folderGitPush, folderGitStage, folderGitStash,
+  folderGitStashes, folderGitStashPop, folderGitStatus, folderGitUnstage, folderUnwatch,
+  folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
 import { type GitMark, markOf } from "./gitMark";
+
+/** What git wrote on the way back from a door of this half, and whether it was a refusal. */
+type Said = { text: string; refused: boolean };
 
 /** Nothing read yet, and what a folder that is no repository answers with. */
 const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [] };
@@ -52,31 +62,32 @@ const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [] };
  * one byte of the working tree and every line of this list, which is why the watch behind that word
  * covers the repository's own directory too (`crate::folder_watch`).
  *
- * **A write asks again itself as well as waiting for that word.** The word comes through a watch
- * that gathers 400ms of them into one (`crate::folder_watch`), which is right for a folder somebody
- * else is writing to and too slow for a box the reader has just ticked.
+ * **A door asks again itself as well as waiting for that word.** The word comes through a watch that
+ * gathers four hundred milliseconds of them into one, and a fetch moves where the branch stands
+ * without writing a byte anybody watches — asking outright is one call and says it now.
  */
-export function GitPanel({ projectId, root }: {
+export function GitPanel({ projectId, root, onHistory }: {
   /** The project the folder is bound to; nothing is drawn without one. */
   projectId: number | null;
   /** The folder the window is on, as its path. */
   root: string | null;
+  /** Open the history in the column across the panes. Where nothing is handed down there is
+   *  nowhere for it to open, and the press is not offered. */
+  onHistory?: () => void;
 }) {
   const [git, setGit] = useState<FolderGitDto>(NOTHING);
   /** False until the first read comes back. Nothing is drawn before it. */
   const [answered, setAnswered] = useState(false);
-  // How many times there is a reason to look again: the host saying the folder moved, and a write
-  // of this half's own coming back. The read below watches it.
+  // How many times there is a reason to look again: the host saying the folder moved, and a door of
+  // this half's own coming back. The read below watches it.
   const [moved, setMoved] = useState(0);
+  // Every door is down while one of them is out, and what git wrote comes back to `said`.
+  const [running, setRunning] = useState(false);
+  const [said, setSaid] = useState<Said | null>(null);
   // What is to be written down, until it is. It is the one thing here a reader has typed rather
   // than read, so it is kept until the commit it belongs to is made — a commit git refused leaves
   // the words in the box, where the reader can press again.
   const [message, setMessage] = useState("");
-  // A write on its way. What is drawn stands for what git said before it, so nothing is pressed
-  // twice while it is out.
-  const [writing, setWriting] = useState(false);
-  // What git said in refusing, word for word — nothing where the last thing asked of it was done.
-  const [refused, setRefused] = useState<string | null>(null);
   // Where the stash list was opened, or nothing while it is shut.
   const [stashAt, setStashAt] = useState<{ x: number; y: number } | null>(null);
   // What is put aside, read when that list opens and not before: it is another call out to git, and
@@ -133,17 +144,17 @@ export function GitPanel({ projectId, root }: {
     return () => { alive = false; };
   }, [projectId, root, moved]);
 
-  // The window moving to another folder is the window being about something else: a message meant
-  // for this repository is not one to leave sitting over another's list of changes, and a refusal
-  // git wrote about this folder says nothing about the next.
+  // The window moving to another folder is the window being about something else: what git said was
+  // said of the folder it was said of, and a message meant for this repository is not one to leave
+  // sitting over another's list of changes.
   useEffect(() => {
+    setSaid(null);
     setMessage("");
-    setRefused(null);
     setStashAt(null);
   }, [projectId, root]);
 
   // Asked each time the list opens, because what is put aside is what is put aside now — and asked
-  // again after a write, since popping one is what the list was opened to do.
+  // again after a door comes back, since taking one out is what the list was opened to do.
   useEffect(() => {
     if (!stashOpen || projectId === null || root === null) return;
     let alive = true;
@@ -154,23 +165,39 @@ export function GitPanel({ projectId, root }: {
   }, [stashOpen, projectId, root, moved]);
 
   /**
-   * Ask git for one thing, and hold what it answers.
+   * Ask git for one thing, and draw what it wrote.
    *
    * Every door goes through here, so that all of them keep the same three: nothing is pressed twice
-   * while one is out, a refusal is kept as git's own words, and the list is read again either way —
-   * a call that failed may still have moved something, and a call that worked has certainly moved
-   * everything this half draws.
+   * while one is out, what git said is kept in git's own words, and the read is asked for again
+   * either way — a call that failed may still have moved something, and a call that worked has
+   * certainly moved what this half draws.
+   *
+   * `shows` is whether what the call did appears in the lists under it. A box that moved its row
+   * from one list to the other has already said that it worked, so git having written nothing about
+   * it is nothing to report; a fetch moves nothing on this screen, and silence on its own there
+   * reads as a button that did not work.
    */
-  const ask = (run: () => Promise<void>) => {
-    if (writing) return;
-    setWriting(true);
-    setRefused(null);
-    void run()
-      .catch((e: unknown) => setRefused(errText(e)))
-      .finally(() => {
-        setWriting(false);
-        setMoved((n) => n + 1);
-      });
+  async function ask(run: () => Promise<string>, shows = false): Promise<void> {
+    if (projectId === null || root === null || running) return;
+    setRunning(true);
+    setSaid(null);
+    try {
+      const wrote = await run();
+      setSaid(wrote === "" && shows ? null : { text: wrote, refused: false });
+    } catch (e) {
+      // git's own sentence, in git's own words. It is the only account of why it stopped, and
+      // rewriting it into this app's vocabulary would cost the reader the one thing it carries.
+      setSaid({ text: errText(e), refused: true });
+    } finally {
+      setRunning(false);
+      setMoved((n) => n + 1);
+    }
+  }
+
+  /** The three that need nothing but the folder they are about. */
+  const reach = (call: (projectId: number, root: string) => Promise<string>): void => {
+    if (projectId === null || root === null) return;
+    void ask(() => call(projectId, root));
   };
 
   // Nothing is drawn where there is nothing to draw it about, and where the answer is still out.
@@ -221,13 +248,29 @@ export function GitPanel({ projectId, root }: {
           </span>
         )}
       </div>
-      <div className="gitpanel__acts">
+      {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the
+          count of what it would send, which is the one of the two the button is about. Then what is
+          put aside, which is the one door here that opens a list rather than doing a thing. */}
+      <div className="gitpanel__net">
+        <button className="btn" disabled={running} onClick={() => reach(folderGitFetch)}>
+          {t("git.fetch")}
+        </button>
+        <button className="btn" disabled={running} onClick={() => reach(folderGitPull)}>
+          {t("git.pull")}
+        </button>
+        <button
+          className="btn btn--primary"
+          disabled={running}
+          onClick={() => reach(folderGitPush)}
+        >
+          {t("git.push")}{git.branch.ahead > 0 && ` ↑${git.branch.ahead}`}
+        </button>
         <button
           className="btn"
           type="button"
           aria-haspopup="menu"
           aria-expanded={stashOpen}
-          disabled={writing}
+          disabled={running}
           // Opened and never toggled here: the list closes itself on the pointer going down
           // anywhere outside it, and this press is one of those (`../components/Menu`).
           onClick={(e) => {
@@ -238,9 +281,25 @@ export function GitPanel({ projectId, root }: {
           {t("git.stash")}
         </button>
       </div>
-      {/* git's own words, as git wrote them: several lines where it wrote several, since the account
-          of which files stand in the way of a checkout is the useful half of it. */}
-      {refused !== null && <p className="gitpanel__refused">{refused}</p>}
+      {running && <p className="gitpanel__said">{t("git.running")}</p>}
+      {/* A push that went through says what it sent; a fetch that found nothing says nothing at all,
+          and the sentence there is this app's own, since silence on its own reads as a button that
+          did not work. */}
+      {!running && said !== null && (
+        <p className={`gitpanel__said${said.refused ? " gitpanel__said--refused" : ""}`}>
+          {said.text === "" ? t("git.quiet") : said.text}
+        </p>
+      )}
+      {/* The one press here that opens the other column. The history is there from the moment the
+          repository has one, and it is not drawn until somebody asks: what it costs is a call of
+          its own, paid by the reader who wants it rather than by everyone (`AMB-T-4899`). The mark
+          says where it goes, which is out of this column and across the panes. */}
+      {onHistory !== undefined && (
+        <button className="gitpanel__open" onClick={onHistory}>
+          {t("git.history")}
+          <Icon name="foldRight" />
+        </button>
+      )}
       <div className="gitpanel__commit">
         <textarea
           className="gitpanel__message"
@@ -252,18 +311,21 @@ export function GitPanel({ projectId, root }: {
         />
         <div className="gitpanel__commitfoot">
           {/* How many paths the commit will name. It is the hinge of this screen, so it is said
-              rather than left to be worked out from the list above (`AMB-D-906`, 3-2). */}
+              rather than left to be worked out from the list below (`AMB-D-906`, 3-2). */}
           {staged.length > 0 && (
             <span className="gitpanel__hint">{tf("git.commitNaming", { n: staged.length })}</span>
           )}
           <button
             className="btn btn--primary gitpanel__do"
             type="button"
-            disabled={writing || staged.length === 0 || message.trim() === ""}
-            onClick={() => ask(async () => {
-              await folderGitCommit(projectId, root, message, staged.map((row) => row.path));
+            disabled={running || staged.length === 0 || message.trim() === ""}
+            onClick={() => void ask(async () => {
+              const wrote = await folderGitCommit(
+                projectId, root, message, staged.map((row) => row.path),
+              );
               setMessage("");
-            })}
+              return wrote;
+            }, true)}
           >
             {t("git.commit")}
           </button>
@@ -274,16 +336,16 @@ export function GitPanel({ projectId, root }: {
         none={t("git.nothingStaged")}
         rows={staged}
         staged
-        writing={writing}
-        onToggle={(row) => ask(() => folderGitUnstage(projectId, root, [row.path]))}
+        running={running}
+        onToggle={(row) => void ask(() => folderGitUnstage(projectId, root, [row.path]), true)}
       />
       <Changes
         what={t("git.changes")}
         none={t("git.nothingChanged")}
         rows={changed}
         staged={false}
-        writing={writing}
-        onToggle={(row) => ask(() => folderGitStage(projectId, root, [row.path]))}
+        running={running}
+        onToggle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
       />
       {stashAt !== null && (
         <Menu at={stashAt} onClose={() => setStashAt(null)}>
@@ -297,7 +359,7 @@ export function GitPanel({ projectId, root }: {
                 // the branch it was made on and the commit it was made over — is the sentence a
                 // reader is choosing between. A stash named by hand is a second box to type in, and
                 // this half has one.
-                ask(() => folderGitStash(projectId, root, "", followed));
+                void ask(() => folderGitStash(projectId, root, "", followed), true);
               }}
             >
               {t("git.stashPush")}
@@ -314,7 +376,7 @@ export function GitPanel({ projectId, root }: {
                   // By the name this list was just read with. `stash@{0}` is where a stash sits and
                   // not what it is, so one kept from an earlier read names whatever has since moved
                   // into that place.
-                  ask(() => folderGitStashPop(projectId, root, one.name));
+                  void ask(() => folderGitStashPop(projectId, root, one.name), true);
                 }}
               >
                 <span className="gitpanel__stashrow">
@@ -331,14 +393,14 @@ export function GitPanel({ projectId, root }: {
 
 /** One of the two lists, under its name — drawn with nothing in it as well, since which of the two
  *  a path is in is the answer, and a list that disappeared would leave the other unnamed. */
-function Changes({ what, none, rows, staged, writing, onToggle }: {
+function Changes({ what, none, rows, staged, running, onToggle }: {
   what: string;
   none: string;
   rows: GitEntryDto[];
   /** Which of git's two answers this list is, which is what a box in it does when it is pressed. */
   staged: boolean;
-  /** A write is out, so nothing here is pressed until it comes back. */
-  writing: boolean;
+  /** A door is out, so nothing here is pressed until it comes back. */
+  running: boolean;
   onToggle: (row: GitEntryDto) => void;
 }) {
   return (
@@ -353,7 +415,7 @@ function Changes({ what, none, rows, staged, writing, onToggle }: {
                 key={row.path.join("/")}
                 row={row}
                 staged={staged}
-                writing={writing}
+                running={running}
                 onToggle={onToggle}
               />
             ))}
@@ -381,10 +443,10 @@ function Changes({ what, none, rows, staged, writing, onToggle }: {
  * broken into a heading per folder is a page rather than a list, and the names are what a reader
  * runs their eye down.
  */
-function ChangedRow({ row, staged, writing, onToggle }: {
+function ChangedRow({ row, staged, running, onToggle }: {
   row: GitEntryDto;
   staged: boolean;
-  writing: boolean;
+  running: boolean;
   onToggle: (row: GitEntryDto) => void;
 }) {
   const name = row.path[row.path.length - 1] ?? "";
@@ -399,7 +461,7 @@ function ChangedRow({ row, staged, writing, onToggle }: {
         className="gitpanel__check"
         type="checkbox"
         checked={staged}
-        disabled={writing}
+        disabled={running}
         aria-label={tf(staged ? "git.unstageOne" : "git.stageOne", { path: whole })}
         onChange={() => onToggle(row)}
       />

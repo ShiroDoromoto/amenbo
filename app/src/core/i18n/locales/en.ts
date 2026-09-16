@@ -814,6 +814,18 @@ const ui = {
   "git.stashPush": "Stash the changes",
   "git.stashEmpty": "Nothing is stashed.",
   "git.stashRestore": "Restore",
+  "git.fetch": "Fetch",
+  "git.pull": "Pull",
+  "git.push": "Push",
+  "git.running": "Working…",
+  "git.quiet": "git said nothing.",
+  "git.history": "History",
+  "git.backToHistory": "Back to the history",
+  "git.merge": "merge",
+  "git.bytes": "bytes",
+  "git.noHistory": "Nothing has been committed here yet.",
+  "git.touchedNothing": "This commit touched nothing.",
+  "git.noPatch": "git wrote no patch for this path.",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

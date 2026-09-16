@@ -155,9 +155,9 @@ export async function folderGitStage(
   projectId: number,
   root: string,
   paths: string[][],
-): Promise<void> {
-  if (!inTauri()) return;
-  await invoke<string>("folder_git_stage", { projectId, root, paths });
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_stage", { projectId, root, paths });
 }
 
 /** Take `paths` back out of the index, leaving the working tree alone — `git reset`. */
@@ -165,9 +165,9 @@ export async function folderGitUnstage(
   projectId: number,
   root: string,
   paths: string[][],
-): Promise<void> {
-  if (!inTauri()) return;
-  await invoke<string>("folder_git_unstage", { projectId, root, paths });
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_unstage", { projectId, root, paths });
 }
 
 /**
@@ -183,9 +183,9 @@ export async function folderGitCommit(
   root: string,
   message: string,
   paths: string[][],
-): Promise<void> {
-  if (!inTauri()) return;
-  await invoke<string>("folder_git_commit", { projectId, root, message, paths });
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_commit", { projectId, root, message, paths });
 }
 
 /**
@@ -201,9 +201,9 @@ export async function folderGitStash(
   root: string,
   message: string,
   paths: string[][],
-): Promise<void> {
-  if (!inTauri()) return;
-  await invoke<string>("folder_git_stash", { projectId, root, message, paths });
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_stash", { projectId, root, message, paths });
 }
 
 /**
@@ -216,9 +216,45 @@ export async function folderGitStashPop(
   projectId: number,
   root: string,
   name: string,
-): Promise<void> {
-  if (!inTauri()) return;
-  await invoke<string>("folder_git_stash_pop", { projectId, root, name });
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_stash_pop", { projectId, root, name });
+}
+
+/**
+ * The three that go out to the remote, each answering with what git wrote — its own words, whether
+ * it worked or not (`AMB-D-906`, 3-4 and 3-5).
+ *
+ * **The window runs them itself** rather than writing the line into a pane for the agent to run.
+ * A window opened from the Dock carries the same ssh agent a terminal does, HTTPS goes through the
+ * credential helper, and neither git nor ssh can stop to wait for a passphrase where there is no
+ * terminal to ask at (`AMB-T-4900`, `crate::folder_git_write`).
+ *
+ * ⚠ **The credential helper is the reader's own program and is under none of that.** git gives up in
+ * half a second; a helper that waits for an answer nobody can give waits for as long as it likes,
+ * and git waits on the helper — measured against Git Credential Manager, which sat there until it
+ * was killed. Nothing here can cut that short, so the caller keeps its buttons down until git
+ * answers rather than pretending the call came back.
+ *
+ * A refusal is not swallowed. git is the only one who knows why it stopped — an upstream that was
+ * never set, a push someone else got to first, a repository whose LFS filter a window cannot run —
+ * and every one of those sentences says more than a word of this app's own would.
+ */
+export async function folderGitFetch(projectId: number, root: string): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_fetch", { projectId, root });
+}
+
+/** Read the remote and bring it in. Merge or rebase is the reader's own config, not this app's. */
+export async function folderGitPull(projectId: number, root: string): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_pull", { projectId, root });
+}
+
+/** Send the branch as it stands. */
+export async function folderGitPush(projectId: number, root: string): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_push", { projectId, root });
 }
 
 /**

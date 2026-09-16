@@ -36,6 +36,13 @@ const hoisted = vi.hoisted(() => ({
   watched: [] as string[],
   unwatched: [] as string[],
   tags: 0,
+  /** Every call out to the remote, in order — the name of the one that was run. */
+  ran: [] as string[],
+  /** What the next call out to the remote answers with, and whether it answers by refusing. */
+  answer: { text: "", refuse: null as unknown },
+  /** Held back while a test wants a call to still be out. Let go with `hoisted.let()`. */
+  held: null as null | (() => void),
+  let: () => {},
 }));
 
 // Everything the factory reaches for is `hoisted`'s: the factory runs when the module under test is
@@ -47,6 +54,13 @@ vi.mock("./folder", () => {
     return hoisted.refuse !== null
       ? Promise.reject(new Error(hoisted.refuse))
       : Promise.resolve("");
+  };
+  /** One of the three, answering the way the test set it up to. */
+  const reach = (name: string) => async (): Promise<string> => {
+    hoisted.ran.push(name);
+    if (hoisted.held !== null) await new Promise<void>((go) => { hoisted.let = () => { go(); }; });
+    if (hoisted.answer.refuse !== null) throw hoisted.answer.refuse;
+    return hoisted.answer.text;
   };
   return {
     folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
@@ -76,6 +90,9 @@ vi.mock("./folder", () => {
     folderGitStash: (_p: number, _r: string, message: string, paths: string[][]) =>
       kept(hoisted.stashed, { message, paths }),
     folderGitStashPop: (_p: number, _r: string, name: string) => kept(hoisted.popped, name),
+    folderGitFetch: reach("fetch"),
+    folderGitPull: reach("pull"),
+    folderGitPush: reach("push"),
   };
 });
 
@@ -104,9 +121,12 @@ const says = (about: Partial<FolderGitDto>): FolderGitDto => ({
   ...about,
 });
 
-async function draw(at: string | null = ROOT) {
+/** Every press of the way across to the history, so a test can read it back. */
+let opened = 0;
+
+async function draw(at: string | null = ROOT, onHistory?: () => void) {
   await act(async () => {
-    root.render(createElement(GitPanel, { projectId: 1, root: at }));
+    root.render(createElement(GitPanel, { projectId: 1, root: at, onHistory }));
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
@@ -138,8 +158,9 @@ const messageBox = (): HTMLTextAreaElement =>
 const commitButton = (): HTMLButtonElement =>
   container.querySelector<HTMLButtonElement>(".gitpanel__do")!;
 
+/** The last of that row: the one that opens what is put aside. */
 const stashButton = (): HTMLButtonElement =>
-  container.querySelector<HTMLButtonElement>(".gitpanel__acts .btn")!;
+  net().find((one) => one.textContent === t("git.stash"))!;
 
 /** What the open menu offers, as the words on each item. */
 const itemNames = (): string[] =>
@@ -178,7 +199,12 @@ async function moveFolder() {
   });
 }
 
+/** The buttons of that row, in the order they are drawn: the three of the remote, then the stash. */
+const net = (): HTMLButtonElement[] =>
+  [...container.querySelectorAll<HTMLButtonElement>(".gitpanel__net .btn")];
+
 beforeEach(() => {
+  opened = 0;
   hoisted.git = {};
   hoisted.asked = [];
   hoisted.takers = [];
@@ -192,6 +218,9 @@ beforeEach(() => {
   hoisted.watched = [];
   hoisted.unwatched = [];
   hoisted.tags = 0;
+  hoisted.ran = [];
+  hoisted.answer = { text: "", refuse: null };
+  hoisted.held = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -315,6 +344,24 @@ describe("the rail's git half", () => {
     await act(async () => { root.render(createElement(GitPanel, { projectId: 1, root: null })); });
     expect(hoisted.unwatched).toEqual([`${ROOT} git 1`]);
   });
+  /// The history is read in the column across the panes, so what stands here is the way to it —
+  /// and nothing of it is asked for until that press is made (`AMB-T-4899`).
+  it("offers the way across to the history, and asks nothing of it here", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw(ROOT, () => { opened += 1; });
+    const across = container.querySelector<HTMLElement>(".gitpanel__open");
+    expect(across?.textContent).toContain(t("git.history"));
+    await act(async () => { across?.click(); });
+    expect(opened).toBe(1);
+  });
+
+  /// Nothing is handed down where there is nowhere for it to open, and a press that reaches nothing
+  /// is not offered.
+  it("offers no way across where there is nowhere to open it", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw();
+    expect(container.querySelector(".gitpanel__open")).toBeNull();
+  });
 
   /// The face has not been told which folder it is on yet. Nothing is asked and nothing is said:
   /// there is no folder here for a sentence to be about.
@@ -322,6 +369,79 @@ describe("the rail's git half", () => {
     await draw(null);
     expect(hoisted.asked).toEqual([]);
     expect(container.textContent).toBe("");
+  });
+
+  /// The window runs the three itself (`AMB-T-4900`), and the one that sends carries the count of
+  /// what it would send. What is put aside stands at the end of the same row.
+  it("draws the three that go out to the remote, with what push would send on it", async () => {
+    hoisted.git[ROOT] = says({
+      branch: { name: "main", upstream: "origin/main", ahead: 2, behind: 0 },
+    });
+    await draw();
+    expect(net().map((one) => one.textContent))
+      .toEqual([t("git.fetch"), t("git.pull"), `${t("git.push")} ↑2`, t("git.stash")]);
+  });
+
+  it("runs the one that was pressed, and no other", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw();
+    await press(net()[1]!);
+    expect(hoisted.ran).toEqual(["pull"]);
+  });
+
+  /// git's own sentence, in git's own words (`AMB-D-906`, 3-4). An upstream that was never set is
+  /// the case a reader meets first, and git's answer is the one that says what to do about it.
+  it("draws what git said when it refused, as git wrote it", async () => {
+    hoisted.git[ROOT] = says({});
+    hoisted.answer = {
+      text: "",
+      refuse: { code: "error", message_en: "fatal: The current branch main has no upstream branch." },
+    };
+    await draw();
+    await press(net()[2]!);
+    const said = container.querySelector(".gitpanel__said");
+    expect(said?.textContent).toBe("fatal: The current branch main has no upstream branch.");
+    expect(said?.className).toContain("gitpanel__said--refused");
+  });
+
+  /// A fetch that found nothing writes nothing, and a button that answers with silence reads as one
+  /// that did not work.
+  it("says so where git worked and wrote nothing", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw();
+    await press(net()[0]!);
+    const said = container.querySelector(".gitpanel__said");
+    expect(said?.textContent).toBe(t("git.quiet"));
+    expect(said?.className).not.toContain("gitpanel__said--refused");
+  });
+
+  /// Where the branch stands is what these three move, so the answer above them is asked for again
+  /// rather than waited on.
+  it("asks git again once the call comes back", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw();
+    expect(hoisted.asked).toEqual([ROOT]);
+    await press(net()[0]!);
+    expect(hoisted.asked).toEqual([ROOT, ROOT]);
+  });
+
+  /// One call at a time: a second press while one is out would be a second process against the same
+  /// repository, and the reader has no way of telling which of the two the answer came from.
+  it("puts the three down while one of them is out, and back up after it", async () => {
+    hoisted.git[ROOT] = says({});
+    hoisted.held = () => {};
+    await draw();
+    await press(net()[0]!);
+    expect(net().every((one) => one.disabled)).toBe(true);
+    expect(container.querySelector(".gitpanel__said")?.textContent).toBe(t("git.running"));
+
+    hoisted.held = null;
+    await act(async () => {
+      hoisted.let();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(net().every((one) => one.disabled)).toBe(false);
+    expect(hoisted.ran).toEqual(["fetch"]);
   });
 });
 
@@ -378,6 +498,16 @@ describe("the rail's git half, pressed", () => {
     expect(commitButton().disabled).toBe(true);
   });
 
+  /// A box that moved its row from one list to the other has already said that it worked. The line
+  /// that stands in for git's silence is for the doors that move nothing on this screen.
+  it("says nothing of git's silence where the lists have already shown the work", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], worktree: "M" })] });
+    await draw();
+    await press(box(t("git.changes"), "a.rs"));
+    expect(container.querySelector(".gitpanel__said")).toBeNull();
+    expect(container.textContent).not.toContain(t("git.quiet"));
+  });
+
   /// git's own sentence, word for word (`AMB-D-906`, 3-4) — and the words the reader typed still in
   /// the box, because a commit git would not make is one they are about to ask for again.
   it("prints what git said in refusing, and keeps what was typed", async () => {
@@ -386,7 +516,7 @@ describe("the rail's git half, pressed", () => {
     await draw();
     await type("fix: the one thing");
     await press(commitButton());
-    expect(container.querySelector(".gitpanel__refused")?.textContent)
+    expect(container.querySelector(".gitpanel__said--refused")?.textContent)
       .toBe("error: cannot commit\nPlease sort it out first.");
     expect(messageBox().value).toBe("fix: the one thing");
   });

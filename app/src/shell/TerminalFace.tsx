@@ -22,10 +22,11 @@ import {
   clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
   getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, getTabsWidth, setRailShown,
   setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide, setTabsCompact, setTabsWidth,
-  TABS_COMPACT_WIDTH, type SideTab,
+  getRailTab, setRailTab, TABS_COMPACT_WIDTH, type RailTab, type SideTab,
 } from "../talk/columns";
 import { FilesPanel, openKey, type OpenFile, type Typed } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
+import { GitPanel } from "../files/GitPanel";
 import { rootShown, sectionsOf } from "../files/sections";
 import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
@@ -229,6 +230,10 @@ export function TerminalFace({
   // has no project until it is told which one it is on; the read below is what brings that project's
   // own answers in. What the file face is drawn at is its narrow width — the wide one is `AMB-T-4253`.
   const [railShown, setRailShownState] = useState(getRailShown);
+  // Which half of the rail is up. It is held here rather than in the rail because the width the
+  // column is drawn at is held here and the two halves are worth different widths — a row of git's
+  // is a path and a mark and a count, and the whole of it has to fit (`../talk/columns`).
+  const [railTab, setRailTabState] = useState<RailTab>(getRailTab);
   // Whether the project tabs are drawn compact, and how wide they are while their names are drawn.
   // The column itself is never closed (`./ProjectTabs`); both of these are kept for the device the way
   // the wish above them is, because what the column draws is the same list of projects whichever one
@@ -236,7 +241,7 @@ export function TerminalFace({
   const [tabsCompact, setTabsCompactState] = useState(getTabsCompact);
   const [namedTabs, setNamedTabsState] = useState(getTabsWidth);
   const [sideShown, setSideShownState] = useState(getSideShown);
-  const [railWidth, setRailWidthState] = useState(() => getRailWidth(null));
+  const [railWidth, setRailWidthState] = useState(() => getRailWidth(null, getRailTab()));
   const [narrowWidth, setNarrowWidthState] = useState(() => getSideNarrow(null));
   const [wideWidth, setWideWidthState] = useState(() => getSideWide(null));
   // Which of the two widths the column is drawn at. It is not kept: a width is how much room this
@@ -854,12 +859,24 @@ export function TerminalFace({
         sideShown ? narrowWidth : 0,
       ),
       setRailWidthState,
-      (px) => setRailWidth(layout.project, px, sideShown ? narrowWidth : 0),
+      (px) => setRailWidth(layout.project, px, railTab, sideShown ? narrowWidth : 0),
     ),
     // The narrow width and not the drawn one: the wide column lies over the panes rather than
     // pushing them aside, so it takes nothing the rail could have had (`AMB-D-835`).
-    [dragging, layout.project, sideShown, narrowWidth, tabsW],
+    [dragging, layout.project, railTab, sideShown, narrowWidth, tabsW],
   );
+
+  /**
+   * Go to the other half of the rail, which is also going to the width that half was left at.
+   *
+   * **The width follows the half and is not carried across.** A person who widened the git half to
+   * read a path did not say anything about how wide they want the folder's names, and a column that
+   * kept the number would answer a question they never asked.
+   */
+  const takeRailTab = useCallback((which: RailTab) => {
+    setRailTabState(setRailTab(which));
+    setRailWidthState(getRailWidth(layout.project, which));
+  }, [layout.project]);
 
   // The edge of whichever width the column is standing on. Dragging the wide one leaves the narrow
   // one where it was, and the other way about: the two answer different questions — how much room
@@ -885,7 +902,7 @@ export function TerminalFace({
   // are kept per project, because what one project wants beside its panes is not what the next does
   // (`AMB-D-835`, `../talk/columns`). A project nothing has been kept for is drawn at the defaults.
   useEffect(() => {
-    setRailWidthState(getRailWidth(layout.project));
+    setRailWidthState(getRailWidth(layout.project, railTab));
     setNarrowWidthState(getSideNarrow(layout.project));
     setWideWidthState(getSideWide(layout.project));
     // And standing on the narrow step, which is where a project is arrived at: the wide one is asked
@@ -1051,6 +1068,9 @@ export function TerminalFace({
   const rail = (
     <FolderRail
       project={projects.find((one) => one.id === layout.project) ?? null}
+      tab={railTab}
+      onTab={takeRailTab}
+      git={<GitPanel projectId={layout.project} root={rootShown(folderRoots, pickedRoot)?.path ?? null} />}
       picker={layout.project === null ? null : (
         <RootPick
           projectId={layout.project}

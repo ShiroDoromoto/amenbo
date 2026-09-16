@@ -2801,7 +2801,7 @@ impl Instructor {
                 // is already unfolded would have them fold it. Saying where the screen has to stand
                 // leaves the road true wherever it is walked from, a tree a step above folded
                 // included.
-                true => "Have the folders standing beside the panes: the column is drawn there, under the project's name, and where it has been put away the control on the row above the panes brings it back. The section that draws the folder itself is then to be standing unfolded. It is drawn that way, so the unfolding is usually nothing to do; unfold it where it is folded.".to_string(),
+                true => "Have the folders standing beside the panes: the column is drawn there, under the project's name, and where it has been put away the control on the row above the panes brings it back. The column holds two lists and the pair of tabs under the project's name says which is up — have the folder one up, which is the one it opens on. The section that draws the folder itself is then to be standing unfolded. It is drawn that way, so the unfolding is usually nothing to do; unfold it where it is folded.".to_string(),
                 false => "Fold that section back up.".to_string(),
             },
             // A folder opened a level, or shut again. Opening is what a road asks for nearly every

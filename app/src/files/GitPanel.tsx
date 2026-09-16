@@ -338,8 +338,11 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         onMoved={() => setMoved((n) => n + 1)}
       />
       {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the
-          count of what it would send, which is the one of the two the button is about. Then what is
-          put aside, which is the one door here that opens a list rather than doing a thing. */}
+          count of what it would send, which is the one of the two the button is about, and the
+          accent is on that same count rather than on the button: filled with nothing to send, it
+          recommends a press that would do nothing, next to a label that already says so by leaving
+          the count off. Then what is put aside, which is the one door here that opens a list rather
+          than doing a thing. */}
       <div className="gitpanel__net">
         <button className="btn" disabled={running} onClick={() => reach(folderGitFetch)}>
           {t("git.fetch")}
@@ -348,7 +351,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
           {t("git.pull")}
         </button>
         <button
-          className="btn btn--primary"
+          className={`btn${git.branch.ahead > 0 ? " btn--primary" : ""}`}
           disabled={running}
           onClick={() => reach(folderGitPush)}
         >

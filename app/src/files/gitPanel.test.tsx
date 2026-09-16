@@ -540,6 +540,25 @@ describe("the rail's git half", () => {
       .toEqual([t("git.fetch"), t("git.pull"), `${t("git.push")} ↑2`, t("git.stash")]);
   });
 
+  /// The fill belongs to the count, not to the button: it is on where the count is on.
+  it("fills push where there is something to send", async () => {
+    hoisted.git[ROOT] = says({
+      branch: { name: "main", upstream: "origin/main", ahead: 1, behind: 0 },
+    });
+    await draw();
+    expect(net()[2]!.className).toContain("btn--primary");
+  });
+
+  /// With nothing to send, push stands with the other three. A filled button there recommends a
+  /// press that does nothing, beside a label that already says so by carrying no count.
+  it("leaves push unfilled where there is nothing to send", async () => {
+    hoisted.git[ROOT] = says({
+      branch: { name: "main", upstream: "origin/main", ahead: 0, behind: 0 },
+    });
+    await draw();
+    expect(net()[2]!.className).not.toContain("btn--primary");
+  });
+
   it("runs the one that was pressed, and no other", async () => {
     hoisted.git[ROOT] = says({});
     await draw();

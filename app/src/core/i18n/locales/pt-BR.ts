@@ -649,6 +649,8 @@ export const ptBR: Translation = {
     "files.openFiles": "Arquivos abertos",
     "files.unsaved": "Não salvo",
     "files.folderGone": "Esta pasta não está mais lá.",
+    "files.rootPick": "A pasta em que esta janela está",
+    "files.rootChanged": "Aqui dentro mudou alguma coisa",
     "files.closeFile": "Fechar este arquivo",
     "files.closeConfirm": "Fechar {name}? O que você escreveu não está salvo e será perdido ao fechar.",
     "files.edit": "Editar",

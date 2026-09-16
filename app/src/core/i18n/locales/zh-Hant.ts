@@ -640,6 +640,8 @@ export const zhHant: Translation = {
     "files.openFiles": "已開啟的檔案",
     "files.unsaved": "尚未儲存",
     "files.folderGone": "這個資料夾已經不在了。",
+    "files.rootPick": "這個視窗正在看的資料夾",
+    "files.rootChanged": "這裡面有東西變了",
     "files.closeFile": "關閉這個檔案",
     "files.closeConfirm": "關閉 {name}？你輸入的內容還沒有儲存，關閉後會遺失。",
     "files.edit": "編輯",

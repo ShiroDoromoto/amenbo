@@ -637,6 +637,8 @@ export const tr: Translation = {
     "files.openFiles": "Açık dosyalar",
     "files.unsaved": "Kaydedilmedi",
     "files.folderGone": "Bu klasör artık yok.",
+    "files.rootPick": "Bu pencerenin üzerinde olduğu klasör",
+    "files.rootChanged": "Burada bir şey değişti",
     "files.closeFile": "Bu dosyayı kapat",
     "files.closeConfirm": "{name} kapatılsın mı? Yazdıklarınız kaydedilmedi ve kapatınca kaybolur.",
     "files.edit": "Düzenle",

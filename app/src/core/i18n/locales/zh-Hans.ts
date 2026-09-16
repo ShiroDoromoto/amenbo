@@ -640,6 +640,8 @@ export const zhHans: Translation = {
     "files.openFiles": "已打开的文件",
     "files.unsaved": "尚未保存",
     "files.folderGone": "这个文件夹已经不在了。",
+    "files.rootPick": "这个窗口正在看的文件夹",
+    "files.rootChanged": "这里面有东西变了",
     "files.closeFile": "关闭这个文件",
     "files.closeConfirm": "关闭 {name}？你输入的内容还没有保存，关闭后会丢失。",
     "files.edit": "编辑",

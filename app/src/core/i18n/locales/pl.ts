@@ -652,6 +652,8 @@ export const pl: Translation = {
     "files.openFiles": "Otwarte pliki",
     "files.unsaved": "Niezapisane",
     "files.folderGone": "Tego folderu już nie ma.",
+    "files.rootPick": "Folder, na którym stoi to okno",
+    "files.rootChanged": "Tutaj coś się zmieniło",
     "files.closeFile": "Zamknij ten plik",
     "files.closeConfirm": "Zamknąć {name}? To, co wpisano, nie zostało zapisane i przepadnie po zamknięciu.",
     "files.edit": "Edytuj",

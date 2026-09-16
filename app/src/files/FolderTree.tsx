@@ -11,10 +11,12 @@
 // so switching panes does not move it — what changed in the repository is the same question
 // whichever terminal is in front of it.
 //
-// **Every bound folder is drawn, each in a section of its own** (`AMB-D-778`). A project with one
-// folder is drawn without a heading, because a heading over the only thing on the screen names
-// nothing the reader could confuse it with. A folder that has gone keeps its section and says so:
-// dropped from the list it would look like one nobody ever bound, and the reader would have no way
+// **One bound folder is drawn, and the reader says which** (`AMB-D-905`). Every one of them was
+// drawn at once while this half only read (`AMB-D-778`), and that stops being an answer the moment a
+// press writes: a window with six trees on it and one git has no way to say which of the six a
+// commit was about. Which folder it is comes down from the face, where the git doors beside this
+// tree read the same choice (`./RootPick`). A folder that has gone is still drawn and says so:
+// dropped from the picker it would look like one nobody ever bound, and the reader would have no way
 // to tell a folder that moved from a binding they removed.
 //
 // **What has changed is git's answer, drawn on the tree's own rows** (`AMB-D-785`). A list of the
@@ -65,7 +67,7 @@ import { useTrash } from "./trash";
 import { fileAt } from "./fileUnder";
 import { type Held, watchCarry } from "./handDrag";
 import { gitMarks, type GitMark } from "./gitMark";
-import { sectionsOf } from "./sections";
+import { rootShown, sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
 
 
@@ -73,8 +75,9 @@ import { Icon } from "../components/Icon";
  * Where a dragged file would land: the bound folder, and the folder inside it as its segments joined
  * ("" being the bound folder itself).
  *
- * Both halves are needed because every section draws a row for its own root, and two sections have a
- * `src` each — a landing that said only `src` would light one up in both.
+ * Both halves are needed because what the host is told is a path, and two bound folders with a `src`
+ * each are two places — a landing that said only `src` would carry the files into whichever the host
+ * reached first.
  */
 type Landing = { root: string; into: string };
 
@@ -93,9 +96,10 @@ type Edit =
  * inside it are, and which row holds the tree's stop in the tab order.
  *
  * **The panel holds it, not the tree.** The tree is unmounted the moment it is folded shut, and the
- * section holding it whenever the folder is unbound or the project switched away from — and what a
- * component holds goes with it. A reader who folds a tree away and opens it again is asking for it
- * back the way they left it, which is only possible if it was never theirs to lose.
+ * section holding it whenever the reader goes to another folder, or the folder is unbound, or the
+ * project switched away from — and what a component holds goes with it. A reader who leaves a tree
+ * and comes back to it is asking for it the way they left it, which is only possible if leaving it
+ * was never losing it.
  *
  * **Only how the reader opened it.** What is read off the disk — the names, git's answer, whether
  * the folder moved — stays with the watch, which is the section's own and has to stop when the
@@ -213,19 +217,32 @@ function rowsAbout(picked: string[], path: string[]): string[][] {
 }
 
 /**
- * Every folder this project is bound to, drawn as one tree per binding, and the acts that reach the
- * rows in them.
+ * The folder this project is on, drawn as a tree, and the acts that reach the rows in it.
  *
  * **What a row opens is not drawn here.** A row pressed twice asks for the file, and the file is
  * drawn in the column on the other side of the panes (`AMB-D-835`). So what this side keeps is how
- * the trees are opened, which rows are picked out, and which name is being typed; the file being
- * read arrives as a prop, and all it does here is put the mark on the row it was opened from.
+ * each folder's tree is opened, which rows are picked out, and which name is being typed; the file
+ * being read arrives as a prop, and all it does here is put the mark on the row it was opened from.
+ *
+ * **How a tree was opened is kept for every bound folder, not only the one drawn.** A reader who
+ * goes to another folder and comes back is asking for the tree they left, and that is only possible
+ * if leaving it never threw it away (`Opened`).
  */
 export function FolderTree({
-  projectId, reading, onRead, onGone, onHandOver, onCarry,
+  projectId, root, reading, onRead, onGone, onHandOver, onCarry,
 }: {
-  /** The project whose folders the trees are rooted at; nothing is drawn without one. */
+  /** The project whose folders the tree is rooted at; nothing is drawn without one. */
   projectId: number | null;
+  /**
+   * Which of the project's folders to draw, as its path (`./RootPick`).
+   *
+   * Nothing — and a path this project is not bound to, which is what a reader's last choice is the
+   * moment they change project — both fall to the first folder that is there (`rootShown`).
+   * Falling back rather than drawing nothing, because a rail with no tree in it would be this
+   * face's answer to a question nobody asked: which folder was picked is a thing to remember, not a
+   * thing to require.
+   */
+  root: string | null;
   /** The file the other column is reading, so the row it was opened from can say so. */
   reading: { root: string; path: string[] } | null;
   /** Ask for a file to be read. What answers is the column on the other side of the panes. */
@@ -257,10 +274,11 @@ export function FolderTree({
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
   const folders = useBoundFolders(projectId ?? 0);
-  // Every folder recorded rather than every folder that is there: one that has gone is a section
-  // saying so, and it can only say so if it is still on the list.
+  // Every folder recorded rather than every folder that is there: one that has gone is still drawn
+  // and says so, and it can only say so if it is still on the list.
   const sections = useMemo(() => sectionsOf(folders.all), [folders.all]);
-  const live = folders.live.map((one) => one.path);
+  // The one being drawn — the face's choice, or what stands in for it (`./sections`).
+  const drawn = rootShown(sections, root);
   // The file a right-click was on, and where the pointer was. One menu for the tree rather than one
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it (`AMB-T-3605`).
@@ -273,22 +291,24 @@ export function FolderTree({
   const [edit, setEdit] = useState<Edit | null>(null);
   // Where a file being dragged in would land: which bound folder, and which folder inside it ("" is
   // the bound folder itself). Null while nothing is over the tree. The folder is half of it because
-  // every section has a row for its own root, and the same path inside two of them is two places.
+  // the same path inside two bound folders is two places, and what goes to the host has to say
+  // which — the tree draws one folder, but the landing is carried out by path.
   const [landing, setLanding] = useState<Landing | null>(null);
   // How each bound folder's tree is opened, by the folder it is about — the folder is the key
-  // because a project draws a section per binding and each of them is opened on its own (`Opened`).
+  // because only one of them is drawn at a time and a reader coming back to another one is asking
+  // for the tree they left (`Opened`).
   const [opened, setOpened] = useState<Record<string, Opened>>({});
   const box = useRef<HTMLDivElement | null>(null);
   // The bin, and the question before it. The reading column holds one of its own for the file it is
   // drawing: what is shared is how a press behaves, not one question for the two of them (`./trash`).
   const trash = useTrash(projectId, onGone);
-  const roots = live.join("\0");
 
   // A folder nobody is bound to any more takes how it was opened with it. Unbinding one, or moving
-  // to another project, leaves a key here that names a section that is no longer drawn — and it
-  // would be read again by whoever bound the same path back, as an answer about a tree they never
-  // opened. The sections rather than the live folders decide: a folder that has gone is still drawn
-  // and still says so, and a reader who left it open should find it that way when it comes back.
+  // to another project, leaves a key here that names a folder nobody can reach — and it would be
+  // read again by whoever bound the same path back, as an answer about a tree they never opened.
+  // The recorded folders rather than the live ones decide: a folder that has gone is still on the
+  // picker and still says so, and a reader who left it open should find it that way when it comes
+  // back.
   const recorded = sections.map((one) => one.path).join("\0");
   useEffect(() => {
     setOpened((was) => {
@@ -300,10 +320,10 @@ export function FolderTree({
   /**
    * Pick rows out of one folder's tree, which puts down whatever was picked in another.
    *
-   * **One selection for the rail, drawn in whichever section it is in.** The sections are how
-   * several bound folders are drawn (`AMB-D-778`), not several selections to hold at once — and
-   * what is done with picked rows is done to one folder's paths, so rows gathered across two of
-   * them would be a selection nothing could act on.
+   * **One selection for the rail, wherever it was made.** Only one folder is drawn at a time
+   * (`AMB-D-905`), so what this guards is the walk away and back: rows left picked in a folder
+   * nobody is looking at would come back under a reader who has since picked others, and what is
+   * done with picked rows is done to one folder's paths.
    */
   const onPicked = (root: string, picked: string[], anchor: string | null) =>
     setOpened((was) => Object.fromEntries(sections.map((one) => {
@@ -334,15 +354,16 @@ export function FolderTree({
   // are this side's to drive (`../core/hostDrop`).
   //
   // **The folder the highlight named is the folder the files are carried into** (`./folder`). Both
-  // halves of the landing go to the host, not the path alone: every section draws a row for its own
-  // root, and two projects' folders each holding a `src` are two places (`AMB-T-3781`).
+  // halves of the landing go to the host, not the path alone: the same path inside two bound
+  // folders is two places, and which folder the row was drawn for is what tells them apart
+  // (`AMB-T-3781`).
   //
   // **What arrived is not said, and what did not is.** The folder is watched and the tree reads its
   // names again on every move, so a file that came in is about to be a row — a line saying so would
   // be a second, slower account of what is already drawn. A carry that stopped leaves nothing to
   // draw, and that is what the toast is for.
   useEffect(() => {
-    if (projectId === null || sections.length === 0) return;
+    if (projectId === null || drawn === null) return;
     let alive = true;
     let stop: (() => void) | null = null;
     void watchHostDrop({
@@ -370,7 +391,7 @@ export function FolderTree({
       stop?.();
       setLanding(null);
     };
-  }, [projectId, roots]);
+  }, [projectId, drawn?.path]);
 
   // And the rows of this panel, carried by hand to one of its own folders (`./handDrag`).
   //
@@ -383,7 +404,7 @@ export function FolderTree({
   // **Rows let go over the folder they are already in are let alone.** The host would answer that
   // each of them is already there, which is a true sentence about a gesture that asked for nothing.
   useEffect(() => {
-    if (projectId === null || sections.length === 0) return;
+    if (projectId === null || drawn === null) return;
     return watchCarry({
       over: (el) => setLanding(landingOf(el)),
       drop: (el, held, copy) => {
@@ -403,7 +424,7 @@ export function FolderTree({
           .catch((e: unknown) => pushNotice(errText(e)));
       },
     });
-  }, [projectId, roots]);
+  }, [projectId, drawn?.path]);
 
   // The tree takes the focus once it has changed a folder, so that undo is the next thing a reader
   // can press. What did the changing was a menu item that is gone by the time the answer lands, and
@@ -474,7 +495,7 @@ export function FolderTree({
   // a project, and there is no project here for it to be about (`AMB-T-4358`).
   if (projectId === null) return <div className="files" />;
 
-  if (sections.length === 0) {
+  if (drawn === null) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
     // has one reads as a broken binding (`core/boundFolders`).
     return folders.answered
@@ -487,31 +508,30 @@ export function FolderTree({
     // able to hold it costs nobody a stop on the way past (`AMB-D-780`).
     <div className="files" ref={box} tabIndex={-1} onKeyDown={onKey}>
       {trash.aside}
-      {sections.map((one) => (
-        <FolderSection
-          key={one.path}
-          projectId={projectId}
-          root={one.path}
-          // The only folder there is needs no heading: a name is what tells two of them apart.
-          label={sections.length > 1 ? one.label : null}
-          bound={one.exists}
-          landing={landing}
-          scroller={box}
-          opened={opened[one.path] ?? AT_FIRST}
-          onOpened={(change) => setOpened((was) => ({
-            ...was,
-            [one.path]: change(was[one.path] ?? AT_FIRST),
-          }))}
-          edit={edit?.root === one.path ? edit : null}
-          onEdit={setEdit}
-          onRead={(path) => { setEdit(null); onRead({ root: one.path, path }); }}
-          onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
-          onTrash={(path) => trash.askTrash(one.path, actOn(one.path, path))}
-          onPicked={(picked, anchor) => onPicked(one.path, picked, anchor)}
-          chosen={reading !== null && reading.root === one.path ? reading.path.join("/") : null}
-          onCarry={onCarry}
-        />
-      ))}
+      {/* Keyed by the folder, so going to another one is a tree torn down and a tree put up rather
+          than one tree handed a different root: what a section reads off the disk is its own, and
+          none of it is about the folder the reader has just left. */}
+      <FolderSection
+        key={drawn.path}
+        projectId={projectId}
+        root={drawn.path}
+        bound={drawn.exists}
+        landing={landing}
+        scroller={box}
+        opened={opened[drawn.path] ?? AT_FIRST}
+        onOpened={(change) => setOpened((was) => ({
+          ...was,
+          [drawn.path]: change(was[drawn.path] ?? AT_FIRST),
+        }))}
+        edit={edit?.root === drawn.path ? edit : null}
+        onEdit={setEdit}
+        onRead={(path) => { setEdit(null); onRead({ root: drawn.path, path }); }}
+        onMenu={(path, dir, x, y) => setMenu({ root: drawn.path, path, dir, x, y })}
+        onTrash={(path) => trash.askTrash(drawn.path, actOn(drawn.path, path))}
+        onPicked={(picked, anchor) => onPicked(drawn.path, picked, anchor)}
+        chosen={reading !== null && reading.root === drawn.path ? reading.path.join("/") : null}
+        onCarry={onCarry}
+      />
       {menu !== null && (
         <FileMenu
           projectId={projectId}
@@ -542,10 +562,11 @@ export function FolderTree({
 /**
  * One bound folder: its tree, wearing what git says about it.
  *
- * **The watch is the section's own.** Each folder is watched separately and each answer names the
- * folder it is about (`./folder`), so a section takes the news addressed to it and leaves the rest.
- * Holding one watch for the panel would mean the panel deciding which folder each answer belonged
- * to, which is the same work done once further from where it is used.
+ * **The watch is the section's own.** The folder is watched by name and each answer says which
+ * folder it is about (`./folder`), so a section takes the news addressed to it and leaves the rest
+ * — the column reading a file watches folders too, and a section is one of several mouths on the
+ * one listener. Going to another folder unmounts this and takes its watch down with it, which is
+ * what keeps the count at one folder (`AMB-D-905`).
  *
  * **What is watched is the section's, how it is opened is the panel's.** The two are held apart on
  * one line: a watch has to stop when the section does, and how a reader opened the tree has to
@@ -557,35 +578,33 @@ export function FolderTree({
  * because it changed. One counter rather than a refresh per reader, because a folder moving is one
  * fact and they would all be reacting to it.
  *
- * A folder that is gone draws its heading and the reason, and nothing else. There is nothing to
- * watch and no tree to open, and the two states it could be confused with — a binding somebody
- * removed, and a folder with nothing in it — both look like an empty section.
+ * A folder that is gone draws the reason and nothing else. There is nothing to watch and no tree to
+ * open, and the two states it could be confused with — a binding somebody removed, and a folder
+ * with nothing in it — both look like an empty section.
  *
  * **A half-watched folder says which half-watched it is.** Too big to walk to the end of and out of
- * watches are separate answers from the host and are drawn as separate lines (`AMB-D-778`): one is
- * about this folder and is answered by pointing the app at less of it, the other is about the
- * machine and is answered by giving it more watches. They are said of the folder rather than of the
- * tree below, so they stand beside the heading, above it.
+ * watches are separate answers from the host and are drawn as separate lines: one is about this
+ * folder and is answered by pointing the app at less of it, the other is about the machine and is
+ * answered by giving it more watches. They are said of the folder rather than of the tree below, so
+ * they stand above it.
  */
 function FolderSection({
-  projectId, root, label, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
+  projectId, root, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
   onTrash, onPicked, chosen, onCarry,
 }: {
   projectId: number;
   root: string;
-  /** The heading, or nothing where this is the only folder. */
-  label: string | null;
   /** Whether the store's own read found the folder. The watch answers the same question later. */
   bound: boolean;
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
    *  where the landing is one of its own (`landed`). */
   landing: Landing | null;
-  /** The box the panel scrolls in — the panel's own, because every section is drawn in the one box
-   *  and what is in view of it is what each tree draws (`Tree`). */
+  /** The box the panel scrolls in — the panel's own, because the section is drawn inside it and
+   *  what is in view of it is what the tree draws (`Tree`). */
   scroller: RefObject<HTMLElement | null>;
   /** How this folder's tree is opened. The panel holds it rather than the section, so that it
-   *  outlives a section unmounted by anything at all — a folder unbound and bound back, a project
-   *  switched away from and returned to (`Opened`). */
+   *  outlives a section unmounted by anything at all — a reader going to another folder and back, a
+   *  folder unbound and bound back, a project switched away from and returned to (`Opened`). */
   opened: Opened;
   /** Change it — handed the way it stands, because two of these can land in one render: unfolding
    *  the way to a name being made is the tree and one folder inside it, said at once. */
@@ -697,16 +716,11 @@ function FolderSection({
 
   const marks = useMemo(() => gitMarks(git), [git]);
 
-  // The whole of one folder is one box, so the space between two folders is wider than the space
-  // inside either — two stacks of rows with the same gap everywhere read as one long stack.
-  const heading = label !== null && (
-    <h3 className="files__foldername" title={root}>{label}</h3>
-  );
-
   if (gone) {
+    // Which folder went is not said here: the picker above names the one being drawn, and a second
+    // name under it would be the same answer twice (`./RootPick`).
     return (
       <div className="files__folder">
-        {heading}
         <p className="files__none">{t("files.folderGone")}</p>
       </div>
     );
@@ -714,7 +728,6 @@ function FolderSection({
 
   return (
     <div className="files__folder">
-      {heading}
       {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
           like one where nothing is happening. Both reasons stand in one stack, tight enough to read
           as one thing said about the folder rather than as two of the panel's rows. */}

@@ -637,6 +637,8 @@ export const nl: Translation = {
     "files.openFiles": "Geopende bestanden",
     "files.unsaved": "Niet opgeslagen",
     "files.folderGone": "Deze map is er niet meer.",
+    "files.rootPick": "De map waar dit venster op staat",
+    "files.rootChanged": "Hierin is iets veranderd",
     "files.closeFile": "Dit bestand sluiten",
     "files.closeConfirm": "{name} sluiten? Wat je erin hebt getypt is niet opgeslagen en gaat bij het sluiten verloren.",
     "files.edit": "Bewerken",

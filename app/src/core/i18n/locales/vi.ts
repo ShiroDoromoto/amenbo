@@ -639,6 +639,8 @@ export const vi: Translation = {
     "files.openFiles": "Tệp đang mở",
     "files.unsaved": "Chưa lưu",
     "files.folderGone": "Thư mục này không còn nữa.",
+    "files.rootPick": "Thư mục mà cửa sổ này đang mở",
+    "files.rootChanged": "Ở đây có gì đó đã thay đổi",
     "files.closeFile": "Đóng tệp này",
     "files.closeConfirm": "Đóng {name}? Những gì bạn đã gõ chưa được lưu và sẽ mất khi đóng.",
     "files.edit": "Sửa",

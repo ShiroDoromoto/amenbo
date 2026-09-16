@@ -635,6 +635,8 @@ export const ko: Translation = {
     "files.openFiles": "열린 파일",
     "files.unsaved": "저장하지 않음",
     "files.folderGone": "이 폴더는 더 이상 없습니다.",
+    "files.rootPick": "이 창이 보고 있는 폴더",
+    "files.rootChanged": "여기에 바뀐 것이 있습니다",
     "files.closeFile": "이 파일 닫기",
     "files.closeConfirm": "{name}을(를) 닫을까요? 입력한 내용은 저장되지 않았고, 닫으면 사라집니다.",
     "files.edit": "편집",

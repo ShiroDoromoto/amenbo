@@ -975,18 +975,46 @@ input[type="color"] {
   background: var(--c-surface);
   border-right: 1px solid var(--c-rule);
 }
-/* Whose folders these are. It is a name and not the caption of a list, so it is drawn as one — the
-   face's own text at the face's own size, where the headings it replaced were small, spaced and
-   faint. */
+/* Whose folders these are, and which of them the window is on. It is a name and not the caption of a
+   list, so it is drawn as one — the face's own text at the face's own size, where the headings it
+   replaced were small, spaced and faint. The two stack, because the second is a control and a
+   control beside a name at the same size reads as part of it. */
 .rail__head {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: var(--s-2);
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--s-2);
   padding: var(--s-3) var(--s-3) var(--s-2);
 }
 .rail__title {
-  flex: 1; min-width: 0; margin: 0;
+  min-width: 0; margin: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--c-text); font-size: var(--fs-md); font-weight: 600;
+}
+/* Which folder the window is on (`app/src/files/RootPick.tsx`, `AMB-D-905`). It is a field and not a
+   heading: what it says is a choice somebody made, so it is drawn on the ground a control stands on
+   and carries the mark that says there is a list behind it. */
+.rootpick__on {
+  width: 100%; min-width: 0;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  background: var(--c-sunken); border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  color: var(--c-text); font: inherit; font-size: var(--fs-md); text-align: left;
+  cursor: pointer;
+}
+.rootpick__on:hover { background: var(--c-hover); }
+.rootpick__name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+/* The box the mark stands in, drawn on every row of the list whether or not there is a mark in it —
+   so the names stand in one column rather than stepping in and out as the folders change under
+   them. Its width is the icon's own, and it flows in the line the way an icon does: the rows of a
+   menu are text, and a box laid out as a block would put the name on the line beneath it. */
+.rootpick__dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--icon-sm); height: var(--icon-sm);
+  margin-right: var(--s-2); vertical-align: -0.18em;
+  color: var(--c-git-modified);
 }
 
 /* ---------- the file face ---------- */
@@ -1011,18 +1039,8 @@ input[type="color"] {
   font-size: var(--fs-md);
 }
 .files--empty { color: var(--c-text-muted); }
-/* One bound folder and everything drawn about it. A project can be bound to several and each gets
-   one of these, so the box is what makes two folders read as two rather than as one long list. */
+/* The bound folder the window is on, and everything drawn about it (`AMB-D-905`). */
 .files__folder { min-width: 0; display: flex; flex-direction: column; gap: var(--s-3); }
-/* The folder's name, drawn only where there is more than one to tell apart. The rule above it is
-   what separates the stacks; the name itself never wraps, since a long path would otherwise push
-   the rows it belongs to down the panel. */
-.files__foldername {
-  margin: 0; padding: var(--s-2) 0 0;
-  border-top: 1px solid var(--c-rule);
-  color: var(--c-text); font-size: var(--fs-md); font-weight: 700; text-align: left;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 .files__row { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 .files__head {
   margin: 0; padding: 0;

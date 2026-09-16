@@ -2840,17 +2840,17 @@ impl Instructor {
             // headings are the interface's own words and the run's language is whatever the machine
             // is set to.
             (Domain::Files, "tree") => match flag(with, "open")? {
-                // Every one of them: a project bound to several folders draws a section each, and a
-                // row can only be read in the section it belongs to now that the tree is the only
-                // place rows are.
+                // One folder, whichever the window is on: a project bound to several draws the one
+                // a reader picked and no other, so a row is read in that folder's tree or it is not
+                // on the screen at all.
                 //
-                // **The state, not the press.** The section is drawn unfolded, so on most roads
-                // there is nothing here for an operator to do — and a step that told them to unfold
-                // what is already unfolded would have them fold it. Saying where the screen has to
-                // stand leaves the road true wherever it is walked from, a section a step above
-                // folded included.
-                true => "Have the folders standing beside the panes: the column is drawn there, under the project's name, and where it has been put away the control on the row above the panes brings it back. The section that draws the folder itself is then to be standing unfolded, each of them where there is more than one. It is drawn that way, so the unfolding is usually nothing to do; unfold any that is folded.".to_string(),
-                false => "Fold those sections back up.".to_string(),
+                // **The state, not the press.** The tree is drawn unfolded, so on most roads there
+                // is nothing here for an operator to do — and a step that told them to unfold what
+                // is already unfolded would have them fold it. Saying where the screen has to stand
+                // leaves the road true wherever it is walked from, a tree a step above folded
+                // included.
+                true => "Have the folders standing beside the panes: the column is drawn there, under the project's name, and where it has been put away the control on the row above the panes brings it back. The section that draws the folder itself is then to be standing unfolded. It is drawn that way, so the unfolding is usually nothing to do; unfold it where it is folded.".to_string(),
+                false => "Fold that section back up.".to_string(),
             },
             // A folder opened a level, or shut again. Opening is what a road asks for nearly every
             // time, so it is what the step means when it says nothing.

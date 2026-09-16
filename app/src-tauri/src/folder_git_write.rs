@@ -307,6 +307,35 @@ pub async fn folder_git_merge_abort(project_id: i64, root: String) -> Result<Str
     told(project_id, root, || vec!["merge".into(), "--abort".into()]).await
 }
 
+/// Take one whole side of a conflict into the working tree — `git checkout --ours|--theirs`.
+///
+/// `mine` is the side the reader is standing on: their own branch where a merge is under way, and
+/// the branch being brought in where it is false.
+///
+/// **It writes the file and leaves the index alone**, which is what makes it end where every other
+/// road out of a conflict ends. The marks go out of the file, the count next door drops to none
+/// (`crate::folder_git::folder_git_marks`), and the path is still unmerged until somebody says it
+/// is settled — the same one press that a file put right by hand is settled by (`AMB-D-906`, 2-7).
+///
+/// **It is offered on a conflicted row and nowhere else.** git refuses it over an ordinary path
+/// with its own sentence about the path not being unmerged, and a door that can only ever be
+/// refused is one not to draw (`app/src/files/FileMenu.tsx`).
+#[tauri::command]
+pub async fn folder_git_take(
+    project_id: i64,
+    root: String,
+    paths: Vec<Vec<String>>,
+    mine: bool,
+) -> Result<String, CmdError> {
+    let side = if mine { "--ours" } else { "--theirs" };
+    asked(project_id, root, paths, move |specs| {
+        let mut args = vec!["checkout".into(), side.into(), "--".into()];
+        args.extend(specs);
+        args
+    })
+    .await
+}
+
 // ── out to the network ───────────────────────────────────────────────────────────────────────
 
 /// Read the remote — `git fetch`.

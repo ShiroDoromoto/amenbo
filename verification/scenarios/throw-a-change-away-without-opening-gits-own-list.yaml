@@ -1,0 +1,253 @@
+# The same act from the other door a reader actually reaches it by: a row in the tree, on a face that
+# has never had git's own list open.
+#
+# ── Why it is a road of its own ──────────────────────────────────────────────────────────────────
+# `put-a-file-back-the-way-git-has-it` walks this act from the rail's git half, where a reader is
+# already reading a list of what changed and every row on it has something to throw away. Here
+# nothing has been read: the reader is in the folder, doing what they came to do, and what tells them
+# this file has something git was never told about is the colour on the row itself. What decides
+# whether the item is drawn is the tree's own reading of git's rows (`app/src/files/FolderTree.tsx`),
+# and it is a different gate from the panel's — a build that lost it would still be green on the
+# other road, which never opens a menu on a row git is quiet about.
+#
+# ── Why a row git is quiet about is read too ─────────────────────────────────────────────────────
+# That gate is the half worth walking. Every row in the rail's changed list is dirty by definition, so
+# a build that drew the item on all of them passes the other road; a tree draws every row in the
+# folder, and the item on a row with nothing to throw away is a press that reaches git with a path it
+# has nothing to say about. It is read last, on the row this road never touched, so what answers for
+# the absence is git's own silence about that file and not the restore this road just walked.
+#
+# ── Why the question is walked both ways, and the file read afterwards ───────────────────────────
+# For the reasons the other road gives, which do not change with the door: the answer that keeps the
+# change is the one the question exists for, and a build that dropped the colour from the row and
+# left the disk alone passes every reading taken on the tree.
+#
+# ── Why the quiet half is not walked here ────────────────────────────────────────────────────────
+# There is one switch behind both doors (`app/src/files/askBeforeRestore.ts`), and the other road
+# moves it, walks it and puts it back. Moved again from here it would prove the same row twice, and
+# the cost of walking it is a Mac left quiet about the one act nothing undoes if this run stops in
+# the middle. The habit is still put where it needs to be before the menu, because whether the panel
+# asks is this machine's and not the build's.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no tree at a shell, and a door is the whole of what this road is about.
+id: throw-a-change-away-without-opening-gits-own-list
+title: Throw a change away from the row in the tree, on a face that never opened git's own list
+description: >
+  Raise a repository holding two recorded files and change one of them. Open the folder and the
+  changed row is wearing git's colour, the untouched one bare. The menu on the changed row offers to
+  throw the change away: refuse once and the colour is still there, go ahead and it goes, and the file
+  reads as git has it. The untouched row's menu offers none of this.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+      dir: orchard-rows
+    as: orchard
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard-rows
+      path: grafting.md
+      content: SCENARIO the scion is cut while the rootstock is still dormant
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard-rows
+      path: pruning.md
+      content: SCENARIO the old wood comes out before the sap rises
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: orchard-rows
+
+  # What git has, and what the road is going to ask for back.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: orchard-rows
+
+  # And the change on top of it, on one of the two. The other is left exactly as git recorded it,
+  # which is what the last reading of this road is about.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard-rows
+      path: grafting.md
+      content: SCENARIO the scion is cut once the leaves are out
+
+steps_gui:
+  # Whatever this Mac's history, the question is on for this run. It is the first step because the
+  # menu below depends on it.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: asks
+      about: restore
+
+  - type: assert
+    domain: files
+    op: setting
+    with:
+      position: asks
+      about: restore
+
+  # Back to the panel, since moving that row is done in the settings and leaves the reader there.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Orchard
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The folder itself, and git's answer worn on its rows. Nothing in the rail's git half is opened on
+  # this road at all — the colour is the whole of what the reader has been told.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: grafting.md
+      section: tree
+      mark: modified
+
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: pruning.md
+      section: tree
+      mark: modified
+      present: false
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: grafting.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: true
+
+  - type: action
+    domain: files
+    op: restore
+
+  # Refused. This is the answer the question exists for: the reader who opened the menu by mistake.
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: no
+      about: restore
+
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: grafting.md
+      section: tree
+      mark: modified
+
+  # And again, answered the other way.
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: grafting.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: restore
+
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: yes
+      about: restore
+
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: grafting.md
+      section: tree
+      mark: modified
+      present: false
+
+  # The reading the colour cannot give. A build that took the mark off the row and left the disk
+  # alone is still green up to here.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: grafting.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the scion is cut while the rootstock is still dormant
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the scion is cut once the leaves are out
+      present: false
+
+  - type: action
+    domain: files
+    op: back
+
+  # And what the row git is quiet about offers, which is none of this. It is last because the menu it
+  # reads is left standing: nothing is pressed on it.
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: pruning.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: false

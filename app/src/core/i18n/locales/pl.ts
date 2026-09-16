@@ -246,7 +246,7 @@ export const pl: Translation = {
     "dimmgr.showOnCardHint": "Pokazuje tę kategorię na karcie zadania. Odpowiedź należy do kategorii, więc zmienia się dla wszystkich, nie tylko na tym urządzeniu",
     "dimmgr.required": "Wymagana",
     "dimmgr.requiredHint": "Wstrzymuje tworzenie zadania, dopóki ta kategoria nie zostanie wypełniona. Zadania już utworzone zostają bez zmian",
-    "dimmgr.requiredNoValuesHint": "Najpierw dodaj wartość — kategorii bez wartości nikt nie mógłby wypełnić",
+    "dimmgr.requiredNoValuesHint": "Najpierw dodaj wartość albo otwórz ponownie zamkniętą — kategorii bez żadnej otwartej wartości nikt nie mógłby wypełnić",
     "dimmgr.appliesTo": "Dotyczy",
     "dimmgr.appliesToHint": "Po której z dwóch stron ta kategoria jest oferowana. Odpowiedź należy do kategorii, więc zmienia się dla wszystkich. Zawężenie nie usuwa niczego, co już wypełniono — po prostu przestaje tam cokolwiek znaczyć",
     "dimmgr.appliesTo.both": "Zadania i decyzje",

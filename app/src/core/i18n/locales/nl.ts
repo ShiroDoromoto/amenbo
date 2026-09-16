@@ -241,7 +241,7 @@ export const nl: Translation = {
     "dimmgr.showOnCardHint": "Toont deze categorie op de taakkaart. Het antwoord hoort bij de categorie, dus het verandert voor iedereen — niet alleen op dit apparaat",
     "dimmgr.required": "Verplicht",
     "dimmgr.requiredHint": "Houdt het aanmaken van een taak tegen tot deze categorie beantwoord is. Al aangemaakte taken blijven zoals ze zijn",
-    "dimmgr.requiredNoValuesHint": "Voeg eerst een waarde toe — een categorie zonder waarden kan niemand beantwoorden",
+    "dimmgr.requiredNoValuesHint": "Voeg eerst een waarde toe of heropen een gesloten waarde — een categorie zonder open waarde kan niemand beantwoorden",
     "dimmgr.appliesTo": "Geldt voor",
     "dimmgr.appliesToHint": "Aan welke van de twee deze categorie wordt aangeboden. Het antwoord hoort bij de categorie, dus het verandert voor iedereen. Beperken haalt niets weg wat al beantwoord is — het betekent daar alleen niets meer",
     "dimmgr.appliesTo.both": "Taken en besluiten",

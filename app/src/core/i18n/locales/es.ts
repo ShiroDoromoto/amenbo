@@ -245,7 +245,7 @@ export const es: Translation = {
     "dimmgr.showOnCardHint": "Muestra esta categoría en la tarjeta de tarea. La respuesta pertenece a la categoría, así que cambia para todos, no solo en este dispositivo",
     "dimmgr.required": "Obligatoria",
     "dimmgr.requiredHint": "Retiene la creación de una tarea hasta que esta categoría tenga respuesta. Las tareas ya creadas se quedan como están",
-    "dimmgr.requiredNoValuesHint": "Añade primero un valor: una categoría sin valores no podría responderse nunca",
+    "dimmgr.requiredNoValuesHint": "Añade primero un valor o reabre uno cerrado: una categoría sin ningún valor abierto no podría responderse nunca",
     "dimmgr.appliesTo": "Se aplica a",
     "dimmgr.appliesToHint": "En cuál de los dos se ofrece esta categoría. La respuesta pertenece a la categoría, así que cambia para todos. Restringirla no quita nada de lo ya respondido — solo deja de significar algo ahí",
     "dimmgr.appliesTo.both": "Tareas y decisiones",

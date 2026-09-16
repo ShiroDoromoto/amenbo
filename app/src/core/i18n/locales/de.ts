@@ -241,7 +241,7 @@ export const de: Translation = {
     "dimmgr.showOnCardHint": "Zeigt diese Kategorie auf der Aufgabenkarte. Die Antwort gehört der Kategorie, also ändert sie sich für alle — nicht nur auf diesem Gerät",
     "dimmgr.required": "Pflicht",
     "dimmgr.requiredHint": "Hält das Erstellen einer Aufgabe an, bis diese Kategorie beantwortet ist. Bereits erstellte Aufgaben bleiben, wie sie sind",
-    "dimmgr.requiredNoValuesHint": "Füge zuerst einen Wert hinzu — eine Kategorie ohne Werte könnte niemand beantworten",
+    "dimmgr.requiredNoValuesHint": "Füge zuerst einen Wert hinzu oder öffne einen geschlossenen wieder — eine Kategorie ohne offenen Wert könnte niemand beantworten",
     "dimmgr.appliesTo": "Gilt für",
     "dimmgr.appliesToHint": "Wofür diese Kategorie angeboten wird. Die Antwort gehört der Kategorie, also ändert sie sich für alle. Das Einschränken nimmt nichts bereits Beantwortetes weg — es bedeutet dort nur nichts mehr",
     "dimmgr.appliesTo.both": "Aufgaben und Entscheidungen",

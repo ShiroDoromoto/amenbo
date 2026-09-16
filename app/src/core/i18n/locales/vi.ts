@@ -243,7 +243,7 @@ export const vi: Translation = {
     "dimmgr.showOnCardHint": "Hiện phân loại này trên thẻ công việc. Câu trả lời thuộc về phân loại, nên nó đổi cho mọi người, không chỉ trên thiết bị này",
     "dimmgr.required": "Bắt buộc",
     "dimmgr.requiredHint": "Giữ việc tạo công việc lại cho đến khi phân loại này được điền. Công việc đã tạo xong vẫn giữ nguyên",
-    "dimmgr.requiredNoValuesHint": "Hãy thêm một giá trị trước — phân loại không có giá trị thì không ai điền được",
+    "dimmgr.requiredNoValuesHint": "Hãy thêm một giá trị trước, hoặc mở lại một giá trị đã đóng — phân loại không có giá trị nào đang mở thì không ai điền được",
     "dimmgr.appliesTo": "Áp dụng cho",
     "dimmgr.appliesToHint": "Phân loại này được đưa ra ở phía nào trong hai phía. Câu trả lời thuộc về phân loại, nên nó thay đổi với mọi người. Thu hẹp lại không lấy đi thứ đã điền — nó chỉ thôi mang ý nghĩa ở phía đó",
     "dimmgr.appliesTo.both": "Công việc và quyết định",

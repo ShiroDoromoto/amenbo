@@ -63,6 +63,11 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
 
 function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId: number; store: ReturnType<typeof useStore> }) {
   const currentId = currentTimeAxisValueId(dim, todayStr());
+  // Counted over the values the axis still offers, which is the count core raises `required` against
+  // (`ops::dimension`, `AMB-D-829`): a closed value takes no new record, so an axis whose values are
+  // all closed is as unanswerable as one holding none. An axis that does not close its values has no
+  // closed ones, so this reads the same as the plain count there.
+  const noOpenValues = !dim.values.some((v) => !v.closed);
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
   }
@@ -138,16 +143,16 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
         </label>
         {/* Whether this axis refuses to be left empty (`AMB-D-734`). It is the same kind of answer as the
             three beside it — the axis's own, so it moves for everyone — and it bites in one place: a task
-            carrying no value here cannot finish its creation. An axis offering no values could never be
-            answered, so core refuses to raise it there and the box stays off until a value exists. */}
+            carrying no value here cannot finish its creation. An axis offering no open value could never
+            be answered, so core refuses to raise it there and the box stays off until one is offered. */}
         <label
           className="dimmgr__ordered"
-          title={dim.values.length === 0 ? t("dimmgr.requiredNoValuesHint") : t("dimmgr.requiredHint")}
+          title={noOpenValues ? t("dimmgr.requiredNoValuesHint") : t("dimmgr.requiredHint")}
         >
           <input
             type="checkbox"
             checked={dim.required}
-            disabled={dim.values.length === 0}
+            disabled={noOpenValues}
             onChange={(e) => store.setDimensionRequired(dim.id, e.target.checked)}
           />
           {t("dimmgr.required")}

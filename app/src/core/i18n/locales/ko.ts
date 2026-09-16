@@ -240,7 +240,7 @@ export const ko: Translation = {
     "dimmgr.showOnCardHint": "이 분류를 작업 카드에 표시합니다. 분류 자체가 가진 설정이라 이 기기뿐 아니라 모두에게 같이 바뀝니다",
     "dimmgr.required": "필수",
     "dimmgr.requiredHint": "이 분류가 비어 있는 동안에는 작업 작성을 마칠 수 없게 합니다. 이미 작성을 마친 작업은 그대로 둡니다",
-    "dimmgr.requiredNoValuesHint": "값을 먼저 추가하세요. 값이 없는 분류는 아무도 채울 수 없습니다",
+    "dimmgr.requiredNoValuesHint": "값을 먼저 추가하거나 닫힌 값을 다시 여세요. 열린 값이 없는 분류는 아무도 채울 수 없습니다",
     "dimmgr.appliesTo": "적용 대상",
     "dimmgr.appliesToHint": "이 분류를 둘 중 어느 쪽에 내보일지. 분류 자체가 가진 설정이므로 모두의 화면이 함께 바뀝니다. 좁혀도 이미 답한 값은 사라지지 않고, 그쪽에서 의미를 갖지 않게 될 뿐입니다",
     "dimmgr.appliesTo.both": "작업과 결정",

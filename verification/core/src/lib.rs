@@ -3228,6 +3228,21 @@ const REGISTRY: &[OpSpec] = &[
     // away.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stage", required: &["name"], refs: &[], strings: &["name"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "unstage", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Space on the row the keyboard is standing on is the same box pressed from the keyboard, so it
+    // is `press` and not an op here — the key is the driver's vocabulary, the way every other key on
+    // this face is.
+    //
+    // **The box on the line a list is named on is a third thing, and it is the list's.** It takes
+    // every row the list draws in one call out to git, whatever the reader has picked out — so a
+    // road that walked the row's box has said nothing about it. Two ops rather than one carrying a
+    // direction, for the reason `stage` and `unstage` are two: the box means the list it is on, and
+    // naming the wrong one is pressing a box in the other list. Neither names a row, because what it
+    // takes is not rows but the list.
+    //
+    // It is not drawn over a list with nothing in it: there is no list to take, and a box offering
+    // to take one would be a press with nothing behind it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stage-all", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "unstage-all", required: &[], refs: &[], strings: &[], binds: false },
     // The message written and the commit made, which is one move on this face: the box and the press
     // stand together under the lists, and a commit with nothing typed is refused by the control being
     // down rather than by anything a road could read.
@@ -3488,7 +3503,13 @@ const REGISTRY: &[OpSpec] = &[
     // `present: false` is the half this exists for. A row of the paths one commit touched is about what
     // was written down, and a record has no working tree to throw away — so the item is not drawn
     // there, and a build that drew it anyway would be offering a press with nothing behind it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "offers", required: &["item", "present"], refs: &[], strings: &["item"], binds: false },
+    //
+    // **`state` is the third answer the menu can give**: an item the set is not in a state for is
+    // drawn and greyed rather than taken away (`git-panel-spec`, 2-8), so "there" and "pressable"
+    // are two questions. Left out, the reading is about the item being there and says nothing about
+    // the press; `state: off` is the greyed half, and `state: on` the half that says a set holding
+    // nothing awkward leaves the item whole.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "offers", required: &["item", "present"], refs: &[], strings: &["item", "state"], binds: false },
     // The question one of those two presses put, answered. `yes` goes ahead and `no` leaves things
     // where they are — and both are a road's to walk, since what a question is for is the second one.
     // `about` says which of the two questions, for the reason the settings rows are named that way.
@@ -3650,6 +3671,20 @@ const REGISTRY: &[OpSpec] = &[
     // stays the driver's to say: it is the reader's own machine's, and a road that named one would
     // be wrong on the other two.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "carry-to-folder", required: &["name", "section", "into"], refs: &[], strings: &["how", "into", "name", "section"], binds: false },
+    // The same gesture inside the half that is git's: a row taken hold of in one of its two lists
+    // and let go on the other, which stages it or takes it back out.
+    //
+    // It is not `carry-to-folder` with another kind of landing. That one moves a file on the
+    // filesystem and this one moves nothing at all — what it changes is what git has been told —
+    // and the two would be one op whose meaning a road could not read off the step.
+    //
+    // `into` is the list it is let go on, said the way `section` says the one it came from. **What
+    // goes is the set where the row is in one**, which is the rule every act on these rows is read
+    // by, so a road that picked rows out first is carrying all of them with this one step.
+    //
+    // **A conflict is carried nowhere.** Staging one is the reader saying the merge is settled
+    // there, and a press that travelled across a panel is no way to say it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "carry-to-list", required: &["name", "section", "into"], refs: &[], strings: &["into", "name", "section"], binds: false },
     // And what the press left. No shot settles it, and that is the point rather than a gap: what a
     // hand-over ends in is off Amenbo's own window — an application that came forward, or an
     // operating system's chooser drawn by the system — and the run shoots the window under test. The

@@ -94,6 +94,15 @@ export type GitDoors = {
   /** Throw away what the working tree has done to them — asked about first (`./restore`). Absent
    *  where there is nothing to throw away, which is every row inside a commit. */
   onRestore?: () => void;
+  /**
+   * Take one whole side of a conflict — the reader's own branch, or the one being brought in.
+   *
+   * **Drawn on a conflicted row and nowhere else** (`AMB-D-906`, 2-7). Over any other path git
+   * refuses it outright, and the pair is a short way round for the files where one side is the
+   * whole answer — something built from something else, a lock file — rather than the way a
+   * conflict is normally settled, which is in the file itself.
+   */
+  onTake?: (mine: boolean) => void;
 };
 
 export function FileMenu({
@@ -270,6 +279,21 @@ export function FileMenu({
           )}
           {git?.onUntrack !== undefined && path.length > 0 && (
             <MenuItem onClick={() => { onClose(); git.onUntrack?.(); }}>{t("git.untrack")}</MenuItem>
+          )}
+          {/* The two that settle a conflict by taking one side of it whole. They are together and
+              set off from the rest, because they are the only items here that are about a row being
+              in conflict — and what they write is the file, not the index: the count of what is
+              left drops to none and the row is still the reader's to declare settled
+              (`crate::folder_git_write`). */}
+          {git?.onTake !== undefined && path.length > 0 && (
+            <>
+              <MenuItem apart onClick={() => { onClose(); git.onTake?.(true); }}>
+                {t("git.takeOurs")}
+              </MenuItem>
+              <MenuItem onClick={() => { onClose(); git.onTake?.(false); }}>
+                {t("git.takeTheirs")}
+              </MenuItem>
+            </>
           )}
           {/* The one road here nothing walks back. It is last, and the question in front of it is
               the bin's own shape for the reason that decision gives (`./RestoreAsk`, `AMB-D-777`). */}

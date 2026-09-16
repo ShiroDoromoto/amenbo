@@ -30,6 +30,17 @@
 // says, and a path can have something in both — a file changed, staged, and then changed again is
 // in both lists because that is what git will do with it.
 //
+// **What a merge could not settle is a third list, and the one number on this half that git did not
+// give it** (`AMB-D-906`, 2-7). The count of conflicts left in a file is read off the file, so it
+// falls the moment the file is put right — by the reader on the other side of the panes, or by the
+// agent in the pane beside it — where git would go on calling the path unmerged until somebody
+// staged it. Nobody else can see that number: a pane shows one file at a time, and this half is the
+// only place the question "how much of this merge is left" is asked of the whole folder.
+//
+// **No screen is drawn for the marks themselves.** A conflicted file is an ordinary file and opens
+// in the ordinary editor; the ways to settle one are to write it, to ask the agent in the pane to,
+// or to take one side whole off the row's own menu — and all three end at the same number falling.
+//
 // **The agent in the pane is not guarded against** (`AMB-D-906`). Nothing here reads whether
 // something is running beside it, refuses a press on that ground, or puts a question in the way.
 // What closes the hole instead is the shape of the call: every commit names its paths, so the
@@ -41,9 +52,10 @@ import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { errText, t, tf } from "../core/i18n";
 import {
-  folderGitCommit, folderGitFetch, folderGitIgnore, folderGitPull, folderGitPush, folderGitStage,
-  folderGitStash, folderGitStashes, folderGitStashPop, folderGitStatus, folderGitUnstage,
-  folderGitUntrack, folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
+  folderGitCommit, folderGitFetch, folderGitIgnore, folderGitMarks, folderGitMergeContinue,
+  folderGitPull, folderGitPush, folderGitStage, folderGitStash, folderGitStashes, folderGitStashPop,
+  folderGitStatus, folderGitTake, folderGitUnstage, folderGitUntrack, folderUnwatch, folderWatch,
+  nextWatchTag, onFolderChanged,
 } from "./folder";
 import { FileMenu } from "./FileMenu";
 import { GitBranch } from "./GitBranch";
@@ -69,7 +81,7 @@ const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: fal
  * gathers four hundred milliseconds of them into one, and a fetch moves where the branch stands
  * without writing a byte anybody watches — asking outright is one call and says it now.
  */
-export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
+export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onRead }: {
   /** The project the folder is bound to; nothing is drawn without one. */
   projectId: number | null;
   /** The folder the window is on, as its path. */
@@ -83,6 +95,15 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
   onPrefix?: (prefix: string) => void;
   /** Hand a changed path to the pane the reader is working in (`../shell/TerminalFace`). */
   onHandOver?: (wholes: string[]) => void;
+  /**
+   * Open one of this folder's files in the column across the panes, by the path this half spells.
+   *
+   * **It is how a conflicted row is reached at all.** This half and the tree are two tabs of one
+   * rail (`./FolderRail`), so a reader standing on the list of what the merge could not settle has
+   * no tree to find those files in — and what settles a conflict is the file itself
+   * (`AMB-D-906`, 2-7).
+   */
+  onRead?: (path: string[]) => void;
 }) {
   const [git, setGit] = useState<FolderGitDto>(NOTHING);
   /** False until the first read comes back. Nothing is drawn before it. */
@@ -109,6 +130,27 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
   const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
   // Throwing away what git has not recorded, which the menu offers over a row that has some.
   const restore = useRestore(projectId);
+  // How many conflicts are still written into each path the merge could not settle, by the whole
+  // path. A path the count has not come back for yet is not in it, which is not the same as nought.
+  const [marks, setMarks] = useState<Record<string, number>>({});
+
+  // git's three answers about a path, kept apart here because the reader does a different thing to
+  // each. A conflict is in neither list below: what a box would do to it is stage it, and staging a
+  // conflict is the one press that says it is settled (`AMB-D-906`, 2-7).
+  const conflicts = git.rows.filter(unmerged);
+  const settled = git.rows.filter((row) => !unmerged(row));
+  // git's `X` is what the index says and its `Y` what the working tree says, and a space in either
+  // is git saying nothing about that half. `?` is not an index letter — it is git saying it has
+  // never seen the path at all — so an untracked file is something to stage and nothing staged.
+  const staged = settled.filter((row) => row.index !== " " && row.index !== "?");
+  const changed = settled.filter((row) => row.worktree !== " ");
+  // What may be put aside: the paths git follows. Naming an untracked one in a stash's pathspec is
+  // refused outright — `did not match any file(s) known to git`, with nothing put aside — and
+  // handing over no paths at all would take in the pane's working tree along with the reader's.
+  const followed = settled.filter((row) => row.index !== "?").map((row) => row.path);
+  // What the count is asked about, as one word: a list rebuilt on every draw is a new array each
+  // time, and the read below is about which paths are in conflict rather than about that array.
+  const inConflict = conflicts.map((row) => row.path.join("/")).join("\n");
 
   // **This half watches the folder itself, for as long as it is drawn.**
   //
@@ -179,6 +221,32 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
     return () => { alive = false; };
   }, [stashOpen, projectId, root, moved]);
 
+  // **How much of each conflict is left, read from the files and not from git.**
+  //
+  // git calls a path unmerged until somebody stages it, so it would go on saying "in conflict"
+  // about a file that has been put right and not yet declared. The file's own bytes say it the
+  // moment they are written — by the reader in the column across the panes, or by the agent in the
+  // pane beside it — and `moved` is the word that says to look again (`AMB-D-906`, 2-7).
+  //
+  // Asked only where there is a conflict to count. A folder with none never pays for this at all.
+  useEffect(() => {
+    if (projectId === null || root === null || inConflict === "") {
+      setMarks({});
+      return;
+    }
+    let alive = true;
+    const paths = inConflict.split("\n").map((whole) => whole.split("/"));
+    void folderGitMarks(projectId, root, paths)
+      .then((counts) => {
+        if (!alive) return;
+        setMarks(Object.fromEntries(paths.map((path, at) => [path.join("/"), counts[at] ?? 0])));
+      })
+      // A file that went while this was out is a row about to stop being drawn, and a number that
+      // did not arrive is drawn as no number rather than as none left.
+      .catch(() => { if (alive) setMarks({}); });
+    return () => { alive = false; };
+  }, [projectId, root, inConflict, moved]);
+
   /**
    * Ask git for one thing, and draw what it wrote.
    *
@@ -231,16 +299,6 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
       </div>
     );
   }
-
-  // git's `X` is what the index says and its `Y` what the working tree says, and a space in either
-  // is git saying nothing about that half. `?` is not an index letter — it is git saying it has
-  // never seen the path at all — so an untracked file is something to stage and nothing staged.
-  const staged = git.rows.filter((row) => row.index !== " " && row.index !== "?");
-  const changed = git.rows.filter((row) => row.worktree !== " ");
-  // What may be put aside: the paths git follows. Naming an untracked one in a stash's pathspec is
-  // refused outright — `did not match any file(s) known to git`, with nothing put aside — and
-  // handing over no paths at all would take in the pane's working tree along with the reader's.
-  const followed = git.rows.filter((row) => row.index !== "?").map((row) => row.path);
 
   return (
     <div className="gitpanel">
@@ -306,35 +364,78 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
           <Icon name="foldRight" />
         </button>
       )}
-      <div className="gitpanel__commit">
-        <textarea
-          className="gitpanel__message"
-          aria-label={t("git.commitMessage")}
-          placeholder={t("git.commitMessage")}
-          rows={2}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
+      {/* What the merge could not settle, above the press that ends the merge — which is the order
+          a reader works it in. It is drawn whenever git names an unmerged path, merge or not: a
+          rebase leaves the same rows, and a list that appeared only for one of them would leave the
+          other with rows in no list at all. */}
+      {conflicts.length > 0 && (
+        <Conflicts
+          rows={conflicts}
+          marks={marks}
+          running={running}
+          onOpen={onRead}
+          // Staging it is the whole of "I say this one is settled" — nothing does it for the
+          // reader, however few marks are left in the file (`AMB-D-906`, 2-7).
+          onSettle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
+          onMenu={(path, x, y) => setMenu({ path, x, y })}
         />
+      )}
+      <div className="gitpanel__commit">
+        {/* **No box while a merge is under way.** git wrote the message when it began the merge and
+            takes that one, so a box here would be one a reader types into and is never asked
+            for. */}
+        {!git.merging && (
+          <textarea
+            className="gitpanel__message"
+            aria-label={t("git.commitMessage")}
+            placeholder={t("git.commitMessage")}
+            rows={2}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+        )}
         <div className="gitpanel__commitfoot">
-          {/* How many paths the commit will name. It is the hinge of this screen, so it is said
-              rather than left to be worked out from the list below (`AMB-D-906`, 3-2). */}
-          {staged.length > 0 && (
+          {/* While a merge is open, how much of it is left; otherwise how many paths the commit
+              will name. Either is the hinge of this screen, so it is said rather than left to be
+              worked out from the lists below (`AMB-D-906`, 3-2). */}
+          {git.merging ? (
+            <span className="gitpanel__hint">
+              {conflicts.length > 0
+                ? tf("git.conflictsLeft", { n: conflicts.length })
+                : t("git.conflictsSettled")}
+            </span>
+          ) : staged.length > 0 && (
             <span className="gitpanel__hint">{tf("git.commitNaming", { n: staged.length })}</span>
           )}
-          <button
-            className="btn btn--primary gitpanel__do"
-            type="button"
-            disabled={running || staged.length === 0 || message.trim() === ""}
-            onClick={() => void ask(async () => {
-              const wrote = await folderGitCommit(
-                projectId, root, message, staged.map((row) => row.path),
-              );
-              setMessage("");
-              return wrote;
-            }, true)}
-          >
-            {t("git.commit")}
-          </button>
+          {/* The one press, under whichever name the folder's state gives it. Ending a merge is a
+              commit git has already written the message for, so the two never stand together —
+              and while one path is still unmerged git refuses it, which is why it is down until
+              the list above is empty. */}
+          {git.merging ? (
+            <button
+              className="btn btn--primary gitpanel__do"
+              type="button"
+              disabled={running || conflicts.length > 0}
+              onClick={() => void ask(() => folderGitMergeContinue(projectId, root), true)}
+            >
+              {t("git.mergeContinue")}
+            </button>
+          ) : (
+            <button
+              className="btn btn--primary gitpanel__do"
+              type="button"
+              disabled={running || staged.length === 0 || message.trim() === ""}
+              onClick={() => void ask(async () => {
+                const wrote = await folderGitCommit(
+                  projectId, root, message, staged.map((row) => row.path),
+                );
+                setMessage("");
+                return wrote;
+              }, true)}
+            >
+              {t("git.commit")}
+            </button>
+          )}
         </div>
       </div>
       <Changes
@@ -386,6 +487,11 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
             onRestore: changed.some((row) => row.path.join("/") === menu.path.join("/"))
               ? () => restore.askRestore(root, [menu.path])
               : undefined,
+            // The short way out of a conflict, and only over one: over any other path git refuses
+            // it with its own sentence about the path not being unmerged.
+            onTake: conflicts.some((row) => row.path.join("/") === menu.path.join("/"))
+              ? (mine) => void ask(() => folderGitTake(projectId, root, [menu.path], mine), true)
+              : undefined,
           }}
         />
       )}
@@ -430,6 +536,130 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
         </Menu>
       )}
     </div>
+  );
+}
+
+/**
+ * Whether git says the merge could not settle this path.
+ *
+ * git writes the pair of letters for that seven ways — one side changed it while the other deleted
+ * it, both added it, both deleted it — and what they have in common is a `U` on one side, or the
+ * same letter on both. It is read off the row rather than asked for again, because the row is
+ * already carrying git's own answer.
+ */
+function unmerged(row: GitEntryDto): boolean {
+  if (row.index === "U" || row.worktree === "U") return true;
+  return row.index === row.worktree && (row.index === "A" || row.index === "D");
+}
+
+/**
+ * What the merge could not settle: one row per path, with how much of it is still in conflict.
+ *
+ * **The number is what this window has that no pane does** (`AMB-D-906`, 2-7). It is counted off
+ * the file rather than off git's index, so it drops the moment the file is put right — by the
+ * reader on the other side of the panes, or by the agent in the pane beside it — and neither has to
+ * tell anybody they are done.
+ *
+ * **Nothing here stages anything by itself.** A file with no marks left in it is a file the reader
+ * is offered the one press that says so, which is what that press means: VS Code asks the same
+ * question in words before it stages a conflict (`AMB-T-4919`).
+ *
+ * **There is no box on these rows.** A box would be the two lists' box, and what it does there is
+ * stage — which on a conflict is the declaration above and not a thing to tick idly.
+ */
+function Conflicts({ rows, marks, running, onOpen, onSettle, onMenu }: {
+  rows: GitEntryDto[];
+  /** How many marks are left in each path, by the whole path. A path that is not in it is one the
+   *  count has not come back for, which is drawn as no number rather than as none. */
+  marks: Record<string, number>;
+  /** A door is out, so nothing here is pressed until it comes back. */
+  running: boolean;
+  /** Open the file on the other side of the panes. Absent where there is nowhere to open it. */
+  onOpen?: (path: string[]) => void;
+  /** Say this one is settled, which is to stage it. */
+  onSettle: (row: GitEntryDto) => void;
+  onMenu: (path: string[], x: number, y: number) => void;
+}) {
+  return (
+    <section className="gitpanel__section gitpanel__section--conflict">
+      <h3 className="gitpanel__head">{t("git.conflicts")} <span>{rows.length}</span></h3>
+      <ul className="gitpanel__list">
+        {rows.map((row) => (
+          <ConflictRow
+            key={row.path.join("/")}
+            row={row}
+            left={marks[row.path.join("/")]}
+            running={running}
+            onOpen={onOpen}
+            onSettle={onSettle}
+            onMenu={onMenu}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * One path the merge could not settle: git's letters, the name, and where it stands.
+ *
+ * **The name is the way into the file**, because this half and the tree are two tabs of one rail:
+ * a reader standing here has no tree to find the file in, and the file is where a conflict is
+ * settled. What opens is the ordinary editor — a conflicted file is an ordinary file, and Amenbo
+ * draws no screen of its own for the marks in it (`AMB-D-906`, 2-7).
+ *
+ * **What stands at the end is the count, until there is none — and then the press.** The two never
+ * stand together: while something is left to settle there is nothing to declare, and once nothing
+ * is left the number would be a nought nobody needs to read.
+ */
+function ConflictRow({ row, left, running, onOpen, onSettle, onMenu }: {
+  row: GitEntryDto;
+  left: number | undefined;
+  running: boolean;
+  onOpen?: (path: string[]) => void;
+  onSettle: (row: GitEntryDto) => void;
+  onMenu: (path: string[], x: number, y: number) => void;
+}) {
+  const name = row.path[row.path.length - 1] ?? "";
+  const holding = row.path.slice(0, -1).join("/");
+  const whole = row.path.join("/");
+  const said = (
+    <>
+      <span className="gitpanel__mark">{letters(row)}</span>
+      <span className="gitpanel__name">{name}</span>
+      {holding !== "" && <span className="gitpanel__where">{holding}</span>}
+    </>
+  );
+  return (
+    <li
+      className="gitpanel__row gitpanel__row--conflict"
+      title={whole}
+      onContextMenu={(e) => { e.preventDefault(); onMenu(row.path, e.clientX, e.clientY); }}
+    >
+      {onOpen === undefined
+        ? <span className="gitpanel__conflictname">{said}</span>
+        : (
+          <button
+            className="gitpanel__conflictname gitpanel__conflictopen"
+            type="button"
+            onClick={() => onOpen(row.path)}
+          >
+            {said}
+          </button>
+        )}
+      {left === undefined ? null : left > 0
+        ? <span className="gitpanel__marks">{tf("git.conflictMarks", { n: left })}</span>
+        : (
+          <button
+            className="btn gitpanel__settle"
+            type="button"
+            disabled={running}
+            onClick={() => onSettle(row)}
+          >
+            {t("git.settleOne")}
+          </button>
+        )}
+    </li>
   );
 }
 

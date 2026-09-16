@@ -8,6 +8,11 @@
 //! machine with no git that can be run without asking the reader to install a compiler, both answer
 //! the same way — nothing.
 //!
+//! **One road here reads the working tree rather than asking git** — how many conflicts are still
+//! written into a file (`folder_git_marks`). git calls a path unmerged until somebody stages it,
+//! so it cannot answer "has this one been put right yet"; the file's own bytes can, whoever wrote
+//! them (`AMB-D-906`, 2-7).
+//!
 //! **Everything here reads; nothing here writes** — the other half is
 //! [`crate::folder_git_write`] (`AMB-D-906`). The line between the two modules is the answer a road
 //! gives when it comes to nothing: here it is an empty hand, because a folder that is no repository
@@ -40,7 +45,7 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::dto::{FolderGitDto, GitBranchDto, GitCommitDto, GitEntryDto, GitFileDto, GitStashDto};
 use crate::error::CmdError;
-use crate::folder_fence::root_of;
+use crate::folder_fence::{open_no_follow, root_of, rooted, under};
 
 /// What git calls one bound folder — as much of it as anything here reads.
 ///
@@ -128,11 +133,10 @@ pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGi
         // would read as a path wearing two status letters.
         let (head, named) = out.split_once('\0').unwrap_or((out.as_str(), ""));
         let rows = rows(named, &repo.prefix);
-        // Whether a merge is underway, asked of the file git itself asks — and free, because the
-        // directory it is in was read once and kept (`repo_of`). A second process to ask git the
-        // same question would be 14ms of a call that is 20ms whole (`AMB-T-4899`), and the watch
-        // the rail lays covers this directory, so the file appearing and going is already a reason
-        // to read again (`crate::folder_watch`).
+        // A file git writes when it begins a merge it could not finish, and deletes when the merge
+        // is concluded or abandoned. Asking for it costs one look at a directory entry, where
+        // asking git the same question would be a second process — and this call is made for every
+        // bound folder the tree draws (`AMB-T-4897`).
         let merging = repo.git_dir.join("MERGE_HEAD").exists();
         Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows, merging })
     })
@@ -306,6 +310,91 @@ pub async fn folder_git_stashes(
         Ok(run(&dir, &args).map(|out| stashes(&out)).unwrap_or_default())
     })
     .await
+}
+
+/// The line a merge writes over the half of a file it could not settle, and what is counted here.
+///
+/// The space is part of it: git writes the name of what the side came from after the arrows, and a
+/// line of nothing but arrows is a line somebody wrote themselves.
+const CONFLICT_MARK: &[u8] = b"<<<<<<< ";
+
+/// How much of a file is read at a time while it is counted. Nothing is held past the chunk it was
+/// read into, so a file of any size costs this much memory and no more.
+const MARK_CHUNK: usize = 64 * 1024;
+
+/// How many conflicts are still written into each of `paths` — one count per path, in the order
+/// they were given.
+///
+/// **The file is read rather than git asked** (`AMB-D-906`, 2-7). git calls a path unmerged until
+/// somebody stages it, so asking git would say "still in conflict" about a file that has been put
+/// right and not yet declared — and what a reader wants to know is whether the arrows are gone. The
+/// file's own bytes say that the moment they are written, whoever wrote them: a reader in the
+/// column across the panes, or the agent in the pane beside it (`crate::folder_watch` is what says
+/// to ask again).
+///
+/// **Only the opening mark is counted**, the way GitHub Desktop counts them (`AMB-T-4919`). A file
+/// half-settled has fewer of them than it had, which is the number to draw; counting all three
+/// kinds of line would treat a `=======` a person typed into a table as a conflict.
+///
+/// **A path that cannot be read counts as none.** That is a file git left whole because it could
+/// not merge it at all — a picture, or one side of a delete — and there the answer "nothing is
+/// marked in it" is the true one: what is left is for the reader to declare settled or to take one
+/// side of.
+#[tauri::command]
+pub async fn folder_git_marks(
+    project_id: i64,
+    root: String,
+    paths: Vec<Vec<String>>,
+) -> Result<Vec<u32>, CmdError> {
+    off_thread(move || {
+        let (roots, base) = rooted(project_id, &root)?;
+        Ok(paths
+            .iter()
+            .map(|path| {
+                under(&roots, base, path).and_then(|(_owner, file)| marks(&file)).unwrap_or(0)
+            })
+            .collect())
+    })
+    .await
+}
+
+/// How many lines of `file` open a conflict, read a chunk at a time.
+///
+/// What it holds across a chunk boundary is how far into [`CONFLICT_MARK`] the line has got, so a
+/// mark split between two reads is still one mark — and a line long enough to fill memory is read
+/// in pieces like any other.
+fn marks(file: &Path) -> Option<u32> {
+    use std::io::Read as _;
+    let mut open = open_no_follow(file).ok()?;
+    let mut buf = vec![0u8; MARK_CHUNK];
+    let mut count = 0u32;
+    // How much of the mark this line has matched so far, or `None` once the line cannot be one. The
+    // file's first byte begins a line, so it starts at nothing matched rather than disqualified.
+    let mut far: Option<usize> = Some(0);
+    loop {
+        let read = open.read(&mut buf).ok()?;
+        if read == 0 {
+            return Some(count);
+        }
+        for byte in &buf[..read] {
+            if *byte == b'\n' {
+                far = Some(0);
+                continue;
+            }
+            let Some(got) = far else { continue };
+            if CONFLICT_MARK.get(got) != Some(byte) {
+                far = None;
+                continue;
+            }
+            far = Some(got + 1);
+            if got + 1 == CONFLICT_MARK.len() {
+                count += 1;
+                // The rest of the line is not the mark again, and a file of arrows would otherwise
+                // be counted once per byte.
+                far = None;
+            }
+        }
+    }
 }
 
 /// One path of the bound folder, spelled so git reads it as a path and not as a pattern.
@@ -1043,6 +1132,50 @@ mod tests {
         let missed = from_first_parent(&app, &read[0].sha, &["--patch"], &["--", &here("app/main.rs")])
             .unwrap();
         assert!(missed.is_empty(), "the repository's spelling is not the folder's");
+    }
+
+    /// The count is the whole of what a reader is told about how far a conflict has been settled,
+    /// so what is counted and what is not has to be exact.
+    #[test]
+    fn counts_the_lines_that_open_a_conflict_and_nothing_else() {
+        let dir = amenbo_scratch::scratch("app-foldergit-marks");
+        std::fs::create_dir_all(&dir).unwrap();
+        let wrote = |name: &str, body: &[u8]| {
+            let at = dir.join(name);
+            std::fs::write(&at, body).unwrap();
+            at
+        };
+
+        let two = wrote(
+            "two.txt",
+            b"<<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> other\nplain\n\
+              <<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> other\n",
+        );
+        assert_eq!(marks(&two), Some(2));
+
+        // The three kinds of line a merge writes are not one thing: a table of `=======` under a
+        // heading is not a conflict, and counting it would say a settled file is not settled.
+        let others = wrote("others.txt", b"=======\n>>>>>>> other\n");
+        assert_eq!(marks(&others), Some(0));
+
+        // The mark is what git writes, which ends in a space and the name of the side. Arrows a
+        // person typed are not it, and neither are arrows part-way along a line.
+        let near = wrote("near.txt", b"<<<<<<<\nbare\nsee <<<<<<< here\n");
+        assert_eq!(marks(&near), Some(0));
+
+        // Windows line endings, where the line before ends in a carriage return.
+        let crlf = wrote("crlf.txt", b"one\r\n<<<<<<< HEAD\r\nmine\r\n");
+        assert_eq!(marks(&crlf), Some(1));
+
+        // Over a chunk boundary, where the mark itself is split between two reads.
+        let mut wide = vec![b'x'; MARK_CHUNK - 4];
+        wide.push(b'\n');
+        wide.extend_from_slice(b"<<<<<<< HEAD\n");
+        assert_eq!(marks(&wrote("wide.txt", &wide)), Some(1));
+
+        // A file that is not there is not a file with no marks in it, and the road above is what
+        // turns that into the nought a reader sees.
+        assert_eq!(marks(&dir.join("gone.txt")), None);
     }
 
     /// A folder that is not in a repository, which is most of them.

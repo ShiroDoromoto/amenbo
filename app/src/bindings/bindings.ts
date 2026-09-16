@@ -747,12 +747,12 @@ prefix: string,
  */
 branch: GitBranchDto | null, rows: Array<GitEntryDto>, 
 /**
- * Whether a merge is underway — `MERGE_HEAD` standing in the repository's own directory.
+ * Whether a merge is under way here — git holding a commit it has been told to bring in, and
+ * waiting to be told the result is settled.
  *
- * **It is not read off the rows.** git writes `U` on a path whose two sides disagree, but a
- * merge whose conflicts have all been settled and staged has no such path left and is still a
- * merge waiting to be concluded — which is exactly the moment a reader needs the way out of
- * it. The file is the thing git itself looks for, and it is there for the whole of the merge.
+ * **It is what turns the commit button into the one that ends the merge.** A commit made while
+ * this is on *is* the merge commit, and the message git has already written for it is the one
+ * it will use — so the box a reader types into is not drawn over it (`crate::folder_git`).
  */
 merging: boolean, };
 

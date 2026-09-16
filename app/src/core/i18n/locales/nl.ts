@@ -237,6 +237,8 @@ export const nl: Translation = {
     "dimmgr.closeValue": "Sluiten",
     "dimmgr.reopenValue": "Heropenen",
     "dimmgr.closeValueHint": "Sluit deze waarde. Wat haar al draagt houdt haar en filters vinden haar nog steeds; alleen nieuwe toewijzingen worden geweigerd, en heropenen kan altijd",
+    "dimmgr.showClosed.one": "{n} gesloten waarde tonen", "dimmgr.showClosed.other": "{n} gesloten waarden tonen",
+    "dimmgr.hideClosed": "Gesloten waarden verbergen",
     "dimmgr.showOnCard": "Op de kaart tonen",
     "dimmgr.showOnCardHint": "Toont deze categorie op de taakkaart. Het antwoord hoort bij de categorie, dus het verandert voor iedereen — niet alleen op dit apparaat",
     "dimmgr.required": "Verplicht",

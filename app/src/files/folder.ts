@@ -75,9 +75,10 @@ export async function folderWatch(
 }
 
 /** What a folder with no git answer looks like, which is what the browser has and what a folder
- *  that is no repository gets: no branch, no rows, no merge open, and no front to take off a
- *  path. */
-const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false };
+ *  that is no repository gets: no branch, no rows, no merge open, no front to take off a path, and
+ *  nothing git said — the last being what a repository git refused to answer about carries instead
+ *  (`crate::folder_git`). */
+const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false, said: null };
 
 /**
  * What git says about one of a project's folders: where its branch stands, and the paths it named.
@@ -86,6 +87,9 @@ const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [], merging: fals
  * tree it is asked about, and two folders of one repository asked together cost five times two
  * folders asked apart (`AMB-D-774`). A folder that is no repository, and a machine with no git,
  * both answer with nothing — which is a tree with no colours on it and not an error to draw.
+ *
+ * **A repository git refused to answer about is not one of those**: it answers with nothing and
+ * `said`, which is git's own sentence about why (`AMB-T-4982`).
  *
  * **The branch rides on the same call as the rows.** Where it stands is one line of what `status`
  * already writes, so asking costs nothing over asking for the rows (`AMB-T-4899`).

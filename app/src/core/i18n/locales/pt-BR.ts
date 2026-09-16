@@ -653,6 +653,7 @@ export const ptBR: Translation = {
     "git.tabFiles": "Arquivos",
     "git.tabGit": "Git",
     "git.noRepo": "Esta pasta não é um repositório.",
+    "git.noAnswer": "O git não respondeu sobre esta pasta.",
     "git.detached": "Em nenhum branch",
     "git.ahead": "{n} à frente",
     "git.behind": "{n} atrás",

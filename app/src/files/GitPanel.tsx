@@ -15,6 +15,12 @@
 // twenty-one on this machine, and what the half would otherwise show is a list of nothing, which
 // reads as a repository where nothing has happened.
 //
+// **A repository git would not answer about draws git's words instead of that sentence**
+// (`AMB-T-4982`). Both come back with no branch, and the two were drawn the same until the sentence
+// was being said of folders that are repositories — of one whose `.gitattributes` names a filter the
+// window cannot reach, which is what a reader who keeps files in LFS meets every time they save one
+// (`AMB-T-4979` measured it).
+//
 // **The three that go out to the remote are run by the window itself**, not written into a pane for
 // the agent to run. What that buys is measured (`AMB-T-4900`): the ssh agent reaches a window opened
 // from the Dock, and HTTPS goes through the credential helper (`./folder`). **Where the helper has
@@ -69,7 +75,7 @@ import { type GitMark, markOf } from "./gitMark";
 type Said = { text: string; refused: boolean };
 
 /** Nothing read yet, and what a folder that is no repository answers with. */
-const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false };
+const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false, said: null };
 
 /**
  * Where the branch stands, what has changed under it, and the doors to do something about it — for
@@ -294,7 +300,23 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
   //
   // **No answer yet** is the read still on its way. A flash of "this folder is not a repository" on
   // one that is reads as an answer that was looked up and came back no.
+  //
+  // **git refusing to answer is neither of those.** It is a repository — the host asked git where
+  // it sits before asking what has changed in it — and what stands in the way is a sentence of
+  // git's about this machine: a filter it cannot run, an index it may not read. So git's own words
+  // are drawn, under a line saying whose they are, rather than the sentence about a folder that is
+  // no repository, which would be a plain falsehood and one nobody can act on (`AMB-T-4982`).
   if (projectId === null || root === null || !answered) return <div className="gitpanel" />;
+  if (git.said !== null) {
+    return (
+      <div className="gitpanel">
+        <p className="files__none">{t("git.noAnswer")}</p>
+        <p className="gitpanel__said gitpanel__said--refused">
+          {git.said === "" ? t("git.quiet") : git.said}
+        </p>
+      </div>
+    );
+  }
   if (git.branch === null) {
     return (
       <div className="gitpanel">

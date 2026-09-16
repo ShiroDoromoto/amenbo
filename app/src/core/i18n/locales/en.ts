@@ -791,6 +791,12 @@ const ui = {
   "git.tabFiles": "Files",
   "git.tabGit": "Git",
   "git.noRepo": "This folder is not a repository.",
+  // The frame around what git wrote in refusing to answer about the folder — a repository
+  // whose `git status` came back non-zero (`../../../files/GitPanel`, `AMB-T-4982`). Without
+  // it the reader is handed a sentence of git's with nothing saying what it is about, and the
+  // line it replaces said the folder was no repository, which it is. git's own words go under
+  // this one and are not translated (`AMB-D-906`, 3-4).
+  "git.noAnswer": "git did not answer about this folder.",
   "git.detached": "Not on a branch",
   "git.ahead": "Ahead by {n}",
   "git.behind": "Behind by {n}",

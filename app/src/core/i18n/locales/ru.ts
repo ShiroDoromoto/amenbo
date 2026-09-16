@@ -656,6 +656,7 @@ export const ru: Translation = {
     "git.tabFiles": "Файлы",
     "git.tabGit": "Git",
     "git.noRepo": "Эта папка не репозиторий.",
+    "git.noAnswer": "git не ответил об этой папке.",
     "git.detached": "Не на ветке",
     "git.ahead": "Впереди на {n}",
     "git.behind": "Позади на {n}",

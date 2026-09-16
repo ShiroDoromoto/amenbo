@@ -643,6 +643,7 @@ export const vi: Translation = {
     "git.tabFiles": "Tệp",
     "git.tabGit": "Git",
     "git.noRepo": "Thư mục này không phải kho lưu trữ.",
+    "git.noAnswer": "git đã không trả lời về thư mục này.",
     "git.detached": "Không ở nhánh nào",
     "git.ahead": "Trước {n}",
     "git.behind": "Sau {n}",

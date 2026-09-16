@@ -8,16 +8,23 @@
 //! machine with no git that can be run without asking the reader to install a compiler, both answer
 //! the same way — nothing.
 //!
+//! **git refusing to answer is not one of those.** A repository whose `git status` comes back
+//! non-zero — the filter a `.gitattributes` names is not on the window's `PATH`, the index is owned
+//! by somebody else — has git's own sentence about why, and that sentence goes up with the empty
+//! answer rather than being dropped into the same silence (`AMB-T-4982`). Only the status road
+//! carries it: it is the one whose emptiness the face draws a sentence off, where every other road
+//! here draws an empty list.
+//!
 //! **One road here reads the working tree rather than asking git** — how many conflicts are still
 //! written into a file (`folder_git_marks`). git calls a path unmerged until somebody stages it,
 //! so it cannot answer "has this one been put right yet"; the file's own bytes can, whoever wrote
 //! them (`AMB-D-906`, 2-7).
 //!
 //! **Everything here reads; nothing here writes** — the other half is
-//! [`crate::folder_git_write`] (`AMB-D-906`). The line between the two modules is the answer a road
-//! gives when it comes to nothing: here it is an empty hand, because a folder that is no repository
-//! is the ordinary case and not a failure to report, and there it is git's own refusal, word for
-//! word.
+//! [`crate::folder_git_write`] (`AMB-D-906`). The line between the two modules is what a road hands
+//! back when it comes to nothing: here it is an empty hand and never an error, because a folder
+//! that is no repository is the ordinary case and not a failure to report, and there a refusal is
+//! the error itself. What git said in refusing is drawn the same on both sides, word for word.
 //!
 //! **What a commit costs is what is asked of it, and the asking is split up.** The history list is
 //! one call and carries no file names, because putting them on it takes one call from 19ms to
@@ -100,7 +107,8 @@ pub fn repo_of(dir: &Path) -> Option<Repo> {
 }
 
 /// Everything git has to say about the folder `root` names, in the shape the file face draws rows
-/// from. An empty answer is the honest one for every way this can come to nothing.
+/// from. An empty answer is the honest one for a folder git had nothing to say about — and where it
+/// refused to say anything, `said` carries why.
 ///
 /// **Off the main thread.** A command with no `async` on it is run where the webview is drawn
 /// ([`crate::agent_models`]), and what this one waits on is git starting up and reading an index
@@ -125,8 +133,21 @@ pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGi
         // same thing with `rev-list --count` would be a second process, which is 14ms of a call
         // that is 20ms whole (`AMB-T-4899`).
         let args = ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--branch", "--", "."];
-        let Some(out) = run(&dir, &args) else {
-            return Ok(FolderGitDto { prefix: repo.prefix, ..Default::default() });
+        let out = match refusable(&dir, &args) {
+            Some(Ok(out)) => out,
+            // git ran and would not answer. The folder is a repository — `rev-parse` said so a few
+            // lines up — so the face has to be told that this is a refusal and not an empty one
+            // (`AMB-T-4982`).
+            Some(Err(said)) => {
+                return Ok(FolderGitDto {
+                    prefix: repo.prefix,
+                    said: Some(said),
+                    ..Default::default()
+                })
+            }
+            // git could not be started at all. There are no words of git's to draw, and the folder
+            // answers the way one with no git does.
+            None => return Ok(FolderGitDto { prefix: repo.prefix, ..Default::default() }),
         };
         // The branch line is the first record and `--branch` always writes one, so what follows the
         // first NUL is the rows — which is also what keeps the `##` out of the row parser, where it
@@ -138,7 +159,7 @@ pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGi
         // asking git the same question would be a second process — and this call is made for every
         // bound folder the tree draws (`AMB-T-4897`).
         let merging = repo.git_dir.join("MERGE_HEAD").exists();
-        Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows, merging })
+        Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows, merging, said: None })
     })
     .await
 }
@@ -461,7 +482,8 @@ fn from_first_parent(dir: &Path, sha: &str, how: &[&str], about: &[&str]) -> Opt
 /// Its stderr goes nowhere on purpose. git warns there about what it stepped over and then answers
 /// normally — a Windows branch past 260 characters is skipped with a `Filename too long` warning
 /// and the rest of the tree comes back — and a warning about a path is not something to put on a
-/// reader's screen when the thing they asked for arrived.
+/// reader's screen when the thing they asked for arrived. Where it did not arrive, that same stderr
+/// is the only account there is, and [`refusable`] is the road that keeps it.
 fn run(dir: &Path, args: &[&str]) -> Option<String> {
     let out = amenbo_core::sys::git()?
         .arg("-C")
@@ -471,6 +493,25 @@ fn run(dir: &Path, args: &[&str]) -> Option<String> {
         .output()
         .ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Run git in `dir` the way [`run`] does, and keep what it wrote when it would not answer: `None`
+/// where git could not be started, `Some(Err(…))` where it ran and refused.
+///
+/// **Only the status road takes this one out**, because it is the only road here whose empty answer
+/// the face turns into a sentence — and the sentence it had was "this folder is not a repository",
+/// said of a folder that is one (`AMB-T-4982`). A history or a diff that comes back empty draws an
+/// empty list, which is not a claim about anything.
+///
+/// **stderr alone.** What [`crate::folder_git_write`] shows is both streams, because a road that
+/// writes says what it did on stdout in words a person reads; a status refused part way writes
+/// `--porcelain=v1 -z` there, which is machine shape and not a sentence to put on a screen.
+fn refusable(dir: &Path, args: &[&str]) -> Option<Result<String, String>> {
+    let out = amenbo_core::sys::git()?.arg("-C").arg(dir).args(args).output().ok()?;
+    Some(match out.status.success() {
+        true => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        false => Err(String::from_utf8_lossy(&out.stderr).trim_end().to_owned()),
+    })
 }
 
 /// Read `--porcelain=v1 -z` into rows, with `prefix` taken off the front of every path.

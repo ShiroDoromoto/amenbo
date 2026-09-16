@@ -134,6 +134,7 @@ steps_gui:
     op: set
     with:
       position: asks
+      about: bin
 
   # Back to the panel, since moving that row is done in the settings and leaves the reader there.
   - type: action
@@ -158,6 +159,7 @@ steps_gui:
     op: answer
     with:
       answer: yes
+      about: bin
 
   # The list is back, standing the way it was left: the tree is the panel's to hold and reading a
   # file does not take it away (`app/src/files/FilesPanel.tsx`). Said rather than assumed, so the

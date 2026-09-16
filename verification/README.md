@@ -733,6 +733,14 @@ repository because a reader's own `~/.gitconfig` is not a scenario's to touch. W
 it is `.gitattributes`, written by `write-file` like anything else a premise leaves lying there, and
 nothing here needs `git-lfs` to be installed: the road that walks it is about a window that cannot
 find one.
+`git-remote` gives that repository somewhere to send to and leaves its branch measured against it,
+which is what the counts of what is waiting to go out and to come in are counts *of*: with nothing on
+the other side git measures a branch against nothing at all. What stands there is a bare repository
+beside the folder, reached by a path — a path asks for no key and no account, so every road about
+those counts walks with nothing on the network. `git-remote-move` records one file on that other side
+from a checkout of its own, and it is the one of the two that is **not** a premise: being behind is
+what somebody else recorded, and a road that opened on it already recorded would prove a first read
+rather than the read taken again that a fetch is for.
 **Every one of these runs git with none of the machine's own configuration** (`GIT_CONFIG_GLOBAL`
 pointed at an empty file, the system one turned off). What a premise declares is the repository it
 builds, and a reader's `git lfs install`, `core.autocrlf` or `commit.gpgsign` would each make that a

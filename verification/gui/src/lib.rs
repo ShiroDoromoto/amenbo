@@ -812,6 +812,11 @@ impl Instructor {
     /// behind to look for — while the word its absence would be read by (the status it was set to) is
     /// standing on every other card on the board.
     ///
+    /// `files offers` is a `Review` for the same reason one face over, and the row it is read on is what
+    /// makes the absent half worth walking: a commit's own list of paths has nothing to throw away, so
+    /// the item is not drawn there, and the words its absence would be read by are on the menu every
+    /// row of the tree opens.
+    ///
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
     /// was given nor the colour it falls back to puts one there. `terminal tab-icon` is the same
@@ -986,6 +991,10 @@ impl Instructor {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
             (Domain::Files, "git-said") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // And the line git wrote on a stash, which is git's own sentence for the same reason.
+            (Domain::Files, "stashed") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // A form named takes this away from the reading: both forms carry the same words, and
@@ -2728,6 +2737,16 @@ impl Instructor {
                 req(with, "dir")?,
                 req(with, "content")?
             ),
+            // Somebody else recording something and sending it, which is the only way what the folder
+            // is behind by ever becomes a number. It is an instruction and not a premise for the
+            // reason `write-file` is one: *when* it happens is the whole of the question, so the
+            // operator is told to do it away from Amenbo and leave the window alone while they do.
+            (Domain::Repo, "git-remote-move") => format!(
+                "Outside Amenbo — in another terminal — take your own checkout of the repository the folder the road calls \"{}\" sends to, put the file \"{}\" in it with \"{}\" inside, record that, and send it. Do not touch Amenbo while you do.",
+                req(with, "dir")?,
+                req(with, "path")?,
+                req(with, "content")?
+            ),
             // The same, for a file whose bytes a road cannot hold in a line of YAML. What the operator
             // is asked for is a copy over the top: the name stays, so nothing about the panel's own
             // list changes, and the only thing that could reach the screen is what is inside the file.
@@ -2843,6 +2862,47 @@ impl Instructor {
                 "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch to bring the list of branches up. At the foot of that list, below the branches, press the row that offers to make a new one: it turns into a box where the row was. Type \"{}\" into it and press Enter. The list goes.",
                 req(with, "name")?
             ),
+            // The same list `branch-go` opens, on its second face. Every row on that face says what
+            // it does, so the operator is told to find the way through rather than a row to press
+            // twice.
+            (Domain::Files, "branch-merge") => format!(
+                "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch to bring the list of branches up. At the foot of it, press the row that offers to bring a branch in: the rows are replaced by the same names, each now saying it brings that one in. Press the one for \"{}\". The list goes.",
+                req(with, "name")?
+            ),
+            // The declaration that a path is settled, which stands where the count stood.
+            (Domain::Files, "settle") => format!(
+                "In the list of conflicts, on the row \"{}\", press the way it offers to declare it settled — it stands at the end of the row, where the count of what is left stood. The row leaves the list.",
+                req(with, "name")?
+            ),
+            // The press that ends the merge. The message is git's, written when the merge began, so
+            // there is no box here and the control says what it does rather than naming a commit.
+            (Domain::Files, "merge-continue") =>
+                "Under the lists in the half of the panel that is git's, press the control that carries the merge through — it stands where the one that records what is staged stands when no merge is underway. The band saying a merge is underway goes."
+                    .to_string(),
+            // The way out, which asks first. The question is put in the band itself, so the operator
+            // is told to look there rather than for a window over it.
+            (Domain::Files, "merge-abort") => match req(with, "answer")? {
+                "yes" => "In the band saying a merge is underway, press the control that stops the merge. The band asks whether to, saying what is lost — press the answer that goes through with stopping it. The band goes, and what the merge wrote is taken back out of the folder.".to_string(),
+                "no" => "In the band saying a merge is underway, press the control that stops the merge. The band asks whether to, saying what is lost — press the answer that keeps the merge. The question goes and the band stays, with the merge still underway.".to_string(),
+                other => return Err(format!("`answer` does not know `{other}` — it is yes or no")),
+            },
+            // The list of what is put aside, opened from the last of the buttons under the branch
+            // line. Three ops rather than one because the list is three things at once: a row that
+            // puts the changes aside, the stashes themselves, and a list somebody may only want to
+            // read.
+            //
+            // The button is named by where it stands, the way every control on this face is.
+            (Domain::Files, "stash") => "In the half of the panel that is git's, press the last of the row of buttons under the line naming the branch — the row the ones that reach the remote stand in: a list comes up. At the top of it, press the row that offers to put the changes aside. The list goes.".to_string(),
+            // The same list opened and left standing, which is how what is in it gets read. It goes
+            // on the next press anywhere outside it, and that press still lands where it was made,
+            // so nothing has to be done to put the list away.
+            (Domain::Files, "stash-list") => "In the half of the panel that is git's, press the last of the row of buttons under the line naming the branch — the row the ones that reach the remote stand in: a list comes up. Leave it standing.".to_string(),
+            // And one of its rows pressed. The row is named by git's own line on the stash, because
+            // the name beside it says where the stash sits rather than which one it is.
+            (Domain::Files, "stash-restore") => format!(
+                "In the half of the panel that is git's, press the last of the row of buttons under the line naming the branch — the row the ones that reach the remote stand in — to bring the list of what is put aside up. Press the row whose line carries \"{}\". The list goes.",
+                req(with, "shows")?
+            ),
             // A row moved between the two lists by its own box. The box is named by where it stands
             // rather than by what it is called, the way every control on this face is — and the row
             // is named by the words it draws, which is the file's own name.
@@ -2878,6 +2938,23 @@ impl Instructor {
             ),
             (Domain::Files, "history-back") =>
                 "At the top of the column across the panes, press the way back — it is drawn as where it goes rather than as a word. The column comes back to the layer above the one it was on."
+                    .to_string(),
+            // The three presses that reach the shared repository, in the row under the branch's
+            // name. Each says what it leaves changed, because that is what the step after it reads:
+            // reading the other side moves neither number but the one measuring what is not here,
+            // bringing it in empties that one, and sending empties the other.
+            //
+            // Each says to wait as well. The window makes the call itself, and the row is out of
+            // reach while it is under way — an operator who read the numbers on the way past would
+            // be reading the ones that stood there before the press.
+            (Domain::Files, "fetch") =>
+                "In the half of the panel that is git's, press the first of the three controls in the row under the branch's name — the one that reads the shared repository without bringing anything in. Wait for the row to come back within reach before going on."
+                    .to_string(),
+            (Domain::Files, "pull") =>
+                "In the half of the panel that is git's, press the second of the three controls in the row under the branch's name — the one that brings in what the shared repository has. Wait for the row to come back within reach before going on."
+                    .to_string(),
+            (Domain::Files, "push") =>
+                "In the half of the panel that is git's, press the third of the three controls in the row under the branch's name — the one that sends what is recorded here, and the only one of the three drawn as the one to press. Wait for the row to come back within reach before going on."
                     .to_string(),
             (Domain::Files, "tree") => match flag(with, "open")? {
                 // One folder, whichever the window is on: a project bound to several draws the one
@@ -3093,10 +3170,14 @@ impl Instructor {
             // the way the tick's is: a row read in its new position with nothing written behind it
             // would be evidence of an answer nothing kept.
             (Domain::Files, "set") => match req(with, "position")? {
-                "asks" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel ask."
-                    .to_string(),
-                "quiet" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel not ask."
-                    .to_string(),
+                "asks" => format!(
+                    "In Amenbo's own settings, under the section about files, move the row for the question before {} to the position that has the panel ask.",
+                    question(with)?.0
+                ),
+                "quiet" => format!(
+                    "In Amenbo's own settings, under the section about files, move the row for the question before {} to the position that has the panel not ask.",
+                    question(with)?.0
+                ),
                 other => {
                     return Err(format!("action `set` does not know the position `{other}`"))
                 }
@@ -3108,15 +3189,22 @@ impl Instructor {
             (Domain::Files, "trash") =>
                 "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
-            // And answering it. The two are named by what each does rather than by the words on the
-            // buttons, which are the interface's own.
-            (Domain::Files, "answer") => match req(with, "answer")? {
-                "yes" => "In the question the panel put about binning the file, press the answer that goes ahead and bins it. Leave the box about not asking again unticked."
+            // The item that throws a change away, on the menu a row's right-click put up. The press and
+            // nothing after it, the way the bin's is: in `asks` the panel puts its question here and
+            // the step leaves it standing, because deciding it is `answer`'s.
+            (Domain::Files, "restore") =>
+                "On the menu standing on the row, press the item that throws away what git has not been told about that file. If the panel asks whether to throw the change away, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
-                "no" => "In the question the panel put about binning the file, press the answer that keeps the file where it is. Leave the box about not asking again unticked."
-                    .to_string(),
-                other => {
-                    return Err(format!("action `answer` does not know the answer `{other}`"))
+            // And answering one of those questions. The answers are named by what each does rather
+            // than by the words on the buttons, which are the interface's own.
+            (Domain::Files, "answer") => {
+                let (about, goes, keeps) = question(with)?;
+                match req(with, "answer")? {
+                    "yes" => format!("In the question the panel put about {about}, press the answer that goes ahead: it {goes}. Leave the box about not asking again unticked."),
+                    "no" => format!("In the question the panel put about {about}, press the answer that {keeps}. Leave the box about not asking again unticked."),
+                    other => {
+                        return Err(format!("action `answer` does not know the answer `{other}`"))
+                    }
                 }
             },
             // And taking it back. The key is the machine's own, and the line says where to be standing:
@@ -3935,13 +4023,26 @@ impl Instructor {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
             },
-            // Where the file face's own settings row stands. The positions are named by what each
+            // What a row's menu offers, read rather than pressed. The item is described and never
+            // quoted, its words being the interface's own.
+            (Domain::Files, "offers") => format!(
+                "On the menu standing on the row, confirm {}.",
+                {
+                    let (there, gone) = menu_item(req(with, "item")?)?;
+                    if present(with) { there } else { gone }
+                }
+            ),
+            // Where the file face's own settings rows stand. The positions are named by what each
             // does rather than by the word drawn on the row, since the words are the interface's own.
             (Domain::Files, "setting") => match req(with, "position")? {
-                "asks" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel ask."
-                    .to_string(),
-                "quiet" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel not ask."
-                    .to_string(),
+                "asks" => format!(
+                    "In Amenbo's own settings, under the section about files, confirm the row for the question before {} stands in the position that has the panel ask.",
+                    question(with)?.0
+                ),
+                "quiet" => format!(
+                    "In Amenbo's own settings, under the section about files, confirm the row for the question before {} stands in the position that has the panel not ask.",
+                    question(with)?.0
+                ),
                 other => {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
@@ -4466,6 +4567,23 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
+            // Whether git has a merge open, which the band is drawn from. It is read apart from the
+            // list of conflicts on purpose: the band outlives the list.
+            (Domain::Files, "merging") => match present(with) {
+                true => "Under the line naming the branch, confirm the band saying a merge is underway is drawn — it is there whether or not anything is left in the list of conflicts below.".to_string(),
+                false => "Under the line naming the branch, confirm no band says a merge is underway.".to_string(),
+            },
+            // What is left in one conflicted file, and the press that stands where the count stops.
+            (Domain::Files, "marks") => match count(with, "n")? {
+                0 => format!(
+                    "In the list of conflicts, confirm the row \"{}\" no longer carries a count of what is left, and offers the way to declare it settled instead.",
+                    req(with, "name")?
+                ),
+                n => format!(
+                    "In the list of conflicts, confirm the row \"{}\" counts {n} of git's marks still standing in the file.",
+                    req(with, "name")?
+                ),
+            },
             // Which branch the line at the top of git's half names.
             (Domain::Files, "on-branch") => match present(with) {
                 true => format!(
@@ -4489,6 +4607,19 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // One row of the list of what is put aside, read while that list is standing. The line
+            // is git's own sentence about where the stash was made, so the words a road looks for
+            // are English whatever language the interface around them is in.
+            (Domain::Files, "stashed") => match present(with) {
+                true => format!(
+                    "On the list of what is put aside, confirm one of the rows carries \"{}\".",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the list of what is put aside, confirm no row carries \"{}\".",
+                    req(with, "shows")?
+                ),
+            },
             // git's own text, drawn line by line. A line is found by the characters it is written
             // with, mark and all, because nothing here rewrites what a diff says.
             (Domain::Files, "patch") => match present(with) {
@@ -4499,6 +4630,27 @@ impl Instructor {
                 false => format!(
                     "In the column across the panes, confirm the patch drawn there has no line \"{}\" in it.",
                     req(with, "shows")?
+                ),
+            },
+            // The two numbers beside the branch's name, each read as its own mark: an up mark for
+            // what is recorded here and not on the other side, a down mark for the other way round.
+            //
+            // Zero is the absence and is said as one. The face draws a number only where there is
+            // one, so an operator told to confirm a `0` would be hunting for something the screen
+            // never puts there — which reads on the manifest exactly like a build that lost the
+            // count.
+            (Domain::Files, "ahead") => match count(with, "count")? {
+                0 => "Beside the branch's name in the half of the panel that is git's, confirm there is no up mark and no number with it — nothing here is waiting to be sent.".to_string(),
+                n => format!(
+                    "Beside the branch's name in the half of the panel that is git's, confirm the up mark reads \"↑{n}\" — {} recorded here and not on the other side.",
+                    counted("commit", n)
+                ),
+            },
+            (Domain::Files, "behind") => match count(with, "count")? {
+                0 => "Beside the branch's name in the half of the panel that is git's, confirm there is no down mark and no number with it — nothing on the other side is waiting to come in.".to_string(),
+                n => format!(
+                    "Beside the branch's name in the half of the panel that is git's, confirm the down mark reads \"↓{n}\" — {} on the other side and not here.",
+                    counted("commit", n)
                 ),
             },
             (Domain::Files, "read-as") => match present(with) {
@@ -5166,13 +5318,56 @@ fn section(with: &Args) -> Result<&'static str, String> {
         Some("tree") => Ok("the folder's own section"),
         Some("changes") => Ok("the list of what has changed, in the half of the panel that is git's"),
         Some("staged") => Ok("the list of what is staged, in the half of the panel that is git's"),
+        Some("conflicts") => Ok("the list of conflicts, in the half of the panel that is git's"),
         Some("history") => Ok("the list of what has been recorded, in the column across the panes"),
         Some("touched") => Ok("the list of the paths one commit touched, in the column across the panes"),
         Some(other) => Err(format!(
-            "`section` does not know `{other}` — it is tree, changes, staged, history or touched"
+            "`section` does not know `{other}` — it is tree, changes, staged, conflicts, history or touched"
         )),
         None => Err("arg `section` must say which section".to_string()),
     }
+}
+
+/// Which of the two questions the file face puts before something goes: the one before a row is put
+/// in the machine's bin, and the one before what git has not been told about a file is thrown away.
+/// Named by what is at stake rather than by the words on the row, for [`section`]'s reason.
+///
+/// It is said on every step that touches either — the settings row, the press's own question — because
+/// the two rows stand together under one heading and the two questions read alike. What comes back is
+/// the question, what its yes does, and what its no keeps, since a step naming the question alone
+/// would leave the operator to work out which button was which.
+fn question(with: &Args) -> Result<(&'static str, &'static str, &'static str), String> {
+    match with.get("about").and_then(|v| v.as_str()) {
+        Some("bin") => Ok((
+            "binning a file",
+            "bins the file",
+            "keeps the file where it is",
+        )),
+        Some("restore") => Ok((
+            "throwing away what git has not been told about a file",
+            "throws the change away",
+            "keeps the change",
+        )),
+        Some(other) => Err(format!(
+            "`about` does not know `{other}` — it is bin or restore"
+        )),
+        None => Err("arg `about` must say which of the two questions".to_string()),
+    }
+}
+
+/// One of the git items a row's menu draws, as the phrase for it being there and the phrase for it
+/// not being there. Both halves are written out for [`task_control`]'s reason: an item that is not
+/// drawn leaves no words behind to look for, so the absent half has to say what is not there.
+fn menu_item(item: &str) -> Result<(&'static str, &'static str), String> {
+    Ok(match item {
+        "restore" => (
+            "an item that throws away what git has not been told about that file is there to press",
+            "no item offers to throw away what git has not been told about that file",
+        ),
+        other => return Err(format!(
+            "`item: {other}` is not an item a row's menu keeps (restore)"
+        )),
+    })
 }
 
 /// Which of a Markdown file's two forms a step is about — what the text says, or the text itself.
@@ -5283,6 +5478,10 @@ fn note(with: &Args) -> Result<&'static str, String> {
         // the two above because the folder is there and is bound — git simply has nothing to say
         // about it — and a reader sent looking for a missing folder would be looking for damage.
         Some("no-repo") => Ok("that this folder is not a repository"),
+        // Said inside the list of what is put aside rather than in place of it, because that list is
+        // also where a stash is made: a reader with nothing put aside still has the row that puts
+        // the changes there.
+        Some("nothing-stashed") => Ok("that nothing has been put aside, on the list standing open"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
         // The file written under a reader who was typing in it. One line covers both ways it is
         // reached — the watch noticing while they type, and a save turned away for the same reason —

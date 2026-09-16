@@ -1033,6 +1033,28 @@ const REGISTRY: &[OpSpec] = &[
     // It needs no `git-lfs` on the machine, and the roads that walk it are about what the window
     // does where there is none on the path it runs git with.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "uses-lfs", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // And somewhere for that repository to send to. A branch is `ahead` and `behind` of something,
+    // and with nothing on the other side git measures it against nothing at all — so a road reading
+    // either number opens on a repository that already has a remote and a branch measured by it.
+    //
+    // What stands on the other side is a bare repository in the run's own throwaway space, reached
+    // by a path. That is deliberate and it is the whole reason this walks offline: a path asks for
+    // no key and no account, so the numbers are git's own arithmetic rather than a network's. The
+    // one road a path cannot walk is git stopping to ask who is sending, and that road is somebody
+    // else's.
+    //
+    // It sends what is recorded as it goes, because a branch git has never been told where to send
+    // is refused by `push` with a sentence about `--set-upstream` — a true answer, and not the one a
+    // road about the numbers is asking for. `dir` follows `git-init`'s rule and for its reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-remote", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // And the other side moving on afterwards. `behind` is a count of what somebody else recorded,
+    // so a road that means to read it has to let somebody else record something — from their own
+    // checkout of the same shared repository, which is what the driver stands in for here.
+    //
+    // **It is a step and not a premise.** The whole of what a fetch is for is that the number moves
+    // while the window is up and shows it, so a world where the other side had already moved before
+    // the app opened would prove a first read rather than a read taken again.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-remote-move", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     // A checkout of the task's own, cut and folded. The road walks the two commands a
     // person working a task actually types, and the refusals that stand between them — which is why
     // `start` is here rather than only the state it leaves: what a second one meets is the whole of
@@ -3118,6 +3140,61 @@ const REGISTRY: &[OpSpec] = &[
     // terminal.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "git-said", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
+    // ── a merge, and what it could not settle ─────────────────────────────────────────────────────
+    // Bringing a branch in is asked of the same list as moving onto one, on a second face of it: the
+    // names are the same names, and a row that did one thing on a press and another on a modifier
+    // would be a row whose answer a reader cannot see before making it. So it is an op of its own
+    // rather than an argument on `branch-go`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "branch-merge", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Whether a merge is underway, read off the band under the branch line. **It is not the list of
+    // conflicts**: the band hangs on git's own record of an unfinished merge, so it is still up when
+    // every conflict has been settled and the list below has gone. That gap is the whole reason this
+    // is a reading of its own — a road that took the list for the merge would call a merge finished
+    // one press too early.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "merging", required: &[], refs: &[], strings: &[], binds: false },
+    // How many marks git left in one of those paths, counted off the file rather than asked of git:
+    // the file is settled by whoever settles it — the reader in the column across the panes, or the
+    // agent in the pane — and nothing else on this face can say how far that has got.
+    //
+    // `n: 0` is not a nought on the screen. Once nothing is left the row stops counting and offers
+    // the way to declare it settled instead, so the two never stand together and the reading says
+    // which of them is drawn.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "marks", required: &["name", "n"], refs: &[], strings: &["name"], binds: false },
+    // That declaration, which is staging the path. Nothing does it for the reader however few marks
+    // are left: what the count says is that the file no longer holds git's marks, and what this says
+    // is that a person looked at it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "settle", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The commit that ends the merge. It is not `commit`: git wrote the message when the merge began
+    // and takes that one, so there is no box to type into and nothing for a road to say but the
+    // press.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "merge-continue", required: &[], refs: &[], strings: &[], binds: false },
+    // And the way out of one, which asks first. `answer` is `yes` or `no`, and both are a road's to
+    // walk: what a conflict settled by hand and never recorded is worth is exactly what the question
+    // is for, and a question only ever answered one way is half a control.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "merge-abort", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    // ── what is put aside, and taken back out ─────────────────────────────────────────────────────
+    // The list the last of the buttons under the branch line opens, which is the one door on this
+    // half that opens a list rather than doing a thing (`app/src/files/GitPanel.tsx`).
+    //
+    // Only what git already follows goes into a stash here, so a road reaches this at all by having
+    // changed a file git has recorded before — where nothing is followed the row that puts things
+    // aside is not drawn, rather than drawn to come back with git's refusal.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stash", required: &[], refs: &[], strings: &[], binds: false },
+    // Opening that list and stopping there, which the branch's list has no op for and this one needs:
+    // what is put aside is written nowhere else on the face, so a road with no way to hold the list
+    // open has no way to read it. It closes on the next press anywhere outside it and that press
+    // still lands, so a road reads the list and simply goes on.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stash-list", required: &[], refs: &[], strings: &[], binds: false },
+    // One of its rows pressed, which takes that stash back out and drops it. The row is named by the
+    // line git wrote on the stash, for the reason `git-said` is read that way: the name it sits under
+    // is `stash@{0}`, which says where a stash is and not which one it is — the row under that name
+    // is a different stash the moment another is made.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stash-restore", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // And that same line read rather than pressed. `shows` is part of git's own sentence about where
+    // the stash was made — the branch it was made on, and the commit it was made over — so what a
+    // road looks for is English however the interface around it is drawn.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "stashed", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+
     // ── what git is told, and what it has written down ────────────────────────────────────────────
     // The half of the panel that is git's is a pair of lists and one press under them: what has
     // changed, what is staged, and the commit that writes the second of those down
@@ -3159,6 +3236,31 @@ const REGISTRY: &[OpSpec] = &[
     // of it, and the line is git's own text: nothing here rewrites what a diff says, so a road can
     // name a line it put in the file itself and find it again with the character git marks it with.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "patch", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+
+    // ── what is here and what is on the other side ────────────────────────────────────────────────
+    // The three presses that reach the shared repository, in the row under the branch's name
+    // (`app/src/files/GitPanel.tsx`). **The window makes these calls itself** rather than writing
+    // them into a pane for somebody else to run.
+    //
+    // Three ops rather than one carrying which of them is meant, because they are three different
+    // acts with three different answers: reading the other side leaves this one where it was,
+    // bringing it in moves this one, and sending moves the other. A road naming the wrong one would
+    // be pressing a control beside the one it meant, which is the reason `stage` and `unstage` are
+    // two as well.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "fetch", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pull", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "push", required: &[], refs: &[], strings: &[], binds: false },
+    // And the two numbers those presses move, drawn beside the branch's name: what is recorded here
+    // and not on the other side, and what is on the other side and not here. They come off the same
+    // read of git that the lists do, so a road walks them without anything else being asked of the
+    // folder.
+    //
+    // `count: 0` is the reading that nothing stands there. The face draws a number only where there
+    // is one to draw — a pair of zeroes says "nothing to do" in two numbers where none says it
+    // better — so a road asking for zero is asking for the absence, and the instruction says so
+    // rather than sending an operator hunting for a `0` that is never drawn.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ahead", required: &["count"], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "behind", required: &["count"], refs: &[], strings: &[], binds: false },
 
     // ── the files the column is holding ───────────────────────────────────────────────────────────
     // The reading column holds several files at once, as a row of tabs above the one on top
@@ -3279,20 +3381,26 @@ const REGISTRY: &[OpSpec] = &[
     // comparison screen, and a reader presses whichever of the two is in front of them.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "keep-mine", required: &[], refs: &[], strings: &[], binds: false },
 
-    // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
-    // Where the file face's own settings row stands: whether the panel asks before it bins a row.
-    // The face has one setting, so the row is not named — the way the tick's is not.
+    // ── binning a row, throwing a change away, and the two questions before them ──────────────────
+    // Where the file face's own settings rows stand: whether the panel asks before it bins a row, and
+    // whether it asks before it throws away what git has not recorded. `about` says which of the two,
+    // `bin` or `restore`, because the two rows stand together under the same heading and a step that
+    // named neither would be moving whichever one the operator's eye landed on first.
     //
-    // **This is what lets the question be walked at all.** Whether it is asked is a habit of the
+    // **They are two switches and not one.** A row in the bin comes back and a change git was never
+    // told about does not, so a reader who silenced the reversible question has said nothing about the
+    // other one.
+    //
+    // **This is what lets either question be walked at all.** Whether it is asked is a habit of the
     // machine the run is on, and the checkbox that turns it off is drawn inside the question it
     // silences — so the settings row is the only thing that puts the question back. A road that can
     // move it can put the machine where it needs it and then walk the question, instead of pressing
     // the bin and covering both endings.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position", "about"], refs: &[], strings: &["position", "about"], binds: false },
     // And moving it. `asks` puts the question back, `quiet` takes it away. The positions are named by
     // what each does rather than by the word drawn on the row, since the words are the interface's own
     // and the run's language is whatever the machine is set to.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position", "about"], refs: &[], strings: &["position", "about"], binds: false },
     // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
     // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
     //
@@ -3302,17 +3410,39 @@ const REGISTRY: &[OpSpec] = &[
     // are the same press, which is why they are the same op — what differs is whether a road wrote a
     // step after it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
-    // The question the bin put, answered. `yes` bins the file and `no` leaves it where it is — and
-    // both are a road's to walk, since what the question is for is the second one.
+    // The item on a row's menu that throws away what the working tree has done to that path
+    // (`app/src/files/restore.tsx`). It takes no args because the menu is already standing on the row
+    // it is about, the way the items `hand-over` presses are.
     //
-    // **The checkbox in it is not this op's.** Ticking it would turn the question off for every run
-    // walked on this machine afterwards, which is the state this pair exists to stop being permanent;
+    // **It is the one act this face offers that nothing takes back.** A commit, a stash and a branch
+    // switch are all still in the reflog afterwards, and a change git was never told about is nowhere
+    // once this is answered — which is why the question before it stands by default, and why its
+    // switch is not the bin's.
+    //
+    // **The press is the whole of this step, and the question is the next one**, exactly as the bin's
+    // is. In `asks` the panel puts a question here and this step leaves it standing; in `quiet` the
+    // change goes on the press.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "restore", required: &[], refs: &[], strings: &[], binds: false },
+    // Which of the git items the standing menu draws, read off the menu `menu` opened rather than off
+    // the row under it. `item` names one by what it does rather than by the words on it, for the reason
+    // `door` and `note` are named that way.
+    //
+    // `present: false` is the half this exists for. A row of the paths one commit touched is about what
+    // was written down, and a record has no working tree to throw away — so the item is not drawn
+    // there, and a build that drew it anyway would be offering a press with nothing behind it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "offers", required: &["item", "present"], refs: &[], strings: &["item"], binds: false },
+    // The question one of those two presses put, answered. `yes` goes ahead and `no` leaves things
+    // where they are — and both are a road's to walk, since what a question is for is the second one.
+    // `about` says which of the two questions, for the reason the settings rows are named that way.
+    //
+    // **The checkbox in it is not this op's.** Ticking it would turn that question off for every run
+    // walked on this machine afterwards, which is the state these pairs exist to stop being permanent;
     // a road that wants the panel quiet says so with `set`.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
-    // And taking it back, which on this face means the last press of the bin and nothing else. What
-    // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
-    // line says the key — and says where to be standing, because the column beside this one hears the
-    // same key as its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer", "about"], refs: &[], strings: &["answer", "about"], binds: false },
+    // And taking it back, which on this face means the last press of the bin and nothing else — the
+    // press above it is the one thing here that never comes back. What does it is the key the machine
+    // already undoes with rather than a control Amenbo drew, so the line says the key — and says where
+    // to be standing, because the column beside this one hears the same key as its own.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── picking rows out ──────────────────────────────────────────────────────────────────────────
@@ -3623,6 +3753,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // will — it is the reader's own machine and their own repository — so a road about what the
     // window does in such a folder has no way to reach one but to be given it.
     (Domain::Repo, "uses-lfs"),
+    // And somewhere for that repository to send to. Same reason again: Amenbo names no remote and
+    // has no command that would, so a branch measured against another side is a world every road
+    // about those numbers opens on rather than one it walks. The other side *moving* is not here —
+    // that one is a step, because a number that moves while the window is up is the whole of what
+    // the read taken again is for.
+    (Domain::Repo, "git-remote"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

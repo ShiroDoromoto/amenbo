@@ -1,0 +1,227 @@
+# The road between one folder and the repository it shares with everybody else: something recorded
+# here goes out, something recorded elsewhere comes in, and the two numbers beside the branch's name
+# say where the folder stands the whole way.
+#
+# ── Why the numbers are the road and not the decoration ──────────────────────────────────────────
+# What the three controls in that row actually change is the pair of counts, and nothing else on the
+# screen moves at all: a fetch that reached the other side and a fetch that never left look alike
+# apart from the number underneath. So each press is read by what it did to the counts, and both
+# counts are read every time — a build that moved the one the press was about and lost the other
+# passes any road that only ever looks at one.
+#
+# ── Why the other side is moved in the middle ────────────────────────────────────────────────────
+# Being behind is a count of what somebody else recorded, so somebody else has to record it, and
+# *when* is the whole question. Moved before the window opened, the number would be there on the
+# first read and this road would prove the first read — which `look-for-git-in-a-folder-that-is-no-
+# repository` already does. Moved while the window is up, it proves the read taken again.
+#
+# The step straight after that move reads the counts and finds them where they were. That is git's
+# arithmetic and worth walking: nothing on this side knows the other side moved until somebody asks,
+# so a build drawing a number there before the fetch is drawing one it could not have.
+#
+# ── Why the file that came in is read at the end ─────────────────────────────────────────────────
+# A pull that moved the count to zero and brought nothing in is a pull that did half its job, and the
+# count alone cannot tell the two apart. The file somebody else recorded is looked for in the folder's
+# own tree, which is the other half of the panel and a different read of a different thing.
+#
+# ── Why nothing here touches the network ─────────────────────────────────────────────────────────
+# What the folder sends to is a bare repository beside it, reached by a path. A path asks for no key
+# and no account, so this runs on a machine with nothing configured and on a machine with no network
+# at all. The one road a path cannot walk is git stopping to ask who is sending, and that is a road of
+# its own.
+id: send-what-is-recorded-here-and-take-in-what-is-not
+title: Send what was recorded in this folder, take in what somebody else recorded, and read where the branch stands the whole way
+description: >
+  Raise a repository that shares with another, level with it. Record something from the panel and
+  watch the count of what is waiting to go out; send it and watch that count empty. Somebody else
+  records something on the other side, and the folder goes on saying nothing came in until it is
+  asked: read the other side and the count of what is waiting to come in appears, bring it in and it
+  empties, and the file they recorded is in this folder's own tree.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # And somewhere for it to send to, with the branch already measured against it. A branch git has
+  # never been told where to send is refused by the send with its own sentence, which is a true answer
+  # and not the one this road is asking about.
+  - type: action
+    domain: repo
+    op: git-remote
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Level with the other side, which is where this road starts. Both counts, because a build that
+  # draws a number under a folder nothing has happened to would pass every later step on this road.
+  - type: assert
+    domain: files
+    op: ahead
+    with:
+      count: 0
+
+  - type: assert
+    domain: files
+    op: behind
+    with:
+      count: 0
+
+  # Something to send. It is written mid-walk rather than stood up as a premise because the panel has
+  # to have drawn the level folder first: a file lying there from the start would arrive as a change
+  # on the first read, with nothing before it to compare against.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the watering note goes in
+
+  # Recorded here and nowhere else, which is the one number that has moved.
+  - type: assert
+    domain: files
+    op: ahead
+    with:
+      count: 1
+
+  - type: assert
+    domain: files
+    op: behind
+    with:
+      count: 0
+
+  - type: action
+    domain: files
+    op: push
+
+  - type: assert
+    domain: files
+    op: ahead
+    with:
+      count: 0
+
+  - type: assert
+    domain: files
+    op: behind
+    with:
+      count: 0
+
+  # Somebody else, on their own checkout of the same shared repository.
+  - type: action
+    domain: repo
+    op: git-remote-move
+    with:
+      dir: greenhouse-beds
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+  # And the folder says nothing about it, because nobody has asked yet. A build drawing a number here
+  # is drawing one it has no way of knowing.
+  - type: assert
+    domain: files
+    op: behind
+    with:
+      count: 0
+
+  - type: action
+    domain: files
+    op: fetch
+
+  # Asked, and now it says so — while what is waiting to go out stays empty, because reading the other
+  # side records nothing on this one.
+  - type: assert
+    domain: files
+    op: behind
+    with:
+      count: 1
+
+  - type: assert
+    domain: files
+    op: ahead
+    with:
+      count: 0
+
+  - type: action
+    domain: files
+    op: pull
+
+  - type: assert
+    domain: files
+    op: behind
+    with:
+      count: 0
+
+  - type: assert
+    domain: files
+    op: ahead
+    with:
+      count: 0
+
+  # The reading the count cannot stand in for: what somebody else recorded is in this folder now, on
+  # the half of the panel that is the folder's own.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: tree

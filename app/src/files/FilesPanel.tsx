@@ -23,13 +23,15 @@ import { Menu, MenuItem } from "../components/Menu";
 import { confirmDialog } from "../core/dialog";
 import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
+import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEncodings, folderRead, folderSave, folderUnwatch, folderWatch, nextWatchTag,
-  onFolderChanged,
+  folderEncodings, folderGitIgnore, folderGitUntrack, folderRead, folderSave, folderUnwatch,
+  folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
-import { FileMenu } from "./FileMenu";
+import { FileMenu, type GitDoors } from "./FileMenu";
 import { useTrash } from "./trash";
+import { useRestore } from "./restore";
 import { FileEditor } from "./FileEditor";
 import { FileDiff } from "./FileDiff";
 import { GitHistory, type At } from "./GitHistory";
@@ -70,7 +72,8 @@ export type Typed = { text: string; edited: boolean; seen: string | undefined };
 
 export function FilesPanel({
   projectId, tab, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone, onClose,
-  wide, onWide, gitRoot = null, history = false, onOpenLedger, onHandOver,
+  wide, onWide, gitRoot = null, gitPrefix = "", history = false, historyOnly = null, onHistoryOnly,
+  onFileHistory, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
   projectId: number | null;
@@ -126,9 +129,20 @@ export function FilesPanel({
   onWide: (want: boolean) => void;
   /** The folder the window is on, which the history is the history of (`./GitPanel`). */
   gitRoot?: string | null;
+  /** The front that folder sits at inside its repository. A commit names its paths from the root,
+   *  and this is what turns one of those back into the folder's own spelling (`./GitHistory`). */
+  gitPrefix?: string;
   /** Whether the history has been pressed for. The column shows nothing about git until it has
    *  been, so this is what puts its tab in the row (`AMB-D-905`). */
   history?: boolean;
+  /** One path the history is narrowed to, as the folder it is in spells it — nothing for the whole
+   *  of it. The face holds it because the press that narrows it is made in the rail, on the other
+   *  side of the panes (`./GitHistory`). */
+  historyOnly?: string | null;
+  onHistoryOnly?: (only: string | null) => void;
+  /** Open the history of one file, narrowed to it — handed the folder it is in and the path inside
+   *  that folder (`./GitHistory`). */
+  onFileHistory?: (root: string, path: string) => void;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
   onOpenLedger?: () => void;
   /** Hand the file being read to the pane the reader is working in (`../shell/TerminalFace`). */
@@ -138,6 +152,8 @@ export function FilesPanel({
   // picked out there: what is shared is how a press behaves, not one question for the two of them
   // (`./trash`).
   const trash = useTrash(projectId, onGone);
+  // Throwing away what git has not recorded, for the file being read (`./restore`).
+  const restore = useRestore(projectId);
 
   // Whether the file on top is holding something that is not on the disk, named by the file rather
   // than by a plain yes: a mark on whichever tab is on would be a mark that moved to the next file
@@ -150,6 +166,10 @@ export function FilesPanel({
   // — one press is one layer, and the two under the history's own are this column's width and this
   // column (`AMB-D-815`, `./GitHistory`).
   const [at, setAt] = useState<At>(null);
+
+  // A narrowing asked for from the rail is a different list of the same kind, so whatever layer the
+  // reader had gone down to in the one before it is not a layer of this one.
+  useEffect(() => { setAt(null); }, [historyOnly]);
 
   // And the files that are not on top, which the face is holding for them (`Typed`). Each is
   // holding what was in its editor when it left the screen, so several tabs can be marked at once —
@@ -261,7 +281,16 @@ export function FilesPanel({
       <div className="files" tabIndex={-1} onKeyDown={onKey}>
         {top}
         {tabs}
-        <GitHistory projectId={projectId} root={gitRoot} at={at} onAt={setAt} />
+        <GitHistory
+          projectId={projectId}
+          root={gitRoot}
+          prefix={gitPrefix}
+          at={at}
+          onAt={setAt}
+          only={historyOnly}
+          onOnly={(one) => { setAt(null); onHistoryOnly?.(one); }}
+          onFileHistory={(one) => onFileHistory?.(gitRoot ?? "", one)}
+        />
       </div>
     );
   }
@@ -314,8 +343,26 @@ export function FilesPanel({
         // about one file, and a bin pressed here is about the one being read.
         onTrash={() => trash.askTrash(reading.root, [reading.path])}
         onKey={onKey}
-        aside={trash.aside}
+        aside={<>{trash.aside}{restore.aside}</>}
         onHandOver={onHandOver}
+        git={{
+          // Spelled from the folder the file was opened out of, which is the folder that road is
+          // run in — so a file opened out of another of the project's folders asks about its own
+          // (`crate::folder_git`).
+          onHistory: (one) => onFileHistory?.(reading.root, one),
+          onIgnore: () => {
+            void folderGitIgnore(projectId, reading.root, [reading.path])
+              .catch((why: unknown) => pushNotice(errText(why)));
+          },
+          onUntrack: () => {
+            void folderGitUntrack(projectId, reading.root, [reading.path])
+              .catch((why: unknown) => pushNotice(errText(why)));
+          },
+          // What git says about this one file is not asked for here: the rail is where git's answer
+          // about the folder is read, and a call of its own for one menu item would be a process
+          // started on the chance somebody opens it. The rail's own rows carry that item
+          // (`./GitPanel`).
+        }}
         onEdited={(edited) => setUnsaved(edited ? openKey(reading) : null)}
       />
     </div>
@@ -492,7 +539,7 @@ function changedUnderneath(e: unknown): boolean {
 /** One file, as far as a panel can show it. */
 function FileReader({
   projectId, root, path, wasTyped, onTyped, onBack, onOpenLedger, onTrash, onKey, aside,
-  onHandOver, onEdited,
+  onHandOver, onEdited, git,
 }: {
   projectId: number;
   root: string;
@@ -522,6 +569,8 @@ function FileReader({
    * one of those roads, so a mark that outlived it would be pointing at text nothing holds.
    */
   onEdited?: (edited: boolean) => void;
+  /** What git can be told about this file (`./FileMenu`). */
+  git?: GitDoors;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   // Why the file did not open, in the reader's own language. A link is not a broken file: the host
@@ -1118,6 +1167,7 @@ function FileReader({
           onClose={() => setMenu(null)}
           onTrash={onTrash}
           onHandOver={onHandOver}
+          git={git}
         />
       )}
       {/* The two texts, over everything else. What it is opened from is the news that the file

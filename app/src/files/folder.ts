@@ -303,6 +303,45 @@ export async function folderGitPush(projectId: number, root: string): Promise<st
 }
 
 /**
+ * Throw away what the working tree has done to `paths` — the one road here that cannot be walked
+ * back (`crate::folder_git_write`).
+ *
+ * A commit, a stash and a branch switch are all still in the reflog afterwards; changes never
+ * written down are nowhere once this returns. So the face asks first (`./RestoreAsk`), and what
+ * comes back where git refuses is git's own sentence (`AMB-D-906`).
+ */
+export async function folderGitRestore(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_restore", { projectId, root, paths });
+}
+
+/** Stop git following `paths`, leaving them on disk. Writing them down again puts them back, which
+ *  is why nothing is asked before it. */
+export async function folderGitUntrack(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_untrack", { projectId, root, paths });
+}
+
+/** Write `paths` into the bound folder's own `.gitignore`, one line each. A path already on the
+ *  list is left where it is. */
+export async function folderGitIgnore(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_ignore", { projectId, root, paths });
+}
+
+/**
  * Stop watching one folder, for the one mount that is saying so.
  *
  * Called for each folder a part of the face drew as that part goes away, with the `watcher` and

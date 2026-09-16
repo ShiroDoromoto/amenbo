@@ -58,12 +58,14 @@ import { asTyped } from "../core/keys";
 import { pushNotice } from "../core/notice";
 import { hostOs } from "../core/platform";
 import {
-  folderClipCopy, folderClipPaste, folderCopy, folderEntries, folderGitStatus, folderImport,
+  folderClipCopy, folderClipPaste, folderCopy, folderEntries, folderGitIgnore, folderGitStatus,
+  folderGitUntrack, folderImport,
   folderMake, folderMove, folderRename, folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
 import { stoppedLine } from "./stopped";
 import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
+import { useRestore } from "./restore";
 import { fileAt } from "./fileUnder";
 import { type Held, watchCarry } from "./handDrag";
 import { gitMarks, type GitMark } from "./gitMark";
@@ -229,7 +231,7 @@ function rowsAbout(picked: string[], path: string[]): string[][] {
  * if leaving it never threw it away (`Opened`).
  */
 export function FolderTree({
-  projectId, root, reading, onRead, onGone, onHandOver, onCarry,
+  projectId, root, reading, onRead, onGone, onHandOver, onCarry, onHistory, onPrefix,
 }: {
   /** The project whose folders the tree is rooted at; nothing is drawn without one. */
   projectId: number | null;
@@ -270,6 +272,17 @@ export function FolderTree({
    * With none handed down, the rows are what they were: things to open.
    */
   onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
+  /**
+   * Open the history of one row, in the column across the panes (`./GitHistory`). Handed the path
+   * as the repository spells it.
+   *
+   * With none handed down there is nowhere for a history to open, and the item is not drawn.
+   */
+  onHistory?: (path: string) => void;
+  /** The front the folder being drawn sits at inside its repository, said as git answers it. The
+   *  face hands it on to whoever reads a commit's own paths, which are the repository's
+   *  (`./GitHistory`). */
+  onPrefix?: (prefix: string) => void;
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -302,6 +315,17 @@ export function FolderTree({
   // The bin, and the question before it. The reading column holds one of its own for the file it is
   // drawing: what is shared is how a press behaves, not one question for the two of them (`./trash`).
   const trash = useTrash(projectId, onGone);
+  // Throwing away what git has not recorded, which the menu a row carries offers (`./restore`).
+  const restore = useRestore(projectId);
+  // The paths git named in the folder being drawn. The section reads them for the colours and
+  // hands them up, because the menu is drawn here and what git can be told about a row is read off
+  // them.
+  const [named, setNamed] = useState<GitEntryDto[]>([]);
+  /** Whether git says the working tree has done something to this path — which is the whole of what
+   *  there is to throw away. A path git says nothing about has nothing to lose. */
+  const dirty = (path: string[]) => named.some(
+    (row) => row.worktree !== " " && row.path.join("/") === path.join("/"),
+  );
 
   // A folder nobody is bound to any more takes how it was opened with it. Unbinding one, or moving
   // to another project, leaves a key here that names a folder nobody can reach — and it would be
@@ -508,6 +532,7 @@ export function FolderTree({
     // able to hold it costs nobody a stop on the way past (`AMB-D-780`).
     <div className="files" ref={box} tabIndex={-1} onKeyDown={onKey}>
       {trash.aside}
+      {restore.aside}
       {/* Keyed by the folder, so going to another one is a tree torn down and a tree put up rather
           than one tree handed a different root: what a section reads off the disk is its own, and
           none of it is about the folder the reader has just left. */}
@@ -531,6 +556,7 @@ export function FolderTree({
         onPicked={(picked, anchor) => onPicked(drawn.path, picked, anchor)}
         chosen={reading !== null && reading.root === drawn.path ? reading.path.join("/") : null}
         onCarry={onCarry}
+        onGit={(prefix, rows) => { setNamed(rows); onPrefix?.(prefix); }}
       />
       {menu !== null && (
         <FileMenu
@@ -553,6 +579,23 @@ export function FolderTree({
           onClose={() => setMenu(null)}
           onTrash={() => trash.askTrash(menu.root, actOn(menu.root, menu.path))}
           onHandOver={onHandOver}
+          git={{
+            onHistory,
+            onIgnore: () => {
+              void folderGitIgnore(projectId, menu.root, actOn(menu.root, menu.path))
+                .catch((why: unknown) => pushNotice(errText(why)));
+            },
+            onUntrack: () => {
+              void folderGitUntrack(projectId, menu.root, actOn(menu.root, menu.path))
+                .catch((why: unknown) => pushNotice(errText(why)));
+            },
+            // Only where git says the working tree has done something to one of them. A row with
+            // nothing to throw away would be offered a press that does nothing, and the one act
+            // here that cannot be walked back is the last one to offer idly.
+            onRestore: actOn(menu.root, menu.path).some(dirty)
+              ? () => restore.askRestore(menu.root, actOn(menu.root, menu.path).filter(dirty))
+              : undefined,
+          }}
         />
       )}
     </div>
@@ -590,7 +633,7 @@ export function FolderTree({
  */
 function FolderSection({
   projectId, root, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
-  onTrash, onPicked, chosen, onCarry,
+  onTrash, onPicked, chosen, onCarry, onGit,
 }: {
   projectId: number;
   root: string;
@@ -627,6 +670,9 @@ function FolderSection({
   /** Take hold of one of this folder's rows, to carry what the press is about — to a pane, or to
    *  one of this panel's own folders (`./handDrag`). */
   onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
+  /** What git said about this folder, handed up as it arrives. The panel draws the menu a row
+   *  carries, and what git can be told about a row is read off this (`./FileMenu`). */
+  onGit: (prefix: string, rows: GitEntryDto[]) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -709,10 +755,11 @@ function FolderSection({
     if (!bound || !treeOpen) return;
     let alive = true;
     void folderGitStatus(projectId, root)
-      // The rows alone. Where the branch stands comes back on the same answer and is drawn by the
-      // half of the rail that is about git rather than by the tree (`AMB-T-4899`).
-      .then((now) => { if (alive) setGit(now.rows); })
-      .catch(() => { if (alive) setGit([]); });
+      // The rows are what the tree colours by. Where the branch stands is drawn by the half of the
+      // rail that is about git rather than by the tree (`AMB-T-4899`), and the rest goes up to the
+      // panel, which is where the menu a row carries is drawn (`onGit`).
+      .then((now) => { if (alive) { setGit(now.rows); onGit(now.prefix, now.rows); } })
+      .catch(() => { if (alive) { setGit([]); onGit("", []); } });
     return () => { alive = false; };
   }, [projectId, root, bound, treeOpen, moved]);
 

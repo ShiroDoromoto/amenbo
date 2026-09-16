@@ -38,10 +38,20 @@ const open = () => draw({ tab: "history", history: true, gitRoot: ROOT });
 const rows = () =>
   [...container.querySelectorAll(".githist__subject")].map((one) => one.textContent);
 
+/** What the last press of the control that widens the list asked for. */
+let widened: string | null | undefined;
+
 /** The reading column, which is where Escape is pressed. */
 const column = () => container.querySelector(".termface__column--side .files")!;
 
 describe("the history in the reading column", () => {
+  it("is drawn whole where nothing narrowed it", async () => {
+    widened = undefined;
+    hoisted.log = [commit({ sha: A })];
+    await open();
+    expect(hoisted.asked).toContain(`log:${ROOT}`);
+  });
+
   it("draws the commits newest first, and says which were merges", async () => {
     hoisted.log = [
       commit({ sha: A, subject: "the newest", parents: [B, "c".repeat(40)] }),
@@ -133,6 +143,32 @@ describe("the history in the reading column", () => {
 
     await open();
     expect(button(t("git.history"))).toBeDefined();
+  });
+
+  /// Narrowing is a different list of the same kind, not a layer: the control that widens it says
+  /// where it goes, and nothing is closed by it (`AMB-D-815`).
+  it("says what the list is narrowed to, and widens it again", async () => {
+    hoisted.log = [commit({ sha: A, subject: "the newest" })];
+    await draw({
+      tab: "history",
+      history: true,
+      gitRoot: ROOT,
+      historyOnly: "src/lib.rs",
+      onHistoryOnly: (one: string | null) => { widened = one; },
+    });
+    expect(hoisted.asked).toContain(`log:${ROOT}:src/lib.rs`);
+    expect(container.querySelector(".githist__onlyname")?.textContent).toBe("lib.rs");
+
+    await click(container.querySelector(".githist__all"));
+    expect(widened).toBeNull();
+  });
+
+  /// The whole of the folder's history is what this face is, so a line saying so where there is
+  /// nothing else it could be would be one every reader reads past.
+  it("says nothing about narrowing where the list is the whole of it", async () => {
+    hoisted.log = [commit({ sha: A })];
+    await open();
+    expect(container.querySelector(".githist__only")).toBeNull();
   });
 
   /// A folder that is no repository, and one nobody has committed in yet, answer the same way —

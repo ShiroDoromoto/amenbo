@@ -19,6 +19,7 @@ import type { GitCommitDto, GitFileDto } from "../bindings/bindings";
 import { formatNumber, t } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { folderGitDiff, folderGitLog, folderGitShow, onFolderChanged } from "./folder";
+import { FileMenu } from "./FileMenu";
 
 /** Which layer the reader is on: the list, one commit, or one file of it. */
 export type At = { sha: string; path: string | null } | null;
@@ -30,12 +31,27 @@ export type At = { sha: string; path: string | null } | null;
  * is that column's: one press is one layer, and the layers below this one are its width and itself
  * (`AMB-D-815`, `./FilesPanel`).
  */
-export function GitHistory({ projectId, root, at, onAt }: {
+export function GitHistory({ projectId, root, prefix, at, onAt, only, onOnly, onFileHistory }: {
   projectId: number | null;
   /** The folder the window is on, as its path. */
   root: string | null;
+  /** The front that folder sits at inside its repository, ending in `/` and empty at the root. A
+   *  commit names its paths from the root, and this is what turns one of those into the folder's
+   *  own spelling — which is what the history of one path takes (`crate::folder_git`). */
+  prefix: string;
   at: At;
   onAt: (at: At) => void;
+  /**
+   * One path the list is narrowed to, as the repository spells it — nothing for the whole of it.
+   *
+   * **It is not one of the layers.** Narrowing is a different list of the same kind, where a layer
+   * is a different kind of thing altogether; so the key that goes back a layer does not widen this,
+   * and the control that widens it does not close anything (`AMB-D-815`).
+   */
+  only: string | null;
+  onOnly: (only: string | null) => void;
+  /** Narrow the list to one of a commit's paths, handed it in the folder's own spelling. */
+  onFileHistory: (path: string) => void;
 }) {
   const [commits, setCommits] = useState<GitCommitDto[]>([]);
   const [answered, setAnswered] = useState(false);
@@ -57,11 +73,11 @@ export function GitHistory({ projectId, root, at, onAt }: {
   useEffect(() => {
     if (projectId === null || root === null) return;
     let alive = true;
-    void folderGitLog(projectId, root)
+    void folderGitLog(projectId, root, only ?? undefined)
       .then((now) => { if (alive) { setCommits(now); setAnswered(true); } })
       .catch(() => { if (alive) { setCommits([]); setAnswered(true); } });
     return () => { alive = false; };
-  }, [projectId, root, moved]);
+  }, [projectId, root, only, moved]);
 
   if (projectId === null || root === null) return <div className="githist" />;
   if (at !== null) {
@@ -76,20 +92,35 @@ export function GitHistory({ projectId, root, at, onAt }: {
         // name that is only missing.
         subject={on?.subject ?? at.sha}
         path={at.path}
+        prefix={prefix}
         onAt={onAt}
+        onFileHistory={onFileHistory}
       />
     );
   }
+  // What the list is of, drawn only where it is of one path: the whole of the folder's history is
+  // what this face is, and a control saying so where there is nothing else it could be would be a
+  // line every reader has to read past.
+  const narrowed = only === null ? null : (
+    <div className="githist__only">
+      <span className="githist__onlyname" title={only}>{name(only)}</span>
+      <button className="githist__all" onClick={() => onOnly(null)}>{t("git.wholeHistory")}</button>
+    </div>
+  );
+
   if (!answered) return <div className="githist" />;
   if (commits.length === 0) {
     return (
       <div className="githist">
-        <p className="files__none">{t("git.noHistory")}</p>
+        {narrowed}
+        <p className="files__none">{only === null ? t("git.noHistory") : t("git.noFileHistory")}</p>
       </div>
     );
   }
   return (
-    <ul className="githist__list">
+    <div className="githist">
+      {narrowed}
+      <ul className="githist__list">
       {commits.map((one) => (
         <li key={one.sha}>
           <button className="githist__row" onClick={() => onAt({ sha: one.sha, path: null })}>
@@ -104,20 +135,31 @@ export function GitHistory({ projectId, root, at, onAt }: {
           </button>
         </li>
       ))}
-    </ul>
+      </ul>
+    </div>
   );
 }
 
 /** One commit: the paths it touched, and — a layer deeper — the patch for one of them. */
-function Opened({ projectId, root, sha, subject, path, onAt }: {
+function Opened({ projectId, root, sha, subject, path, prefix, onAt, onFileHistory }: {
   projectId: number;
   root: string;
   sha: string;
   subject: string;
   path: string | null;
+  prefix: string;
   onAt: (at: At) => void;
+  onFileHistory: (path: string) => void;
 }) {
   const [files, setFiles] = useState<GitFileDto[]>([]);
+  // The path a right-click was on, and where the pointer was. One menu for the layer rather than
+  // one per row, for the reason every other list here has one.
+  const [menu, setMenu] = useState<{ path: string; x: number; y: number } | null>(null);
+  // A commit reaches the whole repository, and the menu speaks about the folder the window is on.
+  // A path above that folder is one this face has no spelling for, so it carries no menu.
+  const held = menu !== null && menu.path.startsWith(prefix)
+    ? menu.path.slice(prefix.length).split("/")
+    : null;
 
   useEffect(() => {
     let alive = true;
@@ -140,20 +182,55 @@ function Opened({ projectId, root, sha, subject, path, onAt }: {
         {path === null ? t("git.backToHistory") : subject}
       </button>
       {path === null
-        ? <Touched files={files} onPath={(one) => onAt({ sha, path: one })} />
+        ? (
+          <Touched
+            files={files}
+            onPath={(one) => onAt({ sha, path: one })}
+            onHistory={(one, x, y) => setMenu({ path: one, x, y })}
+          />
+        )
         : <Patch projectId={projectId} root={root} sha={sha} path={path} />}
+      {menu !== null && held !== null && (
+        <FileMenu
+          projectId={projectId}
+          root={root}
+          path={held}
+          about={[held]}
+          dir={false}
+          at={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+          // The bin is about a file on the disk, and this row is about what one commit wrote down.
+          onTrash={() => setMenu(null)}
+          git={{
+            // The one thing to ask of a record of what was written down: what else has happened to
+            // this path. The rest of the menu changes the working tree, which is a thing to ask of
+            // a row of the tree rather than of a commit's own list.
+            onHistory: onFileHistory,
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /** The paths one commit touched, with what each gained and lost. */
-function Touched({ files, onPath }: { files: GitFileDto[]; onPath: (path: string) => void }) {
+function Touched({ files, onPath, onHistory }: {
+  files: GitFileDto[];
+  onPath: (path: string) => void;
+  /** Open the menu on one of them, at the point the pointer was. */
+  onHistory: (path: string, x: number, y: number) => void;
+}) {
   if (files.length === 0) return <p className="files__none">{t("git.touchedNothing")}</p>;
   return (
     <ul className="githist__list">
       {files.map((one) => (
         <li key={one.path}>
-          <button className="githist__row" onClick={() => onPath(one.path)} title={one.path}>
+          <button
+            className="githist__row"
+            onClick={() => onPath(one.path)}
+            title={one.path}
+            onContextMenu={(e) => { e.preventDefault(); onHistory(one.path, e.clientX, e.clientY); }}
+          >
             <span className="githist__subject">{name(one.path)}</span>
             <span className="githist__who">
               {/* git counts no lines in a file it read as bytes, and says so with a dash rather

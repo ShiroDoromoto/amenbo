@@ -626,6 +626,7 @@ pub fn run() {
       folder_git_write::folder_git_commit,
       folder_git_write::folder_git_restore,
       folder_git_write::folder_git_untrack,
+      folder_git_write::folder_git_ignore,
       folder_git_write::folder_git_stash,
       folder_git_write::folder_git_stash_pop,
       folder_git_write::folder_git_switch,

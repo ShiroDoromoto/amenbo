@@ -158,6 +158,49 @@ pub async fn folder_git_untrack(
     .await
 }
 
+/// Write `paths` into the folder's own `.gitignore`, one line each.
+///
+/// **It runs no git at all**, and it lives here because of what it is for rather than what it does:
+/// the item a reader presses stands beside the ones that do run git, and a road that answered
+/// differently from its neighbours would be one they had to learn twice.
+///
+/// **The file the lines go in is the bound folder's own** — the one the window is on (`AMB-D-905`).
+/// git reads an ignore file in every folder on the way down, so a line could be written nearer the
+/// path it is about; what that buys is a rule the reader has to go looking for, in a file they did
+/// not know was there.
+///
+/// **What is written is a path from that folder, led by `/`.** Without the slash git reads the line
+/// as a name and ignores every file of that name anywhere below — so ignoring one `build/main.rs`
+/// would quietly ignore all of them.
+///
+/// A path already on the list is left alone. Writing it twice would be a second rule saying what
+/// the first says, and a reader who pressed the item on a file already ignored asked for the state
+/// rather than for the line.
+#[tauri::command]
+pub async fn folder_git_ignore(
+    project_id: i64,
+    root: String,
+    paths: Vec<Vec<String>>,
+) -> Result<String, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        let lines: Vec<String> = paths
+            .iter()
+            .map(|path| Ok(format!("/{}", names(path).ok_or_else(gone)?.join("/"))))
+            .collect::<Result<_, CmdError>>()?;
+        let at = dir.join(".gitignore");
+        // Nothing there is nothing to read, which is a file about to be made rather than a failure:
+        // a repository need not have one, and pressing this is how the first one comes to exist.
+        let had = std::fs::read_to_string(&at).unwrap_or_default();
+        let Some(out) = ignoring(&had, &lines) else { return Ok(String::new()) };
+        std::fs::write(&at, out).map_err(|e| -> CmdError {
+            format!("writing .gitignore did not work: {e}").into()
+        })?;
+        Ok(String::new())
+    })
+    .await
+}
+
 // ── what is put aside ────────────────────────────────────────────────────────────────────────
 
 /// Put `paths` aside — `git stash push`, with `message` written on it where there is one.
@@ -331,6 +374,32 @@ where
     asked(project_id, root, Vec::new(), |_| build()).await
 }
 
+/// What the ignore file says once `lines` are on it, or nothing where every one of them already is.
+///
+/// A line already there is left where it is: writing it twice would be a second rule saying what
+/// the first says, and a reader who pressed the item on a path already ignored asked for the state
+/// rather than for the line.
+///
+/// The newline in front of what is added is the one the file may be missing. A last line somebody
+/// wrote without one would otherwise have the first of these run on to the end of it, and the two
+/// would be one rule that matches neither path.
+fn ignoring(had: &str, lines: &[String]) -> Option<String> {
+    let already: Vec<&str> = had.lines().map(str::trim_end).collect();
+    let adding: Vec<&String> = lines.iter().filter(|one| !already.contains(&one.as_str())).collect();
+    if adding.is_empty() {
+        return None;
+    }
+    let mut out = had.to_string();
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    for one in adding {
+        out.push_str(one);
+        out.push('\n');
+    }
+    Some(out)
+}
+
 /// The pathspecs `paths` come to, in the spelling git is run in — one ordinary name per segment,
 /// and the whole of it read as a path rather than as a pattern.
 ///
@@ -469,6 +538,39 @@ mod tests {
         for path in [vec!["..".to_string()], vec!["a/b".to_string()], vec!["/etc".to_string()]] {
             assert!(pathspecs(std::slice::from_ref(&path)).is_err(), "{path:?}");
         }
+    }
+
+    // ── the ignore file ──────────────────────────────────────────────────────────────────────
+
+    /// The line is led by a slash, which is what makes it a path from this folder rather than a
+    /// name matched anywhere below it — and a repository need not have the file at all.
+    #[test]
+    fn a_first_line_makes_the_file_it_goes_in() {
+        let out = ignoring("", &["/build/main.rs".to_string()]).unwrap();
+        assert_eq!(out, "/build/main.rs\n");
+    }
+
+    /// A file somebody wrote without a last newline. Without the one put in front, the line added
+    /// would run on to the end of theirs and the two would be one rule matching neither path.
+    #[test]
+    fn a_file_with_no_last_newline_gets_one_before_the_line() {
+        let out = ignoring("target\n*.log", &["/note.md".to_string()]).unwrap();
+        assert_eq!(out, "target\n*.log\n/note.md\n");
+    }
+
+    #[test]
+    fn a_line_already_there_is_not_written_again() {
+        assert!(ignoring("target\n/note.md\n", &["/note.md".to_string()]).is_none());
+        // And the one that is not there still goes on, beside the one that was.
+        let out = ignoring("/note.md\n", &["/note.md".to_string(), "/other.md".to_string()]).unwrap();
+        assert_eq!(out, "/note.md\n/other.md\n");
+    }
+
+    /// The file's own last newline is what a line is judged against, not the spaces behind it: git
+    /// reads a trailing space as part of the pattern only when it is escaped.
+    #[test]
+    fn a_line_is_matched_past_the_spaces_at_the_end_of_it() {
+        assert!(ignoring("/note.md   \n", &["/note.md".to_string()]).is_none());
     }
 
     #[test]

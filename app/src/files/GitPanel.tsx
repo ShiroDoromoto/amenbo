@@ -41,11 +41,13 @@ import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { errText, t, tf } from "../core/i18n";
 import {
-  folderGitCommit, folderGitFetch, folderGitPull, folderGitPush, folderGitStage, folderGitStash,
-  folderGitStashes, folderGitStashPop, folderGitStatus, folderGitUnstage, folderUnwatch,
-  folderWatch, nextWatchTag, onFolderChanged,
+  folderGitCommit, folderGitFetch, folderGitIgnore, folderGitPull, folderGitPush, folderGitStage,
+  folderGitStash, folderGitStashes, folderGitStashPop, folderGitStatus, folderGitUnstage,
+  folderGitUntrack, folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
+import { FileMenu } from "./FileMenu";
 import { GitBranch } from "./GitBranch";
+import { useRestore } from "./restore";
 import { type GitMark, markOf } from "./gitMark";
 
 /** What git wrote on the way back from a door of this half, and whether it was a refusal. */
@@ -67,14 +69,20 @@ const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [] };
  * gathers four hundred milliseconds of them into one, and a fetch moves where the branch stands
  * without writing a byte anybody watches — asking outright is one call and says it now.
  */
-export function GitPanel({ projectId, root, onHistory }: {
+export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver }: {
   /** The project the folder is bound to; nothing is drawn without one. */
   projectId: number | null;
   /** The folder the window is on, as its path. */
   root: string | null;
   /** Open the history in the column across the panes. Where nothing is handed down there is
-   *  nowhere for it to open, and the press is not offered. */
-  onHistory?: () => void;
+   *  nowhere for it to open, and the press is not offered. A path narrows it to that path alone,
+   *  spelled from this folder (`./GitHistory`). */
+  onHistory?: (path?: string) => void;
+  /** The front this folder sits at inside its repository, said as git answers it (`./FolderTree`
+   *  hands up the same thing from the other half of the rail). */
+  onPrefix?: (prefix: string) => void;
+  /** Hand a changed path to the pane the reader is working in (`../shell/TerminalFace`). */
+  onHandOver?: (wholes: string[]) => void;
 }) {
   const [git, setGit] = useState<FolderGitDto>(NOTHING);
   /** False until the first read comes back. Nothing is drawn before it. */
@@ -95,6 +103,12 @@ export function GitPanel({ projectId, root, onHistory }: {
   // a reader who never opens the list never pays for it.
   const [stashes, setStashes] = useState<GitStashDto[]>([]);
   const stashOpen = stashAt !== null;
+  // The row a right-click was on, and where the pointer was. One menu for the half rather than one
+  // per row: only one can be open, and a row that held its own would keep it after the list moved
+  // under it — which is what every word from the host does to this list.
+  const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
+  // Throwing away what git has not recorded, which the menu offers over a row that has some.
+  const restore = useRestore(projectId);
 
   // **This half watches the folder itself, for as long as it is drawn.**
   //
@@ -138,7 +152,7 @@ export function GitPanel({ projectId, root, onHistory }: {
     }
     let alive = true;
     void folderGitStatus(projectId, root)
-      .then((now) => { if (alive) { setGit(now); setAnswered(true); } })
+      .then((now) => { if (alive) { setGit(now); setAnswered(true); onPrefix?.(now.prefix); } })
       // A folder that went while this was out answers with nothing, which is the same hand as a
       // folder that is no repository — and the half beside this one says which of the two it was.
       .catch(() => { if (alive) { setGit(NOTHING); setAnswered(true); } });
@@ -285,7 +299,7 @@ export function GitPanel({ projectId, root, onHistory }: {
           its own, paid by the reader who wants it rather than by everyone (`AMB-T-4899`). The mark
           says where it goes, which is out of this column and across the panes. */}
       {onHistory !== undefined && (
-        <button className="gitpanel__open" onClick={onHistory}>
+        <button className="gitpanel__open" onClick={() => onHistory()}>
           {t("git.history")}
           <Icon name="foldRight" />
         </button>
@@ -328,6 +342,7 @@ export function GitPanel({ projectId, root, onHistory }: {
         staged
         running={running}
         onToggle={(row) => void ask(() => folderGitUnstage(projectId, root, [row.path]), true)}
+        onMenu={(path, x, y) => setMenu({ path, x, y })}
       />
       <Changes
         what={t("git.changes")}
@@ -336,7 +351,42 @@ export function GitPanel({ projectId, root, onHistory }: {
         staged={false}
         running={running}
         onToggle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
+        onMenu={(path, x, y) => setMenu({ path, x, y })}
       />
+      {restore.aside}
+      {menu !== null && (
+        <FileMenu
+          projectId={projectId}
+          root={root}
+          path={menu.path}
+          about={[menu.path]}
+          // Every row here is a path git named, and git names files and the folders it answers for
+          // whole. What is under a folder it named is not on this list, so nothing here is a folder
+          // anything could be written into.
+          dir={false}
+          at={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+          // The bin is the machine's own, and what it would take is the file — which is not what a
+          // reader pressing on a changed path means. So the row is offered git's doors and not it.
+          onTrash={() => setMenu(null)}
+          onHandOver={onHandOver}
+          git={{
+            onHistory: (path) => onHistory?.(path),
+            onIgnore: () => {
+              void folderGitIgnore(projectId, root, [menu.path])
+                .catch((why: unknown) => setSaid({ text: errText(why), refused: true }));
+            },
+            onUntrack: () => {
+              void ask(() => folderGitUntrack(projectId, root, [menu.path]), true);
+            },
+            // Only where git says the working tree has done something to it. A path that is only
+            // staged has nothing in the working tree to throw away.
+            onRestore: changed.some((row) => row.path.join("/") === menu.path.join("/"))
+              ? () => restore.askRestore(root, [menu.path])
+              : undefined,
+          }}
+        />
+      )}
       {stashAt !== null && (
         <Menu at={stashAt} onClose={() => setStashAt(null)}>
           {/* Nothing git follows is nothing to put aside, and a door that would only ever come back
@@ -383,7 +433,7 @@ export function GitPanel({ projectId, root, onHistory }: {
 
 /** One of the two lists, under its name — drawn with nothing in it as well, since which of the two
  *  a path is in is the answer, and a list that disappeared would leave the other unnamed. */
-function Changes({ what, none, rows, staged, running, onToggle }: {
+function Changes({ what, none, rows, staged, running, onToggle, onMenu }: {
   what: string;
   none: string;
   rows: GitEntryDto[];
@@ -392,6 +442,8 @@ function Changes({ what, none, rows, staged, running, onToggle }: {
   /** A door is out, so nothing here is pressed until it comes back. */
   running: boolean;
   onToggle: (row: GitEntryDto) => void;
+  /** Open the menu this row carries, at the point the pointer was (`./FileMenu`). */
+  onMenu: (path: string[], x: number, y: number) => void;
 }) {
   return (
     <section className="gitpanel__section">
@@ -407,6 +459,7 @@ function Changes({ what, none, rows, staged, running, onToggle }: {
                 staged={staged}
                 running={running}
                 onToggle={onToggle}
+                onMenu={onMenu}
               />
             ))}
           </ul>
@@ -433,18 +486,23 @@ function Changes({ what, none, rows, staged, running, onToggle }: {
  * broken into a heading per folder is a page rather than a list, and the names are what a reader
  * runs their eye down.
  */
-function ChangedRow({ row, staged, running, onToggle }: {
+function ChangedRow({ row, staged, running, onToggle, onMenu }: {
   row: GitEntryDto;
   staged: boolean;
   running: boolean;
   onToggle: (row: GitEntryDto) => void;
+  onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const name = row.path[row.path.length - 1] ?? "";
   const holding = row.path.slice(0, -1).join("/");
   const mark: GitMark = markOf(row);
   const whole = row.path.join("/");
   return (
-    <li className={`gitpanel__row gitpanel__row--${mark}`} title={whole}>
+    <li
+      className={`gitpanel__row gitpanel__row--${mark}`}
+      title={whole}
+      onContextMenu={(e) => { e.preventDefault(); onMenu(row.path, e.clientX, e.clientY); }}
+    >
       {/* The path is said in full, because the box stands away from the name in the reading order
           of anything that reads the row out. */}
       <input

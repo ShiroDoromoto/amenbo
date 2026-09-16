@@ -3148,11 +3148,16 @@ const REGISTRY: &[OpSpec] = &[
     // says a move went through: the list closes either way, and a refusal leaves the reader where
     // they were with nothing on the list to show for it.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "on-branch", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // What git wrote on the way back from one of this half's doors, drawn under the branch line as
-    // git wrote it. `shows` is part of that text, and it is git's own English rather than anything
-    // Amenbo says: a refusal here is not rewritten, not summarised and not turned into a code with a
-    // template behind it, so what a road looks for is the sentence the reader would have got at a
-    // terminal.
+    // What git wrote on the way back from one of this half's doors, drawn as git wrote it. `shows` is
+    // part of that text, and it is git's own English rather than anything Amenbo says: a refusal here
+    // is not rewritten, not summarised and not turned into a code with a template behind it, so what
+    // a road looks for is the sentence the reader would have got at a terminal.
+    //
+    // **Where on the half it is drawn is not part of the reading.** A door's refusal lands under the
+    // branch line, and the read that draws the branch line at all can be the thing that failed — on a
+    // folder git would not answer about there is no branch line for a sentence to sit under, and the
+    // words are in the frame that says so instead. A road that named the place would have to name a
+    // different op for each of them, which is two names for one sentence.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "git-said", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
     // ── a merge, and what it could not settle ─────────────────────────────────────────────────────

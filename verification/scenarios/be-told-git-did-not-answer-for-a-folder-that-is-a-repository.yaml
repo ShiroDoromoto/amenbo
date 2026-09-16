@@ -1,0 +1,164 @@
+# There are three things the half of the panel that is git's can be looking at, and only two of them
+# have ever been drawn apart: a folder that is no repository, and a repository git answered about.
+# The third is a repository git was asked about and would not answer for — the read came back non-zero
+# — and drawn as the first it becomes a sentence that is simply untrue. The reader knows the `.git` is
+# there, is told it is not, and goes looking for damage to a folder that has none.
+#
+# ── Why the read is broken from underneath rather than from the machine ──────────────────────────
+# The way a reader really meets this is a `git status` that cannot finish: a filter it has to run and
+# cannot find, an index written by a newer git, a file the process may not open. All of them are the
+# machine's, and a road standing on one stands on the machine that walks it — which is what
+# `be-told-why-a-move-stopped-in-a-folder-that-uses-lfs` already accepts for the one it is about, and
+# is not worth accepting twice. An index too short to be an index is git's own refusal, on any git,
+# on any machine, and it is the same road into the panel: `status` comes back non-zero and
+# `rev-parse` answers as it always did, so the folder is a repository and there is no answer about it.
+#
+# ── Why the file goes in after `git-init` and not before ────────────────────────────────────────
+# `git init` writes no index at all — there is nothing recorded yet — so a repository that has only
+# been raised has no such file to spoil. What the premise leaves is a file where git expects one and
+# eight bytes where twelve are the least it could be, which is the shape of the refusal read back.
+#
+# ── Why a second folder is bound, and what is read on it ────────────────────────────────────────
+# Said on its own, "git did not answer about this folder" passes on a build that says it about every
+# folder, including the ones git answered about perfectly well. So the frame is read both ways round
+# across one press, the way the line about no repository is
+# (`look-for-git-in-a-folder-that-is-no-repository`). The folder the panel opens on is a repository
+# with a file in it git has not recorded: it has an answer, it is drawn, and the frame is nowhere.
+id: be-told-git-did-not-answer-for-a-folder-that-is-a-repository
+title: A repository git would not answer about says so in git's own words, instead of being called no repository
+description: >
+  Raise a project bound to two folders, both of them repositories, and leave one of them with an
+  index too short for git to read. On the folder git can answer about, the half of the panel that is
+  git's draws what has changed and nothing about an answer that never came. Pick the other folder:
+  the same half says git did not answer about it, carries git's own sentence about the index, and
+  does not say this folder is no repository.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # The second folder is bound the same way as the first, and is a repository just as it is. What is
+  # done to it below is the whole of the difference between them.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: potting-shed
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # A file here too, so the two folders are told apart by what git says about them and not by one of
+  # them being empty.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: potting-shed
+
+  # Written last, over a repository already raised. Eight bytes where git reads twelve before it has
+  # begun, so `git status` stops on the file itself and says so, while `git rev-parse` — which never
+  # opens it — goes on answering that this is a repository.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: .git/index
+      content: SCENARIO
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # `greenhouse-beds` sorts first, so the folder the panel comes up on is the one git answers about
+  # (`app/src/files/sections.ts`).
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: no-answer
+      present: false
+
+  # One press between the two answers.
+  - type: action
+    domain: files
+    op: root-pick
+    with:
+      name: potting-shed
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: no-answer
+
+  # git's own sentence about the file it stopped on, in that frame. It is not rewritten and not
+  # summarised, so what is looked for is the words a reader would have got at a terminal.
+  - type: assert
+    domain: files
+    op: git-said
+    with:
+      shows: index file smaller than expected
+
+  # And the sentence that is not true of this folder. Without it the road passes on the build it was
+  # written against — one that draws both lines at once, or draws the old one under the new.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: no-repo
+      present: false

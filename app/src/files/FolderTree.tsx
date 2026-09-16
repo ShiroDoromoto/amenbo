@@ -68,6 +68,7 @@ import { useTrash } from "./trash";
 import { isDirty, useRestore } from "./restore";
 import { fileAt } from "./fileUnder";
 import { type Held, watchCarry } from "./handDrag";
+import { stemEnd } from "./stem";
 import { gitMarks, type GitMark } from "./gitMark";
 import { rootShown, sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
@@ -159,19 +160,6 @@ type Naming = {
    *  pointer in their hand to open one with. */
   rename: (path: string[]) => void;
 };
-
-/**
- * Where a name's stem ends — the part of it a rename is usually about.
- *
- * The last dot and not the first: `archive.tar.gz` is renamed by changing `archive.tar`, and a name
- * cut at the first dot would hand back a stem nobody meant. A dot at the very front is not one of
- * these — `.gitignore` is a name, not an extension on an empty stem — and a name with no dot in it
- * is all stem, so both answer with the whole length (the convention `./grammars` reads names by).
- */
-function stemEnd(name: string): number {
-  const dot = name.lastIndexOf(".");
-  return dot <= 0 ? name.length : dot;
-}
 
 /** Whether an edit is the renaming of this row. */
 function renaming(edit: Edit | null, root: string, path: string[]): boolean {

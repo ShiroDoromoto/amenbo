@@ -448,6 +448,21 @@ describe("the rail's git half", () => {
     expect(hoisted.taken).toEqual([{ paths: [["both.rs"]], mine: false }]);
   });
 
+  /// Three rows cut at the end read as the same row three times, and what fell off is the one thing
+  /// that would have told them apart. So the stem is the half that shortens and the end of the name
+  /// is drawn beside it, out of reach of the cut (`./stem`).
+  it("draws the end of a name apart from the stem, so the cut falls in the middle", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [row({ path: ["notes", "a-very-long-name.tar.gz"], worktree: "M" })],
+    });
+    await draw();
+    const name = rowOf(t("git.changes"), "a-very-long-name.tar.gz");
+    // The extension and a little of what comes before it: two drafts of one document differ in the
+    // word before the dot, and a tail of the extension alone would draw them as the same row.
+    expect(name.querySelector(".gitpanel__stem")?.textContent).toBe("a-very-long-nam");
+    expect(name.querySelector(".gitpanel__ext")?.textContent).toBe("e.tar.gz");
+  });
+
   /// A folder git named as a whole rather than naming what is inside it, which is what it does with
   /// an untracked one. The slash is how git writes that.
   it("draws a folder git answered for as a whole as the folder it is", async () => {

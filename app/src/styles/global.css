@@ -1202,14 +1202,29 @@ input[type="color"] {
   font-family: var(--font-mono); font-size: var(--fs-xs);
   color: var(--git, var(--c-text-muted));
 }
+/* The name, cut in the middle where the row is too narrow for it: the stem gives way and the end of
+   the name stays (`app/src/files/GitPanel.tsx`). The two halves are one line and never wrap, so the
+   cut falls inside the name rather than turning the row into two. */
 .gitpanel__name {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; min-width: 0; white-space: nowrap;
+  /* Hidden on the name and not only on the stem: it is what keeps the row the height it was. A box
+     that hides its overflow is read as sitting on its own bottom edge rather than on the line
+     inside it, which is how this name sat before it was two, and the folder beside it is set
+     against that same edge. */
+  overflow: hidden;
   color: var(--git, var(--c-text));
 }
+.gitpanel__stem { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gitpanel__ext { flex: 0 0 auto; }
 /* Where it is, after the name rather than over it: a heading per folder would turn a list of
-   changes into a page, and what a reader runs down is the names. */
+   changes into a page, and what a reader runs down is the names.
+
+   **It gives way before the name does**, rather than the two dividing the row between them: the
+   shrink factor is what decides which of a flex line's items loses its space first, and a folder
+   read down to nothing still leaves a row a reader can act on, where a name read down to nothing
+   does not. Held to the right edge by the margin, since it no longer grows into the gap. */
 .gitpanel__where {
-  min-width: 0; flex: 1 1 auto;
+  min-width: 0; flex: 0 999 auto; margin-left: auto;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--c-text-muted); font-size: var(--fs-xs);
   text-align: right;

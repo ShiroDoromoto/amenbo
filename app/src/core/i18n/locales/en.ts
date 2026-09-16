@@ -798,6 +798,22 @@ const ui = {
   "git.nothingStaged": "Nothing is staged yet.",
   "git.changes": "Changes",
   "git.nothingChanged": "Nothing has changed.",
+  // The box on a row, said in full: the box stands away from the name in the reading order of
+  // anything reading the row out, and what it does depends on which of the two lists it is in.
+  "git.stageOne": "Stage {path}",
+  "git.unstageOne": "Unstage {path}",
+  "git.commitMessage": "Commit message",
+  "git.commit": "Commit",
+  // How many paths the commit is about to name to git. It is the hinge of this screen — naming
+  // them is what keeps the pane's half-staged work out of the commit (`AMB-D-906`, 3-2) — so it
+  // is said rather than left to be counted off the list above.
+  "git.commitNaming": "Naming the {n} staged paths",
+  "git.stash": "Stash",
+  // What is put aside, and taken back out. Only paths git already follows go into a stash here:
+  // naming an untracked one is refused by the pathspec, with nothing put aside.
+  "git.stashPush": "Stash the changes",
+  "git.stashEmpty": "Nothing is stashed.",
+  "git.stashRestore": "Restore",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

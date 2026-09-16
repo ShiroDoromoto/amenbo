@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
-// The rail's git half: where the branch stands, and what git has to say about the folder under it.
+// The rail's git half: where the branch stands, what git has to say about the folder under it, and
+// what a reader does about it.
 //
 // What has to be right here is that the half says git's own answer and no more — the two letters
 // decide which of the two lists a path is in, a folder that is no repository is a sentence rather
 // than an empty list, and a count that is nothing is not drawn at all.
+//
+// And that every door it presses names the paths it is about (`AMB-D-906`): a commit that named
+// none would take in the agent in the pane's half-staged work, and a stash that named none would
+// take in its working tree. What git says in refusing is printed as git wrote it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FolderChangesDto, FolderGitDto, GitEntryDto } from "../bindings/bindings";
+import type { FolderChangesDto, FolderGitDto, GitEntryDto, GitStashDto } from "../bindings/bindings";
 import { t, tf } from "../core/i18n";
 
 const hoisted = vi.hoisted(() => ({
@@ -17,18 +22,62 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   /** Everyone listening for the host's word that a folder moved. */
   takers: [] as ((changes: FolderChangesDto) => void)[],
+  /** What is put aside, as the list door reads it. */
+  stashes: [] as GitStashDto[],
+  /** What each door was handed, in order. */
+  staged: [] as string[][][],
+  unstaged: [] as string[][][],
+  commits: [] as { message: string; paths: string[][] }[],
+  stashed: [] as { message: string; paths: string[][] }[],
+  popped: [] as string[],
+  /** What git says in refusing the next write, or nothing where it refuses none. */
+  refuse: null as string | null,
+  /** The watches laid and taken down, as the folder, the part that laid it and which mount. */
+  watched: [] as string[],
+  unwatched: [] as string[],
+  tags: 0,
 }));
 
-vi.mock("./folder", () => ({
-  folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
-    hoisted.asked.push(root);
-    return hoisted.git[root] ?? { prefix: "", branch: null, rows: [] };
-  },
-  onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
-    hoisted.takers.push(take);
-    return () => { hoisted.takers = hoisted.takers.filter((one) => one !== take); };
-  },
-}));
+// Everything the factory reaches for is `hoisted`'s: the factory runs when the module under test is
+// first imported, which is before any `const` in this file has been given its value.
+vi.mock("./folder", () => {
+  /** What a write door answers: it keeps what it was handed, and refuses where git would. */
+  const kept = <T,>(into: T[], one: T): Promise<string> => {
+    into.push(one);
+    return hoisted.refuse !== null
+      ? Promise.reject(new Error(hoisted.refuse))
+      : Promise.resolve("");
+  };
+  return {
+    folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
+      hoisted.asked.push(root);
+      return hoisted.git[root] ?? { prefix: "", branch: null, rows: [] };
+    },
+    onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
+      hoisted.takers.push(take);
+      return () => { hoisted.takers = hoisted.takers.filter((one) => one !== take); };
+    },
+    nextWatchTag: () => {
+      hoisted.tags += 1;
+      return hoisted.tags;
+    },
+    folderWatch: async (_p: number, root: string, watcher: string, tag: number) => {
+      hoisted.watched.push(`${root} ${watcher} ${tag}`);
+      return { root, capped: false, unwatched: false, gone: false };
+    },
+    folderUnwatch: async (root: string, watcher: string, tag: number) => {
+      hoisted.unwatched.push(`${root} ${watcher} ${tag}`);
+    },
+    folderGitStashes: async (): Promise<GitStashDto[]> => hoisted.stashes,
+    folderGitStage: (_p: number, _r: string, paths: string[][]) => kept(hoisted.staged, paths),
+    folderGitUnstage: (_p: number, _r: string, paths: string[][]) => kept(hoisted.unstaged, paths),
+    folderGitCommit: (_p: number, _r: string, message: string, paths: string[][]) =>
+      kept(hoisted.commits, { message, paths }),
+    folderGitStash: (_p: number, _r: string, message: string, paths: string[][]) =>
+      kept(hoisted.stashed, { message, paths }),
+    folderGitStashPop: (_p: number, _r: string, name: string) => kept(hoisted.popped, name),
+  };
+});
 
 import { GitPanel } from "./GitPanel";
 
@@ -62,17 +111,87 @@ async function draw(at: string | null = ROOT) {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
-/** The rows of one of the two lists, by the name over it. */
-const listed = (under: string): string[] => {
-  const section = [...container.querySelectorAll(".gitpanel__section")]
+/** One of the two lists, by the name over it. */
+const sectionOf = (under: string): Element | undefined =>
+  [...container.querySelectorAll(".gitpanel__section")]
     .find((one) => one.querySelector(".gitpanel__head")?.textContent?.startsWith(under));
-  return [...(section?.querySelectorAll(".gitpanel__name") ?? [])].map((one) => one.textContent ?? "");
-};
+
+/** The rows of one of the two lists, by the name over it. */
+const listed = (under: string): string[] =>
+  [...(sectionOf(under)?.querySelectorAll(".gitpanel__name") ?? [])].map((one) => one.textContent ?? "");
+
+/** One list's row for one name, as the row it is drawn as. */
+const rowOf = (under: string, name: string): Element =>
+  [...(sectionOf(under)?.querySelectorAll(".gitpanel__row") ?? [])]
+    .find((one) => one.querySelector(".gitpanel__name")?.textContent === name)!;
+
+/** The box on that row. */
+const box = (under: string, name: string): HTMLInputElement =>
+  rowOf(under, name).querySelector<HTMLInputElement>(".gitpanel__check")!;
+
+/** Whether that row's box is ticked. */
+const ticked = (under: string, name: string): boolean => box(under, name).checked;
+
+const messageBox = (): HTMLTextAreaElement =>
+  container.querySelector<HTMLTextAreaElement>(".gitpanel__message")!;
+
+const commitButton = (): HTMLButtonElement =>
+  container.querySelector<HTMLButtonElement>(".gitpanel__do")!;
+
+const stashButton = (): HTMLButtonElement =>
+  container.querySelector<HTMLButtonElement>(".gitpanel__acts .btn")!;
+
+/** What the open menu offers, as the words on each item. */
+const itemNames = (): string[] =>
+  [...document.querySelectorAll(".menu__item")].map((one) => one.textContent ?? "");
+
+/** One item of the open menu, by the words on it. */
+const menuItem = (words: string): HTMLElement =>
+  [...document.querySelectorAll<HTMLElement>(".menu__item")]
+    .find((one) => one.textContent === words)!;
+
+/** Press one thing, and let whatever it asked for come back. */
+async function press(what: HTMLElement) {
+  await act(async () => {
+    what.click();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/** Write `words` into the commit box, in place of whatever is in it. */
+async function type(words: string) {
+  const at = messageBox();
+  await act(async () => {
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    set.call(at, words);
+    at.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+/** The host's word that this folder moved, which is the half's cue to read it again. */
+async function moveFolder() {
+  await act(async () => {
+    for (const take of [...hoisted.takers]) {
+      take({ root: ROOT, capped: false, unwatched: false, gone: false });
+    }
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
 
 beforeEach(() => {
   hoisted.git = {};
   hoisted.asked = [];
   hoisted.takers = [];
+  hoisted.stashes = [];
+  hoisted.staged = [];
+  hoisted.unstaged = [];
+  hoisted.commits = [];
+  hoisted.stashed = [];
+  hoisted.popped = [];
+  hoisted.refuse = null;
+  hoisted.watched = [];
+  hoisted.unwatched = [];
+  hoisted.tags = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -185,11 +304,140 @@ describe("the rail's git half", () => {
     expect(hoisted.asked).toEqual([ROOT, ROOT]);
   });
 
+  /// The tree lays the watch while the tree is drawn, and this half is drawn in its place — so a
+  /// half leaning on the tree's watch would hear nothing for as long as anybody looked at it.
+  it("watches the folder itself while it is drawn, and lets go as it goes", async () => {
+    hoisted.git[ROOT] = says({});
+    await draw();
+    expect(hoisted.watched).toEqual([`${ROOT} git 1`]);
+    expect(hoisted.unwatched).toEqual([]);
+
+    await act(async () => { root.render(createElement(GitPanel, { projectId: 1, root: null })); });
+    expect(hoisted.unwatched).toEqual([`${ROOT} git 1`]);
+  });
+
   /// The face has not been told which folder it is on yet. Nothing is asked and nothing is said:
   /// there is no folder here for a sentence to be about.
   it("asks nothing where there is no folder to ask about", async () => {
     await draw(null);
     expect(hoisted.asked).toEqual([]);
     expect(container.textContent).toBe("");
+  });
+});
+
+describe("the rail's git half, pressed", () => {
+  /// The box on a row of the changes list is the row not being staged, and pressing it is what
+  /// stages that one path — named to git and not left to whatever the index happens to hold.
+  it("stages the one path a box of the changes list was pressed on", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["src", "lib.rs"], worktree: "M" })] });
+    await draw();
+    await press(box(t("git.changes"), "lib.rs"));
+    expect(hoisted.staged).toEqual([[["src", "lib.rs"]]]);
+    expect(hoisted.unstaged).toEqual([]);
+  });
+
+  /// And the box on a row of the staged list is the row being staged, so pressing it is the other
+  /// way — which is how a path in both lists is a ticked row and an empty one at the same time.
+  it("unstages the one path a box of the staged list was pressed on", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["lib.rs"], index: "M", worktree: "M" })] });
+    await draw();
+    expect(ticked(t("git.staged"), "lib.rs")).toBe(true);
+    expect(ticked(t("git.changes"), "lib.rs")).toBe(false);
+    await press(box(t("git.staged"), "lib.rs"));
+    expect(hoisted.unstaged).toEqual([[["lib.rs"]]]);
+    expect(hoisted.staged).toEqual([]);
+  });
+
+  /// The pathspec is the point of the whole screen (`AMB-D-906`, 3-2): the commit is about the paths
+  /// the list was read with, so the agent in the pane's half-staged work is not written down too.
+  it("names every staged path to the commit, and empties the box once it is written down", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [row({ path: ["a.rs"], index: "M" }), row({ path: ["b", "c.rs"], index: "A" })],
+    });
+    await draw();
+    await type("fix: the one thing");
+    expect(container.querySelector(".gitpanel__hint")?.textContent)
+      .toBe(tf("git.commitNaming", { n: 2 }));
+    await press(commitButton());
+    expect(hoisted.commits).toEqual([{ message: "fix: the one thing", paths: [["a.rs"], ["b", "c.rs"]] }]);
+    expect(messageBox().value).toBe("");
+  });
+
+  /// Nothing staged is nothing to name, and no words are no commit. Both are the shape of the press
+  /// rather than a rewriting of git — what git would have said is never reached.
+  it("will not commit with nothing staged, nor with nothing written", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], worktree: "M" })] });
+    await draw();
+    await type("fix: the one thing");
+    expect(commitButton().disabled).toBe(true);
+
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], index: "M" })] });
+    await moveFolder();
+    expect(commitButton().disabled).toBe(false);
+    await type("   ");
+    expect(commitButton().disabled).toBe(true);
+  });
+
+  /// git's own sentence, word for word (`AMB-D-906`, 3-4) — and the words the reader typed still in
+  /// the box, because a commit git would not make is one they are about to ask for again.
+  it("prints what git said in refusing, and keeps what was typed", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], index: "M" })] });
+    hoisted.refuse = "error: cannot commit\nPlease sort it out first.";
+    await draw();
+    await type("fix: the one thing");
+    await press(commitButton());
+    expect(container.querySelector(".gitpanel__refused")?.textContent)
+      .toBe("error: cannot commit\nPlease sort it out first.");
+    expect(messageBox().value).toBe("fix: the one thing");
+  });
+
+  /// The word from the host is gathered over 400ms, which is right for a folder somebody else is
+  /// writing to and too slow for a box the reader has just ticked.
+  it("reads the folder again itself once a write comes back", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], worktree: "M" })] });
+    await draw();
+    expect(hoisted.asked).toEqual([ROOT]);
+    await press(box(t("git.changes"), "a.rs"));
+    expect(hoisted.asked).toEqual([ROOT, ROOT]);
+  });
+
+  /// Only the paths git follows. An untracked one named in a stash's pathspec is refused outright —
+  /// `did not match any file(s) known to git`, with nothing put aside.
+  it("puts aside the followed paths and leaves the untracked ones out", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["a.rs"], worktree: "M" }),
+        row({ path: ["new.md"], index: "?", worktree: "?" }),
+      ],
+    });
+    await draw();
+    await press(stashButton());
+    await press(menuItem(t("git.stashPush")));
+    expect(hoisted.stashed).toEqual([{ message: "", paths: [["a.rs"]] }]);
+  });
+
+  /// Nothing git follows is nothing to put aside, and a door that could only ever come back with
+  /// git's refusal is one to leave out rather than to offer.
+  it("offers no way to put aside where git follows none of it", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["new.md"], index: "?", worktree: "?" })] });
+    await draw();
+    await press(stashButton());
+    expect(itemNames()).not.toContain(t("git.stashPush"));
+    expect(document.body.textContent).toContain(t("git.stashEmpty"));
+  });
+
+  /// `stash@{0}` is where a stash sits and not what it is, so it is restored by the name the list
+  /// was just read with — and the list is read when it opens, not kept from an earlier look.
+  it("restores a stash by the name the list it was drawn from was read with", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], worktree: "M" })] });
+    hoisted.stashes = [
+      { name: "stash@{0}", message: "On main: the newer one", at: "2026-09-16T00:00:00+09:00" },
+      { name: "stash@{1}", message: "On main: the older one", at: "2026-09-15T00:00:00+09:00" },
+    ];
+    await draw();
+    await press(stashButton());
+    expect(itemNames()).toContain(`On main: the newer one${t("git.stashRestore")}`);
+    await press(menuItem(`On main: the older one${t("git.stashRestore")}`));
+    expect(hoisted.popped).toEqual(["stash@{1}"]);
   });
 });

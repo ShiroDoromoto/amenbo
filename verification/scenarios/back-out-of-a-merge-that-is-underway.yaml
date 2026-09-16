@@ -1,0 +1,277 @@
+# The other ending: a merge nobody wants to finish, dropped from the band it is drawn in.
+#
+# ── Why the question is answered both ways ───────────────────────────────────────────────────────
+# This press loses work git cannot give back — a conflict settled by hand and never recorded is in no
+# commit and no reflog — so the band asks first. A road that only ever said yes would leave the way
+# back untested, and the way back is the half a reader reaches for after pressing the wrong thing. So
+# the question is put up, sent away with the merge still underway, and only then answered.
+#
+# ── Why the conflict is read again after the question is sent away ───────────────────────────────
+# Saying no has to leave the folder exactly as it was. A build that took the question itself for the
+# answer would drop the merge on the first press, and a road that went straight on to pressing yes
+# could not tell that apart from the question working.
+#
+# ── What says it was really dropped ──────────────────────────────────────────────────────────────
+# The band goes and the list of conflicts with it, and the branch line still names the branch that
+# was being merged into. Dropping a merge is not moving anywhere: a build that landed the reader on
+# the other branch would have done something quite different with their folder.
+id: back-out-of-a-merge-that-is-underway
+title: Put a merge aside from the band it is drawn in, after being asked whether to lose what settling it was worth
+description: >
+  Raise a repository and cut two branches from the window, each adding a different line to the end of
+  the same file, then bring one into the other so the merge stops on a conflict. Ask to stop the
+  merge: the band puts the question instead of acting on it, and keeping the merge leaves the
+  conflict exactly where it was. Ask again and go through with it: the band and the conflict both go,
+  and the branch line still names the branch that was being merged into.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # A branch cannot be cut where nothing has been recorded.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Two branches of the road's own. What git calls the branch it began with is the machine's to
+  # decide, so neither road here names it.
+  - type: action
+    domain: files
+    op: branch-new
+    with:
+      name: trays
+
+  - type: action
+    domain: files
+    op: branch-new
+    with:
+      name: seedlings
+
+  # A line added to the end of the file on this branch, and recorded.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the seedlings go under glass in October
+
+  - type: action
+    domain: files
+    op: save
+
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the glass note goes in
+
+  # And a different line at the same end of the same file on the other branch, which is what makes
+  # the two irreconcilable.
+  - type: action
+    domain: files
+    op: branch-go
+    with:
+      name: trays
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the trays are lifted before the frost
+
+  - type: action
+    domain: files
+    op: save
+
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the frost note goes in
+
+  # The merge git cannot make on its own.
+  - type: action
+    domain: files
+    op: branch-merge
+    with:
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: merging
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: conflicts
+
+  # Asked, and sent away. The merge is still underway and the conflict has not moved.
+  - type: action
+    domain: files
+    op: merge-abort
+    with:
+      answer: no
+
+  - type: assert
+    domain: files
+    op: merging
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: conflicts
+
+  # Asked again, and gone through with.
+  - type: action
+    domain: files
+    op: merge-abort
+    with:
+      answer: yes
+
+  - type: assert
+    domain: files
+    op: merging
+    with:
+      present: false
+
+  # Dropping a merge is not moving anywhere.
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: trays

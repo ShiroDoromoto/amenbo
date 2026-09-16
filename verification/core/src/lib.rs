@@ -3103,6 +3103,38 @@ const REGISTRY: &[OpSpec] = &[
     // terminal.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "git-said", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
+    // ── a merge, and what it could not settle ─────────────────────────────────────────────────────
+    // Bringing a branch in is asked of the same list as moving onto one, on a second face of it: the
+    // names are the same names, and a row that did one thing on a press and another on a modifier
+    // would be a row whose answer a reader cannot see before making it. So it is an op of its own
+    // rather than an argument on `branch-go`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "branch-merge", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Whether a merge is underway, read off the band under the branch line. **It is not the list of
+    // conflicts**: the band hangs on git's own record of an unfinished merge, so it is still up when
+    // every conflict has been settled and the list below has gone. That gap is the whole reason this
+    // is a reading of its own — a road that took the list for the merge would call a merge finished
+    // one press too early.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "merging", required: &[], refs: &[], strings: &[], binds: false },
+    // How many marks git left in one of those paths, counted off the file rather than asked of git:
+    // the file is settled by whoever settles it — the reader in the column across the panes, or the
+    // agent in the pane — and nothing else on this face can say how far that has got.
+    //
+    // `n: 0` is not a nought on the screen. Once nothing is left the row stops counting and offers
+    // the way to declare it settled instead, so the two never stand together and the reading says
+    // which of them is drawn.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "marks", required: &["name", "n"], refs: &[], strings: &["name"], binds: false },
+    // That declaration, which is staging the path. Nothing does it for the reader however few marks
+    // are left: what the count says is that the file no longer holds git's marks, and what this says
+    // is that a person looked at it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "settle", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The commit that ends the merge. It is not `commit`: git wrote the message when the merge began
+    // and takes that one, so there is no box to type into and nothing for a road to say but the
+    // press.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "merge-continue", required: &[], refs: &[], strings: &[], binds: false },
+    // And the way out of one, which asks first. `answer` is `yes` or `no`, and both are a road's to
+    // walk: what a conflict settled by hand and never recorded is worth is exactly what the question
+    // is for, and a question only ever answered one way is half a control.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "merge-abort", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
     // ── what is put aside, and taken back out ─────────────────────────────────────────────────────
     // The list the last of the buttons under the branch line opens, which is the one door on this
     // half that opens a list rather than doing a thing (`app/src/files/GitPanel.tsx`).

@@ -1062,6 +1062,19 @@ input[type="color"] {
   font-weight: var(--fw-medium);
 }
 .gitpanel__count { flex: 0 0 auto; color: var(--c-text-muted); font-family: var(--font-mono); }
+/* The three that go out to the remote. They wrap rather than shrink: a button whose word has been
+   cut in half is a button a reader has to guess at, and the column is dragged narrow often enough
+   for that to happen. */
+.gitpanel__net { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+/* What git wrote, in git's own words and its own spacing — the newlines it wrote are the shape of
+   what it said, and a sentence of several lines is why this one wraps rather than being cut off. */
+.gitpanel__said {
+  margin: 0; min-width: 0;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+/* A refusal is git saying no, which is the one of the two a reader must not read past. */
+.gitpanel__said--refused { color: var(--c-stop); }
 .gitpanel__section { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 /* The name of one of git's two answers, with how many are under it. */
 .gitpanel__head {

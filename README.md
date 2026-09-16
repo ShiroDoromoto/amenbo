@@ -208,8 +208,7 @@ amenbo dimension value-add Era --name "Beta" --start 2026-07-08
 amenbo dimension value-update Era Beta --end 2026-12-31
 # --show-on-card puts the axis on the board's task cards, so a card says which value
 # it carries without being opened. Off by default, and the axis carries the answer —
-# it is the project's, not this device's. The axis the board is grouped by is left off
-# the cards under it; the column heading already says it.
+# it is the project's, not this device's.
 amenbo dimension update Area --show-on-card true
 # --required makes the axis refuse to be left empty: a task carrying no value on it
 # cannot finish its creation, and the refusal names the axis. It bites at that one

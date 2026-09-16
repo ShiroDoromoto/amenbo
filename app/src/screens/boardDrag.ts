@@ -38,22 +38,10 @@ export const DROP_ATTR = "data-drop-column";
  *
  * The hit test is the one every pointer drag here shares (`../core/pointerDrag`); what belongs to
  * the board is which attribute names a column and that the answer is the key written on it rather
- * than the element carrying it — the gesture crosses two boards, and a string is what both spell.
+ * than the element carrying it — the gesture is handed a string, not a node.
  */
 export function columnUnder(x: number, y: number): string | null {
   return elementUnder({ x, y }, DROP_ATTR)?.getAttribute(DROP_ATTR) ?? null;
-}
-
-/**
- * Take a column key apart into which board drew it and which of that board's columns it is.
- *
- * The two boards a card can be dragged on name their columns from different things — a status is a
- * word, a dimension's column is a value's id, and one column stands for the cards that carry no value
- * at all. One key spells all three, so the gesture carries a string and the board reads it back.
- */
-export function splitColumn(key: string): [board: string, which: string] {
-  const cut = key.indexOf(":");
-  return cut < 0 ? [key, ""] : [key.slice(0, cut), key.slice(cut + 1)];
 }
 
 /** What a card being dragged looks like: the card's own node, following the pointer. */

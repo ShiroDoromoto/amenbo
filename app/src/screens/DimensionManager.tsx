@@ -27,9 +27,9 @@ import { Icon } from "../components/Icon";
 // period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be unique:
 // core folds "the current era" to a single answer using the order of the dimensions. A closable axis's values
 // grow the other role's payload in the same place: the button that closes one and opens it again (`AMB-D-829`).
-// This is the one face that shows a closed value at all — the picker hides it, the board drops its column once
-// the last card leaves, and only here can it be brought back. Shows, but folded: the closed values sit behind a
-// button that counts them, so an axis with years of retired values still reads as what it currently offers.
+// This is the one face that draws a closed value as retired — the picker hides it altogether, and only here
+// can it be brought back. Draws, but folded: the closed values sit behind a button that counts them, so an
+// axis with years of retired values still reads as what it currently offers.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();

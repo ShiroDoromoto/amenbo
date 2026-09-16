@@ -239,7 +239,7 @@ export const ja: Translation = {
     "dimmgr.showOnCardHint": "この分類をタスクカードに出します。分類そのものが持つ設定なので、この端末だけでなく全員の見え方が変わります",
     "dimmgr.required": "必須",
     "dimmgr.requiredHint": "この分類が空のあいだは、タスクの作成を終えられなくします。作成済みのタスクはそのままです",
-    "dimmgr.requiredNoValuesHint": "先に値を追加してください。値がない分類には誰も答えられません",
+    "dimmgr.requiredNoValuesHint": "先に値を追加するか、閉じた値を開き直してください。開いている値がない分類には誰も答えられません",
     "dimmgr.appliesTo": "効く先",
     "dimmgr.appliesToHint": "この分類をタスクと決定記録のどちらに出すかを決めます。分類そのものが持つ設定なので、全員の見え方が変わります。絞っても、すでに付いている値は消えません。そこで意味を持たなくなるだけです",
     "dimmgr.appliesTo.both": "タスクと決定記録",

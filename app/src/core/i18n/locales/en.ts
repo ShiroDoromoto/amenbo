@@ -258,7 +258,7 @@ const ui = {
   "dimmgr.showOnCardHint": "Put this category on the task card. The category carries the answer, so it changes for everyone — not just on this device",
   "dimmgr.required": "Required",
   "dimmgr.requiredHint": "Hold a task's creation until this category is answered. Tasks already created stay as they are",
-  "dimmgr.requiredNoValuesHint": "Add a value first — a category with no values could never be answered",
+  "dimmgr.requiredNoValuesHint": "Add a value first, or reopen a closed one — a category offering nothing open could never be answered",
   "dimmgr.appliesTo": "Applies to",
   "dimmgr.appliesToHint": "Which of the two this category is offered on. The category carries the answer, so it changes for everyone. Narrowing it takes nothing already answered away — it just stops meaning anything there",
   "dimmgr.appliesTo.both": "Tasks and decisions",

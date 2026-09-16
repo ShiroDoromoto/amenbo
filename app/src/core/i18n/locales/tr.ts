@@ -240,7 +240,7 @@ export const tr: Translation = {
     "dimmgr.showOnCardHint": "Bu kategoriyi görev kartında gösterir. Yanıt kategoriye aittir, bu yüzden yalnızca bu cihazda değil herkes için değişir",
     "dimmgr.required": "Zorunlu",
     "dimmgr.requiredHint": "Bu kategori yanıtlanana kadar görevin oluşturulmasını bekletir. Zaten oluşturulmuş görevler olduğu gibi kalır",
-    "dimmgr.requiredNoValuesHint": "Önce bir değer ekleyin — değeri olmayan bir kategoriyi kimse yanıtlayamaz",
+    "dimmgr.requiredNoValuesHint": "Önce bir değer ekleyin ya da kapalı bir değeri yeniden açın — açık değeri olmayan bir kategoriyi kimse yanıtlayamaz",
     "dimmgr.appliesTo": "Şuna uygulanır",
     "dimmgr.appliesToHint": "Bu kategorinin hangi tarafta sunulacağı. Yanıt kategoriye aittir, bu yüzden herkes için değişir. Daraltmak, zaten yanıtlanmış olanı kaldırmaz — orada yalnızca bir anlam taşımaz olur",
     "dimmgr.appliesTo.both": "Görevler ve kararlar",

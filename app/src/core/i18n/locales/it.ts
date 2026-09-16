@@ -244,7 +244,7 @@ export const it: Translation = {
     "dimmgr.showOnCardHint": "Mostra questa categoria sulla scheda dell'attività. La risposta appartiene alla categoria, quindi cambia per tutti, non solo su questo dispositivo",
     "dimmgr.required": "Obbligatoria",
     "dimmgr.requiredHint": "Trattiene la creazione di un'attività finché questa categoria non ha una risposta. Le attività già create restano come sono",
-    "dimmgr.requiredNoValuesHint": "Aggiungi prima un valore: una categoria senza valori non potrebbe mai avere risposta",
+    "dimmgr.requiredNoValuesHint": "Aggiungi prima un valore o riapri uno chiuso: una categoria senza valori aperti non potrebbe mai avere risposta",
     "dimmgr.appliesTo": "Si applica a",
     "dimmgr.appliesToHint": "Su quale dei due viene offerta questa categoria. La risposta appartiene alla categoria, quindi cambia per tutti. Restringerla non toglie nulla di ciò che è già stato risposto — smette solo di significare qualcosa lì",
     "dimmgr.appliesTo.both": "Attività e decisioni",

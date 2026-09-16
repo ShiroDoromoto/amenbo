@@ -244,7 +244,7 @@ export const fr: Translation = {
     "dimmgr.showOnCardHint": "Affiche cette catégorie sur la carte de tâche. La réponse appartient à la catégorie : elle change pour tout le monde, pas seulement sur cet appareil",
     "dimmgr.required": "Obligatoire",
     "dimmgr.requiredHint": "Retient la création d'une tâche tant que cette catégorie n'a pas de réponse. Les tâches déjà créées restent telles quelles",
-    "dimmgr.requiredNoValuesHint": "Ajoutez d'abord une valeur — une catégorie sans valeur ne pourrait jamais recevoir de réponse",
+    "dimmgr.requiredNoValuesHint": "Ajoutez d'abord une valeur ou rouvrez-en une fermée — une catégorie sans valeur ouverte ne pourrait jamais recevoir de réponse",
     "dimmgr.appliesTo": "S'applique à",
     "dimmgr.appliesToHint": "Sur lequel des deux cette catégorie est proposée. La réponse appartient à la catégorie, donc elle change pour tout le monde. La restreindre n'enlève rien de ce qui a déjà été répondu — cela cesse simplement d'avoir un sens là",
     "dimmgr.appliesTo.both": "Tâches et décisions",

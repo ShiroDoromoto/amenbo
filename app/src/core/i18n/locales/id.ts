@@ -242,7 +242,7 @@ export const id: Translation = {
     "dimmgr.showOnCardHint": "Menampilkan kategori ini pada kartu tugas. Jawabannya milik kategori, jadi berubah untuk semua orang, bukan hanya di perangkat ini",
     "dimmgr.required": "Wajib",
     "dimmgr.requiredHint": "Menahan pembuatan tugas sampai kategori ini diisi. Tugas yang sudah dibuat tetap seperti apa adanya",
-    "dimmgr.requiredNoValuesHint": "Tambahkan nilai dulu — kategori tanpa nilai tidak mungkin bisa diisi",
+    "dimmgr.requiredNoValuesHint": "Tambahkan nilai dulu, atau buka lagi nilai yang ditutup — kategori tanpa nilai terbuka tidak mungkin bisa diisi",
     "dimmgr.appliesTo": "Berlaku untuk",
     "dimmgr.appliesToHint": "Kategori ini ditawarkan di sisi yang mana. Jawabannya milik kategori, jadi berubah untuk semua orang. Mempersempitnya tidak menghapus apa pun yang sudah diisi — hanya berhenti berarti di sana",
     "dimmgr.appliesTo.both": "Tugas dan keputusan",

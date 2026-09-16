@@ -245,7 +245,7 @@ export const ptBR: Translation = {
     "dimmgr.showOnCardHint": "Mostra esta categoria no cartão da tarefa. A resposta pertence à categoria, então muda para todos, não só neste dispositivo",
     "dimmgr.required": "Obrigatória",
     "dimmgr.requiredHint": "Segura a criação de uma tarefa até esta categoria ser respondida. As tarefas já criadas ficam como estão",
-    "dimmgr.requiredNoValuesHint": "Adicione um valor primeiro — uma categoria sem valores nunca poderia ser respondida",
+    "dimmgr.requiredNoValuesHint": "Adicione um valor primeiro ou reabra um fechado — uma categoria sem nenhum valor aberto nunca poderia ser respondida",
     "dimmgr.appliesTo": "Aplica-se a",
     "dimmgr.appliesToHint": "Em qual dos dois esta categoria é oferecida. A resposta pertence à categoria, então muda para todos. Restringi-la não tira nada do que já foi respondido — apenas deixa de significar algo ali",
     "dimmgr.appliesTo.both": "Tarefas e decisões",

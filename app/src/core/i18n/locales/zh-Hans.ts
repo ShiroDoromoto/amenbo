@@ -240,7 +240,7 @@ export const zhHans: Translation = {
     "dimmgr.showOnCardHint": "把这个分类显示在任务卡片上。答案属于分类本身，所以对所有人都会改变，而不只是这台设备",
     "dimmgr.required": "必填",
     "dimmgr.requiredHint": "这个分类为空时，任务的创建无法完成。已经创建完成的任务保持原样",
-    "dimmgr.requiredNoValuesHint": "请先添加一个值——没有值的分类谁也填不了",
+    "dimmgr.requiredNoValuesHint": "请先添加一个值，或重新打开已关闭的值——没有打开的值的分类谁也填不了",
     "dimmgr.appliesTo": "作用于",
     "dimmgr.appliesToHint": "这个分类在两边中的哪一边出现。答案属于分类本身，所以对所有人都会改变。收窄不会拿走已经填好的值 —— 只是在那一边不再有意义",
     "dimmgr.appliesTo.both": "任务和决策",

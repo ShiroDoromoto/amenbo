@@ -7,7 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderGitDto, GitEntryDto,
+  FolderGitDto, GitCommitDto, GitEntryDto, GitFileDto,
 } from "../bindings/bindings";
 
 export const ROOT = "/work/repo";
@@ -42,6 +42,12 @@ const hoisted = vi.hoisted(() => ({
   perRoot: {} as Record<string, FolderChangesDto>,
   /** What git says about each folder, by the folder it is about. */
   git: {} as Record<string, GitEntryDto[]>,
+  /** The commits behind the folder, newest first — the history face reads these. */
+  log: [] as GitCommitDto[],
+  /** What each commit touched, by the commit it is about. */
+  touched: {} as Record<string, GitFileDto[]>,
+  /** The patch for one path of one commit, by "<sha> <path>". */
+  patch: {} as Record<string, string>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
   /** The encodings the host says a file may be reopened in. */
@@ -177,6 +183,20 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`unwatch:${root}`);
     hoisted.watchers.push({ how: "unwatch", root, watcher, tag });
   },
+  folderGitLog: async (_projectId: number, root: string, path?: string): Promise<GitCommitDto[]> => {
+    hoisted.asked.push(`log:${root}${path === undefined ? "" : `:${path}`}`);
+    return hoisted.log;
+  },
+  folderGitShow: async (_projectId: number, root: string, sha: string): Promise<GitFileDto[]> => {
+    hoisted.asked.push(`show:${root}:${sha}`);
+    return hoisted.touched[sha] ?? [];
+  },
+  folderGitDiff: async (
+    _projectId: number, root: string, sha: string, path: string,
+  ): Promise<string> => {
+    hoisted.asked.push(`diff:${root}:${sha}:${path}`);
+    return hoisted.patch[`${sha} ${path}`] ?? "";
+  },
   folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
     hoisted.asked.push(`git:${root}`);
     // The rows are what the tree draws; where the branch stands is the rail's other half and has
@@ -309,6 +329,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel, openKey, type OpenFile, type Typed } from "./FilesPanel";
+import type { SideTab } from "../talk/columns";
 import { FolderTree } from "./FolderTree";
 import { RootPick } from "./RootPick";
 import { rootShown, sectionsOf } from "./sections";
@@ -388,9 +409,9 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
   // `../shell/TerminalFace`).
   const [pickedRoot, setPickedRoot] = useState<string | null>(null);
   const folderRoots = useMemo(() => sectionsOf(hoisted.bound), [hoisted.bound]);
-  // Which half is up. The face keeps it and the column reads it, so the harness holds it too
-  // (`../talk/columns`).
-  const [tab, setTab] = useState<"files" | "memo">(props.tab ?? "files");
+  // Which face is up. The terminal face keeps it and the column reads it, so the harness holds it
+  // too (`../talk/columns`).
+  const [tab, setTab] = useState<SideTab>(props.tab ?? "files");
   const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
   // The keys the column is holding as of this draw, for the answer that arrives after a tab has
   // gone: the face reads its own state where this harness has to keep a mirror of it.
@@ -459,6 +480,10 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
       onClose: props.onClose ?? (() => {}),
       wide,
       onWide: setWide,
+      // The folder the window is on, and whether the history has been pressed for — both are the
+      // terminal face's answers, so the harness hands them the way it does (`../shell/TerminalFace`).
+      gitRoot: props.gitRoot ?? null,
+      history: props.history ?? false,
       onOpenLedger: props.onOpenLedger,
       onHandOver: props.onHandOver,
     })),
@@ -689,6 +714,9 @@ beforeEach(() => {
   hoisted.takers = [];
   hoisted.perRoot = {};
   hoisted.git = {};
+  hoisted.log = [];
+  hoisted.touched = {};
+  hoisted.patch = {};
   hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;

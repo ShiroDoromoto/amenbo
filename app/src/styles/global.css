@@ -1139,6 +1139,83 @@ input[type="color"] {
 .gitpanel__row--added { --git: var(--c-git-added); }
 .gitpanel__row--untracked { --git: var(--c-git-untracked); }
 
+/* The one press in the rail's git half that opens the other column (`app/src/files/GitPanel.tsx`).
+   It is drawn as a way out rather than as an action: what it does is move the reader across the
+   panes, and the mark says which way. */
+.gitpanel__open {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  padding: var(--s-1) var(--s-2);
+  background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  color: var(--c-text); font: inherit; font-size: var(--fs-md);
+  cursor: pointer;
+}
+.gitpanel__open:hover { background: var(--c-hover); }
+
+/* The history of the folder the window is on, in the column across the panes
+   (`app/src/files/GitHistory.tsx`). Three layers stand in one face, so this is what every one of
+   them scrolls in. */
+.githist {
+  flex: 1 1 auto; min-width: 0;
+  min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column;
+  font-size: var(--fs-md);
+}
+/* The way back a layer. It says where it goes rather than that it goes back, which is what makes it
+   read the same as the key that does the same thing (`AMB-D-815`). */
+.githist__back {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-1); min-width: 0;
+  padding: var(--s-2) var(--s-3);
+  background: none; border: 0; border-bottom: 1px solid var(--c-rule);
+  color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: pointer;
+}
+.githist__back:hover { color: var(--c-text); }
+.githist__list { flex: 1 1 auto; list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+/* One row of whichever list is up, in two lines: what it is, and who or how much. A commit subject
+   is a sentence and the rest is a handful of marks, so the two are not asked to share a line. */
+.githist__row {
+  display: flex; flex-direction: column; gap: 1px; width: 100%; min-width: 0;
+  padding: var(--s-1) var(--s-3);
+  background: none; border: 0;
+  color: var(--c-text); font: inherit; font-size: var(--fs-md); text-align: left;
+  cursor: pointer;
+}
+.githist__row:hover { background: var(--c-hover); }
+.githist__subject {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.githist__who {
+  display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+.githist__sha { font-family: var(--font-mono); }
+.githist__merge {
+  padding: 0 var(--s-1);
+  background: var(--c-sunken); border-radius: var(--r-sm);
+}
+.githist__added { color: var(--c-git-added); font-family: var(--font-mono); }
+.githist__removed { color: var(--c-git-modified); font-family: var(--font-mono); }
+.githist__where {
+  min-width: 0; flex: 1 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: right;
+}
+/* git's own text. It is set in the monospace it was written in and left to run off the side rather
+   than wrapped: a patch read with its lines folded is a patch whose columns no longer line up. */
+.githist__patch {
+  flex: 1 1 auto; min-height: 0; margin: 0;
+  overflow: auto;
+  padding: var(--s-2) 0;
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5;
+}
+.githist__line { display: block; padding: 0 var(--s-3); white-space: pre; }
+.githist__line--hunk { color: var(--c-text-muted); background: var(--c-sunken); }
+.githist__line--added { color: var(--c-git-added); }
+.githist__line--removed { color: var(--c-git-modified); }
+
 /* ---------- the file face ---------- */
 /* The right side of the terminal face: what changed in the project's folder lately, and the folder
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying

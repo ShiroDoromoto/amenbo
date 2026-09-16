@@ -21,6 +21,7 @@
 import { useEffect, useState } from "react";
 import type { FolderGitDto, GitEntryDto } from "../bindings/bindings";
 import { t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 import { folderGitStatus, onFolderChanged } from "./folder";
 import { GitBranch } from "./GitBranch";
 import { type GitMark, markOf } from "./gitMark";
@@ -36,11 +37,14 @@ const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [] };
  * one byte of the working tree and every line of this list, which is why the watch behind that word
  * covers the repository's own directory too (`crate::folder_watch`).
  */
-export function GitPanel({ projectId, root }: {
+export function GitPanel({ projectId, root, onHistory }: {
   /** The project the folder is bound to; nothing is drawn without one. */
   projectId: number | null;
   /** The folder the window is on, as its path. */
   root: string | null;
+  /** Open the history in the column across the panes. Where nothing is handed down there is
+   *  nowhere for it to open, and the press is not offered. */
+  onHistory?: () => void;
 }) {
   const [git, setGit] = useState<FolderGitDto>(NOTHING);
   /** False until the first read comes back. Nothing is drawn before it. */
@@ -112,6 +116,16 @@ export function GitPanel({ projectId, root }: {
         on={git.branch}
         onMoved={() => setMoved((n) => n + 1)}
       />
+      {/* The one press here that opens the other column. The history is there from the moment the
+          repository has one, and it is not drawn until somebody asks: what it costs is a call of
+          its own, paid by the reader who wants it rather than by everyone (`AMB-T-4899`). The mark
+          says where it goes, which is out of this column and across the panes. */}
+      {onHistory !== undefined && (
+        <button className="gitpanel__open" onClick={onHistory}>
+          {t("git.history")}
+          <Icon name="foldRight" />
+        </button>
+      )}
       <Changes what={t("git.staged")} none={t("git.nothingStaged")} rows={staged} />
       <Changes what={t("git.changes")} none={t("git.nothingChanged")} rows={changed} />
     </div>

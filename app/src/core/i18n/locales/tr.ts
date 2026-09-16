@@ -651,6 +651,8 @@ export const tr: Translation = {
     "git.nothingChanged": "Hiçbir şey değişmedi.",
     "git.stageOne": "{path} dosyasını hazırla",
     "git.unstageOne": "{path} hazırlığını geri al",
+    "git.stageAll": "Bu listedeki her şeyi hazırla",
+    "git.unstageAll": "Bu listedeki her şeyin hazırlığını geri al",
     "git.commitMessage": "Commit mesajı",
     "git.commit": "Commit et",
     "git.commitNaming": "Hazırlanan {n} yolu belirtir",

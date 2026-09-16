@@ -666,6 +666,8 @@ export const ru: Translation = {
     "git.nothingChanged": "Ничего не изменилось.",
     "git.stageOne": "Подготовить {path}",
     "git.unstageOne": "Убрать {path} из подготовленного",
+    "git.stageAll": "Подготовить всё из этого списка",
+    "git.unstageAll": "Убрать из подготовленного всё из этого списка",
     "git.commitMessage": "Сообщение коммита",
     "git.commit": "Закоммитить",
     "git.commitNaming": "Указывает {n} подготовленных путей",

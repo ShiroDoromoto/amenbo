@@ -1130,9 +1130,16 @@ input[type="color"] {
 /* The name of one of the lists under it — git's two answers, and what the merge could not
    settle — with how many are in it. */
 .gitpanel__head {
-  margin: 0; padding: var(--s-2) 0 0;
-  border-top: 1px solid var(--c-rule);
+  margin: 0; padding: 0;
   color: var(--c-text-muted); font-size: var(--fs-md); font-weight: var(--fw-medium);
+}
+/* The line the name stands on, with the box that takes the whole list at once before it. The rule
+   and the space above it are the line's rather than the name's, so it runs the width of the list
+   whether or not there is a box on it (`app/src/files/GitPanel.tsx`). */
+.gitpanel__headrow {
+  display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
+  padding: var(--s-2) 0 0;
+  border-top: 1px solid var(--c-rule);
 }
 .gitpanel__list { list-style: none; margin: 0; padding: 0; }
 /* One path git named. The mark is set in the same monospaced pair on every row, so the letters make
@@ -1218,8 +1225,9 @@ input[type="color"] {
   color: var(--c-text-muted); font-size: var(--fs-xs);
 }
 .gitpanel__do { margin-left: auto; }
-/* The box that stages a row and unstages it. Set on the line the letters and the name sit on, and
-   held to its own size, so a list of twenty reads down one column of boxes. */
+/* The box that stages and unstages — on a row, and on the line its list is named on, where it takes
+   the whole list at once. Set on the line the letters and the name sit on, and held to its own
+   size, so a list of twenty reads down one column of boxes with the list's own at its head. */
 .gitpanel__check { flex: 0 0 auto; margin: 0; }
 /* The line git wrote on a stash, and what pressing it does. The line is git's own sentence and is as
    long as git made it, so the row is capped and the sentence gives — what is cut off its end is the

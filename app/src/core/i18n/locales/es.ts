@@ -662,6 +662,8 @@ export const es: Translation = {
     "git.nothingChanged": "No ha cambiado nada.",
     "git.stageOne": "Preparar {path}",
     "git.unstageOne": "Dejar de preparar {path}",
+    "git.stageAll": "Preparar todo lo de esta lista",
+    "git.unstageAll": "Dejar de preparar todo lo de esta lista",
     "git.commitMessage": "Mensaje del commit",
     "git.commit": "Hacer commit",
     "git.commitNaming": "Indica las {n} rutas preparadas",

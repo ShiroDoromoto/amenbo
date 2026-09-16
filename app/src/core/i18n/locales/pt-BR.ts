@@ -663,6 +663,8 @@ export const ptBR: Translation = {
     "git.nothingChanged": "Nada mudou.",
     "git.stageOne": "Preparar {path}",
     "git.unstageOne": "Tirar {path} do preparo",
+    "git.stageAll": "Preparar tudo o que está nesta lista",
+    "git.unstageAll": "Tirar do preparo tudo o que está nesta lista",
     "git.commitMessage": "Mensagem do commit",
     "git.commit": "Fazer commit",
     "git.commitNaming": "Indica os {n} caminhos preparados",

@@ -653,6 +653,8 @@ export const vi: Translation = {
     "git.nothingChanged": "Không có gì thay đổi.",
     "git.stageOne": "Chuẩn bị {path}",
     "git.unstageOne": "Bỏ chuẩn bị {path}",
+    "git.stageAll": "Chuẩn bị mọi thứ trong danh sách này",
+    "git.unstageAll": "Bỏ chuẩn bị mọi thứ trong danh sách này",
     "git.commitMessage": "Thông điệp commit",
     "git.commit": "Commit",
     "git.commitNaming": "Chỉ định {n} đường dẫn đã chuẩn bị",

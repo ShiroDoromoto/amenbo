@@ -651,6 +651,8 @@ export const hi: Translation = {
     "git.nothingChanged": "कुछ भी नहीं बदला।",
     "git.stageOne": "{path} स्टेज करें",
     "git.unstageOne": "{path} की स्टेजिंग हटाएँ",
+    "git.stageAll": "इस सूची की सारी फ़ाइलें स्टेज करें",
+    "git.unstageAll": "इस सूची की सारी फ़ाइलों की स्टेजिंग हटाएँ",
     "git.commitMessage": "कमिट संदेश",
     "git.commit": "कमिट करें",
     "git.commitNaming": "स्टेज किए {n} पथ बताए जाएँगे",

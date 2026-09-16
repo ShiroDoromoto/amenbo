@@ -662,6 +662,8 @@ export const fr: Translation = {
     "git.nothingChanged": "Rien n'a changé.",
     "git.stageOne": "Indexer {path}",
     "git.unstageOne": "Désindexer {path}",
+    "git.stageAll": "Indexer tout ce que contient cette liste",
+    "git.unstageAll": "Désindexer tout ce que contient cette liste",
     "git.commitMessage": "Message du commit",
     "git.commit": "Commiter",
     "git.commitNaming": "Nomme les {n} chemins indexés",

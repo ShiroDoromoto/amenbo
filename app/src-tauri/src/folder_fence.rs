@@ -16,6 +16,30 @@ use amenbo_core::binding::canonical_dir;
 
 use crate::error::CmdError;
 
+/// The names `segments` spell, or nothing where one of them is not a single ordinary name.
+///
+/// This is the text half of [`under`] on its own, for a caller that does not open what it builds:
+/// [`crate::folder_git_write`] hands git a pathspec, which git matches inside the repository rather
+/// than against the filesystem. There the folders above the last name must *not* be walked — a path
+/// being staged is often one that is not there any more, and a deleted folder would turn away the
+/// staging of its own deletion.
+pub fn names(segments: impl IntoIterator<Item = impl AsRef<str>>) -> Option<Vec<String>> {
+    let mut names = Vec::new();
+    for segment in segments {
+        // One ordinary name and nothing else. `..`, `.`, an embedded separator, a root and a drive
+        // letter all come back as some other kind of component, or as more than one — none of which
+        // is a file name.
+        let mut parts = Path::new(segment.as_ref()).components();
+        match (parts.next(), parts.next()) {
+            (Some(Component::Normal(name)), None) => {
+                names.push(name.to_string_lossy().into_owned())
+            }
+            _ => return None,
+        }
+    }
+    Some(names)
+}
+
 /// The path `segments` name inside the folder `roots[base]`, and which of `roots` it belongs to —
 /// the fence every door onto a project's folders is built on.
 ///
@@ -52,17 +76,7 @@ pub fn under(
     base: usize,
     segments: impl IntoIterator<Item = impl AsRef<str>>,
 ) -> Option<(usize, PathBuf)> {
-    let mut names = Vec::new();
-    for segment in segments {
-        // One ordinary name and nothing else. `..`, `.`, an embedded separator, a root and a drive
-        // letter all come back as some other kind of component, or as more than one — none of which
-        // is a file name.
-        let mut parts = Path::new(segment.as_ref()).components();
-        match (parts.next(), parts.next()) {
-            (Some(Component::Normal(name)), None) => names.push(name.to_os_string()),
-            _ => return None,
-        }
-    }
+    let mut names = names(segments)?;
 
     let last = names.pop();
     let mut walked = canonical_dir(roots.get(base)?).ok()?;

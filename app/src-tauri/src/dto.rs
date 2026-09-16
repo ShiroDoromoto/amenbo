@@ -1960,6 +1960,24 @@ pub struct GitCommitDto {
     pub(crate) subject: String,
 }
 
+/// One stash, as the list a reader restores from draws a row of it (`crate::folder_git`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitStashDto {
+    /// What git knows it by — `stash@{0}`. It is where the stash sits in the list rather than a name
+    /// of its own: making another one moves every one of them down, which is why a row is restored
+    /// by the name the list was just read with and not by one kept from an earlier read.
+    pub(crate) name: String,
+    /// The line git wrote on it — the branch it was made on and the message, together
+    /// (`On main: what I was in the middle of`). It is git's own sentence and is carried across as
+    /// it came, the way every other word from git here is.
+    pub(crate) message: String,
+    /// When it was made, ISO 8601 with the offset it was made at — the moment kept as it was read,
+    /// the way a commit's is.
+    pub(crate) at: String,
+}
+
 /// One path a commit touched, as the layer under a commit draws a row of it (`crate::folder_git`).
 ///
 /// The path is the one git knows, from the repository's root: a commit is the repository's and

@@ -1,5 +1,6 @@
 //! What git says about the folder the file face is showing: the colour on a tree row, where the
-//! branch stands, and the commits behind both.
+//! branch stands, the commits behind both, and the branches and stashes a reader is offered to
+//! choose from.
 //!
 //! It is one `git status` per bound folder, asked for rather than kept up to date — the face asks
 //! when it opens the panel — and read for display and nothing else: no pane is marked from it and
@@ -7,9 +8,11 @@
 //! machine with no git that can be run without asking the reader to install a compiler, both answer
 //! the same way — nothing.
 //!
-//! **Everything here reads; nothing here writes** (`AMB-D-906` opens the other half elsewhere). So
-//! every road answers with an empty hand rather than with a refusal: a folder that is no repository
-//! is the ordinary case, not a failure to report.
+//! **Everything here reads; nothing here writes** — the other half is
+//! [`crate::folder_git_write`] (`AMB-D-906`). The line between the two modules is the answer a road
+//! gives when it comes to nothing: here it is an empty hand, because a folder that is no repository
+//! is the ordinary case and not a failure to report, and there it is git's own refusal, word for
+//! word.
 //!
 //! **What a commit costs is what is asked of it, and the asking is split up.** The history list is
 //! one call and carries no file names, because putting them on it takes one call from 19ms to
@@ -35,7 +38,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use crate::dto::{FolderGitDto, GitBranchDto, GitCommitDto, GitEntryDto, GitFileDto};
+use crate::dto::{FolderGitDto, GitBranchDto, GitCommitDto, GitEntryDto, GitFileDto, GitStashDto};
 use crate::error::CmdError;
 use crate::folder_fence::root_of;
 
@@ -132,11 +135,12 @@ pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGi
 
 /// Run one git road where waiting on it costs nobody the window.
 ///
-/// Every command in this module waits on git starting up and reading an index whose size is the
+/// Every command that goes to git waits on it starting up and reading an index whose size is the
 /// repository's, not ours — and a command with no `async` on it is run where the webview is drawn
 /// ([`crate::agent_models`]). What the thread is given back for is the same on all of them, so the
-/// words for a road that did not finish are written once here rather than at each of them.
-async fn off_thread<T, F>(work: F) -> Result<T, CmdError>
+/// words for a road that did not finish are written once here rather than at each of them, and
+/// [`crate::folder_git_write`] takes the same road out.
+pub(crate) async fn off_thread<T, F>(work: F) -> Result<T, CmdError>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, CmdError> + Send + 'static,
@@ -230,6 +234,61 @@ pub async fn folder_git_diff(
             return Ok(String::new());
         }
         Ok(from_first_parent(&dir, &sha, &["--patch"], &["--", &path]).unwrap_or_default())
+    })
+    .await
+}
+
+/// The `--format` the branch list is read back by: the name, what it is measured against, and how
+/// it stands against it.
+///
+/// A unit separator stands between the fields and a plain newline between the records, with no `-z`
+/// asked for: a ref name can hold neither a space nor a control character, and git refuses to make
+/// one that does (`check-ref-format`). That is the one field here somebody chose the bytes of.
+const BRANCH_FIELDS: &str = "--format=%(refname:short)%1f%(upstream:short)%1f%(upstream:track)";
+
+/// The `--format` the stash list is read back by. `%gd` is where the stash sits (`stash@{0}`), `%gs`
+/// the line git wrote on it, and `%aI` when it was made — and `-z` ends each record, because `%gs`
+/// is a message and holds whatever was typed into it.
+const STASH_FIELDS: &str = "--format=%gd%x1f%gs%x1f%aI";
+
+/// Every branch of the folder's repository, with where each one stands against its upstream.
+///
+/// It is one `for-each-ref` rather than a `status` per branch: the counts ride on the same call as
+/// the names, the same way the checked-out branch's ride on [`folder_git_status`]
+/// (`AMB-T-4899` measured what a second process costs).
+///
+/// **Which branch is the one checked out is not carried.** [`folder_git_status`] already answers
+/// that, and a second answer to the same question is one that can disagree with the first.
+#[tauri::command]
+pub async fn folder_git_branches(
+    project_id: i64,
+    root: String,
+) -> Result<Vec<GitBranchDto>, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() {
+            return Ok(Vec::new());
+        }
+        let args = ["--no-optional-locks", "for-each-ref", BRANCH_FIELDS, "refs/heads"];
+        Ok(run(&dir, &args).map(|out| branches(&out)).unwrap_or_default())
+    })
+    .await
+}
+
+/// What has been stashed in the folder's repository, newest first — which is the order git keeps
+/// them in, `stash@{0}` being the last one made.
+#[tauri::command]
+pub async fn folder_git_stashes(
+    project_id: i64,
+    root: String,
+) -> Result<Vec<GitStashDto>, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() {
+            return Ok(Vec::new());
+        }
+        let args = ["--no-optional-locks", "stash", "list", "-z", STASH_FIELDS];
+        Ok(run(&dir, &args).map(|out| stashes(&out)).unwrap_or_default())
     })
     .await
 }
@@ -412,6 +471,52 @@ fn commits(out: &str) -> Vec<GitCommitDto> {
                 author: field.next()?.to_string(),
                 at: field.next()?.to_string(),
                 subject: field.next()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Read [`BRANCH_FIELDS`] into one row per branch, in the order git wrote them — by name, which is
+/// what `for-each-ref` sorts by when it is told nothing else.
+///
+/// **How a branch stands is the same brackets `status --branch` writes**, so it is read by the same
+/// hand ([`counted`]): `[ahead 1, behind 2]`, `[gone]`, or nothing at all where there is nothing to
+/// measure against or nothing between them.
+fn branches(out: &str) -> Vec<GitBranchDto> {
+    out.lines()
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let mut field = line.split('\u{1f}');
+            let name = field.next()?.to_string();
+            let upstream = field.next()?.to_string();
+            let track = field.next()?.trim_start_matches('[').trim_end_matches(']');
+            Some(GitBranchDto {
+                name: Some(name),
+                // A branch measured against nothing writes the field empty; one measured against a
+                // branch that is gone writes the name and then says so. Both are the same hand to
+                // a reader — there is nothing to count against — and `branch_of` reads the
+                // checked-out branch's the same way.
+                upstream: Some(upstream).filter(|it| !it.is_empty() && track != "gone"),
+                ahead: counted(track, "ahead"),
+                behind: counted(track, "behind"),
+            })
+        })
+        .collect()
+}
+
+/// Read [`STASH_FIELDS`] into one row per stash, newest first.
+///
+/// A record short of its fields is dropped rather than half-read, for the reason [`commits`] drops
+/// one: every field is written by the same format string.
+fn stashes(out: &str) -> Vec<GitStashDto> {
+    out.split('\0')
+        .filter(|record| !record.is_empty())
+        .filter_map(|record| {
+            let mut field = record.split('\u{1f}');
+            Some(GitStashDto {
+                name: field.next()?.to_string(),
+                message: field.next()?.to_string(),
+                at: field.next()?.to_string(),
             })
         })
         .collect()
@@ -720,6 +825,63 @@ mod tests {
     fn one_that_touched_nothing_is_no_rows() {
         assert!(files("").is_empty());
         assert!(files("\0").is_empty());
+    }
+
+    // ── the branches, and what has been stashed ──────────────────────────────────────────────
+
+    /// Build what `for-each-ref` writes with [`BRANCH_FIELDS`]: the fields with a unit separator
+    /// between them, one line each.
+    fn listed(records: &[[&str; 3]]) -> String {
+        records.iter().map(|one| format!("{}\n", one.join("\u{1f}"))).collect()
+    }
+
+    #[test]
+    fn a_branch_row_carries_its_name_its_upstream_and_both_counts() {
+        let read = branches(&listed(&[["main", "origin/main", "[ahead 1, behind 2]"]]));
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].name.as_deref(), Some("main"));
+        assert_eq!(read[0].upstream.as_deref(), Some("origin/main"));
+        assert_eq!((read[0].ahead, read[0].behind), (1, 2));
+    }
+
+    /// The two ways a branch has nothing to be measured against: it was told nothing to measure by,
+    /// and the one it was told is not there any more. A reader can do the same thing with either,
+    /// which is nothing, so both arrive as no upstream.
+    #[test]
+    fn a_branch_with_nothing_to_measure_against_carries_no_upstream() {
+        let read = branches(&listed(&[["wip", "", ""], ["old", "origin/old", "[gone]"]]));
+        assert_eq!((read[0].upstream.clone(), read[0].ahead, read[0].behind), (None, 0, 0));
+        assert_eq!((read[1].upstream.clone(), read[1].ahead, read[1].behind), (None, 0, 0));
+    }
+
+    /// Level with its upstream. git writes the field empty rather than writing two zeroes, and the
+    /// row says there is an upstream and nothing between them.
+    #[test]
+    fn a_branch_level_with_its_upstream_keeps_the_upstream_and_counts_nothing() {
+        let read = branches(&listed(&[["main", "origin/main", ""]]));
+        assert_eq!(read[0].upstream.as_deref(), Some("origin/main"));
+        assert_eq!((read[0].ahead, read[0].behind), (0, 0));
+    }
+
+    #[test]
+    fn a_repository_with_no_branches_is_no_rows_rather_than_one_empty_one() {
+        assert!(branches("").is_empty());
+        assert!(branches("\n").is_empty());
+    }
+
+    #[test]
+    fn a_stash_row_carries_where_it_sits_what_git_wrote_on_it_and_when() {
+        let read = stashes("stash@{0}\u{1f}On main: 書きかけ\u{1f}2026-09-16T22:58:06+09:00\0");
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].name, "stash@{0}");
+        assert_eq!(read[0].message, "On main: 書きかけ");
+        assert_eq!(read[0].at, "2026-09-16T22:58:06+09:00");
+    }
+
+    #[test]
+    fn nothing_stashed_is_no_rows_rather_than_one_empty_one() {
+        assert!(stashes("").is_empty());
+        assert!(stashes("\0").is_empty());
     }
 
     // ── the names a record may be asked by ───────────────────────────────────────────────────

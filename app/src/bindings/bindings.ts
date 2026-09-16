@@ -1016,6 +1016,28 @@ from: string | null,
 added: number | null, removed: number | null, };
 
 /**
+ * One stash, as the list a reader restores from draws a row of it (`crate::folder_git`).
+ */
+export type GitStashDto = { 
+/**
+ * What git knows it by — `stash@{0}`. It is where the stash sits in the list rather than a name
+ * of its own: making another one moves every one of them down, which is why a row is restored
+ * by the name the list was just read with and not by one kept from an earlier read.
+ */
+name: string, 
+/**
+ * The line git wrote on it — the branch it was made on and the message, together
+ * (`On main: what I was in the middle of`). It is git's own sentence and is carried across as
+ * it came, the way every other word from git here is.
+ */
+message: string, 
+/**
+ * When it was made, ISO 8601 with the offset it was made at — the moment kept as it was read,
+ * the way a commit's is.
+ */
+at: string, };
+
+/**
  * What the plugins became, for the band that says so once (`AMB-D-884` / [`amenbo_core::handover`]).
  *
  * It carries the counts and the names, never the sentence — the wording is the screen's, in the

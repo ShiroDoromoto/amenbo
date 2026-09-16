@@ -38,9 +38,14 @@ mod folder_fence;
 /// What is in a folder, read by walking it: the names directly inside one, and the folders under it
 /// a reader would call theirs rather than a build's (`AMB-D-786`).
 mod folder_walk;
-/// What git says about that folder, for the colour of a tree row and for nothing else: one status
-/// per bound folder, and the front git puts on every path taken back off (`AMB-D-774`).
+/// What git says about that folder: one status per bound folder for the colour of a tree row, the
+/// commits behind it, and the branches and stashes a reader is offered to choose from. It reads and
+/// never writes (`AMB-D-774`), and the front git puts on every path comes back off here.
 mod folder_git;
+/// What the Git panel does to that folder — staging, writing down, stashing, branches, and the
+/// network — with the four conditions that make writing from a window safe beside an agent in a
+/// pane (`AMB-D-906`).
+mod folder_git_write;
 /// Being told what changed in that folder instead of going to look: one watch where the OS covers a
 /// tree with one and a watch per pruned folder where it does not (`AMB-D-779`), and a scan to say
 /// what actually moved (`AMB-T-3604`).
@@ -614,6 +619,23 @@ pub fn run() {
       folder_git::folder_git_log,
       folder_git::folder_git_show,
       folder_git::folder_git_diff,
+      folder_git::folder_git_branches,
+      folder_git::folder_git_stashes,
+      folder_git_write::folder_git_stage,
+      folder_git_write::folder_git_unstage,
+      folder_git_write::folder_git_commit,
+      folder_git_write::folder_git_restore,
+      folder_git_write::folder_git_untrack,
+      folder_git_write::folder_git_stash,
+      folder_git_write::folder_git_stash_pop,
+      folder_git_write::folder_git_switch,
+      folder_git_write::folder_git_branch_create,
+      folder_git_write::folder_git_merge,
+      folder_git_write::folder_git_merge_continue,
+      folder_git_write::folder_git_merge_abort,
+      folder_git_write::folder_git_fetch,
+      folder_git_write::folder_git_pull,
+      folder_git_write::folder_git_push,
       folder_bytes::folder_read,
       folder_bytes::folder_encodings,
       folder::folder_open_file,

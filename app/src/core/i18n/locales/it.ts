@@ -238,6 +238,8 @@ export const it: Translation = {
     "dimmgr.closeValue": "Chiudi",
     "dimmgr.reopenValue": "Riapri",
     "dimmgr.closeValueHint": "Chiude questo valore. Ciò che lo porta già lo mantiene e i filtri continuano a trovarlo; solo le nuove assegnazioni vengono rifiutate, e riaprirlo è sempre possibile",
+    "dimmgr.showClosed.one": "Mostra {n} valore chiuso", "dimmgr.showClosed.many": "Mostra {n} valori chiusi", "dimmgr.showClosed.other": "Mostra {n} valori chiusi",
+    "dimmgr.hideClosed": "Nascondi i valori chiusi",
     "dimmgr.showOnCard": "Mostra sulla scheda",
     "dimmgr.showOnCardHint": "Mostra questa categoria sulla scheda dell'attività. La risposta appartiene alla categoria, quindi cambia per tutti, non solo su questo dispositivo",
     "dimmgr.required": "Obbligatoria",

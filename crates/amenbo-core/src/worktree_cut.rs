@@ -207,7 +207,13 @@ pub fn finish(cut: &Cut, base: Option<&str>, force: bool) -> Result<String, Refu
     }
     let into = cut_from(&cut.root, base);
     if !force {
-        if !git(&cut.worktree, &["status", "--porcelain"])?.is_empty() {
+        // `--no-optional-locks` sits before `status` because it is git's own option and not the
+        // subcommand's; behind it git exits 129 without doing anything. What it buys is the index
+        // lock: a bare `status` takes it to refresh the index, and while it holds it the reader's own
+        // `git add` in the same worktree fails — 43.6% of the time on macOS and 46.9% on Linux, and
+        // never with the option (`AMB-T-4901` measured this call against the other reads made here,
+        // which take no lock either way).
+        if !git(&cut.worktree, &["--no-optional-locks", "status", "--porcelain"])?.is_empty() {
             return Err(Refusal::Dirty(cut.worktree.clone()));
         }
         if !is_merged(&cut.root, &cut.branch, &into) {

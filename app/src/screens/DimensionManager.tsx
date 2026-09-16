@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 import { getSnapshot, subscribe } from "../core/snapshot";
-import { t, tf } from "../core/i18n";
+import { t, tf, tn } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
@@ -28,7 +28,8 @@ import { Icon } from "../components/Icon";
 // core folds "the current era" to a single answer using the order of the dimensions. A closable axis's values
 // grow the other role's payload in the same place: the button that closes one and opens it again (`AMB-D-829`).
 // This is the one face that draws a closed value as retired — the picker hides it altogether, and only here
-// can it be brought back.
+// can it be brought back. Draws, but folded: the closed values sit behind a button that counts them, so an
+// axis with years of retired values still reads as what it currently offers.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
@@ -63,6 +64,16 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
 
 function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId: number; store: ReturnType<typeof useStore> }) {
   const currentId = currentTimeAxisValueId(dim, todayStr());
+  // Closed values are folded away until asked for. This is the one face that shows a closed value at
+  // all (`AMB-D-829`), which is also why it is the one that grows without bound: an axis that retires
+  // a value a week carries every one of them here for good. So the fold says how many it holds and
+  // opens on a press — the way back to a closed value stays in plain sight, which is what the
+  // decision named this face for, and what is in front of a reader is the values still on offer.
+  const [showClosed, setShowClosed] = useState(false);
+  const closedCount = dim.values.filter((v) => v.closed).length;
+  // The rows on screen. Every value still goes to `siblings` below: what a required axis has left to
+  // offer, and where a deleted value's tasks may land, are read off the axis and not off the fold.
+  const shown = showClosed ? dim.values : dim.values.filter((v) => !v.closed);
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
   }
@@ -179,7 +190,7 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
       />
       <div className={`dimmgr__values ${dim.ordered ? "dimmgr__values--ordered" : ""}`}>
         <span className="faint dimmgr__vlabel">{t("dimmgr.values")}</span>
-        {dim.values.map((v, i) => (
+        {shown.map((v, i) => (
           <ValueRow
             key={v.id}
             value={v}
@@ -192,14 +203,26 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
             timeAxis={isTimeAxis(dim)}
             closable={isClosable(dim)}
             current={v.id === currentId}
-            onMoveUp={i > 0 ? () => store.moveDimensionValue(v.id, { before: dim.values[i - 1].id }) : undefined}
+            // The anchor is the row above and the row below **on screen**, not in the axis. Core takes
+            // any sibling as the anchor (`ops::place`), so a folded axis reorders the way it reads —
+            // the moved value clears the closed ones the fold is hiding in between.
+            onMoveUp={i > 0 ? () => store.moveDimensionValue(v.id, { before: shown[i - 1].id }) : undefined}
             onMoveDown={
-              i < dim.values.length - 1
-                ? () => store.moveDimensionValue(v.id, { after: dim.values[i + 1].id })
+              i < shown.length - 1
+                ? () => store.moveDimensionValue(v.id, { after: shown[i + 1].id })
                 : undefined
             }
           />
         ))}
+        {closedCount > 0 && (
+          <button
+            className="btn dimmgr__closedfold"
+            aria-expanded={showClosed}
+            onClick={() => setShowClosed(!showClosed)}
+          >
+            {showClosed ? t("dimmgr.hideClosed") : tn("dimmgr.showClosed", closedCount)}
+          </button>
+        )}
         <AddInline
           className="dimmgr__addval"
           buttonLabel={t("dimmgr.addValue")}

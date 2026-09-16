@@ -234,6 +234,8 @@ export const de: Translation = {
     "dimmgr.closeValue": "Schließen",
     "dimmgr.reopenValue": "Wieder öffnen",
     "dimmgr.closeValueHint": "Diesen Wert schließen. Was ihn schon trägt, behält ihn, und Filter finden ihn weiterhin — nur neue Zuordnungen werden abgewiesen. Wieder öffnen geht jederzeit",
+    "dimmgr.showClosed.one": "{n} geschlossenen Wert zeigen", "dimmgr.showClosed.other": "{n} geschlossene Werte zeigen",
+    "dimmgr.hideClosed": "Geschlossene Werte ausblenden",
     "dimmgr.showOnCard": "Auf der Karte",
     "dimmgr.showOnCardHint": "Zeigt diese Kategorie auf der Aufgabenkarte. Die Antwort gehört der Kategorie, also ändert sie sich für alle — nicht nur auf diesem Gerät",
     "dimmgr.required": "Pflicht",

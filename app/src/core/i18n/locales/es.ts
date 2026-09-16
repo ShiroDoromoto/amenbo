@@ -238,6 +238,8 @@ export const es: Translation = {
     "dimmgr.closeValue": "Cerrar",
     "dimmgr.reopenValue": "Reabrir",
     "dimmgr.closeValueHint": "Cierra este valor. Lo que ya lo lleva lo conserva y los filtros lo siguen encontrando; solo se rechazan las asignaciones nuevas, y reabrirlo siempre es posible",
+    "dimmgr.showClosed.one": "Mostrar {n} valor cerrado", "dimmgr.showClosed.many": "Mostrar {n} valores cerrados", "dimmgr.showClosed.other": "Mostrar {n} valores cerrados",
+    "dimmgr.hideClosed": "Ocultar los valores cerrados",
     "dimmgr.showOnCard": "Mostrar en la tarjeta",
     "dimmgr.showOnCardHint": "Muestra esta categoría en la tarjeta de tarea. La respuesta pertenece a la categoría, así que cambia para todos, no solo en este dispositivo",
     "dimmgr.required": "Obligatoria",

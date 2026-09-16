@@ -234,6 +234,8 @@ export const hi: Translation = {
     "dimmgr.closeValue": "बंद करें",
     "dimmgr.reopenValue": "फिर खोलें",
     "dimmgr.closeValueHint": "इस मान को बंद करता है। जो इसे पहले से रखते हैं वे रखे रहते हैं और छानने में यह मिलता रहता है; केवल नए असाइनमेंट लौटा दिए जाते हैं, और फिर खोलना हमेशा संभव है",
+    "dimmgr.showClosed.one": "{n} बंद मान दिखाएँ", "dimmgr.showClosed.other": "{n} बंद मान दिखाएँ",
+    "dimmgr.hideClosed": "बंद मान छिपाएँ",
     "dimmgr.showOnCard": "कार्ड पर दिखाएँ",
     "dimmgr.showOnCardHint": "इस श्रेणी को कार्य कार्ड पर दिखाता है। यह उत्तर श्रेणी का अपना है, इसलिए यह सभी के लिए बदलता है, सिर्फ़ इस डिवाइस पर नहीं",
     "dimmgr.required": "अनिवार्य",

@@ -239,6 +239,8 @@ export const ptBR: Translation = {
     "dimmgr.closeValue": "Fechar",
     "dimmgr.reopenValue": "Reabrir",
     "dimmgr.closeValueHint": "Fecha este valor. O que já o carrega continua com ele e os filtros ainda o encontram; só as atribuições novas são recusadas, e reabrir é sempre possível",
+    "dimmgr.showClosed.one": "Mostrar {n} valor fechado", "dimmgr.showClosed.many": "Mostrar {n} valores fechados", "dimmgr.showClosed.other": "Mostrar {n} valores fechados",
+    "dimmgr.hideClosed": "Ocultar os valores fechados",
     "dimmgr.showOnCard": "Mostrar no cartão",
     "dimmgr.showOnCardHint": "Mostra esta categoria no cartão da tarefa. A resposta pertence à categoria, então muda para todos, não só neste dispositivo",
     "dimmgr.required": "Obrigatória",

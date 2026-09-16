@@ -236,6 +236,8 @@ export const id: Translation = {
     "dimmgr.closeValue": "Tutup",
     "dimmgr.reopenValue": "Buka lagi",
     "dimmgr.closeValueHint": "Menutup nilai ini. Yang sudah memakainya tetap memakainya dan penyaring masih menemukannya; hanya penetapan baru yang ditolak, dan membukanya lagi selalu bisa",
+    "dimmgr.showClosed.other": "Tampilkan {n} nilai tertutup",
+    "dimmgr.hideClosed": "Sembunyikan nilai tertutup",
     "dimmgr.showOnCard": "Tampilkan di kartu",
     "dimmgr.showOnCardHint": "Menampilkan kategori ini pada kartu tugas. Jawabannya milik kategori, jadi berubah untuk semua orang, bukan hanya di perangkat ini",
     "dimmgr.required": "Wajib",

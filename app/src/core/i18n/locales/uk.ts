@@ -239,6 +239,8 @@ export const uk: Translation = {
     "dimmgr.closeValue": "Закрити",
     "dimmgr.reopenValue": "Відкрити знову",
     "dimmgr.closeValueHint": "Закриває це значення. Те, що вже його несе, лишається з ним, і фільтри його й далі знаходять; відхиляються лише нові призначення, а відкрити знову можна будь-коли",
+    "dimmgr.showClosed.one": "Показати {n} закрите значення", "dimmgr.showClosed.few": "Показати {n} закриті значення", "dimmgr.showClosed.many": "Показати {n} закритих значень", "dimmgr.showClosed.other": "Показати {n} закриті значення",
+    "dimmgr.hideClosed": "Сховати закриті значення",
     "dimmgr.showOnCard": "Показувати на картці",
     "dimmgr.showOnCardHint": "Показує цю категорію на картці завдання. Відповідь належить категорії, тож вона змінюється для всіх, а не лише на цьому пристрої",
     "dimmgr.required": "Обов'язкова",

@@ -234,6 +234,8 @@ export const zhHans: Translation = {
     "dimmgr.closeValue": "关闭",
     "dimmgr.reopenValue": "重新打开",
     "dimmgr.closeValueHint": "关闭这个取值。已经带着它的照旧带着，筛选也还找得到，只有新的指派会被拒绝；重新打开随时可以",
+    "dimmgr.showClosed.other": "显示 {n} 个已关闭的取值",
+    "dimmgr.hideClosed": "隐藏已关闭的取值",
     "dimmgr.showOnCard": "显示在卡片上",
     "dimmgr.showOnCardHint": "把这个分类显示在任务卡片上。答案属于分类本身，所以对所有人都会改变，而不只是这台设备",
     "dimmgr.required": "必填",

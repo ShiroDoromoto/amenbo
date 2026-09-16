@@ -463,6 +463,10 @@ fn run(dir: &Path, args: &[&str]) -> Result<String, CmdError> {
 /// The outer failure is the other thing entirely: git not being on the machine, or not starting.
 fn run_once(dir: &Path, args: &[&str]) -> Result<Result<String, String>, CmdError> {
     let mut git = amenbo_core::sys::git().ok_or_else(|| CmdError::from("git is not installed"))?;
+    // The word this git's children carry, good for as long as this one runs. It is what a question
+    // coming back is recognised by, and it is also how the question can say which call is waiting on
+    // it — the sentence git writes never does (`crate::folder_git_askpass`).
+    let during = crate::folder_git_askpass::during(dir, args.first().copied().unwrap_or_default());
     let out = git
         .arg("-C")
         .arg(dir)
@@ -476,7 +480,7 @@ fn run_once(dir: &Path, args: &[&str]) -> Result<Result<String, String>, CmdErro
         // `ssh -o BatchMode=yes` stood here until `AMB-D-913` — the module doc-comment has which of
         // the two would have stopped the helper being run at all. Nothing is set out of a build
         // tree, where there is no helper beside the binary to point at.
-        .envs(crate::folder_git_askpass::env())
+        .envs(during.env())
         // Nothing here has an editor to open, and a merge being finished asks for one. `true` takes
         // the message git already wrote, which is the one the editor would have opened on.
         .env("GIT_EDITOR", "true")

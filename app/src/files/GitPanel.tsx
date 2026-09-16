@@ -17,7 +17,10 @@
 //
 // **The three that go out to the remote are run by the window itself**, not written into a pane for
 // the agent to run. What that buys is measured (`AMB-T-4900`): the ssh agent reaches a window opened
-// from the Dock, and HTTPS goes through the credential helper (`./folder`).
+// from the Dock, and HTTPS goes through the credential helper (`./folder`). **Where the helper has
+// nothing to answer with, the question is put to the reader** rather than failing on a terminal
+// nobody is watching (`./GitAsk`, `AMB-D-913`) — which is the other reason a door out can be out for
+// as long as it is.
 //
 // **Whatever git wrote is drawn as git wrote it, refusal and all** (`AMB-D-906`, 3-4) — not
 // rewritten, not said again in Amenbo's words, and not turned into a code with a template behind it,

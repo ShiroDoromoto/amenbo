@@ -1640,6 +1640,32 @@ input[type="color"] {
    because the bin is where it sends the row and undo brings it back. */
 .trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 
+/* The question git is waiting on (`../files/GitAsk`). Its own block for the reason the one above is,
+   and wider than that one: what it holds is a sentence git wrote, which nobody here can shorten. */
+.gitask {
+  width: min(520px, 100%);
+  padding: var(--s-5);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
+  border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.gitask__doing { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
+/* git's own sentence. Monospaced and kept as it was written: ssh's runs to several lines, and a URL
+   read back against what the reader meant to reach is read character by character. */
+.gitask__asked {
+  font-family: var(--font-mono); font-size: var(--fs-md);
+  white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: var(--s-3);
+}
+.gitask__said {
+  width: 100%; box-sizing: border-box; margin-bottom: var(--s-4);
+  padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-bg); color: var(--c-text); font-size: var(--fs-md);
+}
+.gitask__save { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); cursor: pointer; }
+.gitask__where { font-size: var(--fs-xs); color: var(--c-text-muted); margin: var(--s-1) 0 var(--s-4); }
+.gitask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.gitask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+.gitask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
+
 /* ---------- the two halves of the panel ---------- */
 /* The row above whichever half is up. It holds the way out and nothing else: the switch between
    files and the page written on is the terminal face's top row, which is where it can be reached

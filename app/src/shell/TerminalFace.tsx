@@ -26,6 +26,7 @@ import {
 } from "../talk/columns";
 import { FilesPanel, openKey, type OpenFile, type Typed } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
+import { GitAsk } from "../files/GitAsk";
 import { GitPanel } from "../files/GitPanel";
 import { rootShown, sectionsOf } from "../files/sections";
 import { fileUnderAny } from "../files/fileUnder";
@@ -1153,6 +1154,10 @@ export function TerminalFace({
         "--side-w": `${sideWidth}px`,
       } as CSSProperties}
     >
+      {/* The question git puts to the person when it needs a password and has no terminal to ask in
+          (`../files/GitAsk`). It stands with the face rather than with the window, because the face
+          is what runs git and it is in one window or the other (`AMB-D-753`). */}
+      <GitAsk />
       <div className="termface__bar">
         {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
             the arrangement: what goes with the terminal is the face whole, and the face is drawn

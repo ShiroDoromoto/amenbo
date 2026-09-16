@@ -20,9 +20,13 @@
 //!
 //! **What stands in for the access a loopback port does not have**: any process on the machine can
 //! connect to `127.0.0.1`, so the port alone would let anything running as this person pull up a
-//! password dialog wearing Amenbo's face. The token closes that — it is drawn afresh for each run
-//! of the app, it reaches the helper only by inheritance from the app itself, and a request that
-//! does not carry it is answered with nothing (`AMB-D-913`).
+//! password dialog wearing Amenbo's face. The token closes that — it is drawn afresh for each git
+//! the app runs, it reaches the helper only by inheritance from that git, and a request that does
+//! not carry one the app is still running is answered with nothing (`AMB-D-913`).
+//!
+//! **Which git it was drawn for is the app's business and not this wire's.** The app keeps that
+//! beside the token, so the question it draws can say what is waiting on the answer; nothing about
+//! it crosses the wire, because the helper has nothing to do with it.
 
 use std::io::Read;
 

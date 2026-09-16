@@ -1062,6 +1062,51 @@ input[type="color"] {
   font-weight: var(--fw-medium);
 }
 .gitpanel__count { flex: 0 0 auto; color: var(--c-text-muted); font-family: var(--font-mono); }
+/* The three that go out to the remote. They wrap rather than shrink: a button whose word has been
+   cut in half is a button a reader has to guess at, and the column is dragged narrow often enough
+   for that to happen. */
+.gitpanel__net { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+/* What git wrote, in git's own words and its own spacing — the newlines it wrote are the shape of
+   what it said, and a sentence of several lines is why this one wraps rather than being cut off. */
+.gitpanel__said {
+  margin: 0; min-width: 0;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+/* A refusal is git saying no, which is the one of the two a reader must not read past. */
+.gitpanel__said--refused { color: var(--c-stop); }
+/* The way onto another branch, at the end of the line the branch is named on. It is the chevron
+   alone: the name beside it already says what the list will be about, and a word for it would take
+   the room the name is losing first (`app/src/files/GitBranch.tsx`). */
+.gitpanel__pick {
+  /* The line sits its text on one baseline, and this is a mark rather than a word — so it is
+     centred against the line instead of hanging off it. */
+  flex: 0 0 auto; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 var(--s-1); border: 0; background: none;
+  color: var(--c-text-muted); font: inherit;
+  cursor: pointer;
+}
+.gitpanel__pick:hover { color: var(--c-text); }
+/* The box the mark stands in, drawn on every row of the branch list whether or not there is a mark
+   in it — so the names stand in one column rather than stepping in and out. It is the same box the
+   folder picker draws (`.rootpick__dot`), in this list's own colour. */
+.gitpanel__ison {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--icon-sm); height: var(--icon-sm);
+  margin-right: var(--s-2); vertical-align: -0.18em;
+  color: var(--c-accent);
+}
+.gitpanel__pickname { overflow: hidden; text-overflow: ellipsis; }
+/* How far that branch stands from what it is measured by, after the name rather than beside it: the
+   names are what a reader runs their eye down. */
+.gitpanel__pickcount {
+  margin-left: var(--s-3);
+  color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+/* The row at the foot of the list while a name is being typed into it. The name is made in the list
+   itself, so the row keeps the list's own padding and the box sits inside it. */
+.gitpanel__make { padding: var(--s-1) var(--s-3); }
 .gitpanel__section { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 /* The name of one of git's two answers, with how many are under it. */
 .gitpanel__head {
@@ -1097,6 +1142,42 @@ input[type="color"] {
 .gitpanel__row--modified { --git: var(--c-git-modified); }
 .gitpanel__row--added { --git: var(--c-git-added); }
 .gitpanel__row--untracked { --git: var(--c-git-untracked); }
+/* The box a commit message is written in, and the row under it. */
+.gitpanel__commit { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+/* The one thing in this column a reader writes rather than reads. `max-width: none` drops the
+   reading width every other textarea takes: this box is as wide as the rail, and the rail is
+   already narrower than that cap. */
+.gitpanel__message { width: 100%; max-width: none; font-size: var(--fs-md); }
+.gitpanel__commitfoot { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+/* How many paths are about to be named. It gives way before the button does, since the button is
+   what the row is for. */
+.gitpanel__hint {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+.gitpanel__do { margin-left: auto; }
+/* The box that stages a row and unstages it. Set on the line the letters and the name sit on, and
+   held to its own size, so a list of twenty reads down one column of boxes. */
+.gitpanel__check { flex: 0 0 auto; margin: 0; }
+/* The line git wrote on a stash, and what pressing it does. The line is git's own sentence and is as
+   long as git made it, so the row is capped and the sentence gives — what is cut off its end is the
+   commit it was made over, and what is kept is the branch and the message. */
+.gitpanel__stashrow {
+  display: flex; align-items: baseline; gap: var(--s-3);
+  max-width: 22rem;
+}
+.gitpanel__stashline {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gitpanel__stashdo { flex: 0 0 auto; color: var(--c-text-muted); font-size: var(--fs-xs); }
+/* Said inside the list rather than in place of it: the list is also where a stash is made, and a
+   menu that vanished would take that door with it. */
+.gitpanel__stashnone {
+  margin: 0; padding: var(--s-2) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
 
 /* The one press in the rail's git half that opens the other column (`app/src/files/GitPanel.tsx`).
    It is drawn as a way out rather than as an action: what it does is move the reader across the

@@ -9,14 +9,16 @@
 // about which path it passes.
 //
 // **Writing goes the same way and answers differently.** Reading swallows what it cannot do — the
-// row is about to stop being drawn anyway — but a name refused is a person's next keystroke, so the
-// two doors at the end let the refusal through to whoever asked for it.
+// row is about to stop being drawn anyway — but a name refused is a person's next keystroke, so
+// every door that writes lets the refusal through to whoever asked for it. The git ones carry
+// git's own sentence, word for word (`AMB-D-906`).
 //
 // Outside Tauri (`npm run dev` in a browser) there is no filesystem to ask, and the face draws its
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
   FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitBranchDto, GitCommitDto, GitFileDto,
+  GitStashDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -132,6 +134,92 @@ export async function folderGitDiff(
 ): Promise<string> {
   if (!inTauri()) return "";
   return await invoke<string>("folder_git_diff", { projectId, root, sha, path });
+}
+
+/** What has been put aside in the folder's repository, newest first (`stash@{0}` last made). */
+export async function folderGitStashes(
+  projectId: number,
+  root: string,
+): Promise<GitStashDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<GitStashDto[]>("folder_git_stashes", { projectId, root });
+}
+
+/**
+ * Put `paths` into the index — `git add`.
+ *
+ * **What comes back when git says no is git's own sentence** (`AMB-D-906`), here and in every door
+ * under it: a read swallows what it cannot do, because the row is about to stop being drawn anyway,
+ * and a write's refusal is the reader's next move.
+ */
+export async function folderGitStage(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_stage", { projectId, root, paths });
+}
+
+/** Take `paths` back out of the index, leaving the working tree alone — `git reset`. */
+export async function folderGitUnstage(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_unstage", { projectId, root, paths });
+}
+
+/**
+ * Write `paths` down with `message` on them, naming each of them to git (`AMB-D-906`, 3-2).
+ *
+ * **Naming them is the point.** A call with none is a call about whatever the index holds at that
+ * moment, and what it holds may be the agent in the pane's half-made work — on all three systems,
+ * every time (`AMB-T-4901`). What git writes down for a named path is that path as the working tree
+ * has it, which is the content the list beside the box was read from.
+ */
+export async function folderGitCommit(
+  projectId: number,
+  root: string,
+  message: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_commit", { projectId, root, message, paths });
+}
+
+/**
+ * Put `paths` aside — `git stash push`, under `message` where there is one.
+ *
+ * **Only paths git already follows.** An untracked one is refused by the pathspec rather than by
+ * the stash — `did not match any file(s) known to git`, with nothing put aside (measured here) — so
+ * the face hands over the followed ones alone. Putting aside what git has never seen is `-u`, which
+ * is a different question and not one this asks.
+ */
+export async function folderGitStash(
+  projectId: number,
+  root: string,
+  message: string,
+  paths: string[][],
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_stash", { projectId, root, message, paths });
+}
+
+/**
+ * Take one stash back out and drop it — `git stash pop`.
+ *
+ * `name` is one the list was just read with: `stash@{0}` is where a stash sits and not what it is,
+ * so one kept from an earlier read names whatever has since moved into that place.
+ */
+export async function folderGitStashPop(
+  projectId: number,
+  root: string,
+  name: string,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_stash_pop", { projectId, root, name });
 }
 
 /**

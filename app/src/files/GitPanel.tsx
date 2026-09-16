@@ -56,6 +56,12 @@
 // was picked in another: what is done with a set of rows here is staging or unstaging, and a set
 // spanning both lists would be a press with two meanings.
 //
+// **A row is also a thing to carry** (`AMB-D-775`, `./handDrag`). The set goes to a pane as the
+// words a reader would have typed, and from one of git's two lists to the other as a staging: one
+// gesture the tree's rows already answer, reaching the half the rows about git are in. What is not
+// carried is a conflict — staging one is the reader saying the merge is settled there, and a press
+// that travelled across a panel is no way to say it.
+//
 // **What a set is for is one press and one call out to git.** The box on a row of the set takes the
 // whole set, Space presses that box from the keyboard, and the box on the line a list is named on
 // takes the list itself — every one of them handing git all the paths at once. Both doors have
@@ -73,9 +79,10 @@
 // What closes the hole instead is the shape of the call: every commit names its paths, so the
 // pane's half-staged work is not taken along with the reader's — measured at 0 of 3,855 against
 // every single time without it (`AMB-T-4901`).
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
-  KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode,
+  KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent,
+  PointerEvent as RowPress, ReactNode,
 } from "react";
 import type { FolderGitDto, GitEntryDto, GitStashDto } from "../bindings/bindings";
 import { Icon } from "../components/Icon";
@@ -93,6 +100,8 @@ import { GitBranch } from "./GitBranch";
 import { useRestore } from "./restore";
 import { type GitMark, markOf } from "./gitMark";
 import { type How, kept, keysIn, PICKED_NONE, pick, type Picked, type Which } from "./gitPick";
+import { type Held, STAGE_ATTR, watchStage } from "./handDrag";
+import { fileAt } from "./fileUnder";
 import type { DiffPick } from "./GitDiff";
 
 /** What git wrote on the way back from a door of this half, and whether it was a refusal. */
@@ -115,7 +124,7 @@ const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: fal
  * without writing a byte anybody watches — asking outright is one call and says it now.
  */
 export function GitPanel({
-  projectId, root, onHistory, onPrefix, onHandOver, onRead, onPicked, onDiff,
+  projectId, root, onHistory, onPrefix, onHandOver, onRead, onCarry, onPicked, onDiff,
 }: {
   /** The project the folder is bound to; nothing is drawn without one. */
   projectId: number | null;
@@ -139,6 +148,14 @@ export function GitPanel({
    * (`AMB-D-906`, 2-7).
    */
   onRead?: (path: string[]) => void;
+  /**
+   * Take up a row of one of the two lists, which is the same gesture the tree's rows are taken up
+   * by (`./handDrag`). Absent where nothing is holding the gesture, and then a row is not carried.
+   *
+   * What a carried row may be let go on is a pane, which is handed the path as words, and the other
+   * of git's two lists, which stages it or takes it back out.
+   */
+  onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
   /**
    * The rows picked out, as the column across the panes reads them — and nothing where the set is
    * put down or is in the list of what a merge could not settle.
@@ -186,6 +203,12 @@ export function GitPanel({
   // on, and it is held here rather than in a list because there is one set for the half: picking in
   // one list is putting down what was picked in another.
   const [picked, setPicked] = useState<Picked>(PICKED_NONE);
+  // Which list a carried row is over, or nothing — the one highlight this half draws while a row is
+  // in hand (`./handDrag`).
+  const [overList, setOverList] = useState<string | null>(null);
+  // And which list the rows in hand were taken up from. A ref rather than state: it is read when
+  // they are let go, and nothing on the screen is drawn from it.
+  const carriedFrom = useRef<Which | null>(null);
   // Throwing away what git has not recorded, which the menu offers over a row that has some.
   const restore = useRestore(projectId);
   // How many conflicts are still written into each path the merge could not settle, by the whole
@@ -268,6 +291,31 @@ export function GitPanel({
     setStashAt(null);
     setPicked(PICKED_NONE);
   }, [projectId, root]);
+
+  // **A row let go on the other list is that row staged, or taken back out** (`./handDrag`).
+  //
+  // The gesture is the tree's and the landing is this half's, so what arrives here is where the
+  // rows came down and nothing else. Let go on the list they were taken up from it does nothing:
+  // there is no third state for a path to move to, and git would be asked to stage what is staged.
+  // Which list that was is remembered rather than read off the rows — a path changed, staged and
+  // changed again is on both lists, and letting its changed half go on the staged one is a reader
+  // asking for the rest of it to go in too.
+  //
+  // Only while this half is drawn, and only over the two lists — a conflict is not carried at all,
+  // because staging one is the reader saying the merge is settled there (`AMB-D-906`, 2-7) and a
+  // press that travelled across a panel is no way to say it.
+  useEffect(() => watchStage({
+    over: (list) => setOverList(list?.getAttribute(STAGE_ATTR) ?? null),
+    drop: (list, held) => {
+      setOverList(null);
+      const which = list.getAttribute(STAGE_ATTR);
+      const from = carriedFrom.current;
+      carriedFrom.current = null;
+      if (projectId === null || root === null || which === from) return;
+      if (which === "staged") void ask(() => folderGitStage(projectId, root, held.paths), true);
+      if (which === "changed") void ask(() => folderGitUnstage(projectId, root, held.paths), true);
+    },
+  }), [projectId, root, running]);
 
   // A path git no longer names is a row nobody can see, and a set holding one is a set the next
   // press acts on silently. Staging one of five rows is the ordinary way it happens: the row leaves
@@ -508,6 +556,14 @@ export function GitPanel({
           which="staged"
           picked={picked}
           onPicked={setPicked}
+          root={root}
+          // Which list the rows came up from, kept for the moment they are let go: a drop back on it
+          // is a gesture that moved nothing.
+          onCarry={onCarry === undefined ? undefined : (held, e) => {
+            carriedFrom.current = "staged";
+            onCarry(held, e);
+          }}
+          over={overList === "staged"}
           onToggle={(paths) => void ask(() => folderGitUnstage(projectId, root, paths), true)}
           onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
           onOpen={onDiff}
@@ -521,6 +577,14 @@ export function GitPanel({
           which="changed"
           picked={picked}
           onPicked={setPicked}
+          root={root}
+          // Which list the rows came up from, kept for the moment they are let go: a drop back on it
+          // is a gesture that moved nothing.
+          onCarry={onCarry === undefined ? undefined : (held, e) => {
+            carriedFrom.current = "changed";
+            onCarry(held, e);
+          }}
+          over={overList === "changed"}
           onToggle={(paths) => void ask(() => folderGitStage(projectId, root, paths), true)}
           onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
           onOpen={onDiff}
@@ -1030,6 +1094,7 @@ function inBox(target: EventTarget | null): boolean {
  *  a path is in is the answer, and a list that disappeared would leave the other unnamed. */
 function Changes({
   what, none, rows, staged, running, which, picked, onPicked, onToggle, onMenu, onOpen,
+  root, onCarry, over,
 }: {
   what: string;
   none: string;
@@ -1049,8 +1114,20 @@ function Changes({
   /** Read what the picked rows are holding, in the column across the panes. Absent where there is
    *  nowhere to read it. */
   onOpen?: () => void;
+  /** The folder these rows are spelled from, which is what a pane is handed them as. */
+  root: string;
+  /** Take up a row of this list (`./handDrag`). Absent where nothing holds the gesture. */
+  onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
+  /** Whether a carried row is over this list, which is the whole of the highlight. */
+  over: boolean;
 }) {
   const on = picking(which, rows, picked, onPicked, onMenu);
+  /** Take this row up, with what the press is about — the set where the row is in it, and the row
+   *  alone where it is not, which is the rule every act on these rows is read by (`rowsAbout`). */
+  const carry = (row: GitEntryDto, e: RowPress<HTMLElement>): void => {
+    const paths = rowsAbout(rows, keysIn(which, picked), row.path);
+    onCarry?.({ wholes: paths.map((one) => fileAt(root, one)), root, paths }, e);
+  };
   /** What pressing one row's box is about: the set, where that row is in it, and the row alone
    *  where it is not — the rule the menu is read by (`rowsAbout`). */
   const toggle = (key: string): void => {
@@ -1058,7 +1135,14 @@ function Changes({
     if (row !== undefined) onToggle(rowsAbout(rows, keysIn(which, picked), row.path));
   };
   return (
-    <section className="gitpanel__section">
+    // **The list answers a row let go on it, and says so while one is over it** (`./handDrag`). The
+    // mark is on the section and not on the rows, because what a drop means here is the list it
+    // lands in — anywhere inside it is the same answer, and an empty list is a landing like any
+    // other.
+    <section
+      className={`gitpanel__section${over ? " gitpanel__section--over" : ""}`}
+      {...{ [STAGE_ATTR]: which }}
+    >
       {/* The name of the list, and before it the box that takes the whole of it at once. The box is
           beside the heading rather than inside it: what it does is this list's, not part of what
           the list is called. */}
@@ -1088,6 +1172,7 @@ function Changes({
                 picked={on.has(whole(row))}
                 stop={on.stop === whole(row)}
                 onPress={(how) => on.press(whole(row), how)}
+                onCarry={(e) => carry(row, e)}
                 onToggle={() => toggle(whole(row))}
                 onMenu={on.menu}
                 onOpen={onOpen}
@@ -1130,7 +1215,7 @@ function Changes({
  * a press on a control that has gone down arrives at the row around it instead.
  */
 function ChangedRow({
-  row, staged, running, picked, stop, onPress, onToggle, onMenu, onOpen,
+  row, staged, running, picked, stop, onPress, onCarry, onToggle, onMenu, onOpen,
 }: {
   row: GitEntryDto;
   staged: boolean;
@@ -1141,6 +1226,8 @@ function ChangedRow({
   stop: boolean;
   /** A press on the row itself, which is what moves the set. */
   onPress: (how: How) => void;
+  /** Take this row up to be carried, with the press that started it (`./handDrag`). */
+  onCarry: (event: RowPress<HTMLElement>) => void;
   /** Press this row's box, which the list reads as being about the set where this row is in it. */
   onToggle: () => void;
   onMenu: (path: string[], x: number, y: number) => void;
@@ -1161,6 +1248,15 @@ function ChangedRow({
       title={path}
       onClick={(e) => press(e, onPress)}
       onDoubleClick={(e) => { if (!inBox(e.target)) onOpen?.(); }}
+      // A row is a thing to press and a thing to carry, and which one a press turns out to be is
+      // decided by how far it travels (`./handDrag`). Not from the box, though: a press there is
+      // already an act of its own, and a hand that slipped a few pixels while pressing it would
+      // stage nothing and put the row in the air instead.
+      onPointerDown={(e) => {
+        if (inBox(e.target)) return;
+        e.currentTarget.focus();
+        onCarry(e);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.currentTarget.focus();

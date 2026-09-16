@@ -748,3 +748,179 @@ describe("the rail's git half, pressed", () => {
     expect(hoisted.popped).toEqual(["stash@{1}"]);
   });
 });
+
+/// Rows are gathered here the way they are in the tree, because the two halves are one rail: ⌘
+/// takes a row in, Shift reaches from where the reader was, and the arrows walk the list. What the
+/// set is for is the doors that act on several rows at once, so what has to be right is which rows
+/// are in it — and that a press meant for one row does not quietly put the set down.
+describe("the rail's git half, with rows picked out", () => {
+  /** The rows of one list that say they are picked out, by their names. */
+  const pickedIn = (under: string): string[] =>
+    [...(sectionOf(under)?.querySelectorAll("[aria-selected=\"true\"]") ?? [])]
+      .map((one) => one.querySelector(".gitpanel__name")?.textContent ?? "");
+
+  /** Press a row with keys held down, the way a reader gathering rows does. */
+  async function clickWith(what: Element, keys: MouseEventInit) {
+    await act(async () => {
+      what.dispatchEvent(new MouseEvent("click", { bubbles: true, ...keys }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  /** A key pressed on the row the keyboard is standing on. */
+  async function keyOn(what: Element, key: string, keys: KeyboardEventInit = {}) {
+    await act(async () => {
+      what.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key, ...keys }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  /** Four changed paths, which is enough for a range to have rows inside it. */
+  const four = (): FolderGitDto => says({
+    rows: [
+      row({ path: ["a.rs"], worktree: "M" }),
+      row({ path: ["b.rs"], worktree: "M" }),
+      row({ path: ["c.rs"], worktree: "M" }),
+      row({ path: ["d.rs"], worktree: "M" }),
+    ],
+  });
+
+  it("takes a row into the set with the machine's key, and back out of it", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs"]);
+
+    await clickWith(rowOf(t("git.changes"), "c.rs"), { metaKey: true, ctrlKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "c.rs"]);
+
+    await clickWith(rowOf(t("git.changes"), "a.rs"), { metaKey: true, ctrlKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["c.rs"]);
+  });
+
+  it("reaches from the end the range is measured from to the row Shift was pressed on", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "b.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "d.rs"), { shiftKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["b.rs", "c.rs", "d.rs"]);
+
+    // Both ways: a range pulled back past its own start grows the other way from the same end.
+    await clickWith(rowOf(t("git.changes"), "a.rs"), { shiftKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "b.rs"]);
+  });
+
+  it("walks the list with the arrows, and reaches with them while Shift is held", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await keyOn(rowOf(t("git.changes"), "a.rs"), "ArrowDown");
+    expect(pickedIn(t("git.changes"))).toEqual(["b.rs"]);
+
+    await keyOn(rowOf(t("git.changes"), "b.rs"), "ArrowDown", { shiftKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["b.rs", "c.rs"]);
+
+    await keyOn(rowOf(t("git.changes"), "c.rs"), "End", { shiftKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["b.rs", "c.rs", "d.rs"]);
+  });
+
+  /// Staging is what a changed row takes and unstaging what a staged one takes, so a set spanning
+  /// both lists would be a press with two meanings.
+  it("puts down what was picked in one list when a row of another is pressed", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["a.rs"], worktree: "M" }),
+        row({ path: ["b.rs"], worktree: "M" }),
+        row({ path: ["kept.rs"], index: "M" }),
+      ],
+    });
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "b.rs"), { metaKey: true, ctrlKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "b.rs"]);
+
+    await clickWith(rowOf(t("git.staged"), "kept.rs"), { metaKey: true, ctrlKey: true });
+    expect(pickedIn(t("git.staged"))).toEqual(["kept.rs"]);
+    expect(pickedIn(t("git.changes"))).toEqual([]);
+  });
+
+  /// The box is what the list does to one path. A reader who gathered five rows to act on has not
+  /// begun again by ticking one of them.
+  it("leaves the set where it is when the box on a row is pressed", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "b.rs"), { metaKey: true, ctrlKey: true });
+
+    await press(box(t("git.changes"), "c.rs"));
+    expect(hoisted.staged).toEqual([[["c.rs"]]]);
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "b.rs"]);
+  });
+
+  /// A path that has left the list it was picked in is a row nobody can see, and a set holding one
+  /// is a set the next press acts on silently. Staging one of three is how it happens.
+  it("keeps the rows still on the list when one of the set leaves it", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "c.rs"), { shiftKey: true });
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "b.rs", "c.rs"]);
+
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["b.rs"], worktree: "M" }),
+        row({ path: ["c.rs"], worktree: "M" }),
+        row({ path: ["d.rs"], worktree: "M" }),
+        row({ path: ["a.rs"], index: "M" }),
+      ],
+    });
+    await moveFolder();
+    expect(pickedIn(t("git.changes"))).toEqual(["b.rs", "c.rs"]);
+  });
+
+  /// A menu opened away from what is picked is a menu about the row under the pointer: the
+  /// alternative is a box standing over one row and acting on others.
+  it("acts on the whole set from a row in it, and on one row from a row outside it", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["a.rs"], index: "U", worktree: "U" }),
+        row({ path: ["b.rs"], index: "U", worktree: "U" }),
+        row({ path: ["c.rs"], index: "U", worktree: "U" }),
+      ],
+    });
+    await draw();
+    await clickWith(rowOf(t("git.conflicts"), "a.rs"), {});
+    await clickWith(rowOf(t("git.conflicts"), "b.rs"), { metaKey: true, ctrlKey: true });
+    await rightClickOn(rowOf(t("git.conflicts"), "b.rs"));
+    await press(menuItem(t("git.takeOurs")));
+    expect(hoisted.taken).toEqual([{ paths: [["a.rs"], ["b.rs"]], mine: true }]);
+
+    await rightClickOn(rowOf(t("git.conflicts"), "c.rs"));
+    expect(pickedIn(t("git.conflicts"))).toEqual(["c.rs"]);
+    await press(menuItem(t("git.takeTheirs")));
+    expect(hoisted.taken[1]).toEqual({ paths: [["c.rs"]], mine: false });
+  });
+
+  /// `git rm --cached` refuses a pathspec naming a path git has never seen, and refuses the whole
+  /// of it — so over a set with an untracked row among them the press would fail for all of them.
+  /// It is drawn and greyed rather than taken away: the menu keeps one shape whatever is picked.
+  it("greys the door that stops git following rows it never followed", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["tracked.rs"], worktree: "M" }),
+        row({ path: ["new.rs"], index: "?", worktree: "?" }),
+      ],
+    });
+    await draw();
+    await rightClickOn(rowOf(t("git.changes"), "tracked.rs"));
+    expect(menuItem(t("git.untrack")).getAttribute("aria-disabled")).toBeNull();
+
+    await clickWith(rowOf(t("git.changes"), "tracked.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "new.rs"), { shiftKey: true });
+    await rightClickOn(rowOf(t("git.changes"), "new.rs"));
+    expect(itemNames()).toContain(t("git.untrack"));
+    expect(menuItem(t("git.untrack")).getAttribute("aria-disabled")).toBe("true");
+    // One path's history is the other door a set of rows is not in a state for.
+    expect(menuItem(t("git.fileHistory")).getAttribute("aria-disabled")).toBe("true");
+  });
+});

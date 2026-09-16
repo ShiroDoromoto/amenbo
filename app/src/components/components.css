@@ -1153,6 +1153,11 @@ button.feed__target:hover { color: var(--c-accent); }
   cursor: pointer;
 }
 .menu__item:hover { background: var(--c-hover); }
+/* A door the rows the menu is about are not all in a state for. It is faint rather than gone, so
+   the menu keeps one shape whatever is picked out (`app/src/files/FileMenu.tsx`), and it answers
+   neither the pointer nor a press. */
+.menu__item--off { color: var(--c-text-muted); cursor: default; }
+.menu__item--off:hover { background: none; }
 /* The item that is not the kind of the ones above it, held off from them. The gap is the whole of
    the separation: a rule would draw a heading over a group of one. */
 .menu__item--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-rule); padding-top: var(--s-2); }

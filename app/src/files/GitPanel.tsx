@@ -50,16 +50,32 @@
 // in the ordinary editor; the ways to settle one are to write it, to ask the agent in the pane to,
 // or to take one side whole off the row's own menu — and all three end at the same number falling.
 //
+// **The rows are picked out the way the tree's are, and one list at a time** (`./gitPick`). ⌘ takes
+// a row in, Shift reaches from where the reader was, and the arrows walk the list — the same answer
+// the other half of the rail gives, because the two are one rail. Picking in one list puts down what
+// was picked in another: what is done with a set of rows here is staging or unstaging, and a set
+// spanning both lists would be a press with two meanings.
+//
+// **What the menu acts on is the set, where it was opened on one of them** (`AMB-D-906`, 2-8). So
+// the items are drawn whatever is picked out and greyed where the set is not in a state for them —
+// a menu whose items came and went with the selection would be one a reader cannot learn, and with
+// rows gathered several at a time a set mixing what git follows with what it has never seen is
+// ordinary.
+//
 // **The agent in the pane is not guarded against** (`AMB-D-906`). Nothing here reads whether
 // something is running beside it, refuses a press on that ground, or puts a question in the way.
 // What closes the hole instead is the shape of the call: every commit names its paths, so the
 // pane's half-staged work is not taken along with the reader's — measured at 0 of 3,855 against
 // every single time without it (`AMB-T-4901`).
 import { useEffect, useState } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode,
+} from "react";
 import type { FolderGitDto, GitEntryDto, GitStashDto } from "../bindings/bindings";
 import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { errText, t, tf } from "../core/i18n";
+import { hostOs } from "../core/platform";
 import {
   folderGitCommit, folderGitFetch, folderGitIgnore, folderGitMarks, folderGitMergeContinue,
   folderGitPull, folderGitPush, folderGitStage, folderGitStash, folderGitStashes, folderGitStashPop,
@@ -70,6 +86,7 @@ import { FileMenu } from "./FileMenu";
 import { GitBranch } from "./GitBranch";
 import { useRestore } from "./restore";
 import { type GitMark, markOf } from "./gitMark";
+import { type How, kept, keysIn, PICKED_NONE, pick, type Picked, type Which } from "./gitPick";
 
 /** What git wrote on the way back from a door of this half, and whether it was a refusal. */
 type Said = { text: string; refused: boolean };
@@ -136,7 +153,13 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
   // The row a right-click was on, and where the pointer was. One menu for the half rather than one
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it — which is what every word from the host does to this list.
-  const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ which: Which; path: string[]; x: number; y: number } | null>(
+    null,
+  );
+  // The rows a reader picked out, in the list they are in (`./gitPick`). It is what the menu acts
+  // on, and it is held here rather than in a list because there is one set for the half: picking in
+  // one list is putting down what was picked in another.
+  const [picked, setPicked] = useState<Picked>(PICKED_NONE);
   // Throwing away what git has not recorded, which the menu offers over a row that has some.
   const restore = useRestore(projectId);
   // How many conflicts are still written into each path the merge could not settle, by the whole
@@ -144,22 +167,22 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
   const [marks, setMarks] = useState<Record<string, number>>({});
 
   // git's three answers about a path, kept apart here because the reader does a different thing to
-  // each. A conflict is in neither list below: what a box would do to it is stage it, and staging a
-  // conflict is the one press that says it is settled (`AMB-D-906`, 2-7).
-  const conflicts = git.rows.filter(unmerged);
+  // each (`rowsIn`).
+  const conflicts = rowsIn("conflict", git.rows);
+  const staged = rowsIn("staged", git.rows);
+  const changed = rowsIn("changed", git.rows);
   const settled = git.rows.filter((row) => !unmerged(row));
-  // git's `X` is what the index says and its `Y` what the working tree says, and a space in either
-  // is git saying nothing about that half. `?` is not an index letter — it is git saying it has
-  // never seen the path at all — so an untracked file is something to stage and nothing staged.
-  const staged = settled.filter((row) => row.index !== " " && row.index !== "?");
-  const changed = settled.filter((row) => row.worktree !== " ");
+  // What git has never seen. It is the one state the menu's doors are not all in: `git rm --cached`
+  // refuses a pathspec naming a path git does not follow, and refuses the whole of it — so a set of
+  // five rows with one untracked among them is a press that fails for all five.
+  const untracked = new Set(git.rows.filter((row) => row.index === "?").map(whole));
   // What may be put aside: the paths git follows. Naming an untracked one in a stash's pathspec is
   // refused outright — `did not match any file(s) known to git`, with nothing put aside — and
   // handing over no paths at all would take in the pane's working tree along with the reader's.
   const followed = settled.filter((row) => row.index !== "?").map((row) => row.path);
   // What the count is asked about, as one word: a list rebuilt on every draw is a new array each
   // time, and the read below is about which paths are in conflict rather than about that array.
-  const inConflict = conflicts.map((row) => row.path.join("/")).join("\n");
+  const inConflict = conflicts.map(whole).join("\n");
 
   // **This half watches the folder itself, for as long as it is drawn.**
   //
@@ -217,7 +240,15 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
     setSaid(null);
     setMessage("");
     setStashAt(null);
+    setPicked(PICKED_NONE);
   }, [projectId, root]);
+
+  // A path git no longer names is a row nobody can see, and a set holding one is a set the next
+  // press acts on silently. Staging one of five rows is the ordinary way it happens: the row leaves
+  // the list it was picked in, and the four beside it stay picked.
+  useEffect(() => {
+    setPicked((now) => kept(now, rowsIn(now.which, git.rows).map(whole)));
+  }, [git]);
 
   // Asked each time the list opens, because what is put aside is what is put aside now — and asked
   // again after a door comes back, since taking one out is what the list was opened to do.
@@ -244,7 +275,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
       return;
     }
     let alive = true;
-    const paths = inConflict.split("\n").map((whole) => whole.split("/"));
+    const paths = inConflict.split("\n").map((one) => one.split("/"));
     void folderGitMarks(projectId, root, paths)
       .then((counts) => {
         if (!alive) return;
@@ -291,6 +322,17 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
     if (projectId === null || root === null) return;
     void ask(() => call(projectId, root));
   };
+
+  /** The rows the open menu acts on: the set picked out, where it was opened on one of them. */
+  const about = menu === null
+    ? []
+    : rowsAbout(rowsIn(menu.which, git.rows), keysIn(menu.which, picked), menu.path);
+  /** Whether git says the working tree has done something to this path — what there is to throw
+   *  away. */
+  const dirty = (path: string[]): boolean => changed.some((row) => whole(row) === path.join("/"));
+  /** Whether this path is one the merge could not settle. */
+  const conflicted = (path: string[]): boolean =>
+    conflicts.some((row) => whole(row) === path.join("/"));
 
   // Nothing is drawn where there is nothing to draw it about, and where the answer is still out.
   //
@@ -401,11 +443,13 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
           rows={conflicts}
           marks={marks}
           running={running}
+          picked={picked}
+          onPicked={setPicked}
           onOpen={onRead}
           // Staging it is the whole of "I say this one is settled" — nothing does it for the
           // reader, however few marks are left in the file (`AMB-D-906`, 2-7).
           onSettle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
-          onMenu={(path, x, y) => setMenu({ path, x, y })}
+          onMenu={(path, x, y) => setMenu({ which: "conflict", path, x, y })}
         />
       )}
       <div className="gitpanel__commit">
@@ -472,8 +516,11 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         rows={staged}
         staged
         running={running}
+        which="staged"
+        picked={picked}
+        onPicked={setPicked}
         onToggle={(row) => void ask(() => folderGitUnstage(projectId, root, [row.path]), true)}
-        onMenu={(path, x, y) => setMenu({ path, x, y })}
+        onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
       />
       <Changes
         what={t("git.changes")}
@@ -481,8 +528,11 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         rows={changed}
         staged={false}
         running={running}
+        which="changed"
+        picked={picked}
+        onPicked={setPicked}
         onToggle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
-        onMenu={(path, x, y) => setMenu({ path, x, y })}
+        onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
       />
       {restore.aside}
       {menu !== null && (
@@ -490,7 +540,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
           projectId={projectId}
           root={root}
           path={menu.path}
-          about={[menu.path]}
+          about={about}
           // Every row here is a path git named, and git names files and the folders it answers for
           // whole. What is under a folder it named is not on this list, so nothing here is a folder
           // anything could be written into.
@@ -504,21 +554,25 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
           git={{
             onHistory: (path) => onHistory?.(path),
             onIgnore: () => {
-              void folderGitIgnore(projectId, root, [menu.path])
+              void folderGitIgnore(projectId, root, about)
                 .catch((why: unknown) => setSaid({ text: errText(why), refused: true }));
             },
             onUntrack: () => {
-              void ask(() => folderGitUntrack(projectId, root, [menu.path]), true);
+              void ask(() => folderGitUntrack(projectId, root, about), true);
             },
-            // Only where git says the working tree has done something to it. A path that is only
-            // staged has nothing in the working tree to throw away.
-            onRestore: changed.some((row) => row.path.join("/") === menu.path.join("/"))
-              ? () => restore.askRestore(root, [menu.path])
+            // Drawn and not pressed where git has never seen one of the rows: `git rm --cached`
+            // refuses a pathspec naming such a path, and refuses the whole of it.
+            followsAll: about.every((path) => !untracked.has(path.join("/"))),
+            // Only where git says the working tree has done something to one of them, and then to
+            // those alone. A path that is only staged has nothing in the working tree to throw
+            // away, and the one act here that cannot be walked back is the last to offer idly.
+            onRestore: about.some(dirty)
+              ? () => restore.askRestore(root, about.filter(dirty))
               : undefined,
-            // The short way out of a conflict, and only over one: over any other path git refuses
-            // it with its own sentence about the path not being unmerged.
-            onTake: conflicts.some((row) => row.path.join("/") === menu.path.join("/"))
-              ? (mine) => void ask(() => folderGitTake(projectId, root, [menu.path], mine), true)
+            // The short way out of a conflict, and only where every row is in one: over any other
+            // path git refuses it with its own sentence about the path not being unmerged.
+            onTake: about.length > 0 && about.every(conflicted)
+              ? (mine) => void ask(() => folderGitTake(projectId, root, about, mine), true)
               : undefined,
           }}
         />
@@ -580,6 +634,51 @@ function unmerged(row: GitEntryDto): boolean {
   return row.index === row.worktree && (row.index === "A" || row.index === "D");
 }
 
+/** A row's path as one word, which is how a picked row is named (`./gitPick`). */
+function whole(row: GitEntryDto): string {
+  return row.path.join("/");
+}
+
+/**
+ * The rows of one of the half's three lists, read off git's answer.
+ *
+ * git's `X` is what the index says and its `Y` what the working tree says, and a space in either is
+ * git saying nothing about that half. `?` is not an index letter — it is git saying it has never
+ * seen the path at all — so an untracked file is something to stage and nothing staged. A conflict
+ * is in neither of the two: what a box would do to it is stage it, and staging a conflict is the
+ * one press that says it is settled (`AMB-D-906`, 2-7).
+ *
+ * Read in two places, and so written once: the lists are drawn from it, and a set of picked rows is
+ * held to it when git is asked again (`./gitPick`).
+ */
+function rowsIn(which: Which | null, rows: GitEntryDto[]): GitEntryDto[] {
+  if (which === "conflict") return rows.filter(unmerged);
+  const settled = rows.filter((row) => !unmerged(row));
+  if (which === "staged") return settled.filter((row) => row.index !== " " && row.index !== "?");
+  if (which === "changed") return settled.filter((row) => row.worktree !== " ");
+  return [];
+}
+
+/**
+ * The rows an act aimed at one row is about: the ones picked out, where that row is among them —
+ * and the row alone, where it is not.
+ *
+ * The same rule the tree reads a menu by (`./FolderTree`). A menu opened away from what a reader
+ * gathered is a menu about the row under the pointer, because the alternative is a box standing
+ * over one row and acting on others.
+ */
+function rowsAbout(rows: GitEntryDto[], picked: string[], path: string[]): string[][] {
+  if (!picked.includes(path.join("/"))) return [path];
+  return rows.filter((row) => picked.includes(whole(row))).map((row) => row.path);
+}
+
+/** Which of the three a press is, by what the reader was holding down. Which key takes a row in is
+ *  the machine's answer: Ctrl and a press is how a Mac asks for the menu (`../core/platform`). */
+function howOf(e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): How {
+  if (e.shiftKey) return "spread";
+  return (hostOs() === "macos" ? e.metaKey : e.ctrlKey) ? "add" : "one";
+}
+
 /**
  * What the merge could not settle: one row per path, with how much of it is still in conflict.
  *
@@ -595,36 +694,148 @@ function unmerged(row: GitEntryDto): boolean {
  * **There is no box on these rows.** A box would be the two lists' box, and what it does there is
  * stage — which on a conflict is the declaration above and not a thing to tick idly.
  */
-function Conflicts({ rows, marks, running, onOpen, onSettle, onMenu }: {
+function Conflicts({ rows, marks, running, picked, onPicked, onOpen, onSettle, onMenu }: {
   rows: GitEntryDto[];
   /** How many marks are left in each path, by the whole path. A path that is not in it is one the
    *  count has not come back for, which is drawn as no number rather than as none. */
   marks: Record<string, number>;
   /** A door is out, so nothing here is pressed until it comes back. */
   running: boolean;
+  /** The half's one set of picked rows, which this list draws its own of (`./gitPick`). */
+  picked: Picked;
+  onPicked: (picked: Picked) => void;
   /** Open the file on the other side of the panes. Absent where there is nowhere to open it. */
   onOpen?: (path: string[]) => void;
   /** Say this one is settled, which is to stage it. */
   onSettle: (row: GitEntryDto) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
+  const on = picking("conflict", rows, picked, onPicked, onMenu);
   return (
     <section className="gitpanel__section gitpanel__section--conflict">
       <h3 className="gitpanel__head">{t("git.conflicts")} <span>{rows.length}</span></h3>
-      <ul className="gitpanel__list">
+      <RowList what={t("git.conflicts")} on={on}>
         {rows.map((row) => (
           <ConflictRow
-            key={row.path.join("/")}
+            key={whole(row)}
             row={row}
-            left={marks[row.path.join("/")]}
+            left={marks[whole(row)]}
             running={running}
+            picked={on.has(whole(row))}
+            stop={on.stop === whole(row)}
+            onPress={(how) => on.press(whole(row), how)}
             onOpen={onOpen}
             onSettle={onSettle}
-            onMenu={onMenu}
+            onMenu={on.menu}
           />
         ))}
-      </ul>
+      </RowList>
     </section>
+  );
+}
+
+/**
+ * What one list answers the reader's hand with: which of its rows are picked out, where the tab
+ * stop is, and what a press or a walk does to the set (`./gitPick`).
+ *
+ * **Written once for the three lists.** They draw different rows — a conflict carries a count and
+ * no box — and a reader gathers rows in all three the same way, so the gathering is here and the
+ * drawing is in each list.
+ */
+function picking(
+  which: Which,
+  rows: GitEntryDto[],
+  picked: Picked,
+  onPicked: (picked: Picked) => void,
+  onMenu: (path: string[], x: number, y: number) => void,
+) {
+  const keys = rows.map(whole);
+  const mine = keysIn(which, picked);
+  return {
+    keys,
+    /** Whether this row is one of the picked. */
+    has: (key: string): boolean => mine.includes(key),
+    /** Where the tab stop is: the end the range is measured from, or the first row before a reader
+     *  has touched the list. Every list keeps one, so Tab reaches each of them. */
+    stop: (picked.which === which ? picked.anchor : null) ?? keys[0],
+    press: (key: string, how: How): void => { onPicked(pick(which, keys, picked, key, how)); },
+    /** Walking with the arrows, from the row the keyboard is on to the one beside it. */
+    walk: (from: string, to: string, spread: boolean): void => {
+      onPicked(pick(which, keys, picked, to, spread ? "spread" : "one", from));
+    },
+    /**
+     * The menu the row carries, opened after the row has been stood on.
+     *
+     * A menu opened away from what is picked is a menu about this row alone: the set is put down,
+     * because the alternative is a box standing over one row and acting on others. Opened on a row
+     * already in the set it changes nothing — that is the press a reader makes to act on what they
+     * gathered.
+     */
+    menu: (path: string[], x: number, y: number): void => {
+      if (!mine.includes(path.join("/"))) onPicked(pick(which, keys, picked, path.join("/"), "one"));
+      onMenu(path, x, y);
+    },
+  };
+}
+
+/** What a list hands its rows, as `picking` answers it. */
+type Picking = ReturnType<typeof picking>;
+
+/**
+ * The box one list's rows are drawn in, and the arrows that walk them.
+ *
+ * **It is a grid and not a list of choices.** The rows carry things to press — a box that stages,
+ * a press that says a conflict is settled — and what may hold a control is a cell of a grid, where
+ * a choice may not. That is also what lets a row say it is one of the picked (`aria-selected`)
+ * while the box inside it goes on saying whether the path is staged.
+ *
+ * A key with the machine's own on it is not this list's, the same way it is not the tree's
+ * (`./FolderTree`): what the reader means by ⌘ or Ctrl is the machine's word. Shift is the one
+ * exception, and it reaches from the end the range is measured from to where the walk arrived.
+ */
+function RowList({ what, on, children }: {
+  /** The name over the list, which is what this box is called by anything reading it out. */
+  what: string;
+  on: Picking;
+  children: ReactNode;
+}) {
+  const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[role="row"]');
+    if (row === null || !e.currentTarget.contains(row)) return;
+    const at = on.keys.indexOf(row.dataset.key ?? "");
+    if (at < 0) return;
+    const list = e.currentTarget;
+    const go = (to: string | undefined) => {
+      if (to === undefined) return;
+      e.preventDefault();
+      on.walk(on.keys[at], to, e.shiftKey);
+      // The row itself, because the stop follows the set and the set has only just been told to
+      // move: a reader walking a list is standing on the row they arrived at, not on the one they
+      // left.
+      list.querySelector<HTMLElement>(`[data-key="${CSS.escape(to)}"]`)?.focus();
+    };
+    switch (e.key) {
+      case "ArrowDown": go(on.keys[at + 1]); break;
+      case "ArrowUp": go(on.keys[at - 1]); break;
+      // The two ends of the list are reached the way the steps are: a reader holding Shift is
+      // asking for everything between, however far away the end is.
+      case "Home": go(on.keys[0]); break;
+      case "End": go(on.keys[on.keys.length - 1]); break;
+    }
+  };
+  return (
+    <ul
+      className="gitpanel__list"
+      role="grid"
+      aria-label={what}
+      // Said on the list, because it is a fact about the list and not about any one row: a reader
+      // being read to is told the rows can be picked out several at a time before they meet one.
+      aria-multiselectable
+      onKeyDown={onKey}
+    >
+      {children}
+    </ul>
   );
 }
 
@@ -640,17 +851,23 @@ function Conflicts({ rows, marks, running, onOpen, onSettle, onMenu }: {
  * stand together: while something is left to settle there is nothing to declare, and once nothing
  * is left the number would be a nought nobody needs to read.
  */
-function ConflictRow({ row, left, running, onOpen, onSettle, onMenu }: {
+function ConflictRow({ row, left, running, picked, stop, onPress, onOpen, onSettle, onMenu }: {
   row: GitEntryDto;
   left: number | undefined;
   running: boolean;
+  /** Whether the reader has this row in the set they gathered (`./gitPick`). */
+  picked: boolean;
+  /** Whether this row holds the list's tab stop. */
+  stop: boolean;
+  /** A press on the row itself, which is what moves the set. */
+  onPress: (how: How) => void;
   onOpen?: (path: string[]) => void;
   onSettle: (row: GitEntryDto) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const name = row.path[row.path.length - 1] ?? "";
   const holding = row.path.slice(0, -1).join("/");
-  const whole = row.path.join("/");
+  const path = whole(row);
   const said = (
     <>
       <span className="gitpanel__mark">{letters(row)}</span>
@@ -660,40 +877,67 @@ function ConflictRow({ row, left, running, onOpen, onSettle, onMenu }: {
   );
   return (
     <li
-      className="gitpanel__row gitpanel__row--conflict"
-      title={whole}
-      onContextMenu={(e) => { e.preventDefault(); onMenu(row.path, e.clientX, e.clientY); }}
+      className={`gitpanel__row gitpanel__row--conflict${picked ? " gitpanel__row--picked" : ""}`}
+      role="row"
+      data-key={path}
+      aria-selected={picked}
+      tabIndex={stop ? 0 : -1}
+      title={path}
+      onClick={(e) => press(e, onPress)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        // Stood on before the menu opens, because the row a menu is about is the row a reader comes
+        // back to when it closes — and a right-click is not a press the browser moves the focus for.
+        e.currentTarget.focus();
+        onMenu(row.path, e.clientX, e.clientY);
+      }}
     >
-      {onOpen === undefined
-        ? <span className="gitpanel__conflictname">{said}</span>
-        : (
-          <button
-            className="gitpanel__conflictname gitpanel__conflictopen"
-            type="button"
-            onClick={() => onOpen(row.path)}
-          >
-            {said}
-          </button>
-        )}
-      {left === undefined ? null : left > 0
-        ? <span className="gitpanel__marks">{tf("git.conflictMarks", { n: left })}</span>
-        : (
-          <button
-            className="btn gitpanel__settle"
-            type="button"
-            disabled={running}
-            onClick={() => onSettle(row)}
-          >
-            {t("git.settleOne")}
-          </button>
-        )}
+      <span className="gitpanel__cell" role="gridcell">
+        {onOpen === undefined
+          ? <span className="gitpanel__conflictname">{said}</span>
+          : (
+            <button
+              className="gitpanel__conflictname gitpanel__conflictopen"
+              type="button"
+              // The set is left where it is: this press is the way into the file, and a reader who
+              // gathered five rows to act on has not put them down by reading one of them.
+              onClick={(e) => { e.stopPropagation(); onOpen(row.path); }}
+            >
+              {said}
+            </button>
+          )}
+        {left === undefined ? null : left > 0
+          ? <span className="gitpanel__marks">{tf("git.conflictMarks", { n: left })}</span>
+          : (
+            <button
+              className="btn gitpanel__settle"
+              type="button"
+              disabled={running}
+              onClick={(e) => { e.stopPropagation(); onSettle(row); }}
+            >
+              {t("git.settleOne")}
+            </button>
+          )}
+      </span>
     </li>
   );
 }
 
+/**
+ * A press on a row, as the set of picked rows hears it.
+ *
+ * **Ctrl and a press is how a Mac asks for the menu**, and the webview may or may not send a click
+ * beside that menu — so the press is let go of there rather than read as the plain one it is not
+ * (`./FolderTree` reads it the same way).
+ */
+function press(e: ReactMouseEvent<HTMLElement>, onPress: (how: How) => void): void {
+  if (hostOs() === "macos" && e.ctrlKey) return;
+  onPress(howOf(e));
+}
+
 /** One of the two lists, under its name — drawn with nothing in it as well, since which of the two
  *  a path is in is the answer, and a list that disappeared would leave the other unnamed. */
-function Changes({ what, none, rows, staged, running, onToggle, onMenu }: {
+function Changes({ what, none, rows, staged, running, which, picked, onPicked, onToggle, onMenu }: {
   what: string;
   none: string;
   rows: GitEntryDto[];
@@ -701,28 +945,36 @@ function Changes({ what, none, rows, staged, running, onToggle, onMenu }: {
   staged: boolean;
   /** A door is out, so nothing here is pressed until it comes back. */
   running: boolean;
+  /** Which list this is to the set of picked rows (`./gitPick`). */
+  which: Which;
+  picked: Picked;
+  onPicked: (picked: Picked) => void;
   onToggle: (row: GitEntryDto) => void;
   /** Open the menu this row carries, at the point the pointer was (`./FileMenu`). */
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
+  const on = picking(which, rows, picked, onPicked, onMenu);
   return (
     <section className="gitpanel__section">
       <h3 className="gitpanel__head">{what} {rows.length > 0 && <span>{rows.length}</span>}</h3>
       {rows.length === 0
         ? <p className="files__none">{none}</p>
         : (
-          <ul className="gitpanel__list">
+          <RowList what={what} on={on}>
             {rows.map((row) => (
               <ChangedRow
-                key={row.path.join("/")}
+                key={whole(row)}
                 row={row}
                 staged={staged}
                 running={running}
+                picked={on.has(whole(row))}
+                stop={on.stop === whole(row)}
+                onPress={(how) => on.press(whole(row), how)}
                 onToggle={onToggle}
-                onMenu={onMenu}
+                onMenu={on.menu}
               />
             ))}
-          </ul>
+          </RowList>
         )}
     </section>
   );
@@ -746,38 +998,60 @@ function Changes({ what, none, rows, staged, running, onToggle, onMenu }: {
  * broken into a heading per folder is a page rather than a list, and the names are what a reader
  * runs their eye down.
  */
-function ChangedRow({ row, staged, running, onToggle, onMenu }: {
+function ChangedRow({ row, staged, running, picked, stop, onPress, onToggle, onMenu }: {
   row: GitEntryDto;
   staged: boolean;
   running: boolean;
+  /** Whether the reader has this row in the set they gathered (`./gitPick`). */
+  picked: boolean;
+  /** Whether this row holds the list's tab stop. */
+  stop: boolean;
+  /** A press on the row itself, which is what moves the set. */
+  onPress: (how: How) => void;
   onToggle: (row: GitEntryDto) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const name = row.path[row.path.length - 1] ?? "";
   const holding = row.path.slice(0, -1).join("/");
   const mark: GitMark = markOf(row);
-  const whole = row.path.join("/");
+  const path = whole(row);
   return (
     <li
-      className={`gitpanel__row gitpanel__row--${mark}`}
-      title={whole}
-      onContextMenu={(e) => { e.preventDefault(); onMenu(row.path, e.clientX, e.clientY); }}
+      className={`gitpanel__row gitpanel__row--${mark}${picked ? " gitpanel__row--picked" : ""}`}
+      role="row"
+      data-key={path}
+      aria-selected={picked}
+      tabIndex={stop ? 0 : -1}
+      title={path}
+      onClick={(e) => press(e, onPress)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.currentTarget.focus();
+        onMenu(row.path, e.clientX, e.clientY);
+      }}
     >
-      {/* The path is said in full, because the box stands away from the name in the reading order
-          of anything that reads the row out. */}
-      <input
-        className="gitpanel__check"
-        type="checkbox"
-        checked={staged}
-        disabled={running}
-        aria-label={tf(staged ? "git.unstageOne" : "git.stageOne", { path: whole })}
-        onChange={() => onToggle(row)}
-      />
-      <span className="gitpanel__mark">{letters(row)}</span>
-      {/* A folder git named as a whole rather than naming what is inside it, which is what it does
-          with an untracked one. The slash is how git writes that, and how the tree reads it. */}
-      <span className="gitpanel__name">{name}{row.isDir ? "/" : ""}</span>
-      {holding !== "" && <span className="gitpanel__where">{holding}</span>}
+      <span className="gitpanel__cell" role="gridcell">
+        {/* The path is said in full, because the box stands away from the name in the reading order
+            of anything that reads the row out.
+
+            **The set is left where it is when the box is pressed.** The box is what this list does
+            to one path, and a reader who gathered five rows to stage together has not begun again
+            by ticking one of them. */}
+        <input
+          className="gitpanel__check"
+          type="checkbox"
+          checked={staged}
+          disabled={running}
+          aria-label={tf(staged ? "git.unstageOne" : "git.stageOne", { path })}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggle(row)}
+        />
+        <span className="gitpanel__mark">{letters(row)}</span>
+        {/* A folder git named as a whole rather than naming what is inside it, which is what it does
+            with an untracked one. The slash is how git writes that, and how the tree reads it. */}
+        <span className="gitpanel__name">{name}{row.isDir ? "/" : ""}</span>
+        {holding !== "" && <span className="gitpanel__where">{holding}</span>}
+      </span>
     </li>
   );
 }

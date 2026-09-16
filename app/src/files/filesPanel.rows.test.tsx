@@ -522,21 +522,23 @@ describe("the file face", () => {
     expect(hoisted.asked.filter((one) => one.startsWith("reveal:"))).toEqual([`reveal:${ROOT}:a.md`]);
   });
 
-  it("draws no door that names one thing while several rows are picked out", async () => {
+  it("greys the door that names one thing while several rows are picked out", async () => {
     await four({ onHandOver: () => {} });
     await clickWith(rowFor("a.md"), { ctrlKey: true });
     await menuOn(rowFor("a.md"));
     // One row: naming it is a thing to do, and the pane is offered the file's own wording.
-    expect(button(t("files.rename"))).toBeDefined();
+    expect(button(t("files.rename"))?.getAttribute("aria-disabled")).toBeNull();
     expect(button(t("files.pasteFilePath"))).toBeDefined();
 
     await click(button(t("files.rename")));
     await clickWith(rowFor("c.md"), { ctrlKey: true });
     await menuOn(rowFor("c.md"));
-    // Two: a rename over both would be a press to refuse afterwards.
-    expect(button(t("files.rename"))).toBeUndefined();
-    // What acts on several is still there.
-    expect(button(t("files.copyPath"))).toBeDefined();
+    // Two: a rename over both would be a press to refuse afterwards — so it is drawn and not
+    // pressed, rather than gone. A menu that changed shape with the selection is one nobody could
+    // learn (`./FileMenu`).
+    expect(button(t("files.rename"))?.getAttribute("aria-disabled")).toBe("true");
+    // What acts on several is still there, and still presses.
+    expect(button(t("files.copyPath"))?.getAttribute("aria-disabled")).toBeNull();
     expect(button(t("files.trash"))).toBeDefined();
   });
 

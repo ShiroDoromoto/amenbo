@@ -79,9 +79,12 @@ function oncePerFolder(paths: string[][]): string[][] {
 /**
  * What git can be told about the rows a menu is about.
  *
- * **Each is absent rather than refused where it does not apply.** A path inside a commit has no
- * change to throw away, and a row whose face cannot open a history has nowhere to open one — an
- * item drawn there would be one a reader presses once and learns to distrust.
+ * **What the row is decides what is drawn; what the set is decides what can be pressed**
+ * (`AMB-D-906`, 2-8). A path inside a commit has no change to throw away and a row whose face
+ * cannot open a history has nowhere to open one, so neither item is there at all. But a door the
+ * rows are merely not all in a state for is drawn and greyed: rows are picked out several at a
+ * time, a set mixing what git follows with what it has never seen is ordinary, and a menu whose
+ * items came and went with the selection would be one a reader could not learn.
  */
 export type GitDoors = {
   /** Open the history of this row alone, in the column across the panes (`./GitHistory`). Handed
@@ -91,6 +94,15 @@ export type GitDoors = {
   onIgnore?: () => void;
   /** Stop git following these rows, leaving them on disk. */
   onUntrack?: () => void;
+  /**
+   * Whether git follows every row the menu is about.
+   *
+   * `false` greys the door above rather than taking it away: `git rm --cached` refuses a pathspec
+   * naming a path git has never seen, and refuses the whole of it — so over five rows with one
+   * untracked among them the press would fail for all five. Absent where the caller answers for one
+   * row and has no set to judge.
+   */
+  followsAll?: boolean;
   /** Throw away what the working tree has done to them — asked about first (`./restore`). Absent
    *  where there is nothing to throw away, which is every row inside a commit. */
   onRestore?: () => void;
@@ -121,9 +133,10 @@ export function FileMenu({
    * doors there are, and a menu whose shape changed with what else was picked out would be a menu
    * a reader could not learn.
    *
-   * The doors that only make sense one at a time — writing a new name into a folder, and renaming —
-   * are drawn only where this is one row. There is nothing to be gained by offering a rename over
-   * five rows except a press that has to be refused afterwards.
+   * The doors that only make sense one at a time — writing a new name into a folder, renaming, and
+   * one path's history — are drawn over five rows and greyed. A rename of five rows is one press
+   * that would have to be refused afterwards; an item that vanished as the fifth row was picked out
+   * is a menu that changes shape under the reader.
    */
   about: string[][];
   /** Whether the row is a folder. It decides the whole of what the menu holds. */
@@ -190,18 +203,18 @@ export function FileMenu({
     <Menu at={at} face={apps} onClose={onClose}>
       {apps === null ? (
         <>
-          {naming !== undefined && dir && alone && (
+          {naming !== undefined && dir && (
             <>
-              <MenuItem onClick={() => pick(() => naming.onMake(false))}>
+              <MenuItem off={!alone} onClick={() => pick(() => naming.onMake(false))}>
                 {t("files.newFile")}
               </MenuItem>
-              <MenuItem onClick={() => pick(() => naming.onMake(true))}>
+              <MenuItem off={!alone} onClick={() => pick(() => naming.onMake(true))}>
                 {t("files.newFolder")}
               </MenuItem>
             </>
           )}
-          {rename !== null && alone
-            && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
+          {rename !== null
+            && <MenuItem off={!alone} onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
           {/* What `⌘C` on the row already does, said out loud: the keys are how a reader who knows
               them copies a path, and the menu is where everybody else looks (`AMB-D-832`). It puts
               the file itself and the plain path on the machine's clipboard in one press, which is
@@ -264,9 +277,12 @@ export function FileMenu({
               the row to the machine and these change what the repository records about it. The
               history is first: it is the one of the four that only reads, and it is what a reader
               opens the others from having looked at (`AMB-D-906`). */}
-          {git?.onHistory !== undefined && alone && path.length > 0 && (
+          {git?.onHistory !== undefined && path.length > 0 && (
             <MenuItem
               apart
+              // One row's history and not a set's: what `git log` is asked is one path, and five
+              // answers are five lists nothing could draw as one.
+              off={!alone}
               // The path as this row's own folder spells it, which is the folder git is run in
               // for that road — so it is read as written (`crate::folder_git`).
               onClick={() => { onClose(); git.onHistory?.(path.join("/")); }}
@@ -278,7 +294,12 @@ export function FileMenu({
             <MenuItem onClick={() => { onClose(); git.onIgnore?.(); }}>{t("git.ignore")}</MenuItem>
           )}
           {git?.onUntrack !== undefined && path.length > 0 && (
-            <MenuItem onClick={() => { onClose(); git.onUntrack?.(); }}>{t("git.untrack")}</MenuItem>
+            <MenuItem
+              off={git.followsAll === false}
+              onClick={() => { onClose(); git.onUntrack?.(); }}
+            >
+              {t("git.untrack")}
+            </MenuItem>
           )}
           {/* The two that settle a conflict by taking one side of it whole. They are together and
               set off from the rest, because they are the only items here that are about a row being

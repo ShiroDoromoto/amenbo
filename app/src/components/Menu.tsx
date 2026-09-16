@@ -162,17 +162,28 @@ export function Menu({ at, face, onClose, children }: {
   );
 }
 
-/** One item. `apart` holds it off from the items above, for the one that is not their kind. */
-export function MenuItem({ apart = false, onClick, children }: {
+/**
+ * One item. `apart` holds it off from the items above, for the one that is not their kind.
+ *
+ * **`off` is an item drawn and not pressed**, for a door the rows a menu is about are not all in a
+ * state for (`../files/FileMenu`). It stays where it is, so a menu keeps one shape whatever is
+ * picked out — and it keeps the arrows, because a reader walking the list is told what is there and
+ * would otherwise find it silently missing.
+ */
+export function MenuItem({ apart = false, off = false, onClick, children }: {
   apart?: boolean;
+  off?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
   return (
     <button
-      className={apart ? `${ITEM} ${ITEM}--apart` : ITEM}
+      className={`${ITEM}${apart ? ` ${ITEM}--apart` : ""}${off ? ` ${ITEM}--off` : ""}`}
       role="menuitem"
-      onClick={onClick}
+      // Not `disabled`: a disabled button is out of the arrows' reach and says nothing to a reader
+      // being read to, which is the opposite of what drawing it was for.
+      aria-disabled={off || undefined}
+      onClick={off ? () => {} : onClick}
     >
       {children}
     </button>

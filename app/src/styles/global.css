@@ -1138,9 +1138,28 @@ input[type="color"] {
 /* One path git named. The mark is set in the same monospaced pair on every row, so the letters make
    a column a reader can run their eye down — which is what makes a list of twenty legible at all. */
 .gitpanel__row {
-  display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
-  padding: 1px 0;
+  min-width: 0;
+  /* The band a picked row wears runs wider than the names, so the row takes the padding back off
+     the panel's own — the names stay in the column the headings above them start in. */
+  padding: 1px var(--s-1); margin: 0 calc(-1 * var(--s-1));
+  border-radius: var(--r-sm);
 }
+/* What the row holds, on one line. It is a cell of the list rather than the row itself, because a
+   row that is a cell may hold nothing to press and these hold a box and a button
+   (`app/src/files/GitPanel.tsx`). */
+.gitpanel__cell { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+/* **The three answers a row gives about the reader's hand**, drawn the way the tree draws them
+   (`.files__file--picked` and below it): the rows they picked out take the accent's faint ground,
+   and the tab stop and the pointer — which are only where their hand is at this instant — take a
+   shade of the ground and give way to it. */
+.gitpanel__row--picked { background: var(--c-accent-faint); }
+.gitpanel__row:hover:not(.gitpanel__row--picked) { background: var(--c-sunken); }
+/* Drawn inside the row rather than outside it: at the height these rows are, a ring held off the
+   edge all but touches the names above and below. */
+.gitpanel__row:focus, .gitpanel__row:focus-visible {
+  outline: 1px solid var(--c-accent); outline-offset: -1px;
+}
+.gitpanel__row:focus:not(.gitpanel__row--picked) { background: var(--c-sunken); }
 .gitpanel__mark {
   flex: 0 0 auto;
   font-family: var(--font-mono); font-size: var(--fs-xs);

@@ -1470,12 +1470,12 @@ impl Instructor {
             // an axis carrying the role, which is what the step before either of these puts there, and
             // it is shut on the last value a required axis still offers, which is the road's other half.
             (Domain::Dimension, "value-close") => format!(
-                "Above the board, open the way into managing the project's categories, find the value \"{}\" under \"{}\", and press the button on its row that closes it.",
+                "Above the board, open the way into managing the project's categories, find the value \"{}\" under \"{}\", and press the button on its row that closes it. The row leaves the list as it closes — the panel folds the closed values away behind a button saying how many it holds — which is the closing landing, not the value going anywhere.",
                 req(with, "value")?,
                 req(with, "dimension")?
             ),
             (Domain::Dimension, "value-reopen") => format!(
-                "Above the board, open the way into managing the project's categories, find the value \"{}\" under \"{}\", and press the button on its row that opens it again. This panel is the only face that draws a closed value at all, so it is the only one the way back is on.",
+                "Above the board, open the way into managing the project's categories, find \"{1}\", press the button under its values that says how many closed ones it holds, and on the row for \"{0}\" that comes out press the button that opens it again. This panel is the only face that draws a closed value at all, so it is the only one the way back is on — folded, but one press from a reader who came looking.",
                 req(with, "value")?,
                 req(with, "dimension")?
             ),
@@ -3618,18 +3618,20 @@ impl Instructor {
                 }
             }
             // Whether a value is closed, read on the one face that draws a closed value at all. The
-            // panel says it twice over — the row is drawn struck through, and the button on it offers
-            // the way back rather than the way out — and neither is a word on a shot: the marking is a
-            // style and the button's label is the interface's own, so an eye closes this one.
+            // panel says it three ways over — the value is behind the fold rather than among what the
+            // category offers, its row is drawn struck through, and the button on it offers the way
+            // back rather than the way out — and none of the three is a word on a shot: the fold's
+            // count is a number, the marking is a style and the button's label is the interface's own,
+            // so an eye closes this one.
             (Domain::Dimension, "closed") => {
                 let dimension = req(with, "dimension")?;
                 let value = req(with, "value")?;
                 match closed_equals(with) {
                     true => format!(
-                        "Above the board, open the way into managing the project's categories and confirm the value \"{value}\" under \"{dimension}\" is drawn as retired — struck through, with the button on its row now offering to open it again rather than to close it."
+                        "Above the board, open the way into managing the project's categories and confirm the value \"{value}\" under \"{dimension}\" is not among the values \"{dimension}\" lists, a button under them counting it instead; press that button and confirm the row it brings out is drawn as retired — struck through, with the button on its row now offering to open it again rather than to close it."
                     ),
                     false => format!(
-                        "Above the board, open the way into managing the project's categories and confirm the value \"{value}\" under \"{dimension}\" is drawn like the category's other values — not struck through, with the button on its row offering to close it."
+                        "Above the board, open the way into managing the project's categories and confirm the value \"{value}\" under \"{dimension}\" stands among the values it lists, drawn like the category's others — not struck through, with the button on its row offering to close it."
                     ),
                 }
             }

@@ -236,6 +236,8 @@ export const ko: Translation = {
     "dimmgr.closeValue": "닫기",
     "dimmgr.reopenValue": "다시 열기",
     "dimmgr.closeValueHint": "이 값을 닫습니다. 이미 지닌 것은 그대로 지니고 필터에서도 계속 찾을 수 있으며, 새로 붙이는 것만 거절됩니다. 다시 여는 것은 언제나 가능합니다",
+    "dimmgr.showClosed.other": "닫힌 값 {n}건 보기",
+    "dimmgr.hideClosed": "닫힌 값 숨기기",
     "dimmgr.showOnCard": "카드에 표시",
     "dimmgr.showOnCardHint": "이 분류를 작업 카드에 표시합니다. 분류 자체가 가진 설정이라 이 기기뿐 아니라 모두에게 같이 바뀝니다",
     "dimmgr.required": "필수",

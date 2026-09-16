@@ -691,11 +691,6 @@ impl Instructor {
     /// right part of it; the count beside them is a bare number, and a board draws bare numbers all over
     /// itself — one on every column head — so a reading of it would pass wherever the run was pointed.
     ///
-    /// `carded` is read except on the one step that carries `grouping: true`, where it is a `Review`:
-    /// the axis named is the one the columns are cut along, so its value is written on a heading over
-    /// the very card being read. Both answers put that word on the shot, and what separates them is
-    /// which part of the board it came from — which a reading never says.
-    ///
     /// `view-warns` is a `Review`. What it names is a bare number, and the sidebar draws bare numbers
     /// down its whole length — one beside every project — so a reading of it would pass wherever the
     /// run was pointed. What tells this one from those is the colour it is drawn in, and a reading
@@ -897,20 +892,10 @@ impl Instructor {
             (Domain::Dimension, "listed") if arg_str(with, "value").is_none() => {
                 Some(Expectation { text: arg_str(with, "dimension")?.to_string(), present: present(with) })
             }
-            // The value on the column heading, which is a word the reader gave. A column that is not
-            // drawn holds nothing that would carry the name elsewhere on the board — the cards under it
-            // went with it, and a card draws a category only where the axis is marked for it.
-            (Domain::Project, "column") => {
-                Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
-            }
             // The value, not the card's title: what is being asked is whether the classification is
             // drawn, and a title is on the board either way. Which card carries it is the driver's to
             // see — the instruction names it — so the reading answers the half a reading can.
-            //
-            // Except where the axis is the one splitting the columns (`grouping: true`), which is a
-            // `Review`: the value is written on the column heading whether or not the card repeats it,
-            // so a reading finds the word on every shot of that board and settles nothing.
-            (Domain::Task, "carded") if !grouping(with) => {
+            (Domain::Task, "carded") => {
                 Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
             }
             (Domain::Folder, "first-loop") => {
@@ -999,13 +984,6 @@ impl Instructor {
             (Domain::Files, "reading") if with.contains_key("as") => None,
             (Domain::Files, "reading") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
-            }
-            // The axis's own name, which is what its button in that row is drawn with. Nothing else on
-            // a board opened plain carries it — a card draws values and not the axis they are on, and
-            // the filter chips are behind a control this road does not press — so the name being
-            // nowhere is the picker not offering it.
-            (Domain::Project, "groupable") => {
-                Some(Expectation { text: arg_str(with, "axis")?.to_string(), present: present(with) })
             }
             _ => None,
         }
@@ -1256,27 +1234,6 @@ impl Instructor {
                 "Have the column down the left of the ledger standing {}. What moves it is at the column's own foot — under the rows, outside what scrolls — a control in a frame of its own, drawn as an arrow run into the window's edge. Press it where the column is at the other width, and leave it where it is already at this one: the same press is what moves it back.",
                 sidebar_width(with)?.wanted,
             ),
-            // The card carried across the board and let go in a column, which is how work is filed
-            // where it is standing. The column is named by the value on its heading — a word the reader
-            // gave — and the axis beside it says which cut of the board the operator is looking at, so a
-            // line is walkable on the board it was written for and on no other.
-            //
-            // The half a closed value turns away is written out rather than left to the sentence every
-            // refused step ends with, for the reason the held creation is: nothing comes back and no
-            // sentence is shown, the column simply not taking the card — so an operator told only to
-            // expect a refusal would be watching for something that never appears.
-            (Domain::Task, "drop-into-column") if with.contains_key("refused") => format!(
-                "On the board cut along \"{}\", carry the card \"{}\" over the column headed \"{}\" and let it go. The column takes no card — it is nowhere a drop can land — so the card stays in the column it came from, with nothing said about it.",
-                req(with, "axis")?,
-                self.target_label(with),
-                req(with, "value")?
-            ),
-            (Domain::Task, "drop-into-column") => format!(
-                "On the board cut along \"{}\", drag the card \"{}\" into the column headed \"{}\" and let it go there.",
-                req(with, "axis")?,
-                self.target_label(with),
-                req(with, "value")?
-            ),
             // The moves that carry the screen from one shot to the next. They read as what to do and
             // not as what to confirm, because that is what they are — the shot they leave behind is
             // the screen after the move, which is how a road across screens is proven walked rather
@@ -1358,15 +1315,10 @@ impl Instructor {
                 "Open the project \"{}\" again, from the list of projects.",
                 req(with, "project")?
             ),
-            // The board recut. The row is named by what it is for rather than by its label, which is a
-            // word of the interface — and the axis's own name is on its button, which the reader gave it.
-            (Domain::Project, "group-by") => format!(
-                "Above the board, in the row of buttons that choose what its columns are cut along, press \"{}\". The columns become that axis's values.",
-                req(with, "axis")?
-            ),
             // The two moves the classification side of this face has, and the manager is opened inside the
-            // first of them: it is reached from the same row above the board that cuts the columns, so a
-            // step that sent a reader anywhere else would be describing a screen that is not there.
+            // first of them: it is reached from the row above the board, which holds nothing beside the
+            // way to add a category, so a step that sent a reader anywhere else would be describing a
+            // screen that is not there.
             //
             // Neither line names the box by its label. What is drawn on it is each reader's own language,
             // and what the road means is the answer the box carries — so it is named by what it does, the
@@ -3379,51 +3331,10 @@ impl Instructor {
                     req(with, "value")?,
                     req(with, "dimension")?
                 ),
-                false if grouping(with) => format!(
-                    "Confirm the card \"{}\" does not repeat \"{}\" — the axis `{}` is the one the columns are cut along, so that word is on the heading above the card and must not be on the card itself.",
-                    self.target_label(with),
-                    req(with, "value")?,
-                    req(with, "dimension")?
-                ),
                 false => format!(
                     "Confirm the card \"{}\" carries nothing from the axis `{}`: \"{}\" is nowhere on the board.",
                     self.target_label(with),
                     req(with, "dimension")?,
-                    req(with, "value")?
-                ),
-            },
-            // The row of buttons that cut the columns, read for which axes it offers. It is the same row
-            // `group-by` presses, and the line says where to look rather than what the row is called:
-            // the label above it is a word of the interface, and the axis's name is the reader's own.
-            (Domain::Project, "groupable") => match present(with) {
-                true => format!(
-                    "Above the board, in the row of buttons that choose what its columns are cut along, confirm \"{}\" is one of them.",
-                    req(with, "axis")?
-                ),
-                false => format!(
-                    "Above the board, in the row of buttons that choose what its columns are cut along, confirm \"{}\" is not one of them — the name is nowhere on the board.",
-                    req(with, "axis")?
-                ),
-            },
-            // One column of the board that row cut, read for whether it is drawn at all. A closed value
-            // is where the answer stops following from the value being defined: the column stands while
-            // cards are still in it — hiding it would take those tasks off the board — and goes once the
-            // last one leaves, so an axis that keeps closing values does not grow columns nobody can
-            // drop into.
-            //
-            // What is standing in the column is no part of the reading, which the line says out loud: an
-            // open value is drawn a column before anything is filed under it, and that empty column is
-            // what a road files the first card through. A line that asked for the cards would send the
-            // reader of such a road looking for a failure the board is not having.
-            (Domain::Project, "column") => match present(with) {
-                true => format!(
-                    "On the board cut along \"{}\", confirm there is a column headed \"{}\", with or without cards standing in it.",
-                    req(with, "axis")?,
-                    req(with, "value")?
-                ),
-                false => format!(
-                    "On the board cut along \"{}\", confirm there is no column headed \"{}\" — the value is still on the category, and nothing is filed under it for the board to hold.",
-                    req(with, "axis")?,
                     req(with, "value")?
                 ),
             },
@@ -5242,13 +5153,6 @@ fn closed_equals(with: &Args) -> bool {
 /// is in, nothing being set up until something sets it up.
 fn set(with: &Args) -> bool {
     with.get("set").and_then(|v| v.as_bool()).unwrap_or(false)
-}
-
-/// Whether the axis a step names is the one the board is cut along. Said out loud by the road, since
-/// nothing in a step says what the board was left grouped by — and it is what turns a reading into a
-/// `Review`, the column heading carrying the value whatever the cards under it do.
-fn grouping(with: &Args) -> bool {
-    with.get("grouping").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 /// Whether a `found` step asks for the top of the answer rather than merely a place in it. Off unless
@@ -7829,91 +7733,6 @@ steps_gui:
             let err = Instructor::new().render(&step).unwrap_err();
             assert!(err.contains(answer), "got: {err}");
         }
-    }
-
-    /// The board recut, and the one `carded` step that recut leaves to an eye. On any other axis the
-    /// value is read off the shot as before; on the axis the columns are cut along, the heading over
-    /// the card carries that word whichever way the card answers, so a reading would pass either way.
-    #[test]
-    fn the_axis_the_board_is_cut_along_leaves_its_card_to_review() {
-        let regroup = Step::Action {
-            domain: Domain::Project,
-            op: "group-by".to_string(),
-            with: [("axis".to_string(), serde_yaml::Value::from("Medium"))].into_iter().collect(),
-            bind: None,
-            window: None,
-        };
-        let said = Instructor::new().render(&regroup).unwrap();
-        assert!(said.contains("Medium"), "the move names the axis to press: {said}");
-
-        let carded = |grouping: bool| {
-            let mut with: Args = [
-                ("target".to_string(), serde_yaml::Value::from("t")),
-                ("dimension".to_string(), serde_yaml::Value::from("Medium")),
-                ("value".to_string(), serde_yaml::Value::from("print")),
-                ("present".to_string(), serde_yaml::Value::from(false)),
-            ]
-            .into_iter()
-            .collect();
-            if grouping {
-                with.insert("grouping".to_string(), serde_yaml::Value::from(true));
-            }
-            Step::Assert { domain: Domain::Task, op: "carded".to_string(), with, window: None }
-        };
-        assert!(
-            Instructor::new().expectation(&carded(false)).is_some(),
-            "an axis the board is not cut along is read off the shot",
-        );
-        assert!(
-            Instructor::new().expectation(&carded(true)).is_none(),
-            "the axis it is cut along is a Review",
-        );
-        let said = Instructor::new().render(&carded(true)).unwrap();
-        assert!(said.contains("heading"), "and the line says where the word will be standing: {said}");
-    }
-
-    /// Filing work by carrying its card into a column, and the one column that will not take it. Both
-    /// halves are the same move and the same three words — the axis, the card, the value on the heading
-    /// — so what tells them apart is what the line says happens at the end of the drag. The refused one
-    /// says the card comes back and nothing is said about it, because that is all a column which is no
-    /// drop target ever does: an operator waiting for a sentence to appear would be waiting for a screen
-    /// this build never draws.
-    #[test]
-    fn a_card_carried_into_a_column_says_when_the_column_will_not_take_it() {
-        let drop = |value: &str, refused: bool| {
-            let mut with: Args = [
-                ("target".to_string(), serde_yaml::Value::from("fresh")),
-                ("axis".to_string(), serde_yaml::Value::from("Release")),
-                ("value".to_string(), serde_yaml::Value::from(value)),
-            ]
-            .into_iter()
-            .collect();
-            if refused {
-                with.insert(
-                    "refused".to_string(),
-                    serde_yaml::Value::from("invalid_dimension_set_closed_value"),
-                );
-            }
-            Step::Action {
-                domain: Domain::Task,
-                op: "drop-into-column".to_string(),
-                with,
-                bind: None,
-                window: None,
-            }
-        };
-
-        let landed = Instructor::new().render(&drop("v19", false)).unwrap();
-        assert!(landed.contains("Release") && landed.contains("v19"), "got: {landed}");
-        assert!(landed.contains("fresh"), "the card is named: {landed}");
-        assert!(!landed.contains("turned away"), "a drop that lands walks no refusal: {landed}");
-
-        let turned = Instructor::new().render(&drop("v18", true)).unwrap();
-        assert!(turned.contains("takes no card"), "got: {turned}");
-        assert!(
-            turned.contains("turned away rather than to go through"),
-            "and it is still a refused step: {turned}"
-        );
     }
 
     /// The demand an axis can carry, and the two controls this face answers it with. A terminal meets

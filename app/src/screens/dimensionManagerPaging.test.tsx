@@ -94,6 +94,12 @@ const up = async (n: number) => {
   await act(async () => { b.click(); });
 };
 
+/** The down arrow on the row at `n` of the page. */
+const down = async (n: number) => {
+  const b = rows()[n].querySelectorAll<HTMLButtonElement>(".dimmgr__movebtn")[1];
+  await act(async () => { b.click(); });
+};
+
 beforeAll(async () => {
   await loadSnapshot();
 });
@@ -157,6 +163,19 @@ describe("DimensionManager paging an axis's values", () => {
     // page went with it, so the value the reader pressed is still in front of them.
     expect(hoisted.moved).toEqual([`${900 + CLOSED + PAGE_SIZE}:before:${900 + CLOSED + PAGE_SIZE - 1}`]);
     expect(pagerInfo()).toContain(tf("pager.page", { page: 1, pages: 2 }));
+  });
+
+  it("anchors the last row of a page on the first row of the one after, and follows it there", async () => {
+    open();
+    expect(names()[PAGE_SIZE - 1]).toBe(`v${CLOSED + PAGE_SIZE - 1}`);
+
+    await down(PAGE_SIZE - 1);
+
+    // The other side of the same boundary, and the reading is the mirror image: anchored on the row
+    // below it in the whole of what is shown — the first row of page 2 — with the page following
+    // forward so the value the reader pressed has not left the screen.
+    expect(hoisted.moved).toEqual([`${900 + CLOSED + PAGE_SIZE - 1}:after:${900 + CLOSED + PAGE_SIZE}`]);
+    expect(pagerInfo()).toContain(tf("pager.page", { page: 2, pages: 2 }));
   });
 
   it("holds the arrow at the very first row, which has nowhere above it", () => {

@@ -2958,8 +2958,9 @@ const REGISTRY: &[OpSpec] = &[
     // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
     // what git says about each row drawn as a colour on it. Every op is the screen's —
     // `cat` is not Amenbo doing anything — and `section` says which part of the column a row is being
-    // looked for in: the folder's own names, or the changes git has to report about them, which is
-    // the other half of the panel and a list of rows like the first.
+    // looked for in: the folder's own names, the two lists in the half of the panel that is git's,
+    // or one of the two layers of the history across the panes. All four are rows with a name on
+    // them, which is what makes one arg enough.
     //
     // Which of the project's folders this panel is about, chosen from the list under the project's
     // name (`app/src/files/RootPick.tsx`). One folder is the window's answer to which
@@ -3076,6 +3077,48 @@ const REGISTRY: &[OpSpec] = &[
     // and lands back on the screen the reader is already reading. It takes no arguments because the
     // face draws one of these, in the row above the text, and the file it belongs to is the one open.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "save-shut", required: &[], refs: &[], strings: &[], binds: false },
+
+    // ── what git is told, and what it has written down ────────────────────────────────────────────
+    // The half of the panel that is git's is a pair of lists and one press under them: what has
+    // changed, what is staged, and the commit that writes the second of those down
+    // (`app/src/files/GitPanel.tsx`).
+    //
+    // **A row moves between the two lists by its own box**, and the box means the list it is in — a
+    // row of the changes is staged by ticking it, and a row of the staged is taken back out by
+    // unticking it. Two ops rather than one carrying a direction, because a road naming the wrong
+    // one would be pressing a box in the other list: the same name stands in both while a path is
+    // changed, staged, and changed again, and that is git's answer rather than a state to be tidied
+    // away.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "stage", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "unstage", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The message written and the commit made, which is one move on this face: the box and the press
+    // stand together under the lists, and a commit with nothing typed is refused by the control being
+    // down rather than by anything a road could read.
+    //
+    // **What it writes down is what is staged and nothing else.** The paths are named on the command
+    // git is given, so a pane that has staged something of its own in the same repository keeps it
+    // (`git-panel-spec`, 3-2) — which is a reading a road takes on the lists afterwards rather than
+    // an argument here.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "commit", required: &["message"], refs: &[], strings: &["message"], binds: false },
+    // What has been written down, opened in the column across the panes. It is one press and it is
+    // not drawn until it is made: the history costs a call of its own, and a face that asked for it
+    // on the way past would charge every reader for a column they never opened.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "history", required: &[], refs: &[], strings: &[], binds: false },
+    // One layer deeper into that column. It is one op for both layers because it is one row: the
+    // list's rows are commits and a commit's rows are the paths it touched, and which of the two a
+    // step means is decided by where the reader is standing — the same fact `press` turns on.
+    //
+    // The row is named by the words it draws: a commit's subject on the first layer, and a file's own
+    // name on the second.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "history-open", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // And back out, one layer a press, by the way drawn at the top of the column. The key does the
+    // same thing and is `press` — this is the one a reader finds without knowing it is there, which
+    // is the reason `back` is an op of its own beside the key.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "history-back", required: &[], refs: &[], strings: &[], binds: false },
+    // The patch git wrote for one path of one commit, at the bottom of that column. `shows` is a line
+    // of it, and the line is git's own text: nothing here rewrites what a diff says, so a road can
+    // name a line it put in the file itself and find it again with the character git marks it with.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "patch", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
     // ── the files the column is holding ───────────────────────────────────────────────────────────
     // The reading column holds several files at once, as a row of tabs above the one on top

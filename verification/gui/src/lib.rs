@@ -976,6 +976,10 @@ impl Instructor {
             (Domain::Files, "read-as") => {
                 Some(Expectation { text: arg_str(with, "encoding")?.to_string(), present: present(with) })
             }
+            // A line of git's own text, read off the shot the way an opened file's words are.
+            (Domain::Files, "patch") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             // A form named takes this away from the reading: both forms carry the same words, and
             // what separates them is punctuation the fold throws away and a size no reading reports.
             (Domain::Files, "reading") if picture(with) => {
@@ -2814,6 +2818,42 @@ impl Instructor {
                 Half::Files => "On the panel beside the panes, have the folder's own names up: the row of tabs under the project's name says which of its two halves is showing, and the first of the two is the folder's. Press it where the other half is up, and leave it alone where it is already the one showing.".to_string(),
                 Half::Git => "On the panel beside the panes, have what git says up: the row of tabs under the project's name says which of its two halves is showing, and the second of the two is git's. Press it where the other half is up, and leave it alone where it is already the one showing.".to_string(),
             },
+            // A row moved between the two lists by its own box. The box is named by where it stands
+            // rather than by what it is called, the way every control on this face is — and the row
+            // is named by the words it draws, which is the file's own name.
+            //
+            // Which list the press is in is the whole of the difference, so each says it: a name can
+            // stand in both at once, and an operator told only "tick the box" would have two to
+            // choose between.
+            (Domain::Files, "stage") => format!(
+                "In the half of the panel that is git's, find \"{}\" in the list of what has changed and tick the box at the start of its row. The row leaves that list and stands in the list of what is staged.",
+                req(with, "name")?
+            ),
+            (Domain::Files, "unstage") => format!(
+                "In the half of the panel that is git's, find \"{}\" in the list of what is staged and untick the box at the start of its row. The row leaves that list and stands in the list of what has changed.",
+                req(with, "name")?
+            ),
+            // The message and the press together. The control is down until something is typed and
+            // something is staged, so an operator who met it greyed has been sent to it a step early
+            // — the line says both, so that reads as the road's fault and not as the build's.
+            (Domain::Files, "commit") => format!(
+                "In the half of the panel that is git's, type \"{}\" into the box above the lists, then press the control beside it that records what is staged. The box empties and the list of what is staged goes empty with it.",
+                req(with, "message")?
+            ),
+            // The one press on this half that opens the other column.
+            (Domain::Files, "history") =>
+                "In the half of the panel that is git's, press the control that opens what has been recorded here — it is the one carrying a mark pointing across the panes. The column on the far side of the panes opens on a list of what was recorded, newest first."
+                    .to_string(),
+            // One layer deeper, and the row is named by the words it draws. Which layer that is
+            // depends on where the reader is standing, so the line says the row rather than the
+            // layer: on the list it is a commit's own words, and a layer in it is a file's name.
+            (Domain::Files, "history-open") => format!(
+                "In the column across the panes, press the row \"{}\". What the column draws is replaced by what is inside that row.",
+                req(with, "name")?
+            ),
+            (Domain::Files, "history-back") =>
+                "At the top of the column across the panes, press the way back — it is drawn as where it goes rather than as a word. The column comes back to the layer above the one it was on."
+                    .to_string(),
             (Domain::Files, "tree") => match flag(with, "open")? {
                 // One folder, whichever the window is on: a project bound to several draws the one
                 // a reader picked and no other, so a row is read in that folder's tree or it is not
@@ -4401,6 +4441,18 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
+            // git's own text, drawn line by line. A line is found by the characters it is written
+            // with, mark and all, because nothing here rewrites what a diff says.
+            (Domain::Files, "patch") => match present(with) {
+                true => format!(
+                    "In the column across the panes, confirm the patch drawn there has the line \"{}\" in it.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "In the column across the panes, confirm the patch drawn there has no line \"{}\" in it.",
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Files, "read-as") => match present(with) {
                 true => format!(
                     "On the row the open file is named on, confirm what says how it was read now names \"{}\".",
@@ -5056,15 +5108,21 @@ fn orient(with: &Args) -> Result<Orient, String> {
 /// `changes` is a list in the half beside the tree, and a row is in it because git has something to
 /// say about that path right now (`app/src/files/GitPanel.tsx`).
 ///
-/// The two are one arg because a row is a row either way — the same name, drawn to be pressed and
-/// looked for — and the phrase is what tells the operator which list to look down. Reaching the
-/// second means having that half up, which is `show-half`'s and not this arg's: naming a section here
-/// says where to look, never what to press to get there.
+/// They are one arg because a row is a row wherever it stands — the same name, drawn to be pressed
+/// and looked for — and the phrase is what tells the operator which list to look down. Getting to
+/// the list is somebody else's: `show-half` puts git's half up, `history` opens the column across
+/// the panes, and `history-open` goes a layer into it. Naming a section says where to look, never
+/// what to press to get there.
 fn section(with: &Args) -> Result<&'static str, String> {
     match with.get("section").and_then(|v| v.as_str()) {
         Some("tree") => Ok("the folder's own section"),
         Some("changes") => Ok("the list of what has changed, in the half of the panel that is git's"),
-        Some(other) => Err(format!("`section` does not know `{other}` — it is tree or changes")),
+        Some("staged") => Ok("the list of what is staged, in the half of the panel that is git's"),
+        Some("history") => Ok("the list of what has been recorded, in the column across the panes"),
+        Some("touched") => Ok("the list of the paths one commit touched, in the column across the panes"),
+        Some(other) => Err(format!(
+            "`section` does not know `{other}` — it is tree, changes, staged, history or touched"
+        )),
         None => Err("arg `section` must say which section".to_string()),
     }
 }

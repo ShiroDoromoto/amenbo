@@ -239,6 +239,13 @@ export function TerminalFace({
   // until it has been (`AMB-D-905`), so this is what puts its tab in that column's row — and it is
   // not kept, because a run nobody asked on should not come up on it.
   const [historyOpen, setHistoryOpen] = useState(false);
+  // One path the history is narrowed to, as the folder holding it spells it — nothing for the whole
+  // of the folder's. It is asked for from a row's own menu, which is in the rail on the other side
+  // of the panes, so the face holds it the way it holds which face is up (`../files/GitHistory`).
+  const [historyOnly, setHistoryOnly] = useState<{ root: string; path: string } | null>(null);
+  // The front the folder the window is on sits at inside its repository, said as git answers it.
+  // Whichever half of the rail is up reads it, so one of the two always has it.
+  const [gitPrefix, setGitPrefix] = useState("");
   // Whether the project tabs are drawn compact, and how wide they are while their names are drawn.
   // The column itself is never closed (`./ProjectTabs`); both of these are kept for the device the way
   // the wish above them is, because what the column draws is the same list of projects whichever one
@@ -815,7 +822,8 @@ export function TerminalFace({
    * width is the room a patch is read in, and the tab is what a reader goes back to it by. It is
    * the same three a file opened from the tree asks for (`openFile`).
    */
-  const openHistory = useCallback(() => {
+  const openHistory = useCallback((only: { root: string; path: string } | null = null) => {
+    setHistoryOnly(only);
     setHistoryOpen(true);
     takeTab("history");
     wantSide(true);
@@ -1100,7 +1108,11 @@ export function TerminalFace({
         <GitPanel
           projectId={layout.project}
           root={gitRoot}
-          onHistory={openHistory}
+          onHistory={(path) => openHistory(
+            path === undefined || gitRoot === null ? null : { root: gitRoot, path },
+          )}
+          onPrefix={setGitPrefix}
+          onHandOver={handOver}
         />
       )}
       picker={layout.project === null ? null : (
@@ -1122,6 +1134,10 @@ export function TerminalFace({
           onGone={goneFiles}
           onHandOver={handOver}
           onCarry={carry}
+          onHistory={(path) => {
+            if (gitRoot !== null) openHistory({ root: gitRoot, path });
+          }}
+          onPrefix={setGitPrefix}
         />
       }
     />
@@ -1455,8 +1471,14 @@ export function TerminalFace({
               onClose={() => wantSide(false)}
               wide={wide}
               onWide={setWideState}
-              gitRoot={gitRoot}
+              gitRoot={historyOnly?.root ?? gitRoot}
+              gitPrefix={gitPrefix}
               history={historyOpen}
+              historyOnly={historyOnly?.path ?? null}
+              onHistoryOnly={(one) => setHistoryOnly(
+                one === null || gitRoot === null ? null : { root: gitRoot, path: one },
+              )}
+              onFileHistory={(root, path) => openHistory({ root, path })}
               onHandOver={handOver}
             />
           </div>

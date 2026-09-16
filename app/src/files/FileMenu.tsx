@@ -1,10 +1,16 @@
 // The menu a row carries: what the machine can do with the paths a press is about — open them where
-// the machine would, show them where they live, hand them to the pane being worked in, or put them
-// in the bin.
+// the machine would, show them where they live, hand them to the pane being worked in, put them in
+// the bin, or say something about them to git.
 //
-// **One menu for both columns** (`AMB-D-835`). It is opened on a row of the tree in the rail and on
-// the file being read on the other side of the panes, and what it acts on is paths — which are the
-// same thing whichever column named them.
+// **One menu wherever a row names a file** (`AMB-D-835`). It is opened on a row of the tree in the
+// rail, on a changed path in the rail's git half, on a path inside a commit, and on the file being
+// read on the other side of the panes — and what it acts on is paths, which are the same thing
+// whichever of them named it.
+//
+// **What git can be told about a row is the caller's to say, not this menu's to work out.** Whether
+// there is a change to throw away, whether a path can be un-followed at all, and where a history
+// would open are answers each of those rows has and this box does not — so they arrive as the
+// handful of callbacks below, and an item with nothing behind it is not drawn.
 import { useState } from "react";
 import type { FolderAppDto } from "../bindings/bindings";
 import { Menu, MenuItem } from "../components/Menu";
@@ -70,7 +76,29 @@ function oncePerFolder(paths: string[][]): string[][] {
  * are about a file's own kind, and a menu that offered them over a folder would be offering to open a
  * directory in a text editor. What is left over a folder is what can be written into it.
  */
-export function FileMenu({ projectId, root, path, about, dir, at, naming, onClose, onTrash, onHandOver }: {
+/**
+ * What git can be told about the rows a menu is about.
+ *
+ * **Each is absent rather than refused where it does not apply.** A path inside a commit has no
+ * change to throw away, and a row whose face cannot open a history has nowhere to open one — an
+ * item drawn there would be one a reader presses once and learns to distrust.
+ */
+export type GitDoors = {
+  /** Open the history of this row alone, in the column across the panes (`./GitHistory`). Handed
+   *  the path as this row's own folder spells it, which is what that road takes. */
+  onHistory?: (path: string) => void;
+  /** Write these rows into the bound folder's own `.gitignore`. */
+  onIgnore?: () => void;
+  /** Stop git following these rows, leaving them on disk. */
+  onUntrack?: () => void;
+  /** Throw away what the working tree has done to them — asked about first (`./restore`). Absent
+   *  where there is nothing to throw away, which is every row inside a commit. */
+  onRestore?: () => void;
+};
+
+export function FileMenu({
+  projectId, root, path, about, dir, at, naming, onClose, onTrash, onHandOver, git,
+}: {
   projectId: number;
   root: string;
   /** The row the menu was opened on — what the menu is drawn from, and what it asks the host about
@@ -110,6 +138,14 @@ export function FileMenu({ projectId, root, path, about, dir, at, naming, onClos
    * an item that answers nothing is worse than an item that is not there.
    */
   onHandOver?: (wholes: string[]) => void;
+  /**
+   * What git can be told about this row, where the row's own face can answer for it.
+   *
+   * **Absent where git has nothing to say** — a folder that is no repository, and a face with no
+   * way to answer. Then none of the items is drawn, which is what a menu that cannot act should
+   * look like.
+   */
+  git?: GitDoors;
 }) {
   // The applications to pick from, once they have been asked for and there are any — the second
   // face of this one menu, drawn where the OS has no chooser to draw it for us.
@@ -214,6 +250,31 @@ export function FileMenu({ projectId, root, path, about, dir, at, naming, onClos
                 {t("files.reveal")}
               </MenuItem>
             </>
+          )}
+          {/* What git can be told about the row, held off from the doors above because they hand
+              the row to the machine and these change what the repository records about it. The
+              history is first: it is the one of the four that only reads, and it is what a reader
+              opens the others from having looked at (`AMB-D-906`). */}
+          {git?.onHistory !== undefined && alone && path.length > 0 && (
+            <MenuItem
+              apart
+              // The path as this row's own folder spells it, which is the folder git is run in
+              // for that road — so it is read as written (`crate::folder_git`).
+              onClick={() => { onClose(); git.onHistory?.(path.join("/")); }}
+            >
+              {t("git.fileHistory")}
+            </MenuItem>
+          )}
+          {git?.onIgnore !== undefined && path.length > 0 && (
+            <MenuItem onClick={() => { onClose(); git.onIgnore?.(); }}>{t("git.ignore")}</MenuItem>
+          )}
+          {git?.onUntrack !== undefined && path.length > 0 && (
+            <MenuItem onClick={() => { onClose(); git.onUntrack?.(); }}>{t("git.untrack")}</MenuItem>
+          )}
+          {/* The one road here nothing walks back. It is last, and the question in front of it is
+              the bin's own shape for the reason that decision gives (`./RestoreAsk`, `AMB-D-777`). */}
+          {git?.onRestore !== undefined && path.length > 0 && (
+            <MenuItem onClick={() => { onClose(); git.onRestore?.(); }}>{t("git.restore")}</MenuItem>
           )}
           {/* Over a folder as much as over a file: the bin takes one whole, and the undo brings it
               back whole. The bound folder is the one row it is not offered over — that row is the

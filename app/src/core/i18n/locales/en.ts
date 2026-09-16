@@ -805,6 +805,22 @@ const ui = {
   "git.noHistory": "Nothing has been committed here yet.",
   "git.touchedNothing": "This commit touched nothing.",
   "git.noPatch": "git wrote no patch for this path.",
+  "git.fileHistory": "This file's history",
+  "git.ignore": "Add to .gitignore",
+  "git.untrack": "Stop following it",
+  "git.restore": "Throw the changes away",
+  "git.wholeHistory": "The whole folder's history",
+  "git.noFileHistory": "Nothing here has touched this path.",
+  "git.restoreAsk": "Throw away what {name} is holding?",
+  "git.restoreAskMany": "Throw away what {n} files are holding?",
+  "git.restoreGone": "git has not recorded it, so nothing brings it back.",
+  "git.restoreQuiet": "Do not ask me again",
+  "git.restoreGo": "Throw it away",
+  "git.restoreKeep": "Keep it",
+  "settings.restoreAsk": "Before throwing changes away",
+  "settings.restoreAskOn": "Ask me",
+  "settings.restoreAskOff": "Do not ask me",
+  "settings.restoreAskNote": "A change git has not recorded is nowhere once it is thrown away — this is the one press in the window that nothing undoes.",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

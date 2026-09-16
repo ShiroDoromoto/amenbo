@@ -48,6 +48,8 @@ const hoisted = vi.hoisted(() => ({
   touched: {} as Record<string, GitFileDto[]>,
   /** The patch for one path of one commit, by "<sha> <path>". */
   patch: {} as Record<string, string>,
+  /** What git refuses the next throwing-away with, where a test is about the refusal. */
+  refuseRestore: null as unknown,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
   /** The encodings the host says a file may be reopened in. */
@@ -196,6 +198,19 @@ vi.mock("./folder", () => ({
   ): Promise<string> => {
     hoisted.asked.push(`diff:${root}:${sha}:${path}`);
     return hoisted.patch[`${sha} ${path}`] ?? "";
+  },
+  folderGitIgnore: async (_projectId: number, root: string, paths: string[][]): Promise<string> => {
+    hoisted.asked.push(`ignore:${root}:${paths.map((one) => one.join("/")).join(",")}`);
+    return "";
+  },
+  folderGitUntrack: async (_projectId: number, root: string, paths: string[][]): Promise<string> => {
+    hoisted.asked.push(`untrack:${root}:${paths.map((one) => one.join("/")).join(",")}`);
+    return "";
+  },
+  folderGitRestore: async (_projectId: number, root: string, paths: string[][]): Promise<string> => {
+    hoisted.asked.push(`restore:${root}:${paths.map((one) => one.join("/")).join(",")}`);
+    if (hoisted.refuseRestore !== null) throw hoisted.refuseRestore;
+    return "";
   },
   folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
     hoisted.asked.push(`git:${root}`);
@@ -458,6 +473,7 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
       createElement(FolderTree, {
         projectId: props.projectId,
         root: pickedRoot,
+        onHistory: props.onHistory,
         reading,
         onRead: openOne,
         onGone: gone,
@@ -483,7 +499,11 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
       // The folder the window is on, and whether the history has been pressed for — both are the
       // terminal face's answers, so the harness hands them the way it does (`../shell/TerminalFace`).
       gitRoot: props.gitRoot ?? null,
+      gitPrefix: props.gitPrefix ?? "",
       history: props.history ?? false,
+      historyOnly: props.historyOnly ?? null,
+      onHistoryOnly: props.onHistoryOnly,
+      onFileHistory: props.onFileHistory,
       onOpenLedger: props.onOpenLedger,
       onHandOver: props.onHandOver,
     })),
@@ -717,6 +737,7 @@ beforeEach(() => {
   hoisted.log = [];
   hoisted.touched = {};
   hoisted.patch = {};
+  hoisted.refuseRestore = null;
   hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;

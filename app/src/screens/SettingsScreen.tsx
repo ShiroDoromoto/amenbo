@@ -20,6 +20,7 @@ import { DataProgressModal } from "../components/DataProgressModal";
 import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
+import { asksBeforeRestore, setAsksBeforeRestore } from "../files/askBeforeRestore";
 import { NotifyTargetsSetting } from "./NotifyTargetsSetting";
 import { ViewerSetting } from "./ViewerSetting";
 import { asTyped, isEnterSubmit } from "../core/keys";
@@ -80,6 +81,7 @@ export function SettingsScreen() {
           (`../files/askBeforeTrash`). */}
       <Category title={t("settings.files")}>
         <TrashAskSetting />
+        <RestoreAskSetting />
       </Category>
 
       {/* Nor does a development build carry the startup section: it registers nothing at login, so the
@@ -133,6 +135,35 @@ export function SettingsScreen() {
  *  Device-local rather than in the store, the way the theme above is: it is a habit of the person at
  *  this machine and not a property of the project. So it is held in state here rather than read off
  *  the snapshot — nothing else on this screen writes it. */
+/** The same switch for the one act in the window nothing undoes: throwing away what git has not
+ *  recorded (`../files/askBeforeRestore`).
+ *
+ *  **It is a second switch and not the one above.** The two questions read alike and stand together,
+ *  and what they cost is not the same: a row in the bin comes back, and a change never written down
+ *  is nowhere. Somebody who silenced the reversible one has said nothing about this (`AMB-D-906`). */
+function RestoreAskSetting() {
+  const [asks, setAsks] = useState(asksBeforeRestore);
+  const change = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const on = e.target.value === "on";
+    setAsksBeforeRestore(on);
+    setAsks(on);
+  };
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("settings.restoreAsk")}</span>
+      <span>
+        <select className="btn" value={asks ? "on" : "off"} onChange={change}>
+          <option value="on">{t("settings.restoreAskOn")}</option>
+          <option value="off">{t("settings.restoreAskOff")}</option>
+        </select>
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+          {t("settings.restoreAskNote")}
+        </div>
+      </span>
+    </div>
+  );
+}
+
 function TrashAskSetting() {
   const [asks, setAsks] = useState(asksBeforeTrash);
   const change = (e: React.ChangeEvent<HTMLSelectElement>) => {

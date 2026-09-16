@@ -1175,6 +1175,28 @@ input[type="color"] {
 .githist__line--added { color: var(--c-git-added); }
 .githist__line--removed { color: var(--c-git-modified); }
 
+/* What the history is narrowed to, over the list (`app/src/files/GitHistory.tsx`). It is not a layer
+   and does not read as one: a layer has a way back that closes it, and this has a control that
+   widens the list it is over. */
+.githist__only {
+  flex: 0 0 auto;
+  display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--c-rule);
+}
+.githist__onlyname {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+.githist__all {
+  flex: 0 0 auto;
+  background: none; border: 0;
+  color: var(--c-text-muted); font: inherit; font-size: var(--fs-xs);
+  text-decoration: underline; cursor: pointer;
+}
+.githist__all:hover { color: var(--c-text); }
+
 /* ---------- the file face ---------- */
 /* The right side of the terminal face: what changed in the project's folder lately, and the folder
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying

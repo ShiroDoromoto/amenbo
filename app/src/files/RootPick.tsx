@@ -60,7 +60,7 @@ export function RootPick({ projectId, sections, root, onRoot }: {
     if (!open) return;
     let alive = true;
     void Promise.all(sections.map((one) => (one.exists
-      ? folderGitStatus(projectId, one.path).then((rows) => rows.length > 0).catch(() => false)
+      ? folderGitStatus(projectId, one.path).then((now) => now.rows.length > 0).catch(() => false)
       : Promise.resolve(false))))
       .then((answers) => {
         if (alive) setChanged(sections.filter((_, i) => answers[i] === true).map((one) => one.path));

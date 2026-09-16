@@ -1,10 +1,26 @@
-//! What git says about the folder the file face is showing, so a tree row can wear a colour.
+//! What git says about the folder the file face is showing: the colour on a tree row, where the
+//! branch stands, and the commits behind both.
 //!
 //! It is one `git status` per bound folder, asked for rather than kept up to date — the face asks
 //! when it opens the panel — and read for display and nothing else: no pane is marked from it and
 //! nobody is told their turn has come (`AMB-D-774`). A folder that is not a repository, and a
 //! machine with no git that can be run without asking the reader to install a compiler, both answer
 //! the same way — nothing.
+//!
+//! **Everything here reads; nothing here writes** (`AMB-D-906` opens the other half elsewhere). So
+//! every road answers with an empty hand rather than with a refusal: a folder that is no repository
+//! is the ordinary case, not a failure to report.
+//!
+//! **What a commit costs is what is asked of it, and the asking is split up.** The history list is
+//! one call and carries no file names, because putting them on it takes one call from 19ms to
+//! between 53 and 254ms; the names come when a commit is opened, and the patch when one of its
+//! files is (`AMB-T-4899`). What the branch stands at rides on the status call rather than being
+//! counted by one of its own.
+//!
+//! **A commit is read as the difference from its first parent**, never as `show` (`AMB-T-4919`).
+//! `show` answers for a merge with a summary of a couple of hundred bytes, so a road built on it
+//! has to ask whether each commit is one — and the first-parent form gives the same answer for an
+//! ordinary commit while needing no such question.
 //!
 //! **Two folders of one repository are asked separately.** What `git status` costs is the amount of
 //! tree it is asked about, so folding two bound folders into one call over their common root is
@@ -19,7 +35,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use crate::dto::GitEntryDto;
+use crate::dto::{FolderGitDto, GitBranchDto, GitCommitDto, GitEntryDto, GitFileDto};
 use crate::error::CmdError;
 use crate::folder_fence::root_of;
 
@@ -84,13 +100,10 @@ pub fn repo_of(dir: &Path) -> Option<Repo> {
 /// waits queue up and the window stands still for the sum — 337 ms over six folders on Windows,
 /// against 70 ms for one (`AMB-T-4897`).
 #[tauri::command]
-pub async fn folder_git_status(
-    project_id: i64,
-    root: String,
-) -> Result<Vec<GitEntryDto>, CmdError> {
-    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<GitEntryDto>, CmdError> {
+pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGitDto, CmdError> {
+    off_thread(move || {
         let dir = root_of(project_id, &root)?;
-        let Some(repo) = repo_of(&dir) else { return Ok(Vec::new()) };
+        let Some(repo) = repo_of(&dir) else { return Ok(FolderGitDto::default()) };
         // `--no-optional-locks` sits before `status` because it is git's own option and not the
         // subcommand's; behind it git exits 129 without doing anything. What it buys is the index
         // lock: without it this call races the reader's own `git add` and breaks it — 92.8% of the
@@ -99,15 +112,162 @@ pub async fn folder_git_status(
         // `-z` is what makes a name in any language come back as the bytes it really is; without it
         // git writes octal escapes instead. `-- .` holds the answer to this folder: git otherwise
         // climbs to the repository root and answers for the whole of it, at eight times the cost.
-        let Some(out) =
-            run(&dir, &["--no-optional-locks", "status", "--porcelain=v1", "-z", "--", "."])
-        else {
-            return Ok(Vec::new());
+        //
+        // `--branch` puts one more line at the front and costs nothing to ask for. Counting the
+        // same thing with `rev-list --count` would be a second process, which is 14ms of a call
+        // that is 20ms whole (`AMB-T-4899`).
+        let args = ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--branch", "--", "."];
+        let Some(out) = run(&dir, &args) else {
+            return Ok(FolderGitDto { prefix: repo.prefix, ..Default::default() });
         };
-        Ok(rows(&out, &repo.prefix))
+        // The branch line is the first record and `--branch` always writes one, so what follows the
+        // first NUL is the rows — which is also what keeps the `##` out of the row parser, where it
+        // would read as a path wearing two status letters.
+        let (head, named) = out.split_once('\0').unwrap_or((out.as_str(), ""));
+        let rows = rows(named, &repo.prefix);
+        Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows })
     })
     .await
-    .map_err(|e| -> CmdError { format!("asking git about this folder did not finish: {e}").into() })?
+}
+
+/// Run one git road where waiting on it costs nobody the window.
+///
+/// Every command in this module waits on git starting up and reading an index whose size is the
+/// repository's, not ours — and a command with no `async` on it is run where the webview is drawn
+/// ([`crate::agent_models`]). What the thread is given back for is the same on all of them, so the
+/// words for a road that did not finish are written once here rather than at each of them.
+async fn off_thread<T, F>(work: F) -> Result<T, CmdError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, CmdError> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| -> CmdError {
+            format!("asking git about this folder did not finish: {e}").into()
+        })?
+}
+
+/// The `--format` the history is read back by: the fields a row is drawn from, in one record each.
+///
+/// The unit separator is what stands between the fields, because it is the one byte none of them
+/// can hold — a subject is a line of a commit message and a name is a name, and both can hold
+/// anything a person can type. The records themselves are ended by NUL, which `-z` asks for.
+const LOG_FIELDS: &str = "--format=%H%x1f%h%x1f%P%x1f%an%x1f%aI%x1f%s";
+
+/// The commits behind the folder `root` names, newest first — the whole repository's, or one path's
+/// where `path` names one.
+///
+/// `path` is spelled from the repository's root, the way git names it and the way a commit's own
+/// files come back (`folder_git_show`). A row of the tree is spelled from the bound folder instead,
+/// so the front `FolderGitDto::prefix` carries goes back on it first.
+///
+/// **A hundred and no more.** Reading 30 rather than 100 saves nothing that can be measured — what
+/// the call costs is git starting up (`AMB-T-4899`) — and a hundred is the length of a scroll
+/// somebody actually reads to the end of.
+#[tauri::command]
+pub async fn folder_git_log(
+    project_id: i64,
+    root: String,
+    path: Option<String>,
+) -> Result<Vec<GitCommitDto>, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() {
+            return Ok(Vec::new());
+        }
+        let mut args = vec!["--no-optional-locks", "log", "--max-count=100", "-z", LOG_FIELDS];
+        // After `--`, so a path that begins like an option is read as the path it is.
+        if let Some(path) = path.as_deref() {
+            args.push("--");
+            args.push(path);
+        }
+        let Some(out) = run(&dir, &args) else { return Ok(Vec::new()) };
+        Ok(commits(&out))
+    })
+    .await
+}
+
+/// What one commit touched, as the rows the layer under it draws.
+///
+/// The counts are `--numstat` rather than the `--stat` a person reads: the two carry the same
+/// answer, and the one written for people truncates a long path with an ellipsis, which is a name
+/// nothing can be opened by.
+#[tauri::command]
+pub async fn folder_git_show(
+    project_id: i64,
+    root: String,
+    sha: String,
+) -> Result<Vec<GitFileDto>, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() || !is_sha(&sha) {
+            return Ok(Vec::new());
+        }
+        let Some(out) = from_first_parent(&dir, &sha, &["--numstat", "-z"], &[]) else {
+            return Ok(Vec::new());
+        };
+        Ok(files(&out))
+    })
+    .await
+}
+
+/// The patch for one path of one commit, as git wrote it.
+///
+/// It is handed over as git's own text rather than read into rows here: what a diff means is one
+/// answer, and a face that draws it and a face that puts it in front of an editor are reading the
+/// same bytes.
+#[tauri::command]
+pub async fn folder_git_diff(
+    project_id: i64,
+    root: String,
+    sha: String,
+    path: String,
+) -> Result<String, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() || !is_sha(&sha) {
+            return Ok(String::new());
+        }
+        Ok(from_first_parent(&dir, &sha, &["--patch"], &["--", &path]).unwrap_or_default())
+    })
+    .await
+}
+
+/// Whether a commit is named by something git will read as a commit and not as an option.
+///
+/// Every sha here came out of [`folder_git_log`], so this turns nothing away that a reader could
+/// have asked for — and a name arriving from anywhere else is one nothing vouches for. A word
+/// beginning with `-` would be read as an option by every command above, which is the whole of what
+/// this is in the way of.
+fn is_sha(sha: &str) -> bool {
+    !sha.is_empty() && sha.len() <= 40 && sha.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// One commit read as what it changed against its first parent, with `how` saying in what shape.
+///
+/// **The first parent and not `show`**, for every commit and with no question asked about which
+/// kind it is: `show --patch` answers for a merge with a couple of hundred bytes of summary, and
+/// the difference from the first parent is what a reader means by "what this commit did" either way
+/// (`AMB-T-4919`, and VS Code reads a merge the same way).
+///
+/// The first commit of a repository has no parent to measure from, and that is the one case `show`
+/// is asked instead — where it is also exactly right, since everything in that commit is new.
+fn from_first_parent(dir: &Path, sha: &str, how: &[&str], about: &[&str]) -> Option<String> {
+    let parent = format!("{sha}^");
+    let mut args = vec!["--no-optional-locks", "diff"];
+    args.extend_from_slice(how);
+    args.push(&parent);
+    args.push(sha);
+    args.extend_from_slice(about);
+    if let Some(out) = run(dir, &args) {
+        return Some(out);
+    }
+    let mut args = vec!["--no-optional-locks", "show", "--format="];
+    args.extend_from_slice(how);
+    args.push(sha);
+    args.extend_from_slice(about);
+    run(dir, &args)
 }
 
 /// Run git in `dir` and hand back its stdout, or `None` for every way it did not answer.
@@ -185,6 +345,109 @@ fn rows(out: &str, prefix: &str) -> Vec<GitEntryDto> {
         });
     }
     rows
+}
+
+/// Read the `--branch` line at the front of `status` into where the branch stands.
+///
+/// git writes one line however the checkout stands, and the three shapes it has are three different
+/// answers rather than degrees of one: a branch measured against another, a branch measured against
+/// nothing, and a checkout that is not on a branch at all.
+///
+/// `[ahead 1, behind 2]` is the only bracket on that line and a ref cannot hold a space, so the
+/// counts are found by the space before it and nothing has to be escaped or counted through.
+fn branch_of(line: &str) -> Option<GitBranchDto> {
+    let line = line.strip_prefix("## ")?;
+    // A repository nobody has committed in yet. git names the branch the first commit would land
+    // on, and there is nothing yet to measure it by.
+    if let Some(name) = line.strip_prefix("No commits yet on ") {
+        return Some(GitBranchDto { name: Some(name.to_string()), ..Default::default() });
+    }
+    // A checkout made at a commit rather than at a branch. There is no name to carry: what git
+    // writes here is the words, in English, whatever the reader's language is.
+    if line == "HEAD (no branch)" {
+        return Some(GitBranchDto::default());
+    }
+    let (head, counts) = match line.rsplit_once(" [") {
+        Some((head, counts)) => (head, counts.trim_end_matches(']')),
+        None => (line, ""),
+    };
+    // Three dots, which is the one thing a ref cannot hold: git refuses a name with two dots
+    // running together, so this cannot be part of either side.
+    let (name, upstream) = match head.split_once("...") {
+        Some((name, upstream)) => (name, Some(upstream.to_string())),
+        None => (head, None),
+    };
+    Some(GitBranchDto {
+        name: Some(name.to_string()),
+        // `[gone]` is git saying the upstream it was told to measure by is not there any more, and
+        // it leaves both counts at nothing — which is the same hand as having none.
+        upstream: upstream.filter(|_| counts != "gone"),
+        ahead: counted(counts, "ahead"),
+        behind: counted(counts, "behind"),
+    })
+}
+
+/// One of the two counts out of what stood in the brackets, and nothing where it was not there.
+fn counted(counts: &str, which: &str) -> u32 {
+    counts
+        .split(", ")
+        .find_map(|one| one.strip_prefix(which)?.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// Read `log -z` with [`LOG_FIELDS`] into rows, one record per commit.
+///
+/// A record short of its fields is dropped rather than half-read: every field is written by the
+/// same format string, so a record missing one did not come out of git.
+fn commits(out: &str) -> Vec<GitCommitDto> {
+    out.split('\0')
+        .filter(|record| !record.is_empty())
+        .filter_map(|record| {
+            let mut field = record.split('\u{1f}');
+            Some(GitCommitDto {
+                sha: field.next()?.to_string(),
+                short: field.next()?.to_string(),
+                // Space-separated, and none at all for the first commit there was.
+                parents: field.next()?.split_whitespace().map(str::to_owned).collect(),
+                author: field.next()?.to_string(),
+                at: field.next()?.to_string(),
+                subject: field.next()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Read `--numstat -z` into the rows one commit's layer draws.
+///
+/// A record is the two counts and the path, tabs between them and a NUL at the end. A file git
+/// reads as bytes has `-` for both counts, which is git saying it counts no lines there rather than
+/// that it counted none.
+///
+/// **A rename writes its path nowhere and its two names next.** The path field comes back empty and
+/// the record is followed by two more — where the file was, then where it is — which is the reverse
+/// of the arrow form git writes for people to read.
+fn files(out: &str) -> Vec<GitFileDto> {
+    let mut files = Vec::new();
+    let mut fields = out.split('\0');
+    while let Some(record) = fields.next() {
+        if record.is_empty() {
+            continue;
+        }
+        let mut part = record.splitn(3, '\t');
+        let (Some(added), Some(removed), Some(path)) = (part.next(), part.next(), part.next())
+        else {
+            continue;
+        };
+        let (from, path) = if path.is_empty() {
+            let (Some(was), Some(now)) = (fields.next(), fields.next()) else { continue };
+            (Some(was.to_string()), now.to_string())
+        } else {
+            (None, path.to_string())
+        };
+        let (added, removed) = (added.parse().ok(), removed.parse().ok());
+        files.push(GitFileDto { path, from, added, removed });
+    }
+    files
 }
 
 #[cfg(test)]
@@ -290,6 +553,251 @@ mod tests {
             rows(&out, &repo_of_app.prefix).iter().map(|row| row.path.join("/")).collect();
         named.sort();
         assert_eq!(named, vec!["keep.txt".to_string(), "日本語.txt".to_string()]);
+    }
+
+    // ── where the branch stands ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a_branch_measured_against_another_carries_both_counts() {
+        let on = branch_of("## main...origin/main [ahead 1, behind 2]").unwrap();
+        assert_eq!(on.name.as_deref(), Some("main"));
+        assert_eq!(on.upstream.as_deref(), Some("origin/main"));
+        assert_eq!((on.ahead, on.behind), (1, 2));
+    }
+
+    /// git writes only the count there is one of, so the other is read off a line that never
+    /// mentions it.
+    #[test]
+    fn one_count_alone_leaves_the_other_at_nothing() {
+        let ahead = branch_of("## main...origin/main [ahead 3]").unwrap();
+        assert_eq!((ahead.ahead, ahead.behind), (3, 0));
+        let behind = branch_of("## main...origin/main [behind 4]").unwrap();
+        assert_eq!((behind.ahead, behind.behind), (0, 4));
+    }
+
+    #[test]
+    fn a_branch_level_with_its_upstream_has_no_brackets_and_no_counts() {
+        let on = branch_of("## task/4927...origin/task/4927").unwrap();
+        assert_eq!(on.upstream.as_deref(), Some("origin/task/4927"));
+        assert_eq!((on.ahead, on.behind), (0, 0));
+    }
+
+    /// A branch nobody has pushed. There is a name and nothing to measure it by, which is a
+    /// different answer from being level with something.
+    #[test]
+    fn a_branch_with_no_upstream_is_named_and_measured_against_nothing() {
+        let on = branch_of("## wip").unwrap();
+        assert_eq!(on.name.as_deref(), Some("wip"));
+        assert_eq!(on.upstream, None);
+    }
+
+    /// The upstream it was told to measure by is not there any more. Nothing can be counted against
+    /// it, so it is handed over as no upstream rather than as a name that answers nothing.
+    #[test]
+    fn an_upstream_that_is_gone_is_handed_over_as_none() {
+        let on = branch_of("## wip...origin/wip [gone]").unwrap();
+        assert_eq!(on.name.as_deref(), Some("wip"));
+        assert_eq!(on.upstream, None);
+        assert_eq!((on.ahead, on.behind), (0, 0));
+    }
+
+    /// A checkout made at a commit rather than at a branch. What git writes there is words and not
+    /// a name, so no name is carried.
+    #[test]
+    fn a_checkout_that_is_on_no_branch_carries_no_name() {
+        let on = branch_of("## HEAD (no branch)").unwrap();
+        assert_eq!(on.name, None);
+        assert_eq!(on.upstream, None);
+    }
+
+    /// A repository nobody has written in yet. git names the branch the first record would land on.
+    #[test]
+    fn a_repository_with_nothing_in_it_names_the_branch_it_would_make() {
+        let on = branch_of("## No commits yet on main").unwrap();
+        assert_eq!(on.name.as_deref(), Some("main"));
+        assert_eq!(on.upstream, None);
+    }
+
+    /// Anything that is not the line — which is what a row of the status is, and what an answer
+    /// with nothing in it is.
+    #[test]
+    fn a_line_that_is_not_the_branch_line_is_no_branch() {
+        assert!(branch_of(" M src/lib.rs").is_none());
+        assert!(branch_of("").is_none());
+    }
+
+    // ── the history ──────────────────────────────────────────────────────────────────────────
+
+    /// Build what `log -z` writes with [`LOG_FIELDS`]: the fields with a unit separator between
+    /// them, and a NUL after each record.
+    fn logged(records: &[[&str; 6]]) -> String {
+        records.iter().map(|one| format!("{}\0", one.join("\u{1f}"))).collect()
+    }
+
+    #[test]
+    fn a_record_is_read_into_the_fields_a_row_is_drawn_from() {
+        let out = logged(&[[
+            "b92495cedd4ec1600395d13b8a60c5f3e4b01d0b",
+            "b92495ce",
+            "50fa3f83f27fe6fb6af437602f88e0dcc8287e8e",
+            "Alice",
+            "2026-09-16T21:59:56+09:00",
+            "feat(gui): draw one folder in the rail",
+        ]]);
+        let read = commits(&out);
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].short, "b92495ce");
+        assert_eq!(read[0].parents, vec!["50fa3f83f27fe6fb6af437602f88e0dcc8287e8e".to_string()]);
+        assert_eq!(read[0].author, "Alice");
+        assert_eq!(read[0].at, "2026-09-16T21:59:56+09:00");
+        assert_eq!(read[0].subject, "feat(gui): draw one folder in the rail");
+    }
+
+    /// The two ends of the shape the face draws the lines of: a merge is made on top of two, and
+    /// the first one there was is made on top of none.
+    #[test]
+    fn a_merge_carries_two_parents_and_the_first_one_carries_none() {
+        let a = "a".repeat(40);
+        let d = "d".repeat(40);
+        let out = logged(&[
+            [&a, "aaaaaaaa", "bbbb cccc", "Alice", "2026-01-01T00:00:00Z", "Merge"],
+            [&d, "dddddddd", "", "Bob", "2025-01-01T00:00:00Z", "first"],
+        ]);
+        let read = commits(&out);
+        assert_eq!(read[0].parents.len(), 2);
+        assert!(read[1].parents.is_empty(), "the first one was made on top of nothing");
+    }
+
+    /// A subject is a line somebody typed, so it holds whatever a reader types — and the separator
+    /// between the fields is the one byte it cannot.
+    #[test]
+    fn a_subject_holding_its_own_punctuation_arrives_whole() {
+        let a = "a".repeat(40);
+        let subject = "fix: 「変わったもの」を消す — a\ttab, and a ...b";
+        let out = logged(&[[&a, "aaaaaaaa", "", "Alice", "2026-01-01T00:00:00Z", subject]]);
+        assert_eq!(commits(&out)[0].subject, subject);
+    }
+
+    #[test]
+    fn a_history_with_nothing_in_it_is_no_rows_rather_than_one_empty_one() {
+        assert!(commits("").is_empty());
+        assert!(commits("\0").is_empty());
+    }
+
+    // ── what one record touched ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a_touched_file_carries_what_it_gained_and_lost() {
+        let read = files("18\t4\tapp/src/shell/TerminalFace.tsx\0");
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].path, "app/src/shell/TerminalFace.tsx");
+        assert_eq!((read[0].added, read[0].removed), (Some(18), Some(4)));
+        assert_eq!(read[0].from, None);
+    }
+
+    /// git writes `-` for both where it read the file as bytes. That is git counting no lines
+    /// there, which is not the same as counting none.
+    #[test]
+    fn a_file_git_counts_no_lines_in_carries_no_counts() {
+        let read = files("-\t-\tapp/icon.png\0");
+        assert_eq!((read[0].added, read[0].removed), (None, None));
+        assert_eq!(read[0].path, "app/icon.png");
+    }
+
+    /// A rename leaves the path empty and writes the two names as records of their own — where it
+    /// was, then where it is. The row is drawn at the name it has now.
+    #[test]
+    fn a_rename_is_drawn_at_the_name_it_has_now_and_says_where_it_was() {
+        let read = files(concat!("2\t2\t\0old/name.rs\0new/name.rs\0", "3\t1\tother.rs\0"));
+        assert_eq!(read.len(), 2);
+        assert_eq!(read[0].path, "new/name.rs");
+        assert_eq!(read[0].from.as_deref(), Some("old/name.rs"));
+        assert_eq!(read[1].path, "other.rs");
+        assert_eq!(read[1].from, None);
+    }
+
+    #[test]
+    fn one_that_touched_nothing_is_no_rows() {
+        assert!(files("").is_empty());
+        assert!(files("\0").is_empty());
+    }
+
+    // ── the names a record may be asked by ───────────────────────────────────────────────────
+
+    /// Every sha reaching the roads below came out of the history, and a word that did not is one
+    /// git would read as an option instead.
+    #[test]
+    fn only_a_name_git_reads_as_a_point_in_history_is_asked_by() {
+        assert!(is_sha("b92495ce"));
+        assert!(is_sha(&"a".repeat(40)));
+        assert!(!is_sha(""));
+        assert!(!is_sha("--all"));
+        assert!(!is_sha("HEAD"));
+        assert!(!is_sha(&"a".repeat(41)));
+    }
+
+    /// The whole of the history road against a real git: the format git takes, the order it answers
+    /// in, and what one record changed read as the difference from its first parent. None of that
+    /// can be pinned by handing the parser bytes somebody wrote by hand.
+    #[test]
+    fn a_repository_reads_its_own_history_back() {
+        if amenbo_core::sys::git().is_none() {
+            return; // Nothing to pin on a machine with no git: every road here answers nothing.
+        }
+        let repo = amenbo_scratch::scratch("app-foldergit-log");
+        std::fs::create_dir_all(&repo).unwrap();
+        run(&repo, &["init", "-q", "-b", "main"]).expect("git init");
+        // Who wrote them is named on each call rather than on the machine, so a git with no name
+        // set still walks this road and nothing outside the scratch folder is written to.
+        const WHO: [&str; 4] = ["-c", "user.name=Alice", "-c", "user.email=alice@example.com"];
+        let record = |message: &'static str| {
+            let mut args = WHO.to_vec();
+            args.extend_from_slice(&["commit", "-q", "-m", message]);
+            args
+        };
+
+        std::fs::write(repo.join("first.txt"), "one\n").unwrap();
+        run(&repo, &["add", "first.txt"]).expect("git add");
+        run(&repo, &record("first")).expect("the first record");
+        std::fs::write(repo.join("first.txt"), "one\ntwo\n").unwrap();
+        run(&repo, &["add", "first.txt"]).expect("git add");
+        run(&repo, &record("second")).expect("the second record");
+
+        let out = run(&repo, &["--no-optional-locks", "log", "--max-count=100", "-z", LOG_FIELDS])
+            .expect("git log");
+        let read = commits(&out);
+        assert_eq!(
+            read.iter().map(|one| one.subject.clone()).collect::<Vec<_>>(),
+            vec!["second".to_string(), "first".to_string()],
+            "newest first, which is the order a list is read in"
+        );
+        assert!(read[1].parents.is_empty(), "the first one was made on top of nothing");
+        assert_eq!(read[0].parents, vec![read[1].sha.clone()]);
+        assert_eq!(read[0].author, "Alice");
+        assert!(
+            read[0].sha.starts_with(&read[0].short),
+            "the short name is the front of the whole one"
+        );
+
+        // And read as what it changed, which is the road every one of them is opened by.
+        let touched = files(
+            &from_first_parent(&repo, &read[0].sha, &["--numstat", "-z"], &[]).expect("git diff"),
+        );
+        assert_eq!(touched.len(), 1);
+        assert_eq!((touched[0].path.as_str(), touched[0].added), ("first.txt", Some(1)));
+
+        // The first one has no parent to measure from, and everything in it is new — which is the
+        // one place the other spelling is asked for.
+        let made = files(
+            &from_first_parent(&repo, &read[1].sha, &["--numstat", "-z"], &[]).expect("git show"),
+        );
+        assert_eq!(made.len(), 1);
+        assert_eq!((made[0].path.as_str(), made[0].added), ("first.txt", Some(1)));
+
+        // The patch for one path of it, handed over as git's own text.
+        let patch =
+            from_first_parent(&repo, &read[0].sha, &["--patch"], &["--", "first.txt"]).unwrap();
+        assert!(patch.contains("+two"), "the line that was added is in the patch git wrote");
     }
 
     /// A folder that is not in a repository, which is most of them.

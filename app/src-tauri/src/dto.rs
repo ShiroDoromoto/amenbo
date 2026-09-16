@@ -1895,6 +1895,89 @@ pub struct GitEntryDto {
     pub(crate) is_dir: bool,
 }
 
+/// Where the branch the folder is on stands against the one it is measured by
+/// (`crate::folder_git`).
+///
+/// It rides on the same `git status` the rows come from: the answer is one line of that call's own
+/// output, so asking for it costs nothing over asking for the rows, where a `rev-list --count` to
+/// find it would be a second process (`AMB-T-4899` measured 14ms for one).
+#[derive(Default, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchDto {
+    /// The branch that is checked out — nothing where HEAD is not on one, which is a checkout made
+    /// at a commit rather than at a branch.
+    pub(crate) name: Option<String>,
+    /// The branch it is measured against, spelled the way git spells it (`origin/main`) — nothing
+    /// where it is measured against none, and where the one it named is gone.
+    pub(crate) upstream: Option<String>,
+    /// Commits this branch has that its upstream does not, and the other way round. Both are zero
+    /// where there is no upstream to count against.
+    pub(crate) ahead: u32,
+    pub(crate) behind: u32,
+}
+
+/// What git says about one bound folder: where its branch stands, and every path it named
+/// (`crate::folder_git`).
+#[derive(Default, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderGitDto {
+    /// Where the bound folder sits inside its repository, ending in `/` and empty where it is the
+    /// repository's own root.
+    ///
+    /// **It is what turns a row of the tree into the name git knows it by.** The tree is drawn from
+    /// the bound folder down and git answers about the repository, so a file history asked for from
+    /// a tree row has to put this back on the front (`folder_git_log`).
+    pub(crate) prefix: String,
+    /// Nothing where the folder is no repository, and where git could not be run at all.
+    pub(crate) branch: Option<GitBranchDto>,
+    pub(crate) rows: Vec<GitEntryDto>,
+}
+
+/// One commit, as a history list draws a row of it (`crate::folder_git`).
+///
+/// **The parents come across and the lines do not.** `--graph` costs git a commit-graph it does not
+/// always have (20ms against 38ms without one, `AMB-T-4899`), and what it draws is characters the
+/// face would have to read back anyway — so the face is handed what the shape is made of and draws
+/// it itself.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitDto {
+    /// The whole of it, which is what everything else here is asked by.
+    pub(crate) sha: String,
+    /// The same commit as git abbreviates it, which is how long this repository needs it to be.
+    pub(crate) short: String,
+    /// What it was made on top of — two or more is a merge, and none is the first commit there was.
+    pub(crate) parents: Vec<String>,
+    /// Who wrote it, as the name on the commit.
+    pub(crate) author: String,
+    /// When it was written, ISO 8601 with the offset it was written at — the moment kept as it was
+    /// read, since what a reader wants to see it in is the face's question.
+    pub(crate) at: String,
+    /// The first line of the message, which is the whole of what a row has room for.
+    pub(crate) subject: String,
+}
+
+/// One path a commit touched, as the layer under a commit draws a row of it (`crate::folder_git`).
+///
+/// The path is the one git knows, from the repository's root: a commit is the repository's and
+/// reaches files the bound folder does not hold.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitFileDto {
+    /// Where it is after the commit.
+    pub(crate) path: String,
+    /// Where it was before, where the commit moved it — and nothing where it did not.
+    pub(crate) from: Option<String>,
+    /// Lines added and lines taken away. Both are nothing for a file git counts no lines in, which
+    /// is what it says of one it reads as bytes rather than as text.
+    pub(crate) added: Option<u32>,
+    pub(crate) removed: Option<u32>,
+}
+
 /// One application a file could be opened with, as the file face draws a row of the chooser it has
 /// to draw itself (`crate::open_with`).
 ///

@@ -729,6 +729,25 @@ clean: boolean,
 digest?: string, };
 
 /**
+ * What git says about one bound folder: where its branch stands, and every path it named
+ * (`crate::folder_git`).
+ */
+export type FolderGitDto = { 
+/**
+ * Where the bound folder sits inside its repository, ending in `/` and empty where it is the
+ * repository's own root.
+ *
+ * **It is what turns a row of the tree into the name git knows it by.** The tree is drawn from
+ * the bound folder down and git answers about the repository, so a file history asked for from
+ * a tree row has to put this back on the front (`folder_git_log`).
+ */
+prefix: string, 
+/**
+ * Nothing where the folder is no repository, and where git could not be run at all.
+ */
+branch: GitBranchDto | null, rows: Array<GitEntryDto>, };
+
+/**
  * A picture out of a folder, named rather than carried: the webview asks [`crate::fileproto`] for
  * the bytes at the path it already has in hand (`AMB-D-783`).
  *
@@ -888,6 +907,66 @@ export type FrameNameDto = {
 frame: string, name: string, by: "session" | "person", };
 
 /**
+ * Where the branch the folder is on stands against the one it is measured by
+ * (`crate::folder_git`).
+ *
+ * It rides on the same `git status` the rows come from: the answer is one line of that call's own
+ * output, so asking for it costs nothing over asking for the rows, where a `rev-list --count` to
+ * find it would be a second process (`AMB-T-4899` measured 14ms for one).
+ */
+export type GitBranchDto = { 
+/**
+ * The branch that is checked out — nothing where HEAD is not on one, which is a checkout made
+ * at a commit rather than at a branch.
+ */
+name: string | null, 
+/**
+ * The branch it is measured against, spelled the way git spells it (`origin/main`) — nothing
+ * where it is measured against none, and where the one it named is gone.
+ */
+upstream: string | null, 
+/**
+ * Commits this branch has that its upstream does not, and the other way round. Both are zero
+ * where there is no upstream to count against.
+ */
+ahead: number, behind: number, };
+
+/**
+ * One commit, as a history list draws a row of it (`crate::folder_git`).
+ *
+ * **The parents come across and the lines do not.** `--graph` costs git a commit-graph it does not
+ * always have (20ms against 38ms without one, `AMB-T-4899`), and what it draws is characters the
+ * face would have to read back anyway — so the face is handed what the shape is made of and draws
+ * it itself.
+ */
+export type GitCommitDto = { 
+/**
+ * The whole of it, which is what everything else here is asked by.
+ */
+sha: string, 
+/**
+ * The same commit as git abbreviates it, which is how long this repository needs it to be.
+ */
+short: string, 
+/**
+ * What it was made on top of — two or more is a merge, and none is the first commit there was.
+ */
+parents: Array<string>, 
+/**
+ * Who wrote it, as the name on the commit.
+ */
+author: string, 
+/**
+ * When it was written, ISO 8601 with the offset it was written at — the moment kept as it was
+ * read, since what a reader wants to see it in is the face's question.
+ */
+at: string, 
+/**
+ * The first line of the message, which is the whole of what a row has room for.
+ */
+subject: string, };
+
+/**
  * One path git named inside the folder the file face is showing (`crate::folder_git`).
  *
  * The two letters are git's own and are carried across as they came: the first is what the index
@@ -914,6 +993,27 @@ worktree: string,
  * with an untracked one. A folded folder is somewhere a colour still has to appear.
  */
 isDir: boolean, };
+
+/**
+ * One path a commit touched, as the layer under a commit draws a row of it (`crate::folder_git`).
+ *
+ * The path is the one git knows, from the repository's root: a commit is the repository's and
+ * reaches files the bound folder does not hold.
+ */
+export type GitFileDto = { 
+/**
+ * Where it is after the commit.
+ */
+path: string, 
+/**
+ * Where it was before, where the commit moved it — and nothing where it did not.
+ */
+from: string | null, 
+/**
+ * Lines added and lines taken away. Both are nothing for a file git counts no lines in, which
+ * is what it says of one it reads as bytes rather than as text.
+ */
+added: number | null, removed: number | null, };
 
 /**
  * What the plugins became, for the band that says so once (`AMB-D-884` / [`amenbo_core::handover`]).

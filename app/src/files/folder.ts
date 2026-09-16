@@ -16,7 +16,7 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderRestoredDto, FolderTrashedDto, GitEntryDto,
+  FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitCommitDto, GitFileDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -72,20 +72,66 @@ export async function folderWatch(
   return await invoke<FolderChangesDto>("folder_watch", { projectId, root, watcher, tag });
 }
 
+/** What a folder with no git answer looks like, which is what the browser has and what a folder
+ *  that is no repository gets: no branch, no rows, and no front to take off a path. */
+const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [] };
+
 /**
- * What git says about one of a project's folders, as the rows a tree draws its colours from.
+ * What git says about one of a project's folders: where its branch stands, and the paths it named.
  *
  * Asked per bound folder rather than once for the project: what `git status` costs is the amount of
  * tree it is asked about, and two folders of one repository asked together cost five times two
  * folders asked apart (`AMB-D-774`). A folder that is no repository, and a machine with no git,
  * both answer with nothing — which is a tree with no colours on it and not an error to draw.
+ *
+ * **The branch rides on the same call as the rows.** Where it stands is one line of what `status`
+ * already writes, so asking costs nothing over asking for the rows (`AMB-T-4899`).
  */
-export async function folderGitStatus(
+export async function folderGitStatus(projectId: number, root: string): Promise<FolderGitDto> {
+  if (!inTauri()) return NO_GIT;
+  return await invoke<FolderGitDto>("folder_git_status", { projectId, root });
+}
+
+/**
+ * The commits behind one of a project's folders, newest first — a hundred of them, or one path's
+ * where `path` names one.
+ *
+ * `path` is spelled from the repository's root, which is how a commit's own files come back
+ * (`folderGitShow`). A row of the tree is spelled from the bound folder, so what
+ * `FolderGitDto.prefix` carries goes back on the front of it first.
+ *
+ * **It is asked for on its own and not with the rows.** Putting the history on the call the colours
+ * come from doubles that call, and it would be paid by every reader whether or not they are looking
+ * at it (`AMB-T-4899`).
+ */
+export async function folderGitLog(
   projectId: number,
   root: string,
-): Promise<GitEntryDto[]> {
+  path?: string,
+): Promise<GitCommitDto[]> {
   if (!inTauri()) return [];
-  return await invoke<GitEntryDto[]>("folder_git_status", { projectId, root });
+  return await invoke<GitCommitDto[]>("folder_git_log", { projectId, root, path: path ?? null });
+}
+
+/** What one commit touched, as the rows the layer under it draws. The paths are the repository's. */
+export async function folderGitShow(
+  projectId: number,
+  root: string,
+  sha: string,
+): Promise<GitFileDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<GitFileDto[]>("folder_git_show", { projectId, root, sha });
+}
+
+/** The patch for one path of one commit, as git wrote it — empty for every way there is none. */
+export async function folderGitDiff(
+  projectId: number,
+  root: string,
+  sha: string,
+  path: string,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_diff", { projectId, root, sha, path });
 }
 
 /**

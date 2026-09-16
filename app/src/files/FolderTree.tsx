@@ -709,7 +709,9 @@ function FolderSection({
     if (!bound || !treeOpen) return;
     let alive = true;
     void folderGitStatus(projectId, root)
-      .then((rows) => { if (alive) setGit(rows); })
+      // The rows alone. Where the branch stands comes back on the same answer and is drawn by the
+      // half of the rail that is about git rather than by the tree (`AMB-T-4899`).
+      .then((now) => { if (alive) setGit(now.rows); })
       .catch(() => { if (alive) setGit([]); });
     return () => { alive = false; };
   }, [projectId, root, bound, treeOpen, moved]);

@@ -1108,7 +1108,8 @@ input[type="color"] {
    itself, so the row keeps the list's own padding and the box sits inside it. */
 .gitpanel__make { padding: var(--s-1) var(--s-3); }
 .gitpanel__section { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
-/* The name of one of git's two answers, with how many are under it. */
+/* The name of one of the lists under it — git's two answers, and what the merge could not
+   settle — with how many are in it. */
 .gitpanel__head {
   margin: 0; padding: var(--s-2) 0 0;
   border-top: 1px solid var(--c-rule);
@@ -1142,6 +1143,28 @@ input[type="color"] {
 .gitpanel__row--modified { --git: var(--c-git-modified); }
 .gitpanel__row--added { --git: var(--c-git-added); }
 .gitpanel__row--untracked { --git: var(--c-git-untracked); }
+/* What the merge could not settle. It wears the colour of the thing that does not move until a hand
+   is put to it, which is what an open conflict is — nothing else lands in this repository while the
+   list has rows in it. */
+.gitpanel__section--conflict .gitpanel__head { color: var(--c-stop); }
+.gitpanel__row--conflict { --git: var(--c-stop); }
+/* The name, which is also the way into the file. It is a button drawn as the row it stands in: what
+   the press does is open the file on the other side of the panes, and a control shaped like a
+   control would put a second shape into a list of rows. */
+.gitpanel__conflictname {
+  display: flex; align-items: baseline; gap: var(--s-2);
+  flex: 1 1 auto; min-width: 0;
+  padding: 0; border: 0; background: none; font: inherit; text-align: left;
+}
+.gitpanel__conflictopen { cursor: pointer; }
+.gitpanel__conflictopen:hover .gitpanel__name { text-decoration: underline; }
+/* How much is still marked in the file, and the press that stands where that number stood once
+   there is none. Both are held to their own size, so the names down the list keep one edge. */
+.gitpanel__marks {
+  flex: 0 0 auto;
+  color: var(--c-stop); font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+.gitpanel__settle { flex: 0 0 auto; padding: 0 var(--s-2); font-size: var(--fs-xs); }
 /* The box a commit message is written in, and the row under it. */
 .gitpanel__commit { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 /* The one thing in this column a reader writes rather than reads. `max-width: none` drops the

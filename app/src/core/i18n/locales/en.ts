@@ -847,6 +847,18 @@ const ui = {
   "git.newBranch": "New branch",
   "git.fromBranch": "from {name}",
   "git.branchName": "Name of the new branch",
+  // What the merge could not settle, and the one number on that list git did not give: how many
+  // conflicts are still written into the file. It is counted off the file rather than off the
+  // index, so it falls the moment the file is put right, whoever put it right (`AMB-D-906`, 2-7).
+  // The press beside it is the reader saying so — nothing here stages a conflict by itself.
+  "git.conflicts": "Conflicts",
+  "git.conflictMarks": "{n} marks left",
+  "git.settleOne": "Say it is settled",
+  "git.conflictsLeft": "{n} still to settle",
+  "git.conflictsSettled": "Everything is settled",
+  "git.mergeContinue": "Continue the merge",
+  "git.takeOurs": "Take this branch's side",
+  "git.takeTheirs": "Take the other branch's side",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

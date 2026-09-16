@@ -75,8 +75,9 @@ export async function folderWatch(
 }
 
 /** What a folder with no git answer looks like, which is what the browser has and what a folder
- *  that is no repository gets: no branch, no rows, and no front to take off a path. */
-const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [] };
+ *  that is no repository gets: no branch, no rows, no merge open, and no front to take off a
+ *  path. */
+const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false };
 
 /**
  * What git says about one of a project's folders: where its branch stands, and the paths it named.
@@ -143,6 +144,25 @@ export async function folderGitStashes(
 ): Promise<GitStashDto[]> {
   if (!inTauri()) return [];
   return await invoke<GitStashDto[]>("folder_git_stashes", { projectId, root });
+}
+
+/**
+ * How many conflicts are still written into each of `paths`, in the order they were given.
+ *
+ * **It is the file's own bytes, not git's answer about the index** (`crate::folder_git`). git calls
+ * a path unmerged until somebody stages it, and what the count is for is the moment before that —
+ * the file being put right, by the reader in the column or by the agent in the pane beside it.
+ *
+ * A path that cannot be read counts as none, which is the true answer for the files git left whole
+ * because it could not merge them at all.
+ */
+export async function folderGitMarks(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<number[]> {
+  if (!inTauri()) return [];
+  return await invoke<number[]>("folder_git_marks", { projectId, root, paths });
 }
 
 /**
@@ -339,6 +359,39 @@ export async function folderGitIgnore(
 ): Promise<string> {
   if (!inTauri()) return "";
   return await invoke<string>("folder_git_ignore", { projectId, root, paths });
+}
+
+/**
+ * End the merge git is holding open — `git merge --continue`.
+ *
+ * **Nothing is typed for it.** git wrote the message when it began the merge and takes that one,
+ * so the box a commit is written in is not drawn while a merge is under way (`./GitPanel`).
+ *
+ * A path git still calls unmerged is refused with its own sentence about the merge not being
+ * concluded, which is why the press is down until the list of them is empty.
+ */
+export async function folderGitMergeContinue(projectId: number, root: string): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_merge_continue", { projectId, root });
+}
+
+/**
+ * Take one whole side of a conflict into the working tree — `git checkout --ours|--theirs`.
+ *
+ * `mine` is the side the reader is standing on: their own branch, against the one being brought in.
+ *
+ * **It ends where every other road out of a conflict ends.** The file is written and the index is
+ * left alone, so the marks go and the path is still unmerged — settled by the same one press as a
+ * file put right by hand (`crate::folder_git_write`, `AMB-D-906`, 2-7).
+ */
+export async function folderGitTake(
+  projectId: number,
+  root: string,
+  paths: string[][],
+  mine: boolean,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_take", { projectId, root, paths, mine });
 }
 
 /**

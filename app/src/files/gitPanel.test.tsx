@@ -24,12 +24,16 @@ const hoisted = vi.hoisted(() => ({
   takers: [] as ((changes: FolderChangesDto) => void)[],
   /** What is put aside, as the list door reads it. */
   stashes: [] as GitStashDto[],
+  /** How many conflicts are left in each path, by the whole path — the count read off the file. */
+  marks: {} as Record<string, number>,
   /** What each door was handed, in order. */
   staged: [] as string[][][],
   unstaged: [] as string[][][],
   commits: [] as { message: string; paths: string[][] }[],
   stashed: [] as { message: string; paths: string[][] }[],
   popped: [] as string[],
+  taken: [] as { paths: string[][]; mine: boolean }[],
+  continued: [] as boolean[],
   /** What git says in refusing the next write, or nothing where it refuses none. */
   refuse: null as string | null,
   /** The watches laid and taken down, as the folder, the part that laid it and which mount. */
@@ -65,7 +69,7 @@ vi.mock("./folder", () => {
   return {
     folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
       hoisted.asked.push(root);
-      return hoisted.git[root] ?? { prefix: "", branch: null, rows: [] };
+      return hoisted.git[root] ?? { prefix: "", branch: null, rows: [], merging: false };
     },
     onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
       hoisted.takers.push(take);
@@ -83,6 +87,11 @@ vi.mock("./folder", () => {
       hoisted.unwatched.push(`${root} ${watcher} ${tag}`);
     },
     folderGitStashes: async (): Promise<GitStashDto[]> => hoisted.stashes,
+    folderGitMarks: async (_p: number, _r: string, paths: string[][]): Promise<number[]> =>
+      paths.map((path) => hoisted.marks[path.join("/")] ?? 0),
+    folderGitMergeContinue: () => kept(hoisted.continued, true),
+    folderGitTake: (_p: number, _r: string, paths: string[][], mine: boolean) =>
+      kept(hoisted.taken, { paths, mine }),
     folderGitStage: (_p: number, _r: string, paths: string[][]) => kept(hoisted.staged, paths),
     folderGitUnstage: (_p: number, _r: string, paths: string[][]) => kept(hoisted.unstaged, paths),
     folderGitCommit: (_p: number, _r: string, message: string, paths: string[][]) =>
@@ -122,15 +131,20 @@ const says = (about: Partial<FolderGitDto>): FolderGitDto => ({
   prefix: "",
   branch: { name: "main", upstream: "origin/main", ahead: 0, behind: 0 },
   rows: [],
+  merging: false,
   ...about,
 });
 
 /** Every press of the way across to the history, so a test can read it back. */
 let opened = 0;
 
-async function draw(at: string | null = ROOT, onHistory?: () => void) {
+async function draw(
+  at: string | null = ROOT,
+  onHistory?: () => void,
+  onRead?: (path: string[]) => void,
+) {
   await act(async () => {
-    root.render(createElement(GitPanel, { projectId: 1, root: at, onHistory }));
+    root.render(createElement(GitPanel, { projectId: 1, root: at, onHistory, onRead }));
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
@@ -175,6 +189,14 @@ const menuItem = (words: string): HTMLElement =>
   [...document.querySelectorAll<HTMLElement>(".menu__item")]
     .find((one) => one.textContent === words)!;
 
+/** Open the menu a row carries, the way a reader does. */
+async function rightClickOn(what: Element) {
+  await act(async () => {
+    what.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
 /** Press one thing, and let whatever it asked for come back. */
 async function press(what: HTMLElement) {
   await act(async () => {
@@ -218,6 +240,9 @@ beforeEach(() => {
   hoisted.commits = [];
   hoisted.stashed = [];
   hoisted.popped = [];
+  hoisted.marks = {};
+  hoisted.taken = [];
+  hoisted.continued = [];
   hoisted.refuse = null;
   hoisted.watched = [];
   hoisted.unwatched = [];
@@ -260,7 +285,7 @@ describe("the rail's git half", () => {
   /// One project in twenty-one on this machine. An empty list there would read as a repository
   /// where nothing has happened.
   it("draws the sentence and nothing else where the folder is no repository", async () => {
-    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [] };
+    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [], merging: false };
     await draw();
     expect(container.textContent).toContain(t("git.noRepo"));
     expect(container.querySelector(".gitpanel__section")).toBeNull();
@@ -281,6 +306,120 @@ describe("the rail's git half", () => {
     await draw();
     expect(listed(t("git.staged"))).toEqual(["staged.rs", "both.rs"]);
     expect(listed(t("git.changes"))).toEqual(["working.rs", "both.rs", "new.md"]);
+  });
+
+  /// A path the merge could not settle is in neither of the two lists. What a box does there is
+  /// stage, and staging a conflict is the one press that says the conflict has been settled.
+  it("keeps what the merge could not settle out of the two lists", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["both.rs"], index: "U", worktree: "U" }),
+        // Each of the other six ways git writes a conflict, and an ordinary change beside them.
+        row({ path: ["added.rs"], index: "A", worktree: "A" }),
+        row({ path: ["dropped.rs"], index: "D", worktree: "D" }),
+        row({ path: ["mine.rs"], index: "U", worktree: "D" }),
+        row({ path: ["theirs.rs"], index: "D", worktree: "U" }),
+        row({ path: ["ours.rs"], index: "U", worktree: "A" }),
+        row({ path: ["incoming.rs"], index: "A", worktree: "U" }),
+        row({ path: ["plain.rs"], index: "M", worktree: "M" }),
+      ],
+    });
+    await draw();
+    expect(listed(t("git.conflicts"))).toEqual([
+      "both.rs", "added.rs", "dropped.rs", "mine.rs", "theirs.rs", "ours.rs", "incoming.rs",
+    ]);
+    expect(listed(t("git.staged"))).toEqual(["plain.rs"]);
+    expect(listed(t("git.changes"))).toEqual(["plain.rs"]);
+  });
+
+  /// The number is counted off the file and not off git's index, so it is the answer to "is this
+  /// one done" before anybody has said so — and the press that says so is offered only at none.
+  it("draws how much of each conflict is left, and offers the press only at none", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["left.rs"], index: "U", worktree: "U" }),
+        row({ path: ["done.rs"], index: "U", worktree: "U" }),
+      ],
+    });
+    hoisted.marks = { "left.rs": 3 };
+    await draw();
+    const left = rowOf(t("git.conflicts"), "left.rs");
+    expect(left.querySelector(".gitpanel__marks")?.textContent).toBe(tf("git.conflictMarks", { n: 3 }));
+    expect(left.querySelector(".gitpanel__settle")).toBeNull();
+    const done = rowOf(t("git.conflicts"), "done.rs");
+    expect(done.querySelector(".gitpanel__marks")).toBeNull();
+    expect(done.querySelector(".gitpanel__settle")?.textContent).toBe(t("git.settleOne"));
+  });
+
+  /// Nothing stages a conflict by itself, however little is left in the file: the press is the
+  /// reader saying it is settled, and it names the one path it was made on.
+  it("stages the path the press to settle was made on, and only that one", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["src", "one.rs"], index: "U", worktree: "U" }),
+        row({ path: ["src", "two.rs"], index: "U", worktree: "U" }),
+      ],
+    });
+    await draw();
+    expect(hoisted.staged).toEqual([]);
+    await press(rowOf(t("git.conflicts"), "one.rs").querySelector<HTMLElement>(".gitpanel__settle")!);
+    expect(hoisted.staged).toEqual([[["src", "one.rs"]]]);
+  });
+
+  /// git wrote the message when it began the merge and takes that one, so a box to write in would
+  /// be one a reader types into and is never asked for. And git refuses to end a merge while a path
+  /// is still unmerged, which is why the press is down until the list is empty.
+  it("swaps the commit box for the press that ends the merge, and holds it down until none is left", async () => {
+    hoisted.git[ROOT] = says({
+      merging: true,
+      rows: [row({ path: ["both.rs"], index: "U", worktree: "U" })],
+    });
+    await draw();
+    expect(container.querySelector(".gitpanel__message")).toBeNull();
+    expect(commitButton().textContent).toBe(t("git.mergeContinue"));
+    expect(commitButton().disabled).toBe(true);
+    expect(container.textContent).toContain(tf("git.conflictsLeft", { n: 1 }));
+
+    hoisted.git[ROOT] = says({ merging: true, rows: [row({ path: ["both.rs"], index: "M" })] });
+    await moveFolder();
+    expect(commitButton().disabled).toBe(false);
+    expect(container.textContent).toContain(t("git.conflictsSettled"));
+    await press(commitButton());
+    expect(hoisted.continued).toEqual([true]);
+  });
+
+  /// A conflicted file is an ordinary file, and this half is the tab the tree is not: a reader
+  /// standing on the list has no other way to the file the conflict is settled in.
+  it("opens the file a conflicted row names, by the path this half spells", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [row({ path: ["src", "both.rs"], index: "U", worktree: "U" })],
+    });
+    const read: string[][] = [];
+    await draw(ROOT, undefined, (path) => read.push(path));
+    await press(
+      rowOf(t("git.conflicts"), "both.rs").querySelector<HTMLElement>(".gitpanel__conflictname")!,
+    );
+    expect(read).toEqual([["src", "both.rs"]]);
+  });
+
+  /// Taking one side whole is the short way out of a conflict and is refused over anything else,
+  /// so it is drawn on a conflicted row and nowhere else.
+  it("offers taking one side whole on a conflicted row and on no other", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["both.rs"], index: "U", worktree: "U" }),
+        row({ path: ["plain.rs"], worktree: "M" }),
+      ],
+    });
+    await draw();
+    await rightClickOn(rowOf(t("git.changes"), "plain.rs"));
+    expect(itemNames()).not.toContain(t("git.takeOurs"));
+
+    await rightClickOn(rowOf(t("git.conflicts"), "both.rs"));
+    expect(itemNames()).toContain(t("git.takeOurs"));
+    expect(itemNames()).toContain(t("git.takeTheirs"));
+    await press(menuItem(t("git.takeTheirs")));
+    expect(hoisted.taken).toEqual([{ paths: [["both.rs"]], mine: false }]);
   });
 
   /// A folder git named as a whole rather than naming what is inside it, which is what it does with

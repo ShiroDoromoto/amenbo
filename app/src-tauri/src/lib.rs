@@ -393,6 +393,10 @@ pub fn run() {
       // not asked for, so a build that was asked is the one that has to tidy up after itself. On macOS
       // this is the only face that can make the pass at all — see the module docs.
       tick::reconcile();
+      // Who a git that needs a password is to ask. The door it is asked through is opened under the
+      // first git that runs, and it is a thread of its own by then — so the app has to be handed
+      // over here, while there is still a handle to hand over (`crate::folder_git_askpass`).
+      folder_git_askpass::init(app.handle().clone());
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());
       // The board is declared in `tauri.conf.json`, so it is already a window by the time this runs —
@@ -642,6 +646,7 @@ pub fn run() {
       folder_git_write::folder_git_fetch,
       folder_git_write::folder_git_pull,
       folder_git_write::folder_git_push,
+      folder_git_askpass::folder_git_askpass_said,
       folder_bytes::folder_read,
       folder_bytes::folder_encodings,
       folder::folder_open_file,

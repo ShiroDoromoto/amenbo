@@ -874,6 +874,20 @@ const ui = {
   "git.mergeContinue": "Continue the merge",
   "git.takeOurs": "Take this branch's side",
   "git.takeTheirs": "Take the other branch's side",
+  // The frame around the question git puts to the person when it needs a password and has no
+  // terminal to ask in (`../../../files/GitAsk`, `AMB-D-913`). The question itself is git's own and
+  // is drawn as git wrote it, in git's language — none of it is translated here.
+  //
+  // `what` is the call waiting on the answer, as a person would have typed it: `git push`. The
+  // question never says which one it belongs to.
+  "git.askDoing": "{what} is waiting for an answer",
+  "git.askSave": "Keep it on this machine",
+  // Where it goes, said because the answer is what nobody can see afterwards. Amenbo holds none of
+  // it: it goes where the git this person runs themselves already looks, which is also the one place
+  // to take it back from (`AMB-D-913`).
+  "git.askSaveWhere": "Amenbo holds none of it — it goes where git already keeps them on this machine.",
+  "git.askGo": "Answer",
+  "git.askCancel": "Cancel",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

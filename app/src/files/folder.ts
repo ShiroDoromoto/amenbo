@@ -17,8 +17,8 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitBranchDto, GitCommitDto, GitFileDto,
-  GitStashDto,
+  FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitAskDto, GitBranchDto, GitCommitDto,
+  GitFileDto, GitStashDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -449,6 +449,42 @@ export async function onFolderChanged(
   if (!inTauri()) return () => {};
   const { listen } = await import("@tauri-apps/api/event");
   return await listen<FolderChangesDto>(CHANGED_EVENT, ({ payload }) => take(payload));
+}
+
+/**
+ * The host's word that a git it is running is waiting to be asked something — a password, a name, a
+ * key's passphrase (`crate::folder_git_askpass`).
+ *
+ * It goes to every window, because the face that runs git is in whichever one currently holds it,
+ * and only one window holds it at a time (`../shell/AppShell`). **The call is stopped for as long as
+ * nobody answers**, so what hears this owes {@link folderGitAskpassSaid} an answer either way.
+ */
+const ASKED_EVENT = "git-askpass://asked";
+
+/** Be told when git is waiting on an answer, until the returned function is called. */
+export async function onGitAsked(take: (ask: GitAskDto) => void): Promise<() => void> {
+  if (!inTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return await listen<GitAskDto>(ASKED_EVENT, ({ payload }) => take(payload));
+}
+
+/**
+ * Answer one of those questions. `said` of `null` is the dialog closed with nothing typed, which is
+ * **not** an empty password — git reads an empty password as a password, so the two travel apart all
+ * the way down.
+ *
+ * `save` asks for it to be kept. Amenbo keeps nothing itself: it goes to `git credential approve`
+ * and from there into this machine's own credential helper, which is where the git the reader runs
+ * themselves already looks (`AMB-D-913`). It is honoured only where the question named a whole
+ * credential (`GitAskDto.savable`).
+ */
+export async function folderGitAskpassSaid(
+  id: number,
+  said: string | null,
+  save: boolean,
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_git_askpass_said", { id, said, save });
 }
 
 /**

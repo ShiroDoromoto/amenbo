@@ -916,6 +916,39 @@ export type FrameNameDto = {
 frame: string, name: string, by: "session" | "person", };
 
 /**
+ * A question git or ssh is waiting on an answer to (`crate::folder_git_askpass`).
+ *
+ * **`asked` is git's own sentence and is drawn as it came** (`AMB-D-913`) — in whatever language
+ * git wrote it, and never said again in Amenbo's words. Everything else here is the frame the
+ * window puts around it, which is the part that is translated.
+ */
+export type GitAskDto = { 
+/**
+ * Which question this is, so the answer reaches the call waiting on it. It names one question
+ * in this run of the app and nothing outside it.
+ */
+id: number, 
+/**
+ * What is waiting, as a person would have typed it — `git push`. The question itself never says
+ * this, and a password box that does not say what asked for it is one nobody can place.
+ */
+doing: string, 
+/**
+ * The question, word for word.
+ */
+asked: string, 
+/**
+ * Whether what is typed is hidden while it is typed. False for git's first question, which asks
+ * who the credential is for.
+ */
+secret: boolean, 
+/**
+ * Whether "keep it" can be offered — whether this question names a credential complete enough
+ * for `git credential approve` to be handed one.
+ */
+savable: boolean, };
+
+/**
  * Where the branch the folder is on stands against the one it is measured by
  * (`crate::folder_git`).
  *

@@ -1942,6 +1942,33 @@ pub struct FolderGitDto {
     pub(crate) merging: bool,
 }
 
+/// A question git or ssh is waiting on an answer to (`crate::folder_git_askpass`).
+///
+/// **`asked` is git's own sentence and is drawn as it came** (`AMB-D-913`) — in whatever language
+/// git wrote it, and never said again in Amenbo's words. Everything else here is the frame the
+/// window puts around it, which is the part that is translated.
+// `Clone` is Tauri's: an event is handed to every window, so the payload is cloned per window.
+#[derive(Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitAskDto {
+    /// Which question this is, so the answer reaches the call waiting on it. It names one question
+    /// in this run of the app and nothing outside it.
+    #[ts(type = "number")]
+    pub(crate) id: u64,
+    /// What is waiting, as a person would have typed it — `git push`. The question itself never says
+    /// this, and a password box that does not say what asked for it is one nobody can place.
+    pub(crate) doing: String,
+    /// The question, word for word.
+    pub(crate) asked: String,
+    /// Whether what is typed is hidden while it is typed. False for git's first question, which asks
+    /// who the credential is for.
+    pub(crate) secret: bool,
+    /// Whether "keep it" can be offered — whether this question names a credential complete enough
+    /// for `git credential approve` to be handed one.
+    pub(crate) savable: bool,
+}
+
 /// One commit, as a history list draws a row of it (`crate::folder_git`).
 ///
 /// **The parents come across and the lines do not.** `--graph` costs git a commit-graph it does not

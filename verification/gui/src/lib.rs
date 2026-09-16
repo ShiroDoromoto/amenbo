@@ -2929,19 +2929,23 @@ impl Instructor {
             // Which list the press is in is the whole of the difference, so each says it: a name can
             // stand in both at once, and an operator told only "tick the box" would have two to
             // choose between.
+            // **The box is about the set, where the row it is on is in one.** A reader who gathered
+            // rows and then ticked one of them has not begun again, so every row picked out moves
+            // together; a row nobody gathered moves alone. The line says both, because a road that
+            // picked rows before this step and a road that did not are walking the same instruction.
             (Domain::Files, "stage") => format!(
-                "In the half of the panel that is git's, find \"{}\" in the list of what has changed and tick the box at the start of its row. The row leaves that list and stands in the list of what is staged.",
+                "In the half of the panel that is git's, find \"{}\" in the list of what has changed and tick the box at the start of its row. It leaves that list and stands in the list of what is staged — and where rows have been picked out and this is one of them, every row picked out goes with it.",
                 req(with, "name")?
             ),
             (Domain::Files, "unstage") => format!(
-                "In the half of the panel that is git's, find \"{}\" in the list of what is staged and untick the box at the start of its row. The row leaves that list and stands in the list of what has changed.",
+                "In the half of the panel that is git's, find \"{}\" in the list of what is staged and untick the box at the start of its row. It leaves that list and stands in the list of what has changed — and where rows have been picked out and this is one of them, every row picked out goes with it.",
                 req(with, "name")?
             ),
             // The message and the press together. The control is down until something is typed and
             // something is staged, so an operator who met it greyed has been sent to it a step early
             // — the line says both, so that reads as the road's fault and not as the build's.
             (Domain::Files, "commit") => format!(
-                "In the half of the panel that is git's, type \"{}\" into the box above the lists, then press the control beside it that records what is staged. The box empties and the list of what is staged goes empty with it.",
+                "In the half of the panel that is git's, type \"{}\" into the box under the lists — it stands at the foot of the half, where it is drawn whether or not the lists above it are scrolled — then press the control beside it that records what is staged. The box empties and the list of what is staged goes empty with it.",
                 req(with, "message")?
             ),
             // The one press on this half that opens the other column.
@@ -3021,11 +3025,22 @@ impl Instructor {
             // Twice, because one press picks the row out and does no more: the file lies over the
             // tree while it is being read, so a row opened on the way past is the row that hides
             // what a reader was reaching for next.
-            (Domain::Files, "open") => format!(
-                "In {}, press \"{}\" twice. The column is replaced by what is in that file.",
-                section(with)?,
-                req(with, "name")?
-            ),
+            // **What a second press opens is what the section holds.** A row of the folder's own
+            // names is a file, and the column draws it; a row of git's two lists is a path that has
+            // changed, and what the column draws there is the patch — the rows picked out, one
+            // under another, as git wrote them (`git-panel-spec`, 2-2 and 2-4).
+            (Domain::Files, "open") => match with.get("section").and_then(|v| v.as_str()) {
+                Some("changes") | Some("staged") => format!(
+                    "In {}, press \"{}\" twice. The column across the panes opens on what the picked rows are holding, drawn as git wrote it, each patch under the name of the path it is about.",
+                    section(with)?,
+                    req(with, "name")?
+                ),
+                _ => format!(
+                    "In {}, press \"{}\" twice. The column is replaced by what is in that file.",
+                    section(with)?,
+                    req(with, "name")?
+                ),
+            },
             // The one control with two ends and one press, so the step names the end. What it is
             // called on screen is the form it is *not* in — a switch says where it goes — which is
             // why the instruction describes the offer rather than quoting the word on it.
@@ -3233,7 +3248,7 @@ impl Instructor {
             // it, the way the bin's is: in `asks` the panel puts its question here and the step
             // leaves it standing, because deciding it is `answer`'s.
             (Domain::Files, "restore") =>
-                "On the menu that is standing, press the item that throws away what git has not been told about that file. If the panel asks whether to throw the change away, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                "On the menu that is standing, press the item that throws away what git has not been told about that file — and about every row picked out with it, where the menu was opened on one of a set. If the panel asks whether to throw the change away, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
             // And answering one of those questions. The answers are named by what each does rather
             // than by the words on the buttons, which are the interface's own.
@@ -4668,13 +4683,17 @@ impl Instructor {
             },
             // git's own text, drawn line by line. A line is found by the characters it is written
             // with, mark and all, because nothing here rewrites what a diff says.
+            //
+            // **What is drawn there may be several patches**, one per path picked out and each under
+            // its own name, so the reading is taken across the whole of the column rather than on
+            // the first of them.
             (Domain::Files, "patch") => match present(with) {
                 true => format!(
-                    "In the column across the panes, confirm the patch drawn there has the line \"{}\" in it.",
+                    "In the column across the panes, confirm the line \"{}\" stands somewhere in what is drawn there, scrolling through every patch on it.",
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "In the column across the panes, confirm the patch drawn there has no line \"{}\" in it.",
+                    "In the column across the panes, confirm the line \"{}\" is nowhere in what is drawn there, scrolling through every patch on it.",
                     req(with, "shows")?
                 ),
             },

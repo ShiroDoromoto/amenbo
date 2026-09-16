@@ -1,0 +1,407 @@
+# Several of a folder's changes gathered into one set, read together, and written down in one commit.
+#
+# The half of the panel that is git's used to answer one row at a time: one box, one round trip, one
+# wait. What is under test here is that a set gathered by hand is what the acts afterwards are about
+# — the patches drawn across the panes, the box that stages, and the paths the commit names.
+#
+# ── Why the two rows picked are not neighbours ───────────────────────────────────────────────────
+# The adding key is what a reader gathers scattered rows with, and the row standing between the two
+# is the reading that says so: a press that had quietly taken everything between them would put that
+# row's line in the patch, in the list of what is staged, and among the paths the commit touched.
+# Three readings notice it, at three different depths.
+#
+# ── Why the first row is opened before the second is picked ──────────────────────────────────────
+# The column across the panes shows nothing about git until somebody presses for it, and the press is
+# a second one on a row. Once it is open the face draws whatever is picked, so the second row is
+# gathered after it and the stack grows under the reader's hand — which is the way a reader actually
+# builds one: they open what they are looking at and then reach for the next.
+#
+# ── Why a fourth file is changed and never touched ───────────────────────────────────────────────
+# `delta.md` is outside every set this road gathers. It is what says the acts reached the rows picked
+# rather than the list they were standing in — a build that staged the whole list passes every other
+# reading here.
+#
+# ── Why the menu leg comes after the commit ──────────────────────────────────────────────────────
+# Throwing a change away is the one act on this half that cannot be taken back, so it is walked on
+# the two files nothing else on this road needs, once what was to be written down has been. Its
+# reading is the same question as the box's, put to the other kind of control: the menu opened on one
+# row of a set acts on the set.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A set of rows is a thing on a screen; what the binary is handed is the
+# paths themselves, and every command there names the files it is about.
+id: read-several-changes-together-and-write-them-down
+title: Gather several of a folder's changes, read them in one column, and record them in one commit
+description: >
+  Raise a repository whose four files have each been changed since they were recorded. Pick two that
+  are not neighbours, read what they are holding across the panes, and stage and record the pair with
+  one box and one press. The patches stand one under another under their own names, the row between
+  the two is in none of it, and the file nobody touched is still waiting among the changes. Then pick
+  the two that are left and throw their changes away from the menu of one of them.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # The four files, recorded first so that every row this road meets is a change to something git
+  # already follows — which is what puts a patch behind each of them.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: alpha.md
+      content: SCENARIO the first bed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: bravo.md
+      content: SCENARIO the second bed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: charlie.md
+      content: SCENARIO the third bed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: delta.md
+      content: SCENARIO the fourth bed
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+  # And now the change on each, every line of it written by this road so that a patch can be read for
+  # words nothing else could have put there.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: alpha.md
+      content: SCENARIO the first bed is watered at dawn
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: bravo.md
+      content: SCENARIO the second bed is left to dry
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: charlie.md
+      content: SCENARIO the third bed is turned over
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: delta.md
+      content: SCENARIO the fourth bed is left alone
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # All four are changes git has been told nothing about yet, which is where this road starts.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: delta.md
+      section: changes
+
+  # ── one row read, and a second gathered under it ──────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO the first bed is watered at dawn
+
+  # Not a neighbour: the row between the two is what says the adding key took this row and not the
+  # run it stands at the end of.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: charlie.md
+      section: changes
+
+  # Both patches now stand in the one column, each under the name git gave it — and the first is
+  # still there, which is what says the second was gathered rather than opened in its place.
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO the first bed is watered at dawn
+
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO the third bed is turned over
+
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO the second bed is left to dry
+      present: false
+
+  # ── the set staged by one box, and written down by one press ──────────────────────────────────
+  # The box is pressed on one row of the set and moves every row in it. A build that read the box as
+  # being about the row under the pointer leaves charlie.md standing among the changes, which the
+  # reading under this notices.
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: alpha.md
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: staged
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: staged
+
+  # And the row between them did not go with them.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the first and third beds go in
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: staged
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: staged
+      present: false
+
+  # ── what was written down ─────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: history
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: SCENARIO the first and third beds go in
+      section: history
+
+  - type: action
+    domain: files
+    op: history-open
+    with:
+      name: SCENARIO the first and third beds go in
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: touched
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: touched
+
+  # The two the commit must not have taken: the row that stood between the two picked, and the one
+  # this road never pressed at all.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: touched
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: delta.md
+      section: touched
+      present: false
+
+  - type: action
+    domain: files
+    op: history-open
+    with:
+      name: alpha.md
+
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO the first bed is watered at dawn
+
+  # ── the menu, asked the same question the box was ─────────────────────────────────────────────
+  # Back on the half that is git's, the two that were never recorded are still waiting. Picked
+  # together and reached from the menu of one of them, what is thrown away is both.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: delta.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: restore
+
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: "yes"
+      about: restore
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: changes
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: delta.md
+      section: changes
+      present: false

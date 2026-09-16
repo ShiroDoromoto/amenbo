@@ -4636,15 +4636,20 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
-            // git's own words, under that line. They are read as git wrote them, so the words a road
-            // looks for are English however the interface around them is drawn.
+            // git's own words, wherever on this half they landed. They are read as git wrote them, so
+            // the words a road looks for are English however the interface around them is drawn.
+            //
+            // The place is left out on purpose. A door's refusal is drawn under the branch line, and
+            // on a folder git would not answer about there is no branch line — the same sentence is
+            // in the frame that says so. An operator told to look under a line that is not there
+            // reads that as a build that lost the sentence.
             (Domain::Files, "git-said") => match present(with) {
                 true => format!(
-                    "Under the line naming the branch, confirm what git wrote is on the screen and carries \"{}\".",
+                    "In the half of the panel that is git's, confirm what git wrote is on the screen and carries \"{}\".",
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "Under the line naming the branch, confirm nothing on the screen carries \"{}\".",
+                    "In the half of the panel that is git's, confirm nothing on the screen carries \"{}\".",
                     req(with, "shows")?
                 ),
             },
@@ -5564,6 +5569,11 @@ fn note(with: &Args) -> Result<&'static str, String> {
         // the two above because the folder is there and is bound — git simply has nothing to say
         // about it — and a reader sent looking for a missing folder would be looking for damage.
         Some("no-repo") => Ok("that this folder is not a repository"),
+        // And the answer that never came, which is not the one above however alike the two halves of
+        // the panel look. The folder is a repository and git was asked about it; what came back was a
+        // refusal. A reader told there is no repository here would go looking for damage to a `.git`
+        // they know is there, and git's own sentence — drawn in this frame — is what says otherwise.
+        Some("no-answer") => Ok("that git did not answer about this folder"),
         // Said inside the list of what is put aside rather than in place of it, because that list is
         // also where a stash is made: a reader with nothing put aside still has the row that puts
         // the changes there.

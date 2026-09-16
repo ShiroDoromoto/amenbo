@@ -879,14 +879,15 @@ jobs:
           workspaces: app/src-tauri
           save-if: ${{ env.SAVE_CACHE }}
 
-      # The host crate's build.rs (tauri_build) validates tauri.conf.json's
-      # externalBin=binaries/amenbo. That sidecar CLI is normally staged by tauri's
-      # beforeBuildCommand, which a plain `cargo clippy/test` never runs, and
-      # binaries/ is gitignored — so on a cache miss (or when tauri.conf.json
-      # changes and build.rs re-runs) this job would fail with `resource path …
-      # doesn't exist`. Stage it up front with the same script the GUI build uses.
-      - name: Stage CLI sidecar (externalBin)
-        run: node app/scripts/prepare-cli-sidecar.mjs
+      # The host crate's build.rs (tauri_build) validates every path in
+      # tauri.conf.json's externalBin — the CLI and the askpass helper. Those are
+      # normally staged by tauri's beforeBuildCommand, which a plain `cargo
+      # clippy/test` never runs, and binaries/ is gitignored — so on a cache miss
+      # (or when tauri.conf.json changes and build.rs re-runs) this job would fail
+      # with `resource path … doesn't exist`. Stage them up front with the same
+      # script the GUI build uses.
+      - name: Stage sidecars (externalBin)
+        run: node app/scripts/prepare-sidecars.mjs
 
       # Same lint contract as the core/cli `rust` job, including the facet env funnel
       # (-D clippy::disallowed_methods): the host crate reads AMENBO_* only via
@@ -999,7 +1000,7 @@ jobs:
       #
       # The `.` here is not the entry `rust-mac-win` shares under `shared-key: workspace`, however
       # alike the two look: that one holds a debug build (clippy and test drive the dev profile),
-      # this one a release build (prepare-cli-sidecar.mjs passes `--release`). Neither can be
+      # this one a release build (prepare-sidecars.mjs passes `--release`). Neither can be
       # dropped in favour of the other.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -1011,8 +1012,8 @@ jobs:
 
       # Same reason as the Linux job: build.rs validates tauri.conf.json's externalBin, which a
       # plain clippy/test never stages, and binaries/ is gitignored.
-      - name: Stage CLI sidecar (externalBin)
-        run: node app/scripts/prepare-cli-sidecar.mjs
+      - name: Stage sidecars (externalBin)
+        run: node app/scripts/prepare-sidecars.mjs
 
       - name: Clippy (all targets)
         run: cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings -D clippy::disallowed_methods

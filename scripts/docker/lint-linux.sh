@@ -44,12 +44,12 @@ rustc --version && cargo clippy --version
 echo "→ [container] clippy: workspace (core/cli)"
 cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
 
-# The Tauri host crate — CI's `app-rust` job. Its build.rs (tauri_build) validates
-# tauri.conf.json's externalBin=binaries/amenbo, and binaries/ is gitignored, so the
-# sidecar has to be staged before clippy can even run. Same script the GUI build
-# uses; here it produces the LINUX CLI, which is the point.
-echo "→ [container] staging CLI sidecar (externalBin) for the host crate"
-node app/scripts/prepare-cli-sidecar.mjs
+# The Tauri host crate — CI's `app-rust` job. Its build.rs (tauri_build) validates every
+# path in tauri.conf.json's externalBin (the CLI and the askpass helper), and binaries/ is
+# gitignored, so both have to be staged before clippy can even run. Same script the GUI
+# build uses; here it produces the LINUX binaries, which is the point.
+echo "→ [container] staging sidecars (externalBin) for the host crate"
+node app/scripts/prepare-sidecars.mjs
 
 echo "→ [container] clippy: app/src-tauri (Tauri host crate)"
 cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings -D clippy::disallowed_methods

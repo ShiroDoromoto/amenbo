@@ -46,6 +46,7 @@ dependencies = [
 name = "amenbo-app"
 version = "28.0.0"
 dependencies = [
+ "amenbo-askpass",
  "amenbo-core",
  "amenbo-scratch",
  "amenbo-static-host",
@@ -92,6 +93,10 @@ dependencies = [
  "windows-core 0.62.2",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "amenbo-askpass"
+version = "28.0.0"
 
 [[package]]
 name = "amenbo-core"

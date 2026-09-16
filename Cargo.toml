@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/amenbo-core", "crates/amenbo-cli", "crates/amenbo-scratch", "crates/amenbo-static-host"]
+members = ["crates/amenbo-core", "crates/amenbo-cli", "crates/amenbo-askpass", "crates/amenbo-scratch", "crates/amenbo-static-host"]
 # The GUI (Tauri) shell is a standalone crate outside the workspace, excluded so the root
 # `cargo build` stays light. It reaches amenbo-core through a path dependency.
 exclude = ["app/src-tauri"]
@@ -17,6 +17,9 @@ amenbo-scratch = { path = "crates/amenbo-scratch" }
 # A loopback host for the tests, for the routes that are reached by URL and cannot be a file on disk
 # (dev-dependency only — never linked into a shipped binary).
 amenbo-static-host = { path = "crates/amenbo-static-host" }
+# The wire between the askpass helper git starts and the window that answers it. Both ends link it,
+# which is what keeps them from drifting apart (`crates/amenbo-askpass`).
+amenbo-askpass = { path = "crates/amenbo-askpass" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # YAML reader for `plugin validate`: authors write manifests as `plugins/<name>.yaml` in the catalog

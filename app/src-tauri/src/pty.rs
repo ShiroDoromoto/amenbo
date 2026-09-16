@@ -606,7 +606,10 @@ fn new_session() -> String {
 /// That many bytes of OS randomness, written as lower-case hex — the shape both a session id and the
 /// name of a pasted file want, and the only one that is safe to put in a path without asking what is
 /// in it.
-fn random_hex(bytes: usize) -> String {
+///
+/// Reached from outside this module by the one other thing here that draws a word nobody else can
+/// guess: the token the askpass door is opened with (`crate::folder_git_askpass`).
+pub(crate) fn random_hex(bytes: usize) -> String {
     let mut drawn = vec![0u8; bytes];
     getrandom::fill(&mut drawn).expect("failed to draw OS randomness");
     drawn.iter().fold(String::with_capacity(bytes * 2), |mut s, b| {

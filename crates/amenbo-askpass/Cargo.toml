@@ -1,0 +1,19 @@
+[package]
+name = "amenbo-askpass"
+description = "The helper git and ssh put their question to, and the wire it carries the question over"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Shipped beside the app as a Tauri sidecar, never to crates.io: it is only meaningful next to the
+# window that answers it.
+publish = false
+
+[[bin]]
+name = "amenbo-askpass"
+path = "src/main.rs"
+
+[dependencies]
+
+[dev-dependencies]
+amenbo-scratch.workspace = true

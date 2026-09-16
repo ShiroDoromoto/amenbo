@@ -6,7 +6,7 @@
 //! channel's own name — are one app in two places on disk.
 //!
 //! The bundle is asked instead, through the CLI it ships. One installer carries both faces and one
-//! build produces them together (`app/scripts/prepare-cli-sidecar.mjs` stages the CLI into the
+//! build produces them together (`app/scripts/prepare-sidecars.mjs` stages the CLI into the
 //! bundle as the app is built), so the sidecar's stamp is the bundle's provenance — and a stamp is
 //! something a binary can be asked for, which a window is not. What it answers is `release_build`,
 //! from the `version` face's `--json`.

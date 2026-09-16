@@ -10,11 +10,10 @@
 # the time axis is, so an axis nobody nominated is turned away rather than retiring a value quietly.
 # The way back is not nominated — reopening is free on any axis — and the demand that a category be
 # answered counts what it still offers, so the last open value does not close while the demand is up.
-# The screen's half is the four faces reading one flag to four ends, which is a thing only a screen
+# The screen's half is the three faces reading one flag to three ends, which is a thing only a screen
 # can be asked about: the filter offers a closed value, the record's own picker leaves it out while
-# still drawing the one that record carries, the board keeps a column only while cards are in it and
-# lets no card be dropped into it, and the classification panel draws every value and is alone in
-# offering the way back.
+# still drawing the one that record carries, and the classification panel draws every value and is
+# alone in offering the way back.
 id: retire-a-value-and-keep-what-is-filed-under-it
 title: A value closed on a category stops taking new records and keeps everything already filed under it, and only deleting takes that away
 description: >
@@ -30,7 +29,8 @@ description: >
 # store. Filing is `classify-work-along-an-axis`'s road and walking it again here would prove that road
 # twice and this one not at all, so the world carries it — and it has to be the world in any case:
 # what closing leaves alone is what was filed *before* it, which is a state no step of this road could
-# stand up after the fact. `v19` is left with nothing on it, which is what the board's half reads.
+# stand up after the fact. `v19` carries nothing, and it is where the removal at the end sends what
+# was filed under `v18`.
 given:
   - type: action
     domain: dimension
@@ -281,10 +281,10 @@ steps_cli:
       present: true
 
 steps_gui:
-  # The screen's half is the one flag read four ways, which is what only a screen can be asked. The
+  # The screen's half is the one flag read three ways, which is what only a screen can be asked. The
   # terminal meets closing as a listing that leaves a value out; here it is a picker that stops offering
-  # it, a board that keeps its column only while cards are in it, a filter that offers it like any
-  # other, and a panel that draws it retired and is alone in offering the way back.
+  # it, a filter that offers it like any other, and a panel that draws it retired and is alone in
+  # offering the way back.
   - type: action
     domain: dimension
     op: closable
@@ -330,66 +330,6 @@ steps_gui:
       value: v18
       present: true
 
-  # The board, cut along the category, and the reading is of the columns rather than of the cards. A
-  # closed value keeps its column while cards are still in it — hiding it would take that work off the
-  # board altogether, the column for "no value" holding only what carries none.
-  - type: action
-    domain: project
-    op: group-by
-    with:
-      axis: Release
-
-  - type: assert
-    domain: project
-    op: column
-    with:
-      axis: Release
-      value: v18
-      present: true
-
-  # And keeps it without taking anything into it. The column is the board's own door onto the filing —
-  # a card carried across and let go is filed under the value on the heading — so a column standing
-  # open to that would be a way around the picker that stopped offering the value. Nothing is said and
-  # nothing comes back: the column is no drop target at all, and the card is left where it came from.
-  - type: action
-    domain: task
-    op: drop-into-column
-    with:
-      target: fresh
-      axis: Release
-      value: v18
-      refused: invalid_dimension_set_closed_value
-
-  # Read where the drop would have shown, which is the record's own picker rather than the board: a
-  # value a record carries is drawn there as the field's answer, the way v18 stands on the record that
-  # carried it all along. This one draws nothing, so nothing was filed.
-  - type: assert
-    domain: dimension
-    op: listed
-    with:
-      target: fresh
-      dimension: Release
-      value: v18
-      present: false
-
-  # And loses it once the last card leaves. Closed with nothing filed under it, the value has no column
-  # to keep — which is what stops a category that keeps retiring values from growing a board of empty
-  # columns nobody can drop a card into.
-  - type: action
-    domain: dimension
-    op: value-close
-    with:
-      dimension: Release
-      value: v19
-
-  - type: assert
-    domain: project
-    op: column
-    with:
-      axis: Release
-      value: v19
-      present: false
-
   # The filter, and it is the one face that draws no distinction: asking what carried a finished
   # release is the whole reason to close a value rather than delete it, so a closed one is offered to
   # narrow by like any other, and the work filed under it comes back. It is walked here rather than
@@ -417,8 +357,8 @@ steps_gui:
     op: close-filters
 
   # And the way back, which is on the panel and nowhere else — the picker cannot offer what it hides,
-  # the board has no column left to press, and the filter narrows by a value rather than changing one.
-  # Read where it was pressed: the row is drawn like the category's others again.
+  # and the filter narrows by a value rather than changing one. Read where it was pressed: the row is
+  # drawn like the category's others again.
   - type: action
     domain: dimension
     op: value-reopen

@@ -11,7 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DRAG_SLOP } from "../core/pointerDrag";
-import { columnUnder, DROP_ATTR, splitColumn, useCardDrag } from "./boardDrag";
+import { columnUnder, DROP_ATTR, useCardDrag } from "./boardDrag";
 
 /** jsdom lays nothing out, so what is under the pointer is stated rather than measured. */
 function under(el: Element | null): void {
@@ -40,12 +40,12 @@ function Board() {
   // pointer, which in a laid-out browser is what `elementFromPoint` would have found.
   const [taken] = useState(1);
   return createElement("div", null,
-    createElement("div", { [DROP_ATTR]: "status:todo", id: "todo" },
+    createElement("div", { [DROP_ATTR]: "todo", id: "todo" },
       cardThere ? createElement("div", {
         className: "card", id: "card",
         onPointerDown: (e: never) => press?.(taken, home, e),
       }, "a card") : null),
-    createElement("div", { [DROP_ATTR]: "status:done", id: "done" }));
+    createElement("div", { [DROP_ATTR]: "done", id: "done" }));
 }
 
 /** A press, a move and a release, as a browser delivers them through a captured pointer. */
@@ -86,7 +86,7 @@ async function releaseOnWindow(x: number, y: number) {
 
 beforeEach(() => {
   landed = [];
-  home = "status:todo";
+  home = "todo";
   cardThere = true;
   press = null;
   dragging = null;
@@ -113,19 +113,12 @@ describe("the point a card is over", () => {
   it("is the column drawn under it, and none where there is no column", () => {
     const todo = document.getElementById("todo");
     under(todo);
-    expect(columnUnder(10, 10)).toBe("status:todo");
+    expect(columnUnder(10, 10)).toBe("todo");
     // Found by walking up: what is literally under the pointer is the card's own text.
     under(document.getElementById("card"));
-    expect(columnUnder(10, 10)).toBe("status:todo");
+    expect(columnUnder(10, 10)).toBe("todo");
     under(null);
     expect(columnUnder(10, 10)).toBeNull();
-  });
-
-  /** One key spells a status, a dimension's value and the column for the cards carrying none. */
-  it("comes apart into the board that drew it and which of its columns it is", () => {
-    expect(splitColumn("status:todo")).toEqual(["status", "todo"]);
-    expect(splitColumn("dim:12")).toEqual(["dim", "12"]);
-    expect(splitColumn("dim:none")).toEqual(["dim", "none"]);
   });
 });
 
@@ -190,15 +183,15 @@ describe("letting a card go", () => {
     await down(100, 100);
     under(document.getElementById("done"));
     await to("pointermove", 200, 100);
-    expect(overColumn).toBe("status:done");
+    expect(overColumn).toBe("done");
     await to("pointerup", 200, 100);
-    expect(landed).toEqual([["status:done", 1]]);
+    expect(landed).toEqual([["done", 1]]);
     expect(dragging).toBeNull();
     expect(document.querySelector(".card--ghost")).toBeNull();
   });
 
-  // The board used to ask this two different ways — one for the status board, one for a dimension's.
-  // Comparing the column it came from with the one it landed on says it once, for both.
+  // Comparing the column the card came from with the one it landed on is the whole of what says
+  // a drop changes nothing.
   it("says nothing about a card let go over the column it came from", async () => {
     await down(100, 100);
     under(document.getElementById("todo"));
@@ -211,14 +204,14 @@ describe("letting a card go", () => {
   // heading while its own place is `rejected`. Letting it go there is a reader saying it was done
   // after all — which comparing against the column, rather than against the card, would have swallowed.
   it("lands a card let go over the column it sits in, where that is not the place it is in", async () => {
-    home = "status:rejected";
+    home = "rejected";
     const done = document.getElementById("todo");
-    done?.setAttribute(DROP_ATTR, "status:done");
+    done?.setAttribute(DROP_ATTR, "done");
     await down(100, 100);
     under(done);
     await to("pointermove", 200, 100);
     await to("pointerup", 200, 100);
-    expect(landed).toEqual([["status:done", 1]]);
+    expect(landed).toEqual([["done", 1]]);
   });
 
   it("says nothing about a card let go over no column at all", async () => {
@@ -243,7 +236,7 @@ describe("letting a card go", () => {
 
     await releaseOnWindow(200, 100);
     expect(landed, "the card that stopped being drawn never reached the column")
-      .toEqual([["status:done", 1]]);
+      .toEqual([["done", 1]]);
     expect(document.querySelector(".card--ghost"), "the ghost stayed on the page").toBeNull();
     expect(document.body.classList.contains("is-dragging")).toBe(false);
   });
@@ -284,7 +277,7 @@ describe("letting a card go", () => {
     await to("pointermove", 200, 100);
     await to("pointerup", 200, 100);
     expect(landed, "the press that landed on a held gesture was turned away")
-      .toEqual([["status:done", 1]]);
+      .toEqual([["done", 1]]);
     expect(document.querySelector(".card--ghost")).toBeNull();
     expect(document.body.classList.contains("is-dragging")).toBe(false);
   });

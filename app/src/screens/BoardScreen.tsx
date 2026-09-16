@@ -14,7 +14,7 @@ import { FirstLoop } from "../components/FirstLoop";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 import { LinkFolderNotice } from "./LinkFolderNotice";
 import { pickBoardNotice } from "./boardNotice";
-import { DROP_ATTR, splitColumn, useCardDrag } from "./boardDrag";
+import { DROP_ATTR, useCardDrag } from "./boardDrag";
 import { useBoundFolders } from "../core/boundFolders";
 import { inTauri } from "../core/snapshot";
 import { axesFor } from "../core/appliesTo";
@@ -38,10 +38,6 @@ import { Icon } from "../components/Icon";
 
 type View = "list" | "board" | "calendar" | "timeline";
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
-
-// What the board's columns group by: `"status"` (a first-class field — the columns fall out of it), or the id
-// of one of the project's dimensions, which splits the board into one column per value of that dimension.
-const STATUS_GROUP = "status";
 
 // Stable empty map for the instant before the assignment read comes back (and in the browser mock, where it
 // stays empty). A fresh `{}` per render would re-render every card for nothing.
@@ -80,8 +76,8 @@ const DONE_COLUMN_CAP = 20;
  * The board surface for one project: the view switcher (list/board/…) plus the tasks/decisions tabs. The initial
  * view is the project's default (`project.view`, persisted from the settings screen); switching views from the
  * header is transient and does not rewrite `project.view`. Tasks are fetched one project at a time via task_page
- * (the whole store is never held), and column grouping and the filter chips are layered on client-side (bounded
- * by the size of a project).
+ * (the whole store is never held), and the filter chips are layered on client-side (bounded by the size of a
+ * project).
  *
  * **The search is core's, not the client's.** A task ref (`AMB-T-<n>`, the bare `#<n>` / `T-<n>`, or — this
  * box reading the task side — a number alone) pins that task without asking core at all. The pin is added
@@ -120,57 +116,32 @@ export function BoardScreen({
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
   // The tasks surface (list/board/…) or the decisions one. Decisions shows only what sits under this project.
   const [tab, setTab] = useState<"tasks" | "decisions">("tasks");
-  const [group, setGroup] = useState<string | number>(STATUS_GROUP);
   const [sel, setSel] = useState<FilterSelection>({});
   // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
   // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dimMgrOpen, setDimMgrOpen] = useState(false);
-  const [dimAssign, setDimAssign] = useState<Record<string, number>>({});
-  // Which column a card is drawn in — moved when it is dropped, and moved back when the write says no.
-  // A required axis will not be emptied (`AMB-D-734`), so the drop onto the "no value" column is a move
-  // the store can refuse; left where it landed, the card would sit in a column it is not in.
-  const showDimAssign = useCallback((taskId: number, valueId: number | undefined) => {
-    setDimAssign((m) => {
-      const n = { ...m };
-      if (valueId === undefined) delete n[taskId];
-      else n[taskId] = valueId;
-      return n;
-    });
-  }, []);
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
   // Incremental, and ANDs with the filter chips.
   const [search, setSearch] = useState("");
-  // Where a card let go over a column goes. The key says which board is being looked at and which of
-  // its columns took the card, and it is the only thing the gesture knows about either — what is
-  // under the pointer is a `data-` attribute, not a React tree (`./boardDrag`).
+  // Where a card let go over a column goes. The column key is the status it stands for, and it is the
+  // only thing the gesture knows about the board — what is under the pointer is a `data-` attribute,
+  // not a React tree (`./boardDrag`).
   //
   // Nothing here asks whether the write would change anything: a card let go where it already was
   // never reaches this, because the gesture compares the column it came from with the one it landed
   // on and says nothing when they are the same.
   const dropOn = useCallback((column: string, id: number) => {
-    const [board, which] = splitColumn(column);
-    if (board === "status") {
-      store.setStatus(id, which as Status);
-      return;
-    }
-    const to = which === "none" ? undefined : Number(which);
-    const was = dimAssign[id];
-    showDimAssign(id, to);
-    const done = to === undefined
-      ? store.unsetTaskDimensionValue(id, was)
-      : store.setTaskDimensionValue(id, to);
-    void done.then((ok) => { if (!ok) showDimAssign(id, was); });
-  }, [store, dimAssign, showDimAssign]);
+    store.setStatus(id, column as Status);
+  }, [store]);
   // Dragging a card is pointer events now, not HTML5 drag: the OS handler that lets a file be dropped
   // on the window swallows the latter on two of the three operating systems (`./boardDrag`, `AMB-D-775`).
   const drag = useCardDrag(dropOn);
-  // Where a card already is, on each of the two boards. On the status board that is its own status
-  // and not the column it is drawn in — the done column draws the rejected too (`AMB-D-397`).
-  const statusHome = useCallback((card: TaskCard) => `status:${card.status}`, []);
-  const dimHome = useCallback((card: TaskCard) => `dim:${dimAssign[card.id] ?? "none"}`, [dimAssign]);
-  // The board surface, for the move flourish. Only one `.board` mounts at a time, so both grouping
-  // layouts share this ref. useBoardFlip is inert outside Tauri and when its flag is off.
+  // Where a card already is: its own status, and not the column it is drawn in — the done column
+  // draws the rejected too (`AMB-D-397`).
+  const statusHome = useCallback((card: TaskCard) => card.status, []);
+  // The board surface, for the move flourish. useBoardFlip is inert outside Tauri and when its flag
+  // is off.
   const boardRef = useRef<HTMLDivElement>(null);
   const armMove = useBoardFlip(boardRef, drag.draggingId);
   // What this project has left to wire. Read here rather than inside the row, because whether the row is
@@ -197,17 +168,8 @@ export function BoardScreen({
   const { tasks: all } = useTaskPage({ projectId, sort: "order" });
   // The board is the task side, so an axis narrowed to decisions is not one of its axes at all
   // (`AMB-D-789`) — filtered once, here, and everything downstream follows: the filter chips, the
-  // grouping select, the cards' own chips and the assignments read for them.
+  // cards' own chips and the assignments read for them.
   const projectDims = axesFor("task", project?.dimensions ?? []);
-  // The axes the columns may be split by. An axis that admits several values at once is not one of them
-  // (`AMB-D-826`): a column says where a task is, so a task sitting on three values of the grouping axis
-  // would be drawn in three columns at once. Narrowing by such an axis is the filter chips' job, and they
-  // still offer every axis. It is only the columns that need one answer per card.
-  const groupableDims = projectDims.filter((d) => d.cardinality !== "multi");
-  // If the grouping axis names a groupable dimension id, that is what splits the columns ("status", a
-  // deleted id, or an axis since turned multi-select → null).
-  const groupingDimId =
-    typeof group === "number" && groupableDims.some((d) => d.id === group) ? group : null;
   // On a project switch, drop back to that project's default view (`project.view`). AppShell does not key
   // BoardScreen by projectId and so never remounts it, which means the useState initialiser does not re-run on a
   // switch — sync it here. The dep is projectId alone, so switching views inside one project does not fire it.
@@ -216,31 +178,11 @@ export function BoardScreen({
     if (v) setView(v);
   }, [projectId]);
   const dimIdsKey = projectDims.map((d) => d.id).join(",");
-  // If the chosen dimension can no longer split the columns — deleted from the manager, or turned
-  // multi-select there — fall the now-dangling group back to status.
-  const groupableIdsKey = groupableDims.map((d) => d.id).join(",");
-  useEffect(() => {
-    if (typeof group === "number" && !groupableDims.some((d) => d.id === group)) setGroup(STATUS_GROUP);
-  }, [group, groupableIdsKey]);
-  // Pull the chosen dimension's task assignments (taskId→valueId) from the read-model in one go (Tauri
-  // only). One value per task, because only a single-select axis can be the one splitting the columns.
-  useEffect(() => {
-    if (!groupingDimId) { setDimAssign({}); return; }
-    let alive = true;
-    fetchProjectDimensionAssignments(projectId, groupingDimId).then((rows) => {
-      if (!alive) return;
-      const m: Record<string, number> = {};
-      for (const r of rows) m[r.taskId] = r.valueId;
-      setDimAssign(m);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, [groupingDimId, projectId]);
   // The assignments of every user-defined dimension (taskId→dimId→valueId), read for the whole board in one
-  // go: `dimAssign` above holds only the axis being grouped by, while the filter chips and the cards' own
-  // chips reach every axis. It goes through the query cache rather than a bare effect because a value
-  // assigned elsewhere — the detail pane's selects, the CLI — acks with the "tasks" scope, and that is what
-  // brings the answer back; an effect keyed on the set of axes would never hear about it, leaving the cards
-  // drawing the classification the board had at mount.
+  // go, because both the filter chips and the cards' own chips reach every axis. It goes through the query
+  // cache rather than a bare effect because a value assigned elsewhere — the detail pane's selects, the CLI
+  // — acks with the "tasks" scope, and that is what brings the answer back; an effect keyed on the set of
+  // axes would never hear about it, leaving the cards drawing the classification the board had at mount.
   const filterDimAssign = useQuery<DimAssignments>(
     ["dimAssign", projectId, dimIdsKey],
     async () => {
@@ -258,14 +200,12 @@ export function BoardScreen({
       return m;
     },
   ).data ?? NO_ASSIGNMENTS;
-  // The dimension whose values split the columns (when group names one). Null for "status" or a deleted id.
-  const groupingDim = groupingDimId ? projectDims.find((d) => d.id === groupingDimId) ?? null : null;
   // What each card draws of its classification (the rule itself is `cardChips`). Memoised, and keyed on
   // identities that only a write moves, so the cards' own memo holds: a fresh array per card per render
   // would re-render every sibling card on a change of selection.
   const chips = useMemo(
-    () => cardChips(projectDims, filterDimAssign, groupingDimId),
-    [projectDims, filterDimAssign, groupingDimId],
+    () => cardChips(projectDims, filterDimAssign),
+    [projectDims, filterDimAssign],
   );
 
   const dims = filterDimensions(projectDims, filterDimAssign);
@@ -285,7 +225,7 @@ export function BoardScreen({
   // view=list (the flat list) is windowed by the pager, which resets to the first page when the view or filters
   // change. usePager is a Hook, so it has to sit above the early-return guard below: if the open project is
   // deleted and `project` flips defined→undefined, the number of Hooks must stay the same (Rules of Hooks — a
-  // violation throws during render and blacks out the screen). groupingDim/dims/tasks above are null-safe through
+  // violation throws during render and blacks out the screen). dims/tasks above are null-safe through
   // `axesFor("task", project?.dimensions ?? [])`, so they come out empty and reach no JSX before the guard returns the placeholder.
   const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${rawQ}`);
   // The one standing notice this board carries (`AMB-D-535`). Every candidate answers for itself whether
@@ -407,23 +347,7 @@ export function BoardScreen({
           </ErrorNote>
         )}
         {view === "board" && (
-          <div className="groupby">
-            <span className="meta">{t("board.group")}</span>
-            <button
-              className={`filterchip ${group === STATUS_GROUP ? "filterchip--on" : ""}`}
-              onClick={() => setGroup(STATUS_GROUP)}
-            >
-              {t("filter.dim.status")}
-            </button>
-            {groupableDims.map((d) => (
-              <button
-                key={d.id}
-                className={`filterchip ${group === d.id ? "filterchip--on" : ""}`}
-                onClick={() => setGroup(d.id)}
-              >
-                {d.name}
-              </button>
-            ))}
+          <div className="dimbar">
             <AddDimension onAdd={(name) => store.addDimension(projectId, name)} />
             {projectDims.length >= 1 && (
               <button className="filterchip" onClick={() => setDimMgrOpen(true)}><Icon name="gear" /> {t("board.manageDimensions")}</button>
@@ -461,7 +385,7 @@ export function BoardScreen({
         </div>
       )}
 
-      {view === "board" && !groupingDim && (
+      {view === "board" && (
         <div className="board" ref={boardRef}>
           {STATUS_COLUMNS.map((st) => {
             // The done column is the *closed* column: a rejection folds in here rather than growing a
@@ -503,8 +427,8 @@ export function BoardScreen({
                 onAdd={st === "todo"
                   ? () => onComposeTask({ projectId, label: project.name })
                   : undefined}
-                dropKey={`status:${st}`}
-                over={drag.overColumn === `status:${st}`}
+                dropKey={st}
+                over={drag.overColumn === st}
                 draggingId={drag.draggingId}
                 homeOf={statusHome}
                 canGrab={movableStatus}
@@ -512,53 +436,6 @@ export function BoardScreen({
               />
             );
           })}
-        </div>
-      )}
-
-      {view === "board" && groupingDim && (
-        <div className="board" ref={boardRef}>
-          {/* A closed value keeps its column only while tasks are still in it (`AMB-D-829`). Closing it
-              retires it from what a task is newly filed under, and an axis that keeps raising values and
-              closing them — a release, a theme — would otherwise grow a board of empty columns nobody
-              can drop into. What was filed under it is a different matter: hiding a column with cards in
-              it would take those tasks off the board altogether, since the "no value" column holds only
-              the tasks carrying none. So the column stays until the last card leaves it, and it takes
-              no drop — core refuses to file anything new under a closed value. */}
-          {groupingDim.values
-            .map((v) => ({ v, cards: tasks.filter((tk) => dimAssign[tk.id] === v.id) }))
-            .filter(({ v, cards }) => !v.closed || cards.length > 0)
-            .map(({ v, cards }) => (
-            <Column
-              key={v.id}
-              name={v.name}
-              cards={cards}
-              chips={chips}
-              selectedTaskId={selectedTaskId}
-              onSelectTask={onSelectTask}
-              onStatus={store.setStatus}
-              onSeeAllList={() => setView("list")}
-              dropKey={v.closed ? undefined : `dim:${v.id}`}
-              over={drag.overColumn === `dim:${v.id}`}
-              draggingId={drag.draggingId}
-              homeOf={dimHome}
-              onPress={drag.press}
-            />
-          ))}
-          <Column
-            name={t("board.noDimensionValue")}
-            cards={tasks.filter((tk) => !dimAssign[tk.id])}
-            chips={chips}
-            selectedTaskId={selectedTaskId}
-            onSelectTask={onSelectTask}
-            onStatus={store.setStatus}
-            onSeeAllList={() => setView("list")}
-            dropKey="dim:none"
-            over={drag.overColumn === "dim:none"}
-            draggingId={drag.draggingId}
-            homeOf={dimHome}
-            onPress={drag.press}
-          />
-          <AddDimensionValue onAdd={(name) => store.addDimensionValue(groupingDim.id, name)} />
         </div>
       )}
 
@@ -604,7 +481,7 @@ export function BoardScreen({
   );
 }
 
-/** The affordance for creating a dimension. It appears as a compact chip at the end of the group toggles. */
+/** The affordance for creating a dimension. It appears as a compact chip on the board's dimension row. */
 function AddDimension({ onAdd }: { onAdd: (name: string) => void }) {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
@@ -622,27 +499,6 @@ function AddDimension({ onAdd }: { onAdd: (name: string) => void }) {
     />
   ) : (
     <button className="filterchip" onClick={() => setAdding(true)}><Icon name="plus" /> {t("board.addDimension")}</button>
-  );
-}
-
-/** The affordance for adding a value — that is, a column — to the dimension currently being grouped by. */
-function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
-  const [adding, setAdding] = useState(false);
-  const [text, setText] = useState("");
-  const commit = () => { if (text.trim()) { onAdd(text.trim()); setText(""); } };
-  return adding ? (
-    <input
-      {...asTyped}
-      className="column__addinput board__addcolinput"
-      autoFocus
-      value={text}
-      placeholder={t("board.dimensionValuePh")}
-      onChange={(e) => setText(e.target.value)}
-      onKeyDown={(e) => { if (isEnterSubmit(e)) { commit(); setAdding(false); } if (e.key === "Escape") setAdding(false); }}
-      onBlur={() => { commit(); setAdding(false); }}
-    />
-  ) : (
-    <button className="board__addcol" onClick={() => setAdding(true)}><Icon name="plus" /> {t("board.addDimensionValue")}</button>
   );
 }
 
@@ -694,10 +550,9 @@ const Column = memo(function Column({
    */
   homeOf?: (card: TaskCard) => string;
   /**
-   * Which cards may be grabbed, where the answer is not "all of them". The status board asks it: a drop
-   * there writes status, and a task still being created has none to write (`AMB-D-846`), so the card is
-   * left where it is rather than dragged into a refusal. The dimension board writes a value, not a
-   * status, so it passes nothing and every card stays grabbable.
+   * Which cards may be grabbed, where the answer is not "all of them". A drop writes status, and a task
+   * still being created has none to write (`AMB-D-846`), so the card is left where it is rather than
+   * dragged into a refusal.
    */
   canGrab?: (card: TaskCard) => boolean;
   onPress?: (id: number, from: string, event: PointerEvent<HTMLElement>) => void;

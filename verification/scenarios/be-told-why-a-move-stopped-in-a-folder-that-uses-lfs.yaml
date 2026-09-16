@@ -1,0 +1,166 @@
+# A folder whose big files are kept by Git LFS is one git cannot check out on its own: it hands the
+# content to `git-lfs`, and `git-lfs` is a program that has to be found. The window runs git with the
+# path the system gives an application — `/usr/bin:/bin:/usr/sbin:/sbin` and nothing else — and
+# `git-lfs` is installed on none of it. So a move a reader makes in their terminal every day is one
+# the window cannot make, and the whole of what this road is about is what they are told when it
+# stops.
+#
+# ── What the window owes here, and what it does not ──────────────────────────────────────────────
+# It owes git's own sentence and the truth about where the folder now stands. It does not owe an
+# explanation: nothing here works out that a filter was missing, names the program, or offers to go
+# and find it. What git wrote is what a reader would have got at a terminal, and that is what is put
+# in front of them.
+#
+# ── Why the file is on the branch being moved onto, and not on both ──────────────────────────────
+# git runs the filter over what a checkout writes, so a road needs a checkout that really writes the
+# file. Standing it on both branches and changing it would do that too, but it would also leave the
+# file tracked and unchanged at rest — and a `git status` over one of those has to convert the
+# content before it can say whether it changed, which puts the same missing program in front of the
+# read that draws the panel at all. The road would then be about a panel that never came up. Here
+# the branch the road opens on holds no such file, the reads are quiet, and the first thing to reach
+# the filter is the move itself.
+#
+# ── Why the premise wires LFS into the repository rather than the machine ────────────────────────
+# `git lfs install` writes the four keys into `~/.gitconfig`, which is the reader's own and no
+# scenario's to touch. git reads them from wherever they are set, so a repository carrying them
+# behaves exactly as that machine would. `uses-lfs` is that half; `.gitattributes` is the other, and
+# is written like any other file a premise leaves lying there.
+#
+# ── What the move leaves behind ─────────────────────────────────────────────────────────────────
+# A checkout that stops part-way has already written what it got through. `.gitattributes` is on the
+# disk afterwards, untracked, and the file the filter choked on is not. Nothing is read about it
+# here: which of a checkout's writes land before it stops is git's own ordering, and a road resting
+# on it would go red the day git changes its mind about the order rather than about the answer.
+#
+# ── What this road stands on, and cannot prove from inside ──────────────────────────────────────
+# That the build's own git cannot find `git-lfs`. On a machine that has it in `/usr/bin` the move
+# goes through and this goes red — correctly, because the sentence it is about is then not the one a
+# reader gets. Homebrew puts it in `/opt/homebrew/bin` or `/usr/local/bin`, which is why there is
+# something to say here at all.
+id: be-told-why-a-move-stopped-in-a-folder-that-uses-lfs
+title: A folder kept in Git LFS stops a move with git's own words, and leaves the reader standing where they were
+description: >
+  Raise a repository with two branches, one of them holding a file that goes through Git LFS, and
+  wire the repository for LFS the way `git lfs install` wires a machine. Open the window on the
+  branch with no such file on it and ask for the other: git cannot run the filter, what it wrote
+  about that is on the screen word for word, and the branch line still names the branch that was
+  never left.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # Everything LFS is on this branch, so that the branch the road opens on has nothing git has to
+  # convert to answer for.
+  - type: action
+    domain: repo
+    op: git-branch
+    with:
+      dir: greenhouse-beds
+      name: beds
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: .gitattributes
+      content: "*.plan filter=lfs diff=lfs merge=lfs -text"
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: beds.plan
+      content: SCENARIO the beds are laid out east to west
+
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+  # Back onto the branch git began with, which the checkout empties again. This is where the window
+  # opens, and where it is still standing when the road ends.
+  - type: action
+    domain: repo
+    op: git-branch
+    with:
+      dir: greenhouse-beds
+      name: main
+
+  # Wired last, because everything above it is recorded as the bytes it was written as. A reader's
+  # machine is wired before any of that, and their own files went through `git-lfs` on the way in —
+  # which is a program this road stands on there being none of.
+  - type: action
+    domain: repo
+    op: uses-lfs
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # The panel comes up at all, which is the half of this the missing program could also have taken
+  # away: a read that failed would draw the line about a folder that is no repository.
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: main
+
+  - type: action
+    domain: files
+    op: branch-go
+    with:
+      name: beds
+
+  # git's own words. It is the shell's answer about the program it was asked to run, which is what
+  # git passes on rather than a sentence of its own about filters.
+  - type: assert
+    domain: files
+    op: git-said
+    with:
+      shows: "git-lfs: command not found"
+
+  # And the reader is where they were. Said on its own, the sentence above passes on a build that
+  # printed it and moved anyway.
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: main

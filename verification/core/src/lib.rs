@@ -1018,6 +1018,21 @@ const REGISTRY: &[OpSpec] = &[
     // — and the tree's rollup, which is about a folder git did **not** name, is never walked.
     // `dir` follows `git-init`'s rule and for its reason.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-commit", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // Which branch the folder is standing on when the road opens. One op and not two: it cuts the
+    // branch where there is none by that name and steps onto it where there is, because a premise
+    // declares where the reader finds the folder rather than the order the branches were made in.
+    // `dir` follows `git-init`'s rule and for its reason, and this follows `git-init` itself — a
+    // branch cannot be cut where nothing has been recorded.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-branch", required: &["name"], refs: &[], strings: &["name", "dir"], binds: false },
+    // A folder whose files of some shape are kept by Git LFS — the state `git lfs install` leaves a
+    // machine in, written into this repository instead of into the reader's own configuration.
+    // Which paths go through it is `.gitattributes`, written by `write-file` like any other file a
+    // premise leaves lying there: one half is the machine's and the other the repository's, and a
+    // road standing on both says both.
+    //
+    // It needs no `git-lfs` on the machine, and the roads that walk it are about what the window
+    // does where there is none on the path it runs git with.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "uses-lfs", required: &[], refs: &[], strings: &["dir"], binds: false },
     // And somewhere for that repository to send to. A branch is `ahead` and `behind` of something,
     // and with nothing on the other side git measures it against nothing at all — so a road reading
     // either number opens on a repository that already has a remote and a branch measured by it.
@@ -3729,6 +3744,15 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // a world no face can reach. It is a premise and only that — a road that recorded something
     // mid-walk would be walking git rather than Amenbo.
     (Domain::Repo, "git-commit"),
+    // And which branch the folder is standing on, which is the same kind of world one step further
+    // again: Amenbo cuts no branch a premise could ask for, and the window's own way of making one is
+    // a road of its own to walk. A road that opens on a repository with more than one branch in it
+    // opens here.
+    (Domain::Repo, "git-branch"),
+    // And the folder's files being kept by Git LFS. Nothing in Amenbo wires that and nothing ever
+    // will — it is the reader's own machine and their own repository — so a road about what the
+    // window does in such a folder has no way to reach one but to be given it.
+    (Domain::Repo, "uses-lfs"),
     // And somewhere for that repository to send to. Same reason again: Amenbo names no remote and
     // has no command that would, so a branch measured against another side is a world every road
     // about those numbers opens on rather than one it walks. The other side *moving* is not here —

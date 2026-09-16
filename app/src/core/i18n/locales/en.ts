@@ -808,6 +808,10 @@ const ui = {
   // anything reading the row out, and what it does depends on which of the two lists it is in.
   "git.stageOne": "Stage {path}",
   "git.unstageOne": "Unstage {path}",
+  // The box on the line the list is named on, which is the same act over the whole of it in one
+  // call out to git. It says which of the two lists it is on, the way the row boxes do.
+  "git.stageAll": "Stage everything on this list",
+  "git.unstageAll": "Unstage everything on this list",
   "git.commitMessage": "Commit message",
   "git.commit": "Commit",
   // How many paths the commit is about to name to git. It is the hinge of this screen — naming

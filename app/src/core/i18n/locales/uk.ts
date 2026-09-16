@@ -666,6 +666,8 @@ export const uk: Translation = {
     "git.nothingChanged": "Нічого не змінилося.",
     "git.stageOne": "Підготувати {path}",
     "git.unstageOne": "Прибрати {path} з підготовленого",
+    "git.stageAll": "Підготувати все з цього списку",
+    "git.unstageAll": "Прибрати з підготовленого все з цього списку",
     "git.commitMessage": "Повідомлення коміту",
     "git.commit": "Закомітити",
     "git.commitNaming": "Вказує {n} підготовлених шляхів",

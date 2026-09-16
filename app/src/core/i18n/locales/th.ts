@@ -653,6 +653,8 @@ export const th: Translation = {
     "git.nothingChanged": "ไม่มีอะไรเปลี่ยน",
     "git.stageOne": "จัดเตรียม {path}",
     "git.unstageOne": "ยกเลิกการจัดเตรียม {path}",
+    "git.stageAll": "จัดเตรียมทุกอย่างในรายการนี้",
+    "git.unstageAll": "ยกเลิกการจัดเตรียมทุกอย่างในรายการนี้",
     "git.commitMessage": "ข้อความคอมมิต",
     "git.commit": "คอมมิต",
     "git.commitNaming": "ระบุ {n} เส้นทางที่จัดเตรียมไว้",

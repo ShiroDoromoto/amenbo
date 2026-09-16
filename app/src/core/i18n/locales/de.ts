@@ -655,6 +655,8 @@ export const de: Translation = {
     "git.nothingChanged": "Es hat sich nichts geändert.",
     "git.stageOne": "{path} bereitstellen",
     "git.unstageOne": "{path} nicht mehr bereitstellen",
+    "git.stageAll": "Alles aus dieser Liste bereitstellen",
+    "git.unstageAll": "Nichts aus dieser Liste mehr bereitstellen",
     "git.commitMessage": "Commit-Nachricht",
     "git.commit": "Committen",
     "git.commitNaming": "Nennt die {n} bereitgestellten Pfade",

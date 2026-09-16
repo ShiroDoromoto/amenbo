@@ -651,6 +651,8 @@ export const nl: Translation = {
     "git.nothingChanged": "Er is niets veranderd.",
     "git.stageOne": "{path} klaarzetten",
     "git.unstageOne": "{path} niet meer klaarzetten",
+    "git.stageAll": "Alles in deze lijst klaarzetten",
+    "git.unstageAll": "Alles in deze lijst niet meer klaarzetten",
     "git.commitMessage": "Commitbericht",
     "git.commit": "Committen",
     "git.commitNaming": "Noemt de {n} klaargezette paden",

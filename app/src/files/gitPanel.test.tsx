@@ -775,6 +775,11 @@ describe("the rail's git half, with rows picked out", () => {
     });
   }
 
+  /** The box on the line a list is named on, or nothing where the list has none. */
+  const allBox = (under: string): HTMLInputElement | undefined =>
+    sectionOf(under)?.querySelector<HTMLInputElement>(".gitpanel__headrow .gitpanel__check")
+      ?? undefined;
+
   /** Four changed paths, which is enough for a range to have rows inside it. */
   const four = (): FolderGitDto => says({
     rows: [
@@ -922,5 +927,82 @@ describe("the rail's git half, with rows picked out", () => {
     expect(menuItem(t("git.untrack")).getAttribute("aria-disabled")).toBe("true");
     // One path's history is the other door a set of rows is not in a state for.
     expect(menuItem(t("git.fileHistory")).getAttribute("aria-disabled")).toBe("true");
+  });
+  /// One press, one call out to git. Six files used to be six presses with the whole half down
+  /// between them, and both doors have taken several paths all along — it was the side handing them
+  /// over that passed one at a time.
+  it("stages every row of the set in one call when the box on one of them is pressed", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "c.rs"), { metaKey: true, ctrlKey: true });
+
+    await press(box(t("git.changes"), "a.rs"));
+    expect(hoisted.staged).toEqual([[["a.rs"], ["c.rs"]]]);
+  });
+
+  /// The rule the menu is read by, read the same way by the box: a press away from what is picked
+  /// is a press about the row under it.
+  it("stages the one row whose box was pressed where it is not in the set", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "b.rs"), { metaKey: true, ctrlKey: true });
+
+    await press(box(t("git.changes"), "d.rs"));
+    expect(hoisted.staged).toEqual([[["d.rs"]]]);
+  });
+
+  /// The box is not a tab stop — the row is — so a reader working the list by keyboard would
+  /// otherwise gather rows with no way to stage them.
+  it("presses the box of the row the keyboard is on when Space is pressed", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    await clickWith(rowOf(t("git.changes"), "b.rs"), {});
+    await keyOn(rowOf(t("git.changes"), "b.rs"), "ArrowDown", { shiftKey: true });
+    await keyOn(rowOf(t("git.changes"), "c.rs"), " ");
+    expect(hoisted.staged).toEqual([[["b.rs"], ["c.rs"]]]);
+  });
+
+  /// Staging a conflict is the reader saying the merge is settled there, which is why those rows
+  /// carry no box at all — and Space over them is that same press.
+  it("leaves a conflicted row alone when Space is pressed on it", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [row({ path: ["both.rs"], index: "U", worktree: "U" })],
+    });
+    await draw();
+    await clickWith(rowOf(t("git.conflicts"), "both.rs"), {});
+    await keyOn(rowOf(t("git.conflicts"), "both.rs"), " ");
+    expect(hoisted.staged).toEqual([]);
+  });
+
+  /// The box on the line the list is named on. What it takes is the list and not the set — it is
+  /// the one press for "all of this", which is what a reader reaches for when the set would be
+  /// every row anyway.
+  it("takes the whole list in one call from the box on its own line", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["a.rs"], worktree: "M" }),
+        row({ path: ["b.rs"], worktree: "M" }),
+        row({ path: ["kept.rs"], index: "M" }),
+      ],
+    });
+    await draw();
+    // Something picked out, to be sure this press is about the list and not about the set.
+    await clickWith(rowOf(t("git.changes"), "b.rs"), {});
+    await press(allBox(t("git.changes"))!);
+    expect(hoisted.staged).toEqual([[["a.rs"], ["b.rs"]]]);
+
+    await press(allBox(t("git.staged"))!);
+    expect(hoisted.unstaged).toEqual([[["kept.rs"]]]);
+  });
+
+  /// A list with nothing in it has nothing to take, and a box over it would be one that answers
+  /// every press with git's own refusal.
+  it("draws no box on the line of a list with nothing in it", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], worktree: "M" })] });
+    await draw();
+    expect(allBox(t("git.changes"))).toBeDefined();
+    expect(allBox(t("git.staged"))).toBeUndefined();
   });
 });

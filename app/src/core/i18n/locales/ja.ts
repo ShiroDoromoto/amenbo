@@ -657,6 +657,8 @@ export const ja: Translation = {
     "git.nothingChanged": "変わったものはありません。",
     "git.stageOne": "{path} をステージする",
     "git.unstageOne": "{path} のステージをやめる",
+    "git.stageAll": "この一覧を全部ステージする",
+    "git.unstageAll": "この一覧のステージを全部やめる",
     "git.commitMessage": "コミット文",
     "git.commit": "コミット",
     "git.commitNaming": "ステージ済み {n} 件をパスで指定",

@@ -653,6 +653,8 @@ export const id: Translation = {
     "git.nothingChanged": "Tidak ada yang berubah.",
     "git.stageOne": "Siapkan {path}",
     "git.unstageOne": "Batalkan penyiapan {path}",
+    "git.stageAll": "Siapkan semua yang ada di daftar ini",
+    "git.unstageAll": "Batalkan penyiapan semua yang ada di daftar ini",
     "git.commitMessage": "Pesan commit",
     "git.commit": "Commit",
     "git.commitNaming": "Menyebut {n} jalur yang disiapkan",

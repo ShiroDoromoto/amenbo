@@ -654,6 +654,8 @@ export const zhHans: Translation = {
     "git.nothingChanged": "什么都没有变。",
     "git.stageOne": "暂存 {path}",
     "git.unstageOne": "取消暂存 {path}",
+    "git.stageAll": "暂存此列表中的全部内容",
+    "git.unstageAll": "取消暂存此列表中的全部内容",
     "git.commitMessage": "提交信息",
     "git.commit": "提交",
     "git.commitNaming": "指定已暂存的 {n} 个路径",

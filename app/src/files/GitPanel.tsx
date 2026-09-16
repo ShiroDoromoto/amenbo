@@ -56,6 +56,12 @@
 // was picked in another: what is done with a set of rows here is staging or unstaging, and a set
 // spanning both lists would be a press with two meanings.
 //
+// **What a set is for is one press and one call out to git.** The box on a row of the set takes the
+// whole set, Space presses that box from the keyboard, and the box on the line a list is named on
+// takes the list itself — every one of them handing git all the paths at once. Both doors have
+// taken several paths all along (`./folder`); it was this side that passed them one at a time,
+// which made six files six presses with the whole half down between them.
+//
 // **What the menu acts on is the set, where it was opened on one of them** (`AMB-D-906`, 2-8). So
 // the items are drawn whatever is picked out and greyed where the set is not in a state for them —
 // a menu whose items came and went with the selection would be one a reader cannot learn, and with
@@ -519,7 +525,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         which="staged"
         picked={picked}
         onPicked={setPicked}
-        onToggle={(row) => void ask(() => folderGitUnstage(projectId, root, [row.path]), true)}
+        onToggle={(paths) => void ask(() => folderGitUnstage(projectId, root, paths), true)}
         onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
       />
       <Changes
@@ -531,7 +537,7 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
         which="changed"
         picked={picked}
         onPicked={setPicked}
-        onToggle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
+        onToggle={(paths) => void ask(() => folderGitStage(projectId, root, paths), true)}
         onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
       />
       {restore.aside}
@@ -713,7 +719,12 @@ function Conflicts({ rows, marks, running, picked, onPicked, onOpen, onSettle, o
   const on = picking("conflict", rows, picked, onPicked, onMenu);
   return (
     <section className="gitpanel__section gitpanel__section--conflict">
-      <h3 className="gitpanel__head">{t("git.conflicts")} <span>{rows.length}</span></h3>
+      {/* No box on this line. What a box does in the two lists below is stage, and staging a
+          conflict is the reader saying the merge is settled there (`AMB-D-906`, 2-7) — the last
+          thing to offer over a whole list at once. */}
+      <div className="gitpanel__headrow">
+        <h3 className="gitpanel__head">{t("git.conflicts")} <span>{rows.length}</span></h3>
+      </div>
       <RowList what={t("git.conflicts")} on={on}>
         {rows.map((row) => (
           <ConflictRow
@@ -793,10 +804,18 @@ type Picking = ReturnType<typeof picking>;
  * (`./FolderTree`): what the reader means by ⌘ or Ctrl is the machine's word. Shift is the one
  * exception, and it reaches from the end the range is measured from to where the walk arrived.
  */
-function RowList({ what, on, children }: {
+function RowList({ what, on, onSpace, children }: {
   /** The name over the list, which is what this box is called by anything reading it out. */
   what: string;
   on: Picking;
+  /**
+   * Space on the row the keyboard is standing on, where the list has a box for it to press.
+   *
+   * **Absent on the list of conflicts.** The box is what the other two lists do to a row, and what
+   * it would do to a conflict is stage it — which is the reader declaring the merge settled there,
+   * not a thing to tick in passing (`AMB-D-906`, 2-7).
+   */
+  onSpace?: (key: string) => void;
   children: ReactNode;
 }) {
   const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
@@ -822,6 +841,13 @@ function RowList({ what, on, children }: {
       // asking for everything between, however far away the end is.
       case "Home": go(on.keys[0]); break;
       case "End": go(on.keys[on.keys.length - 1]); break;
+      // The box of the row the keyboard is on, pressed from the keyboard. The box itself is not a
+      // tab stop — the row is — so without this a reader working the list by keyboard could gather
+      // rows and then have no way to stage them.
+      case " ":
+        e.preventDefault();
+        onSpace?.(on.keys[at]);
+        break;
     }
   };
   return (
@@ -949,18 +975,40 @@ function Changes({ what, none, rows, staged, running, which, picked, onPicked, o
   which: Which;
   picked: Picked;
   onPicked: (picked: Picked) => void;
-  onToggle: (row: GitEntryDto) => void;
+  /** Stage these paths, or take them back out — whichever this list's box does, in one call. */
+  onToggle: (paths: string[][]) => void;
   /** Open the menu this row carries, at the point the pointer was (`./FileMenu`). */
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const on = picking(which, rows, picked, onPicked, onMenu);
+  /** What pressing one row's box is about: the set, where that row is in it, and the row alone
+   *  where it is not — the rule the menu is read by (`rowsAbout`). */
+  const toggle = (key: string): void => {
+    const row = rows.find((one) => whole(one) === key);
+    if (row !== undefined) onToggle(rowsAbout(rows, keysIn(which, picked), row.path));
+  };
   return (
     <section className="gitpanel__section">
-      <h3 className="gitpanel__head">{what} {rows.length > 0 && <span>{rows.length}</span>}</h3>
+      {/* The name of the list, and before it the box that takes the whole of it at once. The box is
+          beside the heading rather than inside it: what it does is this list's, not part of what
+          the list is called. */}
+      <div className="gitpanel__headrow">
+        {rows.length > 0 && (
+          <input
+            className="gitpanel__check"
+            type="checkbox"
+            checked={staged}
+            disabled={running}
+            aria-label={t(staged ? "git.unstageAll" : "git.stageAll")}
+            onChange={() => onToggle(rows.map((row) => row.path))}
+          />
+        )}
+        <h3 className="gitpanel__head">{what} {rows.length > 0 && <span>{rows.length}</span>}</h3>
+      </div>
       {rows.length === 0
         ? <p className="files__none">{none}</p>
         : (
-          <RowList what={what} on={on}>
+          <RowList what={what} on={on} onSpace={toggle}>
             {rows.map((row) => (
               <ChangedRow
                 key={whole(row)}
@@ -970,7 +1018,7 @@ function Changes({ what, none, rows, staged, running, which, picked, onPicked, o
                 picked={on.has(whole(row))}
                 stop={on.stop === whole(row)}
                 onPress={(how) => on.press(whole(row), how)}
-                onToggle={onToggle}
+                onToggle={() => toggle(whole(row))}
                 onMenu={on.menu}
               />
             ))}
@@ -990,6 +1038,10 @@ function Changes({ what, none, rows, staged, running, which, picked, onPicked, o
  * empty row, which is exactly what git will do with it: part of it is written down and part of it is
  * not.
  *
+ * **Pressed on a row of the set it is about the set**, and about this row alone where the row is
+ * not in one — the rule the menu is read by (`rowsAbout`). It stays ticked or empty either way: what
+ * it says is which list the row is in, and five rows of one list are in the same one.
+ *
  * **The mark is git's own letters and the colour is the tree's.** A reader who has seen a row of the
  * tree go that colour is reading the same answer here, so the two wear one set of colours
  * (`./gitMark`, `AMB-D-785`).
@@ -1008,7 +1060,8 @@ function ChangedRow({ row, staged, running, picked, stop, onPress, onToggle, onM
   stop: boolean;
   /** A press on the row itself, which is what moves the set. */
   onPress: (how: How) => void;
-  onToggle: (row: GitEntryDto) => void;
+  /** Press this row's box, which the list reads as being about the set where this row is in it. */
+  onToggle: () => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const name = row.path[row.path.length - 1] ?? "";
@@ -1044,7 +1097,7 @@ function ChangedRow({ row, staged, running, picked, stop, onPress, onToggle, onM
           disabled={running}
           aria-label={tf(staged ? "git.unstageOne" : "git.stageOne", { path })}
           onClick={(e) => e.stopPropagation()}
-          onChange={() => onToggle(row)}
+          onChange={() => onToggle()}
         />
         <span className="gitpanel__mark">{letters(row)}</span>
         {/* A folder git named as a whole rather than naming what is inside it, which is what it does

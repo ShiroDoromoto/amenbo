@@ -1018,6 +1018,28 @@ const REGISTRY: &[OpSpec] = &[
     // — and the tree's rollup, which is about a folder git did **not** name, is never walked.
     // `dir` follows `git-init`'s rule and for its reason.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-commit", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // And somewhere for that repository to send to. A branch is `ahead` and `behind` of something,
+    // and with nothing on the other side git measures it against nothing at all — so a road reading
+    // either number opens on a repository that already has a remote and a branch measured by it.
+    //
+    // What stands on the other side is a bare repository in the run's own throwaway space, reached
+    // by a path. That is deliberate and it is the whole reason this walks offline: a path asks for
+    // no key and no account, so the numbers are git's own arithmetic rather than a network's. The
+    // one road a path cannot walk is git stopping to ask who is sending, and that road is somebody
+    // else's.
+    //
+    // It sends what is recorded as it goes, because a branch git has never been told where to send
+    // is refused by `push` with a sentence about `--set-upstream` — a true answer, and not the one a
+    // road about the numbers is asking for. `dir` follows `git-init`'s rule and for its reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-remote", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // And the other side moving on afterwards. `behind` is a count of what somebody else recorded,
+    // so a road that means to read it has to let somebody else record something — from their own
+    // checkout of the same shared repository, which is what the driver stands in for here.
+    //
+    // **It is a step and not a premise.** The whole of what a fetch is for is that the number moves
+    // while the window is up and shows it, so a world where the other side had already moved before
+    // the app opened would prove a first read rather than a read taken again.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-remote-move", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     // A checkout of the task's own, cut and folded. The road walks the two commands a
     // person working a task actually types, and the refusals that stand between them — which is why
     // `start` is here rather than only the state it leaves: what a second one meets is the whole of
@@ -3178,6 +3200,31 @@ const REGISTRY: &[OpSpec] = &[
     // name a line it put in the file itself and find it again with the character git marks it with.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "patch", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
+    // ── what is here and what is on the other side ────────────────────────────────────────────────
+    // The three presses that reach the shared repository, in the row under the branch's name
+    // (`app/src/files/GitPanel.tsx`). **The window makes these calls itself** rather than writing
+    // them into a pane for somebody else to run.
+    //
+    // Three ops rather than one carrying which of them is meant, because they are three different
+    // acts with three different answers: reading the other side leaves this one where it was,
+    // bringing it in moves this one, and sending moves the other. A road naming the wrong one would
+    // be pressing a control beside the one it meant, which is the reason `stage` and `unstage` are
+    // two as well.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "fetch", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pull", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "push", required: &[], refs: &[], strings: &[], binds: false },
+    // And the two numbers those presses move, drawn beside the branch's name: what is recorded here
+    // and not on the other side, and what is on the other side and not here. They come off the same
+    // read of git that the lists do, so a road walks them without anything else being asked of the
+    // folder.
+    //
+    // `count: 0` is the reading that nothing stands there. The face draws a number only where there
+    // is one to draw — a pair of zeroes says "nothing to do" in two numbers where none says it
+    // better — so a road asking for zero is asking for the absence, and the instruction says so
+    // rather than sending an operator hunting for a `0` that is never drawn.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ahead", required: &["count"], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "behind", required: &["count"], refs: &[], strings: &[], binds: false },
+
     // ── the files the column is holding ───────────────────────────────────────────────────────────
     // The reading column holds several files at once, as a row of tabs above the one on top
     // (`app/src/files/FilesPanel.tsx`), and these are the three ways a road walks that row.
@@ -3632,6 +3679,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // a world no face can reach. It is a premise and only that — a road that recorded something
     // mid-walk would be walking git rather than Amenbo.
     (Domain::Repo, "git-commit"),
+    // And somewhere for that repository to send to. Same reason again: Amenbo names no remote and
+    // has no command that would, so a branch measured against another side is a world every road
+    // about those numbers opens on rather than one it walks. The other side *moving* is not here —
+    // that one is a step, because a number that moves while the window is up is the whole of what
+    // the read taken again is for.
+    (Domain::Repo, "git-remote"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

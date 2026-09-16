@@ -725,6 +725,14 @@ folder a project is **bound** to, and a repository anywhere else leaves every ro
 reaches: until something is committed git names the whole folder and never the paths inside it, so a
 folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
 for — does not exist on the near side of a commit.
+`git-remote` gives that repository somewhere to send to and leaves its branch measured against it,
+which is what the counts of what is waiting to go out and to come in are counts *of*: with nothing on
+the other side git measures a branch against nothing at all. What stands there is a bare repository
+beside the folder, reached by a path — a path asks for no key and no account, so every road about
+those counts walks with nothing on the network. `git-remote-move` records one file on that other side
+from a checkout of its own, and it is the one of the two that is **not** a premise: being behind is
+what somebody else recorded, and a road that opened on it already recorded would prove a first read
+rather than the read taken again that a fetch is for.
 `worktree-start` and `worktree-finish` are the two commands a person working a task types, and the
 road that walks them is the only place a checkout is really cut: the directory has to appear beside
 the repository, the branch has to exist in it, and the fold has to refuse while there is work in

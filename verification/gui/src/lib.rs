@@ -2728,6 +2728,16 @@ impl Instructor {
                 req(with, "dir")?,
                 req(with, "content")?
             ),
+            // Somebody else recording something and sending it, which is the only way what the folder
+            // is behind by ever becomes a number. It is an instruction and not a premise for the
+            // reason `write-file` is one: *when* it happens is the whole of the question, so the
+            // operator is told to do it away from Amenbo and leave the window alone while they do.
+            (Domain::Repo, "git-remote-move") => format!(
+                "Outside Amenbo — in another terminal — take your own checkout of the repository the folder the road calls \"{}\" sends to, put the file \"{}\" in it with \"{}\" inside, record that, and send it. Do not touch Amenbo while you do.",
+                req(with, "dir")?,
+                req(with, "path")?,
+                req(with, "content")?
+            ),
             // The same, for a file whose bytes a road cannot hold in a line of YAML. What the operator
             // is asked for is a copy over the top: the name stays, so nothing about the panel's own
             // list changes, and the only thing that could reach the screen is what is inside the file.
@@ -2902,6 +2912,23 @@ impl Instructor {
             ),
             (Domain::Files, "history-back") =>
                 "At the top of the column across the panes, press the way back — it is drawn as where it goes rather than as a word. The column comes back to the layer above the one it was on."
+                    .to_string(),
+            // The three presses that reach the shared repository, in the row under the branch's
+            // name. Each says what it leaves changed, because that is what the step after it reads:
+            // reading the other side moves neither number but the one measuring what is not here,
+            // bringing it in empties that one, and sending empties the other.
+            //
+            // Each says to wait as well. The window makes the call itself, and the row is out of
+            // reach while it is under way — an operator who read the numbers on the way past would
+            // be reading the ones that stood there before the press.
+            (Domain::Files, "fetch") =>
+                "In the half of the panel that is git's, press the first of the three controls in the row under the branch's name — the one that reads the shared repository without bringing anything in. Wait for the row to come back within reach before going on."
+                    .to_string(),
+            (Domain::Files, "pull") =>
+                "In the half of the panel that is git's, press the second of the three controls in the row under the branch's name — the one that brings in what the shared repository has. Wait for the row to come back within reach before going on."
+                    .to_string(),
+            (Domain::Files, "push") =>
+                "In the half of the panel that is git's, press the third of the three controls in the row under the branch's name — the one that sends what is recorded here, and the only one of the three drawn as the one to press. Wait for the row to come back within reach before going on."
                     .to_string(),
             (Domain::Files, "tree") => match flag(with, "open")? {
                 // One folder, whichever the window is on: a project bound to several draws the one
@@ -4540,6 +4567,27 @@ impl Instructor {
                 false => format!(
                     "In the column across the panes, confirm the patch drawn there has no line \"{}\" in it.",
                     req(with, "shows")?
+                ),
+            },
+            // The two numbers beside the branch's name, each read as its own mark: an up mark for
+            // what is recorded here and not on the other side, a down mark for the other way round.
+            //
+            // Zero is the absence and is said as one. The face draws a number only where there is
+            // one, so an operator told to confirm a `0` would be hunting for something the screen
+            // never puts there — which reads on the manifest exactly like a build that lost the
+            // count.
+            (Domain::Files, "ahead") => match count(with, "count")? {
+                0 => "Beside the branch's name in the half of the panel that is git's, confirm there is no up mark and no number with it — nothing here is waiting to be sent.".to_string(),
+                n => format!(
+                    "Beside the branch's name in the half of the panel that is git's, confirm the up mark reads \"↑{n}\" — {} recorded here and not on the other side.",
+                    counted("commit", n)
+                ),
+            },
+            (Domain::Files, "behind") => match count(with, "count")? {
+                0 => "Beside the branch's name in the half of the panel that is git's, confirm there is no down mark and no number with it — nothing on the other side is waiting to come in.".to_string(),
+                n => format!(
+                    "Beside the branch's name in the half of the panel that is git's, confirm the down mark reads \"↓{n}\" — {} on the other side and not here.",
+                    counted("commit", n)
                 ),
             },
             (Domain::Files, "read-as") => match present(with) {

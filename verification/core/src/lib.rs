@@ -3078,6 +3078,31 @@ const REGISTRY: &[OpSpec] = &[
     // face draws one of these, in the row above the text, and the file it belongs to is the one open.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "save-shut", required: &[], refs: &[], strings: &[], binds: false },
 
+    // ── the branch the folder is standing on ──────────────────────────────────────────────────────
+    // The line at the top of git's half, and the list it opens (`app/src/files/GitBranch.tsx`).
+    //
+    // Opening the list is not an op of its own, the way picking a folder is not: the list closes
+    // itself on the next press anywhere outside it, so a road that opened it and stopped would be
+    // describing a screen that is already going. Each of these is the press that opens it and the
+    // row that is then pressed, together.
+    //
+    // Moving onto one that is already there, and making one that is not. Two ops because the rows
+    // are two: the branches are the list, and making one is the row at its foot, which turns into a
+    // box to type in. A name made there is made where the reader is standing and moves them onto it,
+    // so there is nothing between the typing and the move for a road to say.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "branch-go", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "branch-new", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Which branch the folder is standing on, read off that same line. It is the one reading that
+    // says a move went through: the list closes either way, and a refusal leaves the reader where
+    // they were with nothing on the list to show for it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "on-branch", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // What git wrote on the way back from one of this half's doors, drawn under the branch line as
+    // git wrote it. `shows` is part of that text, and it is git's own English rather than anything
+    // Amenbo says: a refusal here is not rewritten, not summarised and not turned into a code with a
+    // template behind it, so what a road looks for is the sentence the reader would have got at a
+    // terminal.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "git-said", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+
     // ── what git is told, and what it has written down ────────────────────────────────────────────
     // The half of the panel that is git's is a pair of lists and one press under them: what has
     // changed, what is staged, and the commit that writes the second of those down

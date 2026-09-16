@@ -31,39 +31,49 @@ pub const SAVING: &str = ".amenbo-saving-";
 
 /// The names directly inside one folder — folders first, then files, each run in the order a person
 /// reads them. Nothing recurses: a folded tree opens one level at a time (`AMB-T-3602`).
+///
+/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn
+/// ([`crate::agent_models`]), and this one walks the level twice on a filesystem nobody has promised
+/// is fast. A project's folders are drawn side by side and each asks for itself, so what the reader
+/// meets is not one walk but all of them one behind the other (`AMB-T-4897`).
 #[tauri::command]
-pub fn folder_entries(
+pub async fn folder_entries(
     project_id: i64,
     root: String,
     path: Vec<String>,
 ) -> Result<Vec<FolderEntryDto>, CmdError> {
-    let (roots, base) = rooted(project_id, &root)?;
-    let (_owner, dir) = under(&roots, base, &path).ok_or_else(gone)?;
-    // Read off the name itself and not off what it leads to: a folder that is a link is not walked,
-    // whatever is on the other side of it (`AMB-D-782`).
-    if !std::fs::symlink_metadata(&dir).is_ok_and(|meta| meta.is_dir()) {
-        return Err(gone());
-    }
-    // The level is walked twice, and the difference between the two walks is the mark: what the
-    // repository ignores is drawn, and drawn as ignored (`AMB-D-786`). Asking the ignore rules
-    // directly instead would be a second reading of them — global file, parents, `.git/info/exclude`
-    // and all — and the one that could drift from the walk the watch is actually laid over.
-    let kept: std::collections::HashSet<String> =
-        level(&mut walker(&dir)).into_iter().map(|(name, _)| name).collect();
-    let mut rows: Vec<FolderEntryDto> = level(&mut shown(&dir))
-        .into_iter()
-        .map(|(name, is_dir)| FolderEntryDto {
-            ignored: !kept.contains(&name),
-            name,
-            is_dir,
-        })
-        .collect();
-    rows.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-    Ok(rows)
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<FolderEntryDto>, CmdError> {
+        let (roots, base) = rooted(project_id, &root)?;
+        let (_owner, dir) = under(&roots, base, &path).ok_or_else(gone)?;
+        // Read off the name itself and not off what it leads to: a folder that is a link is not
+        // walked, whatever is on the other side of it (`AMB-D-782`).
+        if !std::fs::symlink_metadata(&dir).is_ok_and(|meta| meta.is_dir()) {
+            return Err(gone());
+        }
+        // The level is walked twice, and the difference between the two walks is the mark: what the
+        // repository ignores is drawn, and drawn as ignored (`AMB-D-786`). Asking the ignore rules
+        // directly instead would be a second reading of them — global file, parents,
+        // `.git/info/exclude` and all — and the one that could drift from the walk the watch is
+        // actually laid over.
+        let kept: std::collections::HashSet<String> =
+            level(&mut walker(&dir)).into_iter().map(|(name, _)| name).collect();
+        let mut rows: Vec<FolderEntryDto> = level(&mut shown(&dir))
+            .into_iter()
+            .map(|(name, is_dir)| FolderEntryDto {
+                ignored: !kept.contains(&name),
+                name,
+                is_dir,
+            })
+            .collect();
+        rows.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        Ok(rows)
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("reading this folder did not finish: {e}").into() })?
 }
 
 /// Open one file the way the machine would open it — the reader's own applications, not ours.

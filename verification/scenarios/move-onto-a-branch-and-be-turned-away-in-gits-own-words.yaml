@@ -1,0 +1,263 @@
+# Two branches made from the window, moved between, and then a move git will not make. What the
+# window does with that refusal is the reason the road runs to the end: nothing here rewrites it,
+# softens it or asks beforehand whether the move is wise, so what stands on the screen is the three
+# lines a reader would have got at a terminal.
+#
+# ── Why the branches are made rather than stood up ───────────────────────────────────────────────
+# Nothing a premise can do makes a branch, and that is not a gap: making one is the road. What the
+# premise leaves is a repository with one commit in it, because a branch cannot be cut where nothing
+# has been recorded yet.
+#
+# ── Why neither branch git started with is named ─────────────────────────────────────────────────
+# What a fresh repository calls its first branch is the machine's to decide, and a road naming it
+# would go red on the next machine. So both branches this road stands on are its own: the first is
+# made from whatever git began with, and the second from the first.
+#
+# ── Why a commit stands between them ─────────────────────────────────────────────────────────────
+# A refused move needs a file that differs between the two branches *and* is being edited. Both are
+# built here in the order a reader builds them: the file is changed and recorded on one branch, the
+# move back is made with a clean tree and goes through, and only then is the same file changed again
+# and left unrecorded. A road that only ever edited would be a road where git had nothing to refuse.
+#
+# ── Why the file is closed before each move ──────────────────────────────────────────────────────
+# A move rewrites the file on the disk under whatever is reading it, and the column across the panes
+# has its own answer to that — it says somebody wrote to the file after it was opened. That is a
+# reading of its own on a road of its own, and left standing here it would put a line on the screen
+# this road never asked about.
+#
+# ── What the refusal is read by ──────────────────────────────────────────────────────────────────
+# A fragment of git's own sentence, and the branch line still naming the branch the reader never
+# left. Either alone passes on a build carrying the other fault: one that moved anyway and said so
+# passes the first, and one that silently did nothing passes the second.
+id: move-onto-a-branch-and-be-turned-away-in-gits-own-words
+title: Make two branches, move between them, and be turned away by git in its own words when what is being edited stands in the way
+description: >
+  Raise a repository with one commit in it. Make a branch from the window and another from that one,
+  change the file on the second and record it, then move back to the first with nothing left
+  unrecorded: the branch line follows. Change the same file again and leave it unrecorded, then ask
+  for the second branch: git refuses, its own sentence about the file standing in the way is on the
+  screen, and the branch line still names the branch that was never left.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # A branch cannot be cut where nothing has been recorded, so the premise records what it wrote.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Made from whatever git began with, which this road never names.
+  - type: action
+    domain: files
+    op: branch-new
+    with:
+      name: trays
+
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: trays
+
+  # And the second from the first, so the two share the commit the premise made.
+  - type: action
+    domain: files
+    op: branch-new
+    with:
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: seedlings
+
+  # The file changed and recorded on this branch, which is what makes the two differ.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  # Markdown comes up drawn as what it says, and what is typed into goes into the text itself.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the trays are damped down at noon
+
+  - type: action
+    domain: files
+    op: save
+
+  # Closed before anything moves, so the move does not rewrite a file being read.
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the noon damping goes in
+
+  # Nothing is left unrecorded, so the move is one git makes.
+  - type: action
+    domain: files
+    op: branch-go
+    with:
+      name: trays
+
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: trays
+
+  # The same file changed again and left unrecorded, which is what the move back would overwrite.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the trays are lifted before the frost
+
+  - type: action
+    domain: files
+    op: save
+
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # The move git will not make. The list closes the same way it does on a move that goes through,
+  # so what says which of the two happened is under the branch line and on it.
+  - type: action
+    domain: files
+    op: branch-go
+    with:
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: git-said
+    with:
+      shows: would be overwritten by checkout
+
+  - type: assert
+    domain: files
+    op: on-branch
+    with:
+      name: trays

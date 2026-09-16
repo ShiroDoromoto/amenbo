@@ -980,6 +980,14 @@ impl Instructor {
             (Domain::Files, "patch") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
+            // The branch's name and git's own words: both are text a road wrote or git wrote, and
+            // neither is a word of the interface's, so both are read off the shot.
+            (Domain::Files, "on-branch") => {
+                Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
+            }
+            (Domain::Files, "git-said") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             // A form named takes this away from the reading: both forms carry the same words, and
             // what separates them is punctuation the fold throws away and a size no reading reports.
             (Domain::Files, "reading") if picture(with) => {
@@ -2818,6 +2826,23 @@ impl Instructor {
                 Half::Files => "On the panel beside the panes, have the folder's own names up: the row of tabs under the project's name says which of its two halves is showing, and the first of the two is the folder's. Press it where the other half is up, and leave it alone where it is already the one showing.".to_string(),
                 Half::Git => "On the panel beside the panes, have what git says up: the row of tabs under the project's name says which of its two halves is showing, and the second of the two is git's. Press it where the other half is up, and leave it alone where it is already the one showing.".to_string(),
             },
+            // The branch line's list, opened and pressed in one move. It closes itself on the next
+            // press outside it, so an operator left holding it open would be holding a thing that
+            // goes the moment they do anything else.
+            //
+            // The control is named by where it stands rather than by a word: what it carries is a
+            // mark and not a label, and the name beside it is the branch's, which changes.
+            (Domain::Files, "branch-go") => format!(
+                "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch: a list of the repository's branches comes up. Press the row \"{}\". The list goes.",
+                req(with, "name")?
+            ),
+            // The row at the foot of that list, which turns into a box where the row was. Typing and
+            // the move are one movement on this face: the name is made where the reader is standing
+            // and moves them onto it, so there is nothing in between for a step of its own.
+            (Domain::Files, "branch-new") => format!(
+                "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch to bring the list of branches up. At the foot of that list, below the branches, press the row that offers to make a new one: it turns into a box where the row was. Type \"{}\" into it and press Enter. The list goes.",
+                req(with, "name")?
+            ),
             // A row moved between the two lists by its own box. The box is named by where it stands
             // rather than by what it is called, the way every control on this face is — and the row
             // is named by the words it draws, which is the file's own name.
@@ -4439,6 +4464,29 @@ impl Instructor {
                     "In {}, confirm \"{}\" is not among the rows — the section is drawn, and this is not on it.",
                     section(with)?,
                     req(with, "name")?
+                ),
+            },
+            // Which branch the line at the top of git's half names.
+            (Domain::Files, "on-branch") => match present(with) {
+                true => format!(
+                    "At the top of the half of the panel that is git's, confirm the line naming the branch says \"{}\".",
+                    req(with, "name")?
+                ),
+                false => format!(
+                    "At the top of the half of the panel that is git's, confirm the line naming the branch does not say \"{}\".",
+                    req(with, "name")?
+                ),
+            },
+            // git's own words, under that line. They are read as git wrote them, so the words a road
+            // looks for are English however the interface around them is drawn.
+            (Domain::Files, "git-said") => match present(with) {
+                true => format!(
+                    "Under the line naming the branch, confirm what git wrote is on the screen and carries \"{}\".",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Under the line naming the branch, confirm nothing on the screen carries \"{}\".",
+                    req(with, "shows")?
                 ),
             },
             // git's own text, drawn line by line. A line is found by the characters it is written

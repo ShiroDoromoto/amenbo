@@ -14,16 +14,31 @@
 // twenty-one on this machine, and what the half would otherwise show is a list of nothing, which
 // reads as a repository where nothing has happened.
 //
+// **The three that go out to the remote are run by the window itself**, not written into a pane for
+// the agent to run. What that buys is measured (`AMB-T-4900`): the ssh agent reaches a window opened
+// from the Dock, and HTTPS goes through the credential helper (`./folder`). What git says on the way
+// back is drawn as git wrote it, refusal and all (`AMB-D-906`, 3-4) — which is why the three go down
+// together while one of them is out and come back up on git's answer, whenever that is.
+//
 // **The two lists are git's own two answers**, not two things a reader has sorted. Every path git
 // names carries a letter for what the index says about it and a letter for what the working tree
 // says, and a path can have something in both — a file changed, staged, and then changed again is
 // in both lists because that is what git will do with it.
 import { useEffect, useState } from "react";
 import type { FolderGitDto, GitEntryDto } from "../bindings/bindings";
-import { t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
-import { folderGitStatus, onFolderChanged } from "./folder";
+import { errText, t, tf } from "../core/i18n";
+import {
+  folderGitFetch,
+  folderGitPull,
+  folderGitPush,
+  folderGitStatus,
+  onFolderChanged,
+} from "./folder";
 import { type GitMark, markOf } from "./gitMark";
+
+/** What git wrote on the way back from the remote, and whether it was a refusal. */
+type Said = { text: string; refused: boolean };
 
 /** Nothing read yet, and what a folder that is no repository answers with. */
 const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [] };
@@ -50,6 +65,9 @@ export function GitPanel({ projectId, root, onHistory }: {
   const [answered, setAnswered] = useState(false);
   // How many times the host has said the folder moved. The read below watches it.
   const [moved, setMoved] = useState(0);
+  // The three buttons are down while one of them is out, and what git wrote comes back to `said`.
+  const [running, setRunning] = useState(false);
+  const [said, setSaid] = useState<Said | null>(null);
 
   // The folder is watched by whatever else is drawing it — the tree, and the column reading a file —
   // and every watcher hears the same word. This half takes the news addressed to its own folder and
@@ -81,6 +99,34 @@ export function GitPanel({ projectId, root, onHistory }: {
       .catch(() => { if (alive) { setGit(NOTHING); setAnswered(true); } });
     return () => { alive = false; };
   }, [projectId, root, moved]);
+
+  // What git said was about the folder it was said of. A reader who moved the window on is owed the
+  // new folder's answers and not the last one's, so the line goes with the folder.
+  useEffect(() => { setSaid(null); }, [projectId, root]);
+
+  /**
+   * Run one of the three and draw what git wrote.
+   *
+   * **The read is asked for again either way.** A fetch moves where the branch stands against the
+   * one it is measured by, and a push moves it back level; both are lines of the answer above. The
+   * watch would say so too, four hundred milliseconds later and only for the ones that wrote to
+   * `.git` — asking outright is one call and says it now.
+   */
+  async function reach(call: (projectId: number, root: string) => Promise<string>): Promise<void> {
+    if (projectId === null || root === null || running) return;
+    setRunning(true);
+    setSaid(null);
+    try {
+      setSaid({ text: await call(projectId, root), refused: false });
+    } catch (e) {
+      // git's own sentence, in git's own words. It is the only account of why it stopped, and
+      // rewriting it into this app's vocabulary would cost the reader the one thing it carries.
+      setSaid({ text: errText(e), refused: true });
+    } finally {
+      setRunning(false);
+      setMoved((n) => n + 1);
+    }
+  }
 
   // Nothing is drawn where there is nothing to draw it about, and where the answer is still out.
   //
@@ -126,6 +172,32 @@ export function GitPanel({ projectId, root, onHistory }: {
           </span>
         )}
       </div>
+      {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the
+          count of what it would send, which is the one of the two the button is about. */}
+      <div className="gitpanel__net">
+        <button className="btn" disabled={running} onClick={() => void reach(folderGitFetch)}>
+          {t("git.fetch")}
+        </button>
+        <button className="btn" disabled={running} onClick={() => void reach(folderGitPull)}>
+          {t("git.pull")}
+        </button>
+        <button
+          className="btn btn--primary"
+          disabled={running}
+          onClick={() => void reach(folderGitPush)}
+        >
+          {t("git.push")}{git.branch.ahead > 0 && ` ↑${git.branch.ahead}`}
+        </button>
+      </div>
+      {running && <p className="gitpanel__said">{t("git.running")}</p>}
+      {/* A push that went through says what it sent; a fetch that found nothing says nothing at all,
+          and the sentence there is this app's own, since silence on its own reads as a button that
+          did not work. */}
+      {!running && said !== null && (
+        <p className={`gitpanel__said${said.refused ? " gitpanel__said--refused" : ""}`}>
+          {said.text === "" ? t("git.quiet") : said.text}
+        </p>
+      )}
       {/* The one press here that opens the other column. The history is there from the moment the
           repository has one, and it is not drawn until somebody asks: what it costs is a call of
           its own, paid by the reader who wants it rather than by everyone (`AMB-T-4899`). The mark

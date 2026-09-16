@@ -9,6 +9,11 @@
 // What is carried is paths and nothing else (`AMB-D-820`), so this is the gesture and not the
 // handover: where the rows came down is all it answers, and the face does the rest.
 //
+// **Three things can be under the rows when they are let go**: a pane, which is handed the words; a
+// folder of the tree, which takes the files themselves; and one of the git half's two lists, where
+// what moves is what git has been told about them and nothing on the disk (`./GitPanel`). The first
+// is the face's, the other two are the panel's own and each has its own slot below.
+//
 // **Paths and not a path**, because a reader can pick several rows out and carry them together
 // (`AMB-T-4242`). Which rows a press is about is the panel's answer, so what arrives here is
 // already the list — the gesture is the same whether it is one row or five.
@@ -67,13 +72,29 @@ export interface Held {
 }
 
 /**
- * The panel's side of a row let go over one of its own folders — the half of this gesture the face
- * does not own.
+ * The attribute one of the git half's two lists answers a carry on, holding which of them it is.
+ *
+ * **A third thing a row can be let go on, and the rail's own** (`AMB-D-906`, 2-8): a row dropped on
+ * the list it is not in is staged or taken back out, which is the same act its box does. It is a
+ * mark of its own rather than the folders' (`INTO_ATTR`) because what lands there is not a file
+ * being moved — nothing on the disk is touched — and the two halves are never drawn at once
+ * (`../shell/FolderRail`), so a reader is only ever offered one of the two meanings.
+ */
+export const STAGE_ATTR = "data-stage-into";
+
+/** The list of the git half under a point, or none. */
+export function stageUnder(x: number, y: number): HTMLElement | null {
+  return elementUnder({ x, y }, STAGE_ATTR);
+}
+
+/**
+ * The panel's side of a row let go inside the panel itself — the half of this gesture the face does
+ * not own.
  *
  * **It is a subscription and not a callback down the tree** (`../core/notice`, `../core/hostDrop`),
  * because the two ends of the carry belong to two different faces: the pane's landing is the talk
- * face's, and where a file goes inside a project is the panel's own. The gesture is one at a time,
- * so one watcher is all there ever is.
+ * face's, and what happens inside the panel is the panel's own. The gesture is one at a time, so one
+ * watcher is all there ever is.
  */
 export interface CarryWatch {
   /** The folder under the pointer while a row is held, or nothing — what draws the highlight. It is
@@ -83,13 +104,31 @@ export interface CarryWatch {
   drop: (into: HTMLElement, held: Held, copy: boolean) => void;
 }
 
+/** The same two, for the git half's lists. There is nothing to copy there — what a drop moves is
+ *  git's index and not a file — so the keys held say nothing. */
+export interface StageWatch {
+  over: (into: HTMLElement | null) => void;
+  drop: (into: HTMLElement, held: Held) => void;
+}
+
+/** The two halves of the rail, each with its own slot: the tree watches one and the git half the
+ *  other, and neither hears what was let go on the other's. */
 let watcher: CarryWatch | null = null;
+let stager: StageWatch | null = null;
 
 /** Take up the panel's side of the carry, and hand back the way to put it down. */
 export function watchCarry(watch: CarryWatch): () => void {
   watcher = watch;
   return () => {
     if (watcher === watch) watcher = null;
+  };
+}
+
+/** The same, for the git half's lists. */
+export function watchStage(watch: StageWatch): () => void {
+  stager = watch;
+  return () => {
+    if (stager === watch) stager = null;
   };
 }
 
@@ -104,6 +143,15 @@ export function carriedOver(into: HTMLElement | null): void {
 /** And that one was let go there, with what the keys held asked for. */
 export function carriedInto(into: HTMLElement, taken: Held, copy: boolean): void {
   watcher?.drop(into, taken, copy);
+}
+
+/** The same pair, said to the git half. */
+export function carriedOverStage(into: HTMLElement | null): void {
+  stager?.over(into);
+}
+
+export function carriedIntoStage(into: HTMLElement, taken: Held): void {
+  stager?.drop(into, taken);
 }
 
 /**
@@ -202,8 +250,10 @@ export function useHandDrag(
     let at = grabbedAt;
     let frame = 0;
     // The folder of the panel the pointer was last over, so the panel is told when that changes and
-    // not on every frame the pointer travels through one.
+    // not on every frame the pointer travels through one. The git half's list beside it, for the
+    // same reason.
     let overInto: HTMLElement | null = null;
+    let overList: HTMLElement | null = null;
 
     const stop = () => {
       held.current = null;
@@ -220,6 +270,10 @@ export function useHandDrag(
       if (overInto !== null) {
         overInto = null;
         carriedOver(null);
+      }
+      if (overList !== null) {
+        overList = null;
+        carriedOverStage(null);
       }
     };
 
@@ -248,12 +302,18 @@ export function useHandDrag(
       place(ghost, at);
       const over = paneUnder(at.x, at.y);
       setOverFrame(over !== null && can.current(over) ? over : null);
-      // The panel's own folders, said only as the answer changes: what it draws is one row's
-      // highlight, and a frame that named the same folder again would draw it a second time.
+      // The panel's own landings, said only as the answer changes: what they draw is one highlight,
+      // and a frame that named the same one again would draw it a second time. Which of the two it
+      // is is whichever half of the rail is drawn — they are never both (`../shell/FolderRail`).
       const into = over === null ? intoUnder(at.x, at.y) : null;
       if (into !== overInto) {
         overInto = into;
         carriedOver(into);
+      }
+      const onList = over === null && into === null ? stageUnder(at.x, at.y) : null;
+      if (onList !== overList) {
+        overList = onList;
+        carriedOverStage(onList);
       }
     };
 
@@ -291,7 +351,14 @@ export function useHandDrag(
       // Or a folder of the panel it came from, which is the other thing this gesture can mean: there
       // the rows are the files themselves rather than words about them (`./FolderTree`).
       const into = intoUnder(to.x, to.y);
-      if (into !== null) carriedInto(into, taken, copyHeld(e));
+      if (into !== null) {
+        carriedInto(into, taken, copyHeld(e));
+        return;
+      }
+      // Or one of the git half's lists, where what moves is what git has been told about the rows
+      // and not the rows themselves (`./GitPanel`).
+      const onList = stageUnder(to.x, to.y);
+      if (onList !== null) carriedIntoStage(onList, taken);
     };
 
     const cancel = (e: PointerEvent) => { if (mine(e)) stop(); };

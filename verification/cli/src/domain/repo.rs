@@ -137,30 +137,8 @@ impl Driver<'_> {
             // project is bound to, and a repository anywhere else leaves every row of it bare.
             "git-init" => {
                 let at = self.repo_dir(with)?;
-                let git = |args: &[&str]| -> Result<(), String> {
-                    let out = Command::new("git")
-                        .args(args)
-                        .current_dir(&at)
-                        .output()
-                        .map_err(|e| format!("could not run git: {e}"))?;
-                    if !out.status.success() {
-                        return Err(format!(
-                            "`git {}` failed: {}",
-                            args.join(" "),
-                            String::from_utf8_lossy(&out.stderr).trim()
-                        ));
-                    }
-                    Ok(())
-                };
-                git(&["init", "-q", "--initial-branch", "main"])?;
-                // Named on the command line rather than left to the machine's git config: a box with
-                // no identity set would fail here, and neither name belongs to anybody.
-                git(&[
-                    "-c", "user.name=verify",
-                    "-c", "user.email=verify@example.invalid",
-                    "commit", "--quiet", "--allow-empty",
-                    "-m", "the branch a scenario cuts from",
-                ])?;
+                git_in(&at, &["init", "-q", "--initial-branch", "main"])?;
+                git_in(&at, &["commit", "--quiet", "--allow-empty", "-m", "the branch a scenario cuts from"])?;
                 Ok(Outcome::action(format!("made {} a git repository on `main`", at.display())))
             }
             // What is lying in the folder, recorded — the one way a road can stand up a folder git
@@ -174,31 +152,41 @@ impl Driver<'_> {
             // road committing nothing has a premise that did not do what it said.
             "git-commit" => {
                 let at = self.repo_dir(with)?;
-                let git = |args: &[&str]| -> Result<(), String> {
-                    let out = Command::new("git")
-                        .args(args)
-                        .current_dir(&at)
-                        .output()
-                        .map_err(|e| format!("could not run git: {e}"))?;
-                    if !out.status.success() {
-                        return Err(format!(
-                            "`git {}` failed: {}",
-                            args.join(" "),
-                            String::from_utf8_lossy(&out.stderr).trim()
-                        ));
-                    }
-                    Ok(())
-                };
-                git(&["add", "-A"])?;
-                // The identity is named here for `git-init`'s reason: a box with none set would fail,
-                // and neither name belongs to anybody.
-                git(&[
-                    "-c", "user.name=verify",
-                    "-c", "user.email=verify@example.invalid",
-                    "commit", "--quiet",
-                    "-m", "what the road put here before it started",
-                ])?;
+                git_in(&at, &["add", "-A"])?;
+                git_in(&at, &["commit", "--quiet", "-m", "what the road put here before it started"])?;
                 Ok(Outcome::action(format!("recorded what was lying in {}", at.display())))
+            }
+            // Somewhere for that repository to send to, and the branch measured against it. What
+            // stands on the other side is a bare repository beside the folder in the run's own
+            // throwaway space, reached by a path: a path asks for no key and no account, so this
+            // walks with nothing on the network and the two numbers are git's own arithmetic.
+            //
+            // The branch is sent as this step goes, because `push` against a branch git has never
+            // been told where to send is refused with its own sentence about `--set-upstream`. That
+            // sentence is a true answer and the wrong one to open a road about the numbers on: what
+            // a road wants from here is a branch level with the other side.
+            "git-remote" => {
+                let at = self.repo_dir(with)?;
+                let bare = share_from(&at)?;
+                Ok(Outcome::action(format!("{} now sends to {}", at.display(), bare.display())))
+            }
+            // The other side moving on, which is the only way `behind` ever comes to be a number.
+            // The driver stands in for somebody else's checkout the way `write-file` stands in for a
+            // file a person already had: it clones the shared repository somewhere of its own,
+            // records the file there and sends it, and takes the clone away again.
+            //
+            // The clone is thrown away rather than kept between steps. A road that moved the other
+            // side twice would otherwise be reaching back into a checkout an earlier step left, and
+            // what it is standing in for is a person on another machine, not a second folder of this
+            // road's own.
+            "git-remote-move" => {
+                let at = self.repo_dir(with)?;
+                let path = req_str(with, "path")?;
+                let content = req_str(with, "content")?;
+                // The path is bent through the same gate every other one in this domain is: a step
+                // may name something inside the folder and nothing above it.
+                let bare = move_share_on(&at, self.inside(path)?, content)?;
+                Ok(Outcome::action(format!("somebody else sent {path} to {}", bare.display())))
             }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
@@ -715,6 +703,94 @@ impl Driver<'_> {
     }
 }
 
+/// One git command in one folder, with the identity named on the command line rather than left to
+/// the machine's git config: a box with none set is refused by `commit`, and neither name belongs to
+/// anybody. The two flags are harmless on the commands that never read them, which is what lets
+/// every call in this domain go through one door.
+fn git_in(at: &Path, args: &[&str]) -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["-c", "user.name=verify", "-c", "user.email=verify@example.invalid"])
+        .args(args)
+        .current_dir(at)
+        .output()
+        .map_err(|e| format!("could not run git: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "`git {}` in {} failed: {}",
+            args.join(" "),
+            at.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// Where the repository a folder sends to stands, and where somebody else's checkout of it is made:
+/// beside that folder, under its own name. Both are derived rather than said, for the reason every
+/// other placement in this domain is — a scenario names folders and never paths, so the one place
+/// the layout is written down is here.
+///
+/// **Beside and never inside.** What git says about a folder is drawn from that folder's own rows,
+/// so a second repository under one of them would put rows on the panel no road ever put there.
+fn beside(at: &Path, suffix: &str) -> Result<std::path::PathBuf, String> {
+    let name = at
+        .file_name()
+        .ok_or_else(|| format!("{} has no name to put a shared repository beside", at.display()))?
+        .to_string_lossy()
+        .into_owned();
+    Ok(at.with_file_name(format!("{name}{suffix}")))
+}
+
+/// Give a repository somewhere to send to, and leave its branch measured against it.
+///
+/// The other side is a bare repository reached by a path, which is what lets every road about the
+/// two counts walk with nothing on the network: a path asks for no key and no account. The branch is
+/// sent as this goes, because `push` against a branch git has never been told where to send is
+/// refused with its own sentence about `--set-upstream` — true, and the wrong answer to open a road
+/// about the counts on.
+fn share_from(at: &Path) -> Result<std::path::PathBuf, String> {
+    let bare = beside(at, "-shared.git")?;
+    // git runs in a folder, so the one it is about has to be there before it is started — the only
+    // placement in this domain that is not a folder somebody's premise already stood up.
+    std::fs::create_dir_all(&bare).map_err(|e| format!("could not make {}: {e}", bare.display()))?;
+    git_in(&bare, &["init", "-q", "--bare", "--initial-branch", "main"])?;
+    git_in(at, &["remote", "add", "origin", &bare.to_string_lossy()])?;
+    git_in(at, &["push", "--quiet", "--set-upstream", "origin", "main"])?;
+    Ok(bare)
+}
+
+/// Record one file on the other side, as somebody working from their own checkout of it would.
+///
+/// The checkout is cloned here and taken away again rather than kept between steps. What it stands
+/// in for is a person on another machine, so a road that moved the other side twice must not be
+/// reaching back into a folder an earlier step left lying beside this one.
+fn move_share_on(at: &Path, path: &Path, content: &str) -> Result<std::path::PathBuf, String> {
+    let bare = beside(at, "-shared.git")?;
+    if !bare.exists() {
+        return Err(format!(
+            "{} has nowhere to send to — a road that moves the other side stands one up first (`git-remote`)",
+            at.display()
+        ));
+    }
+    let theirs = beside(at, "-elsewhere")?;
+    // Left behind by a step that failed halfway, it would be cloned over. Taking it away first makes
+    // this say the same thing however the step before it ended.
+    let _ = std::fs::remove_dir_all(&theirs);
+    git_in(at, &["clone", "--quiet", &bare.to_string_lossy(), &theirs.to_string_lossy()])?;
+    let full = theirs.join(path);
+    if let Some(dir) = full.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+    }
+    std::fs::write(&full, content)
+        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    git_in(&theirs, &["add", "-A"])?;
+    git_in(&theirs, &["commit", "--quiet", "-m", "what somebody else recorded"])?;
+    git_in(&theirs, &["push", "--quiet", "origin", "main"])?;
+    std::fs::remove_dir_all(&theirs)
+        .map_err(|e| format!("could not take {} away again: {e}", theirs.display()))?;
+    Ok(bare)
+}
+
 /// Where a task's checkout stands, by the layout Amenbo fixes and nobody is asked about:
 /// `<the repository's parent>/<its name>-worktrees/<id>`.
 ///
@@ -755,6 +831,81 @@ mod tests {
         let resolved = std::fs::canonicalize(&base).unwrap();
         assert_eq!(at, resolved.join("orchard-worktrees").join("4739"));
         assert!(!at.starts_with(&repo), "it is never looked for inside the repository");
+    }
+
+    /// What git answers about a branch, in the shape the panel reads it in: the first line of
+    /// `status --branch`, which is the one read both counts come off.
+    fn standing(at: &Path) -> String {
+        let out = Command::new("git")
+            .args(["--no-optional-locks", "status", "--porcelain=v1", "--branch"])
+            .current_dir(at)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).lines().next().unwrap().to_string()
+    }
+
+    /// The whole road the two counts are walked on, stood up the way the driver stands it up.
+    ///
+    /// **It is written here because nothing else ever runs these two.** The road they were made for
+    /// is the screen's, and the screen harness only drives a shipped build — so a gate that ran on
+    /// every change would never reach them, and a premise that had quietly stopped working would
+    /// first be met by whoever sat down to walk the road by hand.
+    ///
+    /// What is asserted is git's own arithmetic rather than either function's return: level after
+    /// the share is made, ahead by what was recorded here, and behind by what the other side
+    /// recorded — but only once this side has asked, which is the fact the road turns on.
+    #[test]
+    fn a_folder_measures_itself_against_the_repository_it_shares_with() {
+        let session = crate::scratch::session("repo-share-from", false).unwrap();
+        let at = session.cwd.join("greenhouse-beds");
+        // A bound folder is stood up by the session before any step reaches it; this stands in for
+        // that, since what is under test starts at the repository being there.
+        std::fs::create_dir_all(&at).unwrap();
+        git_in(&at, &["init", "-q", "--initial-branch", "main"]).unwrap();
+        git_in(&at, &["commit", "--quiet", "--allow-empty", "-m", "the branch a scenario cuts from"])
+            .unwrap();
+
+        let bare = share_from(&at).unwrap();
+        assert!(bare.join("HEAD").is_file(), "{} is no bare repository", bare.display());
+        assert_eq!(standing(&at), "## main...origin/main", "not level with what it shares with");
+
+        // Recorded here and nowhere else.
+        std::fs::write(at.join("watering.md"), "SCENARIO the seedlings are watered").unwrap();
+        git_in(&at, &["add", "-A"]).unwrap();
+        git_in(&at, &["commit", "--quiet", "-m", "the watering note goes in"]).unwrap();
+        assert_eq!(standing(&at), "## main...origin/main [ahead 1]");
+
+        git_in(&at, &["push", "--quiet"]).unwrap();
+        assert_eq!(standing(&at), "## main...origin/main", "sending did not empty the count");
+
+        // And somebody else records something on the other side.
+        move_share_on(&at, Path::new("sieving.md"), "SCENARIO the loam is sieved").unwrap();
+        assert!(
+            !at.with_file_name("greenhouse-beds-elsewhere").exists(),
+            "their checkout was left lying beside the folder"
+        );
+        // Nothing here knows yet, which is the step the road reads before it asks.
+        assert_eq!(standing(&at), "## main...origin/main", "it knew before anybody asked");
+
+        git_in(&at, &["fetch", "--quiet"]).unwrap();
+        assert_eq!(standing(&at), "## main...origin/main [behind 1]");
+
+        git_in(&at, &["pull", "--quiet"]).unwrap();
+        assert_eq!(standing(&at), "## main...origin/main", "bringing it in did not empty the count");
+        assert!(at.join("sieving.md").is_file(), "the count moved and nothing came in");
+    }
+
+    /// Moving the other side of a folder that shares with nothing says which folder, rather than
+    /// failing inside git with a path nobody wrote.
+    #[test]
+    fn moving_a_side_that_was_never_stood_up_says_so() {
+        let session = crate::scratch::session("repo-share-missing", false).unwrap();
+        let at = session.cwd.join("greenhouse-beds");
+        std::fs::create_dir_all(&at).unwrap();
+        let said = move_share_on(&at, Path::new("sieving.md"), "SCENARIO").unwrap_err();
+        assert!(said.contains("greenhouse-beds"), "the refusal names the folder: {said}");
+        assert!(said.contains("git-remote"), "the refusal says what stands one up: {said}");
     }
 
     /// A folder that is not there cannot be measured from, and the reason says which one — a road

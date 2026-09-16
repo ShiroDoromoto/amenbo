@@ -239,6 +239,8 @@ export const th: Translation = {
     "dimmgr.closeValue": "ปิด",
     "dimmgr.reopenValue": "เปิดใหม่",
     "dimmgr.closeValueHint": "ปิดค่านี้ สิ่งที่ถืออยู่แล้วยังถือต่อไปและตัวกรองยังหาเจอ มีเพียงการกำหนดใหม่ที่ถูกปฏิเสธ และเปิดใหม่ได้เสมอ",
+    "dimmgr.showClosed.other": "แสดงค่าที่ปิดแล้ว {n} รายการ",
+    "dimmgr.hideClosed": "ซ่อนค่าที่ปิดแล้ว",
     "dimmgr.showOnCard": "แสดงบนการ์ด",
     "dimmgr.showOnCardHint": "แสดงหมวดนี้บนการ์ดงาน คำตอบเป็นของหมวดเอง จึงเปลี่ยนสำหรับทุกคน ไม่ใช่แค่บนอุปกรณ์นี้",
     "dimmgr.required": "จำเป็น",

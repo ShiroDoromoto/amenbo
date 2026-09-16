@@ -93,35 +93,59 @@ pub fn repo_of(dir: &Path) -> Option<Repo> {
 
 /// Everything git has to say about the folder `root` names, in the shape the file face draws rows
 /// from. An empty answer is the honest one for every way this can come to nothing.
+///
+/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn
+/// ([`crate::agent_models`]), and what this one waits on is git starting up and reading an index
+/// whose size is the repository's, not ours. A project's folders each ask for themselves, so the
+/// waits queue up and the window stands still for the sum — 337 ms over six folders on Windows,
+/// against 70 ms for one (`AMB-T-4897`).
 #[tauri::command]
-pub fn folder_git_status(project_id: i64, root: String) -> Result<FolderGitDto, CmdError> {
-    let dir = root_of(project_id, &root)?;
-    let Some(repo) = repo_of(&dir) else { return Ok(FolderGitDto::default()) };
-    // `--no-optional-locks` sits before `status` because it is git's own option and not the
-    // subcommand's; behind it git exits 129 without doing anything. What it buys is the index lock:
-    // without it this call races the reader's own `git add` and breaks it — 92.8% of the time on
-    // Linux, and never with it (`AMB-T-3742` measured all three systems).
-    //
-    // `-z` is what makes a name in any language come back as the bytes it really is; without it git
-    // writes octal escapes instead. `-- .` holds the answer to this folder: git otherwise climbs to
-    // the repository root and answers for the whole of it, at eight times the cost.
-    //
-    // `--branch` puts one more line at the front and costs nothing to ask for. Counting the same
-    // thing with `rev-list --count` would be a second process, which is 14ms of a call that is 20ms
-    // whole (`AMB-T-4899`).
-    let args = ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--branch", "--", "."];
-    let Some(out) = run(&dir, &args) else {
-        return Ok(FolderGitDto { prefix: repo.prefix, ..Default::default() });
-    };
-    // The branch line is the first record and `--branch` always writes one, so what follows the
-    // first NUL is the rows — which is also what keeps the `##` out of the row parser, where it
-    // would read as a path wearing two status letters.
-    let (head, named) = out.split_once('\0').unwrap_or((out.as_str(), ""));
-    Ok(FolderGitDto {
-        branch: branch_of(head),
-        rows: rows(named, &repo.prefix),
-        prefix: repo.prefix,
+pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGitDto, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        let Some(repo) = repo_of(&dir) else { return Ok(FolderGitDto::default()) };
+        // `--no-optional-locks` sits before `status` because it is git's own option and not the
+        // subcommand's; behind it git exits 129 without doing anything. What it buys is the index
+        // lock: without it this call races the reader's own `git add` and breaks it — 92.8% of the
+        // time on Linux, and never with it (`AMB-T-3742` measured all three systems).
+        //
+        // `-z` is what makes a name in any language come back as the bytes it really is; without it
+        // git writes octal escapes instead. `-- .` holds the answer to this folder: git otherwise
+        // climbs to the repository root and answers for the whole of it, at eight times the cost.
+        //
+        // `--branch` puts one more line at the front and costs nothing to ask for. Counting the
+        // same thing with `rev-list --count` would be a second process, which is 14ms of a call
+        // that is 20ms whole (`AMB-T-4899`).
+        let args = ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--branch", "--", "."];
+        let Some(out) = run(&dir, &args) else {
+            return Ok(FolderGitDto { prefix: repo.prefix, ..Default::default() });
+        };
+        // The branch line is the first record and `--branch` always writes one, so what follows the
+        // first NUL is the rows — which is also what keeps the `##` out of the row parser, where it
+        // would read as a path wearing two status letters.
+        let (head, named) = out.split_once('\0').unwrap_or((out.as_str(), ""));
+        let rows = rows(named, &repo.prefix);
+        Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows })
     })
+    .await
+}
+
+/// Run one git road where waiting on it costs nobody the window.
+///
+/// Every command in this module waits on git starting up and reading an index whose size is the
+/// repository's, not ours — and a command with no `async` on it is run where the webview is drawn
+/// ([`crate::agent_models`]). What the thread is given back for is the same on all of them, so the
+/// words for a road that did not finish are written once here rather than at each of them.
+async fn off_thread<T, F>(work: F) -> Result<T, CmdError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, CmdError> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| -> CmdError {
+            format!("asking git about this folder did not finish: {e}").into()
+        })?
 }
 
 /// The `--format` the history is read back by: the fields a row is drawn from, in one record each.
@@ -142,23 +166,26 @@ const LOG_FIELDS: &str = "--format=%H%x1f%h%x1f%P%x1f%an%x1f%aI%x1f%s";
 /// the call costs is git starting up (`AMB-T-4899`) — and a hundred is the length of a scroll
 /// somebody actually reads to the end of.
 #[tauri::command]
-pub fn folder_git_log(
+pub async fn folder_git_log(
     project_id: i64,
     root: String,
     path: Option<String>,
 ) -> Result<Vec<GitCommitDto>, CmdError> {
-    let dir = root_of(project_id, &root)?;
-    if repo_of(&dir).is_none() {
-        return Ok(Vec::new());
-    }
-    let mut args = vec!["--no-optional-locks", "log", "--max-count=100", "-z", LOG_FIELDS];
-    // After `--`, so a path that begins like an option is read as the path it is.
-    if let Some(path) = path.as_deref() {
-        args.push("--");
-        args.push(path);
-    }
-    let Some(out) = run(&dir, &args) else { return Ok(Vec::new()) };
-    Ok(commits(&out))
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() {
+            return Ok(Vec::new());
+        }
+        let mut args = vec!["--no-optional-locks", "log", "--max-count=100", "-z", LOG_FIELDS];
+        // After `--`, so a path that begins like an option is read as the path it is.
+        if let Some(path) = path.as_deref() {
+            args.push("--");
+            args.push(path);
+        }
+        let Some(out) = run(&dir, &args) else { return Ok(Vec::new()) };
+        Ok(commits(&out))
+    })
+    .await
 }
 
 /// What one commit touched, as the rows the layer under it draws.
@@ -167,19 +194,22 @@ pub fn folder_git_log(
 /// answer, and the one written for people truncates a long path with an ellipsis, which is a name
 /// nothing can be opened by.
 #[tauri::command]
-pub fn folder_git_show(
+pub async fn folder_git_show(
     project_id: i64,
     root: String,
     sha: String,
 ) -> Result<Vec<GitFileDto>, CmdError> {
-    let dir = root_of(project_id, &root)?;
-    if repo_of(&dir).is_none() || !is_sha(&sha) {
-        return Ok(Vec::new());
-    }
-    let Some(out) = from_first_parent(&dir, &sha, &["--numstat", "-z"], &[]) else {
-        return Ok(Vec::new());
-    };
-    Ok(files(&out))
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() || !is_sha(&sha) {
+            return Ok(Vec::new());
+        }
+        let Some(out) = from_first_parent(&dir, &sha, &["--numstat", "-z"], &[]) else {
+            return Ok(Vec::new());
+        };
+        Ok(files(&out))
+    })
+    .await
 }
 
 /// The patch for one path of one commit, as git wrote it.
@@ -188,24 +218,27 @@ pub fn folder_git_show(
 /// answer, and a face that draws it and a face that puts it in front of an editor are reading the
 /// same bytes.
 #[tauri::command]
-pub fn folder_git_diff(
+pub async fn folder_git_diff(
     project_id: i64,
     root: String,
     sha: String,
     path: String,
 ) -> Result<String, CmdError> {
-    let dir = root_of(project_id, &root)?;
-    if repo_of(&dir).is_none() || !is_sha(&sha) {
-        return Ok(String::new());
-    }
-    Ok(from_first_parent(&dir, &sha, &["--patch"], &["--", &path]).unwrap_or_default())
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() || !is_sha(&sha) {
+            return Ok(String::new());
+        }
+        Ok(from_first_parent(&dir, &sha, &["--patch"], &["--", &path]).unwrap_or_default())
+    })
+    .await
 }
 
 /// Whether a commit is named by something git will read as a commit and not as an option.
 ///
 /// Every sha here came out of [`folder_git_log`], so this turns nothing away that a reader could
 /// have asked for — and a name arriving from anywhere else is one nothing vouches for. A word
-/// beginning with `-` would be read as an option by every command below, which is the whole of what
+/// beginning with `-` would be read as an option by every command above, which is the whole of what
 /// this is in the way of.
 fn is_sha(sha: &str) -> bool {
     !sha.is_empty() && sha.len() <= 40 && sha.chars().all(|c| c.is_ascii_hexdigit())

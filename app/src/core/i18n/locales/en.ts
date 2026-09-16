@@ -255,6 +255,8 @@ const ui = {
   "dimmgr.closeValue": "Close",
   "dimmgr.reopenValue": "Reopen",
   "dimmgr.closeValueHint": "Close this value. What already carries it keeps it and filters still find it — only new assignments are turned away, and reopening is always allowed",
+  "dimmgr.showClosed.one": "Show {n} closed value", "dimmgr.showClosed.other": "Show {n} closed values",
+  "dimmgr.hideClosed": "Hide closed values",
   "dimmgr.showOnCard": "Show on card",
   "dimmgr.showOnCardHint": "Put this category on the task card. The category carries the answer, so it changes for everyone — not just on this device",
   "dimmgr.required": "Required",

@@ -11,8 +11,7 @@
 # The world is declared below because raising the flag is the classification manager's own road: what
 # is under test here is work already filed that way, which is the state a reader opens on. The
 # terminal road reads the filing and walks those two edges; the screen road reads the same world off
-# the board, where the two values are drawn on one card and the category is no longer offered as a way
-# to cut the columns — a column says where a task *is*, and this task is in two places.
+# the board, where both values are drawn on the one card.
 id: answer-one-category-with-several-values
 title: One record answers a category with several of its values at once, and every face reads all of them
 description: >
@@ -20,12 +19,10 @@ description: >
   under either one, which a store keeping one answer per record could not have produced. Taking one
   of the two back off leaves the other standing, and holding the category back to one answer is
   refused while the task still holds both — with the count of what would have been thrown away. On
-  the board the same task's card carries both values, and the category is missing from the row of
-  buttons that cut the columns, while a category that keeps one answer is still offered there.
+  the board the same task's card carries both values at once.
 given:
   # The category the work is filed on, and the one beside it that keeps a single answer. Nothing
-  # separates them but the flag, which is what makes the pair of grouping steps below a question about
-  # the flag rather than about these two categories.
+  # separates them but the flag.
   - type: action
     domain: dimension
     op: create
@@ -206,8 +203,7 @@ steps_cli:
       present: true
 
 steps_gui:
-  # Arrive at the board rather than assume it: what a card draws and what the column picker offers are
-  # both drawn on the opening.
+  # Arrive at the board rather than assume it: what a card draws is drawn on the opening.
   - type: action
     domain: project
     op: open
@@ -225,51 +221,6 @@ steps_gui:
 
   # The second value on the same card. A build drawing one chip per category would put one of these two
   # on the card and settle for it, and which one it kept would be nobody's decision.
-  - type: assert
-    domain: task
-    op: carded
-    with:
-      target: crash
-      dimension: Platform
-      value: android
-      present: true
-
-  # The other half of the setting, and the reason the board has to know about it at all: a column says
-  # where a task is, and this task is under two values at once, so the category is not one of the ways
-  # to cut the columns.
-  - type: assert
-    domain: project
-    op: groupable
-    with:
-      axis: Platform
-      present: false
-
-  # The category beside it keeps a single answer and is still offered, which is what says the picker is
-  # leaving one category out rather than having stopped offering categories.
-  - type: assert
-    domain: project
-    op: groupable
-    with:
-      axis: Area
-      present: true
-
-  # And it is offered for real: pressing it cuts the board, and the card that was carrying both values
-  # goes on carrying them through a split neither of them is part of.
-  - type: action
-    domain: project
-    op: group-by
-    with:
-      axis: Area
-
-  - type: assert
-    domain: task
-    op: carded
-    with:
-      target: crash
-      dimension: Platform
-      value: ios
-      present: true
-
   - type: assert
     domain: task
     op: carded

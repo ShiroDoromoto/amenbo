@@ -54,10 +54,10 @@ pub struct DimensionValueDto {
     /// time axis's. Sent for every value, meaningful only where the axis carries that role — the shape
     /// the period fields already have.
     ///
-    /// The screens read it to four different ends: the filter offers a closed value like any other
+    /// The screens read it to three different ends: the filter offers a closed value like any other
     /// (filtering by it is the whole point of closing rather than deleting), the value picker hides it
-    /// unless the record already carries it, the board draws its column only while cards are still in it,
-    /// and the classification panel shows every value with the switch that closes and reopens one.
+    /// unless the record already carries it, and the classification panel shows every value with the
+    /// switch that closes and reopens one.
     pub(crate) closed: bool,
 }
 
@@ -86,9 +86,7 @@ pub struct DimensionDto {
     pub(crate) notes: String,
     /// How many of this axis's values one record may hold (`AMB-D-826`). Every axis starts `single`,
     /// where one value replaces the last; `multi` is the one that gains a value and keeps what it had.
-    /// The board reads it to keep a multi-select axis out of the axes its columns can be split by — a
-    /// column says where a task is, and a task on several values of one axis is in no single column —
-    /// and the detail pane to draw one select or a row of chips.
+    /// The detail pane reads it to draw one select or a row of chips.
     #[ts(type = "\"single\" | \"multi\"")]
     pub(crate) cardinality: String,
     /// What this axis is nominated as (`amenbo_core::model::DimensionRole`). `time_axis` is the one

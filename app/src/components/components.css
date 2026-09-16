@@ -167,18 +167,9 @@
   background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .column__addbtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
-/* Not a column, so it does not stretch with them — it is a button, and one run down the whole board
-   would read as an empty column rather than as a control. */
-.board__addcol {
-  width: 200px; flex: none; align-self: flex-start;
-  text-align: left; font-size: var(--fs-md); color: var(--c-text-muted);
-  border: 1px dashed var(--c-edge); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-2);
-}
-.board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
-/* The box that is open only while a column is being named: it is already the thing being typed
+/* The box that is open only while a name is being typed: it is already the thing being typed
    into, so it wears the accent on its border from the moment it appears. */
 .column__addinput { border-color: var(--c-accent); font-size: var(--fs-xs); }
-.board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
 
 /* ---------- drag & drop (moving between the status board's columns) ---------- */
 /* A droppable column keeps a grabbable area even when the board is too short for the stretch above to
@@ -240,11 +231,10 @@ body.is-dragging { user-select: none; }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
 .inlineselect { font-size: var(--fs-xs); padding: 0 2px; }
-/* The axis the board is grouped by. Its row is what the detail pane takes width from (the toolbar above
-   spans the pane, this does not), so it folds onto a second line rather than crushing the buttons — the
-   heading beside them holds its line for the same reason. */
-.groupby { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.groupby > .faint { flex: none; white-space: nowrap; }
+/* The board's dimension row (add a category, manage them). It is what the detail pane takes width from
+   (the toolbar above spans the pane, this does not), so it folds onto a second line rather than crushing
+   the buttons. */
+.dimbar { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 
 /* The chip a task's ref is shown in; clicking it copies that same ref. */
 .idchip {

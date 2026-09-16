@@ -28,11 +28,11 @@ import { Pager, usePager } from "../components/Pager";
 // period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be unique:
 // core folds "the current era" to a single answer using the order of the dimensions. A closable axis's values
 // grow the other role's payload in the same place: the button that closes one and opens it again (`AMB-D-829`).
-// This is the one face that shows a closed value at all — the picker hides it, the board drops its column once
-// the last card leaves, and only here can it be brought back. Shows, but folded: the closed values sit behind a
-// button that counts them, so an axis with years of retired values still reads as what it currently offers. The
-// values still on offer are read a page at a time on top of that — the fold bounds what an axis retires, and the
-// page bounds what it offers, neither being a number this panel gets to assume.
+// This is the one face that draws a closed value as retired — the picker hides it altogether, and only here
+// can it be brought back. Draws, but folded: the closed values sit behind a button that counts them, so an
+// axis with years of retired values still reads as what it currently offers. The values still on offer are
+// read a page at a time on top of that — the fold bounds what an axis retires, and the page bounds what it
+// offers, neither being a number this panel gets to assume.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
@@ -67,6 +67,12 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
 
 function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId: number; store: ReturnType<typeof useStore> }) {
   const currentId = currentTimeAxisValueId(dim, todayStr());
+  // Counted over the values the axis still offers, which is the count core raises `required` against
+  // (`ops::dimension`, `AMB-D-829`): a closed value takes no new record, so an axis whose values are
+  // all closed is as unanswerable as one holding none. An axis that does not close its values has no
+  // closed ones, so this reads the same as the plain count there. It is read off the axis rather than
+  // off the fold below — which of them a reader is looking at says nothing about what is on offer.
+  const noOpenValues = !dim.values.some((v) => !v.closed);
   // Closed values are folded away until asked for. This is the one face that shows a closed value at
   // all (`AMB-D-829`), which is also why it is the one that grows without bound: an axis that retires
   // a value a week carries every one of them here for good. So the fold says how many it holds and
@@ -160,16 +166,16 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
         </label>
         {/* Whether this axis refuses to be left empty (`AMB-D-734`). It is the same kind of answer as the
             three beside it — the axis's own, so it moves for everyone — and it bites in one place: a task
-            carrying no value here cannot finish its creation. An axis offering no values could never be
-            answered, so core refuses to raise it there and the box stays off until a value exists. */}
+            carrying no value here cannot finish its creation. An axis offering no open value could never
+            be answered, so core refuses to raise it there and the box stays off until one is offered. */}
         <label
           className="dimmgr__ordered"
-          title={dim.values.length === 0 ? t("dimmgr.requiredNoValuesHint") : t("dimmgr.requiredHint")}
+          title={noOpenValues ? t("dimmgr.requiredNoValuesHint") : t("dimmgr.requiredHint")}
         >
           <input
             type="checkbox"
             checked={dim.required}
-            disabled={dim.values.length === 0}
+            disabled={noOpenValues}
             onChange={(e) => store.setDimensionRequired(dim.id, e.target.checked)}
           />
           {t("dimmgr.required")}

@@ -179,8 +179,15 @@ impl FolderWatches {
 /// it cannot find is a question about a folder it already knows the project is bound to. A folder
 /// that goes away *while it is watched* is a different matter — that is `gone`, and it is what the
 /// watch is there to notice.
+///
+/// **The walk is off the main thread.** A command with no `async` on it is run where the webview is
+/// drawn ([`crate::agent_models`]), and the walk below covers the whole tree under the folder. A
+/// project mounts its folders side by side, so the walks queue up and the window stands still for
+/// the sum of them (`AMB-T-4897`). Only the walk moves: the registry below is a lock held for as
+/// long as a `HashMap` takes, and it is what decides whether this asker is the one that installs —
+/// a decision that has to be made where the asker still is.
 #[tauri::command]
-pub fn folder_watch(
+pub async fn folder_watch(
     app: tauri::AppHandle,
     window: tauri::Window,
     watches: tauri::State<'_, FolderWatches>,
@@ -189,8 +196,16 @@ pub fn folder_watch(
     watcher: String,
     tag: u64,
 ) -> Result<FolderChangesDto, CmdError> {
-    let dir = crate::folder_fence::root_of(project_id, &root)?;
-    let scan = crate::folder_walk::scan(&dir);
+    let asked = root.clone();
+    let (dir, scan) = tauri::async_runtime::spawn_blocking(
+        move || -> Result<(PathBuf, crate::folder_walk::Scan), CmdError> {
+            let dir = crate::folder_fence::root_of(project_id, &asked)?;
+            let scan = crate::folder_walk::scan(&dir);
+            Ok((dir, scan))
+        },
+    )
+    .await
+    .map_err(|e| -> CmdError { format!("walking this folder did not finish: {e}").into() })??;
     let first = FolderChangesDto {
         root: root.clone(),
         // Nothing has been installed yet, so what is reported here is only what the walk itself hit.

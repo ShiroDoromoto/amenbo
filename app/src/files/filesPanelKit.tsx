@@ -7,7 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  GitEntryDto,
+  FolderGitDto, GitEntryDto,
 } from "../bindings/bindings";
 
 export const ROOT = "/work/repo";
@@ -171,9 +171,11 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`unwatch:${root}`);
     hoisted.watchers.push({ how: "unwatch", root, watcher, tag });
   },
-  folderGitStatus: async (_projectId: number, root: string): Promise<GitEntryDto[]> => {
+  folderGitStatus: async (_projectId: number, root: string): Promise<FolderGitDto> => {
     hoisted.asked.push(`git:${root}`);
-    return hoisted.git[root] ?? [];
+    // The rows are what the tree draws; where the branch stands is the rail's other half and has
+    // no reader on this side yet.
+    return { prefix: "", branch: null, rows: hoisted.git[root] ?? [] };
   },
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
     hoisted.takers.push(take);

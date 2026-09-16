@@ -287,6 +287,34 @@ export async function folderGitBranchCreate(
 }
 
 /**
+ * Bring `branch` into the one the folder is standing on — and hand back whatever git said.
+ *
+ * **Conflicts are an answer and not a failure of this call.** git exits non-zero on them, with the
+ * paths it could not settle written in its own words, so what reaches the caller is a refusal
+ * carrying the list — and the merge is underway from that moment (`folderGitStatus` says so).
+ */
+export async function folderGitMerge(
+  projectId: number,
+  root: string,
+  branch: string,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_merge", { projectId, root, branch });
+}
+
+/**
+ * Put the tree back where it stood before the merge.
+ *
+ * **What the reader has settled by hand goes with it.** A conflict resolved in the working tree and
+ * never written down is in no commit and no reflog, so this is asked about before it is run
+ * (`./GitBranch`).
+ */
+export async function folderGitMergeAbort(projectId: number, root: string): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_merge_abort", { projectId, root });
+}
+
+/**
  * The three that go out to the remote, each answering with what git wrote — its own words, whether
  * it worked or not (`AMB-D-906`, 3-4 and 3-5).
  *

@@ -18,8 +18,12 @@ const hoisted = vi.hoisted(() => ({
   switched: [] as string[],
   /** The names asked to be made, in order. */
   made: [] as string[],
+  /** The branches asked to be brought in, in order. */
+  brought: [] as string[],
+  /** How many times the merge underway was asked to be put back. */
+  aborted: 0,
   /** What the host refuses with, by the call it refuses — nothing where it does not. */
-  refuse: {} as { switch?: string; create?: string },
+  refuse: {} as { switch?: string; create?: string; merge?: string },
   /** How many times the half around this one was told to look again. */
   moved: 0,
 }));
@@ -34,6 +38,15 @@ vi.mock("./folder", () => ({
   folderGitBranchCreate: async (_p: number, _r: string, name: string): Promise<string> => {
     hoisted.made.push(name);
     if (hoisted.refuse.create !== undefined) throw new Error(hoisted.refuse.create);
+    return "";
+  },
+  folderGitMerge: async (_p: number, _r: string, branch: string): Promise<string> => {
+    hoisted.brought.push(branch);
+    if (hoisted.refuse.merge !== undefined) throw new Error(hoisted.refuse.merge);
+    return "Fast-forward";
+  },
+  folderGitMergeAbort: async (): Promise<string> => {
+    hoisted.aborted += 1;
     return "";
   },
 }));
@@ -55,13 +68,14 @@ const branch = (about: Partial<GitBranchDto> & { name: string }): GitBranchDto =
   ...about,
 });
 
-/** Draw the line, standing on `on`. */
-async function draw(on: GitBranchDto = branch({ name: "main" })) {
+/** Draw the line, standing on `on` — with or without a merge underway. */
+async function draw(on: GitBranchDto = branch({ name: "main" }), merging = false) {
   await act(async () => {
     root.render(createElement(GitBranch, {
       projectId: 1,
       root: ROOT,
       on,
+      merging,
       onMoved: () => { hoisted.moved += 1; },
     }));
   });
@@ -107,6 +121,8 @@ beforeEach(() => {
   hoisted.branches = [];
   hoisted.switched = [];
   hoisted.made = [];
+  hoisted.brought = [];
+  hoisted.aborted = 0;
   hoisted.refuse = {};
   hoisted.moved = 0;
   container = document.createElement("div");
@@ -139,7 +155,7 @@ describe("the branch line", () => {
     await draw(branch({ name: "task/4932", behind: 3 }));
     await pick();
     expect(items().map((one) => one.querySelector(".gitpanel__pickname")?.textContent))
-      .toEqual(["main", "task/4932", t("git.newBranch")]);
+      .toEqual(["main", "task/4932", t("git.newBranch"), t("git.mergeFrom")]);
     const marked = items().filter((one) => one.querySelector("[data-icon='check']") !== null);
     expect(marked.map((one) => one.querySelector(".gitpanel__pickname")?.textContent))
       .toEqual(["task/4932"]);
@@ -223,6 +239,107 @@ describe("the branch line", () => {
     // A name git has already said no to is not one to ask about twice: typing is what clears it.
     await press("Enter");
     expect(hoisted.made).toEqual(["main"]);
+  });
+
+  /// Which branch to bring in is the same question as which to move onto, asked of the same names —
+  /// so it is a second face of the one list, and every row on it says which of the two it does.
+  it("brings a branch in from the other face of the list", async () => {
+    hoisted.branches = [branch({ name: "main" }), branch({ name: "other" })];
+    await draw();
+    await pick();
+    await act(async () => { items()[3]?.click(); });
+    await settle();
+    // Not the row that was pressed: the face changed under it, and every branch but the one being
+    // stood on is on the new one.
+    expect(items().map((one) => one.querySelector(".gitpanel__pickname")?.textContent))
+      .toEqual([tf("git.mergeOne", { name: "other" })]);
+
+    await act(async () => { items()[0]?.click(); });
+    await settle();
+    expect(hoisted.brought).toEqual(["other"]);
+    expect(hoisted.switched).toEqual([]);
+    expect(hoisted.moved).toBe(1);
+    expect(container.querySelector(".menu")).toBeNull();
+  });
+
+  /// A merge that stopped on conflicts exits non-zero and has still written the whole of them into
+  /// the working tree, so git's words go up and the half around this one looks again either way.
+  it("draws what a merge that stopped on conflicts said, and looks again anyway", async () => {
+    const said = "Auto-merging folder.ts\nCONFLICT (content): Merge conflict in folder.ts\n"
+      + "Automatic merge failed; fix conflicts and then commit the result.";
+    hoisted.branches = [branch({ name: "main" }), branch({ name: "other" })];
+    hoisted.refuse.merge = said;
+    await draw();
+    await pick();
+    await act(async () => { items()[3]?.click(); });
+    await act(async () => { items()[0]?.click(); });
+    await settle();
+    expect(hoisted.brought).toEqual(["other"]);
+    expect(container.querySelector(".gitpanel__said")?.textContent).toBe(said);
+    expect(container.querySelector(".gitpanel__said--refused")).not.toBeNull();
+    expect(hoisted.moved).toBe(1);
+  });
+
+  /// git refuses a second merge in its own words, so the way to that face is out of the list while
+  /// one is underway.
+  it("offers no way in while a merge is already underway", async () => {
+    hoisted.branches = [branch({ name: "main" }), branch({ name: "other" })];
+    await draw(branch({ name: "main" }), true);
+    await pick();
+    expect(items().map((one) => one.querySelector(".gitpanel__pickname")?.textContent))
+      .toEqual(["main", "other", t("git.newBranch")]);
+  });
+
+  /// A repository with one branch has nothing to bring into it, and git would answer a merge of a
+  /// branch into itself with `Already up to date.`
+  it("offers no way in where there is no other branch to bring", async () => {
+    hoisted.branches = [branch({ name: "main" })];
+    await draw();
+    await pick();
+    expect(items().map((one) => one.querySelector(".gitpanel__pickname")?.textContent))
+      .toEqual(["main", t("git.newBranch")]);
+  });
+
+  /// A checkout made at a commit rather than at a branch: what a merge made there would belong to
+  /// is a commit no branch names, so the way in is out of the list.
+  it("offers no way in where the folder is on no branch", async () => {
+    hoisted.branches = [branch({ name: "main" }), branch({ name: "other" })];
+    await draw({ name: null, upstream: null, ahead: 0, behind: 0 });
+    await pick();
+    expect(items().map((one) => one.querySelector(".gitpanel__pickname")?.textContent))
+      .toEqual(["main", "other", t("git.newBranch")]);
+  });
+
+  /// The band is what says a merge is underway, and it is drawn off `MERGE_HEAD` rather than off the
+  /// conflicts — a merge with every conflict settled and staged has no conflict left to say so.
+  it("draws the band while a merge is underway, and asks before putting the tree back", async () => {
+    await draw(branch({ name: "main" }), true);
+    expect(container.querySelector(".gitpanel__merging")?.textContent).toContain(t("git.merging"));
+    expect(container.textContent).not.toContain(t("git.mergeAbortGone"));
+
+    const press = (what: string) =>
+      [...container.querySelectorAll<HTMLButtonElement>(".gitpanel__mergingdo .btn")]
+        .find((one) => one.textContent === what);
+    await act(async () => { press(t("git.mergeAbort"))?.click(); });
+    // Asked, and not yet done: what a reader has settled by hand is in no commit and no reflog.
+    expect(hoisted.aborted).toBe(0);
+    expect(container.textContent).toContain(t("git.mergeAbortGone"));
+
+    await act(async () => { press(t("git.mergeAbortKeep"))?.click(); });
+    expect(hoisted.aborted).toBe(0);
+    expect(container.textContent).not.toContain(t("git.mergeAbortGone"));
+
+    await act(async () => { press(t("git.mergeAbort"))?.click(); });
+    await act(async () => { press(t("git.mergeAbortGo"))?.click(); });
+    await settle();
+    expect(hoisted.aborted).toBe(1);
+    expect(hoisted.moved).toBe(1);
+  });
+
+  /// Nothing of the merge is drawn where there is no merge, which is the ordinary state of a folder.
+  it("draws no band where no merge is underway", async () => {
+    await draw();
+    expect(container.querySelector(".gitpanel__merging")).toBeNull();
   });
 
   /// The branch's name is what the row is about, so the list is read again every time it opens

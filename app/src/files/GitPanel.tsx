@@ -302,12 +302,14 @@ export function GitPanel({ projectId, root, onHistory, onPrefix, onHandOver, onR
 
   return (
     <div className="gitpanel">
-      {/* The branch line is its own, because it is the one part of this half that writes: moving
-          onto another branch, and making one (`./GitBranch`). */}
+      {/* The branch line is its own, because it is the one part of this half whose doors are all
+          about the branch: moving onto another, making one, bringing one in, and getting back out
+          of a merge that is underway (`./GitBranch`). */}
       <GitBranch
         projectId={projectId}
         root={root}
         on={git.branch}
+        merging={git.merging}
         onMoved={() => setMoved((n) => n + 1)}
       />
       {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the

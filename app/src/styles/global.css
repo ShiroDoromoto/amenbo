@@ -1062,6 +1062,25 @@ input[type="color"] {
   font-weight: var(--fw-medium);
 }
 .gitpanel__count { flex: 0 0 auto; color: var(--c-text-muted); font-family: var(--font-mono); }
+/* A merge underway, under the line the branch is named on (`app/src/files/GitBranch.tsx`). It
+   carries an edge in the stop colour rather than a fill: it is a state the repository is in and not
+   a refusal to read, and it stands under the name for as long as the merge lasts. */
+.gitpanel__merging {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  padding: var(--s-2); min-width: 0;
+  border: 1px solid var(--c-stop); border-radius: var(--r-sm);
+}
+.gitpanel__mergingsays {
+  display: flex; align-items: center; gap: var(--s-2);
+  margin: 0; min-width: 0;
+  color: var(--c-stop); font-size: var(--fs-md);
+}
+/* What the press costs, drawn only while the question is standing. */
+.gitpanel__mergingwarn {
+  margin: 0; min-width: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+.gitpanel__mergingdo { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 /* The three that go out to the remote. They wrap rather than shrink: a button whose word has been
    cut in half is a button a reader has to guess at, and the column is dragged narrow often enough
    for that to happen. */

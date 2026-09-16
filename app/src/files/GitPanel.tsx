@@ -20,8 +20,9 @@
 // in both lists because that is what git will do with it.
 import { useEffect, useState } from "react";
 import type { FolderGitDto, GitEntryDto } from "../bindings/bindings";
-import { t, tf } from "../core/i18n";
+import { t } from "../core/i18n";
 import { folderGitStatus, onFolderChanged } from "./folder";
+import { GitBranch } from "./GitBranch";
 import { type GitMark, markOf } from "./gitMark";
 
 /** Nothing read yet, and what a folder that is no repository answers with. */
@@ -103,25 +104,14 @@ export function GitPanel({ projectId, root }: {
 
   return (
     <div className="gitpanel">
-      <div className="gitpanel__branch">
-        {/* A checkout made at a commit rather than at a branch. git writes no name there, so the
-            words say what it is rather than leaving the line empty. */}
-        <span className="gitpanel__branchname" title={git.branch.name ?? t("git.detached")}>
-          {git.branch.name ?? t("git.detached")}
-        </span>
-        {/* Only the count there is one of. A pair of zeroes is a branch level with the one it is
-            measured by, and drawing them says "nothing to do" in two numbers instead of none. */}
-        {git.branch.ahead > 0 && (
-          <span className="gitpanel__count" title={tf("git.ahead", { n: git.branch.ahead })}>
-            ↑{git.branch.ahead}
-          </span>
-        )}
-        {git.branch.behind > 0 && (
-          <span className="gitpanel__count" title={tf("git.behind", { n: git.branch.behind })}>
-            ↓{git.branch.behind}
-          </span>
-        )}
-      </div>
+      {/* The branch line is its own, because it is the one part of this half that writes: moving
+          onto another branch, and making one (`./GitBranch`). */}
+      <GitBranch
+        projectId={projectId}
+        root={root}
+        on={git.branch}
+        onMoved={() => setMoved((n) => n + 1)}
+      />
       <Changes what={t("git.staged")} none={t("git.nothingStaged")} rows={staged} />
       <Changes what={t("git.changes")} none={t("git.nothingChanged")} rows={changed} />
     </div>

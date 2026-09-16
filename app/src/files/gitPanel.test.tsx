@@ -24,6 +24,10 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(root);
     return hoisted.git[root] ?? { prefix: "", branch: null, rows: [] };
   },
+  // The branch line asks for these, and only once its list is opened — which no test here does.
+  folderGitBranches: async () => [],
+  folderGitSwitch: async () => "",
+  folderGitBranchCreate: async () => "",
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
     hoisted.takers.push(take);
     return () => { hoisted.takers = hoisted.takers.filter((one) => one !== take); };

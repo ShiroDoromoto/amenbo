@@ -422,6 +422,11 @@ export function FilesPanel({
  * them repeatedly. One control at the end lists everything by name instead — which is also the
  * answer for the tab that is off the end of the row (`AMB-D-835`).
  *
+ * **That control is there while a tab is off the end, and not otherwise.** What it answers is
+ * “which ones can I not see”, so on a row that is all in view it has no answer to give: with
+ * nothing open it opens on an empty box, and with one file open it names the tab the reader is
+ * already looking at (`AMB-T-4254`).
+ *
  * **A wheel with no sideways axis still moves it.** A trackpad has one and most mice do not, so a
  * plain vertical wheel over this row is read as a sideways one — otherwise the row is unreachable on
  * a machine whose pointer cannot ask for it.
@@ -448,12 +453,34 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, on
   // Where the list of everything open was asked for, drawn like the row menu because it is the same
   // kind of thing: a short list of answers to one question, at the control that asked it.
   const [listing, setListing] = useState<{ x: number; y: number } | null>(null);
+  // Whether the row is longer than the space it was given.
+  const [spilling, setSpilling] = useState(false);
   const on = showing === null ? null : openKey(showing);
 
   useEffect(() => {
     strip.current?.querySelector('[aria-current="true"]')
       ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [on]);
+
+  // Asked of the row itself rather than counted from the tabs: how many fit is a question about the
+  // names on them and the width this column was given, and neither is a number this side holds. The
+  // tabs changing is one reason the answer changes and the column being dragged narrower is the
+  // other, so both are watched. The control lives outside the row it measures, so taking it away
+  // does not widen what was just measured and there is nothing here to oscillate.
+  useEffect(() => {
+    const row = strip.current;
+    if (row === null) return;
+    const measure = () => setSpilling(row.scrollWidth > row.clientWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(row);
+    return () => watch.disconnect();
+  }, [open, memo, history, unsaved.size]);
+
+  // A list opened at a control that has since gone is one nothing can close in the way it was
+  // opened, so the row that took the control away takes the list with it.
+  useEffect(() => { if (!spilling) setListing(null); }, [spilling]);
 
   return (
     <div className="files__tabs">
@@ -528,14 +555,16 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, on
           );
         })}
       </div>
-      <button
-        className="files__more"
-        title={t("files.openFiles")}
-        aria-label={t("files.openFiles")}
-        onClick={(e) => setListing({ x: e.clientX, y: e.clientY })}
-      >
-        <Icon name="more" />
-      </button>
+      {spilling && (
+        <button
+          className="files__more"
+          title={t("files.openFiles")}
+          aria-label={t("files.openFiles")}
+          onClick={(e) => setListing({ x: e.clientX, y: e.clientY })}
+        >
+          <Icon name="more" />
+        </button>
+      )}
       {listing !== null && (
         <Menu at={listing} onClose={() => setListing(null)}>
           {open.map((one) => (

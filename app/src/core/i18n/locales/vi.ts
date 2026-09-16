@@ -239,6 +239,8 @@ export const vi: Translation = {
     "dimmgr.closeValue": "Đóng",
     "dimmgr.reopenValue": "Mở lại",
     "dimmgr.closeValueHint": "Đóng giá trị này. Những gì đã mang nó vẫn giữ nó và bộ lọc vẫn tìm ra; chỉ các gán mới bị từ chối, và mở lại thì lúc nào cũng được",
+    "dimmgr.showClosed.other": "Hiện {n} giá trị đã đóng",
+    "dimmgr.hideClosed": "Ẩn các giá trị đã đóng",
     "dimmgr.showOnCard": "Hiện trên thẻ",
     "dimmgr.showOnCardHint": "Hiện phân loại này trên thẻ công việc. Câu trả lời thuộc về phân loại, nên nó đổi cho mọi người, không chỉ trên thiết bị này",
     "dimmgr.required": "Bắt buộc",

@@ -13,8 +13,9 @@
 # The screen's half is the four faces reading one flag to four ends, which is a thing only a screen
 # can be asked about: the filter offers a closed value, the record's own picker leaves it out while
 # still drawing the one that record carries, the board keeps a column only while cards are in it and
-# lets no card be dropped into it, and the classification panel draws every value and is alone in
-# offering the way back.
+# lets no card be dropped into it, and the classification panel is alone in drawing a closed value at
+# all — folded behind a button that counts them, so the list reads as what the category still offers,
+# and one press from the reader who came for the way back.
 id: retire-a-value-and-keep-what-is-filed-under-it
 title: A value closed on a category stops taking new records and keeps everything already filed under it, and only deleting takes that away
 description: >
@@ -284,7 +285,7 @@ steps_gui:
   # The screen's half is the one flag read four ways, which is what only a screen can be asked. The
   # terminal meets closing as a listing that leaves a value out; here it is a picker that stops offering
   # it, a board that keeps its column only while cards are in it, a filter that offers it like any
-  # other, and a panel that draws it retired and is alone in offering the way back.
+  # other, and a panel that folds it away under a count and is alone in offering the way back.
   - type: action
     domain: dimension
     op: closable
@@ -299,8 +300,10 @@ steps_gui:
       value: v18
 
   # The panel, which is the face the closing was done on and the only one that draws a closed value at
-  # all. What it says is said twice — the row is struck through, and the button that closed the value
-  # now offers to open it — so a reader who has to find it again has somewhere to look.
+  # all. It says so three ways — the value is behind the fold rather than among what the category
+  # offers, its row is struck through, and the button that closed it now offers to open it — so a
+  # reader who has to find it again has somewhere to look, and the fold that puts it away says how many
+  # it is holding rather than losing the count.
   - type: assert
     domain: dimension
     op: closed
@@ -418,7 +421,8 @@ steps_gui:
 
   # And the way back, which is on the panel and nowhere else — the picker cannot offer what it hides,
   # the board has no column left to press, and the filter narrows by a value rather than changing one.
-  # Read where it was pressed: the row is drawn like the category's others again.
+  # Behind the fold, which is where the panel puts a closed value and not where it loses one. Read
+  # where it was pressed: the row stands among the category's others again, drawn like them.
   - type: action
     domain: dimension
     op: value-reopen

@@ -236,6 +236,8 @@ export const ja: Translation = {
     "dimmgr.closeValue": "閉じる",
     "dimmgr.reopenValue": "開き直す",
     "dimmgr.closeValueHint": "この値を閉じます。すでに付いている記録はそのままで、絞り込みでも引けます。新しく付けることだけができなくなります。開き直すのはいつでもできます",
+    "dimmgr.showClosed.other": "閉じた値 {n} 件を表示",
+    "dimmgr.hideClosed": "閉じた値を隠す",
     "dimmgr.showOnCard": "カードに出す",
     "dimmgr.showOnCardHint": "この分類をタスクカードに出します。分類そのものが持つ設定なので、この端末だけでなく全員の見え方が変わります",
     "dimmgr.required": "必須",

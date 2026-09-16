@@ -237,6 +237,8 @@ export const tr: Translation = {
     "dimmgr.closeValue": "Kapat",
     "dimmgr.reopenValue": "Yeniden aç",
     "dimmgr.closeValueHint": "Bu değeri kapatır. Onu zaten taşıyanlar taşımayı sürdürür ve filtreler onu bulmaya devam eder; yalnızca yeni atamalar geri çevrilir, yeniden açmak her zaman mümkündür",
+    "dimmgr.showClosed.one": "{n} kapalı değeri göster", "dimmgr.showClosed.other": "{n} kapalı değeri göster",
+    "dimmgr.hideClosed": "Kapalı değerleri gizle",
     "dimmgr.showOnCard": "Kartta göster",
     "dimmgr.showOnCardHint": "Bu kategoriyi görev kartında gösterir. Yanıt kategoriye aittir, bu yüzden yalnızca bu cihazda değil herkes için değişir",
     "dimmgr.required": "Zorunlu",

@@ -241,6 +241,8 @@ export const fr: Translation = {
     "dimmgr.closeValue": "Fermer",
     "dimmgr.reopenValue": "Rouvrir",
     "dimmgr.closeValueHint": "Ferme cette valeur. Ce qui la porte déjà la garde et les filtres la trouvent toujours ; seules les nouvelles affectations sont refusées, et la rouvrir reste toujours possible",
+    "dimmgr.showClosed.one": "Afficher {n} valeur fermée", "dimmgr.showClosed.many": "Afficher {n} valeurs fermées", "dimmgr.showClosed.other": "Afficher {n} valeurs fermées",
+    "dimmgr.hideClosed": "Masquer les valeurs fermées",
     "dimmgr.showOnCard": "Afficher sur la carte",
     "dimmgr.showOnCardHint": "Affiche cette catégorie sur la carte de tâche. La réponse appartient à la catégorie : elle change pour tout le monde, pas seulement sur cet appareil",
     "dimmgr.required": "Obligatoire",

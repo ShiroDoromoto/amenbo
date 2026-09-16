@@ -5,20 +5,26 @@
 // draw the way back, nothing does.
 //
 // What these guard: the button appears only under the role, it asks for the direction the value is not
-// already in, and the box that grants the role asks for the role rather than for the time axis.
+// already in, the box that grants the role asks for the role rather than for the time axis, and the
+// fold the closed values sit behind counts them and opens on a press — showing them folded is still
+// showing them, but only while the way back stays one press away.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { t } from "../core/i18n";
+import { t, tn } from "../core/i18n";
 
 const hoisted = vi.hoisted(() => ({
   /** Every close the panel asked for, as `<valueId>:<closed>`. */
   asked: [] as string[],
   /** Every role the panel asked for, as `<axisId>:<closable>`. */
   roleAsked: [] as string[],
+  /** Every reorder the panel asked for, as `<valueId>:before|after:<anchorId>`. */
+  moved: [] as string[],
   /** What the axis on screen holds — a test moves either to see the other side of the panel. */
   role: "none" as "none" | "closable",
   closed: false,
+  /** Whether a third value sits below the other two, so the closed one can be read as an in-between. */
+  third: false,
 }));
 
 // Only the two writes these controls drive are stood in for; the panel, the store and the snapshot run
@@ -32,6 +38,10 @@ vi.mock("../core/mutations", async (importOriginal) => {
     },
     setDimensionClosable: async (id: number, closable: boolean) => {
       hoisted.roleAsked.push(`${id}:${closable}`);
+    },
+    moveDimensionValue: async (valueId: number, pos: { before?: number; after?: number }) => {
+      const [side, anchor] = pos.before === undefined ? ["after", pos.after] : ["before", pos.before];
+      hoisted.moved.push(`${valueId}:${side}:${anchor}`);
     },
   };
 });
@@ -47,7 +57,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
     ...orig,
     getSnapshot: () => {
       const snap = orig.getSnapshot();
-      const state = `${hoisted.role}:${hoisted.closed}`;
+      const state = `${hoisted.role}:${hoisted.closed}:${hoisted.third}`;
       if (snap !== from || at !== state) {
         from = snap;
         at = state;
@@ -58,6 +68,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
           values: [
             { id: 901, name: "v19", slug: "v19", closed: false },
             { id: 902, name: "v18", slug: "v18", closed: hoisted.closed },
+            ...(hoisted.third ? [{ id: 903, name: "v17", slug: "v17", closed: false }] : []),
           ],
         };
         withAxis = { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: [axis] } : p)) };
@@ -76,8 +87,14 @@ import { loadSnapshot } from "../core/snapshot";
 let container: HTMLDivElement;
 let root: Root;
 
+/** The value rows on screen, in the order the panel drew them. */
+const rows = () => [...container.querySelectorAll<HTMLDivElement>(".dimmgr__val")];
+
 /** The second value's row — the one a test closes, so the first stays open beside it. */
-const row = () => container.querySelectorAll<HTMLDivElement>(".dimmgr__val")[1];
+const row = () => rows()[1];
+
+/** The fold the closed values sit behind, absent while the axis has none. */
+const fold = () => container.querySelector<HTMLButtonElement>(".dimmgr__closedfold");
 
 /** The buttons on that row, by the label they carry. */
 const buttons = () => [...row().querySelectorAll<HTMLButtonElement>("button")].map((b) => b.textContent);
@@ -90,6 +107,13 @@ const closableBox = () =>
   [...container.querySelectorAll<HTMLLabelElement>("label.dimmgr__ordered")]
     .find((l) => l.textContent?.includes(t("dimmgr.closable")))!
     .querySelector<HTMLInputElement>("input[type=checkbox]")!;
+
+/** Opens the fold, so the rows underneath are the axis's whole list. */
+async function unfold() {
+  const b = fold();
+  if (!b) throw new Error("nothing is folded away");
+  await act(async () => { b.click(); });
+}
 
 async function press(label: string) {
   const b = button(label);
@@ -105,8 +129,10 @@ beforeAll(async () => {
 beforeEach(() => {
   hoisted.asked = [];
   hoisted.roleAsked = [];
+  hoisted.moved = [];
   hoisted.role = "none";
   hoisted.closed = false;
+  hoisted.third = false;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -153,6 +179,7 @@ describe("DimensionManager closing a value", () => {
     hoisted.role = "closable";
     hoisted.closed = true;
     open();
+    await unfold();
 
     expect(buttons()).toContain(t("dimmgr.reopenValue"));
     await press(t("dimmgr.reopenValue"));
@@ -160,12 +187,45 @@ describe("DimensionManager closing a value", () => {
     expect(hoisted.asked).toEqual(["902:false"]);
   });
 
-  it("still shows a closed value, since this is the only face that can bring it back", () => {
+  it("folds a closed value away, saying how many it holds", () => {
     hoisted.role = "closable";
     hoisted.closed = true;
     open();
 
-    expect(container.querySelectorAll(".dimmgr__val").length).toBe(2);
+    expect(rows().length).toBe(1);
+    expect(fold()?.textContent).toBe(tn("dimmgr.showClosed", 1));
+  });
+
+  it("still brings a closed value back, since this is the only face that can", async () => {
+    hoisted.role = "closable";
+    hoisted.closed = true;
+    open();
+    await unfold();
+
+    expect(rows().length).toBe(2);
     expect(container.querySelectorAll(".dimmgr__val--closed").length).toBe(1);
+    expect(fold()?.textContent).toBe(t("dimmgr.hideClosed"));
+  });
+
+  it("offers no fold on an axis with nothing closed", () => {
+    hoisted.role = "closable";
+    open();
+
+    expect(rows().length).toBe(2);
+    expect(fold()).toBe(null);
+  });
+
+  it("reorders by the row above on screen, clearing the closed value the fold hides", async () => {
+    hoisted.role = "closable";
+    hoisted.closed = true;
+    hoisted.third = true;
+    open();
+
+    // On screen: v19, v17 — v18 is closed and folded away between them. So "up" on the second row
+    // anchors on v19, the row a reader sees above it, and not on the v18 they do not.
+    const up = rows()[1].querySelector<HTMLButtonElement>(".dimmgr__movebtn")!;
+    await act(async () => { up.click(); });
+
+    expect(hoisted.moved).toEqual(["903:before:901"]);
   });
 });

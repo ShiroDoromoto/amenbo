@@ -77,23 +77,37 @@ pub fn repo_of(dir: &Path) -> Option<Repo> {
 
 /// Everything git has to say about the folder `root` names, in the shape the file face draws rows
 /// from. An empty answer is the honest one for every way this can come to nothing.
+///
+/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn
+/// ([`crate::agent_models`]), and what this one waits on is git starting up and reading an index
+/// whose size is the repository's, not ours. A project's folders each ask for themselves, so the
+/// waits queue up and the window stands still for the sum — 337 ms over six folders on Windows,
+/// against 70 ms for one (`AMB-T-4897`).
 #[tauri::command]
-pub fn folder_git_status(project_id: i64, root: String) -> Result<Vec<GitEntryDto>, CmdError> {
-    let dir = root_of(project_id, &root)?;
-    let Some(repo) = repo_of(&dir) else { return Ok(Vec::new()) };
-    // `--no-optional-locks` sits before `status` because it is git's own option and not the
-    // subcommand's; behind it git exits 129 without doing anything. What it buys is the index lock:
-    // without it this call races the reader's own `git add` and breaks it — 92.8% of the time on
-    // Linux, and never with it (`AMB-T-3742` measured all three systems).
-    //
-    // `-z` is what makes a name in any language come back as the bytes it really is; without it git
-    // writes octal escapes instead. `-- .` holds the answer to this folder: git otherwise climbs to
-    // the repository root and answers for the whole of it, at eight times the cost.
-    let Some(out) = run(&dir, &["--no-optional-locks", "status", "--porcelain=v1", "-z", "--", "."])
-    else {
-        return Ok(Vec::new());
-    };
-    Ok(rows(&out, &repo.prefix))
+pub async fn folder_git_status(
+    project_id: i64,
+    root: String,
+) -> Result<Vec<GitEntryDto>, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<GitEntryDto>, CmdError> {
+        let dir = root_of(project_id, &root)?;
+        let Some(repo) = repo_of(&dir) else { return Ok(Vec::new()) };
+        // `--no-optional-locks` sits before `status` because it is git's own option and not the
+        // subcommand's; behind it git exits 129 without doing anything. What it buys is the index
+        // lock: without it this call races the reader's own `git add` and breaks it — 92.8% of the
+        // time on Linux, and never with it (`AMB-T-3742` measured all three systems).
+        //
+        // `-z` is what makes a name in any language come back as the bytes it really is; without it
+        // git writes octal escapes instead. `-- .` holds the answer to this folder: git otherwise
+        // climbs to the repository root and answers for the whole of it, at eight times the cost.
+        let Some(out) =
+            run(&dir, &["--no-optional-locks", "status", "--porcelain=v1", "-z", "--", "."])
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(rows(&out, &repo.prefix))
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("asking git about this folder did not finish: {e}").into() })?
 }
 
 /// Run git in `dir` and hand back its stdout, or `None` for every way it did not answer.

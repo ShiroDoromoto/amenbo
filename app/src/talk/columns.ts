@@ -389,8 +389,15 @@ export function setTabsCompact(want: boolean): boolean {
   return want;
 }
 
-/** Which half of the file face is up: the memo a person writes on, or the folder's own files. */
-export type SideTab = "files" | "memo";
+/**
+ * Which of the reading column's faces is up: the memo a person writes on, the folder's own files,
+ * or the history of the folder the window is on.
+ *
+ * **The history is not one of the two that are kept.** The column shows nothing about git until
+ * somebody presses for it (`AMB-D-905`), and a face that came back up on the history would be
+ * putting it there on a run where nobody asked.
+ */
+export type SideTab = "files" | "memo" | "history";
 
 /**
  * The half this device had up, or the one the face opens on where nothing has been kept.
@@ -409,8 +416,14 @@ export function getSideTab(): SideTab {
   return kept(SIDE_TAB) === "files" ? "files" : "memo";
 }
 
-/** Keep the half that was asked for, and answer with it — a half even where nothing can be kept. */
+/**
+ * Keep the face that was asked for, and answer with it — a face even where nothing can be kept.
+ *
+ * **The history is answered with and not written down**, so the next run comes up on whichever of
+ * the other two the reader was on before they went to it. It is a face somebody pressed for, and
+ * the press is what puts it up.
+ */
 export function setSideTab(which: SideTab): SideTab {
-  keep(SIDE_TAB, which);
+  if (which !== "history") keep(SIDE_TAB, which);
   return which;
 }

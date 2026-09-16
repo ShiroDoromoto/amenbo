@@ -798,6 +798,13 @@ const ui = {
   "git.nothingStaged": "Nothing is staged yet.",
   "git.changes": "Changes",
   "git.nothingChanged": "Nothing has changed.",
+  "git.history": "History",
+  "git.backToHistory": "Back to the history",
+  "git.merge": "merge",
+  "git.bytes": "bytes",
+  "git.noHistory": "Nothing has been committed here yet.",
+  "git.touchedNothing": "This commit touched nothing.",
+  "git.noPatch": "git wrote no patch for this path.",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

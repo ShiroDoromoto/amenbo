@@ -1,0 +1,237 @@
+# The road a folder's work actually travels: something changed, some of it is told to git, and what
+# git wrote down is read back afterwards. It is one path and not three, because a commit nobody can
+# find again is not a commit anybody made on purpose.
+#
+# ── Why two files change and only one is recorded ────────────────────────────────────────────────
+# What a commit writes down is what is staged and nothing else — the paths are named on the command
+# git is given rather than left to whatever the index happens to hold when the press lands. That is
+# what keeps a pane's own staging out of a commit made from this window, and it is measured on the
+# second file: it is changed the whole way through, is never ticked, and must be nowhere among the
+# paths the commit touched.
+#
+# A road with one file would pass on a build that recorded everything it could see, which is the
+# exact failure this is written against.
+#
+# ── Why the box is ticked, untucked and ticked again ─────────────────────────────────────────────
+# The box is the only way a row moves between the two lists, and a reader who ticked the wrong one
+# needs the way back more than they needed the way in. Walked one way only, a build whose box does
+# not let go reads as green.
+#
+# ── Why the history is read three layers down ────────────────────────────────────────────────────
+# The list says a commit exists, a commit's own layer says which paths it touched, and the patch says
+# what it did to one of them. Each layer is a separate call, so a build can answer the first and have
+# nothing behind it — a list of subjects with an empty commit under each is a screen that passes any
+# reading taken on the list alone. The way back up is walked for the same reason it is drawn: a
+# reader who went in has to come out, and the layers are one tab rather than three.
+#
+# ── What the patch is read for ───────────────────────────────────────────────────────────────────
+# A line the road itself wrote into the file, with the character git marks an added line with in front
+# of it. Nothing on this face rewrites what a diff says, so the line comes back as git wrote it.
+id: record-what-changed-and-find-it-in-the-history
+title: Tell git about one of two changed files, record it, and find that file and its lines again in the history
+description: >
+  Raise a repository holding two files git has never recorded. Tick one of them into what is staged,
+  take it back out, tick it again, and record it with a message. The list of what is staged goes
+  empty, the file that was never ticked is still waiting among the changes, and the column across the
+  panes opens on the record: its subject on the list, that one file — and not the other — among the
+  paths it touched, and the line the road wrote into it in the patch underneath.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # The file that is changed and never told to git. It is what says the commit named its paths rather
+  # than taking everything it could see.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Both files are changes git has never been told about, which is where this road starts.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: staged
+
+  # And back out again. The way back is what a reader who ticked the wrong row needs, and a box that
+  # only ever goes one way passes every reading taken on the way in.
+  - type: action
+    domain: files
+    op: unstage
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the watering note goes in
+
+  # What was recorded has left the lists, and what was never ticked has not moved.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: staged
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: history
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: SCENARIO the watering note goes in
+      section: history
+
+  # A layer in: which paths that record touched.
+  - type: action
+    domain: files
+    op: history-open
+    with:
+      name: SCENARIO the watering note goes in
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: touched
+
+  # The reading the second file exists for. A build that recorded everything it could see puts this
+  # name here, and every other step on this road still passes.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: touched
+      present: false
+
+  # And a layer deeper, which is git's own text about that one path.
+  - type: action
+    domain: files
+    op: history-open
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO the seedlings are watered every second morning
+
+  # Back up the way it came in. Two presses, because the layers are one tab and not three.
+  - type: action
+    domain: files
+    op: history-back
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: touched
+
+  - type: action
+    domain: files
+    op: history-back
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: SCENARIO the watering note goes in
+      section: history

@@ -457,89 +457,139 @@ export function GitPanel({
 
   return (
     <div className="gitpanel">
-      {/* The branch line is its own, because it is the one part of this half whose doors are all
-          about the branch: moving onto another, making one, bringing one in, and getting back out
-          of a merge that is underway (`./GitBranch`). */}
-      <GitBranch
-        projectId={projectId}
-        root={root}
-        on={git.branch}
-        merging={git.merging}
-        onMoved={() => setMoved((n) => n + 1)}
-      />
-      {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the
-          count of what it would send, which is the one of the two the button is about, and the
-          accent is on that same count rather than on the button: filled with nothing to send, it
-          recommends a press that would do nothing, next to a label that already says so by leaving
-          the count off. Then what is put aside, which is the one door here that opens a list rather
-          than doing a thing. */}
-      <div className="gitpanel__net">
-        <button className="btn" disabled={running} onClick={() => reach(folderGitFetch)}>
-          {t("git.fetch")}
-        </button>
-        <button className="btn" disabled={running} onClick={() => reach(folderGitPull)}>
-          {t("git.pull")}
-        </button>
-        <button
-          className={`btn${git.branch.ahead > 0 ? " btn--primary" : ""}`}
-          disabled={running}
-          onClick={() => reach(folderGitPush)}
-        >
-          {t("git.push")}{git.branch.ahead > 0 && ` ↑${git.branch.ahead}`}
-        </button>
-        <button
-          className="btn"
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={stashOpen}
-          disabled={running}
-          // Opened and never toggled here: the list closes itself on the pointer going down
-          // anywhere outside it, and this press is one of those (`../components/Menu`).
-          onClick={(e) => {
-            const box = e.currentTarget.getBoundingClientRect();
-            setStashAt({ x: box.left, y: box.bottom });
-          }}
-        >
-          {t("git.stash")}
-        </button>
+      {/* **Only the lists scroll.** Where the branch stands and the three that go out to the remote
+          are above them, the box a commit is written in and the press that writes it below — and
+          none of the four moves, however many paths git names. They are what a reader presses, and
+          that last press is what the whole half is worked towards (`AMB-D-906`, 2-2). */}
+      <div className="gitpanel__top">
+        {/* The branch line is its own, because it is the one part of this half whose doors are all
+            about the branch: moving onto another, making one, bringing one in, and getting back out
+            of a merge that is underway (`./GitBranch`). */}
+        <GitBranch
+          projectId={projectId}
+          root={root}
+          on={git.branch}
+          merging={git.merging}
+          onMoved={() => setMoved((n) => n + 1)}
+        />
+        {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the
+            count of what it would send, which is the one of the two the button is about, and the
+            accent is on that same count rather than on the button: filled with nothing to send, it
+            recommends a press that would do nothing, next to a label that already says so by leaving
+            the count off. Then what is put aside, which is the one door here that opens a list rather
+            than doing a thing. */}
+        <div className="gitpanel__net">
+          <button className="btn" disabled={running} onClick={() => reach(folderGitFetch)}>
+            {t("git.fetch")}
+          </button>
+          <button className="btn" disabled={running} onClick={() => reach(folderGitPull)}>
+            {t("git.pull")}
+          </button>
+          <button
+            className={`btn${git.branch.ahead > 0 ? " btn--primary" : ""}`}
+            disabled={running}
+            onClick={() => reach(folderGitPush)}
+          >
+            {t("git.push")}{git.branch.ahead > 0 && ` ↑${git.branch.ahead}`}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={stashOpen}
+            disabled={running}
+            // Opened and never toggled here: the list closes itself on the pointer going down
+            // anywhere outside it, and this press is one of those (`../components/Menu`).
+            onClick={(e) => {
+              const box = e.currentTarget.getBoundingClientRect();
+              setStashAt({ x: box.left, y: box.bottom });
+            }}
+          >
+            {t("git.stash")}
+          </button>
+        </div>
+        {running && <p className="gitpanel__said">{t("git.running")}</p>}
+        {/* A push that went through says what it sent; a fetch that found nothing says nothing at all,
+            and the sentence there is this app's own, since silence on its own reads as a button that
+            did not work. */}
+        {!running && said !== null && (
+          <p className={`gitpanel__said${said.refused ? " gitpanel__said--refused" : ""}`}>
+            {said.text === "" ? t("git.quiet") : said.text}
+          </p>
+        )}
+        {/* The one press here that opens the other column. The history is there from the moment the
+            repository has one, and it is not drawn until somebody asks: what it costs is a call of
+            its own, paid by the reader who wants it rather than by everyone (`AMB-T-4899`). The mark
+            says where it goes, which is out of this column and across the panes. */}
+        {onHistory !== undefined && (
+          <button className="gitpanel__open" onClick={() => onHistory()}>
+            {t("git.history")}
+            <Icon name="foldRight" />
+          </button>
+        )}
       </div>
-      {running && <p className="gitpanel__said">{t("git.running")}</p>}
-      {/* A push that went through says what it sent; a fetch that found nothing says nothing at all,
-          and the sentence there is this app's own, since silence on its own reads as a button that
-          did not work. */}
-      {!running && said !== null && (
-        <p className={`gitpanel__said${said.refused ? " gitpanel__said--refused" : ""}`}>
-          {said.text === "" ? t("git.quiet") : said.text}
-        </p>
-      )}
-      {/* The one press here that opens the other column. The history is there from the moment the
-          repository has one, and it is not drawn until somebody asks: what it costs is a call of
-          its own, paid by the reader who wants it rather than by everyone (`AMB-T-4899`). The mark
-          says where it goes, which is out of this column and across the panes. */}
-      {onHistory !== undefined && (
-        <button className="gitpanel__open" onClick={() => onHistory()}>
-          {t("git.history")}
-          <Icon name="foldRight" />
-        </button>
-      )}
-      {/* What the merge could not settle, above the press that ends the merge — which is the order
-          a reader works it in. It is drawn whenever git names an unmerged path, merge or not: a
-          rebase leaves the same rows, and a list that appeared only for one of them would leave the
-          other with rows in no list at all. */}
-      {conflicts.length > 0 && (
-        <Conflicts
-          rows={conflicts}
-          marks={marks}
+      {/* The one part that scrolls. What the merge could not settle stands at its head — which is
+          the order a reader works it in — and is drawn whenever git names an unmerged path, merge
+          or not: a rebase leaves the same rows, and a list that appeared only for one of them would
+          leave the other with rows in no list at all. */}
+      <div className="gitpanel__lists">
+        {conflicts.length > 0 && (
+          <Conflicts
+            rows={conflicts}
+            marks={marks}
+            running={running}
+            picked={picked}
+            onPicked={setPicked}
+            onOpen={onRead}
+            // Staging it is the whole of "I say this one is settled" — nothing does it for the
+            // reader, however few marks are left in the file (`AMB-D-906`, 2-7).
+            onSettle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
+            onMenu={(path, x, y) => setMenu({ which: "conflict", path, x, y })}
+          />
+        )}
+        <Changes
+          what={t("git.staged")}
+          none={t("git.nothingStaged")}
+          rows={staged}
+          staged
           running={running}
+          which="staged"
           picked={picked}
           onPicked={setPicked}
-          onOpen={onRead}
-          // Staging it is the whole of "I say this one is settled" — nothing does it for the
-          // reader, however few marks are left in the file (`AMB-D-906`, 2-7).
-          onSettle={(row) => void ask(() => folderGitStage(projectId, root, [row.path]), true)}
-          onMenu={(path, x, y) => setMenu({ which: "conflict", path, x, y })}
+          root={root}
+          // Which list the rows came up from, kept for the moment they are let go: a drop back on it
+          // is a gesture that moved nothing.
+          onCarry={onCarry === undefined ? undefined : (held, e) => {
+            carriedFrom.current = "staged";
+            onCarry(held, e);
+          }}
+          over={overList === "staged"}
+          onToggle={(paths) => void ask(() => folderGitUnstage(projectId, root, paths), true)}
+          onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
+          onOpen={onDiff}
         />
-      )}
+        <Changes
+          what={t("git.changes")}
+          none={t("git.nothingChanged")}
+          rows={changed}
+          staged={false}
+          running={running}
+          which="changed"
+          picked={picked}
+          onPicked={setPicked}
+          root={root}
+          // Which list the rows came up from, kept for the moment they are let go: a drop back on it
+          // is a gesture that moved nothing.
+          onCarry={onCarry === undefined ? undefined : (held, e) => {
+            carriedFrom.current = "changed";
+            onCarry(held, e);
+          }}
+          over={overList === "changed"}
+          onToggle={(paths) => void ask(() => folderGitStage(projectId, root, paths), true)}
+          onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
+          onOpen={onDiff}
+        />
+      </div>
       <div className="gitpanel__commit">
         {/* **No box while a merge is under way.** git wrote the message when it began the merge and
             takes that one, so a box here would be one a reader types into and is never asked
@@ -598,48 +648,6 @@ export function GitPanel({
           )}
         </div>
       </div>
-      <Changes
-        what={t("git.staged")}
-        none={t("git.nothingStaged")}
-        rows={staged}
-        staged
-        running={running}
-        which="staged"
-        picked={picked}
-        onPicked={setPicked}
-        root={root}
-        // Which list the rows came up from, kept for the moment they are let go: a drop back on it
-        // is a gesture that moved nothing.
-        onCarry={onCarry === undefined ? undefined : (held, e) => {
-          carriedFrom.current = "staged";
-          onCarry(held, e);
-        }}
-        over={overList === "staged"}
-        onToggle={(paths) => void ask(() => folderGitUnstage(projectId, root, paths), true)}
-        onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
-        onOpen={onDiff}
-      />
-      <Changes
-        what={t("git.changes")}
-        none={t("git.nothingChanged")}
-        rows={changed}
-        staged={false}
-        running={running}
-        which="changed"
-        picked={picked}
-        onPicked={setPicked}
-        root={root}
-        // Which list the rows came up from, kept for the moment they are let go: a drop back on it
-        // is a gesture that moved nothing.
-        onCarry={onCarry === undefined ? undefined : (held, e) => {
-          carriedFrom.current = "changed";
-          onCarry(held, e);
-        }}
-        over={overList === "changed"}
-        onToggle={(paths) => void ask(() => folderGitStage(projectId, root, paths), true)}
-        onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
-        onOpen={onDiff}
-      />
       {restore.aside}
       {menu !== null && (
         <FileMenu

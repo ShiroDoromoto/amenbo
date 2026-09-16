@@ -1044,14 +1044,35 @@ input[type="color"] {
   color: var(--c-text); font-weight: var(--fw-bold);
 }
 
-/* What git says about the folder the window is on (`app/src/files/GitPanel.tsx`). It scrolls in the
-   rail the way the tree does, and stands on the rail's own ground. */
+/* What git says about the folder the window is on (`app/src/files/GitPanel.tsx`). It stands on the
+   rail's own ground, and what scrolls inside it is the lists alone: what a reader presses — where
+   the branch stands, the three that go out to the remote, the box a commit is written in and the
+   press that writes it — keeps its place however many paths git names. */
 .gitpanel {
   flex: 1 1 auto; min-width: 0;
-  min-height: 0; overflow-y: auto;
+  min-height: 0; overflow: hidden;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
   font-size: var(--fs-md);
+}
+/* Above the lists and below them: the two that hold still. They are as tall as what is in them, so
+   the lists take whatever is left and no more. */
+.gitpanel__top {
+  flex: 0 0 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: var(--s-3);
+}
+/* The one part that scrolls.
+
+   **It takes back as padding whatever is drawn outside a row or a list.** A picked row wears a band
+   wider than the names (`.gitpanel__row`), and a list about to receive carried rows wears a ring
+   2px outside itself (`.gitpanel__section--over`); either would be cut at the edge of a box that
+   scrolls. The negative margin gives that room back, so the names stay in the column the head and
+   the foot start in. */
+.gitpanel__lists {
+  flex: 1 1 auto; min-width: 0;
+  min-height: 0; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: var(--s-3);
+  margin: -3px calc(-1 * var(--s-1)); padding: 3px var(--s-1);
 }
 /* The branch, and how far it stands from the one it is measured by. The name gives way first: a
    count is two characters and is the half that goes when the column is dragged narrow. */
@@ -1219,8 +1240,13 @@ input[type="color"] {
   color: var(--c-stop); font-family: var(--font-mono); font-size: var(--fs-xs);
 }
 .gitpanel__settle { flex: 0 0 auto; padding: 0 var(--s-2); font-size: var(--fs-xs); }
-/* The box a commit message is written in, and the row under it. */
-.gitpanel__commit { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+/* The box a commit message is written in, and the row under it — at the foot of the half, where it
+   stays while the lists above it scroll. The press on that row is what the whole half is worked
+   towards, so it is within reach of a reader with forty changes in front of them. */
+.gitpanel__commit {
+  flex: 0 0 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: var(--s-1);
+}
 /* The one thing in this column a reader writes rather than reads. `max-width: none` drops the
    reading width every other textarea takes: this box is as wide as the rail, and the rail is
    already narrower than that cap. */

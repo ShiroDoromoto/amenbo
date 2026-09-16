@@ -812,6 +812,10 @@ const ui = {
   // call out to git. It says which of the two lists it is on, the way the row boxes do.
   "git.stageAll": "Stage everything on this list",
   "git.unstageAll": "Unstage everything on this list",
+  // And what that box is called where the press is about a set rather than about the row it is
+  // on: how many it takes, since the one path it stands beside is no longer the whole of it.
+  "git.stagePicked": "Stage the {n} files picked out",
+  "git.unstagePicked": "Unstage the {n} files picked out",
   "git.commitMessage": "Commit message",
   "git.commit": "Commit",
   // How many paths the commit is about to name to git. It is the hinge of this screen — naming

@@ -655,6 +655,8 @@ export const th: Translation = {
     "git.unstageOne": "ยกเลิกการจัดเตรียม {path}",
     "git.stageAll": "จัดเตรียมทุกอย่างในรายการนี้",
     "git.unstageAll": "ยกเลิกการจัดเตรียมทุกอย่างในรายการนี้",
+    "git.stagePicked": "จัดเตรียมไฟล์ที่เลือกไว้ {n} รายการ",
+    "git.unstagePicked": "ยกเลิกการจัดเตรียมไฟล์ที่เลือกไว้ {n} รายการ",
     "git.commitMessage": "ข้อความคอมมิต",
     "git.commit": "คอมมิต",
     "git.commitNaming": "ระบุ {n} เส้นทางที่จัดเตรียมไว้",

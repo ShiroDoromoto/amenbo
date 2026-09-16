@@ -1166,6 +1166,7 @@ function Changes({
                 onPress={(how) => on.press(whole(row), how)}
                 onCarry={(e) => carry(row, e)}
                 onToggle={() => toggle(whole(row))}
+                takes={rowsAbout(rows, keysIn(which, picked), row.path).length}
                 onMenu={on.menu}
                 onOpen={onOpen}
               />
@@ -1207,7 +1208,7 @@ function Changes({
  * a press on a control that has gone down arrives at the row around it instead.
  */
 function ChangedRow({
-  row, staged, running, picked, stop, onPress, onCarry, onToggle, onMenu, onOpen,
+  row, staged, running, picked, stop, onPress, onCarry, onToggle, takes, onMenu, onOpen,
 }: {
   row: GitEntryDto;
   staged: boolean;
@@ -1222,6 +1223,9 @@ function ChangedRow({
   onCarry: (event: RowPress<HTMLElement>) => void;
   /** Press this row's box, which the list reads as being about the set where this row is in it. */
   onToggle: () => void;
+  /** How many paths that press is about — one where this row is not in the set, and the whole of
+   *  the set where it is. It is what the box is called by anything reading the row out. */
+  takes: number;
   onMenu: (path: string[], x: number, y: number) => void;
   /** Read what the picked rows are holding. Absent where there is nowhere to read it. */
   onOpen?: () => void;
@@ -1257,7 +1261,9 @@ function ChangedRow({
     >
       <span className="gitpanel__cell" role="gridcell">
         {/* The path is said in full, because the box stands away from the name in the reading order
-            of anything that reads the row out.
+            of anything that reads the row out — and where the press is about a set, what is said is
+            how many it takes instead. A box called by one path while it stages five is a control
+            that lies to the one reader who cannot see the band on the rows.
 
             **The set is left where it is when the box is pressed.** The box is what this list does
             to one path, and a reader who gathered five rows to stage together has not begun again
@@ -1267,7 +1273,9 @@ function ChangedRow({
           type="checkbox"
           checked={staged}
           disabled={running}
-          aria-label={tf(staged ? "git.unstageOne" : "git.stageOne", { path })}
+          aria-label={takes > 1
+            ? tf(staged ? "git.unstagePicked" : "git.stagePicked", { n: takes })
+            : tf(staged ? "git.unstageOne" : "git.stageOne", { path })}
           onClick={(e) => e.stopPropagation()}
           onChange={() => onToggle()}
         />

@@ -664,6 +664,8 @@ export const it: Translation = {
     "git.unstageOne": "Togli {path} dallo stage",
     "git.stageAll": "Metti in stage tutto ciò che è in questo elenco",
     "git.unstageAll": "Togli dallo stage tutto ciò che è in questo elenco",
+    "git.stagePicked": "Metti in stage i {n} file selezionati",
+    "git.unstagePicked": "Togli dallo stage i {n} file selezionati",
     "git.commitMessage": "Messaggio del commit",
     "git.commit": "Esegui il commit",
     "git.commitNaming": "Indica i {n} percorsi in stage",

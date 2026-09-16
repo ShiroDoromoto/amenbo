@@ -655,6 +655,8 @@ export const vi: Translation = {
     "git.unstageOne": "Bỏ chuẩn bị {path}",
     "git.stageAll": "Chuẩn bị mọi thứ trong danh sách này",
     "git.unstageAll": "Bỏ chuẩn bị mọi thứ trong danh sách này",
+    "git.stagePicked": "Chuẩn bị {n} tệp đã chọn",
+    "git.unstagePicked": "Bỏ chuẩn bị {n} tệp đã chọn",
     "git.commitMessage": "Thông điệp commit",
     "git.commit": "Commit",
     "git.commitNaming": "Chỉ định {n} đường dẫn đã chuẩn bị",

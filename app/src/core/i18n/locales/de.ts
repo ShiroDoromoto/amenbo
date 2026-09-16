@@ -657,6 +657,8 @@ export const de: Translation = {
     "git.unstageOne": "{path} nicht mehr bereitstellen",
     "git.stageAll": "Alles aus dieser Liste bereitstellen",
     "git.unstageAll": "Nichts aus dieser Liste mehr bereitstellen",
+    "git.stagePicked": "Die {n} ausgewählten Dateien bereitstellen",
+    "git.unstagePicked": "Die {n} ausgewählten Dateien nicht mehr bereitstellen",
     "git.commitMessage": "Commit-Nachricht",
     "git.commit": "Committen",
     "git.commitNaming": "Nennt die {n} bereitgestellten Pfade",

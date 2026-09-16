@@ -668,6 +668,8 @@ export const ru: Translation = {
     "git.unstageOne": "Убрать {path} из подготовленного",
     "git.stageAll": "Подготовить всё из этого списка",
     "git.unstageAll": "Убрать из подготовленного всё из этого списка",
+    "git.stagePicked": "Подготовить выбранные файлы: {n}",
+    "git.unstagePicked": "Убрать из подготовленного выбранные файлы: {n}",
     "git.commitMessage": "Сообщение коммита",
     "git.commit": "Закоммитить",
     "git.commitNaming": "Указывает {n} подготовленных путей",

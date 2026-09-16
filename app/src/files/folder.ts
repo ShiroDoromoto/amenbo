@@ -17,7 +17,8 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitCommitDto, GitFileDto, GitStashDto,
+  FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitBranchDto, GitCommitDto, GitFileDto,
+  GitStashDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -219,6 +220,50 @@ export async function folderGitStashPop(
 ): Promise<string> {
   if (!inTauri()) return "";
   return await invoke<string>("folder_git_stash_pop", { projectId, root, name });
+}
+
+/**
+ * Every branch of the folder's repository, with how far each one stands from what it is measured by.
+ *
+ * **Which of them is checked out is not in here.** That is one line of what `folderGitStatus`
+ * already answers, and a second answer to the same question is one that can disagree with the first.
+ *
+ * It is asked for when the list is opened rather than kept beside the rows: what a reader is shown
+ * has to be the branches there are now, and the call is one `for-each-ref` (`AMB-T-4899`).
+ */
+export async function folderGitBranches(
+  projectId: number,
+  root: string,
+): Promise<GitBranchDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<GitBranchDto[]>("folder_git_branches", { projectId, root });
+}
+
+/**
+ * Move the folder's repository onto `branch` — and hand back whatever git said in doing it.
+ *
+ * **git refusing is the ordinary answer here.** A file being edited that the other branch also
+ * changes makes `checkout` exit 1 with its own account of which files stand in the way, and that
+ * account is what the reader is shown, word for word (`AMB-D-906`, 3-4).
+ */
+export async function folderGitSwitch(
+  projectId: number,
+  root: string,
+  branch: string,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_switch", { projectId, root, branch });
+}
+
+/** Make `name` where the reader is standing and move onto it. Whether git will have the name is
+ *  git's to say, and it says so in its own words. */
+export async function folderGitBranchCreate(
+  projectId: number,
+  root: string,
+  name: string,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_branch_create", { projectId, root, name });
 }
 
 /**

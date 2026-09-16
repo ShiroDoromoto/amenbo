@@ -1075,6 +1075,38 @@ input[type="color"] {
 }
 /* A refusal is git saying no, which is the one of the two a reader must not read past. */
 .gitpanel__said--refused { color: var(--c-stop); }
+/* The way onto another branch, at the end of the line the branch is named on. It is the chevron
+   alone: the name beside it already says what the list will be about, and a word for it would take
+   the room the name is losing first (`app/src/files/GitBranch.tsx`). */
+.gitpanel__pick {
+  /* The line sits its text on one baseline, and this is a mark rather than a word — so it is
+     centred against the line instead of hanging off it. */
+  flex: 0 0 auto; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 var(--s-1); border: 0; background: none;
+  color: var(--c-text-muted); font: inherit;
+  cursor: pointer;
+}
+.gitpanel__pick:hover { color: var(--c-text); }
+/* The box the mark stands in, drawn on every row of the branch list whether or not there is a mark
+   in it — so the names stand in one column rather than stepping in and out. It is the same box the
+   folder picker draws (`.rootpick__dot`), in this list's own colour. */
+.gitpanel__ison {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--icon-sm); height: var(--icon-sm);
+  margin-right: var(--s-2); vertical-align: -0.18em;
+  color: var(--c-accent);
+}
+.gitpanel__pickname { overflow: hidden; text-overflow: ellipsis; }
+/* How far that branch stands from what it is measured by, after the name rather than beside it: the
+   names are what a reader runs their eye down. */
+.gitpanel__pickcount {
+  margin-left: var(--s-3);
+  color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+/* The row at the foot of the list while a name is being typed into it. The name is made in the list
+   itself, so the row keeps the list's own padding and the box sits inside it. */
+.gitpanel__make { padding: var(--s-1) var(--s-3); }
 .gitpanel__section { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 /* The name of one of git's two answers, with how many are under it. */
 .gitpanel__head {

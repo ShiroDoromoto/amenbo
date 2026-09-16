@@ -90,6 +90,10 @@ vi.mock("./folder", () => {
     folderGitStash: (_p: number, _r: string, message: string, paths: string[][]) =>
       kept(hoisted.stashed, { message, paths }),
     folderGitStashPop: (_p: number, _r: string, name: string) => kept(hoisted.popped, name),
+    // The branch line asks for these, and only once its list is opened — which no test here does.
+    folderGitBranches: async () => [],
+    folderGitSwitch: async () => "",
+    folderGitBranchCreate: async () => "",
     folderGitFetch: reach("fetch"),
     folderGitPull: reach("pull"),
     folderGitPush: reach("push"),

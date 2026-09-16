@@ -45,6 +45,7 @@ import {
   folderGitStashes, folderGitStashPop, folderGitStatus, folderGitUnstage, folderUnwatch,
   folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
+import { GitBranch } from "./GitBranch";
 import { type GitMark, markOf } from "./gitMark";
 
 /** What git wrote on the way back from a door of this half, and whether it was a refusal. */
@@ -229,25 +230,14 @@ export function GitPanel({ projectId, root, onHistory }: {
 
   return (
     <div className="gitpanel">
-      <div className="gitpanel__branch">
-        {/* A checkout made at a commit rather than at a branch. git writes no name there, so the
-            words say what it is rather than leaving the line empty. */}
-        <span className="gitpanel__branchname" title={git.branch.name ?? t("git.detached")}>
-          {git.branch.name ?? t("git.detached")}
-        </span>
-        {/* Only the count there is one of. A pair of zeroes is a branch level with the one it is
-            measured by, and drawing them says "nothing to do" in two numbers instead of none. */}
-        {git.branch.ahead > 0 && (
-          <span className="gitpanel__count" title={tf("git.ahead", { n: git.branch.ahead })}>
-            ↑{git.branch.ahead}
-          </span>
-        )}
-        {git.branch.behind > 0 && (
-          <span className="gitpanel__count" title={tf("git.behind", { n: git.branch.behind })}>
-            ↓{git.branch.behind}
-          </span>
-        )}
-      </div>
+      {/* The branch line is its own, because it is the one part of this half that writes: moving
+          onto another branch, and making one (`./GitBranch`). */}
+      <GitBranch
+        projectId={projectId}
+        root={root}
+        on={git.branch}
+        onMoved={() => setMoved((n) => n + 1)}
+      />
       {/* The remote, in the order a person works it: read it, bring it in, send it. Push carries the
           count of what it would send, which is the one of the two the button is about. Then what is
           put aside, which is the one door here that opens a list rather than doing a thing. */}

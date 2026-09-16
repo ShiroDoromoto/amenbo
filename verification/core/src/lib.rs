@@ -2958,9 +2958,31 @@ const REGISTRY: &[OpSpec] = &[
     // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
     // what git says about each row drawn as a colour on it. Every op is the screen's —
     // `cat` is not Amenbo doing anything — and `section` says which part of the column a row is being
-    // looked for in. There is one part to name today; the arg is kept because the panel is not
-    // finished growing, and a road that named none of them would have to be rewritten when it does.
+    // looked for in: the folder's own names, or the changes git has to report about them, which is
+    // the other half of the panel and a list of rows like the first.
     //
+    // Which of the project's folders this panel is about, chosen from the list under the project's
+    // name (`app/src/files/RootPick.tsx`). One folder is the window's answer to which
+    // repository a press writes to, so what this op moves is not the tree alone: the half beside it
+    // and the column on the far side of the panes read the same choice.
+    //
+    // The row is named by the folder's short name, which is what the list draws. The button carries
+    // the whole path and the rows do not, so a road naming a path would be naming something no row
+    // says.
+    //
+    // **The control is drawn only where there is more than one folder to choose**, which is one
+    // project in twenty-one — so a road that walks this op stands up two folders itself rather than
+    // expecting to find them.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "root-pick", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Which of the panel's two halves is up — the folder's own names, or what git says about them
+    // (`app/src/shell/FolderRail.tsx`). A column this narrow has room for one, so the
+    // two take turns and reaching either is a press.
+    //
+    // `half` is `files` or `git`. The step says the half to end in rather than the tab to press, the
+    // way `show-side` says the column to end with: the pair is a switch between two states, and a
+    // road that pressed regardless would land on the other half whenever a run came up already
+    // standing on the one it asked for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "show-half", required: &["half"], refs: &[], strings: &["half"], binds: false },
     // Unfolding the folder. It is a value and not two ops because it is one control that opens and
     // shuts, unlike the two windows' way out and way back, which are pressed in different places.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "tree", required: &["open"], refs: &[], strings: &[], binds: false },

@@ -2791,6 +2791,29 @@ impl Instructor {
             // each is about rather than by their headings, for the reason the segments are: the
             // headings are the interface's own words and the run's language is whatever the machine
             // is set to.
+            // Which of the project's folders the panel is about. The list is under the project's
+            // name and the button on it carries the folder being drawn, so the operator is sent to
+            // the control by where it stands rather than by the word on it — the word is a folder's
+            // name and changes with the press.
+            //
+            // The row is named by the folder's short name, which is what the list draws beside the
+            // dot. The dot is not read here: it says whether git has anything to report about that
+            // folder, which is a question the rows of the half beside the tree answer in full.
+            (Domain::Files, "root-pick") => format!(
+                "Under the project's name at the top of the panel beside the panes, press the control naming the folder being drawn: a short list of the project's folders comes up under it. Press the row \"{}\". The list goes, and the panel is drawn from that folder.",
+                req(with, "name")?
+            ),
+            // Which half of that panel is up. Said as the half to end in, so the step is true
+            // wherever it is walked from — the tabs are a switch, and a run that came up on the half
+            // being asked for would be moved off it by a step that simply pressed.
+            //
+            // The tabs are named by what each half holds rather than by their words, for the reason
+            // every other control on this face is: the words are the interface's own and the run's
+            // language is whatever the machine is set to.
+            (Domain::Files, "show-half") => match half(with)? {
+                Half::Files => "On the panel beside the panes, have the folder's own names up: the row of tabs under the project's name says which of its two halves is showing, and the first of the two is the folder's. Press it where the other half is up, and leave it alone where it is already the one showing.".to_string(),
+                Half::Git => "On the panel beside the panes, have what git says up: the row of tabs under the project's name says which of its two halves is showing, and the second of the two is git's. Press it where the other half is up, and leave it alone where it is already the one showing.".to_string(),
+            },
             (Domain::Files, "tree") => match flag(with, "open")? {
                 // One folder, whichever the window is on: a project bound to several draws the one
                 // a reader picked and no other, so a row is read in that folder's tree or it is not
@@ -4877,6 +4900,27 @@ fn face(with: &Args) -> Result<Face, String> {
     }
 }
 
+/// Which half of the panel beside the panes a step is about — the folder's own names, or what git
+/// says about them (`app/src/shell/FolderRail.tsx`).
+///
+/// A pair and not a `Side`: those are the three columns of the face, and these are the two lists one
+/// of those columns holds one at a time. Named by what each half holds, for the reason every other
+/// control here is — the words on the tabs are the interface's own.
+#[derive(Clone, Copy)]
+enum Half {
+    Files,
+    Git,
+}
+
+fn half(with: &Args) -> Result<Half, String> {
+    match with.get("half").and_then(|v| v.as_str()) {
+        Some("files") => Ok(Half::Files),
+        Some("git") => Ok(Half::Git),
+        Some(other) => Err(format!("`half` does not know `{other}` — it is files or git")),
+        None => Err("arg `half` must say which half of the column".to_string()),
+    }
+}
+
 fn side(with: &Args) -> Result<Side, String> {
     match with.get("side").and_then(|v| v.as_str()) {
         Some("tabs") => Ok(Side::Tabs),
@@ -5007,14 +5051,20 @@ fn orient(with: &Args) -> Result<Orient, String> {
 /// built around. It is named by what it is about because its heading is the interface's own words,
 /// and the run's language is whatever the machine is set to.
 ///
-/// **There is one left.** The section for what had changed lately is gone — what it answered was
-/// "yesterday", and what git says now goes on the tree's own rows instead. The arg stays because it
-/// is the one place a road says which part of the panel it means, and the panel is not finished
-/// growing.
+/// **The section for what had changed lately is gone** — what it answered was "yesterday", and what
+/// git says now goes on the tree's own rows instead. What took its place is not in the same column:
+/// `changes` is a list in the half beside the tree, and a row is in it because git has something to
+/// say about that path right now (`app/src/files/GitPanel.tsx`).
+///
+/// The two are one arg because a row is a row either way — the same name, drawn to be pressed and
+/// looked for — and the phrase is what tells the operator which list to look down. Reaching the
+/// second means having that half up, which is `show-half`'s and not this arg's: naming a section here
+/// says where to look, never what to press to get there.
 fn section(with: &Args) -> Result<&'static str, String> {
     match with.get("section").and_then(|v| v.as_str()) {
         Some("tree") => Ok("the folder's own section"),
-        Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
+        Some("changes") => Ok("the list of what has changed, in the half of the panel that is git's"),
+        Some(other) => Err(format!("`section` does not know `{other}` — it is tree or changes")),
         None => Err("arg `section` must say which section".to_string()),
     }
 }
@@ -5123,6 +5173,10 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
+        // Said by the half that is git's, about the folder the column is on. It is told apart from
+        // the two above because the folder is there and is bound — git simply has nothing to say
+        // about it — and a reader sent looking for a missing folder would be looking for damage.
+        Some("no-repo") => Ok("that this folder is not a repository"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
         // The file written under a reader who was typing in it. One line covers both ways it is
         // reached — the watch noticing while they type, and a save turned away for the same reason —

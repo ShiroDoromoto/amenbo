@@ -1,0 +1,212 @@
+# A project bound to more than one folder has to answer "which repository am I on" before a press can
+# write to one, and the answer is a single pick under the project's name. What this road walks is
+# that pick actually reaching both halves of the panel: the folder's own names, and what git says
+# about that folder.
+#
+# ── Why both halves are read, and read twice ─────────────────────────────────────────────────────
+# The two halves are drawn one at a time and are fetched separately — each reads the disk only while
+# it is the one on the screen (`app/src/shell/FolderRail.tsx`). So a build can follow the pick on one
+# of them and go on answering for the folder it was left on with the other, and a reader would meet
+# that as a commit going into the repository they had just moved off.
+#
+# Each half is read on both folders, and both ways round: the folder picked carries its own file, and
+# the other folder's is nowhere. Either half alone passes on a build carrying the other fault — one
+# that drew both folders at once passes the first, and one that drew nothing at all passes the
+# second.
+#
+# ── Why the files are untracked rather than committed ────────────────────────────────────────────
+# What makes a name appear in git's half is git having something to say about it, and an untracked
+# file is the shortest way to that: `git init` and a file nobody recorded puts the name in the list of
+# what has changed without a road having to commit anything. Which mark it wears is not read here —
+# the reading is which folder the list is about.
+#
+# ── What is not walked here ──────────────────────────────────────────────────────────────────────
+# The column on the far side of the panes reads the same pick, and a file already open in it when the
+# pick moves is a road of its own — one that opens that column, which nothing here does. This one
+# stops at the panel.
+id: move-the-window-onto-another-of-the-projects-folders
+title: Moving the window onto another of the project's folders moves the folder's names and what git says about them together
+description: >
+  Raise a project bound to two folders, each a repository holding a file of its own that git has not
+  recorded. Read the panel beside the panes on the folder it comes up on — its own file in the
+  folder's names, and that same file in git's half — then pick the other folder from the list under
+  the project's name: both halves are about the other folder, and neither still names the first
+  folder's file.
+
+given:
+  # Creating a project links a folder to it, so this one is the project's first.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # And the second, which is what draws the control this road is about: the list is not drawn at all
+  # for a project with one folder to name.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: potting-shed
+      project: greenhouse
+
+  # One file per folder, named apart: the same name in both would leave a row that either folder
+  # could have put there.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+  # Both folders are repositories, so git's half has something to say about either of them. A road
+  # with one repository and one plain folder would read the half changing as the other half's answer
+  # going away, which is a different road (`look-for-git-in-a-folder-that-is-no-repository`).
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: potting-shed
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on the one it
+  # raised before reading anything off it.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # A reader who has picked nothing is shown the first folder that is there, by path — which is the
+  # order the store holds them in and not a ranking (`app/src/files/sections.ts`). Both are there, and
+  # `greenhouse-beds` sorts first.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: tree
+      present: false
+
+  # The other half, about the same folder. This is the reading a build that follows the pick in one
+  # place and not the other fails on.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: changes
+      present: false
+
+  # The pick itself, made from git's half: the control stands above the tabs and belongs to the whole
+  # panel rather than to either half, so a road that had to go back to the folder's names first would
+  # be saying something about the control that is not true.
+  - type: action
+    domain: files
+    op: root-pick
+    with:
+      name: potting-shed
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+      present: false
+
+  # And back to the folder's own names, which is the half the pick was not made on.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+      present: false

@@ -19,9 +19,9 @@
 # A reader who has picked nothing is shown the first folder that is there, by path — which is the
 # order the store holds them in and not a ranking of the folders (`app/src/files/sections.ts`). Both
 # are there at this point and `greenhouse-beds` sorts first, so the rail comes up on the beds.
-# **Going to the other one is not walked here**: the step needs an op the registry does not have, and
-# a line that runs ahead of the registry holds up a release (`../README.md`). It is filed as its own
-# task.
+# **Going to the other one is not walked here**, and it is not a gap either: that is a road of its
+# own, about a pick reaching both halves of the panel rather than about which folder is drawn first
+# (`move-the-window-onto-another-of-the-projects-folders`).
 #
 # ── Why one of them is then taken away ───────────────────────────────────────────────────────────
 # The half a reader meets by accident is a folder that has gone — renamed, moved somewhere tidier,

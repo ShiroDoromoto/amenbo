@@ -1085,3 +1085,40 @@ describe("the rail's git half, read across the panes", () => {
     expect(asked).toBe(0);
   });
 });
+
+/// Only the lists scroll. The box a commit is written in, and the press that writes it, keep their
+/// place under a folder with forty changes in it — and that press is what the whole half is worked
+/// towards (`AMB-D-906`, 2-2).
+describe("the rail's git half, and what holds still in it", () => {
+  const inside = (what: string): Element | null =>
+    container.querySelector(`.gitpanel__lists ${what}`);
+
+  it("scrolls the lists, and nothing else", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["a.rs"], worktree: "M" }),
+        row({ path: ["b.rs"], index: "M" }),
+        row({ path: ["x.rs"], index: "U", worktree: "U" }),
+      ],
+    });
+    await draw();
+
+    // The three lists are in the part that scrolls, all of them.
+    expect(container.querySelectorAll(".gitpanel__lists .gitpanel__section")).toHaveLength(3);
+    // And what is pressed is not: the branch line and the three that go out to the remote above,
+    // the box a commit is written in below.
+    expect(inside(".gitpanel__net")).toBeNull();
+    expect(inside(".gitpanel__commit")).toBeNull();
+    expect(container.querySelector(".gitpanel__top .gitpanel__net")).not.toBeNull();
+  });
+
+  /// At the foot and not at the head: the lists are read before the message is written, which is
+  /// the order the half is worked in.
+  it("puts the commit box under the lists", async () => {
+    hoisted.git[ROOT] = says({ rows: [row({ path: ["a.rs"], worktree: "M" })] });
+    await draw();
+    const lists = container.querySelector(".gitpanel__lists")!;
+    const commit = container.querySelector(".gitpanel__commit")!;
+    expect(lists.compareDocumentPosition(commit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

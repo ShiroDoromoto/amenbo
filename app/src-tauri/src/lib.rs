@@ -626,6 +626,7 @@ pub fn run() {
       folder_git::folder_git_log,
       folder_git::folder_git_show,
       folder_git::folder_git_diff,
+      folder_git::folder_git_tree_diff,
       folder_git::folder_git_branches,
       folder_git::folder_git_stashes,
       folder_git::folder_git_marks,

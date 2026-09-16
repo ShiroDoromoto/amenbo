@@ -1,0 +1,220 @@
+# The box on the line a list is named on, which takes the list itself.
+#
+# It is the one control in the half that is git's whose answer has nothing to do with what a reader
+# picked out: the rows gathered by hand are what the row's own box, the menu and a carry are about,
+# and this one takes every row the list draws whatever is standing picked. A road that walked only
+# the row's box would leave that difference untested, and the two are a tick apart on the screen.
+#
+# ── Why a row is picked out before the box is pressed ────────────────────────────────────────────
+# So that the list going whole says something. With nothing picked, a build that quietly read this as
+# "the set, or the list where there is no set" passes; with one row picked and three rows moving, it
+# cannot.
+#
+# ── Why it is walked in both directions ─────────────────────────────────────────────────────────
+# The box means the list it is on — the one over the changes stages and the one over what is staged
+# takes back out — and a build that wired both to the same call reads as green on the way in. The way
+# back is also what a reader who pressed the wrong one needs.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. What the binary is handed is the paths themselves, and every command there
+# names the files it is about.
+id: take-a-whole-list-of-changes-in-one-press
+title: Take a whole list of a folder's changes with the box on the line it is named on
+description: >
+  Raise a repository whose three files have each been changed since they were recorded, and pick one
+  of them out. Tick the box on the line the list of changes is named on: all three are staged, not
+  the one picked, and the list they came out of is left with nothing on it. Untick the box on the
+  line the other list is named on and all three come back.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: alpha.md
+      content: SCENARIO the first bed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: bravo.md
+      content: SCENARIO the second bed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: charlie.md
+      content: SCENARIO the third bed
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: alpha.md
+      content: SCENARIO the first bed is watered at dawn
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: bravo.md
+      content: SCENARIO the second bed is left to dry
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: charlie.md
+      content: SCENARIO the third bed is turned over
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: changes
+
+  # One row gathered, and the box pressed anyway. What moves is the list, which is the whole of what
+  # this control says.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: stage-all
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: staged
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: staged
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: staged
+
+  # And the list it came out of is empty, which is what says nothing was left behind.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: changes
+      present: false
+
+  # The other box, on the other list. A build that wired the two to one call leaves the rows where
+  # they are.
+  - type: action
+    domain: files
+    op: unstage-all
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: staged
+      present: false

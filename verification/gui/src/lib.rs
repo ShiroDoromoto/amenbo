@@ -2941,6 +2941,15 @@ impl Instructor {
                 "In the half of the panel that is git's, find \"{}\" in the list of what is staged and untick the box at the start of its row. It leaves that list and stands in the list of what has changed — and where rows have been picked out and this is one of them, every row picked out goes with it.",
                 req(with, "name")?
             ),
+            // The box on the line a list is named on, which takes the list rather than the rows a
+            // reader gathered. It is drawn only where the list has rows, so the line says the list
+            // by its name and leaves the operator to find the box beside it.
+            (Domain::Files, "stage-all") =>
+                "In the half of the panel that is git's, on the line the list of what has changed is named on, tick the box before that name. Every row the list draws is staged in one go, whatever was picked out, and the list goes empty."
+                    .to_string(),
+            (Domain::Files, "unstage-all") =>
+                "In the half of the panel that is git's, on the line the list of what is staged is named on, untick the box before that name. Every row the list draws is taken back out in one go, whatever was picked out, and the list goes empty."
+                    .to_string(),
             // The message and the press together. The control is down until something is typed and
             // something is staged, so an operator who met it greyed has been sent to it a step early
             // — the line says both, so that reads as the road's fault and not as the build's.
@@ -3139,6 +3148,12 @@ impl Instructor {
                 // that one is the file on the screen and leaves what is picked out alone, and this
                 // one is what the reader picked. The question is left standing for `answer`, the
                 // way the other bin leaves it.
+                // The box pressed from the keyboard, in the half that is git's. It is the row's own
+                // box and not the list's, so what it takes is the set where the row is in one — the
+                // same press the pointer makes, reached without leaving the keyboard. The tree has
+                // no answer for it, which is why the line says where to be standing.
+                " " => "With the keyboard standing on a row of one of the lists in the half of the panel that is git's — the click that picked one out leaves it there, and so do the arrows — press the space bar. The box at the start of that row is pressed: the row is staged where it stands among the changes and taken back out where it stands among what is staged, and every row picked out with it goes the same way."
+                    .to_string(),
                 "delete" => "With the keyboard standing on a row of the folder's section — the click that picked one out leaves it there — press the key this machine deletes with. Everything picked out goes to the bin together. If the panel asks first, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
                 // And the copy. It is not `files copy` with the click left out: that one stands the
@@ -3437,6 +3452,16 @@ impl Instructor {
                     Some(other) => return Err(format!("`how` does not know `{other}` — it is copy")),
                     None => "",
                 }
+            ),
+            // The same gesture inside git's half, where what a landing changes is what git has been
+            // told rather than where a file sits. The line names the list it lands on rather than a
+            // row in it: anywhere inside that list is the same answer, and the panel marks the whole
+            // of it while the row is over it.
+            (Domain::Files, "carry-to-list") => format!(
+                "In {}, press and hold on the row \"{}\" and drag it — without letting go — onto {}: the whole of that list is marked while the row is over it. Let go there. Where rows have been picked out and this is one of them, every row picked out goes with it.",
+                section(with)?,
+                req(with, "name")?,
+                landing(with)?
             ),
             _ => return Err(unmapped(domain, op)),
         })
@@ -4081,13 +4106,25 @@ impl Instructor {
             // What the menu offers, read rather than pressed — the one a row put up, or the one the
             // file being read did. The item is described and never quoted, its words being the
             // interface's own.
-            (Domain::Files, "offers") => format!(
-                "On the menu that is standing, confirm {}.",
-                {
-                    let (there, gone) = menu_item(req(with, "item")?)?;
-                    if present(with) { there } else { gone }
+            (Domain::Files, "offers") => {
+                let (there, gone) = menu_item(req(with, "item")?)?;
+                match (present(with), with.get("state").and_then(|v| v.as_str())) {
+                    (false, _) => format!("On the menu that is standing, confirm {gone}."),
+                    // Greyed rather than gone: the item is drawn, and a press on it does nothing.
+                    // Which of the two it is, is the whole of this reading, so the line says what
+                    // to look at — the words are dimmed against every other item on the menu.
+                    (true, Some("off")) => format!(
+                        "On the menu that is standing, confirm {there} — and that it is drawn dimmed against the items around it, and does not answer a press."
+                    ),
+                    (true, Some("on")) => format!(
+                        "On the menu that is standing, confirm {there} — and that it is drawn like the items around it rather than dimmed."
+                    ),
+                    (true, Some(other)) => {
+                        return Err(format!("`state` does not know `{other}` — it is on or off"))
+                    }
+                    (true, None) => format!("On the menu that is standing, confirm {there}."),
                 }
-            ),
+            },
             // Where the file face's own settings rows stand. The positions are named by what each
             // does rather than by the word drawn on the row, since the words are the interface's own.
             (Domain::Files, "setting") => match req(with, "position")? {
@@ -5438,6 +5475,18 @@ fn section(with: &Args) -> Result<&'static str, String> {
     }
 }
 
+/// Which of git's two lists a carried row is let go on, said the way [`section`] says the one it
+/// came from. The list of conflicts is not among them: staging a conflict is the reader saying the
+/// merge is settled there, and a press that travelled across a panel is no way to say it.
+fn landing(with: &Args) -> Result<&'static str, String> {
+    match with.get("into").and_then(|v| v.as_str()) {
+        Some("changes") => Ok("the list of what has changed, in the half of the panel that is git's"),
+        Some("staged") => Ok("the list of what is staged, in the half of the panel that is git's"),
+        Some(other) => Err(format!("`into` does not know `{other}` — it is changes or staged")),
+        None => Err("arg `into` must say which list the row is let go on".to_string()),
+    }
+}
+
 /// Which of the two questions the file face puts before something goes: the one before a row is put
 /// in the machine's bin, and the one before what git has not been told about a file is thrown away.
 /// Named by what is at stake rather than by the words on the row, for [`section`]'s reason.
@@ -5474,8 +5523,19 @@ fn menu_item(item: &str) -> Result<(&'static str, &'static str), String> {
             "an item that throws away what git has not been told about that file is there to press",
             "no item offers to throw away what git has not been told about that file",
         ),
+        // The two the menu greys rather than takes away (`git-panel-spec`, 2-8): git refuses to
+        // stop following a set with something it has never followed in it, and one path's history
+        // is one path's.
+        "untrack" => (
+            "an item that stops git following that file is there",
+            "no item offers to stop git following that file",
+        ),
+        "file-history" => (
+            "an item that opens that one file's history is there",
+            "no item offers that one file's history",
+        ),
         other => return Err(format!(
-            "`item: {other}` is not an item a row's menu keeps (restore)"
+            "`item: {other}` is not an item a row's menu keeps (restore, untrack, file-history)"
         )),
     })
 }

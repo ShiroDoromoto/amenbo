@@ -88,6 +88,7 @@ given:
     with:
       dir: greenhouse-beds
 
+
   - type: action
     domain: repo
     op: git-commit
@@ -127,6 +128,16 @@ given:
       dir: greenhouse-beds
       path: delta.md
       content: SCENARIO the fourth bed is left alone
+
+  # The one git has never seen. It is what makes a set the menu has to grey an item over: git refuses
+  # to stop following a set with something it has never followed in it, and refuses the whole of it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: newcomer.md
+      content: SCENARIO the bed that was never recorded
 
 steps_gui:
   - type: action
@@ -233,10 +244,85 @@ steps_gui:
       shows: +SCENARIO the second bed is left to dry
       present: false
 
+  # ── the set carried across, and walked back with the keyboard ─────────────────────────────────
+  # The same set, taken hold of by one of its rows and let go on the other list. What lands there is
+  # every row picked out, which is the reading under this.
+  - type: action
+    domain: files
+    op: carry-to-list
+    with:
+      name: alpha.md
+      section: changes
+      into: staged
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: staged
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: staged
+
+  # And back, from the keyboard. The rows left the list they were picked in, so the set went down
+  # with them and is gathered again — this time in the list they are standing in now.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: alpha.md
+      section: staged
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: charlie.md
+      section: staged
+
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: " "
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: changes
+
   # ── the set staged by one box, and written down by one press ──────────────────────────────────
   # The box is pressed on one row of the set and moves every row in it. A build that read the box as
   # being about the row under the pointer leaves charlie.md standing among the changes, which the
   # reading under this notices.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: alpha.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: charlie.md
+      section: changes
+
   - type: action
     domain: files
     op: stage
@@ -358,6 +444,61 @@ steps_gui:
     with:
       half: git
 
+  # A set mixing a file git follows with one it has never seen. The menu draws every item whatever is
+  # picked out — a menu whose items came and went with the selection is one nobody can learn — and
+  # greys the ones the set is not in a state for: git refuses to stop following such a set, and
+  # refuses the whole of it rather than the one row.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: newcomer.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: bravo.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: untrack
+      present: true
+      state: off
+
+  # And one path's history is one path's, whatever else the set holds.
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: file-history
+      present: true
+      state: off
+
+  # What the set *is* in a state for stands whole beside them, which is what says the greying is
+  # about the item and not about the menu having given up.
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: true
+      state: on
+
+  # ── and the item the menu does act on, over a set it can take whole ───────────────────────────
+  # The press that opens the menu on a row outside the set puts the set down and gathers that row
+  # alone, so the two below are gathered again for the leg that throws their changes away.
   - type: action
     domain: files
     op: pick

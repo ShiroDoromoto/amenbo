@@ -988,6 +988,10 @@ impl Instructor {
             (Domain::Files, "git-said") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
+            // And the line git wrote on a stash, which is git's own sentence for the same reason.
+            (Domain::Files, "stashed") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             // A form named takes this away from the reading: both forms carry the same words, and
             // what separates them is punctuation the fold throws away and a size no reading reports.
             (Domain::Files, "reading") if picture(with) => {
@@ -2843,6 +2847,23 @@ impl Instructor {
                 "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch to bring the list of branches up. At the foot of that list, below the branches, press the row that offers to make a new one: it turns into a box where the row was. Type \"{}\" into it and press Enter. The list goes.",
                 req(with, "name")?
             ),
+            // The list of what is put aside, opened from the last of the buttons under the branch
+            // line. Three ops rather than one because the list is three things at once: a row that
+            // puts the changes aside, the stashes themselves, and a list somebody may only want to
+            // read.
+            //
+            // The button is named by where it stands, the way every control on this face is.
+            (Domain::Files, "stash") => "In the half of the panel that is git's, press the last of the buttons under the line naming the branch: a list comes up. At the top of it, press the row that offers to put the changes aside. The list goes.".to_string(),
+            // The same list opened and left standing, which is how what is in it gets read. It goes
+            // on the next press anywhere outside it, and that press still lands where it was made,
+            // so nothing has to be done to put the list away.
+            (Domain::Files, "stash-list") => "In the half of the panel that is git's, press the last of the buttons under the line naming the branch: a list comes up. Leave it standing.".to_string(),
+            // And one of its rows pressed. The row is named by git's own line on the stash, because
+            // the name beside it says where the stash sits rather than which one it is.
+            (Domain::Files, "stash-restore") => format!(
+                "In the half of the panel that is git's, press the last of the buttons under the line naming the branch to bring the list of what is put aside up. Press the row whose line carries \"{}\". The list goes.",
+                req(with, "shows")?
+            ),
             // A row moved between the two lists by its own box. The box is named by where it stands
             // rather than by what it is called, the way every control on this face is — and the row
             // is named by the words it draws, which is the file's own name.
@@ -4489,6 +4510,19 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // One row of the list of what is put aside, read while that list is standing. The line
+            // is git's own sentence about where the stash was made, so the words a road looks for
+            // are English whatever language the interface around them is in.
+            (Domain::Files, "stashed") => match present(with) {
+                true => format!(
+                    "On the list of what is put aside, confirm one of the rows carries \"{}\".",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the list of what is put aside, confirm no row carries \"{}\".",
+                    req(with, "shows")?
+                ),
+            },
             // git's own text, drawn line by line. A line is found by the characters it is written
             // with, mark and all, because nothing here rewrites what a diff says.
             (Domain::Files, "patch") => match present(with) {
@@ -5283,6 +5317,10 @@ fn note(with: &Args) -> Result<&'static str, String> {
         // the two above because the folder is there and is bound — git simply has nothing to say
         // about it — and a reader sent looking for a missing folder would be looking for damage.
         Some("no-repo") => Ok("that this folder is not a repository"),
+        // Said inside the list of what is put aside rather than in place of it, because that list is
+        // also where a stash is made: a reader with nothing put aside still has the row that puts
+        // the changes there.
+        Some("nothing-stashed") => Ok("that nothing has been put aside, on the list standing open"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
         // The file written under a reader who was typing in it. One line covers both ways it is
         // reached — the watch noticing while they type, and a save turned away for the same reason —

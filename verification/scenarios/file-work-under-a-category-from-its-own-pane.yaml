@@ -1,0 +1,146 @@
+# Where work is filed from, when the reader is standing in front of it. The board's columns are the
+# status and nothing else, so there is no column on it to carry a card into: the move that files a
+# task under a value of a category is made in the record's own pane — open the task, find the control
+# its pane keeps for that category, and choose.
+#
+# It is the screen's road alone. A terminal files work by naming the two words, which is the road
+# `classify-work-along-an-axis` walks, and it has no pane to open. What the two share is what the
+# filing then means, and that is why this road ends where that one does — at the filter. A control
+# that only changed what it was showing would be a drawing; what makes the choice a classification is
+# that narrowing by the value finds the work afterwards, and leaves out the work that went elsewhere.
+id: file-work-under-a-category-from-its-own-pane
+title: A task is filed under a value of a category from its own pane, and the filter finds it there afterwards
+description: >
+  Open a project holding two tasks filed under nothing. Open the first and choose one of the
+  category's values in the control its pane keeps for that category, then file the second under the
+  other value the same way. Narrow the board by the first value: the task filed there comes back, and
+  the task filed elsewhere is left out. Both halves are read, because a build that filed nothing would
+  answer the narrowing with an empty board, and one that filed everything under whichever value it met
+  first would answer it with both.
+# Two values, so that one task can be filed somewhere and the other somewhere else — with one value a
+# build filing everything under whatever it found first would read green. The category's key is
+# written out because the narrowing at the end is spelled in the CLI's grammar, which is the one name
+# the screen and the terminal share. The category itself is raised here rather than on screen: defining
+# one is the classification manager's own road, and what this road is about is where a filing is made
+# from.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Medium
+      slug: medium
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: web
+
+  # Filed under nothing, which is where the road starts: the whole claim is that the choosing is what
+  # files them, so a world that handed them their values would leave nothing for the move to do.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the printed piece
+    as: feature
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: feature
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the online piece
+    as: banner
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: banner
+
+steps_gui:
+  # Arrive at the board rather than assume it. What is standing on it is two cards under the status
+  # they were made in, and nothing on the board says which category either of them answers — which is
+  # the reason the road goes into a pane to file them.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: cwd
+
+  # A value to choose, offered before anything is filed under it. It is read rather than assumed
+  # because the road is about to depend on it: a control offering only the values already in use would
+  # leave a reader no way to file the first task under one at all.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      target: feature
+      dimension: Medium
+      value: print
+      present: true
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: feature
+      dimension: Medium
+      value: print
+
+  # And the other task somewhere else, which is what turns the reading at the end into a question. One
+  # task filed and one left where it was would be answered by a build that narrowed to everything.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: banner
+      dimension: Medium
+      value: web
+
+  # The filter, which is where a choice made in a pane stops being a picture of one. It is spelled in
+  # the grammar the terminal writes, and what it comes back with is the work — so a build that drew the
+  # value in the control without filing anything answers here and not before.
+  - type: action
+    domain: task
+    op: open-filters
+
+  - type: action
+    domain: task
+    op: choose-filter
+    with:
+      axis: dim:medium
+      value: print
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: feature
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: banner
+      present: false
+
+  - type: action
+    domain: task
+    op: close-filters

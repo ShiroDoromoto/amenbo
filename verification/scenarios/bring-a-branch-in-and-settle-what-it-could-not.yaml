@@ -1,0 +1,305 @@
+# A merge that stops on a conflict, settled from outside the window and carried through from inside
+# it. What only this window can say is in the middle of it: how much of the conflict is left, counted
+# off the file itself, falling as the file is put right by whoever is putting it right.
+#
+# ── Why the file is put right from outside Amenbo ────────────────────────────────────────────────
+# Because that is the reading. The count is taken off the file and not asked of git, so it answers
+# for a file the reader fixed in the column across the panes, one the agent in the pane rewrote, and
+# one a text editor somewhere else wrote — all the same. A road that settled it through Amenbo's own
+# editor would prove the narrowest of the three and leave the one that matters most here untested:
+# the agent working in the pane beside this panel.
+#
+# ── Why the band is read after the list has gone ─────────────────────────────────────────────────
+# The band hangs on git's own record of an unfinished merge, and the list of conflicts on paths git
+# still calls unmerged. Declaring the last path settled empties the list while the merge goes on, and
+# a build that drew the band from the list would call the merge over one press early — leaving a
+# reader with a folder mid-merge and nothing on screen saying so.
+#
+# ── Why neither branch git started with is named ─────────────────────────────────────────────────
+# What a fresh repository calls its first branch is the machine's to decide. Both branches here are
+# the road's own, cut one from the other so they share the commit the premise made.
+#
+# ── What says the merge really happened ──────────────────────────────────────────────────────────
+# The other branch's own commit standing in the history afterwards. The band going says the merge
+# ended; only what came across says it ended by being carried through rather than by being dropped.
+id: bring-a-branch-in-and-settle-what-it-could-not
+title: Bring a branch in, watch the conflict shrink as the file is put right, and carry the merge through
+description: >
+  Raise a repository and cut two branches from the window, each adding a different line to the end of
+  the same file. Bring one into the other: the merge stops, the band says so, and the file stands in
+  the list of conflicts with one of git's marks counted against it. Put the file right from outside
+  Amenbo: the count goes, replaced by the way to declare it settled. Declare it, and the band is
+  still up with the list empty — then carry the merge through, and the other branch's commit is in
+  the history.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # A branch cannot be cut where nothing has been recorded.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Two branches of the road's own. What git calls the branch it began with is the machine's to
+  # decide, so neither road here names it.
+  - type: action
+    domain: files
+    op: branch-new
+    with:
+      name: trays
+
+  - type: action
+    domain: files
+    op: branch-new
+    with:
+      name: seedlings
+
+  # A line added to the end of the file on this branch, and recorded.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the seedlings go under glass in October
+
+  - type: action
+    domain: files
+    op: save
+
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the glass note goes in
+
+  # And a different line at the same end of the same file on the other branch, which is what makes
+  # the two irreconcilable.
+  - type: action
+    domain: files
+    op: branch-go
+    with:
+      name: trays
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the trays are lifted before the frost
+
+  - type: action
+    domain: files
+    op: save
+
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: commit
+    with:
+      message: SCENARIO the frost note goes in
+
+  # The merge git cannot make on its own.
+  - type: action
+    domain: files
+    op: branch-merge
+    with:
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: merging
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: conflicts
+
+  # One mark, because the two branches wrote at the same end of the same file.
+  - type: assert
+    domain: files
+    op: marks
+    with:
+      name: watering.md
+      n: 1
+
+  # Put right by somebody who is not this window. The watch behind the panel is what notices.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings go under glass and the trays are lifted before the frost
+
+  - type: assert
+    domain: files
+    op: marks
+    with:
+      name: watering.md
+      n: 0
+
+  # Nothing declares it for the reader, however few marks are left.
+  - type: action
+    domain: files
+    op: settle
+    with:
+      name: watering.md
+
+  # The list is empty and the merge is not over. This is the reading the band exists for.
+  - type: assert
+    domain: files
+    op: merging
+
+  - type: action
+    domain: files
+    op: merge-continue
+
+  - type: assert
+    domain: files
+    op: merging
+    with:
+      present: false
+
+  # What came across. The band going says the merge ended; this says how.
+  - type: action
+    domain: files
+    op: history
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: SCENARIO the glass note goes in
+      section: history

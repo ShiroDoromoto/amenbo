@@ -725,6 +725,18 @@ folder a project is **bound** to, and a repository anywhere else leaves every ro
 reaches: until something is committed git names the whole folder and never the paths inside it, so a
 folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
 for — does not exist on the near side of a commit.
+`git-branch` says which branch the folder is standing on when the road opens, cutting it where
+there is none by that name and stepping onto it where there is: a premise declares where the reader
+finds the folder, not the order its branches were made in. `uses-lfs` wires the repository for Git
+LFS the way `git lfs install` wires a machine — the four `filter.lfs.*` keys, written into the
+repository because a reader's own `~/.gitconfig` is not a scenario's to touch. Which paths go through
+it is `.gitattributes`, written by `write-file` like anything else a premise leaves lying there, and
+nothing here needs `git-lfs` to be installed: the road that walks it is about a window that cannot
+find one.
+**Every one of these runs git with none of the machine's own configuration** (`GIT_CONFIG_GLOBAL`
+pointed at an empty file, the system one turned off). What a premise declares is the repository it
+builds, and a reader's `git lfs install`, `core.autocrlf` or `commit.gpgsign` would each make that a
+different repository on a different box — green where it was written and red on the next machine.
 `worktree-start` and `worktree-finish` are the two commands a person working a task types, and the
 road that walks them is the only place a checkout is really cut: the directory has to appear beside
 the repository, the branch has to exist in it, and the fold has to refuse while there is work in

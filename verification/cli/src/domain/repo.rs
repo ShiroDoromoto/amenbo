@@ -137,30 +137,11 @@ impl Driver<'_> {
             // project is bound to, and a repository anywhere else leaves every row of it bare.
             "git-init" => {
                 let at = self.repo_dir(with)?;
-                let git = |args: &[&str]| -> Result<(), String> {
-                    let out = Command::new("git")
-                        .args(args)
-                        .current_dir(&at)
-                        .output()
-                        .map_err(|e| format!("could not run git: {e}"))?;
-                    if !out.status.success() {
-                        return Err(format!(
-                            "`git {}` failed: {}",
-                            args.join(" "),
-                            String::from_utf8_lossy(&out.stderr).trim()
-                        ));
-                    }
-                    Ok(())
-                };
-                git(&["init", "-q", "--initial-branch", "main"])?;
-                // Named on the command line rather than left to the machine's git config: a box with
-                // no identity set would fail here, and neither name belongs to anybody.
-                git(&[
-                    "-c", "user.name=verify",
-                    "-c", "user.email=verify@example.invalid",
-                    "commit", "--quiet", "--allow-empty",
-                    "-m", "the branch a scenario cuts from",
-                ])?;
+                premise_git(&at, &["init", "-q", "--initial-branch", "main"])?;
+                premise_git(
+                    &at,
+                    &["commit", "--quiet", "--allow-empty", "-m", "the branch a scenario cuts from"],
+                )?;
                 Ok(Outcome::action(format!("made {} a git repository on `main`", at.display())))
             }
             // What is lying in the folder, recorded — the one way a road can stand up a folder git
@@ -174,31 +155,58 @@ impl Driver<'_> {
             // road committing nothing has a premise that did not do what it said.
             "git-commit" => {
                 let at = self.repo_dir(with)?;
-                let git = |args: &[&str]| -> Result<(), String> {
-                    let out = Command::new("git")
-                        .args(args)
-                        .current_dir(&at)
-                        .output()
-                        .map_err(|e| format!("could not run git: {e}"))?;
-                    if !out.status.success() {
-                        return Err(format!(
-                            "`git {}` failed: {}",
-                            args.join(" "),
-                            String::from_utf8_lossy(&out.stderr).trim()
-                        ));
-                    }
-                    Ok(())
-                };
-                git(&["add", "-A"])?;
-                // The identity is named here for `git-init`'s reason: a box with none set would fail,
-                // and neither name belongs to anybody.
-                git(&[
-                    "-c", "user.name=verify",
-                    "-c", "user.email=verify@example.invalid",
-                    "commit", "--quiet",
-                    "-m", "what the road put here before it started",
-                ])?;
+                premise_git(&at, &["add", "-A"])?;
+                premise_git(
+                    &at,
+                    &["commit", "--quiet", "-m", "what the road put here before it started"],
+                )?;
                 Ok(Outcome::action(format!("recorded what was lying in {}", at.display())))
+            }
+            // Which branch the folder is standing on when the road opens. The branch is cut here
+            // where there is none by that name and stepped onto where there is, because what a
+            // premise declares is where the reader finds the folder — never which of the two ways it
+            // came to be there. A road that had to say "make this one, move onto that one" would be
+            // saying the same thing twice for branches it made itself a few lines earlier.
+            //
+            // A branch cannot be cut where nothing has been recorded, so this follows `git-init`,
+            // whose own commit is what there is to cut from.
+            "git-branch" => {
+                let at = self.repo_dir(with)?;
+                let name = req_str(with, "name")?;
+                let there = premise_asks(&at, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{name}")])?;
+                match there {
+                    true => premise_git(&at, &["checkout", "-q", name])?,
+                    false => premise_git(&at, &["checkout", "-q", "-b", name])?,
+                }
+                Ok(Outcome::action(format!("{} is standing on `{name}`", at.display())))
+            }
+            // A folder whose files of some shape are kept by Git LFS rather than by git — the state
+            // `git lfs install` leaves a machine in, written into this repository's own
+            // configuration instead.
+            //
+            // **The reader's own `~/.gitconfig` is not the premise's to write to**, and this is the
+            // one place the difference shows: git reads the four keys from wherever they are set, so
+            // a repository carrying them behaves as the reader's machine would without the run
+            // having touched anything outside its own folder.
+            //
+            // **Which paths go through it is `.gitattributes`**, written by `write-file` like any
+            // other file a road puts in the folder. The two halves are separate because they are
+            // separate for a reader too: one is the machine's, the other is the repository's, and a
+            // road that means to stand on both has to say both.
+            //
+            // **Nothing here needs `git-lfs` to be installed**, and a road standing on this premise
+            // is usually one about what happens where it is not.
+            "uses-lfs" => {
+                let at = self.repo_dir(with)?;
+                for (key, value) in [
+                    ("filter.lfs.clean", "git-lfs clean -- %f"),
+                    ("filter.lfs.smudge", "git-lfs smudge -- %f"),
+                    ("filter.lfs.process", "git-lfs filter-process"),
+                    ("filter.lfs.required", "true"),
+                ] {
+                    premise_git(&at, &["config", key, value])?;
+                }
+                Ok(Outcome::action(format!("{} keeps its big files in LFS", at.display())))
             }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
@@ -704,6 +712,51 @@ fn adler32(bytes: &[u8]) -> u32 {
 }
 
 
+/// Run one git for a premise, and say nothing back where it did what it was asked.
+///
+/// **None of the machine's git configuration is read.** What a premise declares is the repository
+/// it builds, and a reader's own `~/.gitconfig` is no part of that: `git lfs install` in it would
+/// send every commit here through a filter no road asked for, and `core.autocrlf`, `commit.gpgsign`
+/// or `core.hooksPath` would each change what is recorded or where. Left inherited, a scenario is
+/// green on the box it was written on and red on the next one, which is the one thing a release
+/// gate must not be.
+///
+/// The identity is passed for the same reason it always was: a box with none set cannot commit at
+/// all, and neither name belongs to anybody.
+fn premise_git(at: &Path, args: &[&str]) -> Result<(), String> {
+    let out = premise_run(at, args)?;
+    if !out.status.success() {
+        return Err(format!(
+            "`git {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// Whether git answers yes — a question a premise asks before it picks which road to take, where
+/// the no is an answer and not a failure.
+fn premise_asks(at: &Path, args: &[&str]) -> Result<bool, String> {
+    Ok(premise_run(at, args)?.status.success())
+}
+
+/// The one place a premise's git is built, so that what it does not read is settled once.
+///
+/// `/dev/null` is a configuration file with nothing in it, which is what "read none of the
+/// reader's" comes to; Windows spells that file `NUL`. The system one is turned off by its own
+/// variable, there being no path to point at it with.
+fn premise_run(at: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("git")
+        .args(["-c", "user.name=verify", "-c", "user.email=verify@example.invalid"])
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(at)
+        .output()
+        .map_err(|e| format!("could not run git: {e}"))
+}
+
 /// Where a step's repository is: the folder its `dir:` names, or the run's own. `git-init`'s rule,
 /// spelled once because every op in this domain follows it.
 impl Driver<'_> {
@@ -738,6 +791,29 @@ fn worktree_of(root: &Path, id: i64) -> Result<std::path::PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The one question `git-branch` asks before it decides which road to take. A premise names the
+    /// branch it wants the folder standing on and never says whether that branch is there yet, so a
+    /// wrong answer here is either a cut that fails on a name already taken or a move to a branch
+    /// nobody made.
+    #[test]
+    fn a_branch_is_cut_where_there_is_none_by_that_name_and_stepped_onto_where_there_is() {
+        let session = crate::scratch::session("repo-git-branch", false).unwrap();
+        let at = session.cwd.join("orchard");
+        std::fs::create_dir_all(&at).unwrap();
+        premise_git(&at, &["init", "-q", "--initial-branch", "main"]).unwrap();
+        premise_git(&at, &["commit", "--quiet", "--allow-empty", "-m", "cut from"]).unwrap();
+
+        let asks = |name: &str| {
+            premise_asks(&at, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{name}")])
+                .unwrap()
+        };
+        assert!(asks("main"), "the branch `git-init` left is there");
+        assert!(!asks("trays"), "and one nobody made is not");
+
+        premise_git(&at, &["checkout", "-q", "-b", "trays"]).unwrap();
+        assert!(asks("trays"), "once cut, the same question answers the other way");
+    }
 
     /// The layout a task's checkout is placed by — beside the repository, never inside it, which is
     /// the shape Amenbo refuses to be run in. The name is the repository's own, so a road that cuts

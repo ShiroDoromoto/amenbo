@@ -101,6 +101,7 @@ import { useRestore } from "./restore";
 import { type GitMark, markOf } from "./gitMark";
 import { type How, kept, keysIn, PICKED_NONE, pick, type Picked, type Which } from "./gitPick";
 import { type Held, STAGE_ATTR, watchStage } from "./handDrag";
+import { tailFrom } from "./stem";
 import { fileAt } from "./fileUnder";
 import type { DiffPick } from "./GitDiff";
 
@@ -1021,7 +1022,10 @@ function ConflictRow({ row, left, running, picked, stop, onPress, onOpen, onSett
   const said = (
     <>
       <span className="gitpanel__mark">{letters(row)}</span>
-      <span className="gitpanel__name">{name}</span>
+      {/* Cut in the middle where the row is too narrow, the way the two lists' rows are: these are
+          the same names in the same column, and a conflict is the row a reader most needs to tell
+          from the one beside it (`RowName`). */}
+      <RowName name={name} />
       {holding !== "" && <span className="gitpanel__where">{holding}</span>}
     </>
   );
@@ -1288,12 +1292,39 @@ function ChangedRow({
           onChange={() => onToggle()}
         />
         <span className="gitpanel__mark">{letters(row)}</span>
-        {/* A folder git named as a whole rather than naming what is inside it, which is what it does
-            with an untracked one. The slash is how git writes that, and how the tree reads it. */}
-        <span className="gitpanel__name">{name}{row.isDir ? "/" : ""}</span>
+        {/* The name, cut in the middle where the row is too narrow for it (`RowName`). A folder git
+            named as a whole rather than naming what is inside it — which is what it does with an
+            untracked one — carries the slash git writes it with, and the tree reads. */}
+        <RowName name={name} after={row.isDir ? "/" : ""} />
         {holding !== "" && <span className="gitpanel__where">{holding}</span>}
       </span>
     </li>
+  );
+}
+
+/**
+ * A row's name, in the two halves the cut falls between (`./stem`).
+ *
+ * **The stem is what shortens and the end of the name stays.** A column 288px wide is narrower than
+ * plenty of names, and what a run of them has in common is usually the front: three rows cut at the
+ * end read as the same row three times, and the one thing that would have told them apart — the word
+ * before the extension, and the extension itself — is what fell off.
+ *
+ * **A name with nothing to cut is drawn in one piece.** An empty box is still a box, and a flex line
+ * holding one is a line measured from somewhere other than the text in it: the row it is on comes
+ * out taller than the rows around it, which is a list that looks uneven for no reason a reader can
+ * see.
+ *
+ * `after` is what git writes after the name and not part of it — the slash on a folder it answered
+ * for whole. It rides with the end, because that is the part that is never cut.
+ */
+function RowName({ name, after = "" }: { name: string; after?: string }) {
+  const cut = tailFrom(name);
+  return (
+    <span className="gitpanel__name">
+      {cut > 0 && <span className="gitpanel__stem">{name.slice(0, cut)}</span>}
+      <span className="gitpanel__ext">{name.slice(cut)}{after}</span>
+    </span>
   );
 }
 

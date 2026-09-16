@@ -13,8 +13,9 @@
 # decides which side it is on, and nothing rests on remembering a suffix.
 /.local/
 /target/
-# Tauri sidecar staging: `make gui`/`gui-dev` build the CLI and drop it here as
-# `amenbo-<triple>` for bundle.externalBin. Build artifact, not source.
+# Tauri sidecar staging: `make gui`/`gui-dev` build the CLI and the askpass helper and drop them
+# here as `amenbo-<triple>` and `amenbo-askpass-<triple>` for bundle.externalBin. Build artifacts,
+# not source.
 /app/src-tauri/binaries/
 # The tick's launchd agent, written per build by scripts/write-tick-plist.sh: its label carries the
 # channel, so the file that is bundled is a build artifact rather than one tracked shape.

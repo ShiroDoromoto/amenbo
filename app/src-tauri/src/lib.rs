@@ -46,6 +46,9 @@ mod folder_git;
 /// network — with the four conditions that make writing from a window safe beside an agent in a
 /// pane (`AMB-D-906`).
 mod folder_git_write;
+/// The window's end of the wire git's askpass helper calls back on: what a git child is told so
+/// that the question it would have asked a terminal reaches the person instead (`AMB-D-913`).
+mod folder_git_askpass;
 /// Being told what changed in that folder instead of going to look: one watch where the OS covers a
 /// tree with one and a watch per pruned folder where it does not (`AMB-D-779`), and a scan to say
 /// what actually moved (`AMB-T-3604`).

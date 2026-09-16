@@ -134,18 +134,26 @@ echo "== what the kernel says these are (the statfs magic is_network_dir matches
 for fs in $FS_LIST; do stat -f -c '  %n: type=%T magic=0x%t' "$MNT_ROOT/$fs"; done
 
 # The `cargo test` path builds the app crate, and tauri's build script refuses to start without
-# the CLI sidecar for this triple (it is staged by the bundling step, which a test run never
-# does). Stage a debug CLI there so a local container run is not blocked on a packaging artifact.
-# CI hands us a pre-built test binary and skips all of this.
+# every sidecar named in tauri.conf.json for this triple (they are staged by the bundling step,
+# which a test run never does). Stage debug ones so a local container run is not blocked on a
+# packaging artifact. CI hands us a pre-built test binary and skips all of this.
+#
+# Two of them: the CLI, and the askpass helper git is pointed at (crates/amenbo-askpass). The pair
+# is `<crate> <built name> <bundled stem>` — the bundled stem is the only one that splits by
+# channel, and this path is production's.
 if [ -z "$TEST_BIN" ]; then
   triple="$(rustc -vV | awk '/^host:/{print $2}')"
-  sidecar="$REPO/app/src-tauri/binaries/amenbo-$triple"
-  if [ ! -f "$sidecar" ]; then
-    echo "== stage the CLI sidecar tauri's build script insists on ($(basename "$sidecar"))"
-    cargo build --manifest-path "$REPO/Cargo.toml" -p amenbo-cli
-    mkdir -p "$(dirname "$sidecar")"
-    cp "${CARGO_TARGET_DIR:-$REPO/target}/debug/amenbo" "$sidecar"
-  fi
+  for pair in "amenbo-cli amenbo amenbo" "amenbo-askpass amenbo-askpass amenbo-askpass"; do
+    # shellcheck disable=SC2086 # three words, deliberately split
+    set -- $pair
+    sidecar="$REPO/app/src-tauri/binaries/$3-$triple"
+    if [ ! -f "$sidecar" ]; then
+      echo "== stage the sidecar tauri's build script insists on ($(basename "$sidecar"))"
+      cargo build --manifest-path "$REPO/Cargo.toml" -p "$1"
+      mkdir -p "$(dirname "$sidecar")"
+      cp "${CARGO_TARGET_DIR:-$REPO/target}/debug/$2" "$sidecar"
+    fi
+  done
 fi
 
 # One run of the ignored test per mount: it asserts the mount is CALLED network (poll, not

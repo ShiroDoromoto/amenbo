@@ -79,9 +79,9 @@ done
 # What the kernel now calls this volume (is_network_dir asks it the same question: MNT_LOCAL).
 mount | grep -F " on $(cd "$MNT" && pwd -P) " | sed 's/^/  /' || true
 
-# The app crate's build.rs verifies the CLI sidecar (externalBin) exists; `cargo test` alone does
-# not stage it (tauri's beforeBuildCommand does), so stage it the same way `make test` does.
-node "$REPO/app/scripts/prepare-cli-sidecar.mjs"
+# The app crate's build.rs verifies every sidecar (externalBin) exists; `cargo test` alone does
+# not stage them (tauri's beforeBuildCommand does), so stage them the same way `make test` does.
+node "$REPO/app/scripts/prepare-sidecars.mjs"
 
 echo ""
 echo "== store_watch on the SMB mount ($MNT)"

@@ -18,7 +18,24 @@
 //! | Committing takes in whatever the pane happened to have staged — all three systems, every time | The pathspec every commit carries (`pathspecs`); 0 of 3,855 took the wrong thing with it |
 //! | `index.lock` is held by the pane, and git neither waits nor tries again | Twenty tries, 50ms apart (`run`); macOS 32/32, Linux 310/310, Windows 25/26 |
 //! | `ssh-keygen` / `ssh-add` read the reader's terminal — and there is none | The child's stdin is closed (`run_once`) |
-//! | A failure nobody can read: `Device not configured` | `GIT_TERMINAL_PROMPT=0` and `ssh -o BatchMode=yes`, which make it say `terminal prompts disabled` |
+//! | A call that needs a password has no terminal to ask in | The askpass helper shipped beside the app, which puts the question to the window instead (`crate::folder_git_askpass`) |
+//!
+//! **The last row is `AMB-D-913`, and it replaced what `AMB-D-906` had put there.** That was
+//! `GIT_TERMINAL_PROMPT=0` and `ssh -o BatchMode=yes`, which turned `Device not configured` into
+//! `terminal prompts disabled` — a failure a reader can at least read, with the road out of it
+//! written nowhere. Every one of the six products measured in `AMB-T-4968` puts the question to the
+//! person instead.
+//!
+//! **The two did not weigh the same, and only one of them had to go.** Measured on git 2.55.0:
+//!
+//! | | with an askpass set |
+//! |---|---|
+//! | `ssh -o BatchMode=yes` | ssh asks nothing at all, the helper included — so this had to go, or the helper would never be run |
+//! | `GIT_TERMINAL_PROMPT=0` | git runs the helper anyway: it is consulted first, and this only words the fallback taken when the helper answers nothing |
+//!
+//! So what dropping the second one costs is a sentence: where nobody answers, the reader is back to
+//! `Device not configured` rather than `terminal prompts disabled`. `AMB-D-913` drops both, and the
+//! case it is worded for — nobody there to answer — is the one the dialog exists to end.
 //!
 //! **`--no-optional-locks` is not passed here**, though every read next door carries it. What it
 //! turns off is the lock git takes for its own convenience while reading, and a write's lock is the
@@ -385,11 +402,12 @@ fn run_once(dir: &Path, args: &[&str]) -> Result<Result<String, String>, CmdErro
         // and `ssh-add` read stdin when they find no terminal, and what they would find is the
         // window's own — which nobody is watching (`AMB-T-4900`).
         .stdin(Stdio::null())
-        // Not "do not stop to ask" — that is what the closed stdin is for — but "say why". Without
-        // these the reader is told `Device not configured`; with them, `terminal prompts disabled`
-        // and ssh's own account of the key it could not use (`AMB-T-4900`).
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+        // Where the question goes instead of to a terminal: the helper shipped beside the app, and
+        // the port it calls back on (`crate::folder_git_askpass`). `GIT_TERMINAL_PROMPT=0` and
+        // `ssh -o BatchMode=yes` stood here until `AMB-D-913` — the module doc-comment has which of
+        // the two would have stopped the helper being run at all. Nothing is set out of a build
+        // tree, where there is no helper beside the binary to point at.
+        .envs(crate::folder_git_askpass::env())
         // Nothing here has an editor to open, and a merge being finished asks for one. `true` takes
         // the message git already wrote, which is the one the editor would have opened on.
         .env("GIT_EDITOR", "true")

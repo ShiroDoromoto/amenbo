@@ -349,6 +349,18 @@ impl Paths {
         if cfg!(windows) { format!("{}.exe", Self::APP_NAME) } else { Self::APP_NAME.to_owned() }
     }
 
+    /// The other file the bundle carries beside the app: the helper git and ssh are pointed at when
+    /// they need to ask the person something (`crates/amenbo-askpass`).
+    ///
+    /// It is split by channel for the same reason the CLI is — the Windows installer puts the whole
+    /// install directory on `PATH`, so a name shared across channels is a name resolved by
+    /// whichever build was installed first. Nothing tells anyone to type this one, but `PATH` does
+    /// not distinguish between the files it was given and the files it was given by accident.
+    pub fn askpass_file_name() -> String {
+        let stem = format!("{}-askpass", Self::APP_NAME);
+        if cfg!(windows) { format!("{stem}.exe") } else { stem }
+    }
+
     /// The naming rule [`is_dev_channel`](Self::is_dev_channel) applies, taking the name as an
     /// argument so the rule can be pinned by a table: the channel of a running binary is fixed at
     /// compile time, so a test cannot vary it. `amenbo-dev-ish` is not a task instance — only the
@@ -1712,6 +1724,11 @@ mod tests {
             Paths::sidecar_file_name().ends_with(".exe"),
             cfg!(windows),
             "only Windows carries the extension"
+        );
+        assert_eq!(
+            Paths::askpass_file_name().trim_end_matches(".exe"),
+            format!("{}-askpass", Paths::command_name()),
+            "the helper is the same word with one suffix, so the channels split with it"
         );
     }
 

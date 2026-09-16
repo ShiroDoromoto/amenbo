@@ -33,6 +33,10 @@ tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 # Calls core directly, as a Rust library — no FFI.
 amenbo-core = { path = "../../crates/amenbo-core" }
+# The wire the askpass helper calls back on. Only the shape of it is taken from here — the two
+# variable names and the framing — so that the helper git starts and the window that answers it
+# cannot drift apart. The helper's own binary is shipped beside the app as a sidecar, not linked.
+amenbo-askpass = { path = "../../crates/amenbo-askpass" }
 chrono = { version = "0.4", features = ["clock"] }
 # Always-on perf instrumentation: subscribes to the `target="perf"` spans that core and the command
 # layer emit, holding the EnvFilter (resolved env > config > channel > build) in a reloadable layer and

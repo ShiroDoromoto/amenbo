@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5180",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "node scripts/prepare-cli-sidecar.mjs && npm run build"
+    "beforeBuildCommand": "node scripts/prepare-sidecars.mjs && npm run build"
   },
   "app": {
     "windows": [
@@ -31,7 +31,8 @@
     "active": true,
     "targets": "all",
     "externalBin": [
-      "binaries/amenbo"
+      "binaries/amenbo",
+      "binaries/amenbo-askpass"
     ],
     "windows": {
       "nsis": {

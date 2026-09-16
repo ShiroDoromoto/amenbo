@@ -110,6 +110,7 @@ vi.mock("./folder", () => {
 });
 
 import { GitPanel } from "./GitPanel";
+import { carriedIntoStage, carriedOverStage, type Held, STAGE_ATTR } from "./handDrag";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,9 +144,16 @@ async function draw(
   at: string | null = ROOT,
   onHistory?: () => void,
   onRead?: (path: string[]) => void,
+  onCarry?: (held: Held) => void,
 ) {
   await act(async () => {
-    root.render(createElement(GitPanel, { projectId: 1, root: at, onHistory, onRead }));
+    root.render(createElement(GitPanel, {
+      projectId: 1,
+      root: at,
+      onHistory,
+      onRead,
+      onCarry: onCarry === undefined ? undefined : (held) => onCarry(held),
+    }));
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
@@ -1004,5 +1012,134 @@ describe("the rail's git half, with rows picked out", () => {
     await draw();
     expect(allBox(t("git.changes"))).toBeDefined();
     expect(allBox(t("git.staged"))).toBeUndefined();
+  });
+});
+
+/// A row carried from one of git's lists to the other, which is the gesture the tree's rows are
+/// already taken up by (`AMB-D-775`). What has to be right is that the whole set travels, that a
+/// drop on the list the rows are already in asks git nothing, and that a conflict is not carried at
+/// all — staging one is the reader declaring the merge settled (`AMB-D-906`, 2-7).
+describe("the rail's git half, with a row in hand", () => {
+  /** The section a drop would land in, by the name over it. */
+  const listOf = (under: string): HTMLElement =>
+    sectionOf(under) as HTMLElement;
+
+  /** Press a row the way a hand takes hold of one. */
+  async function takeHold(what: Element) {
+    await act(async () => {
+      what.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  /** Let the rows go over one of the lists, the way the gesture reports it. */
+  async function letGoOn(list: HTMLElement, held: Held) {
+    await act(async () => {
+      carriedIntoStage(list, held);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  const two = (): FolderGitDto => says({
+    rows: [
+      row({ path: ["a.rs"], worktree: "M" }),
+      row({ path: ["b.rs"], worktree: "M" }),
+      row({ path: ["kept.rs"], index: "M" }),
+    ],
+  });
+
+  it("hands the whole set to the gesture when one of its rows is taken hold of", async () => {
+    hoisted.git[ROOT] = two();
+    const taken: Held[] = [];
+    await draw(ROOT, undefined, undefined, (held) => taken.push(held));
+    await act(async () => {
+      rowOf(t("git.changes"), "a.rs").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      rowOf(t("git.changes"), "b.rs")
+        .dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true, ctrlKey: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    await takeHold(rowOf(t("git.changes"), "b.rs"));
+    expect(taken).toEqual([{
+      wholes: [`${ROOT}/a.rs`, `${ROOT}/b.rs`],
+      root: ROOT,
+      paths: [["a.rs"], ["b.rs"]],
+    }]);
+  });
+
+  /// The box is an act of its own, and a hand that slipped a few pixels while pressing it would
+  /// stage nothing and put the row in the air instead.
+  it("does not take a row up when the press was on its box", async () => {
+    hoisted.git[ROOT] = two();
+    const taken: Held[] = [];
+    await draw(ROOT, undefined, undefined, (held) => taken.push(held));
+    await takeHold(box(t("git.changes"), "a.rs"));
+    expect(taken).toEqual([]);
+  });
+
+  it("stages what was let go on the staged list, and takes back what was let go on the other", async () => {
+    hoisted.git[ROOT] = two();
+    await draw();
+    await letGoOn(listOf(t("git.staged")), {
+      wholes: [`${ROOT}/a.rs`, `${ROOT}/b.rs`],
+      root: ROOT,
+      paths: [["a.rs"], ["b.rs"]],
+    });
+    expect(hoisted.staged).toEqual([[["a.rs"], ["b.rs"]]]);
+
+    await letGoOn(listOf(t("git.changes")), {
+      wholes: [`${ROOT}/kept.rs`],
+      root: ROOT,
+      paths: [["kept.rs"]],
+    });
+    expect(hoisted.unstaged).toEqual([[["kept.rs"]]]);
+  });
+
+  /// There is no third state for a path to move to, so a drop where the rows already are would ask
+  /// git to stage what is staged.
+  it("asks git nothing when the rows are let go on the list they came from", async () => {
+    hoisted.git[ROOT] = two();
+    const taken: Held[] = [];
+    await draw(ROOT, undefined, undefined, (held) => taken.push(held));
+    // Taken up from the changes list, which is what makes the drop below a gesture that moved
+    // nothing — the half reads where they came from, not where git says they are.
+    await takeHold(rowOf(t("git.changes"), "a.rs"));
+    await letGoOn(listOf(t("git.changes")), taken[0]!);
+    expect(hoisted.staged).toEqual([]);
+    expect(hoisted.unstaged).toEqual([]);
+
+    // And the same rows let go on the other list do move.
+    await takeHold(rowOf(t("git.changes"), "a.rs"));
+    await letGoOn(listOf(t("git.staged")), taken[1]!);
+    expect(hoisted.staged).toEqual([[["a.rs"]]]);
+  });
+
+  it("marks the list a carried row is over, and unmarks it when the row leaves", async () => {
+    hoisted.git[ROOT] = two();
+    await draw();
+    const list = listOf(t("git.staged"));
+    expect(list.getAttribute(STAGE_ATTR)).toBe("staged");
+
+    await act(async () => { carriedOverStage(list); await new Promise((r) => setTimeout(r, 0)); });
+    expect(listOf(t("git.staged")).className).toContain("gitpanel__section--over");
+    expect(listOf(t("git.changes")).className).not.toContain("gitpanel__section--over");
+
+    await act(async () => { carriedOverStage(null); await new Promise((r) => setTimeout(r, 0)); });
+    expect(listOf(t("git.staged")).className).not.toContain("gitpanel__section--over");
+  });
+
+  /// Staging a conflict is the one press that says the merge is settled there, so those rows are
+  /// not in hand at all.
+  it("leaves a conflicted row where it is when the hand presses on it", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [row({ path: ["both.rs"], index: "U", worktree: "U" })],
+    });
+    const taken: Held[] = [];
+    await draw(ROOT, undefined, undefined, (held) => taken.push(held));
+    await takeHold(rowOf(t("git.conflicts"), "both.rs"));
+    expect(taken).toEqual([]);
   });
 });

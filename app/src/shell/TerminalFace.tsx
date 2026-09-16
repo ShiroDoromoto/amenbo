@@ -1114,6 +1114,10 @@ export function TerminalFace({
           )}
           onPrefix={setGitPrefix}
           onHandOver={handOver}
+          // The same gesture the tree's rows are taken up by, so a changed path can be carried to a
+          // pane as readily as a name can — and, inside the half, from one of git's lists to the
+          // other (`../files/handDrag`).
+          onCarry={carry}
           // The half's own folder, because that is the one its rows are spelled from — and the
           // reading column is where a conflicted file is settled (`../files/GitPanel`).
           onRead={gitRoot === null ? undefined : (path) => openFile({ root: gitRoot, path })}

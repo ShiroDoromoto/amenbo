@@ -635,12 +635,12 @@ the button inside it that ends the creation,
 is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
 project put on the card, and nothing at all from the axis beside it that did not ask —
 `answer-one-category-with-several-values` walks the same board over a category one task answers twice:
-both values on the one card, the category missing from the row of buttons that cut the columns while
-the category beside it is still offered there, and the pair still drawn once the board is cut along
-that other one —
-`file-work-by-moving-its-card` walks that board as the place work is filed from rather than read on —
-the column standing before anything is in it, a card carried into it and another carried elsewhere,
-and the narrowing afterwards that comes back with the first and leaves out the second —
+both values on the one card, where a build drawing one chip per category would have kept whichever it
+met first —
+`file-work-under-a-category-from-its-own-pane` walks the filing itself, which is made in a record's own
+pane rather than on that board — the value offered there before anything is filed under it, one task
+filed under it and another filed elsewhere, and the narrowing afterwards that comes back with the first
+and leaves out the second —
 `set-an-app-up-to-reach-this-project` walks the fold that holds the other way in — the app already reaching this
 project and the folder its entry names, beside the app reaching nothing, each row offering the one road its app can
 walk —

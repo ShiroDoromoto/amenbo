@@ -5,7 +5,7 @@
 // because the column draws one of them and the rest are off the screen — so it is given back when
 // the tab comes up again, and it goes when the tab does.
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   aFile, button, click, container, drawOpen, hoisted, last, openFile, pressable, ROOT, settle,
 } from "./filesPanelKit";
@@ -280,8 +280,27 @@ describe("the file face", () => {
       expect(tabFor("b.txt")).toBeUndefined();
     });
 
+    // jsdom lays nothing out, so every width it is asked for is 0 and no row ever spills. What the
+    // face reads is the row's own two numbers, and this is where a test says what they came out as.
+    // It is said on the prototype because the row is not a thing a test here holds, and taken back
+    // after each one because what is left on the prototype is left on every element in the file.
+    const WIDTHS = ["scrollWidth", "clientWidth"] as const;
+    const asWide = (scrollWidth: number, clientWidth: number) => {
+      const came = { scrollWidth, clientWidth };
+      for (const name of WIDTHS) {
+        Object.defineProperty(HTMLElement.prototype, name, {
+          configurable: true, value: came[name],
+        });
+      }
+    };
+    afterEach(() => {
+      const every = HTMLElement.prototype as unknown as Record<string, unknown>;
+      for (const name of WIDTHS) delete every[name];
+    });
+
     // The row scrolls rather than paging, so the tab that is off the end of it is reached by name.
     it("lists everything it is holding, by name", async () => {
+      asWide(200, 100);
       await twoOpen();
       await click(container.querySelector<HTMLElement>(".files__more"));
       await settle();
@@ -291,6 +310,15 @@ describe("the file face", () => {
       await click([...container.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]);
       await settle();
       expect(onTop()).toBe("a.md");
+    });
+
+    /** What the list answers is which tabs cannot be seen. On a row that is all in view there is no
+     *  such tab, and a control that opens on an empty box — or on the name of the tab the reader is
+     *  looking at — reads as one that did nothing (`AMB-T-4254`). */
+    it("keeps the list away while the whole row is in view", async () => {
+      asWide(100, 100);
+      await twoOpen();
+      expect(container.querySelector(".files__more")).toBeNull();
     });
   });
 

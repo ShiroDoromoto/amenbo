@@ -19,8 +19,9 @@
 //!
 //! It is a crate of its own rather than a helper inside one suite because the same host is wanted from
 //! both sides of the tree: this workspace's tests reach it as a dev-dependency, and the pre-distribution
-//! harness — its own cargo workspace, deliberately outside this one — by path when a scenario has to
-//! stand a catalog up. A third hand-rolled listener is the thing it exists to stop.
+//! harness — its own cargo workspace, deliberately outside this one — by path, where a scenario's
+//! premise stands one up behind a git remote that turns every request away and sends git looking for
+//! a credential. A third hand-rolled listener is the thing it exists to stop.
 //!
 //! ```no_run
 //! # use amenbo_static_host::StaticHost;

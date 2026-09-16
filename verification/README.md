@@ -741,6 +741,13 @@ those counts walks with nothing on the network. `git-remote-move` records one fi
 from a checkout of its own, and it is the one of the two that is **not** a premise: being behind is
 what somebody else recorded, and a road that opened on it already recorded would prove a first read
 rather than the read taken again that a fetch is for.
+`git-remote-asking` stands the other side a path cannot be: one that stops and asks who is sending.
+What answers there is a loopback host turning every request away with a `401` and the header naming
+what it wanted, which is the least that sends git looking for a credential — and nothing behind it is
+a repository, because a road about the asking never reaches the point where there would be something
+to send. It takes the place of `git-remote` rather than standing beside it, a repository sending to
+one place. The host answers for as long as the world stands and stops when it is let go, so it is
+held on the driver the way the MCP server a road stands up is.
 **Every one of these runs git with none of the machine's own configuration** (`GIT_CONFIG_GLOBAL`
 pointed at an empty file, the system one turned off). What a premise declares is the repository it
 builds, and a reader's `git lfs install`, `core.autocrlf` or `commit.gpgsign` would each make that a

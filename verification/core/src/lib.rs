@@ -1055,6 +1055,21 @@ const REGISTRY: &[OpSpec] = &[
     // while the window is up and shows it, so a world where the other side had already moved before
     // the app opened would prove a first read rather than a read taken again.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-remote-move", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
+    // And the other side that stops to ask who is sending, which is the one road a path cannot
+    // walk. What stands there is a loopback host that turns every request away with a `401` and the
+    // header naming what it wanted — the least that makes git go looking for a credential — so the
+    // question a road is about is git's own, put the way a repository nobody is logged in to puts
+    // it.
+    //
+    // Nothing on the other side is a repository, and nothing needs to be: git asks before it has
+    // been answered once, and a road about the asking ends where the answer would have gone. That is
+    // also what keeps it offline — the host is on `127.0.0.1` and the port is the one the machine
+    // handed out, so no name is looked up and no account exists to be locked.
+    //
+    // It replaces `git-remote` rather than standing beside it: a repository sends to one place, and
+    // a road walking this one is not reading the counts. `dir` follows `git-init`'s rule and for its
+    // reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-remote-asking", required: &[], refs: &[], strings: &["dir"], binds: false },
     // A checkout of the task's own, cut and folded. The road walks the two commands a
     // person working a task actually types, and the refusals that stand between them — which is why
     // `start` is here rather than only the state it leaves: what a second one meets is the whole of
@@ -3247,6 +3262,12 @@ const REGISTRY: &[OpSpec] = &[
     // bringing it in moves this one, and sending moves the other. A road naming the wrong one would
     // be pressing a control beside the one it meant, which is the reason `stage` and `unstage` are
     // two as well.
+    //
+    // `stops` says the call will not come back on its own: git has something to ask before it can go
+    // out, and what comes up is a question rather than the row within reach again. It is on the step
+    // rather than read off the screen because the operator is told what to do before they press, and
+    // the two presses want opposite things of them — waiting for the row on the road where nothing
+    // is asked, and answering on the road where something is.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "fetch", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pull", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "push", required: &[], refs: &[], strings: &[], binds: false },
@@ -3261,6 +3282,38 @@ const REGISTRY: &[OpSpec] = &[
     // rather than sending an operator hunting for a `0` that is never drawn.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ahead", required: &["count"], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "behind", required: &["count"], refs: &[], strings: &[], binds: false },
+
+    // ── the question git stopped to ask ───────────────────────────────────────────────────────────
+    // What comes up when one of those three presses reaches a repository that wants to know who is
+    // sending (`app/src/files/GitAsk.tsx`). It is filed here rather than under the face
+    // it is drawn on because what raises it is a press on this half and nothing else does: the
+    // window runs those three calls itself, and this is the one thing they can stop for.
+    //
+    // **Two ops read it, because the dialog is written by two hands.** `ask-asked` is git's own
+    // sentence, word for word and in whatever language git wrote it, so `shows` is git's English and
+    // not anything Amenbo says. `ask-doing` is the line above it, which is this side's: it names the
+    // call that is waiting, and what a road looks for in it is the call's own name inside a frame
+    // the interface translates.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ask-doing", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ask-asked", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // Whether the box hides what is typed into it. git's two questions are one dialog drawn twice,
+    // and this is one of the two things that tell them apart on the screen — a name goes in plain
+    // and a password does not.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ask-hidden", required: &[], refs: &[], strings: &[], binds: false },
+    // And the other: whether the offer to keep the answer on this machine is there at all. It is
+    // there only where the question names a whole credential — git's second, the one already
+    // carrying the user — because there is nothing to keep before that, and `present: false` on the
+    // first is what says so.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "ask-keep", required: &[], refs: &[], strings: &[], binds: false },
+    // What the person types into it. `said` is the answer, and it is the road's own word rather than
+    // anything real: a road about the asking ends before the answer is worth anything.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "ask-say", required: &["said"], refs: &[], strings: &["said"], binds: false },
+    // And the two ways out, which are two ops and not one answer with a yes and a no. What they send
+    // down the wire are different things: an answer git reads, and nobody having answered — and git
+    // reads an empty password as a password, so the second cannot be spelled as the first with
+    // nothing in the box.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "ask-go", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "ask-cancel", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── the files the column is holding ───────────────────────────────────────────────────────────
     // The reading column holds several files at once, as a row of tabs above the one on top
@@ -3759,6 +3812,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // that one is a step, because a number that moves while the window is up is the whole of what
     // the read taken again is for.
     (Domain::Repo, "git-remote"),
+    // And the other side of that same kind that asks who is sending. Same reason once more, and the
+    // world it stands up is the one a road about git's question has to open on: the asking happens
+    // on the first call out, so a road that had to arrange it mid-walk would be arranging it after
+    // the call it is about.
+    (Domain::Repo, "git-remote-asking"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under
@@ -4044,8 +4102,9 @@ impl Scenario {
             // axis is one no record may leave empty, `away` whether a word said in a pane is armed
             // and left behind, `folded` whether the ref being pressed in a pane is one the fold broke
             // across two rows, `asks` whether the press that opens a pane meets the question of which
-            // folder rather than a pane, and `first` whether a hit stands at the top of the answer
-            // rather than merely somewhere in it.
+            // folder rather than a pane, `first` whether a hit stands at the top of the answer
+            // rather than merely somewhere in it, and `stops` whether the call a press starts has
+            // something to ask before it can go out.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -4088,6 +4147,7 @@ impl Scenario {
                 "folded",
                 "asks",
                 "first",
+                "stops",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {

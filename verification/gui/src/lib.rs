@@ -828,6 +828,18 @@ impl Instructor {
     /// registered image and the pattern drawn in its place are both pictures, and a slot holding either
     /// puts no word on a shot.
     ///
+    /// `files ask-hidden` is a `Review`, and the reading is why: what it is about is a box drawing
+    /// dots in place of the characters, and dots are not words. Worse than silent — the characters
+    /// it would have drawn are the road's own answer, so a reading looking for them would pass the
+    /// build that drew them and say nothing at all about the build that did not. The instruction
+    /// therefore names both faces of the box, so an eye is comparing rather than hunting.
+    ///
+    /// `files ask-keep` is a `Review` beside it, on both of its states. The offer is put in the
+    /// interface's own language, which is the machine's rather than the build's — the reason `nudge`
+    /// and `tick banner` are `Review`s — and the half worth saying so of is `present: false`: what a
+    /// reading would be looking for there is absent by being untranslated as well as by being
+    /// missing, so it would pass on a build that had lost the offer altogether.
+    ///
     /// **And one that no op names — an expectation the fold leaves nothing of.** [`fold`] keeps
     /// letters and digits and drops everything else, so an expectation written out of punctuation
     /// alone — a quote, a bracket, an arrow — reaches the match as the empty string, which every
@@ -991,6 +1003,13 @@ impl Instructor {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
             (Domain::Files, "git-said") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // The question git stopped to ask, on both of the halves a reading can answer for. What
+            // `ask-asked` names is git's own sentence and what `ask-doing` names is the call inside
+            // this side's frame — neither is a word of the interface's, so both are the same letters
+            // whatever the machine's language is, which is what lets a reading judge them.
+            (Domain::Files, "ask-doing") | (Domain::Files, "ask-asked") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // And the line git wrote on a stash, which is git's own sentence for the same reason.
@@ -2944,17 +2963,37 @@ impl Instructor {
             // reading the other side moves neither number but the one measuring what is not here,
             // bringing it in empties that one, and sending empties the other.
             //
-            // Each says to wait as well. The window makes the call itself, and the row is out of
-            // reach while it is under way — an operator who read the numbers on the way past would
-            // be reading the ones that stood there before the press.
-            (Domain::Files, "fetch") =>
-                "In the half of the panel that is git's, press the first of the three controls in the row under the branch's name — the one that reads the shared repository without bringing anything in. Wait for the row to come back within reach before going on."
+            // Each says how it ends as well, and that is what `stops` moves. The window makes the
+            // call itself and the row is out of reach while it is under way — an operator who read
+            // the numbers on the way past would be reading the ones that stood there before the
+            // press — so the ordinary line is to wait for the row. Where the other side stops to ask
+            // who is sending, waiting for it is waiting for something that is not coming: what
+            // arrives instead is a question over the window, and the step after this one is about it.
+            (Domain::Files, "fetch") => format!(
+                "In the half of the panel that is git's, press the first of the three controls in the row under the branch's name — the one that reads the shared repository without bringing anything in. {}",
+                ends(with)
+            ),
+            (Domain::Files, "pull") => format!(
+                "In the half of the panel that is git's, press the second of the three controls in the row under the branch's name — the one that brings in what the shared repository has. {}",
+                ends(with)
+            ),
+            (Domain::Files, "push") => format!(
+                "In the half of the panel that is git's, press the third of the three controls in the row under the branch's name — the one that sends what is recorded here, and the only one of the three drawn as the one to press. {}",
+                ends(with)
+            ),
+            // The question git stopped to ask, and the three hands that answer it. The dialog is
+            // named by what it is waiting on rather than by any word on it: the line at its top is
+            // the interface's own, and what the operator can always find it by is that the window is
+            // holding still behind it.
+            (Domain::Files, "ask-say") => format!(
+                "In the box on the question the window has put up, type \"{}\". Type nothing else and press nothing yet.",
+                req(with, "said")?
+            ),
+            (Domain::Files, "ask-go") =>
+                "On the question the window has put up, press the control that sends the answer — it is the one drawn as the one to press. What it does next is git's: either another question comes up in its place, or the call carries on."
                     .to_string(),
-            (Domain::Files, "pull") =>
-                "In the half of the panel that is git's, press the second of the three controls in the row under the branch's name — the one that brings in what the shared repository has. Wait for the row to come back within reach before going on."
-                    .to_string(),
-            (Domain::Files, "push") =>
-                "In the half of the panel that is git's, press the third of the three controls in the row under the branch's name — the one that sends what is recorded here, and the only one of the three drawn as the one to press. Wait for the row to come back within reach before going on."
+            (Domain::Files, "ask-cancel") =>
+                "On the question the window has put up, press the control that leaves it unanswered — the one beside the control that sends. The question goes and nobody answered it, which is not the same as answering with an empty box: what comes back is git saying so."
                     .to_string(),
             (Domain::Files, "tree") => match flag(with, "open")? {
                 // One folder, whichever the window is on: a project bound to several draws the one
@@ -4653,6 +4692,41 @@ impl Instructor {
                     counted("commit", n)
                 ),
             },
+            // The two halves of the question the window has put up. The line at the top is this
+            // side's and carries the call that is waiting inside it; the words under it are git's
+            // own, and the instruction says so — an operator who expected Amenbo's phrasing would
+            // read a faithful sentence as a wrong one.
+            (Domain::Files, "ask-doing") => match present(with) {
+                true => format!(
+                    "On the question the window has put up, confirm the line at the top names \"{}\" as what is waiting for an answer. The sentence around it is the interface's own, in whatever language the machine is set to; the call's name is not translated.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the question the window has put up, confirm the line at the top does not name \"{}\".",
+                    req(with, "shows")?
+                ),
+            },
+            (Domain::Files, "ask-asked") => match present(with) {
+                true => format!(
+                    "On the question the window has put up, confirm the words under that line carry \"{}\" — they are git's own sentence, drawn as git wrote it, so they are English however the rest of the window is drawn.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the question the window has put up, confirm the words under that line do not carry \"{}\".",
+                    req(with, "shows")?
+                ),
+            },
+            // Whether the box hides what goes into it. Read after something has been typed, since an
+            // empty box hides nothing either way.
+            (Domain::Files, "ask-hidden") => match present(with) {
+                true => "On the question the window has put up, confirm the box draws what was typed as dots rather than as the characters themselves.".to_string(),
+                false => "On the question the window has put up, confirm the box draws what was typed as the characters themselves rather than as dots.".to_string(),
+            },
+            // And whether the offer to keep the answer is on it at all.
+            (Domain::Files, "ask-keep") => match present(with) {
+                true => "On the question the window has put up, confirm there is a box to tick offering to keep the answer on this machine, with a line under it saying where it goes.".to_string(),
+                false => "On the question the window has put up, confirm there is no box to tick offering to keep the answer — the question has nothing whole enough to keep.".to_string(),
+            },
             (Domain::Files, "read-as") => match present(with) {
                 true => format!(
                     "On the row the open file is named on, confirm what says how it was read now names \"{}\".",
@@ -5057,6 +5131,16 @@ const KEEP_PRINTING_SECONDS: u32 = 90;
 /// written rather than measured because the road is walked by a person: what they can check is that
 /// the printing stopped, and the number is what makes that check enough.
 const PAST_WHAT_IS_KEPT_LINES: u32 = 25_000;
+
+/// How one of the three presses that reach the shared repository ends — the sentence on the end of
+/// its instruction. Written once because the three share it, and it is the whole of what `stops`
+/// changes about any of them.
+fn ends(with: &Args) -> &'static str {
+    match flagged(with, "stops") {
+        true => "It does not come back on its own: the other side stops to ask who is sending, and what comes up is a question over the window.",
+        false => "Wait for the row to come back within reach before going on.",
+    }
+}
 
 /// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
 /// is the half most asserts want, these ask for a shape a step takes only when it says so.

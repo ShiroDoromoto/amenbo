@@ -76,7 +76,7 @@ export async function folderWatch(
 
 /** What a folder with no git answer looks like, which is what the browser has and what a folder
  *  that is no repository gets: no branch, no rows, and no front to take off a path. */
-const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [] };
+const NO_GIT: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false };
 
 /**
  * What git says about one of a project's folders: where its branch stands, and the paths it named.
@@ -264,6 +264,34 @@ export async function folderGitBranchCreate(
 ): Promise<string> {
   if (!inTauri()) return "";
   return await invoke<string>("folder_git_branch_create", { projectId, root, name });
+}
+
+/**
+ * Bring `branch` into the one the folder is standing on — and hand back whatever git said.
+ *
+ * **Conflicts are an answer and not a failure of this call.** git exits non-zero on them, with the
+ * paths it could not settle written in its own words, so what reaches the caller is a refusal
+ * carrying the list — and the merge is underway from that moment (`folderGitStatus` says so).
+ */
+export async function folderGitMerge(
+  projectId: number,
+  root: string,
+  branch: string,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_merge", { projectId, root, branch });
+}
+
+/**
+ * Put the tree back where it stood before the merge.
+ *
+ * **What the reader has settled by hand goes with it.** A conflict resolved in the working tree and
+ * never written down is in no commit and no reflog, so this is asked about before it is run
+ * (`./GitBranch`).
+ */
+export async function folderGitMergeAbort(projectId: number, root: string): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_merge_abort", { projectId, root });
 }
 
 /**

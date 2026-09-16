@@ -11,13 +11,32 @@
 // (`AMB-T-4901` measured it on all three systems), and those lines go on the screen as they came.
 // Amenbo neither rewrites them nor asks beforehand whether the move is wise: the window does not
 // guard the pane's agent against the reader or the reader against it (`AMB-D-906`, 3-1).
+//
+// **The merge is started from this same list, on a second face of it.** Which branch to bring in is
+// the same question as which branch to move onto, asked of the same names — and a row that did one
+// thing on a press and another on a modifier would be a row whose answer a reader cannot see before
+// making it. So the face is switched first and every row on it says what it does.
+//
+// **A merge underway is drawn under the branch line for as long as it lasts**, which is what the
+// way out of it hangs from. Where it is drawn is the answer to the one thing left open when the
+// conflicts were designed (`AMB-T-4919`): the list of them is in this rail and takes no part in
+// what Escape folds (`AMB-D-815`), and a merge with every conflict already settled has no list at
+// all while still being a merge. The line the branch is named on is there either way.
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { GitBranchDto } from "../bindings/bindings";
 import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
-import { folderGitBranchCreate, folderGitBranches, folderGitSwitch } from "./folder";
+import {
+  folderGitBranchCreate, folderGitBranches, folderGitMerge, folderGitMergeAbort, folderGitSwitch,
+} from "./folder";
+
+/** What git wrote on the way back from one of this line's doors, and whether it was a refusal. */
+type Said = { text: string; refused: boolean };
+
+/** Which question the list is asking: which branch to stand on, or which one to bring in. */
+type Face = "go" | "merge";
 
 /**
  * The branch the folder is on, and every other one it could be on.
@@ -25,13 +44,16 @@ import { folderGitBranchCreate, folderGitBranches, folderGitSwitch } from "./fol
  * `on` is the branch as `folderGitStatus` answered it — the one call that says which branch is
  * checked out, so the list below is asked only for the names and the counts and never for that.
  */
-export function GitBranch({ projectId, root, on, onMoved }: {
+export function GitBranch({ projectId, root, on, merging, onMoved }: {
   /** The project the folder is bound to. */
   projectId: number;
   /** The folder the window is on, as its path. */
   root: string;
   /** Where the checked-out branch stands, from the same read the rows came from. */
   on: GitBranchDto;
+  /** Whether a merge is underway, from that same read — `MERGE_HEAD` in the repository's own
+   *  directory, which is there for the whole of a merge and not only while a path is unsettled. */
+  merging: boolean;
   /** A move that went through. What the folder holds has changed under every reader of it. */
   onMoved: () => void;
 }) {
@@ -41,11 +63,20 @@ export function GitBranch({ projectId, root, on, onMoved }: {
   const [branches, setBranches] = useState<GitBranchDto[]>([]);
   // Whether the row at the foot of the list is a box to type a name into.
   const [making, setMaking] = useState(false);
-  // What git said in refusing, or nothing. It stands until the next press, because a refusal about
-  // the working tree is about a thing the reader now has to go and do something about.
-  const [said, setSaid] = useState<string | null>(null);
+  // Which of the two questions the rows are answering.
+  const [face, setFace] = useState<Face>("go");
+  // What git said, or nothing. It stands until the next press, because a refusal about the working
+  // tree is about a thing the reader now has to go and do something about.
+  const [said, setSaid] = useState<Said | null>(null);
+  // Whether the band under the line is standing over its question rather than over its button.
+  const [asking, setAsking] = useState(false);
   const open = at !== null;
   const here = on.name ?? t("git.detached");
+
+  // A merge that has ended takes its question with it. The band is gone either way — aborted, or
+  // concluded from the list of conflicts below — and a question left standing would come back up
+  // over the next merge already answered.
+  useEffect(() => { if (!merging) setAsking(false); }, [merging]);
 
   // Asked when the list opens, and asked again every time it opens: which branches there are is a
   // question about the repository right now, and a list kept from last time is about whenever that
@@ -63,6 +94,7 @@ export function GitBranch({ projectId, root, on, onMoved }: {
   const shut = () => {
     setAt(null);
     setMaking(false);
+    setFace("go");
   };
 
   /** Move onto one of them. The branch already checked out is not a move, and asking git to go
@@ -73,8 +105,39 @@ export function GitBranch({ projectId, root, on, onMoved }: {
     setSaid(null);
     void folderGitSwitch(projectId, root, name)
       .then(() => onMoved())
-      .catch((e: unknown) => setSaid(errText(e)));
+      .catch((e: unknown) => setSaid({ text: errText(e), refused: true }));
   };
+
+  /**
+   * Bring one of them into the branch being stood on.
+   *
+   * **The half around this one is told to look again whichever way git answered.** A merge that
+   * stopped on conflicts exits non-zero and has still written the whole of them into the working
+   * tree, so a refusal here is a screen that has changed as much as a merge that went through.
+   */
+  const bring = (name: string | null) => {
+    shut();
+    if (name === null) return;
+    setSaid(null);
+    void folderGitMerge(projectId, root, name)
+      .then((wrote) => setSaid(wrote === "" ? null : { text: wrote, refused: false }))
+      .catch((e: unknown) => setSaid({ text: errText(e), refused: true }))
+      .finally(() => onMoved());
+  };
+
+  /** Put the tree back where it stood before the merge — answered for, above. */
+  const drop = () => {
+    setAsking(false);
+    setSaid(null);
+    void folderGitMergeAbort(projectId, root)
+      .then((wrote) => setSaid(wrote === "" ? null : { text: wrote, refused: false }))
+      .catch((e: unknown) => setSaid({ text: errText(e), refused: true }))
+      .finally(() => onMoved());
+  };
+
+  // Every branch but the one already being stood on: git answers `Already up to date.` to a merge of
+  // a branch into itself, which is a call spent to be told nothing.
+  const others = branches.filter((one) => one.name !== null && one.name !== on.name);
 
   return (
     <Fragment>
@@ -110,12 +173,73 @@ export function GitBranch({ projectId, root, on, onMoved }: {
           <Icon name="chevronDown" label={t("git.branches")} />
         </button>
       </div>
+      {/* A merge underway, and the way out of it. It hangs from the branch line because that line is
+          drawn for as long as the repository has one, where the list of conflicts below is drawn
+          only while a path is still unsettled — and a merge is no less underway for having had
+          every conflict settled and staged.
+
+          **The question is put in the band itself rather than in a window over it**, the way a
+          branch is named in the list rather than in a window of its own. What it is asking about is
+          the band it is standing in.
+
+          **It is asked every time.** A conflict settled by hand and never written down is in no
+          commit and no reflog, so this press loses work git cannot give back — and unlike throwing
+          one file's changes away, it is not a row sitting a pixel from the rows that open a file
+          (`AMB-D-777`), so there is nothing here for a reader to want turned off. */}
+      {merging && (
+        <div className="gitpanel__merging">
+          <p className="gitpanel__mergingsays">
+            <Icon name="warning" />
+            {t("git.merging")}
+          </p>
+          {asking && <p className="gitpanel__mergingwarn">{t("git.mergeAbortGone")}</p>}
+          <div className="gitpanel__mergingdo">
+            {asking
+              ? (
+                <Fragment>
+                  <button className="btn btn--danger" type="button" onClick={drop}>
+                    {t("git.mergeAbortGo")}
+                  </button>
+                  {/* What the press lands on, the way the question before throwing changes away
+                      puts it on keeping them: of the two answers here, one of them is undone by
+                      nothing. */}
+                  <button className="btn" type="button" autoFocus onClick={() => setAsking(false)}>
+                    {t("git.mergeAbortKeep")}
+                  </button>
+                </Fragment>
+              )
+              : (
+                <button className="btn" type="button" onClick={() => setAsking(true)}>
+                  {t("git.mergeAbort")}
+                </button>
+              )}
+          </div>
+        </div>
+      )}
       {/* git's own words, in git's own layout: the three lines it writes name one file per line, and
           run together they name none of them. */}
-      {said !== null && <p className="gitpanel__said gitpanel__said--refused">{said}</p>}
+      {said !== null && (
+        <p className={`gitpanel__said${said.refused ? " gitpanel__said--refused" : ""}`}>
+          {said.text}
+        </p>
+      )}
       {at !== null && (
-        <Menu at={at} onClose={shut}>
-          {branches.map((one) => (
+        // The face is handed over because the rows are replaced whole when it changes, and the
+        // reader would otherwise be left standing on a row that is no longer there.
+        <Menu at={at} face={face} onClose={shut}>
+          {face === "merge" && others.map((one) => (
+            <MenuItem key={one.name ?? ""} onClick={() => bring(one.name)}>
+              {/* Every row says what it does. The list looks like the one this face was reached
+                  from, and the two do opposite things to the working tree. */}
+              <span className="gitpanel__ison" />
+              <span className="gitpanel__pickname">{tf("git.mergeOne", { name: one.name ?? "" })}</span>
+              <span className="gitpanel__pickcount">
+                {one.ahead > 0 && `↑${one.ahead}`}
+                {one.behind > 0 && `↓${one.behind}`}
+              </span>
+            </MenuItem>
+          ))}
+          {face === "go" && branches.map((one) => (
             <MenuItem key={one.name ?? ""} onClick={() => go(one.name)}>
               {/* The box is drawn for every row, with or without a mark in it, so the names stand in
                   one column rather than stepping in and out as the list changes under them. */}
@@ -129,7 +253,7 @@ export function GitBranch({ projectId, root, on, onMoved }: {
               </span>
             </MenuItem>
           ))}
-          {making
+          {face === "go" && (making
             ? (
               <NewBranch
                 onName={async (name) => {
@@ -146,7 +270,20 @@ export function GitBranch({ projectId, root, on, onMoved }: {
                 <span className="gitpanel__pickname">{t("git.newBranch")}</span>
                 <span className="gitpanel__pickcount">{tf("git.fromBranch", { name: here })}</span>
               </MenuItem>
-            )}
+            ))}
+          {/* The way to the other face. It is out of the list where there is no other branch to
+              bring in, and out of it while a merge is already underway — git refuses the second
+              merge in its own words, and a door that can only ever come back refused is one to
+              leave out rather than to offer. It is out of it at a detached HEAD as well: what a
+              merge made there belongs to is a commit no branch names, which is the one place this
+              window has nothing to say about afterwards. */}
+          {face === "go" && !making && !merging && on.name !== null && others.length > 0 && (
+            <MenuItem apart onClick={() => { setSaid(null); setFace("merge"); }}>
+              <span className="gitpanel__ison"><Icon name="foldRight" /></span>
+              <span className="gitpanel__pickname">{t("git.mergeFrom")}</span>
+              <span className="gitpanel__pickcount">{tf("git.mergeInto", { name: here })}</span>
+            </MenuItem>
+          )}
         </Menu>
       )}
     </Fragment>

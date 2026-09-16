@@ -1933,6 +1933,13 @@ pub struct FolderGitDto {
     /// Nothing where the folder is no repository, and where git could not be run at all.
     pub(crate) branch: Option<GitBranchDto>,
     pub(crate) rows: Vec<GitEntryDto>,
+    /// Whether a merge is underway — `MERGE_HEAD` standing in the repository's own directory.
+    ///
+    /// **It is not read off the rows.** git writes `U` on a path whose two sides disagree, but a
+    /// merge whose conflicts have all been settled and staged has no such path left and is still a
+    /// merge waiting to be concluded — which is exactly the moment a reader needs the way out of
+    /// it. The file is the thing git itself looks for, and it is there for the whole of the merge.
+    pub(crate) merging: bool,
 }
 
 /// One commit, as a history list draws a row of it (`crate::folder_git`).

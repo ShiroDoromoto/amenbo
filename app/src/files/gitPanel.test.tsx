@@ -122,6 +122,7 @@ const says = (about: Partial<FolderGitDto>): FolderGitDto => ({
   prefix: "",
   branch: { name: "main", upstream: "origin/main", ahead: 0, behind: 0 },
   rows: [],
+  merging: false,
   ...about,
 });
 
@@ -260,7 +261,7 @@ describe("the rail's git half", () => {
   /// One project in twenty-one on this machine. An empty list there would read as a repository
   /// where nothing has happened.
   it("draws the sentence and nothing else where the folder is no repository", async () => {
-    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [] };
+    hoisted.git[ROOT] = { prefix: "", branch: null, rows: [], merging: false };
     await draw();
     expect(container.textContent).toContain(t("git.noRepo"));
     expect(container.querySelector(".gitpanel__section")).toBeNull();

@@ -841,12 +841,27 @@ const ui = {
   "settings.restoreAsk": "Before throwing changes away",
   "settings.restoreAskOn": "Ask me",
   "settings.restoreAskOff": "Do not ask me",
-  "settings.restoreAskNote": "A change git has not recorded is nowhere once it is thrown away — this is the one press in the window that nothing undoes.",
+  "settings.restoreAskNote": "A change git has not recorded is nowhere once it is thrown away, and nothing in the window brings it back.",
   "git.branches": "Branches",
   "git.onBranch": "The branch you are on",
   "git.newBranch": "New branch",
   "git.fromBranch": "from {name}",
   "git.branchName": "Name of the new branch",
+  // The second face of the branch list, and what a row of it does. The list is the same names as
+  // the face it was reached from and does the opposite thing to the working tree, so every row here
+  // says what it does rather than leaving it to be known from which face is up.
+  "git.mergeFrom": "Bring a branch in",
+  "git.mergeInto": "into {name}",
+  "git.mergeOne": "Bring in {name}",
+  // A merge underway, drawn under the branch line for the whole of it — including after every
+  // conflict has been settled, when there is no list of them left to say so.
+  "git.merging": "A merge is underway",
+  "git.mergeAbort": "Stop the merge",
+  // What the press costs. A conflict settled by hand and never written down is in no commit and no
+  // reflog, which is why this question stands in front of the press every time.
+  "git.mergeAbortGone": "What has been settled by hand is written down nowhere, and stopping throws it away.",
+  "git.mergeAbortGo": "Stop it",
+  "git.mergeAbortKeep": "Go back",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

@@ -128,7 +128,13 @@ pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGi
         // would read as a path wearing two status letters.
         let (head, named) = out.split_once('\0').unwrap_or((out.as_str(), ""));
         let rows = rows(named, &repo.prefix);
-        Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows })
+        // Whether a merge is underway, asked of the file git itself asks — and free, because the
+        // directory it is in was read once and kept (`repo_of`). A second process to ask git the
+        // same question would be 14ms of a call that is 20ms whole (`AMB-T-4899`), and the watch
+        // the rail lays covers this directory, so the file appearing and going is already a reason
+        // to read again (`crate::folder_watch`).
+        let merging = repo.git_dir.join("MERGE_HEAD").exists();
+        Ok(FolderGitDto { prefix: repo.prefix, branch: branch_of(head), rows, merging })
     })
     .await
 }

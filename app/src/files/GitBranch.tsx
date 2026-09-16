@@ -112,7 +112,7 @@ export function GitBranch({ projectId, root, on, onMoved }: {
       </div>
       {/* git's own words, in git's own layout: the three lines it writes name one file per line, and
           run together they name none of them. */}
-      {said !== null && <pre className="gitpanel__said">{said}</pre>}
+      {said !== null && <p className="gitpanel__said gitpanel__said--refused">{said}</p>}
       {at !== null && (
         <Menu at={at} onClose={shut}>
           {branches.map((one) => (
@@ -207,7 +207,7 @@ function NewBranch({ onName, onEnd }: {
         onKeyDown={(e) => { if (e.key === "Enter") make(); }}
         onBlur={onEnd}
       />
-      {refused !== null && <pre className="gitpanel__said">{refused}</pre>}
+      {refused !== null && <p className="gitpanel__said gitpanel__said--refused">{refused}</p>}
     </div>
   );
 }

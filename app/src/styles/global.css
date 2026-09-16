@@ -1062,6 +1062,19 @@ input[type="color"] {
   font-weight: var(--fw-medium);
 }
 .gitpanel__count { flex: 0 0 auto; color: var(--c-text-muted); font-family: var(--font-mono); }
+/* The three that go out to the remote. They wrap rather than shrink: a button whose word has been
+   cut in half is a button a reader has to guess at, and the column is dragged narrow often enough
+   for that to happen. */
+.gitpanel__net { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+/* What git wrote, in git's own words and its own spacing — the newlines it wrote are the shape of
+   what it said, and a sentence of several lines is why this one wraps rather than being cut off. */
+.gitpanel__said {
+  margin: 0; min-width: 0;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+/* A refusal is git saying no, which is the one of the two a reader must not read past. */
+.gitpanel__said--refused { color: var(--c-stop); }
 /* The way onto another branch, at the end of the line the branch is named on. It is the chevron
    alone: the name beside it already says what the list will be about, and a word for it would take
    the room the name is losing first (`app/src/files/GitBranch.tsx`). */
@@ -1075,15 +1088,6 @@ input[type="color"] {
   cursor: pointer;
 }
 .gitpanel__pick:hover { color: var(--c-text); }
-/* What git said, in git's own layout. Its refusal about a checkout names one file per line, and run
-   together as one paragraph it names none of them — so the line breaks are kept and the text wraps
-   rather than running off the column (`AMB-D-906`, 3-4). */
-.gitpanel__said {
-  margin: 0; padding: var(--s-2);
-  border-radius: var(--r-sm); background: var(--c-sunken);
-  color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-xs);
-  white-space: pre-wrap; overflow-wrap: anywhere;
-}
 /* The box the mark stands in, drawn on every row of the branch list whether or not there is a mark
    in it — so the names stand in one column rather than stepping in and out. It is the same box the
    folder picker draws (`.rootpick__dot`), in this list's own colour. */

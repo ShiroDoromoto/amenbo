@@ -3189,11 +3189,12 @@ impl Instructor {
             (Domain::Files, "trash") =>
                 "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
-            // The item that throws a change away, on the menu a row's right-click put up. The press and
-            // nothing after it, the way the bin's is: in `asks` the panel puts its question here and
-            // the step leaves it standing, because deciding it is `answer`'s.
+            // The item that throws a change away, on whichever menu is standing — a row's right-click
+            // put one up, or the file being read did (`menu-on-file`). The press and nothing after
+            // it, the way the bin's is: in `asks` the panel puts its question here and the step
+            // leaves it standing, because deciding it is `answer`'s.
             (Domain::Files, "restore") =>
-                "On the menu standing on the row, press the item that throws away what git has not been told about that file. If the panel asks whether to throw the change away, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                "On the menu that is standing, press the item that throws away what git has not been told about that file. If the panel asks whether to throw the change away, leave the question standing and answer nothing; leave the box about not asking again unticked."
                     .to_string(),
             // And answering one of those questions. The answers are named by what each does rather
             // than by the words on the buttons, which are the interface's own.
@@ -4023,10 +4024,11 @@ impl Instructor {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
             },
-            // What a row's menu offers, read rather than pressed. The item is described and never
-            // quoted, its words being the interface's own.
+            // What the menu offers, read rather than pressed — the one a row put up, or the one the
+            // file being read did. The item is described and never quoted, its words being the
+            // interface's own.
             (Domain::Files, "offers") => format!(
-                "On the menu standing on the row, confirm {}.",
+                "On the menu that is standing, confirm {}.",
                 {
                     let (there, gone) = menu_item(req(with, "item")?)?;
                     if present(with) { there } else { gone }

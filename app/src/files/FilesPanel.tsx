@@ -17,7 +17,7 @@
 // is.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
-import type { FolderFileDto } from "../bindings/bindings";
+import type { FolderFileDto, GitEntryDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { Menu, MenuItem } from "../components/Menu";
 import { confirmDialog } from "../core/dialog";
@@ -26,12 +26,12 @@ import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEncodings, folderGitIgnore, folderGitUntrack, folderRead, folderSave, folderUnwatch,
-  folderWatch, nextWatchTag, onFolderChanged,
+  folderEncodings, folderGitIgnore, folderGitStatus, folderGitUntrack, folderRead, folderSave,
+  folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
 import { FileMenu, type GitDoors } from "./FileMenu";
 import { useTrash } from "./trash";
-import { useRestore } from "./restore";
+import { isDirty, useRestore } from "./restore";
 import { FileEditor } from "./FileEditor";
 import { FileDiff } from "./FileDiff";
 import { GitHistory, type At } from "./GitHistory";
@@ -154,6 +154,48 @@ export function FilesPanel({
   const trash = useTrash(projectId, onGone);
   // Throwing away what git has not recorded, for the file being read (`./restore`).
   const restore = useRestore(projectId);
+
+  // The folder the file on the screen was opened out of, which is the folder git is asked about
+  // below — a file opened out of another of the project's folders asks about its own
+  // (`crate::folder_git`).
+  const readingRoot = reading?.root ?? null;
+  // How many times the host has said that folder moved. What there is to throw away is what there
+  // is to throw away now, and the menu is opened without warning.
+  const [moved, setMoved] = useState(0);
+  // What git said about that folder, which is where the menu on the file reads whether there is
+  // anything to throw away (`./FileMenu`).
+  //
+  // **Asked here rather than taken from the rail.** The rail draws the tree and git's own half one
+  // at a time (`./GitPanel`), so an item read off either of them would be an item that comes and
+  // goes with what the other column happens to be showing — for the same file, unchanged. The cost
+  // is one more of a call the window already makes for every folder it draws (`AMB-T-4897`), and it
+  // is made only while a file is on the screen.
+  const [named, setNamed] = useState<GitEntryDto[]>([]);
+
+  // The word that the folder moved, listened for and never asked for: every watcher hears the same
+  // one (`./folder`), so what is laid by the tree, by git's own half, or by the reader below for a
+  // file it can draw is heard here too. Where nothing in the window is watching — a binary is drawn
+  // from no watch of its own (`FileReader`) — no word arrives and the answer stands as of the read,
+  // which is what the column is drawing from anyway.
+  useEffect(() => {
+    if (readingRoot === null) return;
+    let alive = true;
+    const listening = onFolderChanged((fresh) => {
+      if (alive && fresh.root === readingRoot) setMoved((n) => n + 1);
+    });
+    return () => { alive = false; void listening.then((stop) => stop()); };
+  }, [readingRoot]);
+
+  useEffect(() => {
+    if (projectId === null || readingRoot === null) { setNamed([]); return; }
+    let alive = true;
+    void folderGitStatus(projectId, readingRoot)
+      .then((now) => { if (alive) setNamed(now.rows); })
+      // A folder that is no repository answers with nothing, and so does one that has gone — which
+      // is a menu without that item rather than a menu that failed to draw.
+      .catch(() => { if (alive) setNamed([]); });
+    return () => { alive = false; };
+  }, [projectId, readingRoot, moved]);
 
   // Whether the file on top is holding something that is not on the disk, named by the file rather
   // than by a plain yes: a mark on whichever tab is on would be a mark that moved to the next file
@@ -358,10 +400,13 @@ export function FilesPanel({
             void folderGitUntrack(projectId, reading.root, [reading.path])
               .catch((why: unknown) => pushNotice(errText(why)));
           },
-          // What git says about this one file is not asked for here: the rail is where git's answer
-          // about the folder is read, and a call of its own for one menu item would be a process
-          // started on the chance somebody opens it. The rail's own rows carry that item
-          // (`./GitPanel`).
+          // Only where git says the working tree has done something to this file. A file with
+          // nothing to throw away would be offered a press that does nothing, and the one act here
+          // that cannot be walked back is the last one to offer idly — the tree's rows read it the
+          // same way (`./restore`).
+          onRestore: isDirty(named, reading.path)
+            ? () => restore.askRestore(reading.root, [reading.path])
+            : undefined,
         }}
         onEdited={(edited) => setUnsaved(edited ? openKey(reading) : null)}
       />

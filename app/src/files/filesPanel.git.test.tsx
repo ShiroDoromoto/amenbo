@@ -7,7 +7,7 @@
 // press in the window that nothing undoes (`AMB-D-906`, `AMB-D-777`).
 import { describe, expect, it } from "vitest";
 import {
-  anyButton, button, click, container, drawOpen, hoisted, menuOn, ROOT, settle,
+  anyButton, button, click, container, drawOpen, hoisted, menuOn, openFile, ROOT, settle,
 } from "./filesPanelKit";
 import { t } from "../core/i18n";
 
@@ -134,5 +134,67 @@ describe("what git can be told about a row of the tree", () => {
     expect(button(t("git.fileHistory"))).toBeUndefined();
     expect(button(t("git.ignore"))).toBeUndefined();
     expect(button(t("git.restore"))).toBeUndefined();
+  });
+});
+
+/**
+ * The same item, on the file being read.
+ *
+ * The menu on this side is opened from the way out of a file the column cannot draw — a picture's
+ * bytes, or a file too big to put on the screen (`./FilesPanel`). That is the reader who most needs
+ * it: what the editor cannot show, the editor cannot be used to put back.
+ */
+describe("what git can be told about the file being read", () => {
+  /** A folder of two files, one of them changed, and a read that comes back as nothing to draw —
+   *  which is what puts the way out on the screen. */
+  function reading() {
+    hoisted.entries = {
+      "": [
+        { name: "changed.png", isDir: false, ignored: false },
+        { name: "recorded.png", isDir: false, ignored: false },
+      ],
+    };
+    hoisted.git[ROOT] = [{ path: ["changed.png"], index: " ", worktree: "M", isDir: false }];
+  }
+
+  it("offers throwing changes away only where git says there are some", async () => {
+    reading();
+    await drawOpen();
+    await openFile(button("recorded.png"));
+    await click(button(t("files.openElsewhere")));
+    expect(button(t("git.restore"))).toBeUndefined();
+
+    await drawOpen();
+    await openFile(button("changed.png"));
+    await click(button(t("files.openElsewhere")));
+    expect(button(t("git.restore"))).toBeDefined();
+  });
+
+  /// The file on the screen and never what is picked out in the rail: this column is about one
+  /// file, and a press made here is about the one being read.
+  it("asks git about the file being read, after the question is answered", async () => {
+    reading();
+    await drawOpen();
+    await openFile(button("changed.png"));
+    await click(button(t("files.openElsewhere")));
+    await click(button(t("git.restore")));
+    await settle();
+    expect(hoisted.asked.some((one) => one.startsWith("restore:"))).toBe(false);
+
+    await click(anyButton(t("git.restoreGo")));
+    await settle();
+    expect(hoisted.asked).toContain(`restore:${ROOT}:changed.png`);
+  });
+
+  /// A folder that is no repository answers with nothing, which is a menu without that item rather
+  /// than a menu that failed to draw.
+  it("offers nothing to throw away where git says nothing about the folder", async () => {
+    reading();
+    delete hoisted.git[ROOT];
+    await drawOpen();
+    await openFile(button("changed.png"));
+    await click(button(t("files.openElsewhere")));
+    expect(button(t("git.restore"))).toBeUndefined();
+    expect(button(t("git.ignore"))).toBeDefined();
   });
 });

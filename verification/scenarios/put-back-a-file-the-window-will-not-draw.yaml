@@ -1,0 +1,244 @@
+# A change thrown away from the column reading the file, rather than from a row naming it.
+#
+# The reader this road is about cannot use the editor to undo anything: what was written over their
+# file is not text, so the column refuses to draw it and there is no caret to put back. What is left
+# them is the same menu every row carries, reached from the line that refuses — and the item on it
+# that puts the recorded bytes back.
+#
+# ── Why it is not the road the rows already walk ─────────────────────────────────────────────────
+# `put-a-file-back-the-way-git-has-it` presses the item on a row of git's own list, and
+# `throw-a-change-away-without-opening-gits-own-list` presses it on a row of the tree. Both of those
+# rows are drawn by a half that has already asked git about the whole folder. The column reading a
+# file has not: it is on the other side of the panes, it draws one file, and whether that file has
+# anything to throw away is a question it has to have asked for itself. A build that answers it from
+# whichever half of the rail happens to be up reads green on both of the other roads and draws
+# nothing here.
+#
+# ── Why the file is one the window will not draw ─────────────────────────────────────────────────
+# That is the only way this menu is reached — a file the column can draw has no line offering a way
+# on, and no row under the pointer to right-click. It is also the reader with the most to gain: a
+# text file somebody wrote binary over is one the editor cannot be used to repair.
+#
+# ── Why the question is walked both ways ─────────────────────────────────────────────────────────
+# The same reason it is on the other roads: the answer that keeps the change is the one the question
+# exists for, and a build whose question went ahead whatever was pressed would read green with only
+# the other answer walked. What it is read against here is the line refusing the file — the change is
+# still on the disk, so the column still will not draw it.
+#
+# ── Why a second file is opened ──────────────────────────────────────────────────────────────────
+# A build that drew the item on every file it refuses would pass everything above. The second file is
+# refused for the same reason and has nothing to throw away, and the menu on it offers no such item.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. The column reading a file is the screen's, and `git checkout` at a shell
+# is not this.
+id: put-back-a-file-the-window-will-not-draw
+title: Throw away what was written over a file the column refuses to draw, and find the recorded bytes back
+description: >
+  Raise a repository holding a written note and a file of bytes that are not text, and write those
+  bytes over the note. Open it: the column refuses to draw it and offers the way on to the machine,
+  and the menu that comes up there offers to throw the change away. Refuse once and the column still
+  refuses the file; go ahead and the note reads as git recorded it. The file that was never changed
+  is refused the same way and offers none of it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # What git is going to be asked for back.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: almanac.md
+      content: SCENARIO the beds are turned over at the end of the season
+
+  # And a file that was never text, so that the absence at the end is read on a file refused for the
+  # same reason rather than on a different kind of row.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse-beds
+      from: files/not-text.bin
+      path: field-notes.bin
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+  # The change, and the whole of the reader's problem: their note is bytes now, and no editor of
+  # theirs will open it to be put right.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse-beds
+      from: files/not-text.bin
+      path: almanac.md
+
+steps_gui:
+  # Whatever this Mac's history, the question is on for this run — the checkbox that silences it is
+  # drawn inside the question itself, so a machine where somebody once ticked it would walk a
+  # different road from the next one.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: asks
+      about: restore
+
+  - type: assert
+    domain: files
+    op: setting
+    with:
+      position: asks
+      about: restore
+
+  # Back to the panel, since moving that row is done in the settings and leaves the reader there.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: almanac.md
+      section: tree
+
+  # The refusal, which is also the only door to the menu on this side.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: not-text
+
+  - type: action
+    domain: files
+    op: menu-on-file
+
+  # Read before it is pressed, so the absence at the end of the road stands against something.
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: true
+
+  - type: action
+    domain: files
+    op: restore
+
+  # Refused. This is the answer the question exists for: the reader who opened the menu by mistake.
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: no
+      about: restore
+
+  # The change is still on the disk, which is what the column goes on saying.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: not-text
+
+  # And again, answered the other way.
+  - type: action
+    domain: files
+    op: menu-on-file
+
+  - type: action
+    domain: files
+    op: restore
+
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: yes
+      about: restore
+
+  # Opened again rather than watched: what is being read is the disk, and a column that dropped its
+  # refusal without the bytes coming back would be read as the same green.
+  - type: action
+    domain: files
+    op: back
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: almanac.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the beds are turned over at the end of the season
+
+  - type: action
+    domain: files
+    op: back
+
+  # And the file nothing was written over, refused for the same reason and offering none of this.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: field-notes.bin
+      section: tree
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: not-text
+
+  - type: action
+    domain: files
+    op: menu-on-file
+
+  - type: assert
+    domain: files
+    op: offers
+    with:
+      item: restore
+      present: false

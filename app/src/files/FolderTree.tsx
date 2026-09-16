@@ -65,7 +65,7 @@ import {
 import { stoppedLine } from "./stopped";
 import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
-import { useRestore } from "./restore";
+import { isDirty, useRestore } from "./restore";
 import { fileAt } from "./fileUnder";
 import { type Held, watchCarry } from "./handDrag";
 import { gitMarks, type GitMark } from "./gitMark";
@@ -321,11 +321,9 @@ export function FolderTree({
   // hands them up, because the menu is drawn here and what git can be told about a row is read off
   // them.
   const [named, setNamed] = useState<GitEntryDto[]>([]);
-  /** Whether git says the working tree has done something to this path — which is the whole of what
-   *  there is to throw away. A path git says nothing about has nothing to lose. */
-  const dirty = (path: string[]) => named.some(
-    (row) => row.worktree !== " " && row.path.join("/") === path.join("/"),
-  );
+  /** Whether this row has something to throw away, read the one way every row that offers the item
+   *  reads it (`./restore`). */
+  const dirty = (path: string[]) => isDirty(named, path);
 
   // A folder nobody is bound to any more takes how it was opened with it. Unbinding one, or moving
   // to another project, leaves a key here that names a folder nobody can reach — and it would be

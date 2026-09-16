@@ -14,10 +14,28 @@
 // the reflog; a change never written down is nowhere once git has been told. That is why the
 // question stands by default and why its own switch is not the bin's (`./askBeforeRestore`).
 import { useState, type ReactNode } from "react";
+import type { GitEntryDto } from "../bindings/bindings";
 import { errText } from "../core/i18n";
 import { folderGitRestore } from "./folder";
 import { asksBeforeRestore } from "./askBeforeRestore";
 import { RestoreAsk } from "./RestoreAsk";
+
+/**
+ * Whether git says the working tree has done something to `path` — which is the whole of what there
+ * is to throw away. A path git says nothing about has nothing to lose.
+ *
+ * **One reading for every caller.** The tree in the rail and the column reading a file each ask git
+ * about the folder they are drawing, and each offers the item off its own answer; what counts as
+ * something to throw away read two ways would be an item on one road and not the other for the same
+ * file. Only the working tree's half is looked at: what is staged and nothing else is a change
+ * `git checkout --` leaves exactly where it is.
+ *
+ * `rows` are the rows git answered about that folder, and `path` is spelled from the folder the way
+ * they are (`GitEntryDto`).
+ */
+export function isDirty(rows: readonly GitEntryDto[], path: string[]): boolean {
+  return rows.some((row) => row.worktree !== " " && row.path.join("/") === path.join("/"));
+}
 
 export type Restore = {
   /** Throw the working tree's changes to these paths away, asking first unless this reader has

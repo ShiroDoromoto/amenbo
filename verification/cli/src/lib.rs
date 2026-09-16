@@ -200,6 +200,12 @@ pub(crate) struct Driver<'a> {
     /// conversation is what the protocol has: dropping it between steps would leave every later one
     /// talking to a closed pipe.
     server: Option<crate::domain::mcp::Standing>,
+    /// The loopback host a premise stood behind a remote that asks who is sending, held for the same
+    /// reason the line above is held: it answers while it is alive and stops when it is dropped, and
+    /// a premise that let go of it would leave git calling on a port nothing is listening at. What
+    /// keeps it standing through a screen road is that the world outlives the walk
+    /// ([`stand_world`]).
+    asking: Option<amenbo_static_host::StaticHost>,
     /// What the machine's own scheduler was holding when this run began. Read once, before anything
     /// walks: nothing in this harness registers a timer, so the only reading an assert can honestly
     /// make is the difference — whether the run left the machine as it found it. The absolute state
@@ -280,6 +286,7 @@ impl<'a> Driver<'a> {
             last_worktree: None,
             artifacts: HashMap::new(),
             server: None,
+            asking: None,
             tick_at_start: false,
             refusal: None,
             fixtures: fixtures.unwrap_or_else(amenbo_scenario::fixtures_dir),

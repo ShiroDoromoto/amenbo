@@ -1,0 +1,174 @@
+# The one thing a press on git's half can stop for: git wanting to know who is sending, put to the
+# person in the window rather than to a terminal nobody is watching.
+#
+# ── Why this is a road and not a unit test ───────────────────────────────────────────────────────
+# What is under test is a wire with four ends on it: the window sets a variable, git runs the program
+# that variable names, that program finds the window over a port, and what comes back travels to the
+# git that is still waiting. Only the shipped bundle has all four — the helper is a file beside the
+# app, and where it is not beside the app nothing is set at all and git behaves as it always did. So
+# a build that lost the helper, or lost the port, or put the question up and never sent the answer
+# back, reads exactly like a build that works until something really presses the control.
+#
+# ── Why the words are read in two places ─────────────────────────────────────────────────────────
+# The dialog is written by two hands and the whole of the decision behind it is which hand writes
+# what. The sentence is git's, word for word and in whatever language git wrote it, because a
+# rewriting is a reader being told something other than what they would have been told at a terminal.
+# The line above it is this side's, naming the call that is waiting, because git's sentence never
+# says what is waiting on it. Each is read where it stands, so a build that translated git's sentence
+# — or that stopped saying which call — comes out red on one step and green on the other.
+#
+# ── Why it is asked twice ────────────────────────────────────────────────────────────────────────
+# git asks who the credential is for and then what it is, and the second question is the one with a
+# whole credential in it. That is why the offer to keep the answer is on the second and not the
+# first: there is nothing to keep until git knows who it is for. Reading both, in order, is what
+# separates "the offer is drawn" from "the offer is drawn when there is something to keep" — and the
+# box goes from plain to hidden across the same step, which is the other half of the same reading.
+#
+# ── Why the road ends by taking it back ──────────────────────────────────────────────────────────
+# The one thing beyond here is what Amenbo does with an answer it was asked to keep, and where that
+# goes is this machine's own credential store. A road may not walk into one. So this ends at the
+# press that says nobody answered — which is a state of its own and not an empty password, git
+# reading an empty password as a password — and what it leaves behind is git's refusal, drawn as git
+# wrote it.
+#
+# ── Why nothing here reaches the network ─────────────────────────────────────────────────────────
+# What the folder sends to is a door on `127.0.0.1` that turns every request away with a `401`. That
+# is the least that sends git looking for a credential, and it needs no repository behind it: this
+# road never reaches the point where there would be something to send. No name is looked up and no
+# account exists, so it runs on a machine with nothing configured and on a machine with no network.
+id: be-asked-who-is-sending-in-the-window
+title: Be asked who is sending in the window rather than at a terminal, and take the question back unanswered
+description: >
+  Raise a repository whose other side wants to know who is sending. Read the shared repository from
+  the panel and, instead of the row coming back, a question comes up: the call that is waiting, named
+  by Amenbo, and git's own sentence under it, drawn as git wrote it. Type a name and answer, and git
+  asks the second of its two — the box now hiding what goes into it, and the offer to keep it on this
+  machine standing where there was nothing to keep before. Leave that one unanswered, and what comes
+  back onto the panel is git saying it could not read the answer.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # And a door to send to that asks who is sending. Standing before the app opens because the asking
+  # happens on the first call out: a world arranged mid-walk would be arranged after the press it is
+  # about.
+  - type: action
+    domain: repo
+    op: git-remote-asking
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # The press that goes out. It does not come back on its own, and the step says so.
+  - type: action
+    domain: files
+    op: fetch
+    with:
+      stops: true
+
+  # The line that is this side's. What it names is the call, which git's own sentence never says.
+  - type: assert
+    domain: files
+    op: ask-doing
+    with:
+      shows: git fetch
+
+  # And the sentence that is git's, as git wrote it. Read for the front of it rather than the whole:
+  # what follows is the port this machine handed out a moment ago, which no road can spell.
+  - type: assert
+    domain: files
+    op: ask-asked
+    with:
+      shows: "Username for 'http://"
+
+  # Nothing to keep yet, because git has not been told who the credential is for. The absence is the
+  # reading: an offer standing here would be an offer to keep half a credential.
+  - type: assert
+    domain: files
+    op: ask-keep
+    with:
+      present: false
+
+  - type: action
+    domain: files
+    op: ask-say
+    with:
+      said: nobody
+
+  - type: action
+    domain: files
+    op: ask-go
+
+  # git's second question, and the name typed into the first is inside it — carried there by git
+  # rather than by anything on this side.
+  - type: assert
+    domain: files
+    op: ask-asked
+    with:
+      shows: "Password for 'http://nobody@"
+
+  - type: action
+    domain: files
+    op: ask-say
+    with:
+      said: nothing-that-opens-anything
+
+  # The two things that moved with the question. Read after the typing, an empty box hiding nothing
+  # either way.
+  - type: assert
+    domain: files
+    op: ask-hidden
+
+  - type: assert
+    domain: files
+    op: ask-keep
+
+  # And out, unanswered. What Amenbo does with an answer it was asked to keep is this machine's own
+  # credential store, which is past where a road may go.
+  - type: action
+    domain: files
+    op: ask-cancel
+
+  # git, told nobody answered, says so in its own words on the panel — the same place every other
+  # sentence of git's lands.
+  - type: assert
+    domain: files
+    op: git-said
+    with:
+      shows: could not read Password for

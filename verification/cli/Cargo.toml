@@ -22,6 +22,11 @@ path = "src/bin/verify_all.rs"
 
 [dependencies]
 amenbo-scenario = { path = "../core" }
+# The loopback host a premise stands behind a remote that asks who is sending (`domain::repo`'s
+# `git-remote-asking`). It is the main tree's test-support crate, reached by path across the
+# workspace boundary — which is the reach its own module doc-comment describes, and the reason a
+# third hand-rolled listener is not written here.
+amenbo-static-host = { path = "../../crates/amenbo-static-host" }
 serde_json = "1"
 serde_yaml = "0.9"
 # The one place a driver reaches past the binary's face: a premise that stands up a device somebody

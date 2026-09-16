@@ -40,6 +40,12 @@ rust:
 # gates its own clippy+test job in _ci.yml — the ONLY thing that compiles core/cli/gui in CI.
 verification:
   - 'verification/**'
+  # The harness's inputs are not confined to verification/. Its CLI driver depends on the main
+  # tree's loopback host by path — the door a premise stands behind a git remote that asks who is
+  # sending — so that crate is as much a build input of this job as anything under verification/.
+  # Left out, the layer excuses the very change that breaks the harness: the PR that edits the host
+  # alone is green with this job skipped.
+  - 'crates/amenbo-static-host/**'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
 gui:

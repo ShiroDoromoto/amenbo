@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use amenbo_scenario::{Args, Domain};
+use amenbo_static_host::{Reply, StaticHost};
 
 use crate::{opt_bool, req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
@@ -187,6 +188,20 @@ impl Driver<'_> {
                 // may name something inside the folder and nothing above it.
                 let bare = move_share_on(&at, self.inside(path)?, content)?;
                 Ok(Outcome::action(format!("somebody else sent {path} to {}", bare.display())))
+            }
+            // The other side that asks who is sending. It is a loopback host turning every request
+            // away with a `401`, which is the least that sends git looking for a credential — so the
+            // question the window then puts up is git's own, asked the way a repository nobody is
+            // logged in to asks it.
+            //
+            // The host is held on the driver for as long as the world stands. A premise that let go
+            // of it would take the port with it, and git would come back saying the connection was
+            // refused instead of asking anything.
+            "git-remote-asking" => {
+                let at = self.repo_dir(with)?;
+                let (host, url) = share_that_asks(&at)?;
+                self.asking = Some(host);
+                Ok(Outcome::action(format!("{} now sends to {url}, which asks who is sending", at.display())))
             }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
@@ -759,6 +774,41 @@ fn share_from(at: &Path) -> Result<std::path::PathBuf, String> {
     Ok(bare)
 }
 
+/// Give a repository somewhere to send to that stops and asks who is sending, and hand back the
+/// host answering there beside the URL git was pointed at.
+///
+/// **What answers is a `401` and nothing else.** git goes looking for a credential when it is turned
+/// away that way, and the header naming what was wanted is what says the refusal is about who is
+/// asking rather than about what was asked for. Nothing behind it is a repository and nothing needs
+/// to be: git asks before it has been let in once, so a road about the asking never reaches the
+/// point where there would be something to send.
+///
+/// Every path answers alike, both services named, because which of the two git reaches for is its
+/// own business — a road pressing the control that reads the other side and a road pressing the one
+/// that sends must meet the same door.
+///
+/// The host has to be **held**: it answers while it is alive and stops when it is dropped
+/// ([`amenbo_static_host::StaticHost`]), and a port nothing is listening at would have git come back
+/// saying the connection was refused instead of asking anything.
+fn share_that_asks(at: &Path) -> Result<(StaticHost, String), String> {
+    let name = at
+        .file_name()
+        .ok_or_else(|| format!("{} has no name to send under", at.display()))?
+        .to_string_lossy()
+        .into_owned();
+    let path = format!("/{name}.git");
+    let host = StaticHost::serve(Vec::<(String, String)>::new());
+    for service in ["git-upload-pack", "git-receive-pack"] {
+        host.set_reply(
+            &format!("{path}/info/refs?service={service}"),
+            Reply::status(401, "").and_header("WWW-Authenticate", "Basic realm=\"amenbo\""),
+        );
+    }
+    let url = host.url(&path);
+    git_in(at, &["remote", "add", "origin", &url])?;
+    Ok((host, url))
+}
+
 /// Record one file on the other side, as somebody working from their own checkout of it would.
 ///
 /// The checkout is cloned here and taken away again rather than kept between steps. What it stands
@@ -894,6 +944,48 @@ mod tests {
         git_in(&at, &["pull", "--quiet"]).unwrap();
         assert_eq!(standing(&at), "## main...origin/main", "bringing it in did not empty the count");
         assert!(at.join("sieving.md").is_file(), "the count moved and nothing came in");
+    }
+
+    /// The door that asks, walked with the real git — as far as a test may walk it.
+    ///
+    /// **It is written here for the reason the road above is.** What this premise stands up is only
+    /// ever asked for by a screen road, and the screen harness drives a shipped build, so no gate
+    /// that runs on a change reaches it. What it has to be right about is one thing: that git gets
+    /// as far as wanting a credential. A door that refused the connection, or answered `404`, would
+    /// fail earlier and the road would never see a question at all.
+    ///
+    /// That is asserted by git's own sentence, with the terminal shut off so the call ends instead of
+    /// waiting on somebody — which is the one thing this test does differently from the road, where
+    /// the whole point is that the question goes to the window.
+    #[test]
+    fn a_folder_sending_to_a_door_that_asks_makes_git_want_a_credential() {
+        let session = crate::scratch::session("repo-share-asking", false).unwrap();
+        let at = session.cwd.join("greenhouse-beds");
+        std::fs::create_dir_all(&at).unwrap();
+        git_in(&at, &["init", "-q", "--initial-branch", "main"]).unwrap();
+        git_in(&at, &["commit", "--quiet", "--allow-empty", "-m", "the branch a scenario cuts from"])
+            .unwrap();
+
+        let (host, url) = share_that_asks(&at).unwrap();
+        assert!(url.starts_with("http://127.0.0.1:"), "it is reached on the loopback: {url}");
+        assert!(url.ends_with("/greenhouse-beds.git"), "it sends under the folder's own name: {url}");
+
+        let out = Command::new("git")
+            .args(["fetch", "origin"])
+            // Nothing is standing to be asked in a test, so git is told to give up where it would
+            // otherwise wait. The sentence it gives up with is what names how far it got.
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", "")
+            .current_dir(&at)
+            .output()
+            .unwrap();
+        let said = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(!out.status.success(), "the door let git in: {said}");
+        assert!(
+            said.contains("could not read Username for"),
+            "git never got as far as wanting a credential: {said}"
+        );
+        assert_eq!(host.heard().len(), 1, "git asked once and was turned away once");
     }
 
     /// Moving the other side of a folder that shares with nothing says which folder, rather than

@@ -1,0 +1,122 @@
+# Not every folder a project is bound to is a repository, and the half of the panel that is git's has
+# to say so rather than draw an empty list. An empty list reads as "nothing has changed here", which
+# is what a repository with a clean working tree says — and a reader who took it that way would be
+# waiting for a commit button that is not there.
+#
+# One folder in twenty-one is in this shape in the store this was measured against, so it is not the
+# odd case: it is the folder somebody bound for the notes in it.
+#
+# ── Why the road stands on a repository first ────────────────────────────────────────────────────
+# Said on its own, "this folder is not a repository" passes on a build that says it about every
+# folder — including the one git has plenty to say about. So the line is read both ways round: it is
+# nowhere on the repository, and it is the whole of the panel on the folder beside it. The two
+# folders are one project and one press apart, which is as close together as the two answers ever
+# stand.
+#
+# ── What is not read on the folder that is no repository ─────────────────────────────────────────
+# Nothing but that line. There is no list of what has changed to look down — the half draws the one
+# sentence and stops — so a road asking whether a name is absent from a list would be asking about a
+# list that was never drawn.
+id: look-for-git-in-a-folder-that-is-no-repository
+title: The half that is git's says a folder is no repository, instead of drawing the empty list a clean repository draws
+description: >
+  Raise a project bound to two folders, one of them a repository with a file git has not recorded and
+  one of them a plain folder. On the repository, git's half of the panel names that file and says
+  nothing about the folder being no repository. Pick the plain folder from the list under the
+  project's name: the same half says this folder is not a repository.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # The second folder is bound the same way as the first and differs in one thing only: nothing ever
+  # runs `git init` in it.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: potting-shed
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # A file here too, so the two folders are told apart by what git says about them and not by one of
+  # them being empty.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # `greenhouse-beds` sorts first, so the repository is the folder the panel comes up on
+  # (`app/src/files/sections.ts`).
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: no-repo
+      present: false
+
+  # One press between the two answers.
+  - type: action
+    domain: files
+    op: root-pick
+    with:
+      name: potting-shed
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: no-repo

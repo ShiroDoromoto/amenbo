@@ -19,10 +19,15 @@ const TREE = "the tree";
 
 const PROJECT = { id: 1, name: "amenbo" } as unknown as Project;
 
-async function draw(project: Project | null) {
+/** What the face draws under the name where the project has more than one folder to choose from
+ *  (`../files/RootPick`). */
+const PICKER = "which folder";
+
+async function draw(project: Project | null, picker?: boolean) {
   await act(async () => {
     root.render(createElement(FolderRail, {
       project,
+      picker: picker === true ? createElement("button", null, PICKER) : undefined,
       folders: createElement("p", null, TREE),
     }));
   });
@@ -57,9 +62,15 @@ describe("the folder rail", () => {
   });
 
   // Nothing is opened from here and nothing is chosen here: the projects are the tabs at the edge of
-  // the face (`./ProjectTabs`) and the panes are the middle of it.
-  it("offers no control of its own", async () => {
+  // the face (`./ProjectTabs`) and the panes are the middle of it. What the head does carry is
+  // handed in, for the reason the tree is — the choice has readers on both sides of the panes.
+  it("offers no control of its own, and stands the one it is handed under the name", async () => {
     await draw(PROJECT);
     expect(container.querySelectorAll(".rail button")).toHaveLength(0);
+
+    await draw(PROJECT, true);
+    // In the head with the name, not above the tree: it says which folder the name's project is
+    // being read in, which is the same sentence read on (`AMB-D-905`).
+    expect(container.querySelector(".rail__head button")?.textContent).toBe(PICKER);
   });
 });

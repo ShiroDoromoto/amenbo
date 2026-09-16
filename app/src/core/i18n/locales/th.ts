@@ -639,6 +639,8 @@ export const th: Translation = {
     "files.openFiles": "ไฟล์ที่เปิดอยู่",
     "files.unsaved": "ยังไม่ได้บันทึก",
     "files.folderGone": "ไม่พบโฟลเดอร์นี้แล้ว",
+    "files.rootPick": "โฟลเดอร์ที่หน้าต่างนี้เปิดอยู่",
+    "files.rootChanged": "ในนี้มีอะไรเปลี่ยนไป",
     "files.closeFile": "ปิดไฟล์นี้",
     "files.closeConfirm": "ปิด {name} ไหม สิ่งที่คุณพิมพ์ไว้ยังไม่ได้บันทึก และจะหายไปเมื่อปิด",
     "files.edit": "แก้ไข",

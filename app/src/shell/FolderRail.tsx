@@ -6,22 +6,29 @@ import { t } from "../core/i18n";
  * The column beside the panes: the folders of the project being shown, under its name
  * (`AMB-D-838`).
  *
- * **It holds one thing, so nothing here swaps.** A column this narrow has room for one list at a
- * time (`AMB-D-835`), and the other two things a person picks on this face are elsewhere: the
- * projects are the tabs at the edge (`./ProjectTabs`) and the panes are the middle of the screen.
+ * **It holds one list, so nothing here swaps.** A column this narrow has room for one at a time
+ * (`AMB-D-835`), and the other two things a person picks on this face are elsewhere: the projects
+ * are the tabs at the edge (`./ProjectTabs`) and the panes are the middle of the screen.
  *
  * **The name at the top is whose folders these are.** A tree drawn without it says which folders are
  * bound but not what they are bound to, and this face has two things called by a project's name —
  * the tab that is on, and this. They agree because they are the same answer read twice: what the tab
  * chose is what the tree is rooted in.
  *
+ * **Under the name stands which of those folders the window is on** (`AMB-D-905`), where the project
+ * has more than one. It is handed in for the reason the tree is: the choice is one answer with two
+ * readers, so the face holds it and both are drawn from it.
+ *
  * **The tree is handed in rather than mounted here** (`../files/FolderTree`): what a row opens is
  * drawn in the column on the other side of the panes, so the two sides answer to one state — and the
  * face that holds that state is the one place both of them can be reached from.
  */
-export function FolderRail({ project, folders }: {
+export function FolderRail({ project, picker, folders }: {
   /** The project being shown, or nothing while the face has not been told which one it is on. */
   project: Project | null;
+  /** Which folder the window is on, drawn under the name (`../files/RootPick`). Nothing where the
+   *  project is bound to one folder, which is the shape all but one project is in. */
+  picker?: ReactNode;
   folders: ReactNode;
 }) {
   return (
@@ -30,6 +37,7 @@ export function FolderRail({ project, folders }: {
           moment the face has not been told which project it is on. */}
       <div className="rail__head">
         <h2 className="rail__title">{project?.name ?? ""}</h2>
+        {picker}
       </div>
       {folders}
     </nav>

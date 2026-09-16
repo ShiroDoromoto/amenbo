@@ -639,6 +639,8 @@ export const id: Translation = {
     "files.openFiles": "Berkas yang terbuka",
     "files.unsaved": "Belum disimpan",
     "files.folderGone": "Folder ini sudah tidak ada.",
+    "files.rootPick": "Folder yang sedang dibuka jendela ini",
+    "files.rootChanged": "Ada yang berubah di sini",
     "files.closeFile": "Tutup berkas ini",
     "files.closeConfirm": "Tutup {name}? Yang Anda ketik belum disimpan dan akan hilang saat ditutup.",
     "files.edit": "Sunting",

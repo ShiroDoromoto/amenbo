@@ -643,6 +643,8 @@ export const ja: Translation = {
     "files.openFiles": "開いているファイル",
     "files.unsaved": "保存していません",
     "files.folderGone": "このフォルダは見つかりません。",
+    "files.rootPick": "このウィンドウが見ているフォルダ",
+    "files.rootChanged": "ここには変更があります",
     "files.closeFile": "このファイルを閉じる",
     "files.closeConfirm": "{name} を閉じますか？打った内容は保存していないので、閉じると失われます。",
     "files.edit": "編集",

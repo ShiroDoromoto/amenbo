@@ -652,6 +652,8 @@ export const ru: Translation = {
     "files.openFiles": "Открытые файлы",
     "files.unsaved": "Не сохранено",
     "files.folderGone": "Этой папки больше нет.",
+    "files.rootPick": "Папка, на которой стоит это окно",
+    "files.rootChanged": "Здесь что-то изменилось",
     "files.closeFile": "Закрыть этот файл",
     "files.closeConfirm": "Закрыть {name}? Введённый текст не сохранён и при закрытии пропадёт.",
     "files.edit": "Править",

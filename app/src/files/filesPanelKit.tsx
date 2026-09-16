@@ -2,7 +2,7 @@
 // put together the way the terminal face puts them, and the small words a test presses and reads
 // with. It is imported first by each of the `filesPanel.*.test.tsx` files, which is what puts the
 // stand-ins in place before the panel itself is loaded.
-import { act, createElement, Fragment, useEffect, useRef, useState } from "react";
+import { act, createElement, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 import type {
@@ -302,6 +302,8 @@ vi.mock("../core/reads", async (importOriginal) => ({
 
 import { FilesPanel, openKey, type OpenFile, type Typed } from "./FilesPanel";
 import { FolderTree } from "./FolderTree";
+import { RootPick } from "./RootPick";
+import { rootShown, sectionsOf } from "./sections";
 import { fileUnderAny } from "./fileUnder";
 import { formatNumber } from "../core/i18n";
 
@@ -373,6 +375,11 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
   });
   // The step the column is standing on, which opening a file asks for and the face keeps.
   const [wide, setWide] = useState(false);
+  // Which of the project's folders the window is on, held where the face holds it: the picker above
+  // the tree and the tree itself are two readers of one choice (`AMB-D-905`,
+  // `../shell/TerminalFace`).
+  const [pickedRoot, setPickedRoot] = useState<string | null>(null);
+  const folderRoots = useMemo(() => sectionsOf(hoisted.bound), [hoisted.bound]);
   // Which half is up. The face keeps it and the column reads it, so the harness holds it too
   // (`../talk/columns`).
   const [tab, setTab] = useState<"files" | "memo">(props.tab ?? "files");
@@ -410,14 +417,25 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
   return createElement(
     Fragment,
     null,
-    createElement("div", { className: "rail" }, createElement(FolderTree, {
-      projectId: props.projectId,
-      reading,
-      onRead: openOne,
-      onGone: gone,
-      onHandOver: props.onHandOver,
-      onCarry: props.onCarry,
-    })),
+    createElement(
+      "div",
+      { className: "rail" },
+      props.projectId === null ? null : createElement(RootPick, {
+        projectId: props.projectId,
+        sections: folderRoots,
+        root: rootShown(folderRoots, pickedRoot)?.path ?? "",
+        onRoot: setPickedRoot,
+      }),
+      createElement(FolderTree, {
+        projectId: props.projectId,
+        root: pickedRoot,
+        reading,
+        onRead: openOne,
+        onGone: gone,
+        onHandOver: props.onHandOver,
+        onCarry: props.onCarry,
+      }),
+    ),
     createElement("div", { className: "termface__column--side" }, createElement(FilesPanel, {
       projectId: props.projectId,
       tab,
@@ -535,11 +553,6 @@ export const labelOf = (el: HTMLElement): string =>
 export const pressable = (text: string): HTMLButtonElement | undefined =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
-/** One row of one folder's tree, named exactly — for a test about which of two folders it is in. */
-export const rowIn = (folder: Element, name: string): HTMLElement | undefined =>
-  [...folder.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
-    .find((one) => labelOf(one) === name);
-
 /** The same, over the whole page: the question before the bin is drawn onto `document.body`. */
 export const anyButton = (text: string) =>
   [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
@@ -575,6 +588,20 @@ export const undoOn = (el: Element) => act(async () => {
   el.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true }));
   await new Promise((r) => setTimeout(r, 0));
 });
+
+/**
+ * Go to another of the project's folders, the way a reader does: open the list above the tree and
+ * press the folder's name on it (`./RootPick`).
+ *
+ * The name is the short one the list draws, not the path — which is what a reader has in front of
+ * them, and what tells two folders apart (`./sections`).
+ */
+export const goRoot = async (label: string) => {
+  await click(container.querySelector(".rootpick__on"));
+  await click([...container.querySelectorAll<HTMLElement>(".menu__item")]
+    .find((one) => one.textContent === label));
+  await settle();
+};
 
 /** The menu, opened on a row the way a person opens it. */
 export const menuOn = (el: Element | null | undefined) => act(async () => {

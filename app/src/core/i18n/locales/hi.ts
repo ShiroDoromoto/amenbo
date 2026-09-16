@@ -637,6 +637,8 @@ export const hi: Translation = {
     "files.openFiles": "खुली फ़ाइलें",
     "files.unsaved": "अभी सहेजा नहीं गया",
     "files.folderGone": "यह फ़ोल्डर अब मौजूद नहीं है।",
+    "files.rootPick": "यह विंडो किस फ़ोल्डर पर है",
+    "files.rootChanged": "यहाँ कुछ बदला है",
     "files.closeFile": "यह फ़ाइल बंद करें",
     "files.closeConfirm": "{name} बंद करें? आपने जो लिखा है वह सहेजा नहीं गया है और बंद करने पर चला जाएगा।",
     "files.edit": "संपादित करें",

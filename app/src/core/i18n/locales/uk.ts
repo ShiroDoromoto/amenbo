@@ -652,6 +652,8 @@ export const uk: Translation = {
     "files.openFiles": "Відкриті файли",
     "files.unsaved": "Не збережено",
     "files.folderGone": "Цієї теки більше немає.",
+    "files.rootPick": "Тека, на якій стоїть це вікно",
+    "files.rootChanged": "Тут щось змінилося",
     "files.closeFile": "Закрити цей файл",
     "files.closeConfirm": "Закрити {name}? Введений текст не збережено, і після закриття він зникне.",
     "files.edit": "Редагувати",

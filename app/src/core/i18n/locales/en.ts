@@ -787,6 +787,8 @@ const ui = {
   // (`../../../files/FilesPanel`).
   "files.unsaved": "Not saved yet",
   "files.folderGone": "This folder is not there any more.",
+  "files.rootPick": "Which folder this window is on",
+  "files.rootChanged": "Something in here has changed",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.

@@ -648,6 +648,8 @@ export const fr: Translation = {
     "files.openFiles": "Fichiers ouverts",
     "files.unsaved": "Non enregistré",
     "files.folderGone": "Ce dossier n'est plus là.",
+    "files.rootPick": "Le dossier sur lequel est cette fenêtre",
+    "files.rootChanged": "Quelque chose a changé ici",
     "files.closeFile": "Fermer ce fichier",
     "files.closeConfirm": "Fermer {name} ? Ce que vous y avez écrit n'est pas enregistré et sera perdu à la fermeture.",
     "files.edit": "Modifier",

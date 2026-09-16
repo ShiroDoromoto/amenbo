@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 // A project bound to several folders, which is where the panel stops having one root.
 //
-// Every section is watched, coloured, read and worked on its own — so what has to be right here is
-// that a word about one folder moves nothing in another, and that a row is acted on in the folder
-// its section was drawn for.
+// One of them is drawn, and a reader says which (`AMB-D-905`). So what has to be right here is that
+// the window is on one folder at a time — watched, coloured, read and worked as that one — and that
+// going to another takes the whole of it along: the watch, git's answer, and what a row acts on.
 import { act } from "react";
 import { describe, expect, it } from "vitest";
 import {
-  aFile, button, click, clickWith, container, draw, drawOpen, hoisted, holdRefusal, leave, menuOn,
-  namebox, openFile, pickedIn, press, pressOn, ROOT, rowFor, rowIn, settle, tell, type,
+  aFile, button, click, clickWith, container, draw, drawOpen, goRoot, hoisted, holdRefusal, leave,
+  menuOn, namebox, openFile, pickedIn, press, pressOn, ROOT, rowFor, settle, tell, type,
 } from "./filesPanelKit";
 import { type CmdError, errLabel, t } from "../core/i18n";
 
@@ -16,112 +16,148 @@ describe("a project bound to several folders", () => {
   const OTHER = "/work/plugins";
   const both = () => { hoisted.bound = [{ path: ROOT, exists: true }, { path: OTHER, exists: true }]; };
 
-  /** Both sections drawn with their trees unfolded — every row of both is then on the screen. Each
-   *  section stands unfolded on its own, so this is the drawing and the settling after it. */
-  async function openBothTrees() {
-    await draw();
-    await settle();
-  }
+  /** The picker's list, as the names it offers — the folders are ordered by path (`./sections`). */
+  const offered = () =>
+    [...container.querySelectorAll<HTMLElement>(".menu__item")].map((one) => one.textContent);
 
-  /** One folder's section, found by the heading over it — the sections are ordered by path, and a
-   *  test that counted on that would be about the ordering rather than about what it says it is. */
-  const folderNamed = (label: string) =>
-    [...container.querySelectorAll(".files__folder")].find(
-      (one) => one.querySelector(".files__foldername")?.textContent === label,
-    )!;
+  /** Whether the list says this folder has something changed in it. */
+  const dotted = (label: string) =>
+    [...container.querySelectorAll<HTMLElement>(".menu__item")]
+      .find((one) => one.textContent === label)
+      ?.querySelector("[data-icon=\"dot\"]") !== null;
 
-  it("watches every one of them, not the first", async () => {
+  it("draws one folder and watches that one, and takes the watch along to the next", async () => {
     both();
     await draw();
-    // The first was never chosen — it was whichever sorted first — and the rest of the project was
-    // invisible because of it (`AMB-D-778`).
-    expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    // The first by path, which is where a reader who has picked nothing starts.
+    expect(container.querySelectorAll(".files__folder")).toHaveLength(1);
     expect(hoisted.asked).toContain(`watch:1:${OTHER}`);
+    expect(hoisted.asked).not.toContain(`watch:1:${ROOT}`);
+
+    await goRoot("repo");
+    // The folder left goes back to being unwatched. Watching all six of Amenbo's own was what this
+    // was costing, and one window answering for one repository is what buys it back (`AMB-D-905`).
+    expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    expect(hoisted.asked).toContain(`unwatch:${OTHER}`);
+    expect(container.querySelectorAll(".files__folder")).toHaveLength(1);
   });
 
-  it("names each one, and names none where there is only one to name", async () => {
+  it("names the folders apart on the list, and offers no list where there is one folder", async () => {
     both();
     await draw();
-    const headings = [...container.querySelectorAll(".files__foldername")];
-    expect(headings.map((one) => one.textContent)).toEqual(["plugins", "repo"]);
+    await click(container.querySelector(".rootpick__on"));
+    expect(offered()).toEqual(["plugins", "repo"]);
 
     hoisted.bound = [{ path: ROOT, exists: true }];
     await draw();
-    // One folder is drawn the way it always was: a heading over the only thing on the screen names
-    // nothing the reader could confuse it with.
-    expect(container.querySelectorAll(".files__foldername")).toHaveLength(0);
+    // A project bound to one folder is drawn the way it always was: a control that can only ever
+    // say the same thing is a press nobody needs.
+    expect(container.querySelector(".rootpick__on")).toBeNull();
   });
 
-  it("asks git about each folder on its own, and colours each one by its own answer", async () => {
+  it("says on the list which folders have something changed in them", async () => {
     both();
-    // One is a repository with something changed in it; the other answers with nothing, which is
-    // what a folder that is no repository answers — and it is not the first one's business.
-    hoisted.git = { [OTHER]: [{ path: ["a.md"], index: " ", worktree: "M", isDir: false }] };
-    await openBothTrees();
+    // What the tree can no longer say by colouring six trees at once (`AMB-D-785`), said coarsely:
+    // something in here, or nothing.
+    hoisted.git = { [ROOT]: [{ path: ["a.md"], index: " ", worktree: "M", isDir: false }] };
+    await draw();
+    // Not before the list is opened. Asking every folder on every draw is the cost the one-folder
+    // window was taken to stop paying.
+    expect(hoisted.asked).not.toContain(`git:${ROOT}`);
+
+    await click(container.querySelector(".rootpick__on"));
+    await settle();
     expect(hoisted.asked).toContain(`git:${ROOT}`);
-    expect(hoisted.asked).toContain(`git:${OTHER}`);
-    expect(folderNamed("repo").querySelector(".files__file--git")).toBeNull();
-    expect(folderNamed("plugins").querySelector(".files__file--git-modified")?.textContent)
-      .toContain("a.md");
+    expect(dotted("repo")).toBe(true);
+    expect(dotted("plugins")).toBe(false);
   });
 
-  it("reads a file out of the folder its row was drawn in", async () => {
+  it("asks git about the folder it draws, and colours that one by its answer", async () => {
+    both();
+    hoisted.git = { [ROOT]: [{ path: ["a.md"], index: " ", worktree: "M", isDir: false }] };
+    await draw();
+    // The folder drawn is `plugins`, which answers with nothing — which is what a folder that is no
+    // repository answers, and not the other folder's business.
+    expect(container.querySelector(".files__file--git")).toBeNull();
+
+    await goRoot("repo");
+    expect(hoisted.asked).toContain(`git:${ROOT}`);
+    expect(container.querySelector(".files__file--git-modified")?.textContent).toContain("a.md");
+  });
+
+  it("reads a file out of the folder the window is on", async () => {
     both();
     hoisted.file = aFile({ text: "hello" });
-    await openBothTrees();
-    await openFile(rowIn(folderNamed("plugins"), "a.md"));
+    await draw();
+    await goRoot("repo");
+    await openFile(button("a.md"));
     await settle();
     // The same path names a different file in each folder, so which folder the row was in has to
     // travel with it.
-    expect(hoisted.asked).toContain(`read:${OTHER}:a.md`);
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+    expect(hoisted.asked).not.toContain(`read:${OTHER}:a.md`);
   });
 
-  it("holds one selection for the panel, in whichever folder it was last made in", async () => {
+  it("puts down rows picked in a folder the reader has gone away from", async () => {
     both();
-    await openBothTrees();
-    await clickWith(rowIn(folderNamed("repo"), "a.md"), { ctrlKey: true });
-    expect(pickedIn(folderNamed("repo"))).toEqual(["a.md"]);
+    await draw();
+    await clickWith(button("a.md"), { ctrlKey: true });
+    expect(pickedIn(container)).toEqual(["a.md"]);
 
-    // The sections are how several bound folders are drawn, not several selections to hold at once
-    // (`AMB-D-778`): rows picked in one folder are put down when rows are picked in another, so
-    // what is picked is always one folder's paths — which is all an act on them can be about.
-    await clickWith(rowIn(folderNamed("plugins"), "a.md"), { ctrlKey: true });
-    expect(pickedIn(folderNamed("plugins"))).toEqual(["a.md"]);
-    expect(pickedIn(folderNamed("repo"))).toEqual([]);
+    // One selection for the rail, wherever it was made: what is done with picked rows is done to
+    // one folder's paths, so rows left standing in a folder nobody is looking at would come back
+    // under a reader who has since picked others.
+    await goRoot("repo");
+    await clickWith(button("a.md"), { ctrlKey: true });
+    await goRoot("plugins");
+    expect(pickedIn(container)).toEqual([]);
   });
 
-  it("keeps a folder that has gone, and says that is what happened", async () => {
+  it("opens on a folder that is there, and keeps the one that has gone on the list", async () => {
+    // `plugins` sorts first and is the one that went. Opening on it would say the project has
+    // nothing while the folder beside it sits there — which is the reading the stacked rail was
+    // taken down for in the first place.
     hoisted.bound = [{ path: ROOT, exists: true }, { path: OTHER, exists: false }];
     await draw();
+    expect(container.textContent).not.toContain(t("files.folderGone"));
+    expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    expect(hoisted.asked).not.toContain(`watch:1:${OTHER}`);
+
     // Dropped from the list it would look like a binding nobody ever made, and a reader would have
     // no way to tell a folder that moved from one they unbound themselves.
+    await click(container.querySelector(".rootpick__on"));
+    expect(offered()).toEqual(["plugins", "repo"]);
+
+    await goRoot("plugins");
     expect(container.textContent).toContain(t("files.folderGone"));
     expect(hoisted.asked).not.toContain(`watch:1:${OTHER}`);
   });
 
-  /** Every section draws a row for its own root, and the trees under two of them can hold the same
-   *  names. A landing that said only the path would light a row up in both. */
-  it("marks a drop's landing in the section the pointer is in, and in no other", async () => {
+  /** The same path inside two bound folders is two places, so a landing says which folder as well
+   *  as which path — and the folder it says is the one the window is on. */
+  it("carries a drop into the folder the window is on", async () => {
     both();
     hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
-    await openBothTrees();
-    const trees = [...container.querySelectorAll(".files__folder")];
-    expect(trees).toHaveLength(2);
+    await draw();
+    await goRoot("repo");
 
-    let step = 0;
-    const over = (el: Element | null | undefined) => act(async () => {
+    const at = (el: Element | null | undefined, how: "over" | "drop") => act(async () => {
       (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
         () => el ?? null;
-      step += 1;
-      hoisted.dragging?.({ payload: { type: "over", position: { x: step, y: 1 } } });
+      hoisted.dragging?.({
+        payload: { type: how, position: { x: 1, y: 1 }, paths: ["/Users/someone/Desktop/note.md"] },
+      });
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    await over(rowIn(trees[1]!, "src"));
-    // The row lit up is in the second folder, and the first folder's `src` is left alone.
-    expect(trees[1]!.querySelectorAll(".files__into")).toHaveLength(1);
-    expect(trees[0]!.querySelectorAll(".files__into")).toHaveLength(0);
+    await at(button("src"), "over");
+    expect(container.querySelectorAll(".files__into")).toHaveLength(1);
+
+    await at(button("src"), "drop");
+    expect(hoisted.imported[0]?.toRoot).toBe(ROOT);
+    expect(hoisted.imported[0]?.to).toEqual(["src"]);
   });
+
 
   // ── naming ──────────────────────────────────────────────────────────────────────────────────
   // Making a name and writing over one are the two doors `crate::folder_write` opens that have a

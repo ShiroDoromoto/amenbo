@@ -1,0 +1,146 @@
+# A project is bound to as many folders as somebody bound it to, and the rail beside the panes draws
+# one of them. The form most projects are actually in is the single folder — Amenbo itself is the one
+# in twenty-one that is not — and what this road stands in front of is what the other twenty never
+# see: a window that has to answer "which repository am I on" before a press can write to one.
+#
+# ── Why two files rather than two headings ───────────────────────────────────────────────────────
+# What says a folder was really read is something out of that folder in the rail, and the only thing
+# there that could not have come from anywhere else is a file the world put in it. So each folder
+# gets a file of its own name, and the reading is taken both ways: the drawn folder's file is in the
+# rail, and the other folder's is not. Either half alone passes on a build carrying the other fault —
+# a build that still stacks every folder passes the first, and one that draws nothing at all passes
+# the second.
+#
+# The files sit directly in their folders rather than in a subfolder, because the tree opens one
+# level at a time and a road that had to open the same-named subfolder in each would be naming a
+# folder that is in both.
+#
+# ── Which of the two the rail is on ──────────────────────────────────────────────────────────────
+# A reader who has picked nothing is shown the first folder that is there, by path — which is the
+# order the store holds them in and not a ranking of the folders (`app/src/files/sections.ts`). Both
+# are there at this point and `greenhouse-beds` sorts first, so the rail comes up on the beds.
+# **Going to the other one is not walked here**: the step needs an op the registry does not have, and
+# a line that runs ahead of the registry holds up a release (`../README.md`). It is filed as its own
+# task.
+#
+# ── Why one of them is then taken away ───────────────────────────────────────────────────────────
+# The half a reader meets by accident is a folder that has gone — renamed, moved somewhere tidier,
+# carried off on a disk that is no longer plugged in. What the tree did before was fall to "this
+# project has no folder yet" for the whole of it, which says the project has nothing when the binding
+# is sitting right there. So what the rail says is what happened to that folder.
+#
+# The move is a step and not a premise because *when* it happens is what is under test: the folder is
+# drawn first, with it still there, and what the watch behind it does when the folder goes out from
+# under it is the whole answer. A world that had moved it before the app came up would be a world
+# with a binding that never pointed anywhere, which is a different reading on a different road
+# (`follow-a-folder-that-moved`).
+id: find-the-rail-on-one-of-the-projects-folders
+title: The rail draws one of the project's folders and only that one, and says so where it stood when that folder goes away
+description: >
+  Raise a project bound to two folders, each holding a file of its own, and unfold the tree in the
+  rail beside the panes: the folder the window is on carries its own file, and the other folder's
+  file is nowhere in the rail. Then take the drawn folder away from outside Amenbo, with nothing on
+  the app pressed: the rail says the folder is not there any more, instead of saying the project has
+  no folder at all.
+
+given:
+  # Creating a project links a folder to it, so this one is the project's first.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # And the second, which is what makes the rail a choice rather than one folder.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: potting-shed
+      project: greenhouse
+
+  # One file per folder, named apart: the same name in both would leave a row in the rail that
+  # either folder could have put there.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on the one it
+  # raised before reading anything off it.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The first level is drawn from the start, so this says where the screen has to stand rather than
+  # working a control to get it there.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # The folder the window is on, read by what is in it. This row could not have come from the other
+  # folder, so it is that folder having been read and not merely named.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  # And the other folder is not on the screen beside it. A window drawing both would be a window with
+  # two answers to which repository a commit is about, which is the reading this rule exists to stop.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: tree
+      present: false
+
+  # Gone, from outside, while the app is watching. Nothing on the screen is pressed for this.
+  - type: action
+    domain: folder
+    op: move
+    with:
+      dir: greenhouse-beds
+      to: greenhouse-beds-elsewhere
+
+  # The rail says what happened to the folder it was on, and stays on it. Falling to "this project
+  # has no folder yet" would leave a reader unable to tell a folder that went from a binding somebody
+  # removed; sliding to the other folder would answer a question the reader never asked, and would
+  # leave the going unsaid.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: folder-gone

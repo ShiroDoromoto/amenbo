@@ -4,6 +4,7 @@ import { EmptySlot } from "./EmptySlot";
 import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { FolderRail } from "./FolderRail";
+import { RootPick } from "../files/RootPick";
 import { PaneOrder } from "./PaneOrder";
 import type { Plate as Row } from "../talk/nameplate";
 import { hueOf } from "../talk/moving";
@@ -25,6 +26,7 @@ import {
 } from "../talk/columns";
 import { FilesPanel, openKey, type OpenFile, type Typed } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
+import { rootShown, sectionsOf } from "../files/sections";
 import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
 import { isBlankSpaceClose } from "./outsideClose";
@@ -288,6 +290,17 @@ export function TerminalFace({
   // rather than a ref because carrying it out is what the read landing does, and an effect has to be
   // told there is one to carry out (`../core/boundFolders`).
   const [held, setHeld] = useState<{ project: number; agent: string | null } | null>(null);
+  /**
+   * Which of the project's folders this window is on, as its path — the window's one answer to
+   * which repository it is (`AMB-D-905`).
+   *
+   * **It is the face's and not the tree's** because it has more than one reader: the tree below is
+   * rooted in it, and the git doors the rail is growing act on it. Nothing until a reader has
+   * picked one, and a path this project is not bound to once they change project — both of which
+   * fall to the first folder that is there (`../files/sections`), so nothing here has to be put
+   * back.
+   */
+  const [pickedRoot, setPickedRoot] = useState<string | null>(null);
 
   const projects = dataAdapter.listProjects();
   const bound = useBoundFolders(layout.project);
@@ -900,6 +913,9 @@ export function TerminalFace({
   // traced across off this, and a fresh array every render would send it back to the host on every
   // keystroke elsewhere on the page (`./EmptySlot`).
   const boundPaths = useMemo(() => bound.live.map((one) => one.path), [bound.live]);
+  // The project's folders as the rail names them, which is what the picker lists and what the tree
+  // is rooted in (`../files/sections`).
+  const folderRoots = useMemo(() => sectionsOf(bound.all), [bound.all]);
   const page = layout.page;
   const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
@@ -1035,9 +1051,20 @@ export function TerminalFace({
   const rail = (
     <FolderRail
       project={projects.find((one) => one.id === layout.project) ?? null}
+      picker={layout.project === null ? null : (
+        <RootPick
+          projectId={layout.project}
+          sections={folderRoots}
+          // Read through the same fallback the tree reads it through, so the name on the control is
+          // the name of the folder actually drawn (`../files/sections`).
+          root={rootShown(folderRoots, pickedRoot)?.path ?? ""}
+          onRoot={setPickedRoot}
+        />
+      )}
       folders={
         <FolderTree
           projectId={layout.project}
+          root={pickedRoot}
           reading={reading}
           onRead={openFile}
           onGone={goneFiles}

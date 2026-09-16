@@ -3,9 +3,10 @@
 //
 // **It draws what is read and never what is found.** Finding a file is the tree's, and the tree is
 // in the rail on the other side of the panes (`AMB-D-835`); what stands here is the file, the draft
-// page, the history of the folder the window is on, or the line saying nothing is open. The tree
-// used to share this column, and a file being read was drawn over it — which is what made picking a
-// second row out impossible once the first was open.
+// page, the history of the folder the window is on, the patches of the rows picked out in the rail's
+// git half, or the line saying nothing is open. The tree used to share this column, and a file being
+// read was drawn over it — which is what made picking a second row out impossible once the first was
+// open.
 //
 // **The file it draws belongs to the project.** It is opened from a folder the project is bound to,
 // so switching panes does not move it — what changed in the repository is the same question
@@ -35,6 +36,7 @@ import { isDirty, useRestore } from "./restore";
 import { FileEditor } from "./FileEditor";
 import { FileDiff } from "./FileDiff";
 import { GitHistory, type At } from "./GitHistory";
+import { GitDiff, type DiffPick } from "./GitDiff";
 import { MemoPage } from "./MemoPage";
 import { Icon } from "../components/Icon";
 import type { SideTab } from "../talk/columns";
@@ -73,6 +75,7 @@ export type Typed = { text: string; edited: boolean; seen: string | undefined };
 export function FilesPanel({
   projectId, tab, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone, onClose,
   wide, onWide, gitRoot = null, gitPrefix = "", history = false, historyOnly = null, onHistoryOnly,
+  diff = false, diffPick = null,
   onFileHistory, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
@@ -132,6 +135,12 @@ export function FilesPanel({
   /** The front that folder sits at inside its repository. A commit names its paths from the root,
    *  and this is what turns one of those back into the folder's own spelling (`./GitHistory`). */
   gitPrefix?: string;
+  /** Whether the patches of the picked rows have been pressed for. The same press the history's
+   *  tab waits for, about the other of git's two faces (`./GitDiff`). */
+  diff?: boolean;
+  /** The rows picked out in the rail's git half, or nothing where the set is put down. The tab
+   *  stands whether or not there is one, because it is the press that put it there. */
+  diffPick?: DiffPick | null;
   /** Whether the history has been pressed for. The column shows nothing about git until it has
    *  been, so this is what puts its tab in the row (`AMB-D-905`). */
   history?: boolean;
@@ -313,10 +322,22 @@ export function FilesPanel({
       // (`AMB-D-905`), and a tab standing there would be saying something.
       history={history ? tab === "history" : null}
       onHistory={() => onTab("history")}
+      diff={diff ? tab === "diff" : null}
+      onDiff={() => onTab("diff")}
       onPick={(one) => { onTab("files"); onPick(one); }}
       onCloseTab={(one) => { void letGo(one, () => onCloseTab(one)); }}
     />
   );
+
+  if (projectId !== null && tab === "diff") {
+    return (
+      <div className="files" tabIndex={-1} onKeyDown={onKey}>
+        {top}
+        {tabs}
+        <GitDiff projectId={projectId} root={gitRoot} picked={diffPick} />
+      </div>
+    );
+  }
 
   if (projectId !== null && tab === "history") {
     return (
@@ -434,7 +455,9 @@ export function FilesPanel({
  * **The file that comes up brings itself into view.** Marking it and leaving it off the end of the
  * row would be a face saying which tab is on to a reader who cannot see it.
  */
-function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, onPick, onCloseTab }: {
+function FileTabs({
+  open, showing, unsaved, memo, onMemo, history, onHistory, diff, onDiff, onPick, onCloseTab,
+}: {
   open: readonly OpenFile[];
   showing: OpenFile | null;
   /** The files holding something not on the disk, by their keys (`FilesPanel`). */
@@ -446,6 +469,10 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, on
    *  at all rather than one standing off (`./GitHistory`). */
   history: boolean | null;
   onHistory: () => void;
+  /** Whether the patches are on top, and `null` where nobody has pressed for them — the same answer
+   *  the history's tab gives (`./GitDiff`). */
+  diff: boolean | null;
+  onDiff: () => void;
   onPick: (at: OpenFile) => void;
   onCloseTab: (at: OpenFile) => void;
 }) {
@@ -476,7 +503,7 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, on
     const watch = new ResizeObserver(measure);
     watch.observe(row);
     return () => watch.disconnect();
-  }, [open, memo, history, unsaved.size]);
+  }, [open, memo, history, diff, unsaved.size]);
 
   // A list opened at a control that has since gone is one nothing can close in the way it was
   // opened, so the row that took the control away takes the list with it.
@@ -515,6 +542,20 @@ function FileTabs({ open, showing, unsaved, memo, onMemo, history, onHistory, on
               onClick={onHistory}
             >
               {t("git.history")}
+            </button>
+          </span>
+        )}
+        {/* And beside it, the other face that is about the folder rather than about a file a reader
+            opened. The two are the most tabs this column draws that nobody opened by name — the
+            column's own row is never more than those and the files (`AMB-D-906`, 2-4). */}
+        {diff !== null && (
+          <span className={`files__tab${diff ? " files__tab--on" : ""}`}>
+            <button
+              className="files__tabname"
+              aria-current={diff ? "true" : undefined}
+              onClick={onDiff}
+            >
+              {t("git.diff")}
             </button>
           </span>
         )}

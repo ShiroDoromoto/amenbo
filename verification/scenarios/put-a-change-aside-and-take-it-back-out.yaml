@@ -1,0 +1,235 @@
+# A change put aside and taken back out, which is the one door on git's half that is about work a
+# reader is not finished with. What it is walked for is the pair: a build that puts something aside
+# and cannot give it back has taken the reader's work away, and the half of the road that reads the
+# list is where the difference between the two shows.
+#
+# ── Why the file is recorded before anything is put aside ────────────────────────────────────────
+# Only paths git already follows go into a stash from this face, and a file git has never been told
+# about is not one: naming it would come back as git's refusal, so the row that puts the changes
+# aside is not drawn at all where nothing is followed. The premise therefore records the file first
+# and changes it afterwards, which is the state a reader is in when they reach for this.
+#
+# ── Why the list is read before as well as after ─────────────────────────────────────────────────
+# What the list says about an empty one is a sentence of its own, drawn inside the list rather than
+# in place of it, and it is the reading that says the row appearing later is the road's own stash and
+# not something that was already there.
+#
+# ── Why the file's own text is read on both sides ────────────────────────────────────────────────
+# The lists come from git and a row leaving one of them is real, but what a stash is for is the
+# working tree: the file on the disk goes back to what was recorded and comes forward again. Read on
+# the lists alone, a build that moved the rows and left the file as it was would pass.
+#
+# ── Why the file is closed before each move ──────────────────────────────────────────────────────
+# Putting a change aside rewrites the file under whatever is reading it, and the column across the
+# panes has its own answer to that — it says somebody wrote to the file after it was opened. That is
+# a reading of its own on a road of its own, and left standing here it would put a line on the screen
+# this road never asked about.
+#
+# ── Why the row is named by git's sentence ───────────────────────────────────────────────────────
+# `stash@{0}` is where a stash sits and not which one it is, so the name a road can hold on to is the
+# line git wrote: the branch the stash was made on, and the commit it was made over.
+id: put-a-change-aside-and-take-it-back-out
+title: Put a change aside from the window, find the folder clean and the stash on the list, and take the change back out again
+description: >
+  Raise a repository with one recorded file in it and that file changed since. Put the change aside
+  from git's half: the list of what has changed goes empty, the file on the disk is back to what was
+  recorded, and the list of what is put aside — which said nothing was, a moment before — carries
+  git's line about the stash. Take it back out from that same list: the change is among the changes
+  again, the file holds what was typed into it, and nothing is put aside any more.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # Plain text under a name the face draws in an editor rather than as Markdown, so what the road
+  # reads out of the file is the file and not a rendering of it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.txt
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+  # Recorded, which is what makes the change below one this face will put aside.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse-beds
+
+  # And changed since. This is the work the road puts aside and asks back for.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.txt
+      content: SCENARIO the trays are damped down at noon
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Where the road starts: one change, and nothing put aside.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.txt
+      section: changes
+
+  - type: action
+    domain: files
+    op: stash-list
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: nothing-stashed
+
+  - type: action
+    domain: files
+    op: stash
+
+  # The change has left the folder.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.txt
+      section: changes
+      present: false
+
+  - type: action
+    domain: files
+    op: stash-list
+
+  - type: assert
+    domain: files
+    op: stashed
+    with:
+      shows: WIP on main
+
+  # And the file on the disk is back to what was recorded, which is what the lists cannot say.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  # Closed before anything moves, so what comes back is not written under a reader.
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.txt
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  - type: action
+    domain: files
+    op: stash-restore
+    with:
+      shows: WIP on main
+
+  # The change is back among the changes, and the stash is gone from the list: taking one back out
+  # drops it, so a road that could ask for it twice would be reading a stash git no longer has.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.txt
+      section: changes
+
+  - type: action
+    domain: files
+    op: stash-list
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: nothing-stashed
+
+  # And the work itself is back, which is the whole of what was asked for.
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the trays are damped down at noon

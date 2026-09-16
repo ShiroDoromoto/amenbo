@@ -725,6 +725,14 @@ folder a project is **bound** to, and a repository anywhere else leaves every ro
 reaches: until something is committed git names the whole folder and never the paths inside it, so a
 folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
 for — does not exist on the near side of a commit.
+`git-branch` says which branch the folder is standing on when the road opens, cutting it where
+there is none by that name and stepping onto it where there is: a premise declares where the reader
+finds the folder, not the order its branches were made in. `uses-lfs` wires the repository for Git
+LFS the way `git lfs install` wires a machine — the four `filter.lfs.*` keys, written into the
+repository because a reader's own `~/.gitconfig` is not a scenario's to touch. Which paths go through
+it is `.gitattributes`, written by `write-file` like anything else a premise leaves lying there, and
+nothing here needs `git-lfs` to be installed: the road that walks it is about a window that cannot
+find one.
 `git-remote` gives that repository somewhere to send to and leaves its branch measured against it,
 which is what the counts of what is waiting to go out and to come in are counts *of*: with nothing on
 the other side git measures a branch against nothing at all. What stands there is a bare repository
@@ -740,6 +748,10 @@ a repository, because a road about the asking never reaches the point where ther
 to send. It takes the place of `git-remote` rather than standing beside it, a repository sending to
 one place. The host answers for as long as the world stands and stops when it is let go, so it is
 held on the driver the way the MCP server a road stands up is.
+**Every one of these runs git with none of the machine's own configuration** (`GIT_CONFIG_GLOBAL`
+pointed at an empty file, the system one turned off). What a premise declares is the repository it
+builds, and a reader's `git lfs install`, `core.autocrlf` or `commit.gpgsign` would each make that a
+different repository on a different box — green where it was written and red on the next machine.
 `worktree-start` and `worktree-finish` are the two commands a person working a task types, and the
 road that walks them is the only place a checkout is really cut: the directory has to appear beside
 the repository, the branch has to exist in it, and the fold has to refuse while there is work in

@@ -203,6 +203,52 @@ impl Driver<'_> {
                 self.asking = Some(host);
                 Ok(Outcome::action(format!("{} now sends to {url}, which asks who is sending", at.display())))
             }
+            // Which branch the folder is standing on when the road opens. The branch is cut here
+            // where there is none by that name and stepped onto where there is, because what a
+            // premise declares is where the reader finds the folder — never which of the two ways it
+            // came to be there. A road that had to say "make this one, move onto that one" would be
+            // saying the same thing twice for branches it made itself a few lines earlier.
+            //
+            // A branch cannot be cut where nothing has been recorded, so this follows `git-init`,
+            // whose own commit is what there is to cut from.
+            "git-branch" => {
+                let at = self.repo_dir(with)?;
+                let name = req_str(with, "name")?;
+                let there = git_asks(&at, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{name}")])?;
+                match there {
+                    true => git_in(&at, &["checkout", "-q", name])?,
+                    false => git_in(&at, &["checkout", "-q", "-b", name])?,
+                }
+                Ok(Outcome::action(format!("{} is standing on `{name}`", at.display())))
+            }
+            // A folder whose files of some shape are kept by Git LFS rather than by git — the state
+            // `git lfs install` leaves a machine in, written into this repository's own
+            // configuration instead.
+            //
+            // **The reader's own `~/.gitconfig` is not the premise's to write to**, and this is the
+            // one place the difference shows: git reads the four keys from wherever they are set, so
+            // a repository carrying them behaves as the reader's machine would without the run
+            // having touched anything outside its own folder.
+            //
+            // **Which paths go through it is `.gitattributes`**, written by `write-file` like any
+            // other file a road puts in the folder. The two halves are separate because they are
+            // separate for a reader too: one is the machine's, the other is the repository's, and a
+            // road that means to stand on both has to say both.
+            //
+            // **Nothing here needs `git-lfs` to be installed**, and a road standing on this premise
+            // is usually one about what happens where it is not.
+            "uses-lfs" => {
+                let at = self.repo_dir(with)?;
+                for (key, value) in [
+                    ("filter.lfs.clean", "git-lfs clean -- %f"),
+                    ("filter.lfs.smudge", "git-lfs smudge -- %f"),
+                    ("filter.lfs.process", "git-lfs filter-process"),
+                    ("filter.lfs.required", "true"),
+                ] {
+                    git_in(&at, &["config", key, value])?;
+                }
+                Ok(Outcome::action(format!("{} keeps its big files in LFS", at.display())))
+            }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
             // from the build under test: the configuration the request carries, and the file the
@@ -723,12 +769,7 @@ impl Driver<'_> {
 /// anybody. The two flags are harmless on the commands that never read them, which is what lets
 /// every call in this domain go through one door.
 fn git_in(at: &Path, args: &[&str]) -> Result<(), String> {
-    let out = Command::new("git")
-        .args(["-c", "user.name=verify", "-c", "user.email=verify@example.invalid"])
-        .args(args)
-        .current_dir(at)
-        .output()
-        .map_err(|e| format!("could not run git: {e}"))?;
+    let out = git_run(at, args)?;
     if !out.status.success() {
         return Err(format!(
             "`git {}` in {} failed: {}",
@@ -738,6 +779,49 @@ fn git_in(at: &Path, args: &[&str]) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Whether git answers yes — a question a premise puts before it picks which road to take, where
+/// the no is an answer and not a failure. `git_in`'s door, read for its status instead of its
+/// refusal.
+fn git_asks(at: &Path, args: &[&str]) -> Result<bool, String> {
+    Ok(git_run(at, args)?.status.success())
+}
+
+/// The one place this domain's git is built, so that what it does **not** read is settled once.
+///
+/// **None of the machine's git configuration is.** What a premise declares is the repository it
+/// builds, and a reader's own `~/.gitconfig` is no part of that: `git lfs install` in it would send
+/// the commits made here through a filter no road asked for, and `core.autocrlf`, `commit.gpgsign`
+/// or `core.hooksPath` would each change what is recorded or where. Left inherited, a scenario is
+/// green on the box it was written on and red on the next one, which is the one thing a release
+/// gate must not be.
+///
+/// `/dev/null` is a configuration file with nothing in it, which is what "read none of the
+/// reader's" comes to; Windows spells that file `NUL`. The system one is turned off by a variable
+/// of its own, there being no path to point at it with.
+fn git_run(at: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    git_run_with(at, args, &[])
+}
+
+/// The same git, with something more in its environment. It is separate so that the isolation above
+/// is written once: a caller that needed it and built its own command would be a second place for
+/// the reader's configuration to leak back in.
+fn git_run_with(
+    at: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> Result<std::process::Output, String> {
+    let mut git = Command::new("git");
+    git.args(["-c", "user.name=verify", "-c", "user.email=verify@example.invalid"])
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(at);
+    for (name, value) in env {
+        git.env(name, value);
+    }
+    git.output().map_err(|e| format!("could not run git: {e}"))
 }
 
 /// Where the repository a folder sends to stands, and where somebody else's checkout of it is made:
@@ -865,6 +949,29 @@ fn worktree_of(root: &Path, id: i64) -> Result<std::path::PathBuf, String> {
 mod tests {
     use super::*;
 
+    /// The one question `git-branch` asks before it decides which road to take. A premise names the
+    /// branch it wants the folder standing on and never says whether that branch is there yet, so a
+    /// wrong answer here is either a cut that fails on a name already taken or a move to a branch
+    /// nobody made.
+    #[test]
+    fn a_branch_is_cut_where_there_is_none_by_that_name_and_stepped_onto_where_there_is() {
+        let session = crate::scratch::session("repo-git-branch", false).unwrap();
+        let at = session.cwd.join("orchard");
+        std::fs::create_dir_all(&at).unwrap();
+        git_in(&at, &["init", "-q", "--initial-branch", "main"]).unwrap();
+        git_in(&at, &["commit", "--quiet", "--allow-empty", "-m", "cut from"]).unwrap();
+
+        let asks = |name: &str| {
+            git_asks(&at, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{name}")])
+                .unwrap()
+        };
+        assert!(asks("main"), "the branch `git-init` left is there");
+        assert!(!asks("trays"), "and one nobody made is not");
+
+        git_in(&at, &["checkout", "-q", "-b", "trays"]).unwrap();
+        assert!(asks("trays"), "once cut, the same question answers the other way");
+    }
+
     /// The layout a task's checkout is placed by — beside the repository, never inside it, which is
     /// the shape Amenbo refuses to be run in. The name is the repository's own, so a road that cuts
     /// in a bound folder and one that cuts in the run's own folder each look beside the right thing.
@@ -970,15 +1077,17 @@ mod tests {
         assert!(url.starts_with("http://127.0.0.1:"), "it is reached on the loopback: {url}");
         assert!(url.ends_with("/greenhouse-beds.git"), "it sends under the folder's own name: {url}");
 
-        let out = Command::new("git")
-            .args(["fetch", "origin"])
-            // Nothing is standing to be asked in a test, so git is told to give up where it would
-            // otherwise wait. The sentence it gives up with is what names how far it got.
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", "")
-            .current_dir(&at)
-            .output()
-            .unwrap();
+        // Nothing is standing to be asked in a test, so git is told to give up where it would
+        // otherwise wait — and to ask nothing of the reader's own askpass on the way there, a
+        // machine with one set being a machine where this would answer itself. The sentence git
+        // gives up with is what names how far it got. It goes through the same door every other call
+        // in this file does, so the reader's configuration is no more readable here than there.
+        let out = git_run_with(
+            &at,
+            &["fetch", "origin"],
+            &[("GIT_TERMINAL_PROMPT", "0"), ("GIT_ASKPASS", "")],
+        )
+        .unwrap();
         let said = String::from_utf8_lossy(&out.stderr).into_owned();
         assert!(!out.status.success(), "the door let git in: {said}");
         assert!(

@@ -37,6 +37,12 @@
 # not drawn there, and a build that drew it anyway would be offering a press with nothing behind it.
 # It is the last step because the menu it reads is left standing: nothing is pressed on it.
 #
+# ── The other door this act is reached by ───────────────────────────────────────────────────────
+# A row in the tree offers the same item, on a face that never opened this list, and what decides
+# whether it is drawn there is the tree's own reading of git's rows rather than this list. That is a
+# gate this road cannot reach — every row here has something to throw away — so it is walked by
+# `throw-a-change-away-without-opening-gits-own-list`, which also reads a row git is quiet about.
+#
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road. `git restore` at a shell is not this, and Amenbo is the subject of none of
 # it.

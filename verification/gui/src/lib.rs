@@ -2843,6 +2843,30 @@ impl Instructor {
                 "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch to bring the list of branches up. At the foot of that list, below the branches, press the row that offers to make a new one: it turns into a box where the row was. Type \"{}\" into it and press Enter. The list goes.",
                 req(with, "name")?
             ),
+            // The same list `branch-go` opens, on its second face. Every row on that face says what
+            // it does, so the operator is told to find the way through rather than a row to press
+            // twice.
+            (Domain::Files, "branch-merge") => format!(
+                "At the top of the half of the panel that is git's, press the control at the end of the line naming the branch to bring the list of branches up. At the foot of it, press the row that offers to bring a branch in: the rows are replaced by the same names, each now saying it brings that one in. Press the one for \"{}\". The list goes.",
+                req(with, "name")?
+            ),
+            // The declaration that a path is settled, which stands where the count stood.
+            (Domain::Files, "settle") => format!(
+                "In the list of conflicts, on the row \"{}\", press the way it offers to declare it settled — it stands at the end of the row, where the count of what is left stood. The row leaves the list.",
+                req(with, "name")?
+            ),
+            // The press that ends the merge. The message is git's, written when the merge began, so
+            // there is no box here and the control says what it does rather than naming a commit.
+            (Domain::Files, "merge-continue") =>
+                "Under the lists in the half of the panel that is git's, press the control that carries the merge through — it stands where the one that records what is staged stands when no merge is underway. The band saying a merge is underway goes."
+                    .to_string(),
+            // The way out, which asks first. The question is put in the band itself, so the operator
+            // is told to look there rather than for a window over it.
+            (Domain::Files, "merge-abort") => match req(with, "answer")? {
+                "yes" => "In the band saying a merge is underway, press the control that stops the merge. The band asks whether to, saying what is lost — press the answer that goes through with stopping it. The band goes, and what the merge wrote is taken back out of the folder.".to_string(),
+                "no" => "In the band saying a merge is underway, press the control that stops the merge. The band asks whether to, saying what is lost — press the answer that keeps the merge. The question goes and the band stays, with the merge still underway.".to_string(),
+                other => return Err(format!("`answer` does not know `{other}` — it is yes or no")),
+            },
             // A row moved between the two lists by its own box. The box is named by where it stands
             // rather than by what it is called, the way every control on this face is — and the row
             // is named by the words it draws, which is the file's own name.
@@ -4466,6 +4490,23 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
+            // Whether git has a merge open, which the band is drawn from. It is read apart from the
+            // list of conflicts on purpose: the band outlives the list.
+            (Domain::Files, "merging") => match present(with) {
+                true => "Under the line naming the branch, confirm the band saying a merge is underway is drawn — it is there whether or not anything is left in the list of conflicts below.".to_string(),
+                false => "Under the line naming the branch, confirm no band says a merge is underway.".to_string(),
+            },
+            // What is left in one conflicted file, and the press that stands where the count stops.
+            (Domain::Files, "marks") => match count(with, "n")? {
+                0 => format!(
+                    "In the list of conflicts, confirm the row \"{}\" no longer carries a count of what is left, and offers the way to declare it settled instead.",
+                    req(with, "name")?
+                ),
+                n => format!(
+                    "In the list of conflicts, confirm the row \"{}\" counts {n} of git's marks still standing in the file.",
+                    req(with, "name")?
+                ),
+            },
             // Which branch the line at the top of git's half names.
             (Domain::Files, "on-branch") => match present(with) {
                 true => format!(
@@ -5166,10 +5207,11 @@ fn section(with: &Args) -> Result<&'static str, String> {
         Some("tree") => Ok("the folder's own section"),
         Some("changes") => Ok("the list of what has changed, in the half of the panel that is git's"),
         Some("staged") => Ok("the list of what is staged, in the half of the panel that is git's"),
+        Some("conflicts") => Ok("the list of conflicts, in the half of the panel that is git's"),
         Some("history") => Ok("the list of what has been recorded, in the column across the panes"),
         Some("touched") => Ok("the list of the paths one commit touched, in the column across the panes"),
         Some(other) => Err(format!(
-            "`section` does not know `{other}` — it is tree, changes, staged, history or touched"
+            "`section` does not know `{other}` — it is tree, changes, staged, conflicts, history or touched"
         )),
         None => Err("arg `section` must say which section".to_string()),
     }

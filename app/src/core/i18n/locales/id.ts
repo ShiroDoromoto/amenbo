@@ -655,6 +655,8 @@ export const id: Translation = {
     "git.unstageOne": "Batalkan penyiapan {path}",
     "git.stageAll": "Siapkan semua yang ada di daftar ini",
     "git.unstageAll": "Batalkan penyiapan semua yang ada di daftar ini",
+    "git.stagePicked": "Siapkan {n} berkas yang dipilih",
+    "git.unstagePicked": "Batalkan penyiapan {n} berkas yang dipilih",
     "git.commitMessage": "Pesan commit",
     "git.commit": "Commit",
     "git.commitNaming": "Menyebut {n} jalur yang disiapkan",

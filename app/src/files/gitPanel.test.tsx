@@ -873,6 +873,23 @@ describe("the rail's git half, with rows picked out", () => {
     expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "b.rs"]);
   });
 
+  /// A box called by one path while it stages five is a control that lies to the one reader who
+  /// cannot see the band on the rows.
+  it("says how many the box takes once the row it is on is in a set", async () => {
+    hoisted.git[ROOT] = four();
+    await draw();
+    expect(box(t("git.changes"), "a.rs").getAttribute("aria-label"))
+      .toBe(tf("git.stageOne", { path: "a.rs" }));
+
+    await clickWith(rowOf(t("git.changes"), "a.rs"), {});
+    await clickWith(rowOf(t("git.changes"), "c.rs"), { metaKey: true, ctrlKey: true });
+    expect(box(t("git.changes"), "a.rs").getAttribute("aria-label"))
+      .toBe(tf("git.stagePicked", { n: 2 }));
+    // The row outside the set goes on being called by its own path: that is what its box takes.
+    expect(box(t("git.changes"), "d.rs").getAttribute("aria-label"))
+      .toBe(tf("git.stageOne", { path: "d.rs" }));
+  });
+
   /// A path that has left the list it was picked in is a row nobody can see, and a set holding one
   /// is a set the next press acts on silently. Staging one of three is how it happens.
   it("keeps the rows still on the list when one of the set leaves it", async () => {

@@ -668,6 +668,8 @@ export const uk: Translation = {
     "git.unstageOne": "Прибрати {path} з підготовленого",
     "git.stageAll": "Підготувати все з цього списку",
     "git.unstageAll": "Прибрати з підготовленого все з цього списку",
+    "git.stagePicked": "Підготувати вибрані файли: {n}",
+    "git.unstagePicked": "Прибрати з підготовленого вибрані файли: {n}",
     "git.commitMessage": "Повідомлення коміту",
     "git.commit": "Закомітити",
     "git.commitNaming": "Вказує {n} підготовлених шляхів",

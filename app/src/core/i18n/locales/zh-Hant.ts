@@ -656,6 +656,8 @@ export const zhHant: Translation = {
     "git.unstageOne": "取消暫存 {path}",
     "git.stageAll": "暫存此清單中的全部內容",
     "git.unstageAll": "取消暫存此清單中的全部內容",
+    "git.stagePicked": "暫存選取的 {n} 個檔案",
+    "git.unstagePicked": "取消暫存選取的 {n} 個檔案",
     "git.commitMessage": "提交訊息",
     "git.commit": "提交",
     "git.commitNaming": "指定已暫存的 {n} 個路徑",

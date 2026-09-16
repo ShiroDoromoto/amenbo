@@ -651,6 +651,8 @@ export const ko: Translation = {
     "git.unstageOne": "{path} 스테이지 해제",
     "git.stageAll": "이 목록 전체 스테이지",
     "git.unstageAll": "이 목록 전체 스테이지 해제",
+    "git.stagePicked": "선택한 {n}개 파일 스테이지",
+    "git.unstagePicked": "선택한 {n}개 파일 스테이지 해제",
     "git.commitMessage": "커밋 메시지",
     "git.commit": "커밋",
     "git.commitNaming": "스테이지된 {n}개 경로를 지정",

@@ -532,21 +532,6 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. What a column is drawn at is a thing on a screen, and a terminal has no
     // column to fold.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "sidebar", required: &["names"], refs: &[], strings: &["names"], binds: false },
-    // A card carried into one of the columns a cut board draws, which is the board's own way of filing
-    // work: what it lands under is the value on the column's heading, so the move names the axis and
-    // that value rather than anywhere on a screen. The card is named by `target`, the way every step
-    // pointing at a record names it.
-    //
-    // A closed value is where the road comes apart, which is why this is written as an op that can be
-    // turned away: such a column stands while cards are still in it and takes no drop, so the value the
-    // picker stopped offering cannot be reached around by hand. The screen holds that line one step
-    // earlier than the store does — the column is no drop target at all, rather than a drop the store
-    // refuses — so `refused:` names the rule the road walks (`dimension set`'s own) and not a sentence
-    // anybody is shown.
-    //
-    // A screen road alone: a terminal files work with `dimension set`, and has no column to carry a
-    // card into.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "drop-into-column", required: &["target", "axis", "value"], refs: &["target"], strings: &["axis", "value"], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },
@@ -585,15 +570,6 @@ const REGISTRY: &[OpSpec] = &[
     // only way to ask a screen what it does on arrival, and a road that assumed the arrival would be
     // reading the screen it never left.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "open", required: &["project"], refs: &[], strings: &["project"], binds: false },
-    // Recutting that board: which axis its columns are split along. It is the one move that changes
-    // what a board *is* rather than which of its cards are drawn, and until it existed every screen
-    // road could only read the split a board opens on. `axis` names an axis by the name a user typed,
-    // and only an axis: the split a board opens on is the status one, and going back to it is a move
-    // no road has needed — walking out to another project and back does not do it, the board holding
-    // what it was last cut along. A road that needs it grows the op a value, beside the road.
-    //
-    // A screen road alone: a terminal has no board to cut.
-    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "group-by", required: &["axis"], refs: &[], strings: &["axis"], binds: false },
     // A classification axis, its values, and the assignment that files a task under one. The axis and
     // the value travel as words — a name, or the key the row answers to, since the command resolves the
     // key before it tries a name.
@@ -1543,23 +1519,6 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone, and a `Review` it could be nothing else than: what stands on the shot is a
     // picture, and a reading answers which words are on one.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "icon", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // Whether the axis is offered as a way to cut the board into columns. Not whether it is defined —
-    // `dimension listed` asks that, and an axis that admits several values at once is defined exactly
-    // as much as ever. What it is not is a way to say where a task *is*: a task
-    // answering three of its values would stand in three columns at once, so the picker leaves it out
-    // while the filter chips go on offering it.
-    //
-    // A screen road alone: a terminal has no columns, which is the same reason `project group-by` is.
-    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "groupable", required: &["axis"], refs: &[], strings: &["axis"], binds: false },
-    // Whether the board, cut along that axis, draws a column for one of its values. Not whether the
-    // value is defined — `dimension listed` asks that — but whether the board keeps a place to stand a
-    // card in. A closed value is where the two come apart: it keeps its column while cards are still
-    // in it and loses it once the last one leaves, which is the one reading that says the board
-    // neither takes filed work off itself nor grows columns nobody can drop into.
-    //
-    // A screen road alone, like the `group-by` that cut the board and the `groupable` that reads the
-    // row of buttons: a terminal answers with a listing, and a listing has no columns.
-    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "column", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     //
     // `side` asks a different question of the same listing — not whether the axis is defined but
@@ -1593,11 +1552,6 @@ const REGISTRY: &[OpSpec] = &[
     // `dim:` filter already answer. The axis is named beside the value because whether the card draws
     // it at all is the axis's answer, so a step that named the value alone would not say what is
     // being asked of.
-    //
-    // `grouping: true` says the axis named is the one the board is currently cut along (`project
-    // group-by` put it there). It changes how the step is judged rather than what it claims: the value
-    // is standing on the column heading whatever the card does, so a reading of the shot would find the
-    // word either way, and an eye closes this one instead.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "carded", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /
     // `in_progress`) — the view is assembled from days, so the bucket is not the task's status field.

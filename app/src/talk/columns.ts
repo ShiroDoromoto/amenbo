@@ -391,13 +391,14 @@ export function setTabsCompact(want: boolean): boolean {
 
 /**
  * Which of the reading column's faces is up: the memo a person writes on, the folder's own files,
- * or the history of the folder the window is on.
+ * the history of the folder the window is on, or what the rows picked out in the rail's git half
+ * are holding.
  *
- * **The history is not one of the two that are kept.** The column shows nothing about git until
- * somebody presses for it (`AMB-D-905`), and a face that came back up on the history would be
- * putting it there on a run where nobody asked.
+ * **The two git faces are not among the ones that are kept.** The column shows nothing about git
+ * until somebody presses for it (`AMB-D-905`), and a face that came back up on either of them would
+ * be putting it there on a run where nobody asked.
  */
-export type SideTab = "files" | "memo" | "history";
+export type SideTab = "files" | "memo" | "history" | "diff";
 
 /**
  * The half this device had up, or the one the face opens on where nothing has been kept.
@@ -419,11 +420,11 @@ export function getSideTab(): SideTab {
 /**
  * Keep the face that was asked for, and answer with it — a face even where nothing can be kept.
  *
- * **The history is answered with and not written down**, so the next run comes up on whichever of
- * the other two the reader was on before they went to it. It is a face somebody pressed for, and
- * the press is what puts it up.
+ * **The two git faces are answered with and not written down**, so the next run comes up on
+ * whichever of the other two the reader was on before they went to one of them. Each is a face
+ * somebody pressed for, and the press is what puts it up.
  */
 export function setSideTab(which: SideTab): SideTab {
-  if (which !== "history") keep(SIDE_TAB, which);
+  if (which === "files" || which === "memo") keep(SIDE_TAB, which);
   return which;
 }

@@ -48,6 +48,9 @@ const hoisted = vi.hoisted(() => ({
   touched: {} as Record<string, GitFileDto[]>,
   /** The patch for one path of one commit, by "<sha> <path>". */
   patch: {} as Record<string, string>,
+  /** What git wrote about the picked rows, by "<staged> <path>,<path>" — the working tree's two
+   *  halves, which the diff face reads (`./GitDiff`). */
+  treePatch: {} as Record<string, string>,
   /** What git refuses the next throwing-away with, where a test is about the refusal. */
   refuseRestore: null as unknown,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
@@ -198,6 +201,13 @@ vi.mock("./folder", () => ({
   ): Promise<string> => {
     hoisted.asked.push(`diff:${root}:${sha}:${path}`);
     return hoisted.patch[`${sha} ${path}`] ?? "";
+  },
+  folderGitTreeDiff: async (
+    _projectId: number, root: string, paths: string[][], staged: boolean,
+  ): Promise<string> => {
+    const asked = paths.map((one) => one.join("/")).join(",");
+    hoisted.asked.push(`tree:${root}:${staged}:${asked}`);
+    return hoisted.treePatch[`${staged} ${asked}`] ?? "";
   },
   folderGitIgnore: async (_projectId: number, root: string, paths: string[][]): Promise<string> => {
     hoisted.asked.push(`ignore:${root}:${paths.map((one) => one.join("/")).join(",")}`);
@@ -501,6 +511,8 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
       gitRoot: props.gitRoot ?? null,
       gitPrefix: props.gitPrefix ?? "",
       history: props.history ?? false,
+      diff: props.diff ?? false,
+      diffPick: props.diffPick ?? null,
       historyOnly: props.historyOnly ?? null,
       onHistoryOnly: props.onHistoryOnly,
       onFileHistory: props.onFileHistory,
@@ -737,6 +749,7 @@ beforeEach(() => {
   hoisted.log = [];
   hoisted.touched = {};
   hoisted.patch = {};
+  hoisted.treePatch = {};
   hoisted.refuseRestore = null;
   hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];

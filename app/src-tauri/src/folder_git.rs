@@ -52,7 +52,7 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::dto::{FolderGitDto, GitBranchDto, GitCommitDto, GitEntryDto, GitFileDto, GitStashDto};
 use crate::error::CmdError;
-use crate::folder_fence::{open_no_follow, root_of, rooted, under};
+use crate::folder_fence::{gone, names, open_no_follow, root_of, rooted, under};
 
 /// What git calls one bound folder — as much of it as anything here reads.
 ///
@@ -278,6 +278,52 @@ pub async fn folder_git_diff(
     .await
 }
 
+/// The patch for what the folder has changed and not written down yet — every path of `paths` in
+/// one answer, and `staged` saying which half of "not written down" is meant.
+///
+/// The two halves are two questions, and git spells them apart: what the working tree holds that
+/// the index does not (`diff`), and what the index holds that the last commit does not
+/// (`diff --cached`). A row of the Git panel sits under one heading or the other, so the caller
+/// knows which of the two it is pointing at before it asks.
+///
+/// **One git for however many paths**, so a selection of twenty rows still starts git once.
+///
+/// **The patches come back in git's order and not in the order they were asked for** — by path,
+/// whatever order the pathspecs were written in (measured against git 2.55.0). That is the order
+/// the panel lists the rows in too, so a face stacking them reads down its own list; one that wants
+/// another order has to cut the answer at each `diff --git` itself.
+///
+/// **No paths is no patch.** A bare `diff` answers with the whole tree, and that is not what an
+/// empty selection asked for: what is wanted here is what somebody pointed at, and pointing at
+/// nothing points at nothing. A folder that is no repository answers the same way, as everything
+/// that reads here does.
+///
+/// It is handed over as git's own text, for the reason [`folder_git_diff`] gives.
+#[tauri::command]
+pub async fn folder_git_tree_diff(
+    project_id: i64,
+    root: String,
+    paths: Vec<Vec<String>>,
+    staged: bool,
+) -> Result<String, CmdError> {
+    off_thread(move || {
+        let dir = root_of(project_id, &root)?;
+        if repo_of(&dir).is_none() || paths.is_empty() {
+            return Ok(String::new());
+        }
+        let specs = pathspecs(&paths)?;
+        let mut args = vec!["--no-optional-locks", "diff", "--patch"];
+        if staged {
+            args.push("--cached");
+        }
+        // After `--`, so a path that begins like an option is read as the path it is.
+        args.push("--");
+        args.extend(specs.iter().map(String::as_str));
+        Ok(run(&dir, &args).unwrap_or_default())
+    })
+    .await
+}
+
 /// The `--format` the branch list is read back by: the name, what it is measured against, and how
 /// it stands against it.
 ///
@@ -436,6 +482,22 @@ fn here(path: &str) -> String {
 /// **`literal` is what makes it a path rather than a pattern**, for the reason [`here`] gives.
 fn whole(path: &str) -> String {
     format!(":(top,literal){path}")
+}
+
+/// The pathspecs `paths` come to, in the spelling git is run in — one ordinary name per segment,
+/// and the whole of it read as a path rather than as a pattern ([`here`] has why that matters).
+///
+/// **A path of no segments is the bound folder itself**, which is the row git writes for a folder
+/// it answers for whole rather than naming what is inside it. `:(literal)` with nothing after it is
+/// how git spells that same folder.
+///
+/// **The fence is [`names`] and not [`crate::folder_fence::under`].** What is built here is handed
+/// to git, which matches it inside the repository — this process never opens it — so the folders
+/// above it are not walked against the filesystem, and must not be: a path being staged is very
+/// often one that is not there any more, and a deleted folder would turn away the staging of its
+/// own deletion.
+pub(crate) fn pathspecs(paths: &[Vec<String>]) -> Result<Vec<String>, CmdError> {
+    paths.iter().map(|path| Ok(here(&names(path).ok_or_else(gone)?.join("/")))).collect()
 }
 
 /// Whether a commit is named by something git will read as a commit and not as an option.
@@ -1227,5 +1289,29 @@ mod tests {
         }
         let plain = amenbo_scratch::scratch("app-foldergit-plain");
         assert!(repo_of(&plain).is_none());
+    }
+
+    // ── the pathspecs a row comes to ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a_path_is_spelled_so_that_git_reads_it_as_a_path_and_not_as_a_pattern() {
+        let specs = pathspecs(&[vec!["src".into(), "a[1].txt".into()]]).unwrap();
+        assert_eq!(specs, vec![":(literal)src/a[1].txt".to_string()]);
+    }
+
+    /// The row git writes for a folder it answers for whole. No segments is the bound folder, and
+    /// `:(literal)` with nothing after it is git's own name for the folder it is run in.
+    #[test]
+    fn a_path_of_no_segments_is_the_folder_itself() {
+        assert_eq!(pathspecs(&[vec![]]).unwrap(), vec![":(literal)".to_string()]);
+    }
+
+    /// Every way out of the folder, refused before a process is started. The pathspec is built from
+    /// text alone, so this is the only thing standing between a caller and a path above the folder.
+    #[test]
+    fn nothing_that_climbs_out_of_the_folder_becomes_a_pathspec() {
+        for path in [vec!["..".to_string()], vec!["a/b".to_string()], vec!["/etc".to_string()]] {
+            assert!(pathspecs(std::slice::from_ref(&path)).is_err(), "{path:?}");
+        }
     }
 }

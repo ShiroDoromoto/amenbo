@@ -141,6 +141,28 @@ export async function folderGitDiff(
   return await invoke<string>("folder_git_diff", { projectId, root, sha, path });
 }
 
+/**
+ * The patch for what `paths` have changed and not written down yet, as git wrote it — all of them
+ * in one answer, stacked by path, which is git's order and not the order they were asked for (and
+ * the order the panel lists them in).
+ *
+ * `staged` picks which half of "not written down" is meant: what the working tree holds that the
+ * index does not (`false`), or what the index holds that the last commit does not (`true`). A row
+ * of the Git panel sits under one heading or the other.
+ *
+ * Empty `paths` come back empty — pointing at nothing is not asking for the whole tree
+ * (`crate::folder_git`).
+ */
+export async function folderGitTreeDiff(
+  projectId: number,
+  root: string,
+  paths: string[][],
+  staged: boolean,
+): Promise<string> {
+  if (!inTauri()) return "";
+  return await invoke<string>("folder_git_tree_diff", { projectId, root, paths, staged });
+}
+
 /** What has been put aside in the folder's repository, newest first (`stash@{0}` last made). */
 export async function folderGitStashes(
   projectId: number,

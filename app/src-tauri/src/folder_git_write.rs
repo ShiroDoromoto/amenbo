@@ -15,7 +15,7 @@
 //!
 //! | The hole | What closes it |
 //! |---|---|
-//! | Committing takes in whatever the pane happened to have staged — all three systems, every time | The pathspec every commit carries (`pathspecs`); 0 of 3,855 took the wrong thing with it |
+//! | Committing takes in whatever the pane happened to have staged — all three systems, every time | The pathspec every commit carries ([`crate::folder_git::pathspecs`]); 0 of 3,855 took the wrong thing with it |
 //! | `index.lock` is held by the pane, and git neither waits nor tries again | Twenty tries, 50ms apart (`run`); macOS 32/32, Linux 310/310, Windows 25/26 |
 //! | `ssh-keygen` / `ssh-add` read the reader's terminal — and there is none | The child's stdin is closed (`run_once`) |
 //! | A call that needs a password has no terminal to ask in | The askpass helper shipped beside the app, which puts the question to the window instead (`crate::folder_git_askpass`) |
@@ -51,7 +51,7 @@ use std::time::Duration;
 
 use crate::error::CmdError;
 use crate::folder_fence::{gone, names, root_of};
-use crate::folder_git::off_thread;
+use crate::folder_git::{off_thread, pathspecs};
 
 /// How many times a call held off by `index.lock` is made again before the refusal is the answer.
 ///
@@ -446,29 +446,6 @@ fn ignoring(had: &str, lines: &[String]) -> Option<String> {
     Some(out)
 }
 
-/// The pathspecs `paths` come to, in the spelling git is run in — one ordinary name per segment,
-/// and the whole of it read as a path rather than as a pattern.
-///
-/// **`:(literal)` is not decoration.** A pathspec is a pattern, so a file called `a[1].txt` also
-/// matches `a1.txt`: staging the one row a reader pointed at stages the other file too, which was
-/// measured here against a real git. The magic word turns the pattern off for that path alone.
-///
-/// **A path of no segments is the bound folder itself**, which is the row git writes for a folder
-/// it answers for whole rather than naming what is inside it ([`crate::folder_git`]). `:(literal)`
-/// with nothing after it is how git spells that same folder.
-///
-/// **The fence is [`names`] and not [`crate::folder_fence::under`].** What is built here is handed
-/// to git, which matches it inside the repository — this process never opens it — so the folders
-/// above it are not walked against the filesystem, and must not be: a path being staged is very
-/// often one that is not there any more, and a deleted folder would turn away the staging of its
-/// own deletion.
-fn pathspecs(paths: &[Vec<String>]) -> Result<Vec<String>, CmdError> {
-    paths
-        .iter()
-        .map(|path| Ok(format!(":(literal){}", names(path).ok_or_else(gone)?.join("/"))))
-        .collect()
-}
-
 /// Run one git that writes, and hand back what it said — or what it said in refusing.
 ///
 /// This is where the conditions in the module doc-comment are kept, so that no road above can be
@@ -568,28 +545,6 @@ fn not_a_name() -> CmdError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_path_is_spelled_so_that_git_reads_it_as_a_path_and_not_as_a_pattern() {
-        let specs = pathspecs(&[vec!["src".into(), "a[1].txt".into()]]).unwrap();
-        assert_eq!(specs, vec![":(literal)src/a[1].txt".to_string()]);
-    }
-
-    /// The row git writes for a folder it answers for whole. No segments is the bound folder, and
-    /// `:(literal)` with nothing after it is git's own name for the folder it is run in.
-    #[test]
-    fn a_path_of_no_segments_is_the_folder_itself() {
-        assert_eq!(pathspecs(&[vec![]]).unwrap(), vec![":(literal)".to_string()]);
-    }
-
-    /// Every way out of the folder, refused before a process is started. The pathspec is built from
-    /// text alone, so this is the only thing standing between a caller and a path above the folder.
-    #[test]
-    fn nothing_that_climbs_out_of_the_folder_becomes_a_pathspec() {
-        for path in [vec!["..".to_string()], vec!["a/b".to_string()], vec!["/etc".to_string()]] {
-            assert!(pathspecs(std::slice::from_ref(&path)).is_err(), "{path:?}");
-        }
-    }
 
     // ── the ignore file ──────────────────────────────────────────────────────────────────────
 

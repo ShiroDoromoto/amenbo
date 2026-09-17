@@ -70,15 +70,20 @@ const GENERIC: LangConfig = {
 
 // One import each, so a language's manners are fetched with its grammar and never before. `toml`
 // has no entry: VS Code ships no TOML extension, so it takes the generic rule like the languages
-// nothing was ever written for.
+// nothing was ever written for. A language may also point at another's file — `erb` at HTML's —
+// where the manners are the same ones and there is nothing of its own to bake.
 const FILES: Partial<Record<string, () => Promise<{ default: unknown }>>> = {
   css: () => import("./langconfig/css.json"),
+  // An ERB template takes HTML's manners: what a new line is indented under, what folds and which
+  // brackets pair up are the HTML around the tags, and VS Code has no ERB extension to bake.
+  erb: () => import("./langconfig/html.json"),
   go: () => import("./langconfig/go.json"),
   html: () => import("./langconfig/html.json"),
   json: () => import("./langconfig/json.json"),
   markdown: () => import("./langconfig/markdown.json"),
   php: () => import("./langconfig/php.json"),
   python: () => import("./langconfig/python.json"),
+  ruby: () => import("./langconfig/ruby.json"),
   rust: () => import("./langconfig/rust.json"),
   shellscript: () => import("./langconfig/shellscript.json"),
   sql: () => import("./langconfig/sql.json"),

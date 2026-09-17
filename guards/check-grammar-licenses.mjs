@@ -61,7 +61,8 @@ const GRANTS = {
       'claim as to its suitability for any purpose.',
     why: 'Grants copying, modification, sale and distribution with no condition attached — no ' +
       'notice to carry, no source to publish. Nothing in it can make an Apache-2.0 bundle ' +
-      'undistributable. The same README license covers toml.tmbundle and html.tmbundle verbatim.',
+      'undistributable. The same README license covers toml.tmbundle, html.tmbundle and ' +
+      'ruby.tmbundle verbatim.',
   },
 }
 
@@ -109,6 +110,14 @@ const GRAMMARS = {
   ],
   python: [
     { grammar: 'python', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/cf4c9e469d521fa5f33353737e8157eb0789ad02/extensions/python/syntaxes/MagicPython.tmLanguage.json' },
+  ],
+  ruby: [
+    { grammar: 'ruby', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/ruby/syntaxes/ruby.tmLanguage.json' },
+  ],
+  // TextMate's own bundle rather than anything VS Code ships, and it names no licence of its own —
+  // the bundle's README is where the terms are, which is the grant above.
+  erb: [
+    { grammar: 'erb', grant: 'textmate-bundle', source: 'https://github.com/textmate/ruby.tmbundle/blob/ecf0f1df23984bcff9b51552e35d9696cb0d9539/Syntaxes/HTML%20(Ruby%20-%20ERB).tmLanguage' },
   ],
   rust: [
     { grammar: 'rust', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/rust/syntaxes/rust.tmLanguage.json' },

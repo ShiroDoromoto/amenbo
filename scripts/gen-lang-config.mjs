@@ -47,7 +47,8 @@ const VSCODE_REV = '08d4889f9ec4a1685d257b9b95de036c8e1ce1e5'
 //
 // `toml` has no entry because VS Code has no built-in TOML extension. `tsx` takes typescript-basics
 // for the same reason its grammar is the TypeScriptReact one: it is the configuration for the whole
-// JavaScript family.
+// JavaScript family. `erb` has none either — VS Code ships no ERB extension — and it takes HTML's
+// instead, which is what an ERB template is outside its `<% %>` (`./langconfig.ts`).
 const EXTENSIONS = {
   css: 'css',
   go: 'go',
@@ -56,6 +57,7 @@ const EXTENSIONS = {
   markdown: 'markdown-basics',
   php: 'php',
   python: 'python',
+  ruby: 'ruby',
   rust: 'rust',
   shellscript: 'shellscript',
   sql: 'sql',

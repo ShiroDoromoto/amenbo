@@ -48,6 +48,12 @@
       "repaired": []
     },
     {
+      "lang": "ruby",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/ruby/language-configuration.json",
+      "sha256": "fb4f26a17fe832f2002dc9c198e3ce26770f055f7ffb7864c09bab6962f79fe5",
+      "repaired": []
+    },
+    {
       "lang": "rust",
       "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/rust/language-configuration.json",
       "sha256": "543f4d958163e2ec7ca52a1d201bbad3e92fcf35d605505f17905436664a011e",

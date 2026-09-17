@@ -35,10 +35,12 @@
 # here drew one.
 #
 # ── Why the word in the PDF is drawn out of rectangles ───────────────────────────────────────────
-# A PDF that named a font would be asking, on every machine this road is walked on, whether that
-# machine has it — and a page whose glyphs the reader has none of comes back blank, which reads
-# exactly like a page that was never drawn. The fixture draws its word as filled boxes instead, so
-# what reaches the screen is the same everywhere and a blank page means what it says.
+# A PDF that named a font would be asking, on every machine this road is walked on, what that machine
+# has it under. What came back would not be blank — a font pdf.js was not handed has its glyphs
+# numbered in Unicode, and something on the machine draws them (`app/src/files/pdfLoad.ts`) — but the
+# shapes would be whatever answered there, and a word read off a shot has to be the same word on
+# every machine. The fixture draws its word as filled boxes instead, so what reaches the screen is
+# the same everywhere and a blank page means what it says.
 #
 # ── Why the picture is thirty kilobytes and a hundred and forty megapixels ────────────────────────
 # The extreme is what the line is about. What the face refuses is measured twice, in bytes and in

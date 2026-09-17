@@ -1,8 +1,9 @@
 // The IO boundary for the file panel's PDF reader. pdf.js is a heavy dependency — about 500 KB
-// gzipped across the library and its worker, and 1.6 MB again in the character maps below — so
-// every part of it is pulled in through a dynamic import and none of it reaches the bundle a window
-// starts from: opening a PDF is what fetches the reader, and one map is fetched only where a
-// document names it. The editor and mermaid take the same shape (`./editorLoad`).
+// gzipped across the library and its worker, 1.6 MB again in the character maps below and 62 KB
+// more in the two fonts beside them — so every part of it is pulled in through a dynamic import and
+// none of it reaches the bundle a window starts from: opening a PDF is what fetches the reader, and
+// a map or a font is fetched only where a document names it. The editor and mermaid take the same
+// shape (`./editorLoad`).
 //
 // It lives in a module of its own so the panel's tests can stand in for it, rather than loading a
 // library that draws into a canvas jsdom does not implement.
@@ -38,6 +39,39 @@ const CMAPS = import.meta.glob<string>(
   { query: "?inline", import: "default" },
 );
 
+/**
+ * The two of the standard fourteen fonts that no machine can be counted on to have.
+ *
+ * Twelve of the fourteen are Times, Helvetica and Courier. pdf.js looks for each of those under a
+ * dozen-odd names the machine might have it under and ends the list with `serif`, `sans-serif` or
+ * `monospace`, so even a machine holding none of them draws the letters in something. Symbol and
+ * ZapfDingbats get one name apiece and no such ending: `Symbol` is there on macOS and on Windows
+ * but on no Linux by default, and **no system has a family called `ZapfDingbats`** — Apple's is
+ * `Zapf Dingbats`, and Windows ships Wingdings instead.
+ *
+ * What is left when the name misses is not blank. pdf.js numbers those glyphs in Unicode, so the
+ * window's own font draws them if it reaches that far — **measured** on a Linux carrying only
+ * DejaVu, where the Greek and the dingbats did arrive, in DejaVu's shapes rather than the ones the
+ * document named. Finding the name settles no more: **measured** on Windows, which does have
+ * `Symbol`, a page of it came back with the wrong glyph where the document had a mu.
+ *
+ * Carrying the two files is what makes such a page the same on the three systems, which is what
+ * `AMB-D-907` paid pdf.js's bulk for, and they cost 62 KB across the two modules that hold them —
+ * fetched, like a map, only where a document names one. The fifteen files beside them in the
+ * package are for Times, Helvetica and Courier, which pdf.js asks for only where system fonts are
+ * turned off — the XFA path, and XFA is off.
+ *
+ * Foxit's two are PDFium's, under BSD-3-Clause (`standard_fonts/LICENSE_FOXIT` inside pdfjs-dist),
+ * which is on `deny.toml`'s allow-list.
+ */
+const FONTS = import.meta.glob<string>(
+  [
+    "/node_modules/pdfjs-dist/standard_fonts/FoxitSymbol.pfb",
+    "/node_modules/pdfjs-dist/standard_fonts/FoxitDingbats.pfb",
+  ],
+  { query: "?inline", import: "default" },
+);
+
 /** The bytes behind a `data:` URL that carries them in base64. */
 function carried(url: string): Uint8Array {
   const bytes = atob(url.slice(url.indexOf(",") + 1));
@@ -58,6 +92,21 @@ class Maps {
     const load = CMAPS[`/node_modules/pdfjs-dist/cmaps/${name}.bcmap`];
     if (load === undefined) throw new Error(`no character map called ${name} is shipped`);
     return { cMapData: carried(await load()), isCompressed: true };
+  }
+}
+
+/**
+ * What pdf.js asks for a standard font's bytes with, on the same terms as `Maps`: the class rather
+ * than an address, so `FONTS` answers and no door has to.
+ *
+ * A file nobody shipped is refused the way pdf.js refuses one — it says so and goes on to the
+ * machine's own faces, which is the road every name but these two takes anyway.
+ */
+class Fonts {
+  async fetch({ filename }: { filename: string }): Promise<Uint8Array> {
+    const load = FONTS[`/node_modules/pdfjs-dist/standard_fonts/${filename}`];
+    if (load === undefined) throw new Error(`no standard font called ${filename} is shipped`);
+    return carried(await load());
   }
 }
 
@@ -142,6 +191,7 @@ export async function mountPdf(
       worker,
       isEvalSupported: false,
       CMapReaderFactory: Maps,
+      StandardFontDataFactory: Fonts,
     }).promise;
   } catch (e) {
     // The worker is this document's, so a document that never opened takes it back down with it.

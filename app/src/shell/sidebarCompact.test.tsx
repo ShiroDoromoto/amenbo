@@ -19,7 +19,7 @@ vi.mock("../mock/adapter", () => ({
   dataAdapter: {
     smartViews: () => [{ id: "inbox" }, { id: "activity" }, { id: "due" }],
     listProjects: () => [
-      { id: 1, name: "amenbo", color: "#101820", icon: null, openCount: 3, proposedDecisionCount: 1 },
+      { id: 1, name: "amenbo", color: "#101820", icon: null, openCount: 3 },
     ],
   },
 }));
@@ -92,7 +92,7 @@ describe("the rail folded to its marks", () => {
   // corner, which is the only place left on it.
   it("keeps a project's count", () => {
     draw(true);
-    expect(projectRow().querySelector(".navitem__count")!.textContent).toBe("4");
+    expect(projectRow().querySelector(".navitem__count")!.textContent).toBe("3");
   });
 
   // The due row is the one that warns on two steps at once. Compact there is no room beside the mark

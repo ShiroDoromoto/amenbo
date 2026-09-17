@@ -123,9 +123,6 @@
 .board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-rule); }
 .decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
-/* Under-discussion (proposed) decision count on the decisions button. Standalone (not the sidebar's task+decision sum), since this surface is the decisions face. */
-.decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
-.decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
 /* The box that narrows a list, wherever a screen puts one. A control takes the page's font from the
    base rule, and a toolbar reads a step below the page — so the step is said here, once, rather than

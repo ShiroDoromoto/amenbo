@@ -9,9 +9,9 @@ import { DimensionField } from "../components/DimensionField";
 import type { DimensionDto } from "../bindings/bindings";
 import type { Actor } from "../mock/types";
 import {
-  acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
-  fetchDecisionDimensions, rejectDecision, reopenDecision, removeDecisionComment, setDecisionDimensionValue,
-  supersedeDecision, unlinkDecisionEdge, unsetDecisionDimensionValue,
+  addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
+  fetchDecisionDimensions, finishWritingDecision, rejectDecision, reopenDecision, removeDecisionComment,
+  setDecisionDimensionValue, supersedeDecision, unlinkDecisionEdge, unsetDecisionDimensionValue,
 } from "../core/mutations";
 import { useDecision, useDecisionComments, useDecisionMadeIn, useDecisionPage } from "../core/reads";
 import {
@@ -40,9 +40,14 @@ function statusColor(s: DecisionStatus): string {
 
 /**
  * The detail pane for one decision record. It renders inside the right pane, where AppShell draws the
- * PaneHeader, so this component returns the body alone and matches TaskDetailPane's layout. Accepting
- * or rejecting may carry an optional reason, so the buttons do not act at once — they raise a
- * confirmation with a reason field.
+ * PaneHeader, so this component returns the body alone and matches TaskDetailPane's layout. Finishing
+ * the writing or turning the decision down may carry an optional reason, so the buttons do not act at
+ * once — they raise a confirmation with a reason field.
+ *
+ * What the doors are drawn off is `draft`, not the status (`AMB-D-918`): while the writing is
+ * unfinished the pane offers to end it or to turn the decision down, and once it is finished the only
+ * way back is to write it again. The labels still read off the acceptance keys — the wording is
+ * `AMB-T-5032`'s, and every one of them is rewritten there in one pass.
  */
 export function DecisionDetailPane({
   decisionId, onOpenTask, onOpenDecision, onGoToPane, focusCommentAt, editCommentAt,
@@ -64,7 +69,7 @@ export function DecisionDetailPane({
   // The comment thread exists only under Tauri (the browser mock has no decisions); posting refetches via the WriteAck.
   const comments = useDecisionComments(inTauri() ? decisionId : null);
   const [comment, setComment] = useState("");
-  const [confirming, setConfirming] = useState<null | "accept" | "reject">(null);
+  const [confirming, setConfirming] = useState<null | "finish" | "reject">(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
@@ -133,7 +138,8 @@ export function DecisionDetailPane({
       setCommentError(errText(e));
     }
   };
-  // Reopening (accepted → proposed) is a write like any other — surface a refusal instead of dropping it.
+  // Putting a written decision back to being written is a write like any other — surface a refusal
+  // instead of dropping it.
   const runReopen = async () => {
     setReopenError(null);
     try {
@@ -142,14 +148,14 @@ export function DecisionDetailPane({
       setReopenError(errText(e));
     }
   };
-  // Await the write and only then close the panel: a failed accept/reject must not read as a success.
+  // Await the write and only then close the panel: a refused write must not read as a success.
   // On failure the reason the user typed stays put, so retrying costs nothing.
   const runDecision = async () => {
     if (!confirming) return;
     setBusy(true);
     setError(null);
     try {
-      if (confirming === "accept") await acceptDecision(d.id, reason);
+      if (confirming === "finish") await finishWritingDecision(d.id, reason);
       else await rejectDecision(d.id, reason);
       setConfirming(null);
       setReason("");
@@ -202,7 +208,9 @@ export function DecisionDetailPane({
               if (e.key === "Escape") setEditing(false);
             }}
           />
-          {d.status === "accepted" && (
+          {/* Editing a decision whose writing is finished is allowed (`AMB-D-363`) and worth a word, so the
+              hint belongs on exactly that case — not on the draft, where an edit is simply the writing. */}
+          {!d.draft && (
             <div className="faint" style={{ marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
           )}
           {editError && <ErrorNote>{editError}</ErrorNote>}
@@ -243,9 +251,10 @@ export function DecisionDetailPane({
         </div>
       )}
 
-      {d.status === "proposed" && (
+      {d.draft && (
         confirming ? (
-          // Confirming an accept or reject, with an optional reason that is left behind as one comment.
+          // Confirming the end of the writing, or a turning-down, with an optional reason that is left
+          // behind as one comment.
           <div className="writebox" style={{ marginTop: 12 }}>
             {confirming === "reject" && standingOn(d).length > 0 && (
               <div style={{ marginBottom: 8 }}>
@@ -281,22 +290,24 @@ export function DecisionDetailPane({
               <span>
                 <button className="btn" onClick={() => { setConfirming(null); setReason(""); setError(null); }}>{t("dec.cancel")}</button>
                 <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={busy} onClick={() => void runDecision()}>
-                  {confirming === "accept" ? t("dec.accept") : t("dec.reject")}
+                  {confirming === "finish" ? t("dec.accept") : t("dec.reject")}
                 </button>
               </span>
             </div>
           </div>
         ) : (
-          // Entry buttons carry the accent fill: accepting or rejecting a
-          // decision is the pane's primary act and must not hide among the faint navigation links.
+          // Entry buttons carry the accent fill: ending the writing, or turning the decision down, is
+          // the pane's primary act and must not hide among the faint navigation links.
           <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <button className="btn btn--primary" onClick={() => setConfirming("accept")}>{t("dec.accept")}</button>
+            <button className="btn btn--primary" onClick={() => setConfirming("finish")}>{t("dec.accept")}</button>
             <button className="btn btn--danger" onClick={() => setConfirming("reject")}>{t("dec.reject")}</button>
           </div>
         )
       )}
 
-      {d.status === "accepted" && (
+      {/* Written, and not turned down: reopen is what puts it back to being written, and reject has no
+          inverse — core refuses it there (`invalid_decision_reopen_rejected`). */}
+      {!d.draft && d.status !== "rejected" && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn" onClick={() => void runReopen()}>{t("dec.reopen")}</button>

@@ -324,6 +324,7 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
         title: row.title,
         body: row.body,
         status: row.status,
+        draft: row.draft,
         project: row.project.map(|p| ProjectRefDto { id: p.id, name: p.name }),
         supersedes: row.supersedes.into_iter().map(to_ref).collect(),
         superseded_by: row.superseded_by.into_iter().map(to_ref).collect(),
@@ -2096,6 +2097,18 @@ pub fn decision_add(
             amenbo_core::activity_log::event::decision_proposed(&d.title),
         );
         Ok(d.id)
+    })?;
+    Ok(WriteAck::new(&["decisions"]).decision(id))
+}
+
+/// End the writing of a decision (`AMB-D-918`) — the second stage of recording one, and the door the
+/// pane draws while the draft flag is up. decided_by is me. Idempotent on a decision already written.
+#[tauri::command]
+pub fn decision_finish_writing(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let by = ActorKind::Human.as_str().to_string();
+        store.finish_writing_decision(id, Some(by), ActorKind::Human)?;
+        Ok(())
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
 }

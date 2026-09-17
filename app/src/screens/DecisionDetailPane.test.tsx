@@ -53,7 +53,7 @@ vi.mock("../core/mutations", () => {
     return Promise.resolve();
   };
   return {
-    acceptDecision: record("acceptDecision"), rejectDecision: record("rejectDecision"),
+    finishWritingDecision: record("finishWritingDecision"), rejectDecision: record("rejectDecision"),
     reopenDecision: record("reopenDecision"), supersedeDecision: record("supersedeDecision"),
     amendDecision: record("amendDecision"), buildsOnDecision: record("buildsOnDecision"),
     unlinkDecisionEdge: record("unlinkDecisionEdge"), addDecisionComment: record("addDecisionComment"),
@@ -78,16 +78,19 @@ let container: HTMLDivElement;
 let root: Root;
 const opened: number[] = [];
 
-/** One decision. By default: proposed, no edges, under a project — the conditions under which the picker shows. */
+/** One decision. By default: still being written, no edges, under a project — the conditions under which the picker shows. */
 function decision(id: number, over: Partial<Decision> = {}): Decision {
-  return {
+  const base = {
     id, ref: `D-${id}`, title: `決定${id}`, body: "", status: "proposed",
     project: { id: 1, name: "検証PJ" },
     supersedes: [], supersededBy: [], amends: [], amendedBy: [], buildsOn: [], builtOnBy: [],
     decidedAt: null, decidedBy: null, linkedTasks: [],
     createdAt: "2026-07-12T00:00:00Z", updatedAt: "2026-07-12T00:00:00Z",
     ...over,
-  } as Decision;
+  };
+  // The flag follows the status unless the case being written says otherwise: core sets the two
+  // together, so a fixture that named one and forgot the other would draw doors the app never draws.
+  return { draft: over.draft ?? base.status === "proposed", ...base } as Decision;
 }
 const ref = (id: number): DecisionRef => ({ id, name: `決定${id}`, ref: `D-${id}` });
 
@@ -368,7 +371,7 @@ describe("rejection blast radius", () => {
     expect(container.textContent).not.toContain(t("dec.revisit"));
   });
 
-  it("accepting overturns nothing, so it shows no revisit prompt", () => {
+  it("ending the writing overturns nothing, so it shows no revisit prompt", () => {
     hoisted.decisions.set(1, decision(1, { builtOnBy: [ref(8)] }));
     render(1);
 
@@ -378,22 +381,22 @@ describe("rejection blast radius", () => {
 });
 
 // A write that never lands must never read as one that did. The pane used to drop the promise and close the
-// panel regardless, so a refused accept looked exactly like a successful one — the badge simply stayed put.
-describe("a refused accept/reject is shown, not swallowed", () => {
+// panel regardless, so a refused write looked exactly like a successful one — the badge simply stayed put.
+describe("a refused finish-writing/reject is shown, not swallowed", () => {
   const open = async (which: "accept" | "reject") => {
     click(button(t(`dec.${which}`)));
     click(button(t(`dec.${which}`))); // the green button in the confirm panel
     await settle();
   };
 
-  it("keeps the confirm panel open and reports the error when the accept is refused", async () => {
-    hoisted.failing.add("acceptDecision");
+  it("keeps the confirm panel open and reports the error when the finish-writing is refused", async () => {
+    hoisted.failing.add("finishWritingDecision");
     hoisted.decisions.set(1, decision(1));
     render(1);
 
     await open("accept");
-    expect(hoisted.calls).toEqual([["acceptDecision", 1, ""]]);
-    expect(container.querySelector("[role=alert]")?.textContent).toContain("acceptDecision refused");
+    expect(hoisted.calls).toEqual([["finishWritingDecision", 1, ""]]);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("finishWritingDecision refused");
     expect(button(t("dec.cancel"))).toBeDefined(); // still confirming, so a retry costs nothing
   });
 

@@ -356,6 +356,10 @@ pub struct DecisionDto {
     /// `superseded_by` is where it is read.
     #[ts(type = "\"proposed\" | \"accepted\" | \"rejected\"")]
     pub(crate) status: String,
+    /// Is this decision still being written (`AMB-D-918`)? The pane draws its doors off this rather
+    /// than off the status: while it is up, the decision is unfinished and the tasks resting on it are
+    /// held back; `decision finish-writing` lowers it.
+    pub(crate) draft: bool,
     /// The project it lives under (the id is an integer key).
     pub(crate) project: Option<ProjectRefDto>,
     /// Decisions this one replaced (supersession, forward). One decision can replace several.

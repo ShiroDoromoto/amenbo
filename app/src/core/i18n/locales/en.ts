@@ -560,6 +560,8 @@ const ui = {
   "act.unassigned": "Unassigned “{title}”",
   "act.moved": "Moved “{title}”", "act.unblocked": "“{title}” is now unblocked (ready)",
   "act.proposed": "Proposed “{title}”",
+  "act.decided": "Decided “{title}”",
+  "act.rejected": "Rejected “{title}”",
   "act.deleted": "Deleted “{title}”",
   "act.deletedWith": "Deleted “{title}” ({tasks}, {decisions})",
   "act.updated": "Updated “{title}”",

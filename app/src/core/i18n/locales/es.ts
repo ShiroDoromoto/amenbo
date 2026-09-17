@@ -534,6 +534,8 @@ export const es: Translation = {
     "act.unassigned": "Quitó el responsable de «{title}»",
     "act.moved": "Movió «{title}»", "act.unblocked": "«{title}» ya no está bloqueada (lista)",
     "act.proposed": "Propuesta “{title}”",
+    "act.decided": "Decidió «{title}»",
+    "act.rejected": "Rechazó «{title}»",
     "act.deleted": "Eliminó «{title}»",
     "act.deletedWith": "Eliminó «{title}» ({tasks}, {decisions})",
     "act.updated": "Actualizó «{title}»",

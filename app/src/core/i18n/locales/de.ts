@@ -527,6 +527,8 @@ export const de: Translation = {
     "act.unassigned": "Hat die Zuständigkeit für „{title}“ aufgehoben",
     "act.moved": "Hat „{title}“ verschoben", "act.unblocked": "„{title}“ ist nicht mehr blockiert (bereit)",
     "act.proposed": "„{title}“ vorgeschlagen",
+    "act.decided": "„{title}“ entschieden",
+    "act.rejected": "„{title}“ abgelehnt",
     "act.deleted": "Hat „{title}“ gelöscht",
     "act.deletedWith": "Hat „{title}“ gelöscht ({tasks}, {decisions})",
     "act.updated": "Hat „{title}“ aktualisiert",

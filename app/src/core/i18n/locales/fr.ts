@@ -534,6 +534,8 @@ export const fr: Translation = {
     "act.unassigned": "A retiré le responsable de « {title} »",
     "act.moved": "A déplacé « {title} »", "act.unblocked": "« {title} » n'est plus bloquée (prête)",
     "act.proposed": "« {title} » proposée",
+    "act.decided": "« {title} » décidée",
+    "act.rejected": "« {title} » rejetée",
     "act.deleted": "A supprimé « {title} »",
     "act.deletedWith": "A supprimé « {title} » ({tasks}, {decisions})",
     "act.updated": "A mis à jour « {title} »",

@@ -297,6 +297,10 @@ export function eventText(
       return tf("act.unblocked", { title: name }, lang);
     case "decision.proposed":
       return tf("act.proposed", { title: name }, lang);
+    case "decision.decided":
+      return tf("act.decided", { title: name }, lang);
+    case "decision.rejected":
+      return tf("act.rejected", { title: name }, lang);
     case "task.deleted":
     case "decision.deleted":
       return tf("act.deleted", { title: name }, lang);

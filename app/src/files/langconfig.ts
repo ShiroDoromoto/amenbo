@@ -77,6 +77,7 @@ const FILES: Partial<Record<string, () => Promise<{ default: unknown }>>> = {
   html: () => import("./langconfig/html.json"),
   json: () => import("./langconfig/json.json"),
   markdown: () => import("./langconfig/markdown.json"),
+  php: () => import("./langconfig/php.json"),
   python: () => import("./langconfig/python.json"),
   rust: () => import("./langconfig/rust.json"),
   shellscript: () => import("./langconfig/shellscript.json"),

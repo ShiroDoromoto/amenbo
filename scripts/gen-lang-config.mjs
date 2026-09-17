@@ -54,6 +54,7 @@ const EXTENSIONS = {
   html: 'html',
   json: 'json',
   markdown: 'markdown-basics',
+  php: 'php',
   python: 'python',
   rust: 'rust',
   shellscript: 'shellscript',

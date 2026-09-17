@@ -36,6 +36,12 @@
       "repaired": []
     },
     {
+      "lang": "php",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/php/language-configuration.json",
+      "sha256": "1af320109beafeb17278cc833f607c6972227262686e54ae3f17b1d07660b837",
+      "repaired": []
+    },
+    {
       "lang": "python",
       "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/python/language-configuration.json",
       "sha256": "141f93a99e92b9d399cbe4e18f36757fc6bcb94df765607b57b149c1749fda28",

@@ -44,6 +44,24 @@ export const GRAMMARS = {
   ],
   json: () => [import("tm-grammars/grammars/json.json")],
   markdown: () => [import("tm-grammars/grammars/markdown.json")],
+  // **The root is the HTML one, not `source.php`** — a PHP file is HTML with `<?php` cut into it,
+  // and reading it the other way round draws `<h1 class="a">` as PHP operators and constants, which
+  // is worse than no colour at all (`AMB-T-4907` read both). That root is the one grammar no
+  // package republishes, so it is baked into the tree beside this (`./tmgrammar`), and the eight
+  // behind it are what a PHP file can hold: its own language, the HTML it sits in, and what each of
+  // those descends into in turn.
+  php: () => [
+    import("./tmgrammar/text.html.php.json"),
+    import("tm-grammars/grammars/php.json"),
+    import("tm-grammars/grammars/html.json"),
+    import("tm-grammars/grammars/html-derivative.json"),
+    import("tm-grammars/grammars/javascript.json"),
+    import("tm-grammars/grammars/css.json"),
+    import("tm-grammars/grammars/json.json"),
+    import("tm-grammars/grammars/sql.json"),
+    import("tm-grammars/grammars/xml.json"),
+    import("tm-grammars/grammars/java.json"),
+  ],
   python: () => [import("tm-grammars/grammars/python.json")],
   rust: () => [import("tm-grammars/grammars/rust.json")],
   shellscript: () => [import("tm-grammars/grammars/shellscript.json")],
@@ -60,6 +78,7 @@ export const SCOPES: Record<LangId, string> = {
   html: "text.html.basic",
   json: "source.json",
   markdown: "text.html.markdown",
+  php: "text.html.php",
   python: "source.python",
   rust: "source.rust",
   shellscript: "source.shell",
@@ -76,6 +95,7 @@ const BY_EXTENSION: Record<string, LangId> = {
   ".bash": "shellscript",
   ".cjs": "tsx",
   ".css": "css",
+  ".ctp": "php",
   ".cts": "tsx",
   ".go": "go",
   ".htm": "html",
@@ -93,6 +113,14 @@ const BY_EXTENSION: Record<string, LangId> = {
   ".mjs": "tsx",
   ".mkd": "markdown",
   ".mts": "tsx",
+  // Five names are PHP's, and they are the five VS Code's own extension claims — `.ctp` is up
+  // among the c's, and CakePHP's. `.blade.php` ends in one of them, so a Laravel template is read
+  // as the PHP it is: the tags, the attributes and everything between `<?php` and `?>` are
+  // coloured, and Blade's own `@if` and `{{ }}` come back plain rather than wrong (`AMB-T-4907`).
+  ".php": "php",
+  ".php4": "php",
+  ".php5": "php",
+  ".phtml": "php",
   ".py": "python",
   ".pyi": "python",
   ".rs": "rust",

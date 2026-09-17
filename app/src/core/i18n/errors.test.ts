@@ -46,13 +46,13 @@ const nestedTree: CmdError = {
 const notReady: CmdError = {
   code: "not_ready",
   message_en:
-    "cannot reserve task AMB-T-12: blocker AMB-T-9 is not done; premise AMB-D-4 is not settled — wait for the ruling, or unlink it",
+    "cannot reserve task AMB-T-12: blocker AMB-T-9 is not done; premise AMB-D-4 is not settled — wait for it to be written to the end, or unlink it",
   fields: { ref: "AMB-T-12" },
   parts: [
     { code: "not_ready_open_blocker", message_en: "blocker AMB-T-9 is not done", fields: { ref: "AMB-T-9" } },
     {
       code: "not_ready_premise_unsettled",
-      message_en: "premise AMB-D-4 is not settled — wait for the ruling, or unlink it",
+      message_en: "premise AMB-D-4 is not settled — wait for it to be written to the end, or unlink it",
       fields: { ref: "AMB-D-4" },
     },
   ],

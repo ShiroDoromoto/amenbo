@@ -250,6 +250,72 @@ steps_cli:
     with:
       count: 0
 
+  # ── The guidance Amenbo wrote, standing in the way of a branch ───────────────────────────────
+  # Amenbo writes `CLAUDE.md` / `AGENTS.md` into a bound folder without asking git, and untracked is
+  # the state they are meant to be in — this repository does not track its own. So untracked is no
+  # issue, and what is worth a line is the one shape that turns into a refusal: a branch of the same
+  # repository has the path, git will not walk over the copy lying there, and the move stops naming
+  # two files the reader never wrote with nothing to say Amenbo put them on disk.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: elsewhere
+
+  # Everything the folder holds goes onto a branch of its own — the guidance among it — so the branch
+  # the reader comes back to has none of it.
+  - type: action
+    domain: repo
+    op: git-branch
+    with:
+      dir: elsewhere
+      name: keeps-the-guidance
+
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: elsewhere
+
+  - type: action
+    domain: repo
+    op: git-branch
+    with:
+      dir: elsewhere
+      name: main
+
+  # The checkout took the pointer and the guidance with it. Binding the folder again is what a reader
+  # does next, and it writes both back — untracked here, tracked on the branch beside it.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: elsewhere
+      project: theirs
+
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: guidance_blocks_checkout
+      present: true
+
+  # Tracking it here too is one of the two ways out, and the read that raised it is what says it took.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: elsewhere
+
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: guidance_blocks_checkout
+      present: false
+
 # ── The faces of `--fix` that are not walked here, and why ────────────────────────────────────
 # `--fix` also sweeps orphaned attachments: rows whose record is gone. That reference is the one no
 # foreign key can hold (`target_type` names the table, so no `REFERENCES` can branch on it), and what

@@ -1083,6 +1083,10 @@ export const de: Translation = {
       message: "Der KI-Leitfaden (von Amenbo verwalteter Block) in {path} ist veraltet (v{version} → v{current}).",
       fix: "„Erneut abgleichen“ bringt den Leitfaden dieses Ordners auf den neuesten Stand (was du selbst geschrieben hast, bleibt erhalten).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} stammt von Amenbo, git verfolgt die Datei in diesem Branch aber nicht – in {branches} schon. Ein Wechsel dorthin wird deshalb abgelehnt.",
+      fix: "Entscheiden Sie sich für eine Seite: die Datei auch hier verfolgen oder sie in {branches} aus der Versionsverwaltung nehmen. Für einen einmaligen Wechsel verschieben Sie die Datei vorher – Amenbo schreibt sie beim nächsten Öffnen dieses Ordners erneut.",
+    },
     legacy_pointer: {
       message: "{path} ist eine Verknüpfung im alten Format — eine dort gestartete KI kommt nicht beim Projekt an.",
       fix: "„Neu verknüpfen“ bindet den Ordner wieder an Projekt #{project}.",

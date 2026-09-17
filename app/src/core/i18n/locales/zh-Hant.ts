@@ -1071,6 +1071,10 @@ export const zhHant: Translation = {
       message: "{path} 中的 AI 指南（Amenbo 受管區塊）已過時（v{version} → v{current}）。",
       fix: "「重新同步」會把這個資料夾的指南更新到現行版本（你自己寫的內容會保留）。",
     },
+    guidance_blocks_checkout: {
+      message: "{path} 是 Amenbo 寫入的，目前分支上 git 並未追蹤它，而 {branches} 有追蹤——切換到那個分支會被拒絕。",
+      fix: "二選一：在目前分支也追蹤該檔案，或在 {branches} 上停止追蹤。若只是切換一次，先把檔案移開即可——Amenbo 下次開啟此資料夾時會重新寫入。",
+    },
     legacy_pointer: {
       message: "{path} 是舊格式的連結——在那裡啟動的 AI 不會解析到這個專案。",
       fix: "「重新連結」會把這個資料夾重新連結到專案 #{project}。",

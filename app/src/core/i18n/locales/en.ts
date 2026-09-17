@@ -1344,6 +1344,10 @@ const doctor = {
     message: "The AI guidance (Amenbo managed block) in {path} is stale (v{version} → v{current}).",
     fix: "“Resync” brings this folder's guidance up to date (your own content is preserved).",
   },
+  guidance_blocks_checkout: {
+    message: "Amenbo wrote {path} and git does not track it on this branch, while {branches} does — checking that branch out is refused.",
+    fix: "Settle the path one way: track the file here too, or stop tracking it on {branches}. To switch across just once, move the file aside first — Amenbo writes it again the next time it opens this folder.",
+  },
   legacy_pointer: {
     message: "{path} is an old-format binding — an AI started there does not resolve to the project.",
     fix: "“Re-bind” binds the folder to project #{project} again.",

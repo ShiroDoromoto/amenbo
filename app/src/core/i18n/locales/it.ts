@@ -1090,6 +1090,10 @@ export const it: Translation = {
       message: "La guida per l'IA (blocco gestito da Amenbo) in {path} è superata (v{version} → v{current}).",
       fix: "«Risincronizza» porta la guida di questa cartella alla versione attuale (quello che hai scritto tu resta).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} l'ha scritto Amenbo e git non lo traccia su questo ramo, mentre {branches} sì: passare a quel ramo viene rifiutato.",
+      fix: "Scegli una via: traccia il file anche qui, oppure smetti di tracciarlo su {branches}. Per un passaggio una tantum, sposta prima il file — Amenbo lo riscrive alla prossima apertura di questa cartella.",
+    },
     legacy_pointer: {
       message: "{path} è un collegamento nel vecchio formato — un'IA avviata lì non arriva al progetto.",
       fix: "«Ricollega» lega di nuovo la cartella al progetto #{project}.",

@@ -1066,6 +1066,10 @@ export const ko: Translation = {
       message: "{path}의 AI 안내서(Amenbo 관리 블록)가 낡았습니다(v{version} → v{current}).",
       fix: "“다시 맞추기”가 이 폴더의 안내서를 현재 버전으로 올립니다(직접 쓴 내용은 그대로 둡니다).",
     },
+    guidance_blocks_checkout: {
+      message: "{path}은(는) Amenbo가 쓴 파일인데 이 브랜치에서는 git이 추적하지 않습니다. {branches}에서는 추적하므로 그쪽으로 옮기려 하면 git이 막습니다.",
+      fix: "한쪽으로 맞추세요. 여기서도 추적하거나, {branches}에서 추적을 그만두면 됩니다. 한 번만 옮기려면 파일을 먼저 치워 두세요. Amenbo는 이 폴더를 다음에 열 때 다시 씁니다.",
+    },
     legacy_pointer: {
       message: "{path}은(는) 이전 형식의 연결입니다 — 거기서 시작한 AI는 이 프로젝트로 이어지지 않습니다.",
       fix: "“다시 연결”이 이 폴더를 프로젝트 #{project}에 다시 연결합니다.",

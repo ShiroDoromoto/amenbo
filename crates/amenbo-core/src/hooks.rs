@@ -352,7 +352,7 @@ fn hooks_are_shared(dir: &Path, hooks: &Path) -> bool {
 /// The git directory shared by every worktree of this repository, resolved through any symlink. This is
 /// where hooks live unless `core.hooksPath` says otherwise, and nothing under it is ever git's to show.
 fn common_git_dir(dir: &Path) -> Option<PathBuf> {
-    let path = git_line(dir, &["rev-parse", "--git-common-dir"])?;
+    let path = crate::sys::git_output(dir, &["rev-parse", "--git-common-dir"])?;
     std::fs::canonicalize(dir.join(path)).ok()
 }
 
@@ -362,20 +362,8 @@ fn common_git_dir(dir: &Path) -> Option<PathBuf> {
 /// spellings says "outside the tree" for a path plainly inside it — and this guard failing open is a hook
 /// committed to everybody's checkout, with nothing on screen to say so.
 fn worktree_root(dir: &Path) -> Option<PathBuf> {
-    let root = git_line(dir, &["rev-parse", "--show-toplevel"])?;
+    let root = crate::sys::git_output(dir, &["rev-parse", "--show-toplevel"])?;
     std::fs::canonicalize(root).ok()
-}
-
-/// The first line of a git command's output, or `None` when git has nothing to say (not a repository, no
-/// runnable git on the machine, or the call failed). Trimmed, because git terminates its answers with a
-/// newline.
-fn git_line(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = crate::sys::git()?.current_dir(dir).args(args).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if line.is_empty() { None } else { Some(line) }
 }
 
 /// Whether git already ignores `path`. `check-ignore` answers by exit code: 0 is ignored, 1 is not, and
@@ -388,27 +376,6 @@ fn is_ignored(dir: &Path, path: &Path) -> bool {
         .arg(path)
         .status()
         .map(|s| s.code() == Some(0))
-        .unwrap_or(false)
-}
-
-/// Does git **track** `path` — is it in the index or a committed file? `ls-files --error-unmatch` exits 0
-/// only for a tracked path. Unlike an untracked file, a tracked one cannot be hidden by
-/// `.git/info/exclude`, so a modification to it shows in `git status` and can be committed. That is why
-/// Amenbo must not slip its block into a foreign hook git tracks: it cannot own it and cannot hide the
-/// change, so it would be leaving Amenbo's lines in the user's versioned tree to be committed by mistake.
-/// A hook under `.git/hooks` is never tracked (it is inside the git dir, outside the working tree), so this
-/// only ever fires for a hook a `core.hooksPath` puts in the tree — `.githooks`, `.husky` — that the
-/// repository has committed. With no runnable git nothing is tracked, for the same reason nothing is
-/// ignored: there is no index to be in.
-fn is_tracked(dir: &Path, path: &Path) -> bool {
-    let Some(mut git) = crate::sys::git() else { return false };
-    git.current_dir(dir)
-        .args(["ls-files", "--error-unmatch"])
-        .arg(path)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
         .unwrap_or(false)
 }
 
@@ -436,7 +403,7 @@ fn exclude_locally(dir: &Path, hook: &Path) {
     };
     // Always forward slashes: this file is read by git, not by the platform.
     let line = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
-    let Some(exclude) = git_line(dir, &["rev-parse", "--git-path", "info/exclude"]) else {
+    let Some(exclude) = crate::sys::git_output(dir, &["rev-parse", "--git-path", "info/exclude"]) else {
         return;
     };
     let exclude = dir.join(exclude);
@@ -572,7 +539,7 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
         // `git status` and could be committed into the user's repo, and `.git/info/exclude` cannot hide a
         // tracked file. Coexisting is only ever silent for a hook under `.git/hooks` or an untracked one in
         // a `core.hooksPath` dir — so leave a tracked stranger's hook to its owner (hand-off), not touched.
-        if !was_ours && existing.is_some() && is_tracked(dir, &hook) {
+        if !was_ours && existing.is_some() && crate::sys::git_tracks(dir, &hook) {
             report.refused.push(slot);
             continue;
         }

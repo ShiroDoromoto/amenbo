@@ -1071,6 +1071,10 @@ export const vi: Translation = {
       message: "Bản hướng dẫn cho AI (khối do Amenbo quản lý) trong {path} đã cũ (v{version} → v{current}).",
       fix: "“Đồng bộ lại” đưa hướng dẫn của thư mục này lên phiên bản hiện tại (phần bạn tự viết vẫn giữ nguyên).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} do Amenbo ghi và git không theo dõi tệp này trên nhánh hiện tại, trong khi {branches} có theo dõi — chuyển sang nhánh đó sẽ bị từ chối.",
+      fix: "Chọn một hướng: theo dõi tệp ở đây luôn, hoặc ngừng theo dõi trên {branches}. Nếu chỉ chuyển một lần, hãy dời tệp đi trước — Amenbo sẽ ghi lại khi mở thư mục này lần sau.",
+    },
     legacy_pointer: {
       message: "{path} là mối gắn định dạng cũ — AI khởi động ở đó không dẫn tới dự án.",
       fix: "“Gắn lại” gắn thư mục vào dự án #{project} lần nữa.",

@@ -40,6 +40,11 @@ pub fn message(issue: &DoctorIssue) -> String {
             p(issue, "version"),
             p(issue, "current"),
         ),
+        DoctorIssueKind::GuidanceBlocksCheckout => format!(
+            "{path} carries Amenbo's managed block and git does not track it on this branch, while {} \
+             does: checking that branch out is refused, naming a file you never wrote.",
+            p(issue, "branches"),
+        ),
         DoctorIssueKind::LegacyPointer | DoctorIssueKind::LegacyPointerAmbiguous => format!(
             "{path} is an old-format pointer (its project id is not the current integer key). \
              Nothing rewrites the `.amenbo` files scattered across folders on your behalf."
@@ -103,6 +108,12 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
         DoctorIssueKind::StaleManagedBlock => format!(
             "Run {cmd} in that folder and the block follows this binary on its own; \
              `{cmd} sync-guide` does every bound folder at once (one folder: `--dir`)."
+        ),
+        DoctorIssueKind::GuidanceBlocksCheckout => format!(
+            "Settle the path one way - track the file on this branch too, or stop tracking it on {}. \
+             To switch across just once, move the file aside first; Amenbo writes it again the next \
+             time it opens that folder.",
+            p(issue, "branches"),
         ),
         DoctorIssueKind::LegacyPointer => format!(
             "Run {cmd} in that folder and the pointer rewrites itself to the current format \

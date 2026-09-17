@@ -1090,6 +1090,10 @@ export const fr: Translation = {
       message: "Le guide de l'IA (bloc géré par Amenbo) dans {path} est périmé (v{version} → v{current}).",
       fix: "« Resynchroniser » remet à jour le guide de ce dossier (ce que vous avez écrit est conservé).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} a été écrit par Amenbo et git ne le suit pas sur cette branche, alors que {branches} le suit : basculer vers cette branche est refusé.",
+      fix: "Tranchez d'un côté : suivez le fichier ici aussi, ou cessez de le suivre sur {branches}. Pour un simple aller-retour, écartez d'abord le fichier — Amenbo le réécrira à la prochaine ouverture de ce dossier.",
+    },
     legacy_pointer: {
       message: "{path} est une liaison à l'ancien format — une IA lancée là n'aboutit pas au projet.",
       fix: "« Relier » rattache le dossier au projet #{project}.",

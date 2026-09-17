@@ -1097,6 +1097,10 @@ export const pl: Translation = {
       message: "Przewodnik dla SI (blok zarządzany przez Amenbo) w {path} jest nieaktualny (v{version} → v{current}).",
       fix: "„Zsynchronizuj ponownie” doprowadzi przewodnik tego folderu do obecnej wersji (Twoje własne treści zostają).",
     },
+    guidance_blocks_checkout: {
+      message: "Plik {path} zapisał Amenbo, a git nie śledzi go na tej gałęzi, choć {branches} go śledzi — przejście na tamtą gałąź zostanie odrzucone.",
+      fix: "Zdecyduj się na jedno: śledź plik również tutaj albo przestań go śledzić na {branches}. Na jednorazowe przejście najpierw odsuń plik — Amenbo zapisze go ponownie przy kolejnym otwarciu tego folderu.",
+    },
     legacy_pointer: {
       message: "{path} to powiązanie w starym formacie — SI uruchomiona tam nie trafia do projektu.",
       fix: "„Podepnij ponownie” znów wiąże folder z projektem #{project}.",

@@ -1089,6 +1089,10 @@ export const ptBR: Translation = {
       message: "O guia da IA (bloco gerenciado pelo Amenbo) em {path} está desatualizado (v{version} → v{current}).",
       fix: "“Sincronizar de novo” põe o guia desta pasta em dia (o que você escreveu é preservado).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} foi escrito pelo Amenbo e o git não o rastreia neste branch, mas {branches} rastreia: mudar para esse branch é recusado.",
+      fix: "Escolha um lado: rastreie o arquivo aqui também ou pare de rastreá-lo em {branches}. Para trocar só uma vez, tire o arquivo do caminho antes — o Amenbo o escreve de novo na próxima vez que abrir esta pasta.",
+    },
     legacy_pointer: {
       message: "{path} é um vínculo em formato antigo — uma IA iniciada aí não chega ao projeto.",
       fix: "“Vincular de novo” liga a pasta ao projeto #{project} outra vez.",

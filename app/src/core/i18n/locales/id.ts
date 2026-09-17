@@ -1072,6 +1072,10 @@ export const id: Translation = {
       message: "Panduan AI (blok yang dikelola Amenbo) di {path} sudah usang (v{version} → v{current}).",
       fix: "“Selaraskan ulang” membawa panduan folder ini ke versi sekarang (tulisan Anda sendiri tetap utuh).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} ditulis Amenbo dan git tidak melacaknya di cabang ini, sedangkan {branches} melacaknya — berpindah ke cabang itu akan ditolak.",
+      fix: "Pilih satu: lacak berkas ini di sini juga, atau berhenti melacaknya di {branches}. Untuk sekali pindah, singkirkan dulu berkasnya — Amenbo menulisnya lagi saat berikutnya membuka folder ini.",
+    },
     legacy_pointer: {
       message: "{path} adalah tautan berformat lama — AI yang dijalankan di sana tidak sampai ke proyeknya.",
       fix: "“Tautkan ulang” menautkan folder itu ke proyek #{project} lagi.",

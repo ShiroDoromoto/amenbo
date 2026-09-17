@@ -15,6 +15,7 @@ export const DOCTOR_ISSUE_KINDS = [
   "duplicate_order_key",
   "orphan_attachment",
   "stale_managed_block",
+  "guidance_blocks_checkout",
   "legacy_pointer",
   "legacy_pointer_ambiguous",
   "missing_pointer",

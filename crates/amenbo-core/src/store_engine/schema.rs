@@ -592,6 +592,12 @@ datasets! {
         // `superseded` is not a state — it is the far end of a `supersedes` edge. Currency is derived
         // (`current` = no live `supersedes` edge names this decision), never stored.
         status: enum_col("proposed", "accepted", "rejected"),
+        // Is the decision still being written? A premise of `ready` on the task side, exactly as
+        // `task.draft` is (`AMB-D-553`, `AMB-D-918`) — so it sits here rather than widening `status`,
+        // and the two sides of the store answer "still being put together" the same way. False is
+        // "the writing is finished", and it is what an existing row means: a decision written before
+        // this column was declared was never a draft.
+        draft: bool_col,
         // When `status` last changed — stamped on a status transition only (`ops::decision`), the mirror of
         // `task.status_changed_at`. `decided_at` cannot stand in for it: a reopen clears that one, and a
         // reopened decision is exactly what the comparison has to date (`AMB-D-373`). Nullable in the decl

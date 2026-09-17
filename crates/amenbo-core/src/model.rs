@@ -659,6 +659,13 @@ pub struct Decision {
     /// Lifecycle state.
     #[serde(default)]
     pub status: DecisionStatus,
+    /// Is the decision still being written? A premise of `ready` on the tasks that rest on it, and a
+    /// flag rather than a status for the reason [`Task::draft`] is one (`AMB-D-553`, `AMB-D-918`): a
+    /// decision half-written is visible everywhere, and what it cannot do is hold a reserve open.
+    /// `false` is "the writing is finished", which is what every decision in a store older than the
+    /// column means.
+    #[serde(default)]
+    pub draft: bool,
     /// When the current `status` began — updated **only** on a status transition (propose / accept / reject
     /// / reopen, and the promotion `supersede` performs), never on an ordinary edit: a body rewritten in
     /// place moves `updated_at` and leaves this still answering "when did this decision last change what it

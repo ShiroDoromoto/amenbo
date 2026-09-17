@@ -112,6 +112,10 @@ pub fn add(tx: &WriteTx<'_>, input: NewDecision) -> Result<Decision> {
         title: input.title,
         body: input.body,
         status: DecisionStatus::Proposed,
+        // Writing has begun and is not finished — the first stage of the two creation takes
+        // (`AMB-D-918`). What lowers it is the second stage, which is `accept` until
+        // `decision finish-writing` arrives to take the name.
+        draft: true,
         // Proposing *is* the first status transition, so the status clock starts here (`AMB-D-373`).
         status_changed_at: Some(now),
         decided_at: None,
@@ -204,6 +208,10 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
     refuse_unmet_required_axes(tx, &before)?;
     let after = Decision {
         status: DecisionStatus::Accepted,
+        // This is the second stage of creation, so the writing ends here (`AMB-D-918`). The two move
+        // together for now because one operation is both; `decision finish-writing` is what will
+        // carry the flag once it exists, and `accept` is what still carries it today.
+        draft: false,
         status_changed_at: Some(now),
         decided_at: Some(now),
         decided_by,
@@ -330,6 +338,9 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     let now = Timestamp::now();
     let after = Decision {
         status: DecisionStatus::Rejected,
+        // Rejecting ends the writing as surely as settling does: nobody goes back to finish a
+        // decision that was not taken, so leaving the flag up would leave a draft nothing can lower.
+        draft: false,
         status_changed_at: Some(now),
         updated_at: now,
         ..before.clone()
@@ -365,6 +376,10 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     let now = Timestamp::now();
     let after = Decision {
         status: DecisionStatus::Proposed,
+        // Back under discussion is back to being written (`AMB-D-918`), which is the same thing the
+        // status says here — the two were set together on the way out and are cleared together on the
+        // way back in.
+        draft: true,
         // The one stamp the reopen axis is built on: a decision that re-opened *after* a task was reserved
         // is a premise that moved under it (`AMB-D-373`). `decided_at` is cleared on this very route, which
         // is why the axis cannot be read off it.
@@ -425,6 +440,9 @@ pub fn supersede(
     if new_before.status == DecisionStatus::Proposed {
         let new_after = Decision {
             status: DecisionStatus::Accepted,
+            // The promotion settles the new side, so it finishes its writing too — the same pair
+            // `accept` moves, moved by the route that accepts without being called `accept`.
+            draft: false,
             // The promotion is a status transition like any other; the old side's row is not rewritten
             // here, and being superseded is an edge rather than a status, so its clock stays where it is.
             status_changed_at: Some(now),
@@ -725,6 +743,76 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    /// The flag that says the writing is not finished (`AMB-D-918`): raised where a decision begins,
+    /// lowered by every route that ends it, and raised again by the one route back into discussion.
+    /// It is a flag beside `status` and not a fourth value of it, so what is asserted here is the
+    /// pair on each route, not one standing in for the other.
+    #[test]
+    fn the_writing_is_unfinished_until_a_route_out_ends_it() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+
+        // Settling it ends the writing.
+        let settled = new_decision(tx, pid, "採択される決定");
+        assert!(settled.draft, "a decision begins half-written");
+        let (settled, _) = accept(tx, settled.id, None).unwrap();
+        assert!(!settled.draft);
+        assert_eq!(settled.status, DecisionStatus::Accepted);
+
+        // And sending it back into discussion begins it again.
+        let (reopened, _) = reopen(tx, settled.id).unwrap();
+        assert!(reopened.draft);
+        assert_eq!(reopened.status, DecisionStatus::Proposed);
+
+        // Rejecting it ends the writing too — nobody goes back to finish a decision not taken.
+        let turned_down = new_decision(tx, pid, "却下される決定");
+        let (turned_down, _) = reject(tx, turned_down.id).unwrap();
+        assert!(!turned_down.draft);
+
+        // So does the promotion `supersede` performs, which settles the new side without being
+        // called `accept`.
+        let replacement = new_decision(tx, pid, "置き換える決定");
+        let (replacement, _, promoted) = supersede(tx, replacement.id, turned_down.id, None).unwrap();
+        assert!(promoted && !replacement.draft);
+    }
+
+    /// `draft:yes|no` on `decision list` — the twin of the task side's key, over the same flag.
+    #[test]
+    fn decision_list_filters_by_draft() {
+        use crate::query::{decision_list, DecisionListParams};
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let open = new_decision(tx, pid, "書きかけの決定");
+        let settled = new_decision(tx, pid, "書き終えた決定");
+        accept(tx, settled.id, None).unwrap();
+
+        let list = |filter: &str| -> Vec<i64> {
+            decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+                project_id: Some(pid),
+                filter_expr: Some(filter.to_string()),
+                sort: "number".to_string(),
+                ..Default::default()
+            })
+            .unwrap()
+            .decisions
+            .into_iter()
+            .map(|d| d.id)
+            .collect()
+        };
+        assert_eq!(list("draft:yes"), vec![open.id]);
+        assert_eq!(list("draft:no"), vec![settled.id]);
+        // A value that is neither is refused, rather than read as one of them.
+        assert!(decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+            project_id: Some(pid),
+            filter_expr: Some("draft:maybe".to_string()),
+            sort: "number".to_string(),
+            ..Default::default()
+        })
+        .is_err());
     }
 
     #[test]

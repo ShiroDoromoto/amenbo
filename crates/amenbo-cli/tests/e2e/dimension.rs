@@ -100,10 +100,10 @@ fn task_add_files_the_new_task_under_the_axes_it_names() {
     assert_eq!(all["count"], 1, "a refused create leaves no unclassified task behind: {all}");
 }
 
-/// `decision add --dim <axis>=<value>` is the same flag on the other classified side (`AMB-D-781`), and
-/// the only road through the door a required axis puts in front of the record (`AMB-D-847`): a decision
-/// left blank on one is refused rather than written for whoever accepts it to be turned away over. The
-/// other refusals are the task side's, plus the one this side has of its own — an axis narrowed off
+/// `decision add --dim <axis>=<value>` is the same flag on the other classified side (`AMB-D-781`). It
+/// demands nothing: a required axis left blank is recorded and named in the response (`AMB-D-925`), and
+/// read again where the writing ends — so what the flag buys is the round trip, not the record. The
+/// refusals here are the task side's, plus the one this side has of its own — an axis narrowed off
 /// decisions (`applies_to`, `AMB-D-789`) classifies nothing here, so it is refused rather than written
 /// as a row that means nothing.
 #[test]
@@ -135,13 +135,20 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     let (accepted, code) = cli.run(&["decision", "accept", &decision_ref(&did), "--json"]);
     assert_eq!(code, 0, "a decision classified at creation accepts straight away: {accepted}");
 
-    // The required axis left blank: refused at the record, not written and reported on (`AMB-D-847`).
-    // The one who accepts a decision is not the one who wrote it, so the demand is put to the writer.
-    let (err, code) = cli.run_err(&["decision", "add", "--project", &pid, "--title", "分類なし", "--body", "根拠", "--json"]);
-    assert_ne!(code, 0, "a blank required axis refuses the record: {err}");
-    assert!(err.contains("テーマ"), "the refusal names the axis: {err}");
-    assert!(err.contains("invalid_decision_required_dimension"), "under the code the acceptance uses: {err}");
-    assert!(err.contains("--dim"), "and the way in is the flag that classifies it as it is written: {err}");
+    // The required axis left blank: recorded and reported on, not refused (`AMB-D-925`). The writing has
+    // a stage of its own now, walked by whoever wrote the decision, so the demand is read there instead.
+    let blank = cli.json(&["decision", "add", "--project", &pid, "--title", "分類なし", "--body", "根拠", "--json"]);
+    let blank_id = id_str(&blank["decision"]["id"]);
+    assert_eq!(
+        blank["decision"]["unmet_required_dimensions"],
+        serde_json::json!(["テーマ"]),
+        "the record goes through and names what is still to classify: {blank}",
+    );
+
+    // And the demand is real, one door on — under the code it has always used.
+    let (err, code) = cli.run_err(&["decision", "accept", &decision_ref(&blank_id), "--json"]);
+    assert_ne!(code, 0, "the settling is where a blank required axis is refused: {err}");
+    assert!(err.contains("invalid_decision_required_dimension"), "under the code the settling uses: {err}");
 
     // Nothing blank, nothing said — the field is absent rather than an empty list, so a reader testing
     // for it is testing for something to do.
@@ -174,12 +181,12 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     assert_eq!(all["count"], before, "a refused create leaves no unclassified decision behind: {all}");
 }
 
-/// The other door that records a decision (`AMB-D-847`). `decision promote` raises one out of a comment
-/// and leaves the same gap `decision add` does — the demand is read where the decision is settled, by
-/// somebody else — so it is turned away here too, before anything is written, and `--dim` is the way
-/// through. Both comment kinds meet the door, and the time axis is not asked for.
+/// The other door that records a decision (`AMB-D-925`). `decision promote` demands no more than
+/// `decision add` does: a required axis left blank is named in the response and read again where the
+/// writing ends, and `--dim` is what saves the round trip. Both comment kinds behave alike, and the time
+/// axis is never among the names — the create fills it.
 #[test]
-fn promoting_a_comment_is_refused_until_the_required_axes_are_answered() {
+fn promoting_a_comment_carries_the_axes_it_names_and_reports_the_rest() {
     let cli = Cli::new();
     let pid = id_str(&cli.json(&["project", "add", "--name", "昇格PJ", "--json"])["project"]["id"]);
     cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
@@ -194,22 +201,21 @@ fn promoting_a_comment_is_refused_until_the_required_axes_are_answered() {
     let tid = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", "土台", "--json"])["task"]["id"]);
     let cid = id_str(&cli.json(&["comment", "add", &task_ref(&tid), "--text", "UTC で保存する", "--json"])["comment"]["id"]);
 
-    // The blank axis turns the promotion away, and the way out is the flag that was left off.
-    let (err, code) = cli.run_err(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC"]);
-    assert_ne!(code, 0, "the promotion is refused: {err}");
-    assert!(err.contains("テーマ"), "and the axis is named: {err}");
-    assert!(!err.contains("フェーズ"), "but not the time axis the create fills: {err}");
-    assert!(err.contains("--dim"), "and the hint says how to answer it: {err}");
+    // The blank axis is named in the response rather than refused, and the time axis is not among the
+    // names — the create fills that one from the era containing today.
+    let blank = cli.json(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC(分類なし)", "--json"]);
+    assert_eq!(
+        blank["decision"]["unmet_required_dimensions"],
+        serde_json::json!(["テーマ"]),
+        "the promotion goes through and names what is still to classify: {blank}",
+    );
 
-    // The refusal in --json carries the code a caller can branch on, and nothing was written: a promotion
-    // turned away leaves no decision behind to classify by hand.
-    let (refused, code) = cli.run_err(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--json"]);
-    assert_ne!(code, 0);
-    let refused: serde_json::Value = serde_json::from_str(&refused).expect("the refusal is JSON");
-    assert_eq!(refused["error"]["code"], "invalid_decision_required_dimension");
-    assert_eq!(cli.json(&["decision", "list", "--project", &pid, "--json"])["count"], 0);
+    // And the demand is read where the writing ends, on the decision the promotion left behind.
+    let (err, code) = cli.run_err(&["decision", "accept", &decision_ref(&id_str(&blank["decision"]["id"])), "--json"]);
+    assert_ne!(code, 0, "the settling is what asks for it: {err}");
+    assert!(err.contains("invalid_decision_required_dimension"), "under the same code: {err}");
 
-    // Answered, it goes through — and the value rides with the create rather than being put on afterwards.
+    // Named at the promotion, the value rides with the create rather than being put on afterwards.
     let did = id_str(&cli.json(&[
         "decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--dim", "テーマ=メイン", "--json",
     ])["decision"]["id"]);
@@ -219,11 +225,14 @@ fn promoting_a_comment_is_refused_until_the_required_axes_are_answered() {
     assert!(named.contains(&"メイン"), "the promotion carries what was named: {shown}");
     assert!(named.contains(&"運用第2期"), "and the era the create fills: {shown}");
 
-    // The decision-comment side meets the same door.
+    // The decision-comment side behaves the same way.
     let dcid = id_str(&cli.json(&["decision", "comment", "add", &decision_ref(&did), "--text", "桁も決める", "--json"])["comment"]["id"]);
-    let (err, code) = cli.run_err(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める"]);
-    assert_ne!(code, 0, "the other kind of comment is refused too: {err}");
-    assert!(err.contains("テーマ"), "and names the same axis: {err}");
+    let raised = cli.json(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める(分類なし)", "--json"]);
+    assert_eq!(
+        raised["decision"]["unmet_required_dimensions"],
+        serde_json::json!(["テーマ"]),
+        "the other kind of comment is recorded and reported on too: {raised}",
+    );
     assert_eq!(
         cli.json(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める", "--dim", "テーマ=対話ウィンドウ", "--json"])
             ["decision"]["title"],
@@ -251,11 +260,11 @@ fn promoting_a_comment_is_refused_until_the_required_axes_are_answered() {
     );
 }
 
-/// The one required axis the record does **not** refuse over (`AMB-D-847`). The time axis is filled from
-/// the era that contains today (`AMB-D-147`), so demanding it at the record would refuse a write over a
-/// value the store puts on in the same transaction. A project whose eras leave today uncovered has no
-/// era to fill it with — and there the decision is recorded all the same, with the axis named in the
-/// response, and it is `decision accept` (whose range is every required axis) that turns it away.
+/// The required axis nobody ever answers by hand. The time axis is filled from the era that contains
+/// today (`AMB-D-147`), so it is normally answered before anyone could be asked — but a project whose
+/// eras leave today uncovered has no era to fill it with, and there it stays blank. The record takes the
+/// decision all the same (`AMB-D-925`) and names the axis in the response; the settling is what turns it
+/// away.
 #[test]
 fn a_required_time_axis_is_named_at_the_record_rather_than_refused() {
     let cli = Cli::new();
@@ -507,9 +516,9 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     cli.json(&["dimension", "value-add", "影響半径", "--name", "この一箇所", "--json"]);
     assert_eq!(axis["dimension"]["applies_to"], "both", "raised plainly, it classifies both sides");
 
-    // Recorded before the flag went up. Raising one does not reach back (`AMB-D-790`), so these are the
-    // decisions that arrive at the acceptance's door with the axis blank — the record's own door
-    // (`AMB-D-847`) would have turned them away had the demand been standing when they were written.
+    // Recorded before the flag went up. Raising one does not reach back (`AMB-D-790`), so these arrive at
+    // the settling with the axis blank — which is where the demand is read, and the only place it is
+    // (`AMB-D-925`): the record would have taken them just the same with the flag already standing.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "分類のない決定", "--json"]);
     let did = id_str(&d["decision"]["id"]);
     let old = cli.json(&["decision", "add", "--project", &pid, "--title", "覆される決定", "--json"]);

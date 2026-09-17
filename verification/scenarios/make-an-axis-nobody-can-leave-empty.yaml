@@ -1,40 +1,36 @@
 # An axis a project cannot be left empty on, and the places the demand bites. Classification is
 # otherwise entirely optional — a task filed under nothing is a task like any other — so what this
-# raises is the exception: the axis whose answer a project will not do without. The demand lands on
-# the steps a record passes through once — the one that ends a task's creation, and, on the decision
-# side, every way a record is written and the ruling that settles it — and nowhere else, which is
-# what keeps raising it from stopping a board that is already full: the work already filed is
-# finished being written, so it never meets the guard. A road that walked only the filing would read
-# the same over a build whose flag does nothing, so this one is written to be turned away ten times
-# — on the axis nobody could answer, on the axis whose answers are all closed, on the creation that
-# left the answer out, on the decision that would be recorded without it, on the promotion that would
-# raise one out of a comment the same way, on the acceptance that left it out, on the supersession
-# that would settle a decision the same way, on the hand that would take the answer back off one task
-# at a time, on the removal that would take it off every task at once, and on the removal that would
-# leave the axis with nothing to answer with at all. The decision's two doors are walked by different people — one writes, another rules — which
-# is why both are here, and why the rulings that meet the second door are the ones written before the
-# demand went up. Writing itself has two ways in rather than one, so the promotion is walked beside
-# the record: a demand read at only one of them is a demand anyone could go around by saying the thing
-# on a timeline first. One axis stands outside that list rather than in it: a time axis is filled from
-# the era whose window covers today, so a demand read where a record is written would turn a writer
-# away over a value the same write is putting on. Where no era covers today there is nothing to fill it
-# with, and the record is written blank all the same — that one is asked for at the settling and
-# nowhere earlier, which is what says the record's door reads a range rather than the whole demand.
+# raises is the exception: the axis whose answer a project will not do without. Both records are
+# written in two stages, and the demand lands on the second of them alone — the step that ends a
+# task's creation, and the one that settles a decision — and nowhere else, which is what keeps
+# raising it from stopping a board that is already full: the work already filed is finished being
+# written, so it never meets the guard. It is also what keeps the demand off the first stage: a
+# writer who has not settled the axis yet still gets the record down, and answers it before the
+# writing ends. A road that walked only the filing would read the same over a build whose flag does
+# nothing, so this one is written to be turned away eight times — on the axis nobody could answer, on
+# the axis whose answers are all closed, on the creation that left the answer out, on the acceptance
+# that left it out, on the supersession that would settle a decision the same way, on the hand that
+# would take the answer back off one task at a time, on the removal that would take it off every task
+# at once, and on the removal that would leave the axis with nothing to answer with at all. Writing a
+# decision has two ways in rather than one, so the promotion is walked beside the record: both of them
+# record, and a road that walked only one would not say that neither demands. One axis is answered
+# before anyone could be asked: a time axis is filled from the era whose window covers today, so it is
+# blank only where no era covers today — and there the record is written all the same, and the
+# settling is where it is asked for.
 id: make-an-axis-nobody-can-leave-empty
-title: An axis marked required turns away the creation, the record, the promotion and the acceptance that left it empty, and holds the answer on once it is there
+title: An axis marked required turns away the creation and the acceptance that left it empty, records what is still being written, and holds the answer on once it is there
 description: >
   Raise the demand on an axis offering no values and be refused — a requirement nobody could answer
   would stop every creation on the project — and be refused the same way on an axis whose values are
   all closed, a closed one being no answer to give. Raise it on an axis that offers two, file a task
   without answering it, and watch the creation refused and the task held out of the mailbox. Put a value on
-  and watch the same creation end. A decision left blank is turned away as it is recorded, and goes
-  through once the answer rides along with it; a comment raised into a decision of its own meets the
-  same demand at the same place, and is refused before anything is written. The rulings written before
-  the demand went up meet it where they are settled, through the acceptance and through the
-  supersession that promotes one, and answering the axis opens both. A required time axis is the one
-  the record does not read, its answer being the era the store writes itself: with no era covering
-  today it is recorded blank, and the settling is where it is asked for. Then try to take the value back
-  off and be refused there too —
+  and watch the same creation end. A decision left blank is recorded rather than turned away, and so is
+  one raised out of a comment: both ways in ask for nothing, and the answer riding along with the
+  record only saves the trip back. The rulings written before the demand went up meet it where they are
+  settled, through the acceptance and through the supersession that promotes one, and answering the
+  axis opens both. A required time axis is answered by the era the store writes itself: with no era
+  covering today it is recorded blank, and the settling is where it is asked for. Then try to take the
+  value back off and be refused there too —
   from the task, and from the axis itself, where removing the value would empty every task on it at
   once unless the removal says where they go. Say where, and the value goes with the task carried
   over, and with the decision beside it; the axis's last value does not go at all, until the demand
@@ -238,18 +234,26 @@ steps_cli:
       target: seed
       present: true
 
-  # The same demand on the other kind of record, and its first door is the record itself. A decision is
-  # written by one person and ruled on by another, so a demand read only at the ruling would turn away
-  # somebody who was never the one who left the axis blank — the writer hears it here instead.
+  # The same demand on the other kind of record, and the record is not where it is read. A decision is
+  # written in two stages like a task, and the first asks for nothing — so one left blank is recorded
+  # rather than turned away, and it is the writing's end that will not come until the axis is answered.
   - type: action
     domain: decision
     op: create
     with:
       title: SCENARIO SEED — recorded with the answer missing
-      refused: invalid_decision_required_dimension
+    as: blank-ruling
 
-  # The answer rides along with the record, and the same step goes through — which is what says the
-  # demand let go rather than never having been there.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: blank-ruling
+      field: status
+      equals: proposed
+
+  # The answer rides along with the record instead, which saves the trip back to put it on afterwards
+  # rather than being what lets the record through.
   - type: action
     domain: decision
     op: create
@@ -259,9 +263,9 @@ steps_cli:
       value: print
     as: ruling
 
-  # The other way in to that first door. A record is not always typed out: a line already said on a
-  # timeline can be raised into one, and a demand read only where a decision is typed would leave that
-  # way in open — say the thing as a comment first, promote it, and the axis is empty again.
+  # The other way a decision is written. A record is not always typed out: a line already said on a
+  # timeline can be raised into one, and this way in asks no more than the other — the axis is empty
+  # again, and the promotion goes through again.
   - type: action
     domain: task
     op: comment
@@ -276,11 +280,19 @@ steps_cli:
     with:
       target: note
       title: SCENARIO SEED — raised out of a comment with the answer missing
-      refused: invalid_decision_required_dimension
+    as: raised-blank
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: raised-blank
+      field: status
+      equals: proposed
 
   # And the answer rides along here too, on the same word the record takes it on. The comment is still
-  # there to raise a second time, which is what says the refusal happened before anything was written
-  # rather than after — a promotion turned away halfway would have taken its line with it.
+  # there to raise a second time, which is what says a promotion leaves the line it was raised from
+  # where it was.
   - type: action
     domain: comment
     op: promote
@@ -660,20 +672,26 @@ steps_gui:
       field: draft
       equals: false
 
-  # The same demand on the other kind of record, met at the same door the terminal meets it at — and
-  # this face answers with a held control rather than a code. What it holds is the button that records,
-  # the decision twin of the task's held finish-creating and on a different screen, which is why a road
-  # that walked only the task's would leave this unwalked.
+  # The same record on this face, and the form holds nothing back. It offers the required axes as
+  # selects so the answer can ride with the record, but one left on `None` records the decision all the
+  # same — the demand is the settling's, and the button beside these selects is not a door.
   - type: action
     domain: decision
     op: create
     with:
       title: SCENARIO SEED — recorded with the answer missing
-      refused: invalid_decision_required_dimension
+    as: blank-ruling
 
-  # Answered where the form asks, and the same control that was shut lets the record through. The
-  # answer goes in with the decision rather than after it, which is what the demand being met at the
-  # form means at all — and the settling that a blank one would have been turned away at now passes.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: blank-ruling
+      field: status
+      equals: proposed
+
+  # Answered where the form offers it, and the answer goes in with the decision rather than after it —
+  # which is what the selects are there for, and the settling a blank one would be turned away at passes.
   - type: action
     domain: decision
     op: create

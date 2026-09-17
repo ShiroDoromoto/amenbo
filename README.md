@@ -314,8 +314,8 @@ amenbo task list --filter "draft:yes" --json
 amenbo decision add --title "SQLite as the source of truth" \
   --body "the local SQLite store is the single truth source" --project "Website refresh"
 amenbo decision add --title "…" --body "…" --dim "Area=Core"  # or classify it as you record it
-# ...and an axis the project marked required is read here: left blank, the record itself is refused,
-# because the demand would otherwise be heard by whoever accepts it rather than by whoever wrote it
+# ...an axis the project marked required is not demanded here: the record goes through and the
+# response names what is still to classify, and the demand is read where the writing ends
 amenbo decision accept AMB-D-<n>              # proposed -> accepted
 amenbo decision accept AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
 amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # proposed -> rejected, with a reason comment

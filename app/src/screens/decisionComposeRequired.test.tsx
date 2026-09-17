@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
-// The demand a decision meets while its writer is still in front of it. A required axis is read where a
-// decision is settled (`AMB-D-790`), and that press is somebody else's — so a form that let the record
-// go out blank would put the refusal in front of the wrong person, hours later.
+// The axes a decision is offered while its writer is still in front of it. A required axis is read
+// where the writing ends (`AMB-D-790`) and nowhere earlier (`AMB-D-925`), so these selects save a trip
+// back through the detail pane rather than holding the record back.
 //
-// What these guard: only the **required** axes on the **decision** side draw a select, the button is
-// **held** until each is answered and says which, and what is answered **rides with the create**.
+// What these guard: only the **required** axes on the **decision** side draw a select, the record goes
+// through with one left blank, and what is answered **rides with the create**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { t, tf } from "../core/i18n";
+import { t } from "../core/i18n";
 
 const REQUIRED = { id: 900, name: "テーマ", notes: "", role: "none", ordered: false, showOnCard: false,
   required: true, appliesTo: "both",
@@ -123,16 +123,16 @@ describe("recording a decision under the axes its project demands", () => {
     expect(hoisted.asked).toEqual(["時代は訊かれない:"]);
   });
 
-  it("holds the button until the axis is answered, and names it", async () => {
+  // The select is an offer, not a door (`AMB-D-925`): a writer who has not decided the axis yet records
+  // the decision anyway, and what goes with the create is the answers that were given.
+  it("records with the axis left blank, sending nothing for it", async () => {
     await open();
     await type("窓をどう建てるか");
-    expect(addButton().disabled).toBe(true);
-    expect(container.textContent).toContain(tf("detail.finishCreatingBlocked", { names: "テーマ" }));
-
-    await pick(selects()[0], "901");
-
     expect(addButton().disabled).toBe(false);
-    expect(container.textContent).not.toContain(tf("detail.finishCreatingBlocked", { names: "テーマ" }));
+
+    await act(async () => { addButton().click(); });
+    await settle();
+    expect(hoisted.asked).toEqual(["窓をどう建てるか:"]);
   });
 
   it("sends what was answered along with the create", async () => {

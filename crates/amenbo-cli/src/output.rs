@@ -535,13 +535,12 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskRequiredDimension) => Some(format!(
                 "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-T-n> <axis> <value>` puts one on the task."
             )),
-            // The decision side of the same door — and this code comes out of two of them, so the way
-            // out is written for both (`AMB-D-847`). At the record there is no decision yet to put a
-            // value on, so the only road is the flag that classifies it as it is written — named on its
-            // own, since either door that records one (`decision add`, `decision promote`) takes it; at
-            // the settling the decision exists, and `dimension set` fills the axis in on it.
+            // The decision side of the same door, and there is one of them (`AMB-D-925`): the writing is
+            // what the demand is read at, so the decision being turned away already exists and the way
+            // out is to put a value on it. `--dim` is named beside it because a decision recorded with
+            // the flag never reaches this refusal at all.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDecisionRequiredDimension) => Some(format!(
-                "This project requires a value on that axis. `{cmd} dimension show <axis>` lists what it offers; then classify it as you record it with `--dim <axis>=<value>`, or put a value on a decision already recorded with `{cmd} dimension set <AMB-D-n> <axis> <value>`."
+                "This project requires a value on that axis before the writing can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-D-n> <axis> <value>` puts one on the decision — or classify it as you record it next time with `--dim <axis>=<value>`."
             )),
             // A status a draft cannot take. The caller was closing or stalling the task, so the two ways
             // out point opposite ways — finish writing it and the status opens, or the draft was written

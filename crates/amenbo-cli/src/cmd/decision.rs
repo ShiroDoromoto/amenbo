@@ -395,16 +395,14 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
 /// The required axes a decision was just created blank on, folded into the response under
 /// `unmet_required_dimensions` and handed back for the human line to name (`AMB-D-790`).
 ///
-/// **Both doors that create a decision go through here**, and after `AMB-D-847` what reaches it is the
-/// one axis the door does not refuse over: the time axis, which the store fills from the era that
-/// contains today rather than demanding (`AMB-D-147`). A project whose eras leave today uncovered
-/// records a decision blank on it, and `decision accept` — whose range is every required axis — is
-/// where that would otherwise first be heard, by somebody who did not write it.
+/// **Both doors that create a decision go through here**, and since `AMB-D-925` what reaches it is
+/// every required axis the record was left blank on — the record demands none of them. The time axis is
+/// rarely among them: the store fills it from the era that contains today (`AMB-D-147`), so only a
+/// project whose eras leave today uncovered records a decision blank on that one.
 ///
 /// Nothing blank means the key is **absent** rather than an empty list: a reader testing for it is
-/// testing for something to do. It names, it does not refuse: what a project demands was turned away by
-/// the store's own door, inside the write, so what reaches this is the one axis that door does not ask
-/// for.
+/// testing for something to do. It names, it does not refuse — the refusal is one stage on, where
+/// `decision finish-writing` reads the same axes and will not end the writing until they are answered.
 fn unmet_on_new_decision(
     store: &Store,
     decision_id: i64,
@@ -423,7 +421,7 @@ fn unmet_on_new_decision(
 /// that create a decision take `--dim`, so both are told the same two ways in.
 fn still_to_classify(unmet: &[String], decision_id: i64) -> String {
     format!(
-        "  still to classify: {} — pass --dim <axis>=<value> here, or fill it in with `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
+        "  still to classify: {} — pass --dim <axis>=<value> here, or fill it in with `{} dimension set {} <axis> <value>` (the writing cannot be finished until then)",
         unmet.join(", "),
         Paths::command_name(),
         decision_label(decision_id),

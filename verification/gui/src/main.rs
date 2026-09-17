@@ -86,8 +86,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use amenbo_verify_cli::World;
 use amenbo_verify_gui::{
-    launch, read_menu, read_shot, read_tree, scratch, shoot, walk, write_manifest, StepBrief, StepRecord,
-    Verdict,
+    bring_it_into_the_window, launch, read_menu, read_shot, read_tree, scratch, shoot, walk,
+    write_manifest, StepBrief, StepRecord, Verdict,
 };
 
 fn main() -> ExitCode {
@@ -331,6 +331,9 @@ fn hand_over(stdin: &std::io::Stdin, brief: &StepBrief<'_>) -> Result<(), String
             (true, false) => "the screen does not name",
         };
         eprintln!("        {side}: {}", exp.text);
+        if let Some(caution) = bring_it_into_the_window(brief.from_the_tree, exp) {
+            eprintln!("        {caution}");
+        }
     }
     eprint!("  … stand the screen where this step says, then press Enter: ");
     let _ = std::io::stderr().flush();

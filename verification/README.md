@@ -90,7 +90,12 @@ step of the first scenario.
 
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
 the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
-network. Exit code is the machine signal — `0`
+network. **The marks of a talk window go off every call as well** — `AMENBO_PANE`,
+`AMENBO_PANE_RESUME`, `AMENBO_SESSION`, `AMENBO_SESSION_DIR`. A release check is walked in a pane of
+Amenbo's own window, and a pane hands those down to everything started in it, so a road asking what
+a record made *outside* a window looks like was being answered by a run that was inside one. A step
+that says a call was typed in a pane puts the two back, and nothing reaches one by inheritance. The
+screen harness takes them off the app it launches for the same reason. Exit code is the machine signal — `0`
 when every assert passes, non-zero on any failed assert or execution error — so the runner reads it
 directly. `--keep` leaves the throwaway store in place for inspection.
 

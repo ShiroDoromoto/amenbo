@@ -82,14 +82,21 @@ pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> 
 /// through here, which is what keeps them the same run: an app started again with anything else in
 /// its environment would be a different app to the one the road walked up to that point.
 fn start(exe: &Path, store: &Session) -> Result<Child, String> {
-    Command::new(exe)
-        .env("AMENBO_HOME", &store.home)
+    let mut cmd = Command::new(exe);
+    cmd.env("AMENBO_HOME", &store.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .env("PATH", tooled_path(&store.tools))
         .current_dir(&store.cwd)
-        .stdout(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("could not launch {}: {e}", exe.display()))
+        .stdout(Stdio::null());
+    // Every mark of a window this run was started inside, taken off the app under test. A release
+    // check is walked in a pane of Amenbo's own talk window, and a pane hands these down to
+    // everything started in it — so the app would come up believing it stands inside a pane of
+    // another window, which is a thing no user's ever does. The store is thrown away for the same
+    // reason (`amenbo_verify_cli::PANE_MARKS`).
+    for mark in amenbo_verify_cli::PANE_MARKS {
+        cmd.env_remove(mark);
+    }
+    cmd.spawn().map_err(|e| format!("could not launch {}: {e}", exe.display()))
 }
 
 /// This process's `PATH` with the run's own stand-ins in front of it.

@@ -444,7 +444,10 @@ to the last consistent state. Two complementary nets sit on top, with distinct r
   `attachments/`, holding every attachment's actual file, laid out under the task or
   decision it hangs on — a one-way export that left the files behind would not be
   taking your data with you. With no `--out` the same JSON streams to stdout for
-  piping (records only — a stream has nowhere to put the files).
+  piping (records only — a stream has nowhere to put the files). An AI never gets
+  that stream: the whole device's content landing in a caller's terminal is what a
+  closed reach is closed to, so a call of theirs with no `--out` writes
+  `amenbo-export-<UTC stamp>` under the current folder and answers with its path.
 - **`amenbo backup [path]`** — a byte-faithful physical snapshot for *disaster
   recovery*. It bundles everything on this device — one database, holding every project —
   into one verified `.amenbo-backup` archive at `path`: the database is snapshotted via

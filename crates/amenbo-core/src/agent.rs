@@ -1720,8 +1720,8 @@ fn all_commands() -> Value {
                    { "name": "--yes", "help": "skip confirmation" }]),
             json!(["amenbo attach rm 01ATT… --yes"])),
 
-        cmd("export", "Exports all data — everything on this device, as JSON, and nothing narrower: export exists for moving to another tool, which an excerpt or a human-readable table does not serve. The core of data sovereignty, and one way: Amenbo writes your data out for whatever you move to next, and reads nothing back in — the way back is `restore` from a `backup` archive. `--out <dir>` writes an **export directory**: `export.json` plus `attachments/`, holding every attachment's actual file under the task or decision it hangs on (each row names its `export_path`). With no `--out` the same JSON streams to stdout — a stream has nowhere to put the files, so that shape carries records only. The secrets are the one thing left behind (`AMB-D-434`): this file goes out to another tool and stays in its hands, and a credential in the clear is not something to hand over on the way past — they ride `backup` instead.",
-            json!([{ "name": "--out <path>", "help": "the export directory to create (must not exist yet). Default: stream to stdout" }]),
+        cmd("export", "Exports all data — everything on this device, as JSON, and nothing narrower: export exists for moving to another tool, which an excerpt or a human-readable table does not serve. The core of data sovereignty, and one way: Amenbo writes your data out for whatever you move to next, and reads nothing back in — the way back is `restore` from a `backup` archive. `--out <dir>` writes an **export directory**: `export.json` plus `attachments/`, holding every attachment's actual file under the task or decision it hangs on (each row names its `export_path`). With no `--out` the same JSON streams to stdout — a stream has nowhere to put the files, so that shape carries records only. **A closed reach is never handed that stream** (`AMB-D-224`): the whole device's content landing in the caller's terminal is the one thing a closed reach is closed to, so where no `--out` is named a destination is chosen instead — `amenbo-export-<UTC stamp>` under the current folder — and what comes back is its path and a count. Redirecting such a call catches the summary line and leaves the export sitting in that folder. The secrets are the one thing left behind (`AMB-D-434`): this file goes out to another tool and stays in its hands, and a credential in the clear is not something to hand over on the way past — they ride `backup` instead.",
+            json!([{ "name": "--out <path>", "help": "the export directory to create (must not exist yet). Default: stdout, except on a closed reach, which gets a directory named amenbo-export-<UTC stamp> under the current folder" }]),
             json!(["amenbo export --out ./amenbo-export",
                    "amenbo export > ./amenbo-export.json"])),
         json!({ "name": "backup", "summary": "Backs up everything on this device — one database, holding every project — into one verified `.amenbo-backup` archive at the given path (VACUUM INTO: checkpointed, transactionally consistent, no torn DB+WAL; bounded-verified; the manifest records its migration generation). The attachment bytes (blobs) are bundled too, so a restore elsewhere brings the files back and not just the rows referencing them. The device's own secrets (at-rest key / identity) are not part of the engine, so none are included; the secrets a feature holds are store rows, so those do ride along and come back working (`AMB-D-434`). The destination must not already exist (managed generation rotation is retired).",
@@ -2581,6 +2581,23 @@ mod tests {
                 listed.contains(&status.as_str()),
                 "the grammar does not name `{}`: {listed:?}",
                 status.as_str()
+            );
+        }
+    }
+
+    /// What an AI reads about `export` has to be what happens to an AI. The spec said the dump
+    /// streams to stdout with no `--out`, which is the one shape a closed reach never gets: a reader
+    /// who believed it redirected the call, and the export landed in the folder they were standing
+    /// in — 87 MB of it, in a repository, with `git status` dirty afterwards.
+    #[test]
+    fn the_export_spec_says_what_a_closed_reach_is_given_instead_of_the_stream() {
+        let spec = command_spec("export").expect("export is a command the index carries");
+        let said = spec.to_string();
+        assert!(said.contains("stdout"), "the stream is still what a human gets: {said}");
+        for needle in ["closed reach", "amenbo-export-"] {
+            assert!(
+                said.contains(needle),
+                "the export spec does not say what a closed reach is handed ({needle}): {said}",
             );
         }
     }

@@ -31,6 +31,13 @@
 //!
 //! What is served then goes through [`crate::webproto`] like every other answer: the type comes from the
 //! allowlist, active types are demoted to source, and nothing may be sniffed back.
+//!
+//! **What is served may also be read by script in our own window**, which is what
+//! `ALLOWED_TO_READ` below says. An `<img>` never had to ask; a reader that has to look at the bytes —
+//! the PDF reader is the first (`app/src/files/pdfLoad.ts`) — does, and without that header it is
+//! told the file could not be loaded at all. Nothing else about the answer moves: the sandbox, the
+//! refusal to sniff and the demotion of active types are the defence `AMB-D-907` names, and all
+//! three stand.
 
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -38,6 +45,19 @@ use std::path::{Path, PathBuf};
 use tauri::http::{header, Request, Response, StatusCode};
 
 use crate::webproto::{empty, hardened, parse_range, percent_decode, query_param, served_content_type};
+
+/// Who may read what this door hands out, as far as the webview's own rules are concerned.
+///
+/// **It is not a fence, and the fence is not weakened by it.** Which files this door answers for is
+/// the project's folders and nothing else, and that is decided before a byte is read. This says only
+/// that the answer, once given, may be read by the page that asked — which is the window Amenbo
+/// draws, because a scheme of ours is reachable from nowhere else. Anything running in that window
+/// can already ask the host to read a file outright.
+///
+/// The webview's own rule is what makes it necessary: the page is served over one scheme of ours and
+/// this door answers on another, so every read of it is a read across origins, and a page reading
+/// across origins without this header is handed nothing — not the file, not a status, and no reason.
+const ALLOWED_TO_READ: &str = "*";
 
 /// Build the one response. Failures come back as a bare status (404/400/416/500) with an empty body: which
 /// of the fence's rules turned a request away is not something a caller is told, because the difference
@@ -77,6 +97,7 @@ fn try_serve(request: &Request<Vec<u8>>) -> Result<Response<Vec<u8>>, StatusCode
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let n = buf.len();
             hardened(StatusCode::PARTIAL_CONTENT)
+                .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_TO_READ)
                 .header(header::CONTENT_TYPE, mime)
                 .header(header::ACCEPT_RANGES, "bytes")
                 .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{total}"))
@@ -94,6 +115,7 @@ fn try_serve(request: &Request<Vec<u8>>) -> Result<Response<Vec<u8>>, StatusCode
             let bytes = read_whole(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let n = bytes.len();
             hardened(StatusCode::OK)
+                .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_TO_READ)
                 .header(header::CONTENT_TYPE, mime)
                 .header(header::ACCEPT_RANGES, "bytes")
                 .header(header::CONTENT_LENGTH, n.to_string())

@@ -357,6 +357,38 @@ describe("the file face", () => {
       .toBe("amenbofile://localhost/1/%2Fwork%2Frepo/a.md?mime=image%2Fpng");
   });
 
+  it("draws a PDF in the panel, from the door that hands out a file", async () => {
+    hoisted.file = aFile({ pdf: { mime: "application/pdf" }, digest: "before" });
+    await drawOpen();
+    await openFile(button("a.md"));
+    await settle();
+    // The same address a picture is fetched from, and the mark rides on it for the same reason: a
+    // file rewritten under the reader is a new address and a document opened again (`AMB-D-797`).
+    expect(last(hoisted.drawnPdf)?.url)
+      .toBe("amenbofile://localhost/1/%2Fwork%2Frepo/a.md?mime=application%2Fpdf&mark=before");
+    // A page carries its number for a reader who cannot see it (`../files/pdfLoad`).
+    expect(last(hoisted.drawnPdf)?.first).toBe(tf("files.pdfPage", { page: 1, of: 3 }));
+    // And what the panel used to say about a PDF — that it is not text — is not said over it now.
+    expect(container.textContent).not.toContain(t("files.notText"));
+  });
+
+  it("says a PDF could not be opened where nothing could draw it, and offers the way on", async () => {
+    hoisted.refusePdf = true;
+    hoisted.file = aFile({ pdf: { mime: "application/pdf" } });
+    await drawOpen();
+    await openFile(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.pdfFailed"));
+    // Not the sentence for a file there is nothing to show of: the host answered for this one, and
+    // what failed is the drawing.
+    expect(container.textContent).not.toContain(t("files.notText"));
+
+    // What this could not open, another application may well (`AMB-T-4352`).
+    await click(button(t("files.openElsewhere")));
+    await click(button(t("files.openWith")));
+    expect(hoisted.asked).toContain(`open:${ROOT}:a.md`);
+  });
+
   it("says what a picture it would not draw was measured at, and offers the way on", async () => {
     hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024, width: 40000, height: 30000 } });
     await drawOpen();

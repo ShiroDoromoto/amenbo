@@ -750,6 +750,8 @@ export const zhHans: Translation = {
     "files.notText": "这不是文本，无法在这里显示。",
     "files.cut": "只显示了开头部分。",
     "files.unreadable": "无法读取这个文件。",
+    "files.pdfFailed": "无法打开这个 PDF。",
+    "files.pdfPage": "第 {page} 页，共 {of} 页",
     "files.openElsewhere": "用别的应用打开",
     "files.dropStopped": "没能把 {name} 放进来：{why}",
     "files.dropPartly": "放进来 {count} 个。{name} 没有：{why}",

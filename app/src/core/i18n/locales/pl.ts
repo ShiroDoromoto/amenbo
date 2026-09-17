@@ -762,6 +762,8 @@ export const pl: Translation = {
     "files.notText": "To nie jest tekst, więc nie da się go tu pokazać.",
     "files.cut": "Pokazany jest tylko początek.",
     "files.unreadable": "Nie udało się odczytać tego pliku.",
+    "files.pdfFailed": "Nie udało się otworzyć tego pliku PDF.",
+    "files.pdfPage": "Strona {page} z {of}",
     "files.openElsewhere": "Otwórz w innej aplikacji",
     "files.dropStopped": "Nie udało się wnieść {name}: {why}",
     "files.dropPartly": "Wniesiono {count}. {name} nie: {why}",

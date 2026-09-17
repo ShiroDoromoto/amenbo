@@ -745,6 +745,8 @@ export const ko: Translation = {
     "files.notText": "텍스트가 아니라서 여기에서는 볼 수 없습니다.",
     "files.cut": "앞부분만 보여 줍니다.",
     "files.unreadable": "이 파일은 읽지 못했습니다.",
+    "files.pdfFailed": "이 PDF를 열 수 없습니다.",
+    "files.pdfPage": "{of}쪽 중 {page}쪽",
     "files.openElsewhere": "다른 앱으로 열기",
     "files.dropStopped": "{name}을(를) 가져오지 못했습니다: {why}",
     "files.dropPartly": "{count}개를 가져왔습니다. {name}은(는) 가져오지 못했습니다: {why}",

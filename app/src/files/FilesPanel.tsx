@@ -34,6 +34,7 @@ import { FileMenu, type GitDoors } from "./FileMenu";
 import { useTrash } from "./trash";
 import { isDirty, useRestore } from "./restore";
 import { FileEditor } from "./FileEditor";
+import { PdfView } from "./PdfView";
 import { FileDiff } from "./FileDiff";
 import { GitHistory, type At } from "./GitHistory";
 import { GitDiff, type DiffPick } from "./GitDiff";
@@ -1188,6 +1189,16 @@ function FileReader({
         {/* The text is what the file holds and the rendering is a view of it (`AMB-D-41`), so the
             editor is reachable for a Markdown file too — otherwise the one kind of file an agent
             writes most is the one kind nobody could correct. */}
+        {/* The PDF is fetched from the same door the picture is, and drawn here rather than sent
+            out to another application (`AMB-D-907`). What draws it is loaded on demand and can
+            fail to load at all, so a failure comes back as the sentence every unreadable file
+            gets — and the pages are off the screen by then. */}
+        {file?.pdf !== undefined && failed === null && (
+          <PdfView
+            src={fileUrl(projectId, root, path, file.pdf.mime, file.digest)}
+            onFailed={() => setFailed({ said: t("files.pdfFailed"), onward: true })}
+          />
+        )}
         {file?.text !== undefined && (
           markdown && !asText
             ? (
@@ -1261,7 +1272,7 @@ function FileReader({
           </>
         )}
         {file !== null && file.text === undefined && file.image === undefined
-          && file.oversize === undefined && (
+          && file.pdf === undefined && file.oversize === undefined && (
           <>
             <p className="files__none">{t("files.notText")}</p>
             {onward}

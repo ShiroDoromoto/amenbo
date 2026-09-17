@@ -758,6 +758,8 @@ export const fr: Translation = {
     "files.notText": "Ce n'est pas du texte : impossible de l'afficher ici.",
     "files.cut": "Seul le début est affiché.",
     "files.unreadable": "Ce fichier n'a pas pu être lu.",
+    "files.pdfFailed": "Ce PDF n'a pas pu être ouvert.",
+    "files.pdfPage": "Page {page} sur {of}",
     "files.openElsewhere": "L'ouvrir dans une autre application",
     "files.dropStopped": "{name} n'a pas pu être ajouté : {why}",
     "files.dropPartly": "{count} ajoutés. {name} non : {why}",

@@ -762,6 +762,8 @@ export const ru: Translation = {
     "files.notText": "Это не текст, поэтому показать его здесь нельзя.",
     "files.cut": "Показано только начало.",
     "files.unreadable": "Не удалось прочитать этот файл.",
+    "files.pdfFailed": "Не удалось открыть этот PDF.",
+    "files.pdfPage": "Страница {page} из {of}",
     "files.openElsewhere": "Открыть в другом приложении",
     "files.dropStopped": "Не удалось перенести {name}: {why}",
     "files.dropPartly": "Перенесено: {count}. {name} — нет: {why}",

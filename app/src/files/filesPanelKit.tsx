@@ -66,6 +66,10 @@ const hoisted = vi.hoisted(() => ({
   /** Every text the panel replaced the standing editor's document with — a file read again is one
    *  of the two ways this happens, and "nothing was replaced" is a thing to assert (`AMB-D-784`). */
   shown: [] as string[],
+  /** Every PDF the panel handed over to be drawn, by the address it named it with. */
+  drawnPdf: [] as { url: string; first: string }[],
+  /** Set where the next PDF is to fail to open at all — what draws them is fetched on demand. */
+  refusePdf: false,
   /** What the host answers about a row it was asked to bin — a test makes one stop by filling it. */
   trashed: null as null | { gone: string[]; stopped: { name: string; why: string } | null },
   /** What comes back out of the bin. `null` is the host saying there is nothing left to undo. */
@@ -140,6 +144,22 @@ vi.mock("./diffLoad", () => ({
     hoisted.compared.push({ theirs, mine });
     const drawn = parent.ownerDocument.createElement("div");
     drawn.className = "cm-mergeView";
+    parent.appendChild(drawn);
+    return { close() { drawn.remove(); } };
+  },
+}));
+
+// pdf.js draws into a canvas and watches where the pages sit, neither of which jsdom implements —
+// so what the panel asked to be drawn is recorded, the same stand-in the editor has.
+vi.mock("./pdfLoad", () => ({
+  mountPdf: async (
+    parent: HTMLElement, url: string, label: (page: number, of: number) => string,
+  ) => {
+    hoisted.drawnPdf.push({ url, first: label(1, 3) });
+    if (hoisted.refusePdf) throw new Error("nothing to draw it with");
+    const drawn = parent.ownerDocument.createElement("div");
+    drawn.className = "files__pdfpage";
+    drawn.textContent = label(1, 3);
     parent.appendChild(drawn);
     return { close() { drawn.remove(); } };
   },
@@ -731,6 +751,8 @@ beforeEach(() => {
   hoisted.typing = null;
   hoisted.saved = [];
   hoisted.compared = [];
+  hoisted.drawnPdf = [];
+  hoisted.refusePdf = false;
   hoisted.keptDigest = "after";
   hoisted.refuseSave = null;
   hoisted.refuseRead = null;

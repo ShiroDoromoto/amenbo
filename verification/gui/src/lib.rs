@@ -4803,14 +4803,15 @@ impl Instructor {
             // A picture is read for the words drawn in it, which is the one thing about a redrawn
             // picture a shot can carry: what a road wants to know is that the bytes on screen are the
             // new bytes, and two pictures that say different words answer that where two that differ
-            // only in their pixels would need an eye.
+            // only in their pixels would need an eye. A PDF's page is read on the same terms — it is
+            // drawn into the panel as an image of itself, and its words are inside it.
             (Domain::Files, "reading") if picture(with) => match present(with) {
                 true => format!(
-                    "Confirm the picture drawn in the panel has \"{}\" written across it.",
+                    "Confirm what is drawn in the panel has \"{}\" written across it.",
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "Confirm the picture drawn in the panel does **not** have \"{}\" written across it.",
+                    "Confirm what is drawn in the panel does **not** have \"{}\" written across it.",
                     req(with, "shows")?
                 ),
             },
@@ -5546,10 +5547,11 @@ fn menu_item(item: &str) -> Result<(&'static str, &'static str), String> {
 ///
 /// The key is the caller's because the two sides of the same question read differently: the move says
 /// the `form` to end in, and the reading says what the words are standing `as`.
-/// Whether a reading is of a picture rather than of a file's text. It is `as` like the other two
-/// forms and not an op of its own, because what is being asked is still "what does the opened file
-/// show" — but it is the only one of the three a shot can judge, so it is told apart here rather
-/// than in [`form`], which answers for the pair that are about text.
+/// Whether a reading is of something drawn rather than of a file's text — a picture, or the page of
+/// a PDF. It is `as` like the other two forms and not an op of its own, because what
+/// is being asked is still "what does the opened file show" — but it is the only one of the three a
+/// shot can judge, so it is told apart here rather than in [`form`], which answers for the pair that
+/// are about text.
 fn picture(with: &Args) -> bool {
     with.get("as").and_then(|v| v.as_str()) == Some("picture")
 }

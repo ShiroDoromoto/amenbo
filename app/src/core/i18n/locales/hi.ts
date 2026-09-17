@@ -747,6 +747,8 @@ export const hi: Translation = {
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
+    "files.pdfFailed": "यह PDF नहीं खुल सका।",
+    "files.pdfPage": "पेज {page} / {of}",
     "files.openElsewhere": "किसी और ऐप में खोलें",
     "files.dropStopped": "{name} को लाया नहीं जा सका: {why}",
     "files.dropPartly": "{count} आ गए। {name} नहीं आया: {why}",

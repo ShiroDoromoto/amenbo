@@ -762,6 +762,8 @@ export const uk: Translation = {
     "files.notText": "Це не текст, тому показати його тут не можна.",
     "files.cut": "Показано лише початок.",
     "files.unreadable": "Не вдалося прочитати цей файл.",
+    "files.pdfFailed": "Не вдалося відкрити цей PDF.",
+    "files.pdfPage": "Сторінка {page} з {of}",
     "files.openElsewhere": "Відкрити в іншій програмі",
     "files.dropStopped": "Не вдалося перенести {name}: {why}",
     "files.dropPartly": "Перенесено: {count}. {name} — ні: {why}",

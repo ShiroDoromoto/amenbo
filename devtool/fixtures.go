@@ -213,7 +213,7 @@ func fixturesGUI(args []string) {
 	}
 	logf("→ launching %s against %s", bin, base)
 	cmd := exec.Command(bin)
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(environ(), env...)
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr // stdout stays reserved for eval-able output
 	if err := cmd.Run(); err != nil {
 		logf("devtool: the dev GUI exited: %v", err)

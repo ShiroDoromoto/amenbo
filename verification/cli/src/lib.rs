@@ -27,6 +27,17 @@ use std::process::Command;
 
 use amenbo_scenario::{Args, BoundKind, Domain, Scenario, Step};
 
+/// What a pane of Amenbo's talk window puts on the terminal it opens, and hands down to everything
+/// started in it. Public because the screen harness launches the app under test with the same fence
+/// around it (`amenbo_verify_gui::launch`).
+///
+/// **The names are spelled here rather than taken from Amenbo's own crates**, for the reason the
+/// two set below are: this workspace drives the shipped binary as a black box and depends on none
+/// of them. That is also what the reading is worth — a build that stopped answering to these names
+/// would have stopped answering to what a real window sets.
+pub const PANE_MARKS: [&str; 4] =
+    ["AMENBO_PANE", "AMENBO_PANE_RESUME", "AMENBO_SESSION", "AMENBO_SESSION_DIR"];
+
 /// Load, isolate, execute, judge — one scenario against one binary. `Err` is an execution error
 /// (the scenario would not load, the binary is not one a run may drive, it would not run); a
 /// scenario that ran but had a failing assert comes back as an `Ok(Report)` with `passed == false`.
@@ -255,6 +266,48 @@ pub(crate) struct Pane {
     resume: String,
 }
 
+/// The command one call is made with: the store it is given, what it is told of the world it stands
+/// in, and the arguments the step named.
+///
+/// It is built apart from running it so the isolation can be read back without a binary to run —
+/// what a call is given is the whole of what makes a run reproducible, and a test can hold it.
+fn isolated(
+    bin: &Path,
+    home: &Path,
+    cwd: &Path,
+    args: &[&str],
+    in_pane: Option<&Pane>,
+) -> Command {
+    // The facet goes on the command line, which is the one input Amenbo is to take it by; a call
+    // that names its own is left alone.
+    let mut with_facet = args.to_vec();
+    if !args.contains(&"--actor") {
+        with_facet.extend_from_slice(&["--actor", "human"]);
+    }
+    let mut cmd = Command::new(bin);
+    cmd.args(&with_facet)
+        .current_dir(cwd)
+        .env("AMENBO_HOME", home)
+        .env("AMENBO_UPDATE_CHECK", "0")
+        .env("NO_COLOR", "1");
+    // Every mark of a window this run might have been started inside, taken off before anything is
+    // put back on. **A gate whose verdict depends on where it was run is not a gate**: the release
+    // check is walked in a pane of Amenbo's own talk window, and a pane hands these four down to
+    // everything started in it — so a road asking what a record made *outside* a window looks like
+    // was answered by a run that was inside one, and a right build went red
+    // (`go-back-into-the-session-a-record-was-made-in`, v28.1.0). The store is thrown away for the
+    // same reason; this is the rest of the same fence.
+    for mark in PANE_MARKS {
+        cmd.env_remove(mark);
+    }
+    // And the two a step asked for, put on the one call that says it was typed inside a pane. A road
+    // that wants a pane says so; nothing reaches one by being inherited.
+    if let Some(pane) = in_pane {
+        cmd.env("AMENBO_PANE", &pane.id).env("AMENBO_PANE_RESUME", &pane.resume);
+    }
+    cmd
+}
+
 /// What an expected refusal travels back on. A refusal has to reach [`Driver::refused`] from
 /// wherever the command was issued, and the way out of an arm that every one of them already has is
 /// the `?` on its invocation — so it goes as an `Err`, and a byte no message of ours carries keeps
@@ -380,27 +433,9 @@ impl<'a> Driver<'a> {
     /// — the pointer that decides what a run reaches is found by walking up from the CWD — so those
     /// steps ask their question from inside the folder they are asking about.
     fn invoke_in(&self, cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
-        // The facet goes on the command line, which is the one input Amenbo is to take it by; a call
-        // that names its own is left alone.
-        let mut with_facet = args.to_vec();
-        if !args.contains(&"--actor") {
-            with_facet.extend_from_slice(&["--actor", "human"]);
-        }
-        let mut cmd = Command::new(&self.bin);
-        cmd.args(&with_facet)
-            .current_dir(cwd)
-            .env("AMENBO_HOME", &self.session.home)
-            .env("AMENBO_UPDATE_CHECK", "0")
-            .env("NO_COLOR", "1");
-        // What the window puts on every terminal it opens, on the one call a step says is typed inside
-        // a pane. The names are spelled here rather than taken from Amenbo's own constants because this
-        // workspace drives the shipped binary as a black box and depends on none of its crates — which
-        // is also what the reading is worth: a build that stopped answering to these names would have
-        // stopped answering to what a real window sets.
-        if let Some(pane) = &self.in_pane {
-            cmd.env("AMENBO_PANE", &pane.id).env("AMENBO_PANE_RESUME", &pane.resume);
-        }
-        cmd.output().map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
+        isolated(&self.bin, &self.session.home, cwd, args, self.in_pane.as_ref())
+            .output()
+            .map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
     }
 
     /// The same, from the run's own CWD — where every step that is not asking about a folder stands.
@@ -978,6 +1013,58 @@ pub fn json_string(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What a call is given of the world it stands in, read off the command rather than off a run.
+    fn told(cmd: &Command) -> Vec<(String, Option<String>)> {
+        cmd.get_envs()
+            .map(|(k, v)| {
+                (k.to_string_lossy().into_owned(), v.map(|v| v.to_string_lossy().into_owned()))
+            })
+            .collect()
+    }
+
+    /// **A gate whose verdict depends on where it was run is not a gate.** The release check is
+    /// walked in a pane of Amenbo's own talk window, and a pane hands its marks down to everything
+    /// started in it — so a road asking what a record made outside a window looks like was answered
+    /// by a run that was inside one, and a right build went red. Each mark is taken off the call the
+    /// way the store is replaced: stated once, where every call goes through.
+    #[test]
+    fn no_mark_of_the_window_a_run_was_started_in_reaches_the_binary() {
+        let cmd = isolated(
+            Path::new("/bin/true"),
+            Path::new("/tmp/home"),
+            Path::new("/tmp"),
+            &["task", "list"],
+            None,
+        );
+        let told = told(&cmd);
+        for mark in PANE_MARKS {
+            assert!(
+                told.contains(&(mark.to_string(), None)),
+                "{mark} is not taken off the call — told: {told:?}",
+            );
+        }
+    }
+
+    /// And the half that keeps a pane reachable: a step that says a call was typed in one puts the
+    /// two marks back, so a road about a pane is about the pane it named rather than about the
+    /// terminal the run happened to be started from.
+    #[test]
+    fn a_call_a_step_says_was_typed_in_a_pane_carries_that_pane() {
+        let pane = Pane { id: "pane-1".to_string(), resume: "resume-1".to_string() };
+        let told = told(&isolated(
+            Path::new("/bin/true"),
+            Path::new("/tmp/home"),
+            Path::new("/tmp"),
+            &["task", "list"],
+            Some(&pane),
+        ));
+        assert!(told.contains(&("AMENBO_PANE".to_string(), Some("pane-1".to_string()))));
+        assert!(told.contains(&("AMENBO_PANE_RESUME".to_string(), Some("resume-1".to_string()))));
+        // The other two stay off: the window's own terminal is not what a road means by a pane.
+        assert!(told.contains(&("AMENBO_SESSION".to_string(), None)));
+        assert!(told.contains(&("AMENBO_SESSION_DIR".to_string(), None)));
+    }
 
     /// The one that the throwaway cwd would otherwise break: a path the caller counted from their
     /// own directory is resolved there, not where the scenario ends up running.

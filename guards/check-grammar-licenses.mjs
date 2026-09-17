@@ -42,6 +42,11 @@ const TMGRAMMAR = join(ROOT, 'app', 'src', 'files', 'tmgrammar')
 // What each baked tree is called in a violation, what its files are named after, and how to write it
 // again. The judgment below is one function because the question is one question: the manifest says
 // what was read and where, and the directory has to be exactly that.
+//
+// Both manifests answer with VS Code's own licence, which is the right answer for a language
+// configuration — those are written in the extension — and one that had to be checked for the
+// grammar: `text.html.php` is converted out of `KapitanOczywisty/language-php`, which the extension
+// registers as MIT, the same answer by the other road.
 const LANG_CONFIG_TREE = { dir: 'langconfig', key: 'lang', regen: 'make lang-config' }
 const TM_GRAMMAR_TREE = { dir: 'tmgrammar', key: 'scope', regen: 'make tm-grammar' }
 
@@ -75,6 +80,25 @@ const GRANTS = {
 // above instead, for a source that states terms without an identifier. Exactly one of the two.
 // `source` is the revision the license was read at — `tm-grammars` publishes the same revisions the
 // set this replaces did, so moving between them read nothing back.
+//
+// **A grammar VS Code publishes is not a grammar VS Code wrote.** Every one of these files opens by
+// naming the project it was converted from, and what binds us is that project's terms rather than
+// VS Code's MIT. Each extension says which project that is and under what license, in its
+// `cgmanifest.json` (`OSSREADME.json` in the older ones), and all of them were read at the same
+// revisions the entries below name. Fifteen entries here name a file VS Code publishes. Fourteen of
+// them resolve to a component their extension registers as MIT — thirteen components, `javascript`
+// and `tsx` sharing one: `microsoft/vscode-css`, `worlpaker/go-syntax`,
+// `microsoft/TypeScript-TmLanguage`, `microsoft/vscode-JSON.tmLanguage`,
+// `microsoft/vscode-markdown-tm-grammar`, `KapitanOczywisty/language-php`,
+// `redhat-developer/vscode-java`, `atom/language-xml`, `MagicStack/MagicPython`, `Shopify/ruby-lsp`,
+// `dustypomerleau/rust-syntax`, `jeff-hykin/better-shell-syntax` and `microsoft/vscode-mssql`. The
+// fifteenth is `html`, which is a TextMate bundle and is written as one below.
+//
+// Two extensions register a TextMate bundle beside their MIT component, for a file we do not carry:
+// `javascript` for the regular-expression grammar out of `textmate/javascript.tmbundle`, and
+// `markdown-basics` for `textmate/markdown.tmbundle`, which the MIT component is itself built from.
+// The grant is unconditional either way, so neither changes what may be shipped — only which line
+// answers for it.
 const GRAMMARS = {
   css: [
     { grammar: 'css', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/css/syntaxes/css.tmLanguage.json' },
@@ -82,8 +106,11 @@ const GRAMMARS = {
   go: [
     { grammar: 'go', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/091ef378baaa141c8bc4bbe9775d4cb3bd655a80/extensions/go/syntaxes/go.tmLanguage.json' },
   ],
+  // Converted out of textmate/html.tmbundle, like `html-derivative` below and from the same bundle:
+  // the file VS Code publishes says so at the top, and VS Code's own component manifest for the
+  // extension registers that bundle under the TextMate Bundle License rather than its own MIT.
   html: [
-    { grammar: 'html', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/45324363153075dab0482312ae24d8c068d81e4f/extensions/html/syntaxes/html.tmLanguage.json' },
+    { grammar: 'html', grant: 'textmate-bundle', source: 'https://github.com/textmate/html.tmbundle/blob/0c3d5ee54de3a993f747f54186b73a4d2d3c44a2/Syntaxes/HTML.plist' },
   ],
   javascript: [
     { grammar: 'javascript', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/210541906e5a96ab39f9c753f921b1bd35f4138b/extensions/javascript/syntaxes/JavaScript.tmLanguage.json' },

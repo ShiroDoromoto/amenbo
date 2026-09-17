@@ -1505,6 +1505,13 @@ pub enum DecisionCmd {
         #[arg(long)]
         body: Option<String>,
     },
+    /// Finish writing a decision — the second stage of recording one, which settles it and releases the tasks that rest on it. A human or an AI may say it; a decision already written is a no-op
+    FinishWriting {
+        id: String,
+        /// reason for settling it — recorded as a decision comment, not a dedicated field. Pass `-` to read it from stdin
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Accept a decision (proposed → accepted)
     Accept {
         id: String,

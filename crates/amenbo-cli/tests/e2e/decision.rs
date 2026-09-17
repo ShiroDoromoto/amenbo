@@ -48,6 +48,41 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     assert_eq!(cli.json(&["decision", "comment", "list", &did3, "--json"])["count"], 0);
 }
 
+/// The door `AMB-D-918` puts a decision's second stage behind: `decision finish-writing` ends the
+/// writing, settles the decision and releases the task resting on it. A second run says plainly that
+/// nothing changed, and `--reason` lands one comment on the real transition alone.
+#[test]
+fn finishing_the_writing_settles_a_decision_and_releases_the_work_on_it() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+    let t = cli.json(&["task", "add", "--project", &pid, "--title", "前提の上に立つ作業", "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    cli.json(&["task", "finish-creating", &tid, "--json"]);
+    cli.json(&["decision", "link", &did, &tid, "--json"]);
+
+    // Still being written, so the work on it cannot be reserved.
+    assert_eq!(cli.json(&["decision", "list", "--filter", "draft:yes", "--json"])["count"], 1);
+    assert_eq!(cli.json(&["task", "show", &tid, "--json"])["ready"], false);
+
+    let done = cli.json(&["decision", "finish-writing", &did, "--reason", "レビュー後に合意", "--json"]);
+    assert_eq!(done["noop"], false);
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "accepted");
+    assert_eq!(cli.json(&["decision", "list", "--filter", "draft:no", "--json"])["count"], 1);
+    assert_eq!(cli.json(&["task", "show", &tid, "--json"])["ready"], true);
+    let said = cli.json(&["decision", "comment", "list", &did, "--json"]);
+    assert_eq!(said["count"], 1);
+    assert_eq!(said["comments"][0]["text"], "レビュー後に合意");
+
+    // Written already: reported as no change, and the reason does not pile up.
+    let again = cli.json(&["decision", "finish-writing", &did, "--reason", "二度目", "--json"]);
+    assert_eq!(again["noop"], true);
+    assert_eq!(cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 1);
+}
+
 /// Re-accepting an already-accepted decision is an idempotent noop that **says so** instead of a bare
 /// "✓" that reads as a fresh acceptance: `noop` is true, `changed` is empty, the facet that first
 /// settled it is never silently overwritten (that is `reopen`'s job), and a `--reason` on the noop

@@ -214,6 +214,23 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             write_envelope(flags, "decision.edit", "decision", serde_json::to_value(&detail).unwrap(), Some(changed), false, format!("✓ Edited decision: {}", decision_label(d.id)));
         }
+        DecisionCmd::FinishWriting { id, reason } => {
+            let reason = body_arg_opt(reason)?;
+            let did = resolve_decision(store, &id).map_err(CliError::from)?;
+            let by = flags.facet()?.as_str().to_string();
+            let (d, changed) = store.finish_writing_decision(did, Some(by), flags.facet()?).map_err(CliError::from)?;
+            let detail = store.decision_detail(d.id).map_err(CliError::from)?;
+            if changed {
+                // `--reason` is the same thin sugar it is on `accept`: one comment on the timeline, and
+                // only where the writing actually ended, so a re-run does not pile reasons up.
+                add_reason_comment(store, flags, did, reason)?;
+                write_envelope(flags, "decision.finish-writing", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["draft".to_string(), "status".to_string()]), false, format!("✓ Finished writing decision: {}", decision_label(d.id)));
+            } else {
+                // Already written: say so plainly rather than a bare "✓" that reads as "just now
+                // settled". Who settled it is frozen, and `reopen` is the sanctioned way to change it.
+                write_envelope(flags, "decision.finish-writing", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already written{} — no change. To write it again, `reopen` it first.", decision_label(d.id), accepted_by_suffix(&d)));
+            }
+        }
         DecisionCmd::Accept { id, reason } => {
             let reason = body_arg_opt(reason)?;
             let did = resolve_decision(store, &id).map_err(CliError::from)?;

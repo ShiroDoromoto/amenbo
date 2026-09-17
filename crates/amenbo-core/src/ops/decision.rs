@@ -188,7 +188,6 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decisio
 /// never occurred — the freeze on `decided_by`/`decided_at` still holds, and re-stamping a different
 /// facet is [`reopen`]'s business, not a silent overwrite here.
 pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(Decision, bool)> {
-    let now = Timestamp::now();
     let decided_by = decided_by.map(|t| t.trim().to_string());
     let before = live_before(tx, id)?;
     match before.status {
@@ -203,14 +202,47 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
         }
     }
     // Every arm above either returned or left `Proposed`, so reaching here *is* the transition — the
-    // idempotent re-accept never gets this far, and so never moves the clock. Which is exactly where a
-    // required classification is read (`AMB-D-790`): the transition, once, on the way through.
-    refuse_unmet_required_axes(tx, &before)?;
+    // idempotent re-accept never gets this far, and so never moves the clock.
+    Ok((settle(tx, &before, decided_by)?, true))
+}
+
+/// End the writing of a decision (`AMB-D-918`) — the second stage of the two its creation takes, and
+/// the decision twin of [`crate::ops::task::finish_creating`]. It lowers `draft`, settles the decision
+/// and stamps `decided_at`/`decided_by` with whoever finished it. Open to a human and to an AI alike:
+/// what it says is "I have finished writing this", which is a statement only its writer can make.
+///
+/// Idempotent when the writing is already finished — a decision whose `draft` is down comes back
+/// untouched, the shape `finish_creating` has, so re-running it neither re-stamps nor re-fires. That
+/// covers the rejected and the already-settled alike: neither is still being written.
+///
+/// Returns `(decision, changed)`. `changed` is `false` on that noop, which is what the caller watches
+/// to fire `decision.accepted` once and once only.
+///
+/// [`accept`] still stands beside it until the acceptance itself goes (`AMB-T-5028`), and the two
+/// share one body below: whichever door a decision comes through, what happens to the row is the same.
+pub fn finish_writing(
+    tx: &WriteTx<'_>,
+    id: i64,
+    decided_by: Option<String>,
+) -> Result<(Decision, bool)> {
+    let decided_by = decided_by.map(|t| t.trim().to_string());
+    let before = live_before(tx, id)?;
+    if !before.draft {
+        return Ok((before, false)); // idempotent: the writing is already finished, nothing changed
+    }
+    Ok((settle(tx, &before, decided_by)?, true))
+}
+
+/// The row half both doors share: the required classification is read, the writing ends, and the
+/// decision is settled with the moment and the facet that settled it. Called only where the caller has
+/// established that this call *is* the transition, so the clock moves exactly once.
+///
+/// Where a required classification is read (`AMB-D-790`): the transition, once, on the way through.
+fn settle(tx: &WriteTx<'_>, before: &Decision, decided_by: Option<String>) -> Result<Decision> {
+    refuse_unmet_required_axes(tx, before)?;
+    let now = Timestamp::now();
     let after = Decision {
         status: DecisionStatus::Accepted,
-        // This is the second stage of creation, so the writing ends here (`AMB-D-918`). The two move
-        // together for now because one operation is both; `decision finish-writing` is what will
-        // carry the flag once it exists, and `accept` is what still carries it today.
         draft: false,
         status_changed_at: Some(now),
         decided_at: Some(now),
@@ -218,8 +250,8 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
         updated_at: now,
         ..before.clone()
     };
-    emit_update(tx, record::decision(&before), record::decision(&after))?;
-    Ok((after, true))
+    emit_update(tx, record::decision(before), record::decision(&after))?;
+    Ok(after)
 }
 
 /// Refuse the settling of a decision that carries no value on an axis its project requires
@@ -827,6 +859,69 @@ mod tests {
         assert!(d.decided_at.is_none());
         assert!(edge_count(tx, d.id) == 0);
         assert_eq!(crate::view::decision_display_ref(&d), "AMB-D-1");
+    }
+
+    /// The second stage of recording a decision (`AMB-D-918`), the twin of `task finish-creating`: it
+    /// lowers the flag, settles the decision and stamps who finished it. Running it again over a
+    /// decision already written is the no-op that shape has, so nothing is re-stamped.
+    #[test]
+    fn finish_writing_ends_the_writing_and_settles_the_decision() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = new_decision(tx, pid, "書き終える決定");
+        assert!(d.draft && d.decided_at.is_none());
+
+        let (written, changed) = finish_writing(tx, d.id, Some("  ai  ".to_string())).unwrap();
+        assert!(changed);
+        assert!(!written.draft);
+        assert_eq!(written.status, DecisionStatus::Accepted);
+        assert!(written.decided_at.is_some());
+        assert_eq!(written.decided_by.as_deref(), Some("ai"), "the facet is trimmed as accept trims it");
+
+        // Already written: the same call changes nothing and leaves the stamps where they are.
+        let (again, changed) = finish_writing(tx, d.id, Some("human".to_string())).unwrap();
+        assert!(!changed);
+        assert_eq!(again.decided_by.as_deref(), Some("ai"), "who finished it is not overwritten");
+        assert_eq!(again.decided_at, written.decided_at);
+
+        // A rejected decision is not being written either, so it is the same no-op rather than a
+        // second route into settling one.
+        let turned_down = new_decision(tx, pid, "却下された決定");
+        reject(tx, turned_down.id).unwrap();
+        let (untouched, changed) = finish_writing(tx, turned_down.id, None).unwrap();
+        assert!(!changed);
+        assert_eq!(untouched.status, DecisionStatus::Rejected);
+    }
+
+    /// The required-classification door is on the transition, so the new second stage reads it exactly
+    /// where `accept` does (`AMB-D-790`) — one body, one place it is asked.
+    #[test]
+    fn a_required_axis_holds_the_writing_until_it_is_answered() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let axis = crate::ops::dimension::add(
+            tx,
+            pid,
+            crate::ops::dimension::NewDimension { name: "影響半径".to_string(), ..Default::default() },
+        )
+        .unwrap();
+        let value = crate::ops::dimension::value_add(tx, axis.id, "この一箇所", None).unwrap();
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
+            .unwrap();
+
+        let d = new_decision(tx, pid, "分類のない決定");
+        let err = finish_writing(tx, d.id, None).unwrap_err();
+        assert!(
+            err.message_en().contains("影響半径"),
+            "the refusal names the axis to fill in: {}",
+            err.message_en()
+        );
+        assert!(live_before(tx, d.id).unwrap().draft, "and the writing is still open");
+
+        crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
+        assert!(!finish_writing(tx, d.id, None).unwrap().0.draft);
     }
 
     /// The decision side of the required-classification door (`AMB-D-790`): settling is what a required

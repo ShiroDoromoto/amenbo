@@ -3,9 +3,9 @@
 # Rewrite it deliberately: cargo test -p amenbo-core record_the_entry_size -- --ignored
 agentCycle       5791
 amenbo           104
-capabilities     7252
+capabilities     7295
 commandDetail    568
-commands         1999
+commands         2025
 conventions      5502
 cycles           13675
 filterGrammar    5183
@@ -17,5 +17,5 @@ principles       350
 schemaVersion    3
 updateAvailable  5
 version          7
-TOTAL            43931
-TOTAL_IN_A_PANE  44446
+TOTAL            44000
+TOTAL_IN_A_PANE  44515

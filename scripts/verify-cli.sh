@@ -9,13 +9,21 @@
 #   unset one (a typo, a renamed variable) expands to nothing and the command becomes
 #   `rm -rf` of whatever is left. As a file, shellcheck reads it.
 #
-# The isolation is the whole point, and it is two
-# things, both required:
+# The isolation is the whole point, and it is three things, all required:
 #   (1) AMENBO_HOME=throwaway dir — the ONLY thing that keeps the run out of the real app-data
 #       tree. An isolated CWD alone does not: `init` with no `.amenbo` pointer in sight creates
 #       a store under the real app-data root.
 #   (2) a throwaway CWD with no `.amenbo` ancestor — so a run inside the repo cannot grab the
 #       production pointer.
+#   (3) the marks of a talk window off the environment — `AMENBO_PANE`, `AMENBO_PANE_RESUME`,
+#       `AMENBO_SESSION`, `AMENBO_SESSION_DIR`. A pane hands all four down to everything started
+#       inside it, and the binary reads them as proof that it is in the window: it then says what it
+#       did into that pane's drop box, so the bar under the pane somebody is working in counts a
+#       decision this run made, and opening it goes to whatever the real store holds at that number
+#       — a throwaway store starts numbering at one, and so did the real one. The first two keep
+#       the run out of the real store and this one keeps it out of the real window; without it a
+#       `make verify` typed in a pane is read there as work, and only there — a run made anywhere
+#       else says nothing to anybody.
 #
 # The throwaway CWD is bound to nothing, which is a shape of its own: an AI reaches only the project
 # its folder names, so every read that draws a reach comes back out_of_reach there. Both shapes are
@@ -39,6 +47,16 @@
 #        (KEEP=1 to inspect the dirs after; INIT=1 to run against a bound store;
 #         SCRIPT=<file> to run a sequence instead of one command)
 set -euo pipefail
+
+# (3), taken off once here rather than at each invocation below: unset in this shell is unset in
+# every child, the `init` that INIT=1 runs included. It is the same fence `amenbo_scratch::command`
+# puts around the child a test starts and the verification driver around the shipped binary
+# (`verification/cli/src/lib.rs`, `PANE_MARKS`). Named one by one, as the driver names them and a
+# test does not: a test decides its whole environment, and this is a command somebody typed. What is
+# wrong to inherit here is these four — a run pointed at a fake manifest or posing as another
+# machine is one the caller asked for on purpose, and dropping everything spelled `AMENBO_*` would
+# take those with it.
+unset AMENBO_SESSION AMENBO_SESSION_DIR AMENBO_PANE AMENBO_PANE_RESUME
 
 if [ $# -lt 1 ]; then
     echo "usage: verify-cli.sh <cli-binary> [args...]" >&2

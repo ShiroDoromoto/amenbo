@@ -1612,17 +1612,18 @@ export async function removeDecisionComment(commentId: number, decisionId: numbe
 }
 
 /**
- * Accept a decision (Proposed → Accepted). Passing a `reason` also posts it as one comment — this is the
- * GUI form of `decision accept --reason`: the rationale is a comment, not a field of its own.
+ * End the writing of a decision (`AMB-D-918`) — the second stage of recording one, which settles it and
+ * releases the tasks resting on it. Passing a `reason` also posts it as one comment — this is the GUI
+ * form of `decision finish-writing --reason`: the rationale is a comment, not a field of its own.
  */
-export async function acceptDecision(id: number, reason?: string): Promise<void> {
+export async function finishWritingDecision(id: number, reason?: string): Promise<void> {
   if (!inTauri()) return;
   const r = reason?.trim();
   if (r) await addDecisionComment(id, r);
-  return invokeAck("decision_accept", { id });
+  return invokeAck("decision_finish_writing", { id });
 }
 
-/** Reject a decision (Proposed → Rejected). Symmetrically with accept, a `reason` is posted as one comment. */
+/** Reject a decision (Proposed → Rejected). As with finishing the writing, a `reason` is posted as one comment. */
 export async function rejectDecision(id: number, reason?: string): Promise<void> {
   if (!inTauri()) return;
   const r = reason?.trim();
@@ -1630,7 +1631,7 @@ export async function rejectDecision(id: number, reason?: string): Promise<void>
   return invokeAck("decision_reject", { id });
 }
 
-/** Put an accepted decision back under discussion (Accepted → Proposed). This is the sanctioned way to make a small correction without polluting the supersede chain: non-destructive, reversible, auditable. */
+/** Put a written decision back to being written (`draft` up again). This is the sanctioned way to make a small correction without polluting the supersede chain: non-destructive, reversible, auditable. */
 export async function reopenDecision(id: number): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("decision_reopen", { id });

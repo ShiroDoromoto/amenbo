@@ -3807,6 +3807,9 @@ pub struct DecisionCardRow {
     pub title: String,
     pub body: String,
     pub status: String,
+    /// Whether the writing is still unfinished (`AMB-D-918`) — what the decision pane reads to decide
+    /// which doors to draw, the same flag `draft:` asks for on `decision list`.
+    pub draft: bool,
     pub decided_at: Option<String>,
     pub created_at: String,
     /// When this decision last changed in any way — an edit to the body, and a status transition alike
@@ -3855,6 +3858,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
     const P: col::project::Cols = col::project::of("p");
     let mut sel = Select::new();
     let (id, title, body, status) = (sel.col(D.id), sel.col(D.title), sel.col(D.body), sel.col(D.status));
+    let draft = sel.col(D.draft);
     let (decided_at, created_at) = (sel.col(D.decided_at), sel.col(D.created_at));
     let updated_at = sel.col(D.updated_at);
     let pid = sel.col(D.project_id);
@@ -3876,6 +3880,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
                 title: title.get(r)?,
                 body: body.get(r)?,
                 status: status.get(r)?,
+                draft: draft.get(r)?,
                 decided_at: decided_at.get(r)?,
                 created_at: created_at.get(r)?,
                 updated_at: updated_at.get(r)?,

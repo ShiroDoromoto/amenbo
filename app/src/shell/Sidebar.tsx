@@ -217,7 +217,10 @@ export function Sidebar({
               hint === "before" ? "navitem--drop-before" : "",
               hint === "after" ? "navitem--drop-after" : "",
             ].filter(Boolean).join(" ");
-            const count = p.openCount + p.proposedDecisionCount;
+            // Open tasks, and nothing else: a decision still being written is not work waiting on the
+            // reader, and counting one here made the row say there was more to do than there was
+            // (`AMB-D-918`).
+            const count = p.openCount;
             return (
               <button
                 key={p.id}

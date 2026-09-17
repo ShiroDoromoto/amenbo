@@ -280,7 +280,6 @@ export function BoardScreen({
         onClick={() => setTab("decisions")}
       >
         <Icon name="scales" /> {t("nav.decisions")}
-        {project.proposedDecisionCount ? <span className="decisionsbtn__count">{project.proposedDecisionCount}</span> : null}
       </button>
       <div className="topbar__spacer" />
       {/* The one control the filters have while they are closed, so it says how many axes are narrowing:

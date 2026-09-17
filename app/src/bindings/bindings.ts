@@ -327,6 +327,12 @@ ref: string, title: string, body: string,
  */
 status: "proposed" | "accepted" | "rejected", 
 /**
+ * Is this decision still being written (`AMB-D-918`)? The pane draws its doors off this rather
+ * than off the status: while it is up, the decision is unfinished and the tasks resting on it are
+ * held back; `decision finish-writing` lowers it.
+ */
+draft: boolean, 
+/**
  * The project it lives under (the id is an integer key).
  */
 project: ProjectRefDto | null, 

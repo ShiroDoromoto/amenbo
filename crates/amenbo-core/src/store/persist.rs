@@ -1185,16 +1185,16 @@ impl Store {
     ///
     /// **The time-axis default lands here too**, on the same terms as the task side: the era that
     /// contains today fills the axis nobody named, and what the caller names wins over it. A decision is
-    /// classified on the same axes a task is (`AMB-D-781`), and a required one is read here and again at
-    /// `decision accept` (`AMB-D-790`, `AMB-D-847`), so an era nobody wrote would hold up every
-    /// acceptance for want of a value the store can settle itself (`AMB-D-147` fills the axis rather
-    /// than demanding it). The day it reads is the day the decision is recorded, not the day it is
-    /// accepted: a write at `accept` would put a second job on that one point. A time axis narrowed off
-    /// decisions is left alone (`AMB-D-789`).
+    /// classified on the same axes a task is (`AMB-D-781`), and a required one is read where the writing
+    /// ends (`AMB-D-790`), so an era nobody wrote would hold up every settling for want of a value the
+    /// store can settle itself (`AMB-D-147` fills the axis rather than demanding it). The day it reads is
+    /// the day the decision is recorded, not the day it is settled: a write at the settling would put a
+    /// second job on that one point. A time axis narrowed off decisions is left alone (`AMB-D-789`).
     ///
-    /// **Every required axis but that one is a door here** (`AMB-D-847`): the create is refused, not
-    /// merely reported on, so nothing blank is recorded for whoever accepts it to be turned away over.
-    /// The check runs last, on the classification as it will be committed.
+    /// **Nothing is demanded here** (`AMB-D-925`). The creation has two stages, and the first one asks
+    /// for nothing — the axes a project requires are read at `decision finish-writing`, walked by the
+    /// same person who wrote the decision, exactly as `task finish-creating` reads them on the task side
+    /// (`AMB-D-734`). What this call reports back is which axes are still blank, not a refusal.
     pub fn add_decision_with_dimensions(
         &mut self,
         input: crate::ops::decision::NewDecision,
@@ -1230,11 +1230,6 @@ impl Store {
                     }
                 }
             }
-            // Last, because it judges the decision as it will be committed: after what the caller
-            // named and after the era the store fills in itself. A blank required axis fails the
-            // write, so the refusal leaves no half-classified decision for anyone to find
-            // (`AMB-D-847`).
-            crate::ops::decision::refuse_unmet_required_axes_at_record(tx, &decision)?;
             Ok(decision)
         })
     }

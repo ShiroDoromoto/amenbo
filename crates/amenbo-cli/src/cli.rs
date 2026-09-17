@@ -1466,7 +1466,8 @@ pub enum DecisionCmd {
         /// classify the new decision as `<axis>=<value>` — the same resolution as `dimension set` (id, or
         /// an exact name, case-insensitive). Repeatable for different axes; an axis is single-select, so
         /// naming one twice is refused, and so is an axis that does not classify decisions. A required
-        /// axis left empty is what `decision accept` refuses later, so fill it here.
+        /// axis left empty is what `decision finish-writing` refuses later, so filling it here saves the
+        /// round trip (`AMB-D-925`).
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
@@ -1591,7 +1592,8 @@ pub enum DecisionCmd {
         /// classify the new decision as `<axis>=<value>` — the same resolution as `dimension set` (id, or
         /// an exact name, case-insensitive). Repeatable for different axes; an axis is single-select, so
         /// naming one twice is refused, and so is an axis that does not classify decisions. A required
-        /// axis left empty turns the promotion away before anything is written, so fill it here.
+        /// axis left empty is what `decision finish-writing` refuses later, so filling it here saves the
+        /// round trip (`AMB-D-925`).
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },

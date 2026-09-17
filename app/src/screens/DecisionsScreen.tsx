@@ -287,10 +287,10 @@ function DecisionCard({ d, selected, onSelect }: {
   );
 }
 
-// Recording a decision, and the one demand the form has to carry. A required axis is read where a
-// decision is settled (`AMB-D-790`), and that press belongs to whoever accepts it — not to whoever
-// wrote it. So the form asks here, while the writer is still in front of it, rather than letting the
-// record go out blank and the acceptance come back refused at somebody else.
+// Recording a decision, and the axes the form offers on the way. A required axis is read where the
+// writing ends (`AMB-D-790`), and nothing is demanded at the record (`AMB-D-925`) — so the selects are
+// here to save the writer a second trip through the detail pane, not to hold the record back. Leave one
+// blank and the decision is filed all the same; `decision finish-writing` is where it is asked for.
 //
 // Only the **required** axes draw a select, and not the time axis among them: the store puts the era
 // containing today on a decision as it is recorded (`AMB-D-147`), so asking first would cost a choice
@@ -302,23 +302,24 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
   const [busy, setBusy] = useState(false);
   const [values, setValues] = useState<Record<number, number>>({});
 
-  // The decision side alone (`AMB-D-789`): an axis narrowed to tasks demands nothing of a decision, and
-  // holding this button on one would ask for a value no decision can carry. The time axis comes off for
-  // the opposite reason — the create fills it, so the answer is already there by the time anyone could
-  // be refused for it. A project with no era over today fills nothing and asks nothing, and the
-  // acceptance says so, exactly as it does on the task side.
+  // The decision side alone (`AMB-D-789`): an axis narrowed to tasks demands nothing of a decision, so
+  // a select for one would ask for a value no decision can carry. The time axis comes off for a
+  // different reason — the create fills it, so the answer is already there before anyone could be
+  // asked. A project with no era over today fills nothing and asks nothing.
   const project = getSnapshot().projects.find((p) => p.id === projectId);
   const demanded = axesFor("decision", project?.dimensions ?? [])
     .filter((d) => d.required && !isTimeAxis(d));
-  const unmet = demanded.filter((d) => values[d.id] === undefined);
 
   async function submit() {
-    if (!title.trim() || unmet.length > 0) return;
+    if (!title.trim()) return;
     setBusy(true);
     try {
-      // The values ride with the create, so a decision filed under an axis never exists without it —
-      // the same transaction the CLI's `--dim` writes in.
-      await addDecision(projectId, title.trim(), body, demanded.map((d) => values[d.id]));
+      // What was answered rides with the create, in the transaction the CLI's `--dim` writes in; what
+      // was left blank simply does not go, and the decision is recorded without it.
+      const answered = demanded
+        .map((d) => values[d.id])
+        .filter((id): id is number => id !== undefined);
+      await addDecision(projectId, title.trim(), body, answered);
       onDone();
     } finally {
       setBusy(false);
@@ -370,19 +371,12 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button
           className="btn btn--primary"
-          disabled={busy || !title.trim() || unmet.length > 0}
+          disabled={busy || !title.trim()}
           onClick={() => void submit()}
         >
           {t("dec.add")}
         </button>
         <button className="btn" onClick={onDone}>{t("dec.cancel")}</button>
-        {/* Why the button is held, named rather than left to a tooltip — the selects are right above.
-            The sentence is the task pane's, because it is the same sentence: fill these in first. */}
-        {unmet.length > 0 && (
-          <span className="faint">
-            {tf("detail.finishCreatingBlocked", { names: unmet.map((d) => d.name).join(", ") })}
-          </span>
-        )}
       </div>
     </div>
   );

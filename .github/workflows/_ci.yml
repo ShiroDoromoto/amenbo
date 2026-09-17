@@ -680,6 +680,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The window will not run wasm, and a dependency bump is merged with nobody reading it: the PDF
+      # reader publishes its own wasm build from its next major on, and this is what would notice.
+      # It reads the install and the bundle, which is why it sits here rather than in tree-guards.
+      - name: Refuse WebAssembly in what ships
+        run: ../guards/check-no-wasm.sh
+
       # The Vitest unit suite (front-end logic: reconcile self-heal, IPC, i18n,
       # bind-folder). Host-independent — pure Node, so it gates per-PR on Linux
       # without the macOS bundle. Mirrors the `npm test` leg of the local make-test

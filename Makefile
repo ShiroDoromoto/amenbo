@@ -796,6 +796,9 @@ gate-app-rust:
 ## ones (do not add heavy features).
 gate-gui:
 	cd app && npm run typecheck && npm run build && npm test
+	## Straight after the build that writes it: the gate reads the bundle as well as the installed
+	## packages, so it is here rather than among the file-only gates.
+	$(MAKE) --no-print-directory wasm-gate
 
 ## The pre-distribution harness stage (verification/, a cargo workspace of its own outside the root
 ## one): CI's `verification` job, the same two lines. Nothing here drives a binary — the scenarios are
@@ -952,6 +955,12 @@ ts-derive-gate:
 
 test-spawn-gate:
 	@guards/check-test-spawn.sh
+
+## Guard the one thing the window will not run: dependency bumps are merged unattended, and the PDF
+## reader publishes a wasm build of its own from its next major on. Needs an install and a bundle to
+## read, so `gate-gui` is what runs it.
+wasm-gate:
+	@guards/check-no-wasm.sh
 
 ## Guard the gui layer's reach: the parity tests read Rust straight out of the tree with Vite's
 ## `?raw`, so the GUI job's inputs are not confined to app/. A file it reads that no `gui:` pattern

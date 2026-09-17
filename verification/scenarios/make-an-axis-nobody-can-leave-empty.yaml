@@ -7,11 +7,11 @@
 # written, so it never meets the guard. It is also what keeps the demand off the first stage: a
 # writer who has not settled the axis yet still gets the record down, and answers it before the
 # writing ends. A road that walked only the filing would read the same over a build whose flag does
-# nothing, so this one is written to be turned away eight times — on the axis nobody could answer, on
+# nothing, so this one is written to be turned away seven times — on the axis nobody could answer, on
 # the axis whose answers are all closed, on the creation that left the answer out, on the acceptance
-# that left it out, on the supersession that would settle a decision the same way, on the hand that
-# would take the answer back off one task at a time, on the removal that would take it off every task
-# at once, and on the removal that would leave the axis with nothing to answer with at all. Writing a
+# that left it out, on the hand that would take the answer back off one task at a time, on the removal
+# that would take it off every task at once, and on the removal that would leave the axis with nothing
+# to answer with at all. Writing a
 # decision has two ways in rather than one, so the promotion is walked beside the record: both of them
 # record, and a road that walked only one would not say that neither demands. One axis is answered
 # before anyone could be asked: a time axis is filled from the era whose window covers today, so it is
@@ -27,8 +27,8 @@ description: >
   and watch the same creation end. A decision left blank is recorded rather than turned away, and so is
   one raised out of a comment: both ways in ask for nothing, and the answer riding along with the
   record only saves the trip back. The rulings written before the demand went up meet it where they are
-  settled, through the acceptance and through the supersession that promotes one, and answering the
-  axis opens both. A required time axis is answered by the era the store writes itself: with no era
+  settled, and answering the axis opens them. Superseding is not one of those doors — it draws an edge
+  and settles nothing. A required time axis is answered by the era the store writes itself: with no era
   covering today it is recorded blank, and the settling is where it is asked for. Then try to take the
   value back off and be refused there too —
   from the task, and from the axis itself, where removing the value would empty every task on it at
@@ -352,16 +352,15 @@ steps_cli:
       field: status
       equals: accepted
 
-  # And the other door onto that same state. Superseding settles the new side on its way through, so it
-  # is a settling like the acceptance above and meets the demand there too — which is what says the
-  # guard is on the transition rather than on the one command that happens to be named after it.
+  # And what is not that door. Superseding draws one edge and settles nothing, so a new side with the
+  # axis still blank goes through without being asked — and comes back still under discussion, which is
+  # what says the demand is on the settling rather than on anything that merely names a decision.
   - type: action
     domain: decision
     op: supersede
     with:
       target: standing-revision
       replaces: standing-ruling
-      refused: invalid_decision_required_dimension
 
   - type: assert
     domain: decision
@@ -381,10 +380,9 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: supersede
+    op: accept
     with:
       target: standing-revision
-      replaces: standing-ruling
 
   - type: assert
     domain: decision

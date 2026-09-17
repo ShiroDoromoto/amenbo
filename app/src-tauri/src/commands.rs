@@ -408,7 +408,6 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
             icon: p.icon.clone(),
             view: p.default_view.clone(),
             open_count: p.open_count,
-            proposed_decision_count: p.proposed_decision_count,
             dimensions,
         });
     }
@@ -2113,17 +2112,6 @@ pub fn decision_finish_writing(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["decisions"]).decision(id))
 }
 
-/// Accept a decision (Proposed → Accepted). decided_by is me.
-#[tauri::command]
-pub fn decision_accept(id: i64) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        let by = ActorKind::Human.as_str().to_string();
-        store.accept_decision(id, Some(by), ActorKind::Human)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["decisions"]).decision(id))
-}
-
 /// Reject a decision (Proposed → Rejected).
 #[tauri::command]
 pub fn decision_reject(id: i64) -> Result<WriteAck, CmdError> {
@@ -2160,8 +2148,7 @@ pub fn decision_edit(id: i64, title: Option<String>, body: Option<String>) -> Re
 #[tauri::command]
 pub fn decision_supersede(new_id: i64, old_id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let by = ActorKind::Human.as_str().to_string();
-        store.supersede_decision(new_id, old_id, Some(by), ActorKind::Human)?;
+        store.supersede_decision(new_id, old_id)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(new_id).decision(old_id))
@@ -5537,7 +5524,7 @@ pub(crate) mod tests {
         assert_eq!(c.linked_decisions.len(), 1, "an unsettled premise is a subset of linked_decisions");
         assert!(task_status(task, "in_progress".into()).is_err(), "reservation is rejected");
 
-        decision_accept(did).unwrap();
+        decision_finish_writing(did).unwrap();
         let c = card(task);
         assert!(c.ready, "ready once the basis is settled");
         assert!(c.blocked_by_decisions.is_empty(), "a settled premise no longer holds it back");
@@ -5924,6 +5911,7 @@ pub(crate) mod tests {
         let premise = add("台帳は末尾から読む");
         let head = add("整数キーで持つ");
 
+        decision_finish_writing(head).unwrap();
         decision_supersede(head, old).unwrap();
         decision_amend(head, partial).unwrap();
         decision_builds_on(head, premise).unwrap();
@@ -5937,8 +5925,8 @@ pub(crate) mod tests {
 
         let c = card(head);
         assert_eq!(c.r#ref, amenbo_core::idref::decision(head), "the conversational ref is the display form of the id");
-        assert_eq!(c.status, "accepted", "supersede promotes the drawing side to accepted");
-        assert!(c.decided_at.is_some(), "an accepted decision has a decided-on date");
+        assert_eq!(c.status, "accepted", "the writing ended, so the card reads it as settled");
+        assert!(c.decided_at.is_some(), "a settled decision has a decided-on date");
         assert!(!c.decided_by.as_ref().unwrap().name.is_empty(), "who decided is carried too");
         assert_eq!(c.supersedes.len(), 1, "the decision it superseded");
         assert_eq!(c.supersedes[0].id, old);
@@ -7178,7 +7166,7 @@ pub(crate) mod tests {
                 })
                 .unwrap();
             store.link_decision(d.id, a).unwrap();
-            store.accept_decision(d.id, Some(me.clone()), ActorKind::Human).unwrap();
+            store.finish_writing_decision(d.id, Some(me.clone()), ActorKind::Human).unwrap();
             let d2 = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
                     title: "方針Y".into(),
@@ -7187,7 +7175,8 @@ pub(crate) mod tests {
                     made_in: None,
                 })
                 .unwrap();
-            store.supersede_decision(d2.id, d.id, Some(me.clone()), ActorKind::Human).unwrap();
+            store.finish_writing_decision(d2.id, Some(me.clone()), ActorKind::Human).unwrap();
+            store.supersede_decision(d2.id, d.id).unwrap();
             let d3 = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
                     title: "方針Y改".into(),

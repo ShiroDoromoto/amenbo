@@ -15,7 +15,7 @@ import {
 } from "../core/mutations";
 import { useDecision, useDecisionComments, useDecisionMadeIn, useDecisionPage } from "../core/reads";
 import {
-  EDGE_KINDS, edgeCandidates, edgeRows, promotesToAccepted, standingOn, type EdgeKind, type EdgeRow,
+  EDGE_KINDS, edgeCandidates, edgeRows, standingOn, type EdgeKind, type EdgeRow,
 } from "../core/decisionEdges";
 import { confirmDialog } from "../core/dialog";
 import { invoke } from "../core/ipc";
@@ -564,9 +564,7 @@ function DecisionEdges({ d, onOpenDecision }: {
  * The flow for wiring an edge. Pick the type (stop reading it / read it alongside / read it first),
  * then pick the other decision from the same project. The direction is always new → old, so this
  * decision is the one doing the wiring, and decisions already connected drop out of the candidates —
- * one type per pair. Wiring a supersedes from a decision still under discussion makes core promote it
- * to accepted; blocking that in the UI would break core's invariant, so the UI only says what is
- * about to happen. A supersedes turns the other decision into history — it overturns it — so anything
+ * one type per pair. A supersedes turns the other decision into history — it overturns it — so anything
  * built on top of that decision is shown beforehand too: as a warning with a way out, never as a
  * block on the supersede itself.
  */
@@ -578,9 +576,6 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
   const all = useDecisionPage(projectId);
   const link = async (target: Decision) => {
     const label = target.ref ?? decisionRef(target.id);
-    if (promotesToAccepted(d, kind)) {
-      if (!(await confirmDialog(tf("dec.edge.supersedeAcceptsConfirm", { target: label })))) return;
-    }
     const standing = kind === "supersedes" ? standingOn(target) : [];
     if (standing.length > 0) {
       const list = standing.map((s) => `${s.ref ?? decisionRef(s.id)} ${s.name ?? t("dec.unknownName")}`).join("\n");
@@ -627,9 +622,6 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
         />
         <button className="btn" onClick={() => { setOpen(false); setQuery(""); }}>{t("dec.edge.cancel")}</button>
       </div>
-      {promotesToAccepted(d, kind) && (
-        <div style={{ color: "#c0504d" }}><Icon name="warning" /> {t("dec.edge.supersedeAccepts")}</div>
-      )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {candidates.length === 0 ? (
         <div className="faint">{t("dec.edge.noCandidates")}</div>

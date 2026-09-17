@@ -1713,9 +1713,9 @@ pub fn dimension_siblings(
     order_siblings(conn, D.id, D.order_key, Some(Pred::eq(D.project_id, project_id)), exclude)
 }
 
-/// The project's required axes for one side (`AMB-D-734`, `AMB-D-790`), as `(id, name)` in display
+/// The project's required axes for one side (`AMB-D-734`, `AMB-D-925`), as `(id, name)` in display
 /// order — the premise [`crate::ops::task::finish_creating`] reads at its door and
-/// [`crate::ops::decision::accept`] at its own. Read inside the writer's transaction: the flag is one
+/// [`crate::ops::decision::finish_writing`] at its own. Read inside the writer's transaction: the flag is one
 /// an `update` in another transaction can raise, and a creation finished against a stale answer is one
 /// that got through a premise the store already held.
 pub fn required_dimensions(
@@ -4027,10 +4027,6 @@ pub struct ProjectRow {
     pub default_view: String,
     /// not-yet-done task count (todo/in_progress/blocked) — the sidebar's per-project badge.
     pub open_count: usize,
-    /// proposed (under-discussion) decision count — a `proposed`, still-current decision; a superseded
-    /// proposal is no longer under discussion, and accepted/rejected are settled. Feeds the sidebar/header
-    /// under-discussion badge.
-    pub proposed_decision_count: usize,
     pub dimensions: Vec<DimensionRow>,
 }
 
@@ -4045,7 +4041,6 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
     let mut dimensions_by_project = overview_dimensions(conn, reach)?;
     let mut values_by_dimension = overview_dimension_values(conn, reach)?;
     let mut open_count_by_project = overview_open_counts(conn, reach)?;
-    let mut proposed_count_by_project = overview_proposed_counts(conn, reach)?;
 
     for proj in &mut projects {
         let mut dimensions = dimensions_by_project.remove(&proj.id).unwrap_or_default();
@@ -4054,7 +4049,6 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
         }
         proj.dimensions = dimensions;
         proj.open_count = open_count_by_project.remove(&proj.id).unwrap_or(0);
-        proj.proposed_decision_count = proposed_count_by_project.remove(&proj.id).unwrap_or(0);
     }
 
     Ok(projects)
@@ -4089,7 +4083,6 @@ fn overview_projects(conn: &Connection, reach: Option<i64>) -> Result<Vec<Projec
                 icon: icon.get(r)?,
                 default_view: default_view.get(r)?,
                 open_count: 0,
-                proposed_decision_count: 0,
                 dimensions: Vec::new(),
             })
         })
@@ -4209,26 +4202,7 @@ fn overview_open_counts(conn: &Connection, reach: Option<i64>) -> Result<HashMap
     grouped_counts(conn, &sql, project_id, count)
 }
 
-/// Proposed (under-discussion) decision count per project, in one grouped pass. "Proposed" is the stored
-/// status; a superseded proposal is excluded because currency is derived from the edges, not the status —
-/// accepted/rejected fall out by the status filter alone.
-fn overview_proposed_counts(conn: &Connection, reach: Option<i64>) -> Result<HashMap<i64, usize>> {
-    const DC: col::decision::Cols = col::decision::ALL;
-
-    let mut sel = Select::new();
-    let project_id = sel.col(DC.project_id);
-    let count = sel.count_all();
-    let pred = Pred::all(
-        [Pred::eq(DC.status, crate::model::DecisionStatus::Proposed.as_str()), !superseded(DC)]
-            .into_iter()
-            .chain(scoped(reach, DC.project_id)),
-    );
-    let mut sql = Sql::from(&sel, DC.table);
-    sql.push_where(pred.as_ref()).group_by([DC.project_id.to_sql()]);
-    grouped_counts(conn, &sql, project_id, count)
-}
-
-/// Read a `GROUP BY project_id` count back as a map — the shape both overview counts come in.
+/// Read a `GROUP BY project_id` count back as a map — the shape the overview's count comes in.
 fn grouped_counts(
     conn: &Connection,
     sql: &Sql,
@@ -6472,54 +6446,6 @@ mod tests {
         assert!(plan.contains("task_by_due"), "the plan does not seek the index:\n{plan}");
     }
 
-    /// `project_overview` carries per-project proposed (under-discussion) decision counts: `proposed`
-    /// `project_overview` carries per-project proposed (under-discussion) decision counts: `proposed`
-    /// decisions grouped by their `project_id`. accepted/rejected are excluded by status, and a proposed
-    /// decision that a `supersedes` edge points at is excluded as no longer current. A project with none
-    /// reports 0.
-    #[test]
-    fn project_overview_proposed_decision_counts() {
-        let e = StoreEngine::open_in_memory_unchecked().unwrap();
-        e.put_record("project", 1, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
-        e.put_record("project", 2, &[("name", text("Beta")), ("order_key", text("b"))]).unwrap();
-        e.put_record("project", 3, &[("name", text("Gamma")), ("order_key", text("c"))]).unwrap();
-        let decision = |id: i64, project_id: &str, status: &str| {
-            let cols = vec![
-                ("project_id", text(project_id)),
-                ("title", text(&id.to_string())),
-                ("body", text("b")),
-                ("status", text(status)),
-            ];
-            e.put_record("decision", id, &cols).unwrap();
-        };
-        // project 1: two proposed, plus an accepted and a rejected that must not count => 2.
-        decision(1, "1", "proposed");
-        decision(2, "1", "proposed");
-        decision(3, "1", "accepted");
-        decision(4, "1", "rejected");
-        // project 2: one proposed, but it is superseded by decision 6 => 0 (no longer under discussion).
-        decision(5, "2", "proposed");
-        decision(6, "2", "accepted");
-        e.put_record(
-            "decision_edge",
-            1,
-            &[("decision_id", text("6")), ("target_decision_id", text("5")), ("kind", text("supersedes"))],
-        )
-        .unwrap();
-        // project 3: only an accepted decision => 0.
-        decision(7, "3", "accepted");
-
-        let conn = e.conn();
-        let by: HashMap<i64, usize> = project_overview(conn, crate::reach::Reach::All)
-            .unwrap()
-            .into_iter()
-            .map(|r| (r.id, r.proposed_decision_count))
-            .collect();
-        assert_eq!(by.get(&1).copied(), Some(2), "two proposed; accepted/rejected excluded");
-        assert_eq!(by.get(&2).copied(), Some(0), "the one proposal is superseded => not current");
-        assert_eq!(by.get(&3).copied(), Some(0), "no proposed decision => 0");
-    }
-
     /// `project_overview` carries the display version of the image a project shows for itself, so the
     /// tabs down the edge of the face can draw every project's without asking for one at a time
     /// (`AMB-D-838`). A project nobody registered one for reports `None`, which is what the tabs fall
@@ -6829,7 +6755,7 @@ mod tests {
         // An accepted decision linked after — a settled ground never blocks, so not a premise change.
         let d_settled =
             decision::add(&tx, decision::NewDecision { title: "採択済み".into(), body: String::new(), project_id: pid, made_in: None }).unwrap();
-        decision::accept(&tx, d_settled.id, None).unwrap();
+        decision::finish_writing(&tx, d_settled.id, None).unwrap();
         decision::link(&tx, d_settled.id, held).unwrap();
 
         let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
@@ -6870,7 +6796,7 @@ mod tests {
                 decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None },
             )
             .unwrap();
-            decision::accept(&tx, d.id, None).unwrap();
+            decision::finish_writing(&tx, d.id, None).unwrap();
             let link = decision::link(&tx, d.id, held).unwrap().0;
             tx.set_field("decision_task_link", link.id, "linked_at", text("2019-01-01T00:00:00Z")).unwrap();
             tx.set_field("decision", d.id, "status_changed_at", text("2019-01-01T00:00:00Z")).unwrap();
@@ -6923,7 +6849,7 @@ mod tests {
         // An accepted ground, linked and settled long before the reservation — so neither the link's clock
         // nor the decision's own can be what flags it below.
         let ground = mk("置き換えられる前提");
-        decision::accept(&tx, ground, None).unwrap();
+        decision::finish_writing(&tx, ground, None).unwrap();
         let link = decision::link(&tx, ground, held).unwrap().0;
         tx.set_field("decision_task_link", link.id, "linked_at", text("2019-01-01T00:00:00Z")).unwrap();
         tx.set_field("decision", ground, "status_changed_at", text("2019-01-01T00:00:00Z")).unwrap();
@@ -6932,7 +6858,7 @@ mod tests {
 
         // Superseded under the holder: `ready` drops, and the axis says why.
         let newer = mk("置き換える方");
-        decision::supersede(&tx, newer, ground, None).unwrap();
+        decision::supersede(&tx, newer, ground).unwrap();
         let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
         assert!(got.added_blockers.is_empty() && got.added_decisions.is_empty(), "no premise was drawn");
         assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![ground]);

@@ -179,9 +179,6 @@ pub struct ProjectDto {
     /// Open task count (todo/in_progress/blocked — anything but done, live only). The sidebar's
     /// count badge.
     pub(crate) open_count: usize,
-    /// Proposed (under-discussion) decision count — decisions still awaiting a ruling. Feeds the
-    /// sidebar row and the header decision button's under-discussion badge.
-    pub(crate) proposed_decision_count: usize,
     /// Unified dimensions (classification axes). Empty means none are in use. Task classification
     /// happens on these axes and nowhere else.
     pub(crate) dimensions: Vec<DimensionDto>,

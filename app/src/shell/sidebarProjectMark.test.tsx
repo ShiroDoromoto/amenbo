@@ -21,9 +21,9 @@ vi.mock("../mock/adapter", () => ({
     smartViews: () => [],
     listProjects: () => [
       // A dark ground, a pale one, and one with an image — the three answers the mark has.
-      { id: 1, name: "amenbo", color: "#101820", icon: null, openCount: 0, proposedDecisionCount: 0 },
-      { id: 2, name: "the site", color: "#ffe066", icon: null, openCount: 0, proposedDecisionCount: 0 },
-      { id: 3, name: "orchard", color: "#0a0", icon: "data:image/png;base64,LOGO", openCount: 0, proposedDecisionCount: 0 },
+      { id: 1, name: "amenbo", color: "#101820", icon: null, openCount: 0 },
+      { id: 2, name: "the site", color: "#ffe066", icon: null, openCount: 0 },
+      { id: 3, name: "orchard", color: "#0a0", icon: "data:image/png;base64,LOGO", openCount: 0 },
     ],
   },
 }));

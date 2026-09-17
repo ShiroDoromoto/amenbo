@@ -63,16 +63,6 @@ export function standingOn(d: Decision): DecisionRef[] {
 }
 
 /**
- * Whether drawing this edge would silently promote the drawing side (this decision) to accepted. core's
- * `supersede` takes the view that "if it replaces something, it is settled" and lifts a `Proposed` new side to
- * `Accepted` — an ambush for a user who never pressed accept, so we say so before the edge is drawn (`amends`
- * and `builds_on` do not promote).
- */
-export function promotesToAccepted(d: Decision, kind: EdgeKind): boolean {
-  return kind === "supersedes" && d.status === "proposed";
-}
-
-/**
  * Candidates for the "draw an edge" picker. Excludes this decision itself and any decision already connected by
  * an edge in either direction: one pair holds one edge (`decision_edge_pair` is UNIQUE), so offering a connected
  * decision again would merely rewrite the kind, which reads misleadingly as a way to redraw the edge. `query` is

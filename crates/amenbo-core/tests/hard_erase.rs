@@ -76,7 +76,7 @@ fn build() -> (Store, i64, i64, i64) {
         })
         .unwrap()
         .id;
-    store.accept_decision(decision, Some(me.clone()), ActorKind::Human).unwrap();
+    store.finish_writing_decision(decision, Some(me.clone()), ActorKind::Human).unwrap();
 
     // Reopen so the caller gets a store it can lock and erase through. (Drop first to release the
     // exclusive lock before reopening the same store.)

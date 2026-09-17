@@ -316,8 +316,8 @@ amenbo decision add --title "SQLite as the source of truth" \
 amenbo decision add --title "…" --body "…" --dim "Area=Core"  # or classify it as you record it
 # ...an axis the project marked required is not demanded here: the record goes through and the
 # response names what is still to classify, and the demand is read where the writing ends
-amenbo decision accept AMB-D-<n>              # proposed -> accepted
-amenbo decision accept AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
+amenbo decision finish-writing AMB-D-<n>      # end the writing: the draft flag goes down and the decision is settled
+amenbo decision finish-writing AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
 amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # proposed -> rejected, with a reason comment
 amenbo decision edit AMB-D-<n> --body "…refined rationale…" # edit title/body in place — proposed or accepted alike (supersede to overturn; rejected is terminal)
 amenbo decision comment add AMB-D-<n> --text "revisited after the 10k benchmark — still holds" # discuss on the timeline (comments are the discussion around the body)

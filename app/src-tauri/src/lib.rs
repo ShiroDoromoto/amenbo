@@ -460,7 +460,6 @@ pub fn run() {
       commands::decision_comment_edit,
       commands::decision_add,
       commands::decision_finish_writing,
-      commands::decision_accept,
       commands::decision_reject,
       commands::decision_reopen,
       commands::decision_edit,

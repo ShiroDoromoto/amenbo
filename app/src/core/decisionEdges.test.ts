@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeCandidates, edgeRows, promotesToAccepted, standingOn } from "./decisionEdges";
+import { edgeCandidates, edgeRows, standingOn } from "./decisionEdges";
 import type { Decision } from "./snapshot";
 
 function dec(over: Partial<Decision> & { id: number }): Decision {
@@ -62,20 +62,6 @@ describe("edgeCandidates", () => {
     expect(edgeCandidates(all, self, "d-7").map((c) => c.id)).toEqual([7]);
     expect(edgeCandidates(all, self, "台帳").map((c) => c.id)).toEqual([7]);
     expect(edgeCandidates(all, self, "存在しない")).toEqual([]);
-  });
-});
-
-describe("promotesToAccepted", () => {
-  it("promotes only when drawing supersedes from a decision under discussion", () => {
-    const proposed = dec({ id: 10, status: "proposed" });
-    expect(promotesToAccepted(proposed, "supersedes")).toBe(true);
-    expect(promotesToAccepted(proposed, "amends")).toBe(false);
-    expect(promotesToAccepted(proposed, "buildsOn")).toBe(false);
-  });
-
-  it("an already-accepted or rejected decision does not promote even on supersedes (core only raises Proposed)", () => {
-    expect(promotesToAccepted(dec({ id: 10, status: "accepted" }), "supersedes")).toBe(false);
-    expect(promotesToAccepted(dec({ id: 10, status: "rejected" }), "supersedes")).toBe(false);
   });
 });
 

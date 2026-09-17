@@ -106,7 +106,7 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     cli.finish_creating(&tid);
 
     // A premise must be accepted before the task it holds can be reserved, so accept, then link.
-    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
     cli.json(&["decision", "link", &did, &tid, "--json"]);
 
     // Nobody holds the task yet: reopening takes no ground out from under anyone.
@@ -114,7 +114,7 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     assert_eq!(c0, 0);
     assert!(!e0.contains('⚠'), "a todo linked task must not warn: {e0}");
 
-    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
     cli.json(&["task", "status", &tid, "in_progress", "--json"]);
 
     // Reopening pulls the settled ground out from under the reservation: the changer is told.
@@ -159,7 +159,7 @@ fn superseding_a_decision_under_a_reserved_task_warns_the_changer() {
         let t = cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"]);
         let tid = id_str(&t["task"]["id"]);
         cli.finish_creating(&tid);
-        cli.json(&["decision", "accept", &did, "--json"]);
+        cli.json(&["decision", "finish-writing", &did, "--json"]);
         cli.json(&["decision", "link", &did, &tid, "--json"]);
         let d_ref = d["decision"]["ref"].as_str().unwrap().to_string();
         let t_ref = t["task"]["ref"].as_str().unwrap().to_string();
@@ -842,7 +842,7 @@ fn reserving_a_not_ready_task_is_refused_with_a_way_out() {
     assert_eq!(v["error"]["code"], "not_ready", "unsettled premise → not_ready: {stderr}");
 
     // Settling it clears the way: accept satisfies the premise, and there is no --force.
-    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
     let ok = cli.json(&["task", "status", &tid, "in_progress", "--actor", "ai", "--json"]);
     assert_eq!(ok["task"]["status"], "in_progress");
 }

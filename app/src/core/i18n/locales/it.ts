@@ -200,8 +200,6 @@ export const it: Translation = {
     "dec.edge.add": "Collega una decisione", "dec.edge.cancel": "Annulla", "dec.edge.unlink": "Togli il collegamento",
     "dec.edge.unlinkConfirm": "Il collegamento con {target} verrà tolto. La decisione in sé non viene annullata. Continuare?",
     "dec.edge.kind.supersedes": "La sostituisce", "dec.edge.kind.amends": "La modifica", "dec.edge.kind.buildsOn": "Poggia su di essa",
-    "dec.edge.supersedeAccepts": "Sostituire significa che hai deciso — questa decisione proposta diventa accettata.",
-    "dec.edge.supersedeAcceptsConfirm": "Sostituire {target}. Sostituire significa che hai deciso, quindi questa decisione proposta diventa accettata. Continuare?",
     "dec.edge.supersedeRevisitConfirm": "Queste decisioni poggiano su {target} — rivedile se la sostituisci:\n{list}\n\nSostituirla lo stesso?",
     "dec.edge.searchPh": "Cerca decisioni da collegare (AMB-D-<n>, titolo)",
     "dec.edge.noCandidates": "Non resta alcuna decisione da collegare",
@@ -1055,7 +1053,6 @@ export const it: Translation = {
     invalid_dimension_values_unordered:
       "I valori di questa categoria non hanno un ordine, quindi non si possono riordinare.",
     invalid_decision_edit_rejected: "{ref} è stata respinta, e una decisione respinta non si può modificare.",
-    invalid_decision_accept_rejected: "{ref} è stata respinta, e una decisione respinta non si può accettare.",
     invalid_decision_reject_accepted: "{ref} è accettata. Sostituiscila invece di respingerla.",
     invalid_decision_reopen_rejected: "{ref} è stata respinta, e una decisione respinta non si può riaprire.",
     invalid_decision_self_supersede: "Una decisione non può sostituire sé stessa.",

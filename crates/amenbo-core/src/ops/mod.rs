@@ -281,7 +281,7 @@ mod cross_project_tests {
             let same = mk_decision(tx, a, "A のもう 1 つ");
 
             for r in [
-                super::decision::supersede(tx, db, da, None).err(),
+                super::decision::supersede(tx, db, da).err(),
                 super::decision::amend(tx, db, da).err(),
                 super::decision::builds_on(tx, db, da).err(),
             ] {

@@ -439,7 +439,7 @@ export async function createProject(name: string, dir: string | null): Promise<n
     ...s,
     projects: [
       ...s.projects,
-      { id, name, color: "#6b7280", icon: null, view: "board", openCount: 0, proposedDecisionCount: 0, dimensions: [] },
+      { id, name, color: "#6b7280", icon: null, view: "board", openCount: 0, dimensions: [] },
     ],
   }));
   return id;
@@ -1574,7 +1574,7 @@ export async function removeTaskCommit(taskId: number, sha: string): Promise<voi
  *
  * `dimensionValueIds` classifies it as it is recorded, riding in the same transaction as the row: a
  * decision filed under an axis never exists without it, and an axis the project requires is answered
- * before `decision accept` reads it (`AMB-D-790`).
+ * before `decision finish-writing` reads it (`AMB-D-925`).
  */
 export async function addDecision(
   projectId: number,

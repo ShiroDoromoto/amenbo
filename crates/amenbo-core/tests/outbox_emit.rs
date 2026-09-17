@@ -506,42 +506,31 @@ fn moving_between_projects_carries_the_slug_but_a_reorder_does_not() {
     assert!(since(&store, h).is_empty(), "a same-project reorder emits no move event");
 }
 
-/// Accepting and rejecting fire their verdict events once, on the real transition only — the idempotent
-/// re-accept reports no change and observes nothing.
+/// Rejecting fires its verdict event once, on the real transition only — the idempotent re-reject
+/// reports no change and observes nothing.
 #[test]
-fn decision_verdicts_fire_once_on_the_real_transition() {
+fn decision_rejection_fires_once_on_the_real_transition() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
-
-    let accepted = store.add_decision(new_decision("採択する案", project)).unwrap().id;
-    let h = head(&store);
-    store.accept_decision(accepted, Some("user".to_string()), ActorKind::Human).unwrap();
-    let ev = only(&store, h);
-    assert_eq!(ev.event, "decision.accepted");
-    assert_eq!(ev.record_id, accepted);
-    assert_eq!(ev.actor, "human");
-    assert_eq!(ev.new_state, None, "the name is the whole state");
-    assert_eq!(ev.project, Some(project), "a decision carries its own project");
-
-    // Re-accepting an already-accepted decision reports changed=false, so nothing fires.
-    let h = head(&store);
-    store.accept_decision(accepted, Some("user".to_string()), ActorKind::Human).unwrap();
-    assert!(since(&store, h).is_empty(), "a re-accept observes nothing");
 
     let rejected = store.add_decision(new_decision("却下する案", project)).unwrap().id;
     let h = head(&store);
     store.reject_decision(rejected, ActorKind::Ai).unwrap();
     let ev = only(&store, h);
     assert_eq!(ev.event, "decision.rejected");
+    assert_eq!(ev.record_id, rejected);
     assert_eq!(ev.actor, "ai");
-    assert_eq!(ev.new_state, None);
-    assert_eq!(ev.project, Some(project));
+    assert_eq!(ev.new_state, None, "the name is the whole state");
+    assert_eq!(ev.project, Some(project), "a decision carries its own project");
+
+    let h = head(&store);
+    store.reject_decision(rejected, ActorKind::Ai).unwrap();
+    assert!(since(&store, h).is_empty(), "a re-reject observes nothing");
 }
 
-/// The other door onto the same transition (`AMB-D-918`): ending the writing settles the decision, so
-/// it fires the same `decision.accepted`, once, and a re-run over a decision already written fires
-/// nothing. The name is deliberately the one `accept` carries — subscribers listen for a settled
-/// decision, not for which verb settled it.
+/// The one door onto settling a decision (`AMB-D-918`): ending the writing fires `decision.accepted`,
+/// once, and a re-run over a decision already written fires nothing. The event keeps the name the
+/// retired `accept` carried — subscribers listen for a settled decision, not for which verb settled it.
 #[test]
 fn finishing_the_writing_fires_the_same_acceptance_once() {
     let mut store = temp_store();
@@ -567,49 +556,27 @@ fn finishing_the_writing_fires_the_same_acceptance_once() {
     assert!(since(&store, h).is_empty(), "a second run over a written decision observes nothing");
 }
 
-/// Superseding with a still-`Proposed` decision promotes it to `Accepted` on the way, and that promotion
-/// is a real verdict — so `decision.accepted` fires once, stamped with the caller's actor. Drawing the
-/// edge again over the now-accepted side promotes nothing and observes nothing.
+/// Superseding draws one edge and settles nothing (`AMB-D-918`), so it is not a verdict and observes
+/// nothing — whichever state the new side is in when the edge is drawn.
 #[test]
-fn a_supersede_that_promotes_the_new_side_fires_decision_accepted_once() {
+fn a_supersede_emits_nothing() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
 
     let old = store.add_decision(new_decision("旧案", project)).unwrap().id;
-    store.accept_decision(old, Some("user".to_string()), ActorKind::Human).unwrap();
+    store.finish_writing_decision(old, Some("user".to_string()), ActorKind::Human).unwrap();
     let new = store.add_decision(new_decision("新案", project)).unwrap().id;
 
-    // The new side is still Proposed; superseding promotes it to Accepted, which observes as an acceptance.
+    // The new side is still being written: the edge lands and nothing is observed.
     let h = head(&store);
-    store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Ai).unwrap();
-    let ev = only(&store, h);
-    assert_eq!(ev.event, "decision.accepted");
-    assert_eq!(ev.record_id, new, "the promotion is the new side's acceptance");
-    assert_eq!(ev.actor, "ai");
-    assert_eq!(ev.project, Some(project));
-    assert_eq!(ev.new_state, None, "the name is the whole state");
+    store.supersede_decision(new, old).unwrap();
+    assert!(since(&store, h).is_empty(), "drawing the edge settles nothing");
 
-    // Re-superseding the same pair promotes nothing (the new side is already accepted), so nothing fires.
+    // And once the new side is written, re-drawing it observes nothing either.
+    store.finish_writing_decision(new, Some("user".to_string()), ActorKind::Human).unwrap();
     let h = head(&store);
-    store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Ai).unwrap();
-    assert!(since(&store, h).is_empty(), "a re-supersede promotes nothing and observes nothing");
-}
-
-/// Superseding with a side that is *already* `Accepted` draws the edge but promotes nothing, so no
-/// acceptance is observed — the edge is not a verdict.
-#[test]
-fn a_supersede_over_an_already_accepted_side_emits_nothing() {
-    let mut store = temp_store();
-    let project = store.project_add(new_project("PJ")).unwrap().id;
-
-    let old = store.add_decision(new_decision("旧案", project)).unwrap().id;
-    let new = store.add_decision(new_decision("新案", project)).unwrap().id;
-    // Accept the new side first, so the supersession only draws the edge — no promotion.
-    store.accept_decision(new, Some("user".to_string()), ActorKind::Human).unwrap();
-
-    let h = head(&store);
-    store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Human).unwrap();
-    assert!(since(&store, h).is_empty(), "drawing the edge over an accepted side promotes nothing");
+    store.supersede_decision(new, old).unwrap();
+    assert!(since(&store, h).is_empty(), "a re-supersede observes nothing");
 }
 
 /// **The stamp is a fact about the moment, not a lookup.** An event fired while the task was in one

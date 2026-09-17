@@ -196,8 +196,6 @@ export const hi: Translation = {
     "dec.edge.add": "निर्णय जोड़ें", "dec.edge.cancel": "रद्द करें", "dec.edge.unlink": "कड़ी हटाएँ",
     "dec.edge.unlinkConfirm": "{target} से कड़ी हटाई जाएगी। निर्णय स्वयं वापस नहीं लिया जाता। जारी रखें?",
     "dec.edge.kind.supersedes": "इसे अधिक्रमित करता है", "dec.edge.kind.amends": "इसे संशोधित करता है", "dec.edge.kind.buildsOn": "इस पर टिका है",
-    "dec.edge.supersedeAccepts": "अधिक्रमित करने का अर्थ है कि आपने तय कर लिया — यह प्रस्तावित निर्णय स्वीकृत हो जाएगा।",
-    "dec.edge.supersedeAcceptsConfirm": "{target} को अधिक्रमित करें। अधिक्रमित करने का अर्थ है कि आपने तय कर लिया, इसलिए यह प्रस्तावित निर्णय स्वीकृत हो जाएगा। जारी रखें?",
     "dec.edge.supersedeRevisitConfirm": "ये निर्णय {target} पर टिके हैं — उसे अधिक्रमित करें तो इन्हें फिर से देखें:\n{list}\n\nफिर भी अधिक्रमित करें?",
     "dec.edge.searchPh": "जोड़ने के लिए निर्णय खोजें (AMB-D-<n>, शीर्षक)",
     "dec.edge.noCandidates": "जोड़ने को कोई निर्णय बचा नहीं",
@@ -1037,7 +1035,6 @@ export const hi: Translation = {
     invalid_dimension_values_unordered:
       "इस श्रेणी के मानों का कोई क्रम नहीं है, इसलिए उन्हें दोबारा क्रमबद्ध नहीं किया जा सकता।",
     invalid_decision_edit_rejected: "{ref} अस्वीकृत है, और अस्वीकृत निर्णय संपादित नहीं किया जा सकता।",
-    invalid_decision_accept_rejected: "{ref} अस्वीकृत है, और अस्वीकृत निर्णय स्वीकार नहीं किया जा सकता।",
     invalid_decision_reject_accepted: "{ref} स्वीकृत है। इसे अस्वीकार करने के बजाय प्रतिस्थापित करें।",
     invalid_decision_reopen_rejected: "{ref} अस्वीकृत है, और अस्वीकृत निर्णय दोबारा नहीं खोला जा सकता।",
     invalid_decision_self_supersede: "कोई निर्णय स्वयं को प्रतिस्थापित नहीं कर सकता।",

@@ -387,7 +387,7 @@ fn comment_edit_rewrites_the_body_and_keeps_the_id_and_its_attachment() {
     let did = id_str(&d["decision"]["id"]);
     let dc = cli.json(&["decision", "comment", "add", &did, "--text", "誤字のある投稿", "--json"]);
     let dcid = id_str(&dc["comment"]["id"]);
-    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
     cli.json(&["decision", "comment", "edit", &dcid, "--text", "直した投稿", "--json"]);
     let dlisted = cli.json(&["decision", "comment", "list", &did, "--json"]);
     assert_eq!(dlisted["count"], 1);

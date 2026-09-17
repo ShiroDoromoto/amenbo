@@ -196,8 +196,6 @@ export const nl: Translation = {
     "dec.edge.add": "Besluit koppelen", "dec.edge.cancel": "Annuleren", "dec.edge.unlink": "Ontkoppelen",
     "dec.edge.unlinkConfirm": "De koppeling met {target} wordt verwijderd. Het besluit zelf wordt niet teruggedraaid. Doorgaan?",
     "dec.edge.kind.supersedes": "Vervangt het", "dec.edge.kind.amends": "Wijzigt het", "dec.edge.kind.buildsOn": "Bouwt erop voort",
-    "dec.edge.supersedeAccepts": "Vervangen betekent dat je hebt besloten — dit voorgestelde besluit wordt aangenomen.",
-    "dec.edge.supersedeAcceptsConfirm": "Vervang {target}. Vervangen betekent dat je hebt besloten, dus dit voorgestelde besluit wordt aangenomen. Doorgaan?",
     "dec.edge.supersedeRevisitConfirm": "Deze besluiten staan op {target} — kijk ze na als je het vervangt:\n{list}\n\nToch vervangen?",
     "dec.edge.searchPh": "Zoek een besluit om te koppelen (AMB-D-<n>, titel)",
     "dec.edge.noCandidates": "Er is geen besluit meer om te koppelen",
@@ -1038,7 +1036,6 @@ export const nl: Translation = {
     invalid_dimension_values_unordered:
       "De waarden van deze categorie hebben geen volgorde en kunnen dus niet worden herschikt.",
     invalid_decision_edit_rejected: "{ref} is afgewezen, en een afgewezen besluit kan niet worden bewerkt.",
-    invalid_decision_accept_rejected: "{ref} is afgewezen, en een afgewezen besluit kan niet worden aangenomen.",
     invalid_decision_reject_accepted: "{ref} is aangenomen. Vervang het in plaats van het af te wijzen.",
     invalid_decision_reopen_rejected: "{ref} is afgewezen, en een afgewezen besluit kan niet worden heropend.",
     invalid_decision_self_supersede: "Een besluit kan zichzelf niet vervangen.",

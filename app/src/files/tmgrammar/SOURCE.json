@@ -1,0 +1,14 @@
+{
+  "note": "Written by scripts/gen-tm-grammar.mjs. Do not edit by hand; re-run `make tm-grammar`.",
+  "repository": "https://github.com/microsoft/vscode",
+  "licence": "MIT",
+  "tag": "1.135.0",
+  "revision": "08d4889f9ec4a1685d257b9b95de036c8e1ce1e5",
+  "files": [
+    {
+      "scope": "text.html.php",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/php/syntaxes/html.tmLanguage.json",
+      "sha256": "4eec00e50017cd82b3e2473ed9f774a9be6b1bb2de11371a0bf2785c3ae8b4f1"
+    }
+  ]
+}

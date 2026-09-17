@@ -1256,19 +1256,34 @@ impl Instructor {
                 named_pane(with),
                 req(with, "title")?
             ),
-            // Settling a decision, from its own pane. Unlike the creation the task pane holds shut, this
-            // button is live and the refusal comes back from the press — so the line sends a reader to
-            // press it, and what the road reads is the sentence that comes back and the decision left
-            // where it was. A line that had them hunting for a shut button would describe a screen that
-            // is not there.
-            (Domain::Decision, "accept") if with.contains_key("refused") => format!(
-                "Open the decision \"{}\", press the button that settles it, and confirm. The pane refuses the confirmation and names the categories still to answer, in the box the confirmation was made in.",
+            // Ending a decision's writing, from its own pane. Unlike the creation the task pane holds
+            // shut, this button is live and the refusal comes back from the press — so the line sends a
+            // reader to press it, and what the road reads is the sentence that comes back and the
+            // decision left where it was. A line that had them hunting for a shut button would describe
+            // a screen that is not there. The button is named by what it does, because its wording is
+            // the interface's own and is drawn in whatever language the run is in.
+            (Domain::Decision, "finish-writing") if with.contains_key("refused") => format!(
+                "Open the decision \"{}\", press the button that ends its writing, and confirm. The pane refuses the confirmation and names the categories still to answer, in the box the confirmation was made in.",
                 self.target_label(with)
             ),
-            (Domain::Decision, "accept") => format!(
-                "Open the decision \"{}\", press the button that settles it, and confirm.",
+            (Domain::Decision, "finish-writing") => format!(
+                "Open the decision \"{}\", press the button that ends its writing, and confirm.",
                 self.target_label(with)
             ),
+            // The other way out of the writing, on the same pane and behind the same confirmation. The
+            // reason is written where the confirmation asks for it rather than being a field of the
+            // record: what is typed there lands on the decision's timeline, so a road that means to
+            // read it back later has to put it in through this box.
+            (Domain::Decision, "reject") => match arg_str(with, "reason") {
+                Some(reason) => format!(
+                    "Open the decision \"{}\", press the button that turns it down, write \"{reason}\" where the confirmation asks why, and confirm.",
+                    self.target_label(with)
+                ),
+                None => format!(
+                    "Open the decision \"{}\", press the button that turns it down, and confirm.",
+                    self.target_label(with)
+                ),
+            },
             // The same move on the other side. It is written out rather than shared with the task's,
             // because the pane it is made in is the decision's own and the road has to say which screen
             // the operator is standing on.
@@ -1339,7 +1354,7 @@ impl Instructor {
             }
             (Domain::Decision, "choose-filter") => format!(
                 "In the values now open, press the one the CLI writes as `{}`, and leave whatever is already chosen on that axis chosen.",
-                filter_pair(req(with, "axis")?, req(with, "value")?)
+                decision_filter_pair(req(with, "axis")?, req(with, "value")?)
             ),
             // Onto the face that searches across the records, and through the hit standing on it. The
             // asking is part of the move rather than a step of its own: a hit cannot be pressed before
@@ -3835,6 +3850,18 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // The decision's row on the one view that runs everything that has happened. The view is
+            // named inside the confirming, the way `found` names the search it asks: there is no
+            // standing screen a separate move could arrive at, and what the row says is the whole of
+            // what this reads. The event is said in words rather than by its key, because the row is
+            // drawn in whatever language the run is in and an operator matching a key would be matching
+            // something the screen never puts up.
+            (Domain::Decision, "activity") => format!(
+                "On the smart view that runs everything that has happened, confirm it carries {} saying the decision \"{}\" {}.",
+                if present(with) { "a row" } else { "no row" },
+                self.target_label(with),
+                decision_event(req(with, "event")?)?
+            ),
             // Which session the record says it was made in. Both halves read the pane's **name** rather
             // than the heading over it: the heading is a word of the interface's and is drawn in
             // whatever language the run is in, while the name is the road's own and is on that row and
@@ -5063,6 +5090,19 @@ fn filter_pair(axis: &str, value: &str) -> String {
     format!("{axis}{sep}{value}")
 }
 
+/// The same pair, for the axis a decision's state is read on. Not everything that axis offers is a
+/// state: whether the writing is finished is a flag, and being replaced is an edge, and both are
+/// offered among the states because that is where a reader looks for them — while the terminal writes
+/// each on a key of its own. The instruction names the grammar, so it names the key the terminal really
+/// uses; everything else is the pair as the step wrote it.
+fn decision_filter_pair(axis: &str, value: &str) -> String {
+    match (axis, value) {
+        ("status", "draft") => "draft:yes".to_string(),
+        ("status", "superseded") => "superseded:yes".to_string(),
+        _ => filter_pair(axis, value),
+    }
+}
+
 fn unmapped(domain: Domain, op: &str) -> String {
     format!(
         "op `{op}` for domain `{domain:?}` is in the scenario registry but not yet mapped in the GUI harness"
@@ -5171,6 +5211,19 @@ fn ticked(with: &Args) -> Result<String, String> {
             names(with, "projects")?
         )),
     }
+}
+
+/// What the stream says of a decision, said as the operator has to read it off the row. The set is
+/// closed: an event outside it is refused here rather than handed on as a row to go and look for.
+fn decision_event(kind: &str) -> Result<&'static str, String> {
+    Ok(match kind {
+        "decision.proposed" => "was recorded",
+        "decision.decided" => "was decided",
+        "decision.rejected" => "was turned down",
+        other => {
+            return Err(format!("`event: {other}` is not something the stream says of a decision"))
+        }
+    })
 }
 
 /// What a smart view's row stands for, said without its label. The sidebar is translated, so a road

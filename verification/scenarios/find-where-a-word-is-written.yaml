@@ -115,6 +115,14 @@ steps_cli:
       title: SCENARIO DECISION — retention of the outbox
     as: outbox
 
+  # Written out, because the row this road reads at the end says where a record stands and a
+  # half-written one has nowhere else to say so.
+  - type: action
+    domain: decision
+    op: finish-writing
+    with:
+      target: outbox
+
   # The three faces of one record. Each word was written in exactly one of them, so a search that
   # answered on the wrong face would be caught here rather than read as a hit.
   - type: assert
@@ -469,7 +477,7 @@ steps_cli:
     with:
       words: retention
       target: outbox
-      standing: proposed
+      standing: decided
 
   # `--filter` is read in the grammar of the side named beside it, and each side has its own: the task
   # list's keys narrow the tasks, the decision list's narrow the decisions. Both halves are walked,
@@ -494,7 +502,7 @@ steps_cli:
       filter: "status:todo"
       present: false
 
-  # The other grammar, on the other side. `status:proposed` is a decision's word — a task has no such
+  # The other grammar, on the other side. `status:decided` is a decision's word — a task has no such
   # status — and the decision comes back on it, which is the whole of what this narrowing was for.
   - type: assert
     domain: decision
@@ -503,7 +511,7 @@ steps_cli:
       words: retention
       target: outbox
       kind: decision
-      filter: "status:proposed"
+      filter: "status:decided"
       face: title
 
   - type: assert
@@ -513,7 +521,7 @@ steps_cli:
       words: retention
       target: outbox
       kind: decision
-      filter: "status:accepted"
+      filter: "status:rejected"
       present: false
 
   # `--project` is the other narrowing, and deliberately not a key of that grammar: a project is an
@@ -595,6 +603,12 @@ steps_gui:
     with:
       title: SCENARIO DECISION — retention of the outbox
     as: outbox
+
+  - type: action
+    domain: decision
+    op: finish-writing
+    with:
+      target: outbox
 
   # A remark on the other side, so all four of the places a hit can be on are written somewhere on this
   # road. Its word is its own: what the rows are asked at the end is which place each one names, and a
@@ -770,7 +784,7 @@ steps_gui:
       words: retention
       target: outbox
       kind: decision
-      filter: "status:proposed"
+      filter: "status:decided"
       face: title
 
   # What the row says about the record it points at, past the ref and the title. Each side is asked for
@@ -793,7 +807,7 @@ steps_gui:
       words: retention
       target: outbox
       face: title
-      standing: proposed
+      standing: decided
 
   # The fourth control, and the only one the screen offers as a choice rather than as an expression: a
   # project is one finite list of names, the same for both sides. The second project the premise stood

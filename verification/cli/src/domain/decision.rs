@@ -1,11 +1,40 @@
-//! The `decision` domain: the append-only "why we chose X", its lifecycle from proposed to
-//! settled, the edges between decisions, the link that makes one a task's premise, and its own
-//! timeline.
+//! The `decision` domain: the append-only "why we chose X", the two stages its writing takes, the
+//! edges between decisions, the link that makes one a task's premise, and its own timeline.
 
 use amenbo_scenario::{Args, Domain};
 
 use crate::{opt_bool, req_str, unmapped, Driver, Outcome};
 use crate::judge::{judge_field, judge_found, judge_timeline};
+
+/// Judge one entry on the shared activity stream: is there a row for this decision naming this event.
+/// Both halves of the pair are asked, because either alone would pass over a build that draws one word
+/// for everything — a row for the right record saying the wrong thing, or the right word said of some
+/// other record.
+fn judge_activity(
+    id: i64,
+    event: &str,
+    with: &Args,
+    items: &serde_json::Value,
+) -> Result<Outcome, String> {
+    let rows = items.as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let found = rows.iter().any(|it| {
+        it["target"]["type"].as_str() == Some("decision")
+            && it["target"]["id"].as_i64() == Some(id)
+            && it["event"]["kind"].as_str() == Some(event)
+    });
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let pass = found == present;
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "the stream {} `{event}` for decision {id} ({} entries, expected {}, {})",
+            if found { "carries" } else { "does not carry" },
+            rows.len(),
+            if present { "carried" } else { "gone" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
+}
 
 impl Driver<'_> {
     pub(crate) fn decision_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
@@ -62,10 +91,10 @@ impl Driver<'_> {
                 self.run_json(&["decision", "edit", &target.to_string(), "--body", body, "--json"])?;
                 Ok(Outcome::action(format!("edited the body of decision {target}")))
             }
-            "accept" => {
+            "finish-writing" => {
                 let target = self.resolve(with)?;
                 self.run_json(&["decision", "finish-writing", &target.to_string(), "--json"])?;
-                Ok(Outcome::action(format!("accepted decision {target}")))
+                Ok(Outcome::action(format!("finished writing decision {target}")))
             }
             "reject" => {
                 let target = self.resolve(with)?;
@@ -73,7 +102,7 @@ impl Driver<'_> {
                 let mut args: Vec<String> =
                     vec!["decision".into(), "reject".into(), id, "--yes".into(), "--json".into()];
                 // The reason is not a field of its own: it lands on the decision's timeline, which is
-                // where a later reader looks for why the proposal did not carry.
+                // where a later reader looks for why it was not taken.
                 if let Some(reason) = with.get("reason").and_then(|v| v.as_str()) {
                     args.push("--reason".into());
                     args.push(reason.to_string());
@@ -170,6 +199,17 @@ impl Driver<'_> {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
                 judge_field(&format!("decision {target}"), with, &v)
+            }
+            // The decision's entries on the shared stream. There is no narrowing to one decision —
+            // `--task` is the task side's and has no twin here — so the whole system half is read and
+            // the row is picked out by the record it points at and the event it names. Reading it
+            // unnarrowed is also what a person does: the stream is one stream, and a decision's own
+            // page does not carry it.
+            "activity" => {
+                let target = self.resolve(with)?;
+                let event = req_str(with, "event")?;
+                let v = self.run_json(&["activity", "--kind", "system", "--json"])?;
+                judge_activity(target, event, with, &v["items"])
             }
             // Which session the record says it was made in. What is asked here is identity and not a
             // name: what a pane is called is kept on the pane's own row, which the window writes and a
@@ -274,5 +314,39 @@ impl Driver<'_> {
             }
             _ => Err(unmapped(Domain::Decision, op)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// The row is picked out by all three of what it points at, which side of the store that is, and
+    /// what it says. A build that matched on fewer would answer for the wrong record — the two sides
+    /// number independently, so a task and a decision really can share an id.
+    #[test]
+    fn a_row_is_the_one_asked_for_only_when_record_side_and_event_all_agree() {
+        let stream = json!([
+            { "target": { "type": "task", "id": 7 }, "event": { "kind": "decision.decided" } },
+            { "target": { "type": "decision", "id": 9 }, "event": { "kind": "decision.decided" } },
+            { "target": { "type": "decision", "id": 7 }, "event": { "kind": "decision.proposed" } },
+        ]);
+        let asked = |id, event| {
+            judge_activity(id, event, &Args::new(), &stream).expect("the judge answers").pass
+        };
+        assert!(asked(7, "decision.proposed"), "the row for this decision, saying this");
+        assert!(!asked(7, "decision.decided"), "the same word, on the task side and on another decision");
+        assert!(!asked(9, "decision.rejected"), "a word nothing on the stream says");
+    }
+
+    /// `present: false` is the other half of the same question, and the one a road writes to say an
+    /// end never arrived — so it has to pass on an empty stream rather than erroring on one.
+    #[test]
+    fn an_absence_is_asked_for_the_same_way_and_holds_on_an_empty_stream() {
+        let mut with = Args::new();
+        with.insert("present".to_string(), serde_yaml::Value::Bool(false));
+        let empty = json!([]);
+        assert!(judge_activity(7, "decision.decided", &with, &empty).expect("the judge answers").pass);
     }
 }

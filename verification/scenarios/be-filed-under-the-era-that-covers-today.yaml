@@ -204,8 +204,8 @@ steps_cli:
 
   # A decision is filed on the same axes a task is, and the era arrives on it the same way — as it is
   # recorded, without being asked for. It matters more on this side: the demand for an answer is read
-  # where a decision is accepted, so an era nobody wrote would turn every acceptance away for a value
-  # the store could have settled itself.
+  # where a decision's writing ends, so an era nobody wrote would turn every one of those away for a
+  # value the store could have filled itself.
   - type: action
     domain: decision
     op: create

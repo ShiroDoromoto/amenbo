@@ -474,7 +474,7 @@ describe("the remaining pane writes report a refusal, not swallow it", () => {
   });
 });
 
-// Editing title/body in place: one form drives the single `editDecision` write, proposed and accepted alike;
+// Editing title/body in place: one form drives the single `editDecision` write, draft and decided alike;
 // a rejected decision is terminal and gets no edit affordance.
 describe("editing the title and body in place", () => {
   const startEdit = () => click(button(t("detail.edit")));
@@ -496,7 +496,7 @@ describe("editing the title and body in place", () => {
     expect(hoisted.calls).toEqual([["editDecision", 1, "新題", "新本文"]]);
   });
 
-  it("an accepted decision is editable and shows the not-a-re-decision hint", () => {
+  it("a decided decision is editable and shows the not-a-re-decision hint", () => {
     hoisted.decisions.set(1, decision(1, { draft: false }));
     render(1);
 

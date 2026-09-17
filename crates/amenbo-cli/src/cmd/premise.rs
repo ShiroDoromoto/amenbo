@@ -36,7 +36,7 @@ pub(crate) fn warn_if_premise_added_to_reserved(store: &Store, id: i64, what: &s
 /// task drops to `ready:no` without losing its reservation and its holder gets no interrupt.
 ///
 /// Two acts reach this, and `act` names which one is speaking: a `reopen` (the decision goes back to
-/// proposed) and a `supersede` (it stays accepted but stops being current). Both leave the premise
+/// being written) and a `supersede` (it stays settled but stops being current). Both leave the premise
 /// unsettled, which is what `ready` reads — so both are made audible, and neither is forbidden. An
 /// idempotent one settles nothing anew and so says nothing, which is why every caller warns only when its
 /// write reported a change. `detail` is the **unsettled** decision's card — the old side of a supersede,

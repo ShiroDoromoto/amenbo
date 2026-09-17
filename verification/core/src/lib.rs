@@ -682,12 +682,13 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. The row is drawn on a record's own page and a terminal has no page to draw
     // it on: what a reader types there is `decision show`, which prints the name and presses nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "press-made-in", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // A decision's own life: the body is written while it is still proposed, settling it ends the
-    // writing, and the link is what makes it a task's premise.
+    // A decision's own life. It is saved settled and still being written, so what the second stage ends
+    // is the writing and not the deciding; the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "accept", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // The other two rulings a proposal can meet: turned down, and un-settled to be discussed again.
-    // A `reason` is optional here as it is on the command, and lands on the decision's timeline.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "finish-writing", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The other two ends the writing can meet: turned down, and — once it is over — opened again to be
+    // written further. A `reason` is optional here as it is on the command, and lands on the decision's
+    // timeline.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "reject", required: &["target"], refs: &["target"], strings: &["reason"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "reopen", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "link", required: &["target", "task"], refs: &["target", "task"], strings: &[], binds: false },
@@ -697,7 +698,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "supersede", required: &["target", "replaces"], refs: &["target", "replaces"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "builds-on", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "unlink", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
-    // A decision's timeline is its own: the body freezes on acceptance, the comments do not.
+    // A decision's timeline is its own: the body holds what was decided, the timeline everything said
+    // about it, before the writing ended and after.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-edit", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
@@ -1304,6 +1306,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "commented", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "commented", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], strings: &["text", "kind"], binds: false },
+    // The other side's entries on that same stream. It is an op apart from the task's rather than the
+    // same one widened, because the two ask different questions. A task's history can be scoped to the
+    // task and read whole, so a road can ask whether the stream is fed at all; a decision's cannot be
+    // scoped by anything the surfaces offer, so a road has to name the entry it means — which is why
+    // `event` is required here and there is nothing to narrow by kind.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "activity", required: &["target", "event"], refs: &["target"], strings: &["event"], binds: false },
     // What a `store` action left behind: the archive on disk, and whether an export carries the row
     // for an object an earlier step made. `from` names the export the same way `target` names the
     // object, so both sides are checked back to a binding. `absent` asks the archive's bytes for a
@@ -3783,12 +3791,14 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.
     (Domain::Decision, "create"),
-    // And one of those already settled, where a road opens on a corpus a reader is separating rather
-    // than on one they are ruling over. Settling is a road of its own (`read-whether-a-decision-still-holds`),
-    // so a screen road that walked it to arrange its world would prove that road twice and its own not
-    // at all — while a store holding both a standing policy and somebody's open suggestion is exactly
-    // the world anyone narrowing decisions is standing in.
-    (Domain::Decision, "accept"),
+    // And the two ends its writing can reach, where a road opens on a corpus a reader is separating
+    // rather than on one they are writing. Ending the writing is a road of its own
+    // (`read-whether-a-decision-still-holds`), so a screen road that walked it to arrange its world
+    // would prove that road twice and its own not at all — while a store holding a finished record, a
+    // half-written one and one that was turned down is exactly the world anyone narrowing decisions is
+    // standing in.
+    (Domain::Decision, "finish-writing"),
+    (Domain::Decision, "reject"),
     // A device that has been used for a while. It is the one premise no amount of doing reaches: what
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.

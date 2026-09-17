@@ -328,7 +328,7 @@ describe("the search screen", () => {
     expect(standing(2)).toBeNull();
     // A decision still being written says so in place of its status: it is `decided` from the moment it
     // is saved (`AMB-D-918`), so the status alone would read the same as the settled one two rows up.
-    expect(standing(3)!.textContent).toContain(t("dec.status.proposed"));
+    expect(standing(3)!.textContent).toContain(t("dec.status.draft"));
     expect(standing(3)!.textContent).not.toContain(t("dec.status.decided"));
     expect(rows()).toHaveLength(4);
   });

@@ -305,7 +305,7 @@ function HitRow({
  */
 function statusWord(status: string, task: boolean, draft: boolean): string {
   if (task) return isStatus(status) ? statusLabel(status) : status;
-  if (draft) return t("dec.status.proposed");
+  if (draft) return t("dec.status.draft");
   const key = `dec.status.${status}`;
   const word = t(key);
   return word === key ? status : word;

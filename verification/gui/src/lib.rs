@@ -1256,17 +1256,18 @@ impl Instructor {
                 named_pane(with),
                 req(with, "title")?
             ),
-            // Settling a decision, from its own pane. Unlike the creation the task pane holds shut, this
-            // button is live and the refusal comes back from the press — so the line sends a reader to
-            // press it, and what the road reads is the sentence that comes back and the decision left
-            // where it was. A line that had them hunting for a shut button would describe a screen that
-            // is not there.
-            (Domain::Decision, "accept") if with.contains_key("refused") => format!(
-                "Open the decision \"{}\", press the button that settles it, and confirm. The pane refuses the confirmation and names the categories still to answer, in the box the confirmation was made in.",
+            // Ending a decision's writing, from its own pane. Unlike the creation the task pane holds
+            // shut, this button is live and the refusal comes back from the press — so the line sends a
+            // reader to press it, and what the road reads is the sentence that comes back and the
+            // decision left where it was. A line that had them hunting for a shut button would describe
+            // a screen that is not there. The button is named by what it does, because its wording is
+            // the interface's own and is drawn in whatever language the run is in.
+            (Domain::Decision, "finish-writing") if with.contains_key("refused") => format!(
+                "Open the decision \"{}\", press the button that ends its writing, and confirm. The pane refuses the confirmation and names the categories still to answer, in the box the confirmation was made in.",
                 self.target_label(with)
             ),
-            (Domain::Decision, "accept") => format!(
-                "Open the decision \"{}\", press the button that settles it, and confirm.",
+            (Domain::Decision, "finish-writing") => format!(
+                "Open the decision \"{}\", press the button that ends its writing, and confirm.",
                 self.target_label(with)
             ),
             // The same move on the other side. It is written out rather than shared with the task's,
@@ -1339,7 +1340,7 @@ impl Instructor {
             }
             (Domain::Decision, "choose-filter") => format!(
                 "In the values now open, press the one the CLI writes as `{}`, and leave whatever is already chosen on that axis chosen.",
-                filter_pair(req(with, "axis")?, req(with, "value")?)
+                decision_filter_pair(req(with, "axis")?, req(with, "value")?)
             ),
             // Onto the face that searches across the records, and through the hit standing on it. The
             // asking is part of the move rather than a step of its own: a hit cannot be pressed before
@@ -5061,6 +5062,19 @@ pub fn instructions(scenario: &Scenario) -> Result<Vec<String>, String> {
 fn filter_pair(axis: &str, value: &str) -> String {
     let sep = if axis.starts_with("dim:") { '=' } else { ':' };
     format!("{axis}{sep}{value}")
+}
+
+/// The same pair, for the axis a decision's state is read on. Not everything that axis offers is a
+/// state: whether the writing is finished is a flag, and being replaced is an edge, and both are
+/// offered among the states because that is where a reader looks for them — while the terminal writes
+/// each on a key of its own. The instruction names the grammar, so it names the key the terminal really
+/// uses; everything else is the pair as the step wrote it.
+fn decision_filter_pair(axis: &str, value: &str) -> String {
+    match (axis, value) {
+        ("status", "draft") => "draft:yes".to_string(),
+        ("status", "superseded") => "superseded:yes".to_string(),
+        _ => filter_pair(axis, value),
+    }
 }
 
 fn unmapped(domain: Domain, op: &str) -> String {

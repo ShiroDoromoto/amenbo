@@ -40,22 +40,20 @@ function statusColor(s: DecisionStatus, draft: boolean): string {
   }
 }
 
-// The word on that badge, off the same two facts and in the same order. The draft still reads off the
-// acceptance-era key; every one of them is rewritten in `AMB-T-5032`.
+// The word on that badge, off the same two facts and in the same order.
 function statusWord(s: DecisionStatus, draft: boolean): string {
-  return draft ? t("dec.status.proposed") : t(`dec.status.${s}`);
+  return draft ? t("dec.status.draft") : t(`dec.status.${s}`);
 }
 
 /**
- * The detail pane for one decision record. It renders inside the right pane, where AppShell draws the
+ * The detail pane for one decision. It renders inside the right pane, where AppShell draws the
  * PaneHeader, so this component returns the body alone and matches TaskDetailPane's layout. Finishing
  * the writing or turning the decision down may carry an optional reason, so the buttons do not act at
  * once — they raise a confirmation with a reason field.
  *
  * What the doors are drawn off is `draft`, not the status (`AMB-D-918`): while the writing is
  * unfinished the pane offers to end it or to turn the decision down, and once it is finished the only
- * way back is to write it again. The labels still read off the acceptance keys — the wording is
- * `AMB-T-5032`'s, and every one of them is rewritten there in one pass.
+ * way back is to write it again.
  */
 export function DecisionDetailPane({
   decisionId, onOpenTask, onOpenDecision, onGoToPane, focusCommentAt, editCommentAt,

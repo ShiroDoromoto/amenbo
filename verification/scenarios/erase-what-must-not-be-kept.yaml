@@ -11,9 +11,9 @@ description: >
   is the absence, which is the whole promise. What sat beside it is asserted as still there, since an
   erase that took the timeline with it would satisfy the first assert just as well. The store is
   asked whether it is sound afterwards, because this arm rewrites the file itself (VACUUM) rather
-  than just a row in it. Then the other arm, back to back: an accepted decision's body is overwritten
-  in place, and the decision is read back to see that it kept its number and its status while losing
-  what was in it. Run as the human: this is human-gated maintenance and the AI actor is refused.
+  than just a row in it. Then the other arm, back to back: the body of a decision whose writing is over
+  is overwritten in place, and the decision is read back to see that it kept its number and its stage
+  while losing what was in it. Run as the human: this is human-gated maintenance and the AI actor is refused.
 steps_cli:
   - type: action
     domain: task
@@ -104,7 +104,7 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: record
 
@@ -116,8 +116,8 @@ steps_cli:
       body: "SCENARIO — redacted"
 
   # What redaction promises is precisely this pair: the body is the new text, and the record itself is
-  # still the same accepted decision — the number, the status and the links a reader trusts survive
-  # the one section that went.
+  # still the same decision, its writing still over — the number, the stage and the links a reader
+  # trusts survive the one section that went.
   - type: assert
     domain: decision
     op: field
@@ -131,8 +131,8 @@ steps_cli:
     op: field
     with:
       target: record
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
   - type: assert
     domain: store

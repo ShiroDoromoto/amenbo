@@ -130,7 +130,7 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
     const ref = d.ref ?? d.name ?? String(d.id);
     parts.push({
       code: "not_ready_premise_unsettled",
-      message_en: `premise ${ref} is not settled — wait for the writing to be finished, or unlink it`,
+      message_en: `premise ${ref} is not settled — wait for it to be written to the end, or unlink it`,
       fields: { ref },
     });
   }

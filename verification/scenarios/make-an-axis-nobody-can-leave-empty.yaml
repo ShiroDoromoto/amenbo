@@ -2,23 +2,23 @@
 # otherwise entirely optional — a task filed under nothing is a task like any other — so what this
 # raises is the exception: the axis whose answer a project will not do without. Both records are
 # written in two stages, and the demand lands on the second of them alone — the step that ends a
-# task's creation, and the one that settles a decision — and nowhere else, which is what keeps
+# task's creation, and the one that ends a decision's writing — and nowhere else, which is what keeps
 # raising it from stopping a board that is already full: the work already filed is finished being
 # written, so it never meets the guard. It is also what keeps the demand off the first stage: a
 # writer who has not settled the axis yet still gets the record down, and answers it before the
 # writing ends. A road that walked only the filing would read the same over a build whose flag does
 # nothing, so this one is written to be turned away seven times — on the axis nobody could answer, on
-# the axis whose answers are all closed, on the creation that left the answer out, on the acceptance
-# that left it out, on the hand that would take the answer back off one task at a time, on the removal
-# that would take it off every task at once, and on the removal that would leave the axis with nothing
-# to answer with at all. Writing a
+# the axis whose answers are all closed, on the creation that left the answer out, on the writing that
+# would have ended with it out, on the hand that would take the answer back off one task at a time, on
+# the removal that would take it off every task at once, and on the removal that would leave the axis
+# with nothing to answer with at all. Writing a
 # decision has two ways in rather than one, so the promotion is walked beside the record: both of them
 # record, and a road that walked only one would not say that neither demands. One axis is answered
 # before anyone could be asked: a time axis is filled from the era whose window covers today, so it is
-# blank only where no era covers today — and there the record is written all the same, and the
-# settling is where it is asked for.
+# blank only where no era covers today — and there the record is written all the same, and the end of
+# the writing is where it is asked for.
 id: make-an-axis-nobody-can-leave-empty
-title: An axis marked required turns away the creation and the acceptance that left it empty, records what is still being written, and holds the answer on once it is there
+title: An axis marked required turns away the creation and the finished writing that left it empty, records what is still being written, and holds the answer on once it is there
 description: >
   Raise the demand on an axis offering no values and be refused — a requirement nobody could answer
   would stop every creation on the project — and be refused the same way on an axis whose values are
@@ -26,11 +26,11 @@ description: >
   without answering it, and watch the creation refused and the task held out of the mailbox. Put a value on
   and watch the same creation end. A decision left blank is recorded rather than turned away, and so is
   one raised out of a comment: both ways in ask for nothing, and the answer riding along with the
-  record only saves the trip back. The rulings written before the demand went up meet it where they are
-  settled, and answering the axis opens them. Superseding is not one of those doors — it draws an edge
-  and settles nothing. A required time axis is answered by the era the store writes itself: with no era
-  covering today it is recorded blank, and the settling is where it is asked for. Then try to take the
-  value back off and be refused there too —
+  record only saves the trip back. The records written before the demand went up meet it where their
+  writing ends, and answering the axis opens them. Superseding is not one of those doors — it draws an
+  edge and ends nobody's writing. A required time axis is answered by the era the store writes itself:
+  with no era covering today it is recorded blank, and the end of the writing is where it is asked for.
+  Then try to take the value back off and be refused there too —
   from the task, and from the axis itself, where removing the value would empty every task on it at
   once unless the removal says where they go. Say where, and the value goes with the task carried
   over, and with the decision beside it; the axis's last value does not go at all, until the demand
@@ -98,21 +98,21 @@ given:
     with:
       target: standing
 
-  # Two rulings written before any demand goes up, and here for the same reason the standing task is:
-  # once the flag is raised the record's own door turns a blank decision away, so the records that go
-  # on to meet the *ruling's* door have to be the ones already on the board when it went up.
+  # Two records written before any demand goes up, and here for the same reason the standing task is:
+  # once the flag is raised the second stage turns a blank decision away, so the records that go on to
+  # meet the *decision's* door have to be the ones already on the board when it went up.
   - type: action
     domain: decision
     op: create
     with:
-      title: SCENARIO WORLD — a ruling this board already carried
+      title: SCENARIO WORLD — a record this board already carried
     as: standing-ruling
 
   - type: action
     domain: decision
     op: create
     with:
-      title: SCENARIO WORLD — the ruling that would replace it
+      title: SCENARIO WORLD — the record that would replace it
     as: standing-revision
 
 steps_cli:
@@ -249,8 +249,8 @@ steps_cli:
     op: field
     with:
       target: blank-ruling
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   # The answer rides along with the record instead, which saves the trip back to put it on afterwards
   # rather than being what lets the record through.
@@ -287,8 +287,8 @@ steps_cli:
     op: field
     with:
       target: raised-blank
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   # And the answer rides along here too, on the same word the record takes it on. The comment is still
   # there to raise a second time, which is what says a promotion leaves the line it was raised from
@@ -311,24 +311,25 @@ steps_cli:
       target: raised
       present: true
 
-  # And the second door, met by a ruling written before the demand went up. Raising a flag does not
-  # reach back, so this one is on the board with the axis blank — and it is the settling that reads it.
+  # And the second door, met by a record written before the demand went up. Raising a flag does not
+  # reach back, so this one is on the board with the axis blank — and it is the end of the writing that
+  # reads it.
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: standing-ruling
       refused: invalid_decision_required_dimension
 
-  # Turned away leaves it where it was, exactly as the creation was left: still under discussion, and
-  # so still nothing the rest of the store is reading as settled.
+  # Turned away leaves it where it was, exactly as the creation was left: still being written, and so
+  # still nothing the work resting on it can start off.
   - type: assert
     domain: decision
     op: field
     with:
       target: standing-ruling
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   - type: action
     domain: dimension
@@ -340,7 +341,7 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: standing-ruling
 
@@ -349,12 +350,13 @@ steps_cli:
     op: field
     with:
       target: standing-ruling
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
-  # And what is not that door. Superseding draws one edge and settles nothing, so a new side with the
-  # axis still blank goes through without being asked — and comes back still under discussion, which is
-  # what says the demand is on the settling rather than on anything that merely names a decision.
+  # And what is not that door. Superseding draws one edge and ends nobody's writing, so a new side with
+  # the axis still blank goes through without being asked — and comes back still being written, which is
+  # what says the demand is on the end of the writing rather than on anything that merely names a
+  # decision.
   - type: action
     domain: decision
     op: supersede
@@ -367,8 +369,8 @@ steps_cli:
     op: field
     with:
       target: standing-revision
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   - type: action
     domain: dimension
@@ -380,7 +382,7 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: standing-revision
 
@@ -389,8 +391,8 @@ steps_cli:
     op: field
     with:
       target: standing-revision
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
   # And the one axis this first door lets past. A time axis answers itself — the era whose window covers
   # today goes on as the record is made — so reading the demand where the record is written would turn a
@@ -444,12 +446,12 @@ steps_cli:
       value: print
     as: eraless
 
-  # And the demand is real, one door further on. The settling reads every required axis, the time axis
-  # included, so what the record let past is what the acceptance asks for — and the ruling is left under
-  # discussion exactly as the one above it was.
+  # And the demand is real, one door further on. The end of the writing reads every required axis, the
+  # time axis included, so what the record let past is what that door asks for — and the record is left
+  # half-written exactly as the one above it was.
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: eraless
       refused: invalid_decision_required_dimension
@@ -459,8 +461,8 @@ steps_cli:
     op: field
     with:
       target: eraless
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   # And the door does not swing back. A demand met only at the creation would be a demand anyone could
   # empty a minute later, so taking the value off a required axis is refused as well — the way back to
@@ -672,7 +674,8 @@ steps_gui:
 
   # The same record on this face, and the form holds nothing back. It offers the required axes as
   # selects so the answer can ride with the record, but one left on `None` records the decision all the
-  # same — the demand is the settling's, and the button beside these selects is not a door.
+  # same — the demand belongs to the end of the writing, and the button beside these selects is not a
+  # door.
   - type: action
     domain: decision
     op: create
@@ -685,11 +688,11 @@ steps_gui:
     op: field
     with:
       target: blank-ruling
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   # Answered where the form offers it, and the answer goes in with the decision rather than after it —
-  # which is what the selects are there for, and the settling a blank one would be turned away at passes.
+  # which is what the selects are there for, and the door a blank one would be turned away at passes.
   - type: action
     domain: decision
     op: create
@@ -701,7 +704,7 @@ steps_gui:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: ruling
 
@@ -710,8 +713,8 @@ steps_gui:
     op: field
     with:
       target: ruling
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
   # And the other control this face holds: the value the answer was given cannot simply be removed
   # while the answer stands on it, so the manager asks where the tasks go and carries them there. A

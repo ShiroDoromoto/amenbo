@@ -10,7 +10,7 @@ id: raise-a-decision-out-of-a-comment
 title: A comment promoted into a decision keeps its words, and brings the task it was said on — or, raised off another decision, nothing at all
 description: >
   Say something on a task's timeline, promote that comment into a decision, and read back the body
-  it carries, the state it starts in, and the link it brought with it. Promotion crosses three
+  it carries, the stage it starts in, and the link it brought with it. Promotion crosses three
   objects at once, which is exactly the shape a shipped build can half-carry. Then do it again from a
   decision's own timeline, on a project of its own: the words carry over the same way, the record is
   filed where the decision it was raised from is filed, and it arrives with no edge whatsoever.
@@ -63,14 +63,15 @@ steps_cli:
       field: body
       equals: SCENARIO — the reasoning that turned out to be worth keeping
 
-  # Promotion proposes; it does not rule. The human still accepts or rejects.
+  # Promotion is the first of the two stages a decision's writing takes, and no more: the record comes
+  # out still being written, for whoever raised it to finish or to turn down.
   - type: assert
     domain: decision
     op: field
     with:
       target: rec
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   - type: assert
     domain: decision
@@ -80,7 +81,7 @@ steps_cli:
       field: linked_tasks.0.name
       equals: SCENARIO SEED — the task the decision was made on
 
-  # And the link is a premise like any other, so the task waits on the ruling it just produced.
+  # And the link is a premise like any other, so the task waits on the record it just produced.
   - type: assert
     domain: task
     op: field
@@ -135,8 +136,8 @@ steps_cli:
     op: field
     with:
       target: raised
-      field: status
-      equals: proposed
+      field: draft
+      equals: true
 
   # It is filed where the decision it was raised from is filed, not where the run happens to stand.
   - type: assert

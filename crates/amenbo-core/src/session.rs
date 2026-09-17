@@ -396,15 +396,15 @@ pub fn spec() -> Value {
         "what": "The vocabulary of the terminal you are running in. It moves the pane on the person's \
                  screen and touches no store: nothing said here outlives this window, and none of it \
                  can be said from outside it.",
+        // **What is owed is the instruction, and the case for it is not.** This is read at the top
+        // of a pane and the first thing the AI says goes on the person's screen, so every sentence
+        // here is one they read — and three panes opened on one repository put the same paragraph
+        // in front of them three times. The case is kept where the reader who needs it is: why a
+        // folder is no name for a pane is on `Statement` above (`AMB-D-862`, `AMB-D-748`), and why the
+        // name waits for the person's first line is on the test that holds it below.
         "owed": [
             "Say `name` once the person has spoken their first line, and name the work rather than \
-             the place. Before they speak there is nothing to name but the waiting, and panes named \
-             for that read alike — which is the one thing a name is here to prevent. The name is also \
-             typed into this terminal, so one said while the person is still writing that first line \
-             is read as part of what they are writing. Left unsaid, the pane is labelled by its \
-             folder — which answers where you are and never which of you: open three panes on one \
-             repository and the person reads the same label three times over, with no way to tell \
-             which one to look at."
+             the place."
         ],
         "offered": [],
         "promises": "A statement is information, never a promise. Say what has happened, not what you \

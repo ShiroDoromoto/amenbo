@@ -444,6 +444,7 @@ func tartRun() error {
 	defer f.Close()
 
 	cmd := exec.Command("tart", "run", vmCloneName, "--no-graphics", "--no-clipboard")
+	cmd.Env = environ()
 	cmd.Stdin = nil
 	cmd.Stdout, cmd.Stderr = f, f
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

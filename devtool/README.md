@@ -1047,3 +1047,9 @@ is how a warning stops being read.
 - `AMENBO_HOME` — not read, **set**: `devgui cli` puts the task's own store there
   for the CLI it runs. It is Amenbo's own isolation seam, the same one
   `make verify` points at a mktemp store.
+- `AMENBO_PANE` / `AMENBO_PANE_RESUME` / `AMENBO_SESSION` / `AMENBO_SESSION_DIR`
+  — not read, **taken off**: a pane of Amenbo's talk window hands these down to
+  everything started in it, and an `amenbo` that finds them answers as though it
+  were inside the window — announcing to that pane what it did against a
+  throwaway store. Every child devtool starts gets an environment without them
+  (`run.go`'s `environ`). A child that wants a pane is handed one by name.

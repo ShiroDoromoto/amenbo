@@ -816,8 +816,9 @@ ssh-copy-id -i ~/.ssh/amenbo-vm.pub admin@$(tart ip amenbo-golden)
 devtool vm golden --prepare                     # …and it stops the golden itself
 ```
 
-`--prepare` gives the guest **the Japanese input method**, and turns **live
-conversion off** in it.
+`--prepare` gives the guest **the Japanese input method**, turns **live
+conversion off** in it, and settles **the guest's own git** — no credential
+helper, and an identity to commit under.
 
 - **Why any of it.** The base image ships U.S. and the character palette and
   nothing else, so a screen in there cannot be typed at through an input method
@@ -845,9 +846,23 @@ conversion off** in it.
   the way the screen tool is, and deleted before the golden is stopped: the golden
   holds no copy of a tool this tree changes.
 
-`devtool vm status` says whether the running clone carries the input method, so a
-clone cut from a golden prepared before this is told apart from one that can walk
-that road.
+- **Why git is in here too.** The base image points git at a credential manager of
+  its own and gives it no identity, and each costs a road. The manager takes the
+  question of who is sending before Amenbo is asked it, so the road about the
+  window's own question never sees one and the push ends in
+  `Authentication failed`. The missing identity turns every commit into git's
+  complaint about it, and that text stands on the screen where a road reading what
+  is *not* on the screen finds it. Both were taken off by hand for the v28.1.0
+  check, which is a thing nobody should be doing every release.
+- **Why in the golden rather than in a road.** They are the ground every road
+  stands on, not a premise any one road is about — a road stating them would be
+  standing the machine up rather than the product. The identity is `verify
+  <verify@example.invalid>`, the same pair the shell harness writes on its own
+  commits, so a run has one name whichever side made the commit.
+
+`devtool vm status` says whether the running clone carries the input method and
+what its git is set to, so a clone cut from a golden prepared before either of
+them is told apart from one that can walk those roads.
 
 ### One screen, two roles
 

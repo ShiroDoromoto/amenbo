@@ -62,6 +62,13 @@ const (
 	// taken away again before the golden is stopped: the golden carries no copy of a tool this tree
 	// changes, which is the same rule the screen tool is sent under.
 	vmInputPath = vmGuestHome + "/input"
+	// vmGitName and vmGitEmail are who the guest's git commits as. The base image has neither, and
+	// git answers a commit made with no identity by refusing or by warning — either way a road that
+	// records a change is reading git's complaint rather than the build's behaviour. The pair is the
+	// one the shell harness already writes on its own commits
+	// (`verification/cli/src/domain/repo.rs`), so a run has one name whichever side made the commit.
+	vmGitName  = "verify"
+	vmGitEmail = "verify@example.invalid"
 	// vmJapaneseInputMethod is the input method the golden is prepared with. It is spelled here as
 	// well as in vminput.swift because the two are separate programs, and what this one needs it for
 	// is reading a guest's preferences back — which the tool is not in there to do: it is taken out
@@ -958,6 +965,9 @@ func vmGoldenPrepare() error {
 		return fmt.Errorf("turning live conversion off in %s: %w", vmGoldenName, err)
 	}
 	logf("  input   : live conversion off — what stands unsettled is the reading as it was typed")
+	if err := vmGoldenGit(ip); err != nil {
+		return err
+	}
 	// Out again before the golden goes down, on the rule the screen tool is sent under: the golden
 	// holds no copy of a tool this tree changes, or a clone can answer with a stale one.
 	if _, err := sshRun(ip, "rm", "-f", shq(vmInputPath)); err != nil {
@@ -968,6 +978,38 @@ func vmGoldenPrepare() error {
 		return err
 	}
 	logf("✓ %s prepared — `devtool vm up` cuts a clone that comes up with it", vmGoldenName)
+	return nil
+}
+
+// vmGoldenGit settles the two things the guest's git would otherwise decide for itself, both of
+// which stand between a road and the build it is walking.
+//
+// **The credential helper.** The base image points git at a manager of its own, which takes the
+// question of who is sending before Amenbo is asked it — so a road about the window's own question
+// never sees one, and the push ends in `Authentication failed`. Amenbo asks through the helper it
+// hands git for the call, and that is what a road walks; a helper already in the guest's config
+// answers first and is never the one under test.
+//
+// **The identity.** The base image has no `user.name` or `user.email`, so a commit made in there
+// comes back with git's complaint about it — and that text stands on the screen, where a road
+// reading what is *not* on the screen finds it and goes red.
+//
+// Both are written into the golden rather than into each road: they are the ground every road
+// stands on, and a road that had to state them would be stating them for the machine rather than
+// for the product.
+func vmGoldenGit(ip string) error {
+	// One line each, because each is a line for the guest's shell: `--unset-all` answers 5 where
+	// there is nothing to unset, which is the ordinary case on a golden cut a second time, and the
+	// absence of a helper is not a failure to report.
+	if _, err := sshRun(ip, "git config --global --unset-all credential.helper || true"); err != nil {
+		return fmt.Errorf("taking the credential helper out of %s's git: %w", vmGoldenName, err)
+	}
+	for _, pair := range [][2]string{{"user.name", vmGitName}, {"user.email", vmGitEmail}} {
+		if _, err := sshRun(ip, "git config --global "+pair[0]+" "+shq(pair[1])); err != nil {
+			return fmt.Errorf("writing %s into %s's git: %w", pair[0], vmGoldenName, err)
+		}
+	}
+	logf("  git     : no credential helper, and commits are %s <%s>", vmGitName, vmGitEmail)
 	return nil
 }
 
@@ -1030,6 +1072,7 @@ func vmStatus() error {
 	logf("  clone   : %s running at %s", vmCloneName, ip)
 	reportDisplay(ip)
 	reportInputSources(ip)
+	reportGit(ip)
 	reportClaude(ip)
 	reportVersionDrift(ip)
 	return nil
@@ -1053,6 +1096,37 @@ func reportInputSources(ip string) {
 	}
 	logf("  input   : NO Japanese input method — this clone was cut from a golden prepared before it was added,")
 	logf("            so a word written through one cannot be walked in here. `devtool vm golden --prepare` adds it")
+}
+
+// reportGit says whether the guest's git is the ground a road stands on: nobody's credential helper
+// in front of Amenbo's, and an identity to commit under. A clone cut from a golden prepared before
+// `vmGoldenGit` carries neither, and what that costs is a road that walks most of the way and then
+// reads git's own complaint off the screen — which is the failure this line is here to name first.
+//
+// Being unable to ask is not an answer, on the terms `reportInputSources` says it.
+func reportGit(ip string) {
+	// `--get` answers 1 where the key is not there, which is exactly what is being asked about — so
+	// both questions are asked in a way that answers rather than fails.
+	helper, err := sshRun(ip, "git config --global --get credential.helper || true")
+	if err != nil {
+		return
+	}
+	who, err := sshRun(ip, "git config --global --get user.email || true")
+	if err != nil {
+		return
+	}
+	helper, who = strings.TrimSpace(helper), strings.TrimSpace(who)
+	if helper == "" && who != "" {
+		logf("  git     : nobody's helper in front of Amenbo's, commits as %s", who)
+		return
+	}
+	if helper != "" {
+		logf("  git     : a credential helper is set (%s) — it answers before Amenbo's window is asked", helper)
+	}
+	if who == "" {
+		logf("  git     : no identity to commit under — git's complaint about it lands on the screen a road reads")
+	}
+	logf("            `devtool vm golden --prepare` settles both, on the golden clones are cut from")
 }
 
 // reportClaude says which Claude Code the clone has, because the one road that opens a pane on a

@@ -17,17 +17,35 @@
 
 use tauri::http::{header, Request, Response, StatusCode};
 
+/// Who may read what these doors hand out, as far as the webview's own rules are concerned.
+///
+/// **It is not a fence, and no fence is weakened by it.** Which bytes a door answers for is decided
+/// before one is read — a hash that is already in the store, or a file inside a folder the project is
+/// bound to — and this says only that the answer, once given, may be read by the page that asked.
+/// That page is the window Amenbo draws, because a scheme of ours is reachable from nowhere else, and
+/// anything running in it can already ask the host to read a file outright.
+///
+/// The webview's own rule is what makes it necessary: the page is served over one scheme of ours and
+/// these doors answer on others, so every read of them is a read across origins, and a page reading
+/// across origins without this header is handed nothing — not the bytes, not a status, and no reason.
+/// An `<img>`, an `<audio>` and an `<iframe>` never had to ask; a reader that has to look at the bytes
+/// does — the PDF reader (`app/src/files/pdfLoad.ts`) and the attachment preview that shows text,
+/// Markdown and CSV (`app/src/components/Attachments.tsx`) are the ones that do.
+const ALLOWED_TO_READ: &str = "*";
+
 /// The base of every response, so that **all** of them carry the same restraints: `X-Content-Type-Options:
 /// nosniff` stops the webview from second-guessing the type we chose (HTML that [`served_content_type`]
-/// demoted to `text/plain` must not be sniffed back into a document), and `Content-Security-Policy:
+/// demoted to `text/plain` must not be sniffed back into a document), `Content-Security-Policy:
 /// default-src 'none'; sandbox` is the last wall if something does open one **as a document** — a sandbox
-/// with no tokens means an opaque origin and no scripting, which puts IPC out of reach. The latter is
+/// with no tokens means an opaque origin and no scripting, which puts IPC out of reach — and
+/// `Access-Control-Allow-Origin` lets our own page read the answer at all ([`ALLOWED_TO_READ`]). The CSP is
 /// ignored when the bytes are loaded as a subresource (image, audio, video), so it costs nothing in display.
 pub fn hardened(status: StatusCode) -> tauri::http::response::Builder {
     Response::builder()
         .status(status)
         .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
         .header(header::CONTENT_SECURITY_POLICY, "default-src 'none'; sandbox")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_TO_READ)
 }
 
 /// A failure: a bare status with an empty body.
@@ -204,6 +222,20 @@ mod tests {
             b = b.header(header::RANGE, r);
         }
         b.body(Vec::new()).unwrap()
+    }
+
+    /// Every answer says our own page may read it. Without it the webview hands a reader nothing at all,
+    /// and both doors are then taken for a file that is not on this device (`AMB-T-5008`).
+    #[test]
+    fn every_answer_may_be_read_by_our_page() {
+        for status in [StatusCode::OK, StatusCode::PARTIAL_CONTENT, StatusCode::RANGE_NOT_SATISFIABLE] {
+            let resp = hardened(status).body(Vec::<u8>::new()).expect("a response");
+            assert_eq!(
+                resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).map(|v| v.to_str().unwrap()),
+                Some("*"),
+                "{status}"
+            );
+        }
     }
 
     #[test]

@@ -101,7 +101,9 @@ function TextBody({ src, render, sep }: { src: string; render: "text" | "markdow
       .catch(() => { if (alive) setErr(true); });
     return () => { alive = false; };
   }, [src]);
-  if (err) return <div className="attach__missing faint">{t("attach.notLocal")}</div>;
+  // Not the same thing as a blob this device never fetched: the file is here and the read of it
+  // failed, so it is said the way the file panel says it (`AMB-T-5008`).
+  if (err) return <div className="attach__missing faint">{t("files.unreadable")}</div>;
   if (text === null) return <div className="faint attach__loading">…</div>;
   if (render === "markdown") return <div className="attach__text markdown"><Markdown>{text}</Markdown></div>;
   if (render === "csv") return <CsvTable text={text} sep={sep ?? ","} />;

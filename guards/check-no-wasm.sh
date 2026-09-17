@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # check-no-wasm.sh — keep WebAssembly out of what the window is built to need.
 #
-# The window will not run wasm: the CSP refuses it, measured on two engines, and allowing it would
-# mean deciding that arbitrary bytecode may run where the person's tasks are. What makes that easy to
-# lose is that dependency bumps are merged unattended. `pdfjs-dist` is the one already on its way:
-# 4.10.38 is what this tree holds, 5.0.375 is the first release to publish `wasm/openjpeg.wasm` and
-# `wasm/qcms_bg.wasm` as files of their own, and 6.3.289 adds `wasm/jbig2.wasm` and
-# `wasm/quickjs-eval.wasm` to them.
+# This gate is the whole of that: allowing a module would mean deciding that arbitrary bytecode may
+# run where the person's tasks are, and nothing else refuses one. The CSP is not a second lock — it
+# reaches the document and not a worker, measured on both engines, which is the allowance below.
+# What makes that easy to lose is that dependency bumps are merged unattended. `pdfjs-dist` is the
+# one already on its way: 4.10.38 is what this tree holds, 5.0.375 is the first release to publish
+# `wasm/openjpeg.wasm` and `wasm/qcms_bg.wasm` as files of their own, and 6.3.289 adds
+# `wasm/jbig2.wasm` and `wasm/quickjs-eval.wasm` to them.
 #
 # What is measured, in the order it is read:
 #
@@ -40,12 +41,22 @@ dist=$app/dist
 # into its worker, its sandbox and its image decoders. It is the JPEG 2000 decoder, reached from
 # `JpxImage` and from nowhere else, so the only thing that asks for it is a PDF holding such an image.
 #
-# **It runs where the engine lets it, and this window is one of those.** Measured on macOS: a PDF
-# whose image is a `/JPXDecode` stream drew that image in the pane, which only the decoder can have
-# done — `script-src 'self'` does not gate WebAssembly on WebKit. On an engine that does gate it
-# there, the compile is refused and that image is what the document loses; the rest of the page draws
-# either way. So the allowance is not "it cannot run" but "nothing we draw goes near it unless a
-# document brought a JPEG 2000 image with it".
+# **It runs, on both of the engines this window is drawn by.** A PDF whose image is a `/JPXDecode`
+# stream drew that image in the pane on macOS (WebKit) and on Windows (WebView2, Chromium 153),
+# which only the decoder can have done.
+#
+# The two get there differently. WebKit does not gate WebAssembly on `script-src` at all. Chromium
+# does — a module compiled in the document is refused with "Compiling or instantiating WebAssembly
+# module violates the following Content Security policy directive", measured on that same engine
+# build under this window's own CSP — but the decoder is not compiled in the document. It is
+# compiled in pdf.js's worker, and the worker is handed no CSP to be refused by: tauri sets the
+# `Content-Security-Policy` header on `.html` and on nothing else (2.11.5, `manager/mod.rs`), and
+# Chromium takes a worker's policy from that worker script's own response rather than from the
+# document that started it.
+#
+# So the allowance is not "it cannot run", and not "it runs on one engine": it runs on both, and what
+# it rests on is that nothing we draw goes near it unless a document brought a JPEG 2000 image with
+# it.
 #
 # **The allowance is a claim about that one decoder, not about the package.** A wasm file published
 # beside the code is caught by the scan above it regardless of who published it.

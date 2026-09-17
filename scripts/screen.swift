@@ -16,6 +16,9 @@
 //   swift screen.swift shot <pid> <out.png>      shoot that app's window into a png
 //   swift screen.swift read <image.png>          the words on a shot, as JSON: corrected, and as read
 //   swift screen.swift find <pid> [name]         every named element on screen, or those that name reaches
+//                                                — with `--within <class>` to list one part of the window:
+//                                                  the box the interface draws under that CSS class, and
+//                                                  what is inside it
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //                                                — with `--role <role>` when the name is on several kinds
 //   swift screen.swift click <x> <y>             left-click at a screen point
@@ -567,6 +570,31 @@ func axName(_ el: AXUIElement) -> String? {
     return nil
 }
 
+/// The CSS classes the element is drawn under, as WebKit hands them out of a web view
+/// (`AXDOMClassList`). Nothing outside a web view carries them, and an element with none answers
+/// with an empty list.
+///
+/// **They are what a section of the interface can be named by without naming its words.** The
+/// heading over a list is the interface's own language and changes with the machine's; the class a
+/// list is drawn under does not (`verification/gui`).
+func axClasses(_ el: AXUIElement) -> [String] {
+    axAttribute(el, "AXDOMClassList") as? [String] ?? []
+}
+
+/// The first element under `el` drawn under the class `marker`, in the order the tree holds them.
+///
+/// Unnamed elements are walked into and not skipped, which is the difference from `elements(under:)`:
+/// a list is a box around its rows and a box has nothing to be called, so the thing being looked for
+/// here is almost always one of the elements that listing leaves out.
+func markedBy(_ marker: String, under el: AXUIElement, depth: Int = 0) -> AXUIElement? {
+    guard depth < 60 else { return nil } // a tree deeper than this is a cycle, not a screen
+    if axClasses(el).contains(marker) { return el }
+    for child in axAttribute(el, kAXChildrenAttribute as String) as? [AXUIElement] ?? [] {
+        if let found = markedBy(marker, under: child, depth: depth + 1) { return found }
+    }
+    return nil
+}
+
 /// A webview keeps its contents out of the accessibility tree until a client asks for them, and
 /// answers with the window's frame alone until then. Setting this is the asking; the answer it
 /// returns is not the point (a webview declines to hold the attribute and serves the tree
@@ -651,9 +679,19 @@ func appWindow(pid: Int, named wanted: String?) -> AXUIElement {
 /// name it answers to and a frame past the window's edge, and every press here is a screen point. A
 /// window that will not say where it stands answers `.infinite`, so a frame nobody could read refuses
 /// nothing.
-func windowAndElements(pid: Int, window wanted: String?) -> (frame: CGRect, elements: [Element]) {
+func windowAndElements(
+    pid: Int,
+    window wanted: String?,
+    within marker: String? = nil
+) -> (frame: CGRect, elements: [Element]) {
     let w = appWindow(pid: pid, named: wanted)
-    return (axFrame(w) ?? .infinite, elements(under: w))
+    // The window's own frame either way: what `within` narrows is which elements are listed, not
+    // where the window stands, and a caller aiming at one of them is still aiming inside the window.
+    guard let marker else { return (axFrame(w) ?? .infinite, elements(under: w)) }
+    guard let part = markedBy(marker, under: w) else {
+        fail("no part of the window is drawn under \(marker) — it is a CSS class the interface puts on the box being asked about, and nothing on this screen carries it")
+    }
+    return (axFrame(w) ?? .infinite, elements(under: part))
 }
 
 /// Whether the window holds the point a press aimed at `e` would land on.
@@ -773,8 +811,8 @@ func aimedAt(_ name: String?, _ role: String?) -> String {
     }
 }
 
-func find(pid: Int, name: String?, role: String?, window: String?) {
-    let (frame, elements) = windowAndElements(pid: pid, window: window)
+func find(pid: Int, name: String?, role: String?, window: String?, within: String?) {
+    let (frame, elements) = windowAndElements(pid: pid, window: window, within: within)
     let all = ofRole(role, elements)
     let found = name.map { named($0, among: all) } ?? all
     for e in found {
@@ -785,7 +823,10 @@ func find(pid: Int, name: String?, role: String?, window: String?) {
         let standing = onTheWindow(e, frame) ? "" : "\toutside the window"
         print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))\(standing)")
     }
-    if found.isEmpty { fail("nothing on screen is \(aimedAt(name, role))") }
+    if found.isEmpty {
+        let here = within.map { " inside the part of the window drawn under \($0)" } ?? ""
+        fail("nothing on screen is \(aimedAt(name, role))\(here)")
+    }
 }
 
 /// Every name the app's own menu bar carries: each heading, and the items under it.
@@ -1743,7 +1784,8 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
 
 let (window, afterWindow) = takeOption("--window", CommandLine.arguments, needs: "the title of a window")
 let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
-let (at, afterAt) = takeAt(afterRole)
+let (within, afterWithin) = takeOption("--within", afterRole, needs: "a CSS class the box being asked about is drawn under")
+let (at, afterAt) = takeAt(afterWithin)
 let (held, args) = takeModifiers(afterAt)
 guard args.count >= 2 else {
     fail("usage: screen <front|shot|read|find|menu|click-named|right-click-named|dblclick-named|point-named|click|right-click|dblclick|point|drag|drop-file|type|key|input-source|compose|scroll|set-date|trusted> … [--window <title>]")
@@ -1762,6 +1804,9 @@ if !held.isEmpty,
 if at != nil, args[1] != "scroll" {
     fail("--at says where the finger stands for a wheel, and only scroll takes one")
 }
+if within != nil, args[1] != "find" {
+    fail("--within narrows a listing to one part of the window, and only find takes one")
+}
 
 switch args[1] {
 case "front":
@@ -1777,8 +1822,8 @@ case "menu":
     guard args.count == 3, let pid = Int(args[2]) else { fail("usage: screen menu <pid>") }
     menuBar(pid: pid)
 case "find":
-    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--role <role>] [--window <title>]") }
-    find(pid: pid, name: args.count == 4 ? args[3] : nil, role: role, window: window)
+    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--role <role>] [--within <class>] [--window <title>]") }
+    find(pid: pid, name: args.count == 4 ? args[3] : nil, role: role, window: window, within: within)
 case "click-named":
     guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--role <role>] [--cmd] [--shift] [--opt] [--ctrl] [--window <title>]") }
     clickNamed(pid: pid, name: args[3], role: role, window: window, flags: held)

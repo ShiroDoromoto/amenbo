@@ -169,11 +169,30 @@ pub fn read_shot(image: &Path, screen: &Path) -> Result<Reading, String> {
 /// all — the same search [`read_shot`]'s answer is put to — so the listing goes through the same fold
 /// and the same match, and a name the tool broke across its columns is still found in it.
 ///
+/// `within` is the part of the window to list, where the step named a section of the interface
+/// ([`marks_the_section`]). **It is the whole of what makes an absence readable**: a road saying a
+/// name is not on one list is saying it about that list, and the same name is often on another one
+/// a few hundred pixels away — the rail's own list of what changed, or git's reply in the pane
+/// behind the panel. Listed whole, the window answers "it is here somewhere" and reds a screen that
+/// is right. What narrows it is a CSS class rather than the heading over the list,
+/// because the heading is the interface's own language and this harness is held to none.
+///
 /// The fold is taken here rather than in the tool, which is the one place this differs from a shot's
 /// reading: `screen find` prints a listing for whoever is driving the screen, and folding it there
 /// would take that listing away from them.
-pub fn read_tree(pid: i64, window: Option<&str>, screen: &Path) -> Result<Reading, String> {
-    let out = tool(screen, "find", &[OsStr::new(&pid.to_string())], window)?;
+pub fn read_tree(
+    pid: i64,
+    window: Option<&str>,
+    within: Option<&str>,
+    screen: &Path,
+) -> Result<Reading, String> {
+    let pid = pid.to_string();
+    let mut args: Vec<&OsStr> = vec![OsStr::new(&pid)];
+    if let Some(marker) = within {
+        args.push(OsStr::new("--within"));
+        args.push(OsStr::new(marker));
+    }
+    let out = tool(screen, "find", &args, window)?;
     let raw = String::from_utf8_lossy(&out).into_owned();
     Ok(Reading { text: fold(&raw), raw })
 }
@@ -5778,6 +5797,38 @@ pub fn reads_the_tree(domain: Domain, op: &str) -> bool {
     matches!((domain, op), (Domain::Files, "listed") | (Domain::Terminal, "label"))
 }
 
+/// The CSS class the interface draws a section under, for a step that named one ([`section`]).
+///
+/// **A listing of the whole window cannot answer an absence.** "This name is not on that list" is a
+/// question about one list, and a name the road is asking after is often on another part of the same
+/// screen — the rail keeps its own list of what changed, and git's reply stands in the pane behind
+/// the panel. Both reded a release run whose screen was right, and neither was the list being
+/// asked about.
+///
+/// **The class and not the heading.** What is over each list is a word of the interface's, in
+/// whatever language the machine is set to, and nothing in this harness is held to those (`section`
+/// names them for a person and never for a match). A class is the same letters on every machine, and
+/// the interface carries one on each of these boxes for exactly this (`app/src/files/GitPanel.tsx`).
+///
+/// **What is named is the list itself and not the box around it.** A plain `div` is not on the
+/// accessibility tree at all — WebKit leaves out what carries no meaning of its own — so a class on
+/// one is a class the tool can never find. Every name here is a list or a tree, which the tree does
+/// carry.
+///
+/// A section this does not know, or a step that named none, lists the window whole — which is the
+/// answer for the asserts that are about the window rather than about a list in it.
+pub fn marks_the_section(with: &Args) -> Option<&'static str> {
+    match with.get("section").and_then(|v| v.as_str())? {
+        "tree" => Some("files__list--tree"),
+        "changes" => Some("gitpanel__list--changed"),
+        "staged" => Some("gitpanel__list--staged"),
+        "conflicts" => Some("gitpanel__list--conflict"),
+        "history" => Some("githist__list--history"),
+        "touched" => Some("githist__list--touched"),
+        _ => None,
+    }
+}
+
 /// The asserts closed by reading the app's own menu bar ([`read_menu`]) rather than the shot.
 ///
 /// One entry, and the table is closed for the reason the two above it are. What puts an assert here
@@ -5872,7 +5923,9 @@ pub struct StepBrief<'a> {
 ///
 /// `read_tree` closes the asserts on [`reads_the_tree`], and it is the same reading in a different
 /// place: the window the shot was aimed at, listed off its accessibility tree instead of read off
-/// the picture. The shot is taken either way — the reading moves, the evidence does not.
+/// the picture. The shot is taken either way — the reading moves, the evidence does not. It is
+/// handed the window and the part of it the step named ([`marks_the_section`]), which is what lets
+/// an absence be about one list rather than about the whole screen.
 ///
 /// `read_menu` does the same for [`reads_the_menu`], one step further out: the app's menu bar, which
 /// no window holds and no shot of one can carry.
@@ -5910,7 +5963,7 @@ pub fn walk<C, O, T, M, H, R, S, Q>(
 where
     C: FnMut(Option<&str>, &Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
-    T: FnMut(Option<&str>) -> Result<Reading, String>,
+    T: FnMut(Option<&str>, Option<&str>) -> Result<Reading, String>,
     M: FnMut() -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
     R: FnMut() -> Result<(), String>,
@@ -5940,6 +5993,12 @@ where
         let window = step.window();
         let from_store = kind == "assert" && reads_the_store(domain, &op);
         let from_tree = kind == "assert" && reads_the_tree(domain, &op);
+        // Which part of the window that listing is of, where the step named a section
+        // (`marks_the_section`).
+        let within = match step {
+            Step::Assert { with, .. } if from_tree => marks_the_section(with),
+            _ => None,
+        };
         let from_menu = kind == "assert" && reads_the_menu(domain, &op);
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
@@ -6039,7 +6098,7 @@ where
                     read_menu()
                         .map_err(|e| format!("step {}: reading the menu bar failed: {e}", i + 1))?
                 } else if from_tree {
-                    read_tree(shot_at)
+                    read_tree(shot_at, within)
                         .map_err(|e| format!("step {}: reading the screen failed: {e}", i + 1))?
                 } else {
                     read_text(&shot_path)
@@ -6312,7 +6371,7 @@ steps_gui:
 
     /// The same, for [`reads_the_tree`]: a road with no step on that table is never to reach for
     /// the accessibility tree, and a walk that did would be reading a screen off the wrong side.
-    fn nothing_on_the_tree(_: Option<&str>) -> Result<Reading, String> {
+    fn nothing_on_the_tree(_: Option<&str>, _: Option<&str>) -> Result<Reading, String> {
         unreachable!("no step on this road is read off the accessibility tree")
     }
 
@@ -10100,6 +10159,22 @@ steps_gui:
     with: { name: grafting.md, section: tree }
 "#;
 
+    /// The road the narrowing is for: a name the road says is **not** on one list, while the same
+    /// name stands somewhere else on the same screen.
+    const NOT_ON_THAT_LIST: &str = r#"
+id: sample-elsewhere
+title: A name on the screen, and not on the list being asked about
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with: { face: terminal }
+  - type: assert
+    domain: files
+    op: listed
+    with: { name: sieving.md, section: staged, present: false }
+"#;
+
     const OFF_THE_MENU: &str = r#"
 id: sample-menu
 title: The bar above the app, in the language the reader picked
@@ -10200,14 +10275,14 @@ steps_gui:
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-tree-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
-        let asked: RefCell<Vec<Option<String>>> = RefCell::new(Vec::new());
+        let asked: RefCell<Vec<(Option<String>, Option<String>)>> = RefCell::new(Vec::new());
         let outcome = walk(
             &s,
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a row read off the tree is never sent to the reader"),
-            |window| {
-                asked.borrow_mut().push(window.map(str::to_string));
+            |window, within| {
+                asked.borrow_mut().push((window.map(str::to_string), within.map(str::to_string)));
                 Ok(reading("AXRow\tgrafting.md\t504 379 123 22"))
             },
             nothing_on_the_menu,
@@ -10219,7 +10294,11 @@ steps_gui:
         .expect("walk");
 
         assert!(outcome.passed, "the whole name is on the tree, however the rail drew it");
-        assert_eq!(*asked.borrow(), vec![None], "asked once, at the window the shot was aimed at");
+        assert_eq!(
+            *asked.borrow(),
+            vec![(None, Some("files__list--tree".to_string()))],
+            "asked once, at the window the shot was aimed at and at the section the road named",
+        );
         let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
         assert_eq!(rec.verdict, Verdict::Pass);
         assert_eq!(rec.found, Some(true));
@@ -10227,6 +10306,46 @@ steps_gui:
         let kept =
             std::fs::read_to_string(dir.join("02-assert-files-listed.txt")).expect("the listing");
         assert!(kept.contains("AXRow"), "the listing is filed as the tool gave it — got: {kept}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The failure the narrowing was written for: a `present: false` step reded a screen that was
+    /// right, because the name it asked after stood somewhere else on the same window — the rail's
+    /// own list of what changed, and git's reply in the pane behind the panel — both on one release
+    /// run. The listing is of the list the road named, so the screen answers the question that was
+    /// asked.
+    #[test]
+    fn an_absence_is_read_off_the_list_the_road_named() {
+        let s = load(NOT_ON_THAT_LIST);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-part-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a row read off the tree is never sent to the reader"),
+            |_, within| {
+                Ok(match within {
+                    // The list the road is asking about holds nothing but the line saying so.
+                    Some("gitpanel__list--staged") => reading("AXStaticText\tNothing is staged yet."),
+                    // The window whole holds the name, on a list nobody asked about. A walk that
+                    // read this would red the step.
+                    _ => reading("AXRow\tsieving.md\t20 300 120 22"),
+                })
+            },
+            nothing_on_the_menu,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            unheard,
+        )
+        .expect("walk");
+
+        assert!(outcome.passed, "the name is not on the list the road named");
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.verdict, Verdict::Pass);
+        assert_eq!(rec.found, Some(false));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -10243,7 +10362,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a row read off the tree is never sent to the reader"),
-            |_| Ok(reading("AXRow\tpruning.md\t504 357 123 22")),
+            |_, _| Ok(reading("AXRow\tpruning.md\t504 357 123 22")),
             nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
@@ -10272,7 +10391,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a row read off the tree is never sent to the reader"),
-            |_| Err("the window answered with nothing".to_string()),
+            |_, _| Err("the window answered with nothing".to_string()),
             nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),

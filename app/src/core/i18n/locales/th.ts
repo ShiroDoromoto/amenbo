@@ -749,6 +749,8 @@ export const th: Translation = {
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",
     "files.cut": "แสดงเฉพาะส่วนต้นเท่านั้น",
     "files.unreadable": "อ่านไฟล์นี้ไม่ได้",
+    "files.pdfFailed": "เปิดไฟล์ PDF นี้ไม่ได้",
+    "files.pdfPage": "หน้า {page} จาก {of}",
     "files.openElsewhere": "เปิดในแอปอื่น",
     "files.dropStopped": "นำ {name} เข้ามาไม่ได้: {why}",
     "files.dropPartly": "นำเข้ามาแล้ว {count} รายการ {name} ไม่ได้: {why}",

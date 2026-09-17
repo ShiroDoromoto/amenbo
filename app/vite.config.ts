@@ -8,6 +8,11 @@ export default defineConfig({
   // Tauri assumes a fixed port (get it wrong and you get a white screen).
   server: { port: 5180, strictPort: true },
   clearScreen: false,
+  // Vite knows nothing about `.bcmap`, the form pdf.js publishes its character maps in, and an
+  // extension it does not know is not an asset it will carry. Named here it is one — and the reader
+  // imports each map with `?inline`, so what ships is data inside a module rather than a file to go
+  // and fetch (`src/files/pdfLoad.ts`).
+  assetsInclude: ["**/*.bcmap"],
   build: {
     // One entry per window (`AMB-T-3588`): the board is the root document, the talk window its own.
     // Naming them both is what keeps the second one out of the build — Vite takes `index.html` alone

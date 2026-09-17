@@ -1735,6 +1735,14 @@ input[type="color"] {
 .files__editor { font-size: var(--fs-xs); }
 .files__editor .cm-editor { height: auto; }
 .files__image { max-width: 100%; height: auto; }
+/* The PDF's pages, stacked down the panel the way the reader scrolls them (`../files/pdfLoad`).
+   Each page holds its room before anything is drawn into it, so the column does not jump as the
+   pages fill in behind the scroll. */
+.files__pdf { display: flex; flex-direction: column; gap: var(--s-3); }
+/* A page is white in both themes, because a page is white: what is drawn into it is the paper the
+   document was written on, and the room kept for one is that same paper before it arrives. */
+.files__pdfpage { width: 100%; background: #fff; border: 1px solid var(--c-edge); }
+.files__pdfpaper { display: block; width: 100%; height: auto; }
 /* The way out of a picture the panel would not draw: a word under the refusal, not a control in a
    row, because it is the sentence's own next step. */
 .files__hand {

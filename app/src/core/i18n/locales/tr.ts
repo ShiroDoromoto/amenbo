@@ -747,6 +747,8 @@ export const tr: Translation = {
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",
     "files.unreadable": "Bu dosya okunamadı.",
+    "files.pdfFailed": "Bu PDF açılamadı.",
+    "files.pdfPage": "Sayfa {page} / {of}",
     "files.openElsewhere": "Başka bir uygulamada aç",
     "files.dropStopped": "{name} alınamadı: {why}",
     "files.dropPartly": "{count} alındı. {name} alınamadı: {why}",

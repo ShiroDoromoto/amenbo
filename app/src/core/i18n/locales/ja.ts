@@ -753,6 +753,8 @@ export const ja: Translation = {
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",
     "files.unreadable": "このファイルは読めませんでした。",
+    "files.pdfFailed": "この PDF は開けませんでした。",
+    "files.pdfPage": "{of} ページ中 {page} ページ目",
     "files.openElsewhere": "ほかのアプリで開く",
     "files.dropStopped": "{name} を取り込めませんでした: {why}",
     "files.dropPartly": "{count} 件を取り込みました。{name} は取り込めませんでした: {why}",

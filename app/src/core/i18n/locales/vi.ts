@@ -749,6 +749,8 @@ export const vi: Translation = {
     "files.notText": "Đây không phải văn bản nên không hiển thị được ở đây.",
     "files.cut": "Chỉ hiển thị phần đầu.",
     "files.unreadable": "Không đọc được tệp này.",
+    "files.pdfFailed": "Không mở được tệp PDF này.",
+    "files.pdfPage": "Trang {page} trên {of}",
     "files.openElsewhere": "Mở bằng ứng dụng khác",
     "files.dropStopped": "Không đưa được {name} vào: {why}",
     "files.dropPartly": "Đã đưa vào {count}. {name} thì không: {why}",

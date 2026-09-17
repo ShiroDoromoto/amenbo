@@ -747,6 +747,8 @@ export const nl: Translation = {
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
+    "files.pdfFailed": "Deze pdf kon niet worden geopend.",
+    "files.pdfPage": "Pagina {page} van {of}",
     "files.openElsewhere": "In een andere app openen",
     "files.dropStopped": "{name} kon niet worden opgenomen: {why}",
     "files.dropPartly": "{count} opgenomen. {name} niet: {why}",

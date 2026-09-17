@@ -29,6 +29,17 @@
 # refused picture as a damaged file. The road then takes the way on it offers, because a refusal that
 # only refuses leaves the reader holding a file they still want opened.
 #
+# The fifth is a PDF, and it is the one file here that is neither text nor a picture and is drawn all
+# the same. It stands at the end because it is the answer to the first two: what the panel says it
+# cannot show is meant to be short, and a PDF spent years on that list for no reason but that nothing
+# here drew one.
+#
+# ── Why the word in the PDF is drawn out of rectangles ───────────────────────────────────────────
+# A PDF that named a font would be asking, on every machine this road is walked on, whether that
+# machine has it — and a page whose glyphs the reader has none of comes back blank, which reads
+# exactly like a page that was never drawn. The fixture draws its word as filled boxes instead, so
+# what reaches the screen is the same everywhere and a blank page means what it says.
+#
 # ── Why the picture is thirty kilobytes and a hundred and forty megapixels ────────────────────────
 # The extreme is what the line is about. What the face refuses is measured twice, in bytes and in
 # pixels, and a fixture large in both would not say which of the two answered. This one is small
@@ -50,7 +61,8 @@ description: >
   it is a link, which is not the answer either file above got — that one is whole and the refusal is meant. Then
   press a picture the face does recognise and still will not draw: what comes back is that it is too large,
   together with how large it was measured to be — and the way on it offers hands the file to the machine, out of
-  the same menu the rows carry.
+  the same menu the rows carry. Last, press a PDF: it is neither text nor a picture, and the word inside it is
+  drawn in the panel.
 
 given:
   - type: action
@@ -96,6 +108,15 @@ given:
       dir: greenhouse
       from: files/too-many-pixels.png
       path: notes/glasshouse-plan.png
+
+  # And a PDF, holding one word drawn as filled boxes rather than set in anybody's font.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse
+      from: files/a-word-in-a-pdf.pdf
+      path: notes/bed-plan.pdf
 
   # And a name in the folder that is a link out of it, pointing at a file kept where more than one
   # project could share it.
@@ -315,3 +336,21 @@ steps_gui:
     op: handed-over
     with:
       door: pick
+
+  # The fifth file, and the one the panel draws although it is neither text nor a picture. Opened
+  # from the tree like the four before it, so what changes between them is the file and nothing else.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: bed-plan.pdf
+      section: tree
+
+  # Read off a shot, because the word is drawn inside the file rather than written on the face — the
+  # same terms a picture is read on.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      as: picture
+      shows: FIELD

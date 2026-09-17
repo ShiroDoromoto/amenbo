@@ -749,6 +749,8 @@ export const id: Translation = {
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
+    "files.pdfFailed": "PDF ini tidak bisa dibuka.",
+    "files.pdfPage": "Halaman {page} dari {of}",
     "files.openElsewhere": "Buka di aplikasi lain",
     "files.dropStopped": "{name} tidak bisa dimasukkan: {why}",
     "files.dropPartly": "{count} masuk. {name} tidak: {why}",

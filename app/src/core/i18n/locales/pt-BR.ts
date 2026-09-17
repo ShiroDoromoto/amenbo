@@ -759,6 +759,8 @@ export const ptBR: Translation = {
     "files.notText": "Isto não é texto, então não dá para mostrar aqui.",
     "files.cut": "Só o começo está sendo mostrado.",
     "files.unreadable": "Não foi possível ler este arquivo.",
+    "files.pdfFailed": "Não foi possível abrir este PDF.",
+    "files.pdfPage": "Página {page} de {of}",
     "files.openElsewhere": "Abrir em outro aplicativo",
     "files.dropStopped": "Não foi possível trazer {name}: {why}",
     "files.dropPartly": "{count} entraram. {name} não: {why}",

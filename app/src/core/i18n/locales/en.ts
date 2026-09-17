@@ -944,6 +944,13 @@ const ui = {
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  // A PDF whose pages could not be drawn — the file is there and the host answered for it, but what
+  // draws it would not open it (`AMB-D-907`). The way on below is the same one, because another
+  // application may well open what this could not.
+  "files.pdfFailed": "This PDF could not be opened.",
+  // What a drawn page is called for a reader who is not looking at it: a page is a picture as far
+  // as anything reading the screen out is concerned, so its number has to be written on it.
+  "files.pdfPage": "Page {page} of {of}",
   // The one way on out of every file this panel does not draw — the binary, the one that could not
   // be read, and the picture refused for its size. A line that only says no leaves the reader
   // holding a file they still want opened (`AMB-T-4352`).

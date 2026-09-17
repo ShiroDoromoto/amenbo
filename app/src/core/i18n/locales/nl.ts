@@ -1073,6 +1073,10 @@ export const nl: Translation = {
       message: "De AI-handleiding (het blok dat Amenbo beheert) in {path} is verouderd (v{version} → v{current}).",
       fix: "“Opnieuw synchroniseren” brengt de handleiding van deze map bij (wat je zelf schreef blijft behouden).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} is door Amenbo geschreven en git volgt het bestand niet op deze branch, terwijl {branches} dat wel doet: overschakelen naar die branch wordt geweigerd.",
+      fix: "Kies één kant: volg het bestand hier ook, of stop met volgen op {branches}. Voor één keer overschakelen zet u het bestand eerst opzij — Amenbo schrijft het opnieuw zodra deze map weer wordt geopend.",
+    },
     legacy_pointer: {
       message: "{path} is een koppeling in de oude vorm — een AI die daar start komt niet bij het project uit.",
       fix: "“Opnieuw koppelen” bindt de map weer aan project #{project}.",

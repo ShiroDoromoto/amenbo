@@ -1090,6 +1090,10 @@ export const es: Translation = {
       message: "La guía para la IA (bloque gestionado por Amenbo) en {path} está desfasada (v{version} → v{current}).",
       fix: "«Volver a sincronizar» pone al día la guía de esta carpeta (lo que has escrito tú se conserva).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} la escribió Amenbo y git no la rastrea en esta rama, pero en {branches} sí: cambiar a esa rama se rechaza.",
+      fix: "Elige un lado: rastrea el archivo también aquí o deja de rastrearlo en {branches}. Si solo quieres cambiar una vez, aparta antes el archivo; Amenbo lo vuelve a escribir la próxima vez que abra esta carpeta.",
+    },
     legacy_pointer: {
       message: "{path} es un vínculo en formato antiguo: una IA lanzada ahí no llega al proyecto.",
       fix: "«Volver a vincular» vuelve a atar la carpeta al proyecto #{project}.",

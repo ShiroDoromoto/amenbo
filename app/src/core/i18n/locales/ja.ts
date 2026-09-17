@@ -1085,6 +1085,10 @@ export const ja: Translation = {
       message: "{path} の AI 手引き（Amenbo 管理ブロック）が古いバージョンです（v{version} → v{current}）。",
       fix: "「再同期」でこのフォルダの手引きを現行バージョンへ更新できます（あなたの記述は保持）。",
     },
+    guidance_blocks_checkout: {
+      message: "{path} は Amenbo が書きましたが、このブランチでは git が追跡していません。{branches} は追跡しているので、そこへ移ろうとすると git が止めます。",
+      fix: "どちらかに揃えてください——ここでも追跡するか、{branches} で追跡をやめるか。一度移るだけなら、先にファイルを退ければ通ります（Amenbo は次にこのフォルダを開いたとき書き直します）。",
+    },
     legacy_pointer: {
       message: "{path} は旧形式の紐付けです。ここで起動した AI はプロジェクトへ解決しません。",
       fix: "「紐付け直す」でプロジェクト #{project} へ紐付け直せます。",

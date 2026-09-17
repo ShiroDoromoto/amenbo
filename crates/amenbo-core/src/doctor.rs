@@ -44,6 +44,9 @@ pub enum DoctorIssueKind {
     OrphanAttachment,
     /// A bound folder's managed block is an older version.
     StaleManagedBlock,
+    /// A bound folder's `CLAUDE.md` / `AGENTS.md` carries Amenbo's block, git does not track it here, and
+    /// a local branch does — so checking that branch out is refused.
+    GuidanceBlocksCheckout,
     /// A legacy-format `.amenbo` whose project resolves unambiguously.
     LegacyPointer,
     /// A legacy-format `.amenbo` whose project does not resolve.
@@ -75,6 +78,7 @@ impl DoctorIssueKind {
         Self::DuplicateOrderKey,
         Self::OrphanAttachment,
         Self::StaleManagedBlock,
+        Self::GuidanceBlocksCheckout,
         Self::LegacyPointer,
         Self::LegacyPointerAmbiguous,
         Self::MissingPointer,
@@ -94,6 +98,7 @@ impl DoctorIssueKind {
             Self::DuplicateOrderKey => "duplicate_order_key",
             Self::OrphanAttachment => "orphan_attachment",
             Self::StaleManagedBlock => "stale_managed_block",
+            Self::GuidanceBlocksCheckout => "guidance_blocks_checkout",
             Self::LegacyPointer => "legacy_pointer",
             Self::LegacyPointerAmbiguous => "legacy_pointer_ambiguous",
             Self::MissingPointer => "missing_pointer",
@@ -131,6 +136,7 @@ impl DoctorIssueKind {
             Self::DuplicateOrderKey => &["project", "order_key"],
             Self::OrphanAttachment => &["attachment", "target"],
             Self::StaleManagedBlock => &["path", "dir", "version", "current"],
+            Self::GuidanceBlocksCheckout => &["path", "dir", "branches"],
             Self::LegacyPointer => &["path", "dir", "project"],
             Self::LegacyPointerAmbiguous => &["path"],
             Self::MissingPointer => &["dir", "project"],
@@ -217,6 +223,7 @@ pub fn report(store: &Store) -> crate::error::Result<DoctorResult> {
     // GUI tick.
     let env = stale_managed_block_issues(store)
         .into_iter()
+        .chain(guidance_blocks_checkout_issues(store))
         .chain(pointer_issues(store))
         .chain(orphan_binding_issues(store))
         .chain(project_without_folder_issues(store)?)
@@ -259,6 +266,168 @@ fn stale_managed_block_issues(store: &Store) -> Vec<DoctorIssue> {
             )
         })
         .collect()
+}
+
+/// How many local branches one folder's check reads. A repository with more than this keeps its remaining
+/// branches unexamined rather than paying for them, and it is also what keeps the one call that writes to
+/// git's stdin inside the pipe buffer, so it can write the whole query before it reads a byte.
+const BRANCH_SCAN_CAP: usize = 200;
+
+/// How many branch names the sentence carries before it trails off. The reader needs one to act on, not the
+/// list.
+const BRANCH_NAME_CAP: usize = 3;
+
+/// The two files Amenbo writes into a bound folder, in the order a sentence should name them.
+const GUIDANCE_FILES: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
+
+/// Warns where **Amenbo's own `CLAUDE.md` / `AGENTS.md` will stop a `git checkout`**.
+///
+/// Amenbo writes those two files into a bound folder, and by design it does not ask git first (`AMB-D-249`:
+/// they belong to whoever cloned the repository, and this repository does not track its own). Untracked is
+/// therefore the ordinary state and is no issue at all. It becomes one where a **branch of the same
+/// repository tracks that path**: git refuses to walk over an untracked file, so switching to that branch
+/// stops with `The following untracked working tree files would be overwritten by checkout`, naming two
+/// files the person never wrote. Nothing on the way there says Amenbo put them on disk — which is the whole
+/// of what this check exists to say (`AMB-T-5041`).
+///
+/// The reading is deliberately narrow, because the noisy version of this check would fire on every bound
+/// folder there is. All three have to hold: the file carries Amenbo's managed block, git does not track it
+/// **here**, and a **local branch head** has it. Branch heads rather than history — a repository that
+/// tracked the file once and stopped (this one did, `AMB-T-1561`) has nothing left to be stopped by, and a
+/// check reading `--all` would warn it for ever. Remote-tracking branches are left out for the same reason
+/// the cap exists: what a person switches between is their own branches.
+///
+/// **Three git calls per folder at the very most**, and each one answers for both files at once: what is
+/// tracked here, which branches there are, and which of them hold the paths. A folder drops out before the
+/// next call wherever the answer is already settled, so the ordinary bound folder — untracked guidance, no
+/// branch that has it — pays two. This still belongs to [`report`] alone and not to any path that runs per
+/// tick.
+///
+/// **It rewrites nothing**, and it raises nothing where git cannot be run — with no git there is no index,
+/// nothing reads as tracked, and no branch reads as having anything.
+fn guidance_blocks_checkout_issues(store: &Store) -> Vec<DoctorIssue> {
+    let in_reach = crate::binding::dirs_in_reach(store);
+    let mut issues = Vec::new();
+    for dir in store.bindings().all_dirs() {
+        if !in_reach.contains(&dir) {
+            continue;
+        }
+        let at = std::path::Path::new(&dir);
+        // Ours, on disk. A folder that is gone, or whose files are somebody else's, falls out on the read
+        // and costs no git call at all.
+        let ours: Vec<&'static str> = GUIDANCE_FILES
+            .into_iter()
+            .filter(|name| {
+                std::fs::read_to_string(at.join(name))
+                    .ok()
+                    .and_then(|text| crate::agents::managed_block_version(&text))
+                    .is_some()
+            })
+            .collect();
+        if ours.is_empty() {
+            continue;
+        }
+        let tracked = tracked_here(at, &ours);
+        let loose: Vec<&'static str> = ours.into_iter().filter(|name| !tracked.iter().any(|t| t == name)).collect();
+        if loose.is_empty() {
+            continue;
+        }
+        let branches = local_branches(at);
+        if branches.is_empty() {
+            continue;
+        }
+        for (name, blocked) in branches_holding(at, &branches, &loose) {
+            let path = at.join(name).display().to_string();
+            let named = if blocked.len() > BRANCH_NAME_CAP {
+                format!("{}, …", blocked[..BRANCH_NAME_CAP].join(", "))
+            } else {
+                blocked.join(", ")
+            };
+            issues.push(DoctorIssue::new(
+                DoctorIssueKind::GuidanceBlocksCheckout,
+                &path,
+                // A surface names the file, and a person acts on the folder — the same pair
+                // `stale_managed_block` hands over, for the same reason.
+                &[("path", &path), ("dir", &dir), ("branches", &named)],
+            ));
+        }
+    }
+    issues
+}
+
+/// Which of `files` git tracks in `at` — one `ls-files` for all of them, since it prints back exactly the
+/// paths it knows. Empty where git will not run: with no index nothing is tracked.
+fn tracked_here(at: &std::path::Path, files: &[&'static str]) -> Vec<String> {
+    let mut args = vec!["ls-files", "-z", "--"];
+    args.extend(files.iter().copied());
+    crate::sys::git_output(at, &args)
+        .map(|out| out.split('\0').filter(|p| !p.is_empty()).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// This repository's local branch names, capped at [`BRANCH_SCAN_CAP`]. Empty where git will not run or
+/// `at` is in no repository — the same answer, since neither leaves a branch anyone could check out.
+fn local_branches(at: &std::path::Path) -> Vec<String> {
+    crate::sys::git_output(at, &["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+        .map(|out| out.lines().take(BRANCH_SCAN_CAP).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// For each of `files`, which of `branches` hold it at their tip — files with none are left out. One
+/// `cat-file --batch-check` answers for every pair: it reads `<branch>:<file>` lines and replies to each in
+/// order, `… missing` for the ones that have not got it. Asking per pair would be one process each, and
+/// this runs per bound folder.
+///
+/// The whole query is written before a byte is read, which is safe only because [`BRANCH_SCAN_CAP`] keeps
+/// both sides well inside the pipe buffer. Git closing its end early would raise `SIGPIPE` on the write, so
+/// the pipe is told not to ([`crate::sys::suppress_child_stdin_sigpipe`]).
+fn branches_holding(
+    at: &std::path::Path,
+    branches: &[String],
+    files: &[&'static str],
+) -> Vec<(&'static str, Vec<String>)> {
+    use std::io::Write;
+    let pairs: Vec<(&'static str, &String)> =
+        files.iter().flat_map(|f| branches.iter().map(move |b| (*f, b))).collect();
+    let Some(mut git) = crate::sys::git() else {
+        return Vec::new();
+    };
+    let Ok(mut child) = git
+        .current_dir(at)
+        .args(["cat-file", "--batch-check"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return Vec::new();
+    };
+    let Some(mut stdin) = child.stdin.take() else {
+        return Vec::new();
+    };
+    crate::sys::suppress_child_stdin_sigpipe(&stdin);
+    let query: String = pairs.iter().map(|(file, branch)| format!("{branch}:{file}\n")).collect();
+    let written = stdin.write_all(query.as_bytes()).is_ok();
+    drop(stdin); // git reads to end of input, so the answer does not come until this closes.
+    let Ok(out) = child.wait_with_output() else {
+        return Vec::new();
+    };
+    if !written {
+        return Vec::new();
+    }
+    let mut held: Vec<(&'static str, Vec<String>)> = files.iter().map(|f| (*f, Vec::new())).collect();
+    for (answer, (file, branch)) in String::from_utf8_lossy(&out.stdout).lines().zip(&pairs) {
+        // Anything git could resolve is something checkout would have to write here; only "missing" (and
+        // "ambiguous", which resolves to nothing either) leaves the path free.
+        if answer.ends_with(" missing") || answer.ends_with(" ambiguous") {
+            continue;
+        }
+        if let Some(row) = held.iter_mut().find(|(f, _)| f == file) {
+            row.1.push((*branch).clone());
+        }
+    }
+    held.retain(|(_, blocked)| !blocked.is_empty());
+    held
 }
 
 /// The issues where a bound folder's `.amenbo` is broken — legacy format ([`legacy_pointer_issues`]) or gone
@@ -490,6 +659,7 @@ mod tests {
                 "duplicate_order_key",
                 "orphan_attachment",
                 "stale_managed_block",
+                "guidance_blocks_checkout",
                 "legacy_pointer",
                 "legacy_pointer_ambiguous",
                 "missing_pointer",
@@ -502,6 +672,82 @@ mod tests {
                 "unwired_folder_ambiguous",
             ]
         );
+    }
+
+    /// Run one git command in `dir`, and fail the test if git did not like it. The identity is named on
+    /// the command line and the reader's own configuration is shut out, so what runs here is the same on
+    /// every machine — a `commit` is refused outright where no identity is set, and a global `init.templatedir`
+    /// or `core.hooksPath` would otherwise reach into a repository this test believes it made bare.
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(["-c", "user.name=verify", "-c", "user.email=verify@example.invalid"])
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// Amenbo's own `CLAUDE.md` / `AGENTS.md` are untracked in nearly every bound folder there is, and that
+    /// is the designed state (`AMB-D-249`) — so the check has to stay quiet there and speak only where a
+    /// branch of the same repository has the path, which is what makes `git checkout` refuse.
+    #[test]
+    fn guidance_is_raised_only_where_a_branch_would_be_refused_over_it() {
+        let (store, pid) = store_with_project("guidance-checkout");
+        let dir = PathBuf::from(store.bindings().dirs_for_project(pid)[0].to_string());
+        let of_kind = |store: &Store| -> Vec<DoctorIssue> {
+            report(store)
+                .unwrap()
+                .issues
+                .into_iter()
+                .filter(|i| i.kind == DoctorIssueKind::GuidanceBlocksCheckout)
+                .collect()
+        };
+
+        // Amenbo has written the folder its guidance, and there is no repository at all yet.
+        crate::agents::upsert_into_dir(&dir, None, "amenbo");
+        assert!(of_kind(&store).is_empty(), "no repository, nothing to be stopped by");
+
+        git(&dir, &["init", "-q", "-b", "main"]);
+        std::fs::write(dir.join("README.md"), "x").unwrap();
+        git(&dir, &["add", "README.md"]);
+        git(&dir, &["commit", "-q", "-m", "first"]);
+        assert!(of_kind(&store).is_empty(), "untracked and tracked nowhere is the ordinary state");
+
+        // One branch commits both files; back on `main` git has neither, and Amenbo writes them again.
+        git(&dir, &["checkout", "-q", "-b", "beds"]);
+        git(&dir, &["add", "CLAUDE.md", "AGENTS.md"]);
+        git(&dir, &["commit", "-q", "-m", "guidance"]);
+        git(&dir, &["checkout", "-q", "main"]);
+        assert!(!dir.join("CLAUDE.md").exists(), "the checkout took them with it");
+        crate::agents::upsert_into_dir(&dir, None, "amenbo");
+
+        let raised = of_kind(&store);
+        assert_eq!(raised.len(), 2, "both files would be named by the refusal: {raised:?}");
+        for issue in &raised {
+            assert_eq!(issue.severity, "warning", "nothing in the store is broken");
+            assert_eq!(issue.params.get("branches").map(String::as_str), Some("beds"));
+            assert_eq!(issue.params.get("dir").map(String::as_str), Some(dir.to_string_lossy().as_ref()));
+        }
+
+        // Tracking it here is one of the two ways out, and it settles that file alone.
+        git(&dir, &["add", "CLAUDE.md"]);
+        git(&dir, &["commit", "-q", "-m", "track the guidance here too"]);
+        let left = of_kind(&store);
+        assert_eq!(left.len(), 1, "only the file still untracked is left: {left:?}");
+        assert!(left[0].params["path"].ends_with("AGENTS.md"), "{left:?}");
+
+        // The other way out: the branch stops tracking it, so there is nothing to be refused over. Getting
+        // there needs the very move the fix hint describes — git will not cross while the file is in the way.
+        std::fs::remove_file(dir.join("AGENTS.md")).unwrap();
+        git(&dir, &["checkout", "-q", "beds"]);
+        git(&dir, &["rm", "-q", "--cached", "AGENTS.md"]);
+        git(&dir, &["commit", "-q", "-m", "untrack"]);
+        git(&dir, &["checkout", "-q", "main"]);
+        crate::agents::upsert_into_dir(&dir, None, "amenbo");
+        assert!(of_kind(&store).is_empty(), "no branch has the path any more");
     }
 
     /// A folder whose AI does not start on Amenbo is raised until the wiring lands or the reader says no —

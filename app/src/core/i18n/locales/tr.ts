@@ -1071,6 +1071,10 @@ export const tr: Translation = {
       message: "{path} içindeki yapay zekâ kılavuzu (Amenbo'nun yönettiği blok) güncelliğini yitirmiş (v{version} → v{current}).",
       fix: "“Yeniden eşitle” bu klasörün kılavuzunu güncel sürüme getirir (kendi yazdıklarınız korunur).",
     },
+    guidance_blocks_checkout: {
+      message: "{path} dosyasını Amenbo yazdı ve git bu dalda onu izlemiyor; {branches} ise izliyor — o dala geçmek reddedilir.",
+      fix: "Bir tarafa karar verin: dosyayı burada da izleyin ya da {branches} dalında izlemeyi bırakın. Yalnızca bir kez geçecekseniz önce dosyayı kenara alın; Amenbo bu klasörü bir sonraki açışında onu yeniden yazar.",
+    },
     legacy_pointer: {
       message: "{path} eski biçimde bir bağ — orada başlatılan yapay zekâ projeye ulaşmaz.",
       fix: "“Yeniden bağla” klasörü #{project} projesine yeniden bağlar.",

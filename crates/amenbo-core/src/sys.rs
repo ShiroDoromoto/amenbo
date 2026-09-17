@@ -150,6 +150,39 @@ pub fn git() -> Option<Command> {
     Some(command("git"))
 }
 
+/// Run one git command in `dir` and hand back its trimmed stdout, or `None` when git has nothing to say —
+/// no runnable git on this machine, `dir` in no repository, or the call itself failing. Empty output reads
+/// as `None` too: every caller here asks git for a value, and no value is the same answer as no git.
+///
+/// It is the plain read used by whoever needs one fact out of git and has an answer ready for not getting
+/// it. The calls that must tell a refusal apart from a missing git do not come through here —
+/// [`crate::worktree_cut`] keeps git's own stderr for that.
+pub fn git_output(dir: &std::path::Path, args: &[&str]) -> Option<String> {
+    let out = git()?.current_dir(dir).args(args).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if text.is_empty() { None } else { Some(text) }
+}
+
+/// Does git **track** `path` — is it in the index or a committed file? `ls-files --error-unmatch` exits 0
+/// only for a tracked path. The difference matters wherever Amenbo writes a file into somebody's working
+/// tree: a tracked file's change shows in `git status` and can be committed, while an untracked one is
+/// Amenbo's alone and git will refuse to walk over it. With no runnable git nothing is tracked — there is
+/// no index to be in.
+pub fn git_tracks(dir: &std::path::Path, path: &std::path::Path) -> bool {
+    let Some(mut git) = git() else { return false };
+    git.current_dir(dir)
+        .args(["ls-files", "--error-unmatch"])
+        .arg(path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Where git is on this Mac — see [`git`] for why this is a question at all.
 #[cfg(target_os = "macos")]
 mod git_path {

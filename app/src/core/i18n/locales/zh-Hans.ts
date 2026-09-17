@@ -1071,6 +1071,10 @@ export const zhHans: Translation = {
       message: "{path} 中的 AI 指南（Amenbo 受管区块）已过时（v{version} → v{current}）。",
       fix: "“重新同步”会把这个文件夹的指南更新到当前版本（你自己写的内容会保留）。",
     },
+    guidance_blocks_checkout: {
+      message: "{path} 是 Amenbo 写入的，当前分支上 git 并未跟踪它，而 {branches} 跟踪了它——切换到那个分支会被拒绝。",
+      fix: "二选一：在当前分支也跟踪该文件，或在 {branches} 上停止跟踪。若只是切换一次，先把文件移开即可——Amenbo 下次打开此文件夹时会重新写入。",
+    },
     legacy_pointer: {
       message: "{path} 是旧格式的关联——在那里启动的 AI 不会解析到这个项目。",
       fix: "“重新关联”会把这个文件夹重新关联到项目 #{project}。",

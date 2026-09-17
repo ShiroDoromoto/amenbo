@@ -1023,6 +1023,12 @@ impl Instructor {
             (Domain::Store, "quit-names") => {
                 Some(Expectation { text: arg_str(with, "agent")?.to_string(), present: present(with) })
             }
+            // The line the operator put in the file, read back off the preview. It is neither the
+            // interface's words nor the record's, so a reading finds it where the bytes were drawn and
+            // nowhere else on that pane.
+            (Domain::Attachment, "preview") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             (Domain::Files, "listed") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
@@ -1165,9 +1171,10 @@ impl Instructor {
             // screen keeps two ways in and they are not the same place: a record's own attachments have
             // a section of their own on its pane, and a remark's fold into the button under it.
             (Domain::Task, "attach") => format!(
-                "Open the task \"{}\" and attach a file named \"{}\" to it, from the attachments section on its pane.",
+                "Open the task \"{}\" and attach a file named \"{}\" to it, from the attachments section on its pane.{}",
                 self.target_label(with),
-                file_named(with)?
+                file_named(with)?,
+                written_in(with)
             ),
             // The form's own selects, answered before the record goes in. It is one move rather than
             // two: what is chosen is written with the decision, so the line sends a reader to the form
@@ -1228,9 +1235,10 @@ impl Instructor {
             // named by what it says, which is what an operator has to read it off the timeline by —
             // nothing else on screen tells one remark from another.
             (Domain::Comment, "attach") => format!(
-                "Find the comment \"{}\" and attach a file named \"{}\" to it, with the button for that under the remark itself.",
+                "Find the comment \"{}\" and attach a file named \"{}\" to it, with the button for that under the remark itself.{}",
                 self.target_label(with),
-                file_named(with)?
+                file_named(with)?,
+                written_in(with)
             ),
             // The words go into the box, and what they do to the board is the shot after this one. It is
             // written as a move rather than folded into the assert for the reason the other moves here
@@ -4878,6 +4886,24 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // The words a preview draws out of an attachment, read under the row that names the file.
+            // What is looked for is the line the operator was asked to put in that file, which is the
+            // one thing on that part of the pane neither the interface nor the record wrote — so a
+            // reading that finds it found the bytes coming back out of the store and onto the screen.
+            (Domain::Attachment, "preview") => match present(with) {
+                true => format!(
+                    "Open the record \"{}\", find the attachment \"{}\" on it, and confirm the preview drawn under that row shows \"{}\".",
+                    self.target_label(with),
+                    req(with, "file")?,
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Open the record \"{}\", find the attachment \"{}\" on it, and confirm \"{}\" is nowhere under that row.",
+                    self.target_label(with),
+                    req(with, "file")?,
+                    req(with, "shows")?
+                ),
+            },
             // What git says about a row. The mark is named by the state rather than by the colour, so
             // the eye is told what to look for in words that outlive a palette.
             (Domain::Files, "row-mark") => match present(with) {
@@ -5048,6 +5074,19 @@ fn file_named(with: &Args) -> Result<&str, String> {
         );
     }
     req(with, "file")
+}
+
+/// The line the operator has to have written in that file, as a clause on the end of the instruction.
+///
+/// It is empty where the step does not say, which is every road that only hangs the file and never
+/// reads it back. Where a road does read it back, the words have to be in the file before they can be
+/// on a shot of it — nothing a run lays down is where the picker is pointed, so the only way they get
+/// there is by being asked for.
+fn written_in(with: &Args) -> String {
+    match arg_str(with, "written") {
+        Some(words) => format!(" Write the line \"{words}\" in that file first — it is what a later step reads off the screen."),
+        None => String::new(),
+    }
 }
 
 fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
@@ -7709,6 +7748,43 @@ steps_gui:
         let on_remark = ins.render(&steps[3]).unwrap();
         assert!(on_remark.contains("the comment \"the sweep runs nightly\""), "got: {on_remark}");
         assert!(on_remark.contains("under the remark itself"), "got: {on_remark}");
+    }
+
+    /// What a preview is read for has to be in the file before the file is hung, and the file is the
+    /// operator's to bring — so the line asks for it, and the reading asks for it back.
+    #[test]
+    fn what_the_preview_will_be_read_for_is_asked_for_at_the_attach() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: attach
+    with: { target: seed, file: run.log, written: line one }
+  - type: assert
+    domain: attachment
+    op: preview
+    with: { target: seed, file: run.log, shows: line one }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        ins.render(&steps[0]).unwrap();
+        let hung = ins.render(&steps[1]).unwrap();
+        assert!(hung.contains("Write the line \"line one\" in that file first"), "got: {hung}");
+        let read = ins.render(&steps[2]).unwrap();
+        assert!(read.contains("the attachment \"run.log\""), "got: {read}");
+        assert!(read.contains("the preview drawn under that row shows \"line one\""), "got: {read}");
+        // And it is read off the shot, which is what makes the line worth a screenshot at all.
+        let expectation = ins.expectation(&steps[2]).expect("a reading");
+        assert_eq!(expectation.text, "line one");
+        assert!(expectation.present);
     }
 
     /// A link named where a file belongs. The screen's two ways in both take bytes off a disk, so there

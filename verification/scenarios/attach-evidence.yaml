@@ -6,6 +6,21 @@ description: >
   exists once there is an installed binary and a real store on disk. So the line ends by saving the
   blob back out and comparing it to what went in. `attach open` is deliberately left out: it hands the
   file to whatever the desktop opens it with, which is not something an unattended run should do.
+given:
+  # A record for the screen's road to hang evidence on. The terminal's road below makes its own,
+  # because what it walks begins at the ingest; the screen's road begins at the attaching, and
+  # standing the record up here keeps its shots on the part under test.
+  - type: action
+    domain: task
+    op: create
+    with: { title: SCENARIO SEED — the task the screen hangs evidence on }
+    as: shown
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with: { target: shown }
+
 steps_cli:
   # A file the person already has lying in their folder.
   - { type: action, domain: repo, op: write-file, with: { path: run.log, content: "line one\nline two\n" } }
@@ -46,3 +61,28 @@ steps_cli:
   - { type: action, domain: attachment, op: rm, with: { target: spec } }
   - { type: assert, domain: attachment, op: listed, with: { target: spec, owner: seed, owner_kind: task, present: false } }
   - { type: assert, domain: attachment, op: listed, with: { target: log, owner: seed, owner_kind: task, present: true } }
+
+# The half of this a terminal cannot answer for. The bytes going in and coming back out are the
+# road above; what nobody has walked is the pane drawing them — a preview reads the attachment over
+# a scheme of ours, which is a read across origins and was answered with nothing at all for as long
+# as the door did not say our own page may read it. The screen is the only place that shows.
+#
+# The file is the operator's to bring, so the line inside it is asked for rather than laid down, and
+# that line is what the shot is read for: it is neither the interface's words nor the record's, so a
+# reading that finds it found the bytes on the screen.
+steps_gui:
+  - type: action
+    domain: task
+    op: attach
+    with:
+      target: shown
+      file: run.log
+      written: line one
+
+  - type: assert
+    domain: attachment
+    op: preview
+    with:
+      target: shown
+      file: run.log
+      shows: line one

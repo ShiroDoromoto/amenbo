@@ -1783,6 +1783,12 @@ given up by that: what a search reaches of an attachment is what it is called, n
 `url:` has no way in on that face at all, so the GUI harness refuses one rather than writing a line
 about a face the app does not have.
 
+`written:` is the screen road's own half of that, for the one thing a name cannot answer: what the
+pane draws out of the file. The bytes have to be in it before a shot can be read for them, and the
+file is the operator's, so the instruction asks for the line as well as the name — and
+`attachment preview` reads it back off the pane. That assert is the screen's alone: a terminal hands
+the bytes back by saving them out (`attachment saved`), where nothing is drawn at all.
+
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.
 

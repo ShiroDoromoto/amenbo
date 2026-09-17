@@ -956,9 +956,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "choose-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Hanging bytes or a link on a record. Each `attach` names either a `file` the run wrote or a
     // `url`, and binds the attachment, since managing one afterwards means naming it.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name"], binds: true },
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name"], binds: true },
-    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name"], binds: true },
+    //
+    // `written` is the line that file has in it, and it is the screen road's alone: at a terminal the
+    // run laid the file down itself and knows every byte of it, while on screen the file is the
+    // operator's to bring and only its name crosses (`amenbo_verify_gui`). Named here, the words the
+    // preview will be read for are words somebody was told to put in the file.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name", "written"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name", "written"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name", "written"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Attachment, op: "rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The folder the run works in: the files a person already has there, the repository the hooks
     // are written into, and the two hook commands themselves.
@@ -1368,6 +1373,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "listed", required: &["target", "owner", "owner_kind"], refs: &["target", "owner"], strings: &["owner_kind", "position"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "saved", required: &["target", "content"], refs: &["target"], strings: &["content"], binds: false },
+    // What the row draws under itself, which is a screen road's alone: a terminal hands the bytes
+    // back by saving them out (`saved` above), and nothing there is drawn. `target` is the record the
+    // attachment hangs on rather than the attachment, because that is what an operator opens and what
+    // the screen names; `file` picks the row out among the record's own, and `shows` is the words the
+    // preview has to have drawn out of it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "preview", required: &["target", "file", "shows"], refs: &["target"], strings: &["file", "shows"], binds: false },
     // The repository-side gates: what the lint found in a file, and what is in a hook slot.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], strings: &["path"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], strings: &["hook", "state"], binds: false },

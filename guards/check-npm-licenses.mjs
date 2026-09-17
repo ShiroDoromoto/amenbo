@@ -15,7 +15,7 @@
 // into the bundle, so its licenses do not bind what we distribute. Same split as the npm audit gate.
 //
 // Scope is also one license per package, which is as deep as npm records. A package that is a
-// container for other people's work — `@shikijs/langs` ships 361 TextMate grammars collected from
+// container for other people's work — `tm-grammars` ships 260 TextMate grammars collected from
 // as many projects — declares its own license and says nothing about theirs. That question is
 // check-grammar-licenses.mjs's, and it reads the same allow-list this file parses.
 //

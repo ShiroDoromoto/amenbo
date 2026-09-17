@@ -28,12 +28,27 @@ const judge = (ids, table = TABLE, grants = {}) => judgeGrammars(new Set(ids), A
 test('the bundled set is the import specifiers, whatever the map around them is called', () => {
   const source = `
     export const GRAMMARS = {
-      rust: () => import("@shikijs/langs/rust"),
-      tsx: () => import('@shikijs/langs/tsx'),
+      rust: () => [import("tm-grammars/grammars/rust.json")],
+      tsx: () => [import('tm-grammars/grammars/tsx.json')],
     }
     export const SCOPES = { rust: "source.rust" }
   `
   assert.deepEqual([...bundledGrammars(source)].sort(), ['rust', 'tsx'])
+})
+
+// A language is drawn with the grammars its catalog names, and every one of them is bundled — which
+// is what the gate has to judge. Reading the keys would have missed the two behind `html`.
+test('every grammar a language is drawn with is read, not just the language', () => {
+  const source = `
+    export const GRAMMARS = {
+      html: () => [
+        import("tm-grammars/grammars/html.json"),
+        import("tm-grammars/grammars/javascript.json"),
+        import("tm-grammars/grammars/css.json"),
+      ],
+    }
+  `
+  assert.deepEqual([...bundledGrammars(source)].sort(), ['css', 'html', 'javascript'])
 })
 
 // A catalog that stopped importing grammars is a catalog that moved. Answering "nothing is
@@ -50,7 +65,7 @@ test('a grammar bundled with no licence recorded is refused', () => {
   assert.match(violations[0], /ahk2 is bundled but no licence is recorded/)
 })
 
-// The reason this gate exists: `@shikijs/langs` declares MIT and ships GPL-3.0 grammars inside it,
+// The reason this gate exists: `tm-grammars` declares MIT and ships GPL-3.0 grammars inside it,
 // so the package's own field cannot be what a grammar is judged by.
 test('a copyleft grammar is refused even though its package declares MIT', () => {
   const table = { ...TABLE, gnuplot: [{ grammar: 'gnuplot', license: 'GPL-3.0', source: 'https://example.invalid/gnuplot' }] }

@@ -497,13 +497,16 @@ steps_gui:
       state: on
 
   # ── and the item the menu does act on, over a set it can take whole ───────────────────────────
-  # The press that opens the menu on a row outside the set puts the set down and gathers that row
-  # alone, so the two below are gathered again for the leg that throws their changes away.
+  # The set the leg below throws away is bravo and delta, and it is reached from the one above by
+  # taking the untracked row back out rather than by starting again: the menu was opened on a row
+  # *inside* the set, and a press there leaves the set standing. (Opened on a row outside it, the
+  # press would have put the set down and gathered that row alone — which is a different road, and
+  # the one this note used to describe.)
   - type: action
     domain: files
     op: pick
     with:
-      name: bravo.md
+      name: newcomer.md
       section: changes
 
   - type: action

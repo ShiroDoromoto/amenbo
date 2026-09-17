@@ -349,9 +349,10 @@ pub struct DecisionDto {
     pub(crate) r#ref: String,
     pub(crate) title: String,
     pub(crate) body: String,
-    /// proposed / accepted / rejected. "Superseded" is not a status — it is an edge, and
-    /// `superseded_by` is where it is read.
-    #[ts(type = "\"proposed\" | \"accepted\" | \"rejected\"")]
+    /// decided / rejected — the two ways a decision ends (`AMB-D-918`). "Superseded" is not a status
+    /// — it is an edge, and `superseded_by` is where it is read; neither is "still being written",
+    /// which is `draft` below.
+    #[ts(type = "\"decided\" | \"rejected\"")]
     pub(crate) status: String,
     /// Is this decision still being written (`AMB-D-918`)? The pane draws its doors off this rather
     /// than off the status: while it is up, the decision is unfinished and the tasks resting on it are
@@ -836,8 +837,8 @@ pub struct SearchHitDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct SearchStandingDto {
-    /// `todo` / `in_progress` / `done` / `blocked` / `rejected` for a task, `proposed` / `accepted` /
-    /// `rejected` for a decision.
+    /// `todo` / `in_progress` / `done` / `blocked` / `rejected` for a task, `decided` / `rejected`
+    /// for a decision.
     pub(crate) status: String,
     /// Tasks only, and only where one was set.
     #[serde(skip_serializing_if = "Option::is_none")]

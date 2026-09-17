@@ -192,7 +192,7 @@ export const ru: Translation = {
     "dec.newBodyPh": "Вывод и обоснование (не вставляйте сырое обсуждение)", "dec.add": "Записать", "dec.cancel": "Отмена",
     "dec.accept": "Принять", "dec.reject": "Отклонить", "dec.reopen": "Вернуть к обсуждению",
     "dec.editAcceptedHint": "Правка принятого решения — это правка формулировки, а не новое решение (дата решения не меняется). Чтобы отменить его, замените его новым решением через «Связать решение» ниже.",
-    "dec.status.proposed": "Предложено", "dec.status.accepted": "Принято", "dec.status.rejected": "Отклонено",
+    "dec.status.proposed": "Предложено", "dec.status.decided": "Принято", "dec.status.rejected": "Отклонено",
     "dec.filterSuperseded": "Заменённые",
     "dec.supersededByRef": "заменено на {by}",
     "dec.supersedes": "Заменяет", "dec.supersededBy": "Заменено на", "dec.amends": "Изменяет", "dec.amendedBy": "Изменено в", "dec.linkedTasks": "Связанные задачи",

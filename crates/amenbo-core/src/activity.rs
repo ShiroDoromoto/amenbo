@@ -807,7 +807,7 @@ mod tests {
                 ("project_id", Sql::Integer(project)),
                 ("title", text(title_)),
                 ("body", text("本文")),
-                ("status", text("proposed")),
+                ("status", text("decided")),
             ],
         )
         .unwrap();

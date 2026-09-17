@@ -7,7 +7,7 @@ function dec(over: Partial<Decision> & { id: number }): Decision {
     ref: `D-${over.id}`,
     title: `決定 ${over.id}`,
     body: "",
-    status: "accepted",
+    status: "decided",
     current: true,
     project: { id: 1, name: "amenbo" },
     supersedes: [],

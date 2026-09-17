@@ -347,13 +347,13 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                             .with("ref", label),
                     );
                 }
-                // `proposed` (not settled). "It was superseded" is caught by the arm above (successor
-                // present) — currency is a derived projection and never surfaces in status, so a premise that
-                // is no longer current with no successor cannot reach here. `accepted` can, and by one
-                // route only: a decision whose writing is not finished (`AMB-D-918`), which
-                // `unsettled_premise` holds back whatever its status says. An accepted premise that
-                // nothing supersedes and nobody is still writing goes through without reaching here.
-                DecisionStatus::Proposed | DecisionStatus::Accepted => {
+                // "It was superseded" is caught by the arm above (successor present) — currency is a
+                // derived projection and never surfaces in status, so a premise that is no longer
+                // current with no successor cannot reach here. `decided` can, and by one route only: a
+                // decision whose writing is not finished (`AMB-D-918`), which `unsettled_premise`
+                // holds back whatever its status says. A settled premise that nothing supersedes and
+                // nobody is still writing goes through without reaching here.
+                DecisionStatus::Decided => {
                     reasons.push(
                         Msg::new(format!("premise {label} is not settled — wait for the ruling, or unlink it"))
                             .coded(ErrorCode::NotReadyPremiseUnsettled)

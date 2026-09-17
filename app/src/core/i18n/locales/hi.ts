@@ -187,7 +187,7 @@ export const hi: Translation = {
     "dec.newBodyPh": "निष्कर्ष + आधार (चर्चा जैसी है वैसी न चिपकाएँ)", "dec.add": "दर्ज करें", "dec.cancel": "रद्द करें",
     "dec.accept": "स्वीकारें", "dec.reject": "अस्वीकारें", "dec.reopen": "चर्चा पर लौटाएँ",
     "dec.editAcceptedHint": "स्वीकृत निर्णय को संपादित करना शब्दों का सुधार है, दोबारा निर्णय लेना नहीं (निर्णय की तारीख नहीं बदलती)। उसे पलटना हो तो नीचे “निर्णय जोड़ें” से नए निर्णय द्वारा अधिक्रमित करें।",
-    "dec.status.proposed": "प्रस्तावित", "dec.status.accepted": "स्वीकृत", "dec.status.rejected": "अस्वीकृत",
+    "dec.status.proposed": "प्रस्तावित", "dec.status.decided": "स्वीकृत", "dec.status.rejected": "अस्वीकृत",
     "dec.filterSuperseded": "अधिक्रमित",
     "dec.supersededByRef": "{by} द्वारा अधिक्रमित",
     "dec.supersedes": "अधिक्रमित करता है", "dec.supersededBy": "इससे अधिक्रमित", "dec.amends": "संशोधित करता है", "dec.amendedBy": "इससे संशोधित", "dec.linkedTasks": "जुड़े हुए काम",

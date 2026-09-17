@@ -589,9 +589,11 @@ datasets! {
         project_id: fk("project", "RESTRICT"),
         title: col(REQ),
         body: col(REQ),
-        // `superseded` is not a state — it is the far end of a `supersedes` edge. Currency is derived
+        // The two ways a decision ends, and there is no third (`AMB-D-918`): saving one decides it, so
+        // no value here names the stage before the verdict — `draft` below does. `superseded` is not a
+        // state either — it is the far end of a `supersedes` edge, and currency is derived
         // (`current` = no live `supersedes` edge names this decision), never stored.
-        status: enum_col("proposed", "accepted", "rejected"),
+        status: enum_col("decided", "rejected"),
         // Is the decision still being written? A premise of `ready` on the task side, exactly as
         // `task.draft` is (`AMB-D-553`, `AMB-D-918`) — so it sits here rather than widening `status`,
         // and the two sides of the store answer "still being put together" the same way. False is

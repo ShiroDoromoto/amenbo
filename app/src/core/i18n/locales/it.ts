@@ -191,7 +191,7 @@ export const it: Translation = {
     "dec.newBodyPh": "Conclusione + motivi (non incollare la discussione grezza)", "dec.add": "Registra", "dec.cancel": "Annulla",
     "dec.accept": "Accetta", "dec.reject": "Respingi", "dec.reopen": "Rimanda in discussione",
     "dec.editAcceptedHint": "Modificare una decisione accettata è una correzione di forma, non una nuova decisione (la data della decisione non cambia). Per ribaltarla, sostituiscila con una nuova decisione da «Collega una decisione», qui sotto.",
-    "dec.status.proposed": "Proposta", "dec.status.accepted": "Accettata", "dec.status.rejected": "Respinta",
+    "dec.status.proposed": "Proposta", "dec.status.decided": "Accettata", "dec.status.rejected": "Respinta",
     "dec.filterSuperseded": "Sostituite",
     "dec.supersededByRef": "sostituita da {by}",
     "dec.supersedes": "Sostituisce", "dec.supersededBy": "Sostituita da", "dec.amends": "Modifica", "dec.amendedBy": "Modificata da", "dec.linkedTasks": "Attività collegate",

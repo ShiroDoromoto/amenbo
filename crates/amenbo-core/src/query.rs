@@ -1538,13 +1538,13 @@ pub struct DecisionFilter {
     /// the axes and their values are one set shared with the tasks, and a reader who learnt to ask for
     /// them on one side should not have to learn a second way here.
     pub dimensions: Vec<DimensionFilter>,
-    /// `decided_before:<date>` — accepted on or before this day (the day `decided_at` fell on where
+    /// `decided_before:<date>` — settled on or before this day (the day `decided_at` fell on where
     /// the reader is ≤ date; the day itself is **included**). "What had been decided as of some point
     /// in time" is not a feature of its own: it falls out of composing this ordinary filter key with
-    /// `superseded:`. Decisions never accepted (proposed / rejected, with no `decided_at`) match
-    /// neither direction.
+    /// `superseded:`. A decision that was never settled (still being written, or rejected — either
+    /// way with no `decided_at`) matches neither direction.
     pub decided_before: Option<NaiveDate>,
-    /// `decided_after:<date>` — accepted on or after this day (the day `decided_at` fell on where the
+    /// `decided_after:<date>` — settled on or after this day (the day `decided_at` fell on where the
     /// reader is ≥ date; the day itself is **included**). The counterpart of `decided_before`: give
     /// both and you have a span, inclusive at each end.
     pub decided_after: Option<NaiveDate>,
@@ -1574,7 +1574,7 @@ impl DecisionFilter {
             match key {
                 "status" => {
                     f.status = Some(DecisionStatus::parse(value).ok_or_else(|| {
-                        Error::invalid("status must be proposed / accepted / rejected")
+                        Error::invalid("status must be decided / rejected")
                     })?)
                 }
                 // `draft:yes|no` — the premise that says the writing is not finished.
@@ -1968,6 +1968,7 @@ pub fn decision_detail(
         title: row.title,
         body: row.body,
         status: crate::model::DecisionStatus::parse(&row.status).unwrap_or_default(),
+        draft: row.draft,
         supersedes,
         superseded_by,
         amends,
@@ -2299,7 +2300,7 @@ pub struct SearchHit {
 #[derive(Clone, Debug, Serialize)]
 pub struct HitStanding {
     /// The record's own state, in the vocabulary its side speaks: `todo` / `in_progress` / `done` /
-    /// `blocked` / `rejected` for a task, `proposed` / `accepted` / `rejected` for a decision. Which of
+    /// `blocked` / `rejected` for a task, `decided` / `rejected` for a decision. Which of
     /// the two to read it as is `kind`'s to say, as it is for everything else the two sides share here.
     pub status: String,
     /// How urgent it is — tasks only, and only where one was set.
@@ -2805,7 +2806,7 @@ mod filter_tests {
 
         for message in [
             Filter::parse("4238", day).unwrap_err().to_string(),
-            DecisionFilter::parse("status:accepted 833", day).unwrap_err().to_string(),
+            DecisionFilter::parse("status:decided 833", day).unwrap_err().to_string(),
         ] {
             assert!(message.contains("must be in key:value form"), "the grammar is still stated: {message}");
             assert!(message.contains("number:"), "and the key that reads a number: {message}");
@@ -3562,7 +3563,7 @@ mod filter_tests {
 
         let decision_hit = r.hits.iter().find(|h| h.kind == "decision").expect("the decision's title");
         let d = decision_hit.standing.as_ref().expect("the decision's standing");
-        assert_eq!(d.status, "proposed");
+        assert_eq!(d.status, "decided");
         assert_eq!(d.priority, None, "a decision has no priority to carry");
         assert_eq!(
             d.labels.iter().map(|l| (l.axis.as_str(), l.value.as_str())).collect::<Vec<_>>(),

@@ -189,7 +189,7 @@ export const vi: Translation = {
     "dec.newBodyPh": "Kết luận + căn cứ (đừng dán nguyên cuộc thảo luận)", "dec.add": "Ghi", "dec.cancel": "Huỷ",
     "dec.accept": "Chấp nhận", "dec.reject": "Bác", "dec.reopen": "Đưa lại thảo luận",
     "dec.editAcceptedHint": "Sửa một quyết định đã chấp nhận là sửa câu chữ, không phải quyết lại (ngày quyết không đổi). Muốn lật nó thì hãy thay thế bằng một quyết định mới qua “Nối một quyết định” ở dưới.",
-    "dec.status.proposed": "Đề xuất", "dec.status.accepted": "Đã chấp nhận", "dec.status.rejected": "Bị bác",
+    "dec.status.proposed": "Đề xuất", "dec.status.decided": "Đã chấp nhận", "dec.status.rejected": "Bị bác",
     "dec.filterSuperseded": "Đã bị thay thế",
     "dec.supersededByRef": "bị {by} thay thế",
     "dec.supersedes": "Thay thế", "dec.supersededBy": "Bị thay thế bởi", "dec.amends": "Sửa đổi", "dec.amendedBy": "Bị sửa đổi bởi", "dec.linkedTasks": "Việc đã nối",

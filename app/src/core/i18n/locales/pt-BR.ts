@@ -192,7 +192,7 @@ export const ptBR: Translation = {
     "dec.newBodyPh": "Conclusão + motivos (não cole a discussão crua)", "dec.add": "Registrar", "dec.cancel": "Cancelar",
     "dec.accept": "Aceitar", "dec.reject": "Recusar", "dec.reopen": "Devolver à discussão",
     "dec.editAcceptedHint": "Editar uma decisão aceita é ajuste de redação, não uma nova decisão (a data de decisão não muda). Para derrubá-la, substitua-a por uma nova decisão em “Vincular uma decisão”, abaixo.",
-    "dec.status.proposed": "Proposta", "dec.status.accepted": "Aceita", "dec.status.rejected": "Recusada",
+    "dec.status.proposed": "Proposta", "dec.status.decided": "Aceita", "dec.status.rejected": "Recusada",
     "dec.filterSuperseded": "Substituídas",
     "dec.supersededByRef": "substituída por {by}",
     "dec.supersedes": "Substitui", "dec.supersededBy": "Substituída por", "dec.amends": "Altera", "dec.amendedBy": "Alterada por", "dec.linkedTasks": "Tarefas vinculadas",

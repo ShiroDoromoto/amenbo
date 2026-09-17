@@ -27,15 +27,23 @@ import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { FacetAvatar } from "../components/atoms";
 
-// Colour of the status badge — keep it matching DecisionsScreen's statusColor. The badge says the status
-// and nothing else (`AMB-D-410`); that this decision was overturned is an edge, and the edge list below
-// is where it is read.
-function statusColor(s: DecisionStatus): string {
+// Colour of the state badge — keep it matching DecisionsScreen's statusColor. The badge says how far
+// the decision has got and nothing else (`AMB-D-410`); that this decision was overturned is an edge,
+// and the edge list below is where it is read. An unfinished writing is read before the status,
+// because the status has nothing to tell apart while it is up: a decision is `decided` from the
+// moment it is saved (`AMB-D-918`).
+function statusColor(s: DecisionStatus, draft: boolean): string {
+  if (draft) return "#b88600";
   switch (s) {
-    case "accepted": return "#2e9e6b";
-    case "proposed": return "#b88600";
+    case "decided": return "#2e9e6b";
     case "rejected": return "#c0504d";
   }
+}
+
+// The word on that badge, off the same two facts and in the same order. The draft still reads off the
+// acceptance-era key; every one of them is rewritten in `AMB-T-5032`.
+function statusWord(s: DecisionStatus, draft: boolean): string {
+  return draft ? t("dec.status.proposed") : t(`dec.status.${s}`);
 }
 
 /**
@@ -75,7 +83,7 @@ export function DecisionDetailPane({
   const [commentError, setCommentError] = useState<string | null>(null);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Editing the title/body in place (proposed and accepted alike). One form drives the single `editDecision`
+  // Editing the title/body in place (still being written and settled alike). One form drives the single `editDecision`
   // write; a rejected decision is terminal (core refuses it), so the edit affordance is hidden there.
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -184,7 +192,7 @@ export function DecisionDetailPane({
         ) : (
           <span style={editable ? { cursor: "text" } : undefined} title={editable ? t("detail.edit") : undefined} onDoubleClick={editable ? startEdit : undefined}>{d.title}</span>
         )}
-        <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
+        <span className="chip chip--status" style={{ background: statusColor(d.status, d.draft) }}>{statusWord(d.status, d.draft)}</span>
         {!editing && editable && (
           <button className="btn" onClick={startEdit}>{t("detail.edit")}</button>
         )}

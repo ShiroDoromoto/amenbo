@@ -265,7 +265,7 @@ pub fn seed(bulk: usize) -> Seeded {
             project_id: pid,
             title: format!("decision #{i}"),
             body: String::new(),
-            status: DecisionStatus::Proposed,
+            status: DecisionStatus::Decided,
             created_at: now,
             updated_at: now,
             ..Default::default()

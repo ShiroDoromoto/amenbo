@@ -187,7 +187,7 @@ export const nl: Translation = {
     "dec.newBodyPh": "Conclusie + onderbouwing (plak geen rauwe discussie)", "dec.add": "Vastleggen", "dec.cancel": "Annuleren",
     "dec.accept": "Aannemen", "dec.reject": "Afwijzen", "dec.reopen": "Terug naar de discussie",
     "dec.editAcceptedHint": "Een aangenomen besluit bewerken is een tekstuele correctie, geen nieuw besluit (de besluitdatum verandert niet). Wil je het omkeren, vervang het dan door een nieuw besluit via “Besluit koppelen” hieronder.",
-    "dec.status.proposed": "Voorgesteld", "dec.status.accepted": "Aangenomen", "dec.status.rejected": "Afgewezen",
+    "dec.status.proposed": "Voorgesteld", "dec.status.decided": "Aangenomen", "dec.status.rejected": "Afgewezen",
     "dec.filterSuperseded": "Vervangen",
     "dec.supersededByRef": "vervangen door {by}",
     "dec.supersedes": "Vervangt", "dec.supersededBy": "Vervangen door", "dec.amends": "Wijzigt", "dec.amendedBy": "Gewijzigd door", "dec.linkedTasks": "Gekoppelde taken",

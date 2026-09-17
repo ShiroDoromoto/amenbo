@@ -855,6 +855,11 @@ pub const STEPS: &[Step] = &[
             "ALTER TABLE decision ADD COLUMN draft BOOLEAN NOT NULL DEFAULT 0 CHECK(draft IN (0, 1));",
         ),
     },
+    Step {
+        to: 48,
+        name: "fold decision.proposed away, and rename accepted to decided",
+        apply: Apply::Custom(fold_the_proposal_away),
+    },
 ];
 
 /// v43: take the plugin mechanism's tables and its execution log away (`AMB-D-884`).
@@ -1862,6 +1867,79 @@ fn admit_rejected_task_status(ctx: &Ctx<'_>) -> Result<()> {
     if before != after {
         return Err(super::StoreEngineError::UnrecognisedDdl { table: "task", expected: NARROW });
     }
+    Ok(())
+}
+
+/// v48: the decision's closed set loses a value and renames another — `proposed` / `accepted` /
+/// `rejected` becomes `decided` / `rejected` (`AMB-D-918`).
+///
+/// **The declaration first, the rows second, one transaction.** SQLite checks a `CHECK` on write and
+/// never on the rows already there, so narrowing the set while `accepted` is still written in the
+/// column is safe — and it is the only order that works, because the `UPDATE` that writes `decided`
+/// would be refused by the set it is moving out of. Both halves ride the step's transaction, so a
+/// store never comes to rest holding one without the other.
+///
+/// **This is v9's procedure met a fourth time, copied rather than called.** SQLite has no
+/// `ALTER TABLE … DROP CONSTRAINT`, and the rebuild-and-swap its documentation prescribes is closed for
+/// the reason [`admit_rejected_task_status`] gives at length — enforcement is on and four tables
+/// reference `decision`, so dropping it would fire them. A step is frozen at the meaning it had when it
+/// was written, so it names its own clause in its own text: folded into a helper, an edit to that
+/// helper would reach back into stores migrated years ago. What is *not* frozen is the declaration
+/// around the clause — `draft` reaches a store either from its birth `CREATE TABLE` or from v47's
+/// `ALTER TABLE`, so two stores at this version carry the same columns in a different order, which is
+/// why the text is read rather than written.
+///
+/// **Where each old value lands.** `accepted` is `decided` under a new name: same rows, same
+/// `decided_at` / `decided_by`, nothing about them reconsidered. `proposed` goes to `rejected`, which
+/// is the only honest home left for it — `draft` was seeded `0` by v47, so a proposal carried over as
+/// `decided` would read as a settled policy nobody settled, and one carried over as a draft would be a
+/// writing nobody is going to finish. A store where the old build never rejected anything has no
+/// `proposed` row to move, and the `UPDATE` touches nothing.
+fn fold_the_proposal_away(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from the baseline on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(status IN ('', 'proposed', 'accepted', 'rejected'))";
+    /// The same column with the two values that outlive the acceptance.
+    const WIDE: &str = "CHECK(status IN ('', 'decided', 'rejected'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'decision'",
+        [],
+        |r| r.get(0),
+    )?;
+    if !declared.contains(WIDE) {
+        // Not already folded: a store born from a registry that carries the new set, stamped back to an
+        // earlier version, is the one that arrives here with nothing to rewrite.
+        if !declared.contains(NARROW) {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "decision",
+                expected: NARROW,
+            });
+        }
+        let folded = declared.replace(NARROW, WIDE);
+
+        let before = column_names(ctx.tx, "decision")?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'decision'",
+            [&folded],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the `UPDATE` below
+        // sees the new set instead of the one this connection read at open.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, "decision")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "decision",
+                expected: NARROW,
+            });
+        }
+    }
+
+    ctx.tx.execute_batch(
+        "UPDATE decision SET status = 'decided' WHERE status = 'accepted';
+         UPDATE decision SET status = 'rejected' WHERE status = 'proposed';",
+    )?;
     Ok(())
 }
 
@@ -4544,6 +4622,64 @@ mod tests {
 
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         assert_eq!(engine.get_meta("talk.layout").unwrap().as_deref(), Some("{not json"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v48 in full: the closed set narrows to the two values that outlive the acceptance, and every
+    /// row lands on one of them (`AMB-D-918`). `accepted` is `decided` under a new name; `proposed`
+    /// goes to `rejected`, because `draft` was seeded `0` by v47 and neither of the other two homes
+    /// tells the truth about a proposal nobody ruled on. The empty status a row caught mid-create
+    /// carries is left where it is — it is not one of the three the step speaks for.
+    #[test]
+    fn the_proposal_is_folded_away_and_the_acceptance_is_renamed() {
+        let dir = scratch("decision-status-fold");
+        let engine = store_at(&dir, 47);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO decision (id, project_id, title, body, status, created_at, updated_at) VALUES
+                     (1, 1, 'settled',  '', 'accepted', '2025-12-01T00:00:00Z', '2025-12-01T00:00:00Z'),
+                     (2, 1, 'proposed', '', 'proposed', '2025-11-01T00:00:00Z', '2025-11-01T00:00:00Z'),
+                     (3, 1, 'declined', '', 'rejected', '2025-10-01T00:00:00Z', '2025-10-01T00:00:00Z'),
+                     (4, 1, '',         '', '',         '',                     '');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let folded: Vec<(i64, String)> = {
+            let conn = engine.conn();
+            let mut stmt = conn.prepare("SELECT id, status FROM decision ORDER BY id").unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(
+            folded,
+            vec![
+                (1, "decided".to_string()),
+                (2, "rejected".to_string()),
+                (3, "rejected".to_string()),
+                (4, String::new()),
+            ],
+        );
+
+        let declared = declared_sql(&engine, "decision");
+        assert!(
+            declared.contains("CHECK(status IN ('', 'decided', 'rejected'))"),
+            "the closed set is the new one: {declared}"
+        );
+        assert!(
+            engine
+                .conn()
+                .execute(
+                    "UPDATE decision SET status = 'accepted' WHERE id = 1",
+                    [],
+                )
+                .is_err(),
+            "and the retired value is refused on the way in, not merely absent"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }

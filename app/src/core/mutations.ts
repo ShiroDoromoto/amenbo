@@ -1569,7 +1569,7 @@ export async function removeTaskCommit(taskId: number, sha: string): Promise<voi
 }
 
 /**
- * Record a decision (Proposed, under project_id). Decisions exist only inside Tauri — the mock fixtures
+ * Record a decision (decided, its writing still open, under project_id). Decisions exist only inside Tauri — the mock fixtures
  * have none — so in browser iteration every decision call below is a no-op.
  *
  * `dimensionValueIds` classifies it as it is recorded, riding in the same transaction as the row: a
@@ -1623,7 +1623,7 @@ export async function finishWritingDecision(id: number, reason?: string): Promis
   return invokeAck("decision_finish_writing", { id });
 }
 
-/** Reject a decision (Proposed → Rejected). As with finishing the writing, a `reason` is posted as one comment. */
+/** Reject a decision — the other way out of the draft (`AMB-D-918`). As with finishing the writing, a `reason` is posted as one comment. */
 export async function rejectDecision(id: number, reason?: string): Promise<void> {
   if (!inTauri()) return;
   const r = reason?.trim();
@@ -1637,7 +1637,7 @@ export async function reopenDecision(id: number): Promise<void> {
   return invokeAck("decision_reopen", { id });
 }
 
-/** Edit a decision's title/body in place — proposed or accepted alike (`AMB-D-363`); rejected is terminal. */
+/** Edit a decision's title/body in place — still being written or settled alike (`AMB-D-363`); rejected is terminal. */
 export async function editDecision(id: number, title: string | null, body: string | null): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("decision_edit", { id, title, body });

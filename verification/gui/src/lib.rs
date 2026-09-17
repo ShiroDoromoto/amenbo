@@ -7675,7 +7675,7 @@ steps_gui:
   - type: action
     domain: decision
     op: choose-filter
-    with: { axis: status, value: accepted }
+    with: { axis: status, value: decided }
   - type: assert
     domain: decision
     op: narrowed

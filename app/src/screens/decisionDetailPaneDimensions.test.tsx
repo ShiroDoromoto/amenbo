@@ -65,7 +65,7 @@ import { DecisionDetailPane } from "./DecisionDetailPane";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const DECISION = {
-  id: 781, ref: "D-781", title: "決定781", body: "", status: "accepted", draft: false,
+  id: 781, ref: "D-781", title: "決定781", body: "", status: "decided", draft: false,
   project: { id: 1, name: "検証PJ" },
   supersedes: [], supersededBy: [], amends: [], amendedBy: [], buildsOn: [], builtOnBy: [],
   decidedAt: null, decidedBy: null, linkedTasks: [],

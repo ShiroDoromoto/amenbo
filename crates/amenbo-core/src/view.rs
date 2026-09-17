@@ -319,6 +319,10 @@ pub struct DecisionCompact {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
     pub status: DecisionStatus,
+    /// Whether the writing is still unfinished (`AMB-D-918`) — what `draft:` narrows the listing by,
+    /// and the one thing the status can no longer say: a decision is `decided` from the moment it is
+    /// saved, so a row without this could not tell one still in hand from one that is settled.
+    pub draft: bool,
     /// The conversational ref: `AMB-D-<n>` — a number space of its own, separate from a task's. Rendered from
     /// `id`.
     pub r#ref: String,
@@ -345,6 +349,11 @@ pub struct DecisionDetail {
     pub title: String,
     pub body: String,
     pub status: DecisionStatus,
+    /// Whether the writing is still unfinished (`AMB-D-918`) — the premise that holds a task resting
+    /// on this decision out of `ready`. It is carried beside `status` because since the acceptance was
+    /// folded away the status alone no longer says it: a decision is `decided` from the moment it is
+    /// saved, and this is what separates one still in hand from one that is settled.
+    pub draft: bool,
     /// The decisions this one supersedes (id + title). One decision can supersede several — the edges
     /// form a DAG.
     pub supersedes: Vec<DecisionRef>,
@@ -366,8 +375,8 @@ pub struct DecisionDetail {
     /// that declares no axis at all.
     pub dimensions: Vec<ClassifiedAs>,
     pub decided_at: Option<Timestamp>,
-    /// Who accepted it: a free-text decider token, not an entity key. The token is read into both `id`
-    /// and `name`, so the two always carry the same string.
+    /// Who ended the writing: a free-text decider token, not an entity key. The token is read into
+    /// both `id` and `name`, so the two always carry the same string.
     pub decided_by: Option<Ref>,
     /// The live tasks linked to it (id + title + status).
     pub linked_tasks: Vec<LinkedTaskRef>,
@@ -401,6 +410,7 @@ pub fn decision_compact_with(
         // The body is omitted by default; the `decision list --with-body` path fills in `d.body` later.
         body: None,
         status: d.status,
+        draft: d.draft,
         r#ref: decision_display_ref(d),
         project,
         superseded_by: superseded_by.iter().map(|id| crate::idref::decision(*id)).collect(),

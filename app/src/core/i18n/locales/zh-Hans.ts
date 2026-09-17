@@ -187,7 +187,7 @@ export const zhHans: Translation = {
     "dec.newBodyPh": "结论＋依据（不要粘贴原始讨论）", "dec.add": "记录", "dec.cancel": "取消",
     "dec.accept": "采纳", "dec.reject": "否决", "dec.reopen": "退回讨论",
     "dec.editAcceptedHint": "编辑已采纳的决策属于措辞修正，不是重新决策（决定日期不会改变）。要推翻它，请用下方的“关联决策”以新决策取代它。",
-    "dec.status.proposed": "提案中", "dec.status.accepted": "已采纳", "dec.status.rejected": "已否决",
+    "dec.status.proposed": "提案中", "dec.status.decided": "已采纳", "dec.status.rejected": "已否决",
     "dec.filterSuperseded": "已被取代",
     "dec.supersededByRef": "已被 {by} 取代",
     "dec.supersedes": "取代", "dec.supersededBy": "被取代于", "dec.amends": "修订", "dec.amendedBy": "被修订于", "dec.linkedTasks": "关联任务",

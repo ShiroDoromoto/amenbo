@@ -191,7 +191,7 @@ export const es: Translation = {
     "dec.newBodyPh": "Conclusión + razones (no pegues la discusión en bruto)", "dec.add": "Registrar", "dec.cancel": "Cancelar",
     "dec.accept": "Aceptar", "dec.reject": "Rechazar", "dec.reopen": "Devolver a discusión",
     "dec.editAcceptedHint": "Editar una decisión aceptada es corregir la redacción, no volver a decidir (la fecha de la decisión no cambia). Para revocarla, sustitúyela por una nueva decisión desde «Enlazar una decisión», más abajo.",
-    "dec.status.proposed": "Propuesta", "dec.status.accepted": "Aceptada", "dec.status.rejected": "Rechazada",
+    "dec.status.proposed": "Propuesta", "dec.status.decided": "Aceptada", "dec.status.rejected": "Rechazada",
     "dec.filterSuperseded": "Sustituidas",
     "dec.supersededByRef": "sustituida por {by}",
     "dec.supersedes": "Sustituye a", "dec.supersededBy": "Sustituida por", "dec.amends": "Modifica a", "dec.amendedBy": "Modificada por", "dec.linkedTasks": "Tareas enlazadas",

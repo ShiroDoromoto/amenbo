@@ -81,16 +81,17 @@ const opened: number[] = [];
 /** One decision. By default: still being written, no edges, under a project — the conditions under which the picker shows. */
 function decision(id: number, over: Partial<Decision> = {}): Decision {
   const base = {
-    id, ref: `D-${id}`, title: `決定${id}`, body: "", status: "proposed",
+    id, ref: `D-${id}`, title: `決定${id}`, body: "", status: "decided",
     project: { id: 1, name: "検証PJ" },
     supersedes: [], supersededBy: [], amends: [], amendedBy: [], buildsOn: [], builtOnBy: [],
     decidedAt: null, decidedBy: null, linkedTasks: [],
     createdAt: "2026-07-12T00:00:00Z", updatedAt: "2026-07-12T00:00:00Z",
     ...over,
   };
-  // The flag follows the status unless the case being written says otherwise: core sets the two
-  // together, so a fixture that named one and forgot the other would draw doors the app never draws.
-  return { draft: over.draft ?? base.status === "proposed", ...base } as Decision;
+  // The shape core gives a decision the moment it is saved (`AMB-D-918`): `decided`, with the
+  // writing still open. Both routes out of the draft lower the flag, so a case that names either —
+  // `rejected`, or the instant it was settled at — gets the writing closed with it.
+  return { draft: over.draft ?? (base.status === "decided" && !base.decidedAt), ...base } as Decision;
 }
 const ref = (id: number): DecisionRef => ({ id, name: `決定${id}`, ref: `D-${id}` });
 
@@ -173,7 +174,7 @@ describe("the stamps that say how fresh the record is", () => {
 
   it("say when it was settled, and hold back the change the settling itself made", () => {
     hoisted.decisions.set(1, decision(1, {
-      status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-07-15T09:00:00Z",
+      status: "decided", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-07-15T09:00:00Z",
     }));
     render(1);
     expect(stamps()).toContain(t("dec.decided"));
@@ -185,7 +186,7 @@ describe("the stamps that say how fresh the record is", () => {
   // knowing who made it — so the decided stamp names them beside the date.
   it("name who settled it beside the decided stamp", () => {
     hoisted.decisions.set(1, decision(1, {
-      status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-07-15T09:00:00Z",
+      status: "decided", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-07-15T09:00:00Z",
       decidedBy: { id: "ai", name: "ai" },
     }));
     render(1);
@@ -202,7 +203,7 @@ describe("the stamps that say how fresh the record is", () => {
 
   it("say when it last changed once something has moved since", () => {
     hoisted.decisions.set(1, decision(1, {
-      status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-08-01T10:00:00Z",
+      status: "decided", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-08-01T10:00:00Z",
     }));
     render(1);
     expect(stamps()).toContain(t("dec.lastChanged"));
@@ -433,7 +434,7 @@ describe("the remaining pane writes report a refusal, not swallow it", () => {
 
   it("surfaces a refused reopen", async () => {
     hoisted.failing.add("reopenDecision");
-    hoisted.decisions.set(1, decision(1, { status: "accepted" }));
+    hoisted.decisions.set(1, decision(1, { draft: false }));
     render(1);
 
     click(button(t("dec.reopen")));
@@ -496,7 +497,7 @@ describe("editing the title and body in place", () => {
   });
 
   it("an accepted decision is editable and shows the not-a-re-decision hint", () => {
-    hoisted.decisions.set(1, decision(1, { status: "accepted" }));
+    hoisted.decisions.set(1, decision(1, { draft: false }));
     render(1);
 
     startEdit();

@@ -1385,6 +1385,16 @@ function Tree({
   /** How far in a line is drawn. The step itself is the stylesheet's (`../styles/global.css`). */
   const step = (depth: number) => ({ "--depth": depth } as CSSProperties);
 
+  /**
+   * The picked rows as something a row can be looked up in, rather than a list to walk.
+   *
+   * Every drawn row asks four times whether it is picked, and a reader who picks the whole tree
+   * makes each of those questions as long as the tree — the work grows with the rows times the
+   * rows, and the screen stops while it is answered (`AMB-T-5016` measured it on the list beside
+   * this one). The set is built once per draw and answers each question in one step.
+   */
+  const inPicked = new Set(picked);
+
   return (
     <ul
       ref={tree}
@@ -1470,7 +1480,7 @@ function Tree({
             // On every row and not only on the picked ones: what a reader is told about a row they
             // have arrived at is whether it is in the selection, and a row that said nothing would
             // be read as one that cannot be picked at all.
-            aria-selected={picked.includes(line.key)}
+            aria-selected={inPicked.has(line.key)}
             tabIndex={line.key === stop ? 0 : -1}
             className={`files__item${lands ? " files__into" : ""}`}
             // A press picks the row out; which keys are down says what else it is. The machine's
@@ -1495,7 +1505,7 @@ function Tree({
               }
               if (mac ? e.metaKey : e.ctrlKey) {
                 onPicked(
-                  picked.includes(line.key)
+                  inPicked.has(line.key)
                     ? picked.filter((one) => one !== line.key)
                     : [...picked, line.key],
                   line.key,
@@ -1556,7 +1566,7 @@ function Tree({
               e.preventDefault();
               e.stopPropagation();
               e.currentTarget.focus();
-              if (!picked.includes(line.key)) onPicked([line.key], line.key);
+              if (!inPicked.has(line.key)) onPicked([line.key], line.key);
               onMenu(line.path, line.isDir, e.clientX, e.clientY);
             }}
             // Where the tab stop follows to, however the row was reached — the arrows move the
@@ -1569,7 +1579,7 @@ function Tree({
                 <span className={rowClass("files__dir", {
                   ignored: line.ignored,
                   mark,
-                  picked: picked.includes(line.key),
+                  picked: inPicked.has(line.key),
                   chosen: chosen === line.key,
                 })}
                 >
@@ -1584,7 +1594,7 @@ function Tree({
                 <span className={rowClass("files__file", {
                   ignored: line.ignored,
                   mark,
-                  picked: picked.includes(line.key),
+                  picked: inPicked.has(line.key),
                   chosen: chosen === line.key,
                 })}
                 >

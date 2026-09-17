@@ -209,7 +209,9 @@ fn run(opts: &Opts) -> Result<bool, String> {
         |image| read_shot(image, &screen),
         // The same window the shot was aimed at, listed off its accessibility tree — for the asserts
         // a picture carries but cannot be read for, a name a narrow column drew cut being the one.
-        |window| read_tree(gui.borrow().pid, window, &screen),
+        // Narrowed to the section the step named, so an absence is about that list and not about
+        // every list on the screen.
+        |window, within| read_tree(gui.borrow().pid, window, within, &screen),
         // The app's own menu bar, which stands above every window and is on no shot of one.
         || read_menu(gui.borrow().pid, &screen),
         |brief| hand_over(&stdin, brief),

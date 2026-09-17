@@ -349,6 +349,16 @@ parsed: what the assert asks is whether the name is on that window at all, which
 a shot's reading is put to, so it goes through the same fold and the same match. A step on this table comes
 out `pass`/`fail` like any other, and the listing is filed beside the shot the way a reading is.
 
+**An absence is read off the list the road named, not off the window.** A step that says a name is
+*not* on a list is saying it about that list, and the same name often stands somewhere else on the
+same screen: the rail keeps its own list of what changed, and git's reply stands in the pane behind
+the panel. Both reded a release run whose screen was right. So a step that names a `section:` is
+read off that section alone — `screen find <pid> --within <class>` lists the box the interface draws
+under that CSS class and what is inside it. The class and not the heading over it: a heading is a
+word of the interface's, in whatever language the machine is set to, and nothing here is held to
+those. `amenbo_verify_gui::marks_the_section` is the one table that pairs a road's word for a
+section with the class the interface marks it by.
+
 **The shot is still taken and still filed.** The reading moves; the evidence does not — the picture
 is what an eye reads the step back from, and a tree read is no more legible to a person than a
 photograph of a screen nobody kept.
@@ -424,7 +434,8 @@ step was captured, non-zero on a failed assert or a load/capture/reading failure
 closed by a human from the evidence, not by the exit code.
 
 **Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
-element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
+element on screen with the name it answers to and where it stands — `--within <class>` narrows that
+listing to one box of the interface, the one drawn under that CSS class — and `click-named <pid> <name>`
 clicks the one of that name — bringing that pid's app to the front first, since a press lands on
 whatever is frontmost where it is aimed and anything that took the front would swallow it silently.
 `right-click-named` is the same press with the other button, which is the only way to reach a menu

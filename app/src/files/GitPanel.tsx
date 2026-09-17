@@ -879,7 +879,7 @@ function Conflicts({ rows, marks, running, picked, onPicked, onOpen, onSettle, o
       <div className="gitpanel__headrow">
         <h3 className="gitpanel__head">{t("git.conflicts")} <span>{rows.length}</span></h3>
       </div>
-      <RowList what={t("git.conflicts")} on={on}>
+      <RowList what={t("git.conflicts")} which="conflict" on={on}>
         {rows.map((row) => (
           <ConflictRow
             key={whole(row)}
@@ -958,9 +958,20 @@ type Picking = ReturnType<typeof picking>;
  * (`./FolderTree`): what the reader means by ⌘ or Ctrl is the machine's word. Shift is the one
  * exception, and it reaches from the end the range is measured from to where the walk arrived.
  */
-function RowList({ what, on, onSpace, children }: {
+function RowList({ what, which, on, onSpace, children }: {
   /** The name over the list, which is what this box is called by anything reading it out. */
   what: string;
+  /**
+   * Which of git's lists this is, in the same word the panel uses for it everywhere else.
+   *
+   * **It is drawn into the class and read from there.** A screen road asks what is on one list and
+   * not on another, and the only way to hold an answer to one list is to name that list — which
+   * cannot be done by the words over it, since those are the interface's and change with the
+   * language the machine is set to (`verification/gui`). The class is the same letters everywhere,
+   * and this box is the one the accessibility tree carries: the boxes around it are plain divs, and
+   * a plain div is not on that tree at all.
+   */
+  which: Which;
   on: Picking;
   /**
    * Space on the row the keyboard is standing on, where the list has a box for it to press.
@@ -1006,7 +1017,7 @@ function RowList({ what, on, onSpace, children }: {
   };
   return (
     <ul
-      className="gitpanel__list"
+      className={`gitpanel__list gitpanel__list--${which}`}
       role="grid"
       aria-label={what}
       // Said on the list, because it is a fact about the list and not about any one row: a reader
@@ -1221,7 +1232,7 @@ function Changes({
       {rows.length === 0
         ? <p className="files__none">{none}</p>
         : (
-          <RowList what={what} on={on} onSpace={toggle}>
+          <RowList what={what} which={which} on={on} onSpace={toggle}>
             {rows.map((row) => (
               <ChangedRow
                 key={whole(row)}

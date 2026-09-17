@@ -121,7 +121,10 @@ export function GitHistory({ projectId, root, prefix, at, onAt, only, onOnly, on
   return (
     <div className="githist">
       {narrowed}
-      <ul className="githist__list">
+      {/* Which of the two lists this is. They are drawn one at a time and look alike, and a screen
+        road asks what is on one and not the other — the heading over them is the interface's and
+        changes with the language (`verification/gui`). */}
+    <ul className="githist__list githist__list--history">
       {commits.map((one) => (
         <li key={one.sha}>
           <button className="githist__row" onClick={() => onAt({ sha: one.sha, path: null })}>
@@ -223,7 +226,7 @@ function Touched({ files, onPath, onHistory }: {
 }) {
   if (files.length === 0) return <p className="files__none">{t("git.touchedNothing")}</p>;
   return (
-    <ul className="githist__list">
+    <ul className="githist__list githist__list--touched">
       {files.map((one) => (
         <li key={one.path}>
           <button

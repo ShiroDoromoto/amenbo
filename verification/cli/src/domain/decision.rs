@@ -1,6 +1,5 @@
-//! The `decision` domain: the append-only "why we chose X", its lifecycle from proposed to
-//! settled, the edges between decisions, the link that makes one a task's premise, and its own
-//! timeline.
+//! The `decision` domain: the append-only "why we chose X", the two stages its writing takes, the
+//! edges between decisions, the link that makes one a task's premise, and its own timeline.
 
 use amenbo_scenario::{Args, Domain};
 
@@ -62,10 +61,10 @@ impl Driver<'_> {
                 self.run_json(&["decision", "edit", &target.to_string(), "--body", body, "--json"])?;
                 Ok(Outcome::action(format!("edited the body of decision {target}")))
             }
-            "accept" => {
+            "finish-writing" => {
                 let target = self.resolve(with)?;
                 self.run_json(&["decision", "finish-writing", &target.to_string(), "--json"])?;
-                Ok(Outcome::action(format!("accepted decision {target}")))
+                Ok(Outcome::action(format!("finished writing decision {target}")))
             }
             "reject" => {
                 let target = self.resolve(with)?;
@@ -73,7 +72,7 @@ impl Driver<'_> {
                 let mut args: Vec<String> =
                     vec!["decision".into(), "reject".into(), id, "--yes".into(), "--json".into()];
                 // The reason is not a field of its own: it lands on the decision's timeline, which is
-                // where a later reader looks for why the proposal did not carry.
+                // where a later reader looks for why it was not taken.
                 if let Some(reason) = with.get("reason").and_then(|v| v.as_str()) {
                     args.push("--reason".into());
                     args.push(reason.to_string());

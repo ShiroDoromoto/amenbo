@@ -12,19 +12,20 @@
 id: find-a-decision-again
 title: A decision is found by keyword, by what it is, and by what it is filed under — and the ones that do not match stay out
 description: >
-  Record decisions on different subjects, settle one of them, and file two under different values of
-  an axis, then ask for each by keyword, by status and by classification. What is under test is the
-  narrowing itself: an answer that returned everything, or that quietly returned nothing, reads as
-  green either way, so every arm is asserted from both sides — the decision that matches is present,
-  the one that does not is absent. On screen the same narrowing is composed in the panel the values
-  stand in, which adds the two questions only a screen has: that an axis takes a set rather than the
-  last press, and that folding the values away keeps the narrowing while giving back the room.
+  Record decisions on different subjects, leave them at different stages of their writing, and file
+  them under different values of an axis, then ask for each by keyword, by where its writing got to and
+  by classification. What is under test is the narrowing itself: an answer that returned everything, or
+  that quietly returned nothing, reads as green either way, so every arm is asserted from both sides —
+  the decision that matches is present, the one that does not is absent. On screen the same narrowing
+  is composed in the panel the values stand in, which adds the two questions only a screen has: that an
+  axis takes a set rather than the last press, and that folding the values away keeps the narrowing
+  while giving back the room.
 given:
-  # The world both drivers open on: a corpus already worth separating — a standing policy, somebody's
-  # open suggestion, and a third record that only the axis tells from the first. Recording, settling
-  # and filing are roads of their own (`record-a-decision`, `read-whether-a-decision-still-holds`,
-  # `classify-work-along-an-axis`); walking any of them to arrange this world would prove that road
-  # twice and this one not at all.
+  # The world both drivers open on: a corpus already worth separating — a record written out, one still
+  # being written, a third that only the axis tells from the first, and one that was turned down.
+  # Recording, writing out and filing are roads of their own (`record-a-decision`,
+  # `read-whether-a-decision-still-holds`, `classify-work-along-an-axis`); walking any of them to
+  # arrange this world would prove that road twice and this one not at all.
   - type: action
     domain: dimension
     op: create
@@ -59,8 +60,8 @@ given:
       title: SCENARIO DECISION — the installer layout
     as: installer
 
-  # The third: settled like the first, so the status axis keeps it, and filed under the other value,
-  # so only the classification axis can take it away.
+  # The third: written out like the first, so the flag keeps it, and filed under the other value, so
+  # only the classification axis can take it away.
   - type: action
     domain: decision
     op: create
@@ -68,15 +69,24 @@ given:
       title: SCENARIO DECISION — the sidebar width
     as: sidebar
 
+  # And the fourth, which is the one the state axis can reach and the flag cannot: a record turned down
+  # is not half-written, so nothing but its own state separates it.
   - type: action
     domain: decision
-    op: accept
+    op: create
+    with:
+      title: SCENARIO DECISION — the second window bar
+    as: dropped
+
+  - type: action
+    domain: decision
+    op: finish-writing
     with:
       target: retention
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: sidebar
 
@@ -104,6 +114,21 @@ given:
       dimension: theme
       value: window
 
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: dropped
+      dimension: theme
+      value: main
+
+  # Filed before it is turned down, because a record nobody took is one nobody goes back to.
+  - type: action
+    domain: decision
+    op: reject
+    with:
+      target: dropped
+
 steps_cli:
   # By keyword: `search` reads over title and body, and the subject that was not asked for stays out.
   - type: assert
@@ -122,13 +147,14 @@ steps_cli:
       target: installer
       present: false
 
-  # By status: settled and unsettled are the two a reader separates before anything else — an
-  # accepted decision is standing policy, a proposed one is still someone's suggestion.
+  # By how far the writing got, which is the separation a reader makes before anything else — a record
+  # written out is the store's answer, a half-written one is still somebody at a keyboard. It is a flag
+  # and not a state, so it is asked for on a key of its own.
   - type: assert
     domain: decision
     op: listed
     with:
-      filter: "status:accepted"
+      filter: "draft:no"
       target: retention
       present: true
 
@@ -136,7 +162,7 @@ steps_cli:
     domain: decision
     op: listed
     with:
-      filter: "status:accepted"
+      filter: "draft:no"
       target: installer
       present: false
 
@@ -144,12 +170,30 @@ steps_cli:
     domain: decision
     op: listed
     with:
-      filter: "status:proposed"
+      filter: "draft:yes"
       target: installer
       present: true
 
-  # And by what it is filed under, which is the arm neither of the two above reaches: the record it
-  # leaves out is settled like the one it keeps, so nothing but the axis separates them.
+  # And by the state itself, which the flag cannot stand in for: the record it keeps is written out like
+  # the one it leaves out, so nothing but the state separates them.
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "status:rejected"
+      target: dropped
+      present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "status:rejected"
+      target: retention
+      present: false
+
+  # And by what it is filed under, which is the arm none of those above reaches: the record it leaves
+  # out is written out like the one it keeps, so nothing but the axis separates them.
   - type: assert
     domain: decision
     op: listed
@@ -172,7 +216,7 @@ steps_cli:
     domain: decision
     op: listed
     with:
-      filter: "status:accepted dim:theme=window"
+      filter: "draft:no dim:theme=window"
       target: sidebar
       present: true
 
@@ -180,7 +224,7 @@ steps_cli:
     domain: decision
     op: listed
     with:
-      filter: "status:accepted dim:theme=window"
+      filter: "draft:no dim:theme=window"
       target: installer
       present: false
 
@@ -203,17 +247,19 @@ steps_gui:
     domain: decision
     op: narrowed
     with:
-      target: retention
+      target: dropped
       present: true
 
+  # The panel offers the state and the writing on one axis, because that is where a reader looks for
+  # both — so the set below is composed of one of each.
   - type: action
     domain: decision
     op: choose-filter
     with:
       axis: status
-      value: accepted
+      value: rejected
 
-  # One value in, and the record in the other state is gone. This is the shot the set is proved
+  # One value in, and the record the value does not name is gone. This is the shot the set is proved
   # against: it has to be taken before the second value goes in, or nothing tells a set from an axis
   # that simply kept the last press.
   - type: assert
@@ -228,7 +274,7 @@ steps_gui:
     op: choose-filter
     with:
       axis: status
-      value: proposed
+      value: draft
 
   - type: assert
     domain: decision
@@ -237,21 +283,13 @@ steps_gui:
       target: installer
       present: true
 
+  # And the row the first press brought in is still there, which is the whole of the question: a press
+  # that had cleared its neighbour would leave the list holding this one's opposite and nothing else.
   - type: assert
     domain: decision
     op: narrowed
     with:
-      target: retention
-      present: true
-
-  # The second axis, which the first one cannot stand in for: the record it takes away is settled, so
-  # the status axis chose it and it is standing until this press. Both halves are read, or what the
-  # press is credited with is a row the status axis had already taken.
-  - type: assert
-    domain: decision
-    op: narrowed
-    with:
-      target: sidebar
+      target: dropped
       present: true
 
   - type: action
@@ -261,18 +299,21 @@ steps_gui:
       axis: dim:theme
       value: main
 
+  # The second axis, which the first one cannot stand in for: the record it takes away is one the axis
+  # above chose, so it is standing until this press. Both halves are read, or what the press is
+  # credited with is a row the first axis had already taken.
   - type: assert
     domain: decision
     op: narrowed
     with:
-      target: sidebar
+      target: installer
       present: false
 
   - type: assert
     domain: decision
     op: narrowed
     with:
-      target: retention
+      target: dropped
       present: true
 
   - type: action
@@ -291,12 +332,12 @@ steps_gui:
     domain: decision
     op: narrowed
     with:
-      target: retention
+      target: dropped
       present: true
 
   - type: assert
     domain: decision
     op: narrowed
     with:
-      target: sidebar
+      target: installer
       present: false

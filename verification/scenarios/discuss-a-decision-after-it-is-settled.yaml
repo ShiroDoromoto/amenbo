@@ -1,13 +1,13 @@
-# A decision's body freezes when it is accepted; its timeline does not. That asymmetry is the whole
-# point of the decision timeline — it is where the reasoning for accepting, and everything said
-# afterwards, has to be able to land — so the line that matters is a comment posted after the
-# freeze.
+# A decision's body holds what was decided; everything said about it goes on its timeline. That split
+# is the whole point of the decision timeline — the reasoning that did not belong in the record, and
+# everything learned after it was written out, has to have somewhere to land — so the line that matters
+# is a comment posted once the writing is over.
 id: discuss-a-decision-after-it-is-settled
-title: A decision's timeline stays open after the body freezes, and its comments can be fixed or taken back
+title: A decision's timeline stays open after its writing is finished, and its comments can be fixed or taken back
 description: >
-  Comment on a proposed decision, accept it, and comment again — then rewrite one comment and delete
-  the other, reading the timeline back each time. What is under test is that acceptance closes the
-  body and nothing else.
+  Comment on a decision while it is still being written, finish the writing, and comment again — then
+  rewrite one comment and delete the other, reading the timeline back each time. What is under test is
+  that ending the writing closes nothing on the timeline.
 steps_cli:
   - type: action
     domain: decision
@@ -21,7 +21,7 @@ steps_cli:
     op: comment
     with:
       target: rec
-      text: SCENARIO — the question raised while it was still a proposal
+      text: SCENARIO — the question raised while it was still being written
     as: before
 
   - type: assert
@@ -29,16 +29,16 @@ steps_cli:
     op: commented
     with:
       target: rec
-      text: SCENARIO — the question raised while it was still a proposal
+      text: SCENARIO — the question raised while it was still being written
       present: true
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: rec
 
-  # The body is frozen from here on; the timeline is what discussion has left.
+  # The record is written out from here on, and the talking goes on where it always went.
   - type: action
     domain: decision
     op: comment
@@ -55,7 +55,7 @@ steps_cli:
       text: SCENARIO — what was learned after it was settled
       present: true
 
-  # The decision's own page carries the timeline's tail, which is what a reader opening the ruling
+  # The decision's own page carries the timeline's tail, which is what a reader opening the record
   # actually reads — a timeline reachable only from a second command is one nobody knows to run.
   - type: assert
     domain: decision
@@ -91,7 +91,7 @@ steps_cli:
     op: commented
     with:
       target: rec
-      text: SCENARIO — the question raised while it was still a proposal
+      text: SCENARIO — the question raised while it was still being written
       present: false
 
   # Removing one leaves the rest of the timeline standing.

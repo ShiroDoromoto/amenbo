@@ -1306,6 +1306,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "commented", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "commented", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], strings: &["text", "kind"], binds: false },
+    // The other side's entries on that same stream. It is an op apart from the task's rather than the
+    // same one widened, because the two ask different questions. A task's history can be scoped to the
+    // task and read whole, so a road can ask whether the stream is fed at all; a decision's cannot be
+    // scoped by anything the surfaces offer, so a road has to name the entry it means — which is why
+    // `event` is required here and there is nothing to narrow by kind.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "activity", required: &["target", "event"], refs: &["target"], strings: &["event"], binds: false },
     // What a `store` action left behind: the archive on disk, and whether an export carries the row
     // for an object an earlier step made. `from` names the export the same way `target` names the
     // object, so both sides are checked back to a binding. `absent` asks the archive's bytes for a

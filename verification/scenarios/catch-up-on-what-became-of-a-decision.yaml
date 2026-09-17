@@ -1,0 +1,171 @@
+# What became of a decision is read off the same stream everything else is. There is no page of its
+# own for it — a decision's card carries the record and its timeline, not its history — so the one
+# place a reader learns that this one was written out and that one was turned down is the view that
+# runs everything. A build that drew those two rows alike, or drew nothing for them, would leave the
+# end of a decision's writing invisible while every other move on the store still showed.
+id: catch-up-on-what-became-of-a-decision
+title: The stream says which decisions were written out and which were turned down, and does not say it of the ones still being written
+description: >
+  Record three decisions, finish the writing of one and turn another down, then read the stream back
+  and ask it for each of the three by name. Every arm is asserted from both sides — the row that
+  should be there is, and the word that belongs to another record is not — because a feed that said
+  one word of everything, and a feed that said nothing at all, both read as green from the present
+  half alone.
+steps_cli:
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the one that was written out
+    as: carried
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the one that was turned down
+    as: dropped
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the one still being written
+    as: open
+
+  # Recording is itself an entry, and it is the one every decision has: it is what the two below are
+  # read against, since a stream that only ever said this would answer every other question wrongly.
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: open
+      event: decision.proposed
+      present: true
+
+  - type: action
+    domain: decision
+    op: finish-writing
+    with:
+      target: carried
+
+  - type: action
+    domain: decision
+    op: reject
+    with:
+      target: dropped
+      reason: SCENARIO — why it did not carry
+
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: carried
+      event: decision.decided
+      present: true
+
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: dropped
+      event: decision.rejected
+      present: true
+
+  # The two ends are not one word. Each is asked for on the record that met the other, so a build that
+  # wrote the same entry for both would be caught here rather than read as two green rows above.
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: carried
+      event: decision.rejected
+      present: false
+
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: dropped
+      event: decision.decided
+      present: false
+
+  # And the writing nobody ended leaves no end on the stream, which is what says the entry is written
+  # where the writing ends rather than where the record is made.
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: open
+      event: decision.decided
+      present: false
+
+steps_gui:
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the one that was written out
+    as: carried
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the one that was turned down
+    as: dropped
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the one still being written
+    as: open
+
+  - type: action
+    domain: decision
+    op: finish-writing
+    with:
+      target: carried
+
+  - type: action
+    domain: decision
+    op: reject
+    with:
+      target: dropped
+      reason: SCENARIO — why it did not carry
+
+  # All three rows are read on one view, and that is the point of reading them here: the failure this
+  # road is written against is a build that draws one word for every move on a decision, and a road
+  # that looked at a single row would call that build green.
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: carried
+      event: decision.decided
+      present: true
+
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: dropped
+      event: decision.rejected
+      present: true
+
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: open
+      event: decision.proposed
+      present: true
+
+  - type: assert
+    domain: decision
+    op: activity
+    with:
+      target: open
+      event: decision.decided
+      present: false

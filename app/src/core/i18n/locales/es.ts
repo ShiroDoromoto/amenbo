@@ -200,8 +200,6 @@ export const es: Translation = {
     "dec.edge.add": "Enlazar una decisión", "dec.edge.cancel": "Cancelar", "dec.edge.unlink": "Quitar el enlace",
     "dec.edge.unlinkConfirm": "Se quita el enlace con {target}. La decisión en sí no se deshace. ¿Continuar?",
     "dec.edge.kind.supersedes": "La sustituye", "dec.edge.kind.amends": "La modifica", "dec.edge.kind.buildsOn": "Se apoya en ella",
-    "dec.edge.supersedeAccepts": "Sustituir significa que ya has decidido: esta decisión propuesta pasa a aceptada.",
-    "dec.edge.supersedeAcceptsConfirm": "Sustituir {target}. Sustituir significa que ya has decidido, así que esta decisión propuesta pasa a aceptada. ¿Continuar?",
     "dec.edge.supersedeRevisitConfirm": "Estas decisiones se apoyan en {target}; revísalas si la sustituyes:\n{list}\n\n¿Sustituirla de todos modos?",
     "dec.edge.searchPh": "Buscar decisiones que enlazar (AMB-D-<n>, título)",
     "dec.edge.noCandidates": "No queda ninguna decisión que enlazar",
@@ -1053,7 +1051,6 @@ export const es: Translation = {
     invalid_dimension_values_unordered:
       "Los valores de esta categoría no llevan orden, así que no se pueden reordenar.",
     invalid_decision_edit_rejected: "{ref} fue rechazada, y una decisión rechazada no se puede editar.",
-    invalid_decision_accept_rejected: "{ref} fue rechazada, y una decisión rechazada no se puede aceptar.",
     invalid_decision_reject_accepted: "{ref} está aceptada. Sustitúyela en lugar de rechazarla.",
     invalid_decision_reopen_rejected: "{ref} fue rechazada, y una decisión rechazada no se puede reabrir.",
     invalid_decision_self_supersede: "Una decisión no puede sustituirse a sí misma.",

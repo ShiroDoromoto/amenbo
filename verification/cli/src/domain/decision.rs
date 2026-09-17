@@ -18,7 +18,7 @@ impl Driver<'_> {
                     None => self.standing_project()?.to_string(),
                 };
                 // The decision side of the same flag, and the side where it also answers a demand: an
-                // axis the project requires is read at the acceptance, so filling it here is what keeps
+                // axis the project requires is read where the writing ends, so filling it here keeps
                 // the refusal off somebody else's press.
                 let mut args: Vec<String> =
                     vec!["decision".into(), "add".into(), "--title".into(), title.into(), "--project".into(), pid.clone(), "--json".into()];
@@ -64,7 +64,7 @@ impl Driver<'_> {
             }
             "accept" => {
                 let target = self.resolve(with)?;
-                self.run_json(&["decision", "accept", &target.to_string(), "--json"])?;
+                self.run_json(&["decision", "finish-writing", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("accepted decision {target}")))
             }
             "reject" => {
@@ -129,8 +129,6 @@ impl Driver<'_> {
             "supersede" => {
                 let target = self.resolve(with)?;
                 let old = self.resolve_key(with, "replaces")?;
-                // The command accepts the new decision on the way, so a scenario that supersedes
-                // does not accept it first — it would be refused as already settled.
                 self.run_json(&["decision", "supersede", &target.to_string(), "--replaces", &old.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("decision {target} replaces decision {old}")))
             }

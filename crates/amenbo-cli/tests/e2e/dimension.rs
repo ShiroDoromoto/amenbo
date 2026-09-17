@@ -132,7 +132,7 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
 
     // The required axis is filled, so the acceptance the empty one would have been turned away for goes
     // through — and the response said nothing was left to fill in.
-    let (accepted, code) = cli.run(&["decision", "accept", &decision_ref(&did), "--json"]);
+    let (accepted, code) = cli.run(&["decision", "finish-writing", &decision_ref(&did), "--json"]);
     assert_eq!(code, 0, "a decision classified at creation accepts straight away: {accepted}");
 
     // The required axis left blank: recorded and reported on, not refused (`AMB-D-925`). The writing has
@@ -146,7 +146,7 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     );
 
     // And the demand is real, one door on — under the code it has always used.
-    let (err, code) = cli.run_err(&["decision", "accept", &decision_ref(&blank_id), "--json"]);
+    let (err, code) = cli.run_err(&["decision", "finish-writing", &decision_ref(&blank_id), "--json"]);
     assert_ne!(code, 0, "the settling is where a blank required axis is refused: {err}");
     assert!(err.contains("invalid_decision_required_dimension"), "under the code the settling uses: {err}");
 
@@ -211,7 +211,7 @@ fn promoting_a_comment_carries_the_axes_it_names_and_reports_the_rest() {
     );
 
     // And the demand is read where the writing ends, on the decision the promotion left behind.
-    let (err, code) = cli.run_err(&["decision", "accept", &decision_ref(&id_str(&blank["decision"]["id"])), "--json"]);
+    let (err, code) = cli.run_err(&["decision", "finish-writing", &decision_ref(&id_str(&blank["decision"]["id"])), "--json"]);
     assert_ne!(code, 0, "the settling is what asks for it: {err}");
     assert!(err.contains("invalid_decision_required_dimension"), "under the same code: {err}");
 
@@ -283,7 +283,7 @@ fn a_required_time_axis_is_named_at_the_record_rather_than_refused() {
     let did = id_str(&recorded["decision"]["id"]);
 
     // The demand is real — it is read one door later, where the range is every required axis.
-    let (err, code) = cli.run_err(&["decision", "accept", &decision_ref(&did), "--json"]);
+    let (err, code) = cli.run_err(&["decision", "finish-writing", &decision_ref(&did), "--json"]);
     assert_ne!(code, 0, "the acceptance is what asks for the time axis: {err}");
     assert!(err.contains("時代"), "and names it: {err}");
 }
@@ -501,10 +501,10 @@ fn dimension_demands_an_answer_and_the_creation_is_held_until_it_gets_one() {
     assert!(!after.contains("required"), "and it stops saying so: {after}");
 }
 
-/// The decision side of the required-classification door (`AMB-D-790`): a decision cannot be settled
-/// while an axis the project requires of decisions is blank, `supersede` reads the same door because it
-/// settles too, and which side a required axis holds is the axis's own `applies_to` to say
-/// (`AMB-D-789`) — so a task-only one lets an acceptance through and a decision-only one lets a
+/// The decision side of the required-classification door (`AMB-D-925`): a decision cannot be settled
+/// while an axis the project requires of decisions is blank, `supersede` is not that door because it
+/// settles nothing, and which side a required axis holds is the axis's own `applies_to` to say
+/// (`AMB-D-789`) — so a task-only one lets a settling through and a decision-only one lets a
 /// creation through.
 #[test]
 fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
@@ -526,28 +526,28 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     cli.json(&["dimension", "update", "影響半径", "--required", "true", "--json"]);
 
     // The acceptance is held, and the refusal names the axis and the way to answer it.
-    let (err, code) = cli.run_err(&["decision", "accept", &did]);
+    let (err, code) = cli.run_err(&["decision", "finish-writing", &did]);
     assert_ne!(code, 0, "the acceptance is held: {err}");
     assert!(err.contains("影響半径"), "and the axis is named: {err}");
     assert!(err.contains("dimension set"), "and the hint says how to answer it: {err}");
 
     // The same refusal in --json carries the code a caller can branch on, and nothing was settled.
-    let (refused, code) = cli.run_err(&["decision", "accept", &did, "--json"]);
+    let (refused, code) = cli.run_err(&["decision", "finish-writing", &did, "--json"]);
     assert_ne!(code, 0);
     let refused: serde_json::Value = serde_json::from_str(&refused).expect("the refusal is JSON");
     assert_eq!(refused["error"]["code"], "invalid_decision_required_dimension");
     assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "proposed");
 
-    // `supersede` settles the new side too, so it meets the same door.
+    // `supersede` settles nothing (`AMB-D-918`), so it is not that door: the new side draws the edge
+    // with the axis still blank, and comes back still under discussion.
     cli.json(&["dimension", "set", &decision_ref(&old_id), "影響半径", "この一箇所", "--json"]);
-    cli.json(&["decision", "accept", &old_id, "--json"]);
-    let (err, code) = cli.run_err(&["decision", "supersede", &did, "--replaces", &old_id]);
-    assert_ne!(code, 0, "promoting through supersede is still settling: {err}");
-    assert!(err.contains("影響半径"), "and the same axis is named: {err}");
+    cli.json(&["decision", "finish-writing", &old_id, "--json"]);
+    cli.json(&["decision", "supersede", &did, "--replaces", &old_id, "--json"]);
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "proposed");
 
-    // Answer the axis and both roads go through.
+    // Answer the axis and the one door goes through.
     cli.json(&["dimension", "set", &decision_ref(&did), "影響半径", "この一箇所", "--json"]);
-    assert_eq!(cli.json(&["decision", "accept", &did, "--json"])["decision"]["status"], "accepted");
+    assert_eq!(cli.json(&["decision", "finish-writing", &did, "--json"])["decision"]["status"], "accepted");
 
     // Which side the flag holds is the axis's own to say. A task-only required axis asks nothing of a
     // decision...
@@ -562,7 +562,7 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     ]);
     let free_id = id_str(&free["decision"]["id"]);
     assert_eq!(
-        cli.json(&["decision", "accept", &free_id, "--json"])["decision"]["status"],
+        cli.json(&["decision", "finish-writing", &free_id, "--json"])["decision"]["status"],
         "accepted",
         "an axis that classifies only tasks holds no acceptance",
     );
@@ -717,7 +717,7 @@ fn task_add_defaults_to_the_time_axis_value_covering_today() {
 
 /// A new decision defaults to that same era, on the same terms as a task's — the axis nobody named is
 /// filled, and `--dim` on the time axis wins over it. Without this a required time axis would refuse
-/// every `decision accept` for a value the store can settle itself.
+/// every `decision finish-writing` for a value the store can settle itself.
 #[test]
 fn decision_add_defaults_to_the_time_axis_value_covering_today() {
     let cli = Cli::new();

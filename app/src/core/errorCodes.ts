@@ -99,10 +99,9 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // the creation.
   "invalid_task_status_draft",
   // Its decision twin: the same flag, read at the other door a record passes through once
-  // (`decision accept`), and the decision pane is where that button is.
+  // (`decision finish-writing`), and the decision pane is where that button is.
   "invalid_decision_required_dimension",
   "invalid_decision_edit_rejected",
-  "invalid_decision_accept_rejected",
   "invalid_decision_reject_accepted",
   "invalid_decision_reopen_rejected",
   "invalid_decision_self_supersede",

@@ -857,13 +857,13 @@ mod tests {
             assert!(err.message_en().contains("premise AMB-D-1 is not settled"), "{}", err.message_en());
 
             // accepted: the premise is alive, so the reservation goes through.
-            crate::ops::decision::accept(tx, proposed, None).unwrap();
+            crate::ops::decision::finish_writing(tx, proposed, None).unwrap();
             set_status(tx, tid, TaskStatus::InProgress).unwrap();
             set_status(tx, tid, TaskStatus::Todo).unwrap();
 
             // superseded: tell them to relink to the successor.
             let successor = new_decision(tx, pid, "置き換える決定");
-            crate::ops::decision::supersede(tx, successor, proposed, None).unwrap();
+            crate::ops::decision::supersede(tx, successor, proposed).unwrap();
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 was superseded by AMB-D-2"), "{}", err.message_en());
@@ -891,7 +891,7 @@ mod tests {
         with_numbered_task(|tx, pid, tid| {
             let premise = new_decision(tx, pid, "書きかけのまま採択された決定");
             crate::ops::decision::link(tx, premise, tid).unwrap();
-            crate::ops::decision::accept(tx, premise, None).unwrap();
+            crate::ops::decision::finish_writing(tx, premise, None).unwrap();
 
             let before = crate::store_engine::read::decision(tx.conn(), premise).unwrap().unwrap();
             let after = crate::model::Decision { draft: true, ..before.clone() };
@@ -1026,7 +1026,7 @@ mod tests {
             check(tx);
             set_status(tx, blocker, TaskStatus::Done).unwrap();
             check(tx);
-            crate::ops::decision::accept(tx, premise, None).unwrap();
+            crate::ops::decision::finish_writing(tx, premise, None).unwrap();
             check(tx);
             // The third premise rides the same symmetry: a start day still ahead has to hide the task
             // from the mailbox and refuse the reserve, or the two would disagree about one task.

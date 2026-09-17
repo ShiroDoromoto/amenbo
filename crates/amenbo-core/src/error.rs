@@ -200,7 +200,7 @@ pub enum Error {
 
     /// The task being reserved has unmet preconditions: an unfinished blocker still stands, or a decision
     /// linked as its grounds is not settled (`proposed` / `rejected` / superseded). There is no `--force` —
-    /// the way through is `task undepend` / `decision link --unlink` / `decision accept`.
+    /// the way through is `task undepend` / `decision link --unlink` / `decision finish-writing`.
     #[error("{0}")]
     NotReady(Msg),
 
@@ -342,7 +342,6 @@ pub enum ErrorCode {
     InvalidTaskStatusDraft,
     InvalidDecisionRequiredDimension,
     InvalidDecisionEditRejected,
-    InvalidDecisionAcceptRejected,
     InvalidDecisionRejectAccepted,
     InvalidDecisionReopenRejected,
     InvalidDecisionSelfSupersede,
@@ -425,7 +424,6 @@ impl ErrorCode {
             ErrorCode::InvalidTaskStatusDraft => "invalid_task_status_draft",
             ErrorCode::InvalidDecisionRequiredDimension => "invalid_decision_required_dimension",
             ErrorCode::InvalidDecisionEditRejected => "invalid_decision_edit_rejected",
-            ErrorCode::InvalidDecisionAcceptRejected => "invalid_decision_accept_rejected",
             ErrorCode::InvalidDecisionRejectAccepted => "invalid_decision_reject_accepted",
             ErrorCode::InvalidDecisionReopenRejected => "invalid_decision_reopen_rejected",
             ErrorCode::InvalidDecisionSelfSupersede => "invalid_decision_self_supersede",
@@ -494,7 +492,6 @@ impl ErrorCode {
         ErrorCode::InvalidTaskStatusDraft,
         ErrorCode::InvalidDecisionRequiredDimension,
         ErrorCode::InvalidDecisionEditRejected,
-        ErrorCode::InvalidDecisionAcceptRejected,
         ErrorCode::InvalidDecisionRejectAccepted,
         ErrorCode::InvalidDecisionReopenRejected,
         ErrorCode::InvalidDecisionSelfSupersede,
@@ -692,7 +689,6 @@ mod tests {
             "invalid_task_status_draft",
             "invalid_decision_required_dimension",
             "invalid_decision_edit_rejected",
-            "invalid_decision_accept_rejected",
             "invalid_decision_reject_accepted",
             "invalid_decision_reopen_rejected",
             "invalid_decision_self_supersede",

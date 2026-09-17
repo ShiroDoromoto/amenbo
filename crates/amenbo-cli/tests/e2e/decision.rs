@@ -25,8 +25,8 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     assert_eq!(id_str(&listed["decision"]["id"]), did);
     assert_eq!(listed["comments"][0]["text"], "初回コメント");
 
-    // accept --reason appends one comment: the reason lands on the timeline, not in the body.
-    cli.json(&["decision", "accept", &did, "--reason", "レビュー後に合意", "--json"]);
+    // finish-writing --reason appends one comment: the reason lands on the timeline, not in the body.
+    cli.json(&["decision", "finish-writing", &did, "--reason", "レビュー後に合意", "--json"]);
     let after_accept = cli.json(&["decision", "comment", "list", &did, "--json"]);
     assert_eq!(after_accept["count"], 2, "one reason comment is added");
     assert_eq!(after_accept["comments"][1]["text"], "レビュー後に合意");
@@ -44,7 +44,7 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     // A whitespace-only reason is ignored, leaving no empty comment behind.
     let d3 = cli.json(&["decision", "add", "--project", &pid, "--title", "理由なし", "--json"]);
     let did3 = id_str(&d3["decision"]["id"]);
-    cli.json(&["decision", "accept", &did3, "--reason", "   ", "--json"]);
+    cli.json(&["decision", "finish-writing", &did3, "--reason", "   ", "--json"]);
     assert_eq!(cli.json(&["decision", "comment", "list", &did3, "--json"])["count"], 0);
 }
 
@@ -83,32 +83,32 @@ fn finishing_the_writing_settles_a_decision_and_releases_the_work_on_it() {
     assert_eq!(cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 1);
 }
 
-/// Re-accepting an already-accepted decision is an idempotent noop that **says so** instead of a bare
-/// "✓" that reads as a fresh acceptance: `noop` is true, `changed` is empty, the facet that first
-/// settled it is never silently overwritten (that is `reopen`'s job), and a `--reason` on the noop
-/// does not pile a comment. `reject` / `supersede` are the same shape.
+/// Re-running `finish-writing` on a decision already written is an idempotent noop that **says so**
+/// instead of a bare "✓" that reads as a fresh settling: `noop` is true, `changed` is empty, the facet
+/// that first settled it is never silently overwritten (that is `reopen`'s job), and a `--reason` on
+/// the noop does not pile a comment. `reject` / `supersede` are the same shape.
 #[test]
 fn re_settling_a_decision_is_a_reported_noop_and_does_not_overwrite_or_pile_a_reason() {
     let cli = Cli::new();
     let p = cli.json(&["project", "add", "--name", "PJ", "--json"]);
     let pid = id_str(&p["project"]["id"]);
 
-    // First accept settles it; the facet is recorded.
+    // The first run settles it; the facet is recorded.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "採択の名義", "--json"]);
     let did = id_str(&d["decision"]["id"]);
-    let first = cli.json(&["decision", "accept", &did, "--json"]);
+    let first = cli.json(&["decision", "finish-writing", &did, "--json"]);
     assert_eq!(first["noop"], false);
     assert_eq!(first["decision"]["decided_by"]["name"], "human");
 
-    // Re-accepting reports a noop with nothing changed, keeps the recorded facet (re-stamping is
+    // Re-running it reports a noop with nothing changed, keeps the recorded facet (re-stamping is
     // `reopen`'s route), and the `--reason` does not become a comment.
-    let again = cli.json(&["decision", "accept", &did, "--reason", "名義を直したい", "--json"]);
-    assert_eq!(again["noop"], true, "re-accepting is a reported noop");
+    let again = cli.json(&["decision", "finish-writing", &did, "--reason", "名義を直したい", "--json"]);
+    assert_eq!(again["noop"], true, "re-settling is a reported noop");
     assert_eq!(again["changed"].as_array().unwrap().len(), 0, "nothing changed");
     assert_eq!(again["decision"]["decided_by"]["name"], "human", "the recorded facet is untouched");
     assert_eq!(
         cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 0,
-        "a reason on a noop re-accept must not pile a comment"
+        "a reason on a noop re-settle must not pile a comment"
     );
 
     // reject: re-rejecting an already-rejected decision is a reported noop too.
@@ -125,7 +125,7 @@ fn re_settling_a_decision_is_a_reported_noop_and_does_not_overwrite_or_pile_a_re
     // supersede: re-superseding an already-superseded pair is a reported noop.
     let old = cli.json(&["decision", "add", "--project", &pid, "--title", "旧", "--json"]);
     let oldid = id_str(&old["decision"]["id"]);
-    cli.json(&["decision", "accept", &oldid, "--json"]);
+    cli.json(&["decision", "finish-writing", &oldid, "--json"]);
     let new = cli.json(&["decision", "add", "--project", &pid, "--title", "新", "--json"]);
     let newid = id_str(&new["decision"]["id"]);
     assert_eq!(cli.json(&["decision", "supersede", &newid, "--replaces", &oldid, "--json"])["noop"], false);
@@ -198,7 +198,7 @@ fn a_decision_comment_promotes_into_a_record_that_stands_alone() {
 
 /// A decision's page carries its timeline (`AMB-D-448`), in the shape `task show` gives its own: the count
 /// is marked even at zero, the newest three are previewed on one line each, and the way to the full text is
-/// named. What `accept --reason` wrote is a comment, so a page without them would leave the ruling's own
+/// named. What `finish-writing --reason` wrote is a comment, so a page without them would leave the ruling's own
 /// reasoning off the only page anyone opens to read the ruling.
 #[test]
 fn a_decision_page_says_how_much_was_said_on_it_and_previews_the_latest() {
@@ -221,7 +221,7 @@ fn a_decision_page_says_how_much_was_said_on_it_and_previews_the_latest() {
     );
 
     // The reason an acceptance was given lands on the timeline, and is what the page has to carry.
-    cli.json(&["decision", "accept", &did, "--reason", "この形で行く", "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--reason", "この形で行く", "--json"]);
     let long = "あ".repeat(80);
     cli.json(&["decision", "comment", "add", &did, "--text", &long, "--json"]);
 
@@ -267,7 +267,7 @@ fn a_decision_says_which_of_the_tasks_it_created_are_still_standing() {
             ["decision"]["id"],
     );
     // Tasks under an unsettled decision cannot be started, so accept it before moving any status.
-    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
 
     let a_task = |title: &str| -> String {
         let id = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", title, "--json"])["task"]["id"]);
@@ -333,8 +333,8 @@ fn a_premise_is_read_first_and_its_overturn_names_what_to_revisit() {
     };
     let premise = add("同期は撤去する");
     let standing = add("削除は物理削除にする");
-    cli.json(&["decision", "accept", &premise, "--json"]);
-    cli.json(&["decision", "accept", &standing, "--json"]);
+    cli.json(&["decision", "finish-writing", &premise, "--json"]);
+    cli.json(&["decision", "finish-writing", &standing, "--json"]);
 
     // Draw the premise edge: neither decision moves, and nothing is drawn at the premise.
     let built = cli.json(&["decision", "builds-on", &standing, "--on", &premise, "--json"]);
@@ -645,7 +645,7 @@ fn a_decision_page_dates_itself() {
 
     // Settled: the decided stamp arrives, and the change the settling itself made is held back rather
     // than printed as a second line naming the same instant.
-    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
     let (human, _) = cli.run(&["decision", "show", &did]);
     let shown = cli.json(&["decision", "show", &did, "--json"]);
     let decided = shown["decided_at"].as_str().unwrap().to_string();

@@ -651,8 +651,8 @@ const REGISTRY: &[OpSpec] = &[
     // `project` names the shelf it is filed on, for a scenario about where a record ends up; left
     // out, it is the run's own project like everything else.
     // Classified as it is recorded, the same way a task is — and on this side it is also how a
-    // required axis is answered before the acceptance reads it, since a decision has no second stage
-    // for its writer to be turned away at.
+    // required axis is answered before the step that ends the writing reads it: the record itself is
+    // never turned away over one.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value"], binds: true },
     // The same record written from inside a pane, which is a different road and not the same one typed
     // somewhere else. What a record keeps of the session that made it is written only where the create
@@ -682,8 +682,8 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. The row is drawn on a record's own page and a terminal has no page to draw
     // it on: what a reader types there is `decision show`, which prints the name and presses nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "press-made-in", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
-    // and the link is what makes it a task's premise.
+    // A decision's own life: the body is written while it is still proposed, settling it ends the
+    // writing, and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "accept", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The other two rulings a proposal can meet: turned down, and un-settled to be discussed again.

@@ -97,8 +97,8 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
         DecisionCmd::Show { id } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             let detail = store.decision_detail(did).map_err(CliError::from)?;
-            // The timeline is read with the decision, the way a task's is (`AMB-D-448`). What accepting or
-            // rejecting one gave as its reason is a comment (`decision accept --reason`), so a page that
+            // The timeline is read with the decision, the way a task's is (`AMB-D-448`). What settling or
+            // rejecting one gave as its reason is a comment (`decision finish-writing --reason`), so a page that
             // did not carry the timeline would leave the ruling's own reasoning off the only page anyone
             // opens to read the ruling.
             let comments = store.decision_comment_list(did, None, None).map(|r| r.comments).unwrap_or_default();
@@ -221,32 +221,15 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let (d, changed) = store.finish_writing_decision(did, Some(by), flags.facet()?).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             if changed {
-                // `--reason` is the same thin sugar it is on `accept`: one comment on the timeline, and
-                // only where the writing actually ended, so a re-run does not pile reasons up.
+                // `--reason` is thin sugar for adding one comment with the reason (the same shape as
+                // `task block --reason`). It gets no field of its own, and it is added only where the
+                // writing actually ended, so a re-run does not pile reasons up.
                 add_reason_comment(store, flags, did, reason)?;
                 write_envelope(flags, "decision.finish-writing", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["draft".to_string(), "status".to_string()]), false, format!("✓ Finished writing decision: {}", decision_label(d.id)));
             } else {
                 // Already written: say so plainly rather than a bare "✓" that reads as "just now
                 // settled". Who settled it is frozen, and `reopen` is the sanctioned way to change it.
                 write_envelope(flags, "decision.finish-writing", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already written{} — no change. To write it again, `reopen` it first.", decision_label(d.id), accepted_by_suffix(&d)));
-            }
-        }
-        DecisionCmd::Accept { id, reason } => {
-            let reason = body_arg_opt(reason)?;
-            let did = resolve_decision(store, &id).map_err(CliError::from)?;
-            let by = flags.facet()?.as_str().to_string();
-            let (d, changed) = store.accept_decision(did, Some(by), flags.facet()?).map_err(CliError::from)?;
-            let detail = store.decision_detail(d.id).map_err(CliError::from)?;
-            if changed {
-                // `--reason` is thin sugar for adding one comment with the reason (the same shape as
-                // `task block --reason`). It gets no field of its own. Only on a real acceptance —
-                // re-accepting an already-settled decision changes nothing, so a reason must not pile up.
-                add_reason_comment(store, flags, did, reason)?;
-                write_envelope(flags, "decision.accept", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Accepted decision: {}", decision_label(d.id)));
-            } else {
-                // Already accepted: say so plainly instead of a bare "✓" that reads as "just now settled".
-                // The facet that accepted it is frozen; `reopen` is the sanctioned route to change it.
-                write_envelope(flags, "decision.accept", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already accepted{} — no change. To change who accepted it, `reopen` then `accept` again.", decision_label(d.id), accepted_by_suffix(&d)));
             }
         }
         DecisionCmd::Reject { id, reason } => {
@@ -302,8 +285,7 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             // Read the blast radius before drawing the edge: read it afterwards and the supersedes edge just
             // drawn (new_id itself) turns up among the decisions said to want revisiting.
             let standing = standing_on(store, old_id);
-            let by = flags.facet()?.as_str().to_string();
-            let (d, changed) = store.supersede_decision(new_id, old_id, Some(by), flags.facet()?).map_err(CliError::from)?;
+            let (d, changed) = store.supersede_decision(new_id, old_id).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);
@@ -317,10 +299,10 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                         decision_label(old_id)
                     ),
                 }
-                write_envelope(flags, "decision.supersede", "decision", resource, Some(vec!["status".to_string(), "supersedes".to_string()]), false, format!("✓ {} supersedes {}", decision_label(new_id), decision_label(old_id)));
+                write_envelope(flags, "decision.supersede", "decision", resource, Some(vec!["supersedes".to_string()]), false, format!("✓ {} supersedes {}", decision_label(new_id), decision_label(old_id)));
                 note_revisit(flags, old_id, &standing);
             } else {
-                // The edge was already there and the new side already settled: nothing to draw.
+                // The edge was already there: nothing to draw.
                 write_envelope(flags, "decision.supersede", "decision", resource, Some(vec![]), true, format!("• {} already supersedes {} — no change.", decision_label(new_id), decision_label(old_id)));
             }
         }
@@ -508,7 +490,7 @@ fn accepted_by_suffix(d: &amenbo_core::model::Decision) -> String {
     }
 }
 
-/// Record the reason a decision was accepted or rejected as a comment (the same shape as
+/// Record the reason a decision was settled or rejected as a comment (the same shape as
 /// `task block --reason`). An empty or whitespace-only reason is ignored.
 fn add_reason_comment(store: &mut Store, flags: &Flags, decision_id: i64, reason: Option<String>) -> Result<(), CliError> {
     if let Some(r) = reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {

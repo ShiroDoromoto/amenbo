@@ -598,8 +598,8 @@ impl Store {
     }
 
     /// The names of the project's required axes a decision carries no value on, in display order
-    /// (`AMB-D-790`). Empty means every demand this project makes of a decision is answered — which is
-    /// the same question `decision accept` asks at its door, put here so a surface can ask it without
+    /// (`AMB-D-925`). Empty means every demand this project makes of a decision is answered — which is
+    /// the same question `decision finish-writing` asks at its door, put here so a surface can ask it without
     /// having to be turned away first. A decision that is gone answers with nothing to fill in.
     pub fn unmet_required_decision_axes(&self, decision_id: i64) -> Result<Vec<String>> {
         self.reachable_decision(decision_id)?;

@@ -1243,31 +1243,13 @@ impl Store {
         self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::update(tx, id, patch))
     }
 
-    /// Accept a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
-    /// is `false` on the idempotent noop (already accepted), so the caller does not report a fresh
-    /// acceptance that never happened.
-    pub fn accept_decision(
-        &mut self,
-        id: i64,
-        decided_by: Option<String>,
-        actor: crate::model::ActorKind,
-    ) -> Result<(crate::model::Decision, bool)> {
-        self.write_one(&[WriteTarget::Decision(id)], |tx| {
-            let (decision, changed) = crate::ops::decision::accept(tx, id, decided_by)?;
-            if changed {
-                emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
-            }
-            Ok((decision, changed))
-        })
-    }
-
     /// End the writing of a decision (one operation = one transaction) — the second stage of its
     /// creation (`AMB-D-918`). Returns `(decision, changed)`; `changed` is `false` when the writing
     /// was already finished, which is what keeps `decision.accepted` to one firing per decision.
     ///
-    /// The event is the same one [`Store::accept_decision`] fires and carries the same name: the name
-    /// is baked into `project_notify_event`'s `CHECK`, and moving the door a decision leaves by is no
-    /// reason to make every subscriber relearn what to listen for.
+    /// The event it fires keeps the name `decision.accepted`: the name is baked into
+    /// `project_notify_event`'s `CHECK`, and moving the door a decision leaves by is no reason to make
+    /// every subscriber relearn what to listen for (`AMB-D-918`).
     pub fn finish_writing_decision(
         &mut self,
         id: i64,
@@ -1306,30 +1288,18 @@ impl Store {
         self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::reopen(tx, id))
     }
 
-    /// Supersede one decision with another (one operation = one transaction). Inserting the
-    /// `supersedes` edge and promoting the new decision ride together; the old decision's row is left
-    /// untouched, because whether it is current is derived from the edges. When the supersession
-    /// promotes the new side `Proposed → Accepted`, that acceptance is a real verdict, so a
-    /// `decision.accepted` event is emitted on the promotion (and only then — drawing the edge over an
-    /// already-accepted side promotes nothing and observes nothing). `actor` is the process facet,
-    /// stamped onto that event. Returns `(new_decision, changed)`.
+    /// Supersede one decision with another (one operation = one transaction) — one `supersedes` edge
+    /// and nothing else. Neither row is rewritten: the old decision stops being current because the
+    /// edge says so, and settling the new side is `finish_writing_decision`'s business (`AMB-D-918`).
+    /// Returns `(new_decision, changed)`; `changed` is `false` when the edge was already there.
     pub fn supersede_decision(
         &mut self,
         new_id: i64,
         old_id: i64,
-        decided_by: Option<String>,
-        actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
         self.write_one(
             &[WriteTarget::Decision(new_id), WriteTarget::Decision(old_id)],
-            |tx| {
-                let (decision, changed, promoted) =
-                    crate::ops::decision::supersede(tx, new_id, old_id, decided_by)?;
-                if promoted {
-                    emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
-                }
-                Ok((decision, changed))
-            },
+            |tx| crate::ops::decision::supersede(tx, new_id, old_id),
         )
     }
 

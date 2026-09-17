@@ -46,8 +46,8 @@ steps_cli:
       title: SCENARIO DECISION — the policy that replaces it
     as: new
 
-  # The body is written while the decision is still proposed; accepting freezes it, and superseding
-  # accepts. So it is set — and read back — before the edges are drawn.
+  # The body is written while the decision is still proposed. So it is set — and read back — before
+  # the writing ends.
   - type: action
     domain: decision
     op: edit
@@ -62,6 +62,13 @@ steps_cli:
       target: new
       field: body
       equals: The rule this decision settles, as the reader will find it.
+
+  # Superseding draws one edge and settles nothing, so the successor is settled on its own first.
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: new
 
   - type: action
     domain: decision
@@ -86,7 +93,7 @@ steps_cli:
       target: new
       on: premise
 
-  # The successor's own card: settled — superseding accepts — unreplaced, and carrying both relations.
+  # The successor's own card: settled, unreplaced, and carrying both relations.
   - type: assert
     domain: decision
     op: field

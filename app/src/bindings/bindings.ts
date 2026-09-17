@@ -1629,11 +1629,6 @@ icon: string | null, view: "list" | "board" | "calendar" | "timeline",
  */
 openCount: number, 
 /**
- * Proposed (under-discussion) decision count — decisions still awaiting a ruling. Feeds the
- * sidebar row and the header decision button's under-discussion badge.
- */
-proposedDecisionCount: number, 
-/**
  * Unified dimensions (classification axes). Empty means none are in use. Task classification
  * happens on these axes and nowhere else.
  */

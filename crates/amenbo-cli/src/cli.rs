@@ -1513,13 +1513,6 @@ pub enum DecisionCmd {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Accept a decision (proposed → accepted)
-    Accept {
-        id: String,
-        /// reason for accepting — recorded as a decision comment, not a dedicated field. Pass `-` to read it from stdin
-        #[arg(long)]
-        reason: Option<String>,
-    },
     /// Reject a decision (proposed → rejected)
     Reject {
         id: String,

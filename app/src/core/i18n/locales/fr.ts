@@ -200,8 +200,6 @@ export const fr: Translation = {
     "dec.edge.add": "Lier une décision", "dec.edge.cancel": "Annuler", "dec.edge.unlink": "Retirer le lien",
     "dec.edge.unlinkConfirm": "Le lien avec {target} va être retiré. La décision elle-même n'est pas défaite. Continuer ?",
     "dec.edge.kind.supersedes": "La remplace", "dec.edge.kind.amends": "La modifie", "dec.edge.kind.buildsOn": "S'appuie sur elle",
-    "dec.edge.supersedeAccepts": "Remplacer signifie que vous avez tranché — cette décision proposée devient acceptée.",
-    "dec.edge.supersedeAcceptsConfirm": "Remplacer {target}. Remplacer signifie que vous avez tranché, donc cette décision proposée devient acceptée. Continuer ?",
     "dec.edge.supersedeRevisitConfirm": "Ces décisions s'appuient sur {target} — revoyez-les si vous la remplacez :\n{list}\n\nLa remplacer quand même ?",
     "dec.edge.searchPh": "Chercher des décisions à lier (AMB-D-<n>, titre)",
     "dec.edge.noCandidates": "Plus aucune décision à lier",
@@ -1053,7 +1051,6 @@ export const fr: Translation = {
     invalid_dimension_values_unordered:
       "Les valeurs de cette catégorie ne portent aucun ordre, elles ne peuvent donc pas être réordonnées.",
     invalid_decision_edit_rejected: "{ref} a été rejetée, et une décision rejetée ne peut pas être modifiée.",
-    invalid_decision_accept_rejected: "{ref} a été rejetée, et une décision rejetée ne peut pas être acceptée.",
     invalid_decision_reject_accepted: "{ref} est acceptée. Remplacez-la plutôt que de la rejeter.",
     invalid_decision_reopen_rejected: "{ref} a été rejetée, et une décision rejetée ne peut pas être rouverte.",
     invalid_decision_self_supersede: "Une décision ne peut pas se remplacer elle-même.",

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Unit-testing the pure logic on its own (edgeRows / promotesToAccepted / standingOn in `core/decisionEdges.ts`)
-// proves nothing about the pane actually using it: promoting without warning first, or unlinking the wrong edge
+// Unit-testing the pure logic on its own (edgeRows / standingOn in `core/decisionEdges.ts`) proves nothing about
+// the pane actually using it: superseding without naming what stands on the target, or unlinking the wrong edge
 // from a back-reference row, would both slip through. What is checked here is the wiring to the pane.
 //
 // The edge controls are wrapped in `inTauri()` and so are not drawn in bare jsdom — hence we claim to be inside
@@ -261,33 +261,12 @@ describe("drawing an edge (promotion warning and blast radius)", () => {
   }
   const pick = (targetRef: string) => click(buttons().find((b) => b.textContent?.startsWith(targetRef)));
 
-  it("under-discussion × \"supersede this\" warns first, and on Cancel does not supersede (nor promote)", async () => {
+  it("supersede draws the edge and settles nothing, so nothing is asked first", async () => {
     hoisted.decisions.set(1, decision(1));
     hoisted.page.push(decision(2));
     render(1);
 
     openPicker("supersedes");
-    expect(container.textContent).toContain(t("dec.edge.supersedeAccepts")); // warned as soon as the kind is chosen
-
-    hoisted.answers.push(false);
-    pick("D-2");
-    await settle();
-    expect(hoisted.asked).toEqual([tf("dec.edge.supersedeAcceptsConfirm", { target: "D-2" })]);
-    expect(hoisted.calls).toEqual([]);
-
-    pick("D-2"); // this time, OK
-    await settle();
-    expect(hoisted.calls).toEqual([["supersedeDecision", 1, 2]]);
-  });
-
-  it("superseding from an accepted decision does not promote, so it gives no warning", async () => {
-    hoisted.decisions.set(1, decision(1, { status: "accepted" }));
-    hoisted.page.push(decision(2));
-    render(1);
-
-    openPicker("supersedes");
-    expect(container.textContent).not.toContain(t("dec.edge.supersedeAccepts"));
-
     pick("D-2");
     await settle();
     expect(hoisted.asked).toEqual([]);
@@ -311,17 +290,16 @@ describe("drawing an edge (promotion warning and blast radius)", () => {
     expect(hoisted.calls[1]).toEqual(["buildsOnDecision", 1, 2]);
   });
 
-  it("when decisions stand on the target, it follows the promotion warning with a revisit prompt (Cancel does not supersede)", async () => {
+  it("when decisions stand on the target, it asks with a revisit prompt (Cancel does not supersede)", async () => {
     hoisted.decisions.set(1, decision(1));
     hoisted.page.push(decision(2, { builtOnBy: [ref(9)] }));
     render(1);
 
     openPicker("supersedes");
-    hoisted.answers.push(true, false); // OK to the promotion warning, then back out at the revisit confirm
+    hoisted.answers.push(false); // back out at the revisit confirm
     pick("D-2");
     await settle();
     expect(hoisted.asked).toEqual([
-      tf("dec.edge.supersedeAcceptsConfirm", { target: "D-2" }),
       tf("dec.edge.supersedeRevisitConfirm", { target: "D-2", list: "D-9 決定9" }),
     ]);
     expect(hoisted.calls).toEqual([]);

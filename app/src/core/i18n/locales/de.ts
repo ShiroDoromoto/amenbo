@@ -196,8 +196,6 @@ export const de: Translation = {
     "dec.edge.add": "Entscheidung verknüpfen", "dec.edge.cancel": "Abbrechen", "dec.edge.unlink": "Verknüpfung lösen",
     "dec.edge.unlinkConfirm": "Die Verknüpfung mit {target} wird entfernt. Die Entscheidung selbst wird nicht rückgängig gemacht. Fortfahren?",
     "dec.edge.kind.supersedes": "Ersetzt sie", "dec.edge.kind.amends": "Ändert sie", "dec.edge.kind.buildsOn": "Baut auf ihr auf",
-    "dec.edge.supersedeAccepts": "Ersetzen heißt, du hast entschieden — diese vorgeschlagene Entscheidung wird angenommen.",
-    "dec.edge.supersedeAcceptsConfirm": "{target} ersetzen. Ersetzen heißt, du hast entschieden, also wird diese vorgeschlagene Entscheidung angenommen. Fortfahren?",
     "dec.edge.supersedeRevisitConfirm": "Diese Entscheidungen bauen auf {target} auf — sieh sie dir noch einmal an, wenn du sie ersetzt:\n{list}\n\nTrotzdem ersetzen?",
     "dec.edge.searchPh": "Entscheidungen zum Verknüpfen suchen (AMB-D-<n>, Titel)",
     "dec.edge.noCandidates": "Keine Entscheidung mehr zum Verknüpfen übrig",
@@ -1044,8 +1042,6 @@ export const de: Translation = {
       "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",
     invalid_decision_edit_rejected:
       "{ref} wurde abgelehnt, und eine abgelehnte Entscheidung lässt sich nicht bearbeiten.",
-    invalid_decision_accept_rejected:
-      "{ref} wurde abgelehnt, und eine abgelehnte Entscheidung lässt sich nicht annehmen.",
     invalid_decision_reject_accepted: "{ref} ist angenommen. Ersetze sie, statt sie abzulehnen.",
     invalid_decision_reopen_rejected:
       "{ref} wurde abgelehnt, und eine abgelehnte Entscheidung lässt sich nicht wieder öffnen.",

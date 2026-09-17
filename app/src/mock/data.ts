@@ -17,7 +17,6 @@ export const projects: Project[] = [
     icon: null,
     view: "board",
     openCount: 5,
-    proposedDecisionCount: 0,
     dimensions: [],
   },
   {
@@ -27,7 +26,6 @@ export const projects: Project[] = [
     icon: null,
     view: "board",
     openCount: 2,
-    proposedDecisionCount: 0,
     dimensions: [],
   },
 ];

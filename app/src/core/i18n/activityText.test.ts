@@ -40,6 +40,15 @@ describe("a system event as a line", () => {
     expect(eventText({ kind: "decision.proposed" }, "Which road", "en")).toBe("Proposed “Which road”");
   });
 
+  // Both ends of a decision's writing used to arrive as "updated", which said nothing about which
+  // end it was (`AMB-T-5054`).
+  it("tells the end of a decision's writing apart from its withdrawal", () => {
+    expect(eventText({ kind: "decision.decided" }, "どちらの道を採るか", "ja")).toBe("「どちらの道を採るか」を決定");
+    expect(eventText({ kind: "decision.decided" }, "Which road", "en")).toBe("Decided “Which road”");
+    expect(eventText({ kind: "decision.rejected" }, "どちらの道を採るか", "ja")).toBe("「どちらの道を採るか」を取り下げ");
+    expect(eventText({ kind: "decision.rejected" }, "Which road", "en")).toBe("Rejected “Which road”");
+  });
+
   it("reports a deletion as a deletion, whichever kind of row was deleted", () => {
     expect(eventText({ kind: "task.deleted" }, "下書き", "ja")).toBe("「下書き」を削除");
     expect(eventText({ kind: "decision.deleted" }, "旧方針", "ja")).toBe("「旧方針」を削除");

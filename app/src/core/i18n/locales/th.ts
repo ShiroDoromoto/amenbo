@@ -525,6 +525,8 @@ export const th: Translation = {
     "act.unassigned": "ปลดผู้รับผิดชอบของ “{title}”",
     "act.moved": "ย้าย “{title}”", "act.unblocked": "“{title}” ไม่ติดขัดแล้ว (พร้อมทำ)",
     "act.proposed": "เสนอ “{title}”",
+    "act.decided": "ตัดสินใจ “{title}”",
+    "act.rejected": "ปฏิเสธ “{title}”",
     "act.deleted": "ลบ “{title}”",
     "act.deletedWith": "ลบ “{title}” ({tasks}, {decisions})",
     "act.updated": "แก้ไข “{title}”",

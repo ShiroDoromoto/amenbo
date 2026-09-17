@@ -538,6 +538,8 @@ export const uk: Translation = {
     "act.unassigned": "Знято відповідального з «{title}»",
     "act.moved": "Переміщено «{title}»", "act.unblocked": "«{title}» більше не заблоковано (готове)",
     "act.proposed": "Запропоновано «{title}»",
+    "act.decided": "Вирішено «{title}»",
+    "act.rejected": "Відхилено «{title}»",
     "act.deleted": "Видалено «{title}»",
     "act.deletedWith": "Видалено «{title}» ({tasks}, {decisions})",
     "act.updated": "Оновлено «{title}»",

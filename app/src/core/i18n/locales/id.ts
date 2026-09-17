@@ -525,6 +525,8 @@ export const id: Translation = {
     "act.unassigned": "Melepaskan penanggung jawab “{title}”",
     "act.moved": "Memindahkan “{title}”", "act.unblocked": "“{title}” kini tidak terhambat (siap)",
     "act.proposed": "Mengusulkan “{title}”",
+    "act.decided": "Memutuskan “{title}”",
+    "act.rejected": "Menolak “{title}”",
     "act.deleted": "Menghapus “{title}”",
     "act.deletedWith": "Menghapus “{title}” ({tasks}, {decisions})",
     "act.updated": "Memperbarui “{title}”",

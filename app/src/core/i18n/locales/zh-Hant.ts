@@ -523,6 +523,8 @@ export const zhHant: Translation = {
     "act.unassigned": "取消了「{title}」的指派",
     "act.moved": "移動了「{title}」", "act.unblocked": "「{title}」不再受阻（可以開始了）",
     "act.proposed": "提出了「{title}」",
+    "act.decided": "確定了「{title}」",
+    "act.rejected": "否決了「{title}」",
     "act.deleted": "刪除了「{title}」",
     "act.deletedWith": "刪除了「{title}」（{tasks}、{decisions}）",
     "act.updated": "更新了「{title}」",

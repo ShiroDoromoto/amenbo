@@ -13,7 +13,8 @@
 //
 // Which renderer runs is decided by an allowlist (`previewKind`). An attachment is unverified bytes
 // and the webview is an execution environment with a line to the IPC, so the types we will render are
-// enumerated, and anything executable (SVG, HTML, XML…) is downgraded to a source view.
+// enumerated, and anything executable (SVG, HTML, XML…) is downgraded to a source view. A PDF is not
+// opened as a document at all: it is drawn page by page by the reader we ship (`../files/PdfView`).
 
 import { useEffect, useState } from "react";
 import { useAttachments, type Attachment } from "../core/reads";
@@ -24,7 +25,8 @@ import {
 } from "../core/mutations";
 import { watchAttachWell, WELL_ATTR } from "../core/attachDrop";
 import { confirmDialog } from "../core/dialog";
-import { previewKind } from "../core/attachmentView";
+import { pdfFitsThePane, previewKind } from "../core/attachmentView";
+import { PdfView } from "../files/PdfView";
 import { Markdown } from "./Markdown";
 import { formatNumber, t, tf } from "../core/i18n";
 import { Icon } from "./Icon";
@@ -67,11 +69,8 @@ function AttachmentBody({ a }: { a: Attachment }) {
       return <audio className="attach__audio" src={src} controls preload="metadata" />;
     case "video":
       return <video className="attach__video" src={src} controls preload="metadata" />;
-    // A PDF is the one type the webview renders **as a document**, so it is fenced into a sandbox with
-    // no tokens: an opaque origin, no scripts. A bare <iframe> here would let an attachment become a
-    // document running in our own origin.
     case "pdf":
-      return <iframe className="attach__pdf" src={src} title={a.filename ?? "pdf"} sandbox="" />;
+      return <PdfBody src={src} sizeBytes={a.sizeBytes} />;
     case "markdown":
       return <TextBody src={src} render="markdown" />;
     case "csv":
@@ -85,6 +84,29 @@ function AttachmentBody({ a }: { a: Attachment }) {
     case "none":
       return <div className="attach__unsupported faint">{t("attach.unsupported")}</div>;
   }
+}
+
+/**
+ * An attachment's PDF, drawn by the same reader the file panel draws one with (`AMB-D-907`).
+ *
+ * **Nothing before this refuses one for its size.** A file in a folder is measured by the host and
+ * the panel is handed a refusal instead of bytes; an attachment is answered for by its hash, so the
+ * cap is applied here (`../core/attachmentView`). Over it the reader is left with the download button
+ * in the row above — the way out an attachment has, since a preview is not a copy they keep — and
+ * how large the file is stands in that row already, so the refusal does not print it a second time.
+ */
+function PdfBody({ src, sizeBytes }: { src: string; sizeBytes: bigint | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!pdfFitsThePane(sizeBytes)) {
+    return <div className="attach__missing faint">{t("files.tooBig")}</div>;
+  }
+  if (failed) return <div className="attach__missing faint">{t("files.pdfFailed")}</div>;
+  // The box is what scrolls the pages past the reader, so it is what a page is drawn near.
+  return (
+    <div className="attach__pdf">
+      <PdfView src={src} scrolls=".attach__pdf" onFailed={() => setFailed(true)} />
+    </div>
+  );
 }
 
 /** Fetches text/markdown/CSV over the protocol and renders it, truncating a large file at CAP so it cannot run away. */

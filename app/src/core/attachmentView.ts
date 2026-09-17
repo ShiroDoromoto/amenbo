@@ -6,6 +6,23 @@
 // side of every custom protocol, not of attachments alone, so this table is what a file read out of a
 // session's folder passes through too.
 
+/**
+ * The largest PDF an attachment is drawn from, in bytes.
+ *
+ * **It is the pair of `PDF_CAP` in `app/src-tauri/src/folder_bytes.rs`** (`AMB-D-907`), and it is
+ * held here because nothing on the way refuses one for the reader: a file in a folder is measured by
+ * the host before the panel is told about it, while an attachment is answered for by its hash alone
+ * and the door hands out whatever is under it. What the cap guards is the same either way — the
+ * bytes this window holds to draw a document it was handed whole.
+ */
+export const PDF_PREVIEW_CAP = 64 * 1024 * 1024;
+
+/** Is this attachment small enough to draw? A size nobody recorded is taken as one that fits. */
+export function pdfFitsThePane(sizeBytes: bigint | number | null | undefined): boolean {
+  if (sizeBytes === null || sizeBytes === undefined) return true;
+  return Number(sizeBytes) <= PDF_PREVIEW_CAP;
+}
+
 /** How a preview is drawn. `none` is not drawn in the webview at all; it goes out to "open externally". */
 export type PreviewKind = "image" | "audio" | "video" | "pdf" | "markdown" | "csv" | "tsv" | "text" | "none";
 

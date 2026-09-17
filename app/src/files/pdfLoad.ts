@@ -13,9 +13,9 @@
 // Linux the built-in viewer *is* pdf.js. The version is the last one that carries no wasm, which
 // `AMB-D-769` does not allow.
 //
-// **The bytes are fetched, not carried.** The address is the door that hands out a file by its path
-// (`../core/fileUrl`), the same one the picture beside it is drawn from, so nothing of the file
-// crosses the command seam.
+// **The bytes are fetched, not carried.** The address is the door the picture beside the document is
+// drawn from — a file by its path for the panel (`../core/fileUrl`), an attachment by its hash for a
+// record (`../core/blobUrl`) — so nothing of the file crosses the command seam.
 
 import type { RenderTask } from "pdfjs-dist";
 
@@ -84,6 +84,9 @@ export type MountedPdf = {
   close(): void;
 };
 
+/** The panel's scrolling part, which is what a page is near or far from unless the caller says otherwise. */
+const SCROLLS = ".files__body";
+
 /**
  * Draw the PDF at `url` into `parent`, a page at a time as the reader comes to them.
  *
@@ -91,14 +94,18 @@ export type MountedPdf = {
  * anything reading the page out is concerned, so the number it holds has to be written down. It is
  * passed in rather than read here because the wording belongs to the face (`./PdfView`).
  *
+ * `scrolls` selects the part that scrolls the document past the reader, because "near" is measured
+ * against it: the file panel's body, or the box an attachment is drawn in (`../components/Attachments`).
+ *
  * Throws where the document cannot be opened at all — a file that is not the PDF its first bytes
- * claimed, or one the door would not hand over. The panel says so and offers the way on, which is
- * the same answer it gives for a file it could not read.
+ * claimed, or one the door would not hand over. The caller says so and offers what way on it has,
+ * which for the panel is the same answer a file it could not read gets.
  */
 export async function mountPdf(
   parent: HTMLElement,
   url: string,
   label: (page: number, of: number) => string,
+  scrolls: string = SCROLLS,
 ): Promise<MountedPdf> {
   const pdfjs = await import("pdfjs-dist");
   // The worker is addressed as a file of ours: Vite emits it beside the bundle, so it is fetched
@@ -198,7 +205,7 @@ export async function mountPdf(
       watcher.unobserve(frame);
       draw(frame, Number(frame.dataset.page));
     }
-  }, { root: parent.closest(".files__body"), rootMargin: AHEAD });
+  }, { root: parent.closest(scrolls), rootMargin: AHEAD });
 
   for (let at = 1; at <= of; at += 1) {
     const frame = parent.ownerDocument.createElement("div");

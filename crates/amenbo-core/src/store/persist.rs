@@ -23,6 +23,28 @@ fn mint_activity_id(tx: &WriteTx<'_>) -> Result<i64> {
     Ok(id)
 }
 
+/// The ledger line a decision's own transition leaves behind, built **inside** the mutation's
+/// transaction and appended by the caller **after** the commit (`crate::activity_log`). The id is
+/// minted here so it keeps its place in the sequence even when the commit that earned it is the last
+/// thing to happen; the project and the title come off the row the transition just wrote, which saves
+/// a second read and is the only version of them the line should carry.
+fn decision_ledger_entry(
+    tx: &WriteTx<'_>,
+    decision: &crate::model::Decision,
+    actor: crate::model::ActorKind,
+    event: serde_json::Value,
+) -> Result<crate::activity_log::Entry> {
+    Ok(crate::activity_log::Entry {
+        id: mint_activity_id(tx)?,
+        at: crate::time::Timestamp::now(),
+        actor: Some(actor),
+        project: Some(decision.project_id),
+        task: None,
+        decision: Some(decision.id),
+        event,
+    })
+}
+
 // ── Plugin observation events (the outbox emit half of the write path) ─────────
 //
 // A write wrapper composes the semantic event it alone can name — it knows the operation intent (its
@@ -1250,36 +1272,56 @@ impl Store {
     /// The event it fires keeps the name `decision.accepted`: the name is baked into
     /// `project_notify_event`'s `CHECK`, and moving the door a decision leaves by is no reason to make
     /// every subscriber relearn what to listen for (`AMB-D-918`).
+    ///
+    /// A real transition also leaves a `decision.decided` line in the activity ledger, written after
+    /// the commit. The line is written here rather than in the callers — as [`Store::reject_decision`]
+    /// writes its own — so the CLI and the GUI narrate the same moment without either having to
+    /// remember to.
     pub fn finish_writing_decision(
         &mut self,
         id: i64,
         decided_by: Option<String>,
         actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
-        self.write_one(&[WriteTarget::Decision(id)], |tx| {
+        let (decision, changed, entry) = self.write_one(&[WriteTarget::Decision(id)], |tx| {
             let (decision, changed) = crate::ops::decision::finish_writing(tx, id, decided_by)?;
-            if changed {
-                emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
+            if !changed {
+                return Ok((decision, false, None));
             }
-            Ok((decision, changed))
-        })
+            emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
+            let event = crate::activity_log::event::decision_decided(&decision.title);
+            let entry = decision_ledger_entry(tx, &decision, actor, event)?;
+            Ok((decision, true, Some(entry)))
+        })?;
+        if let Some(entry) = &entry {
+            crate::activity_log::append(&self.paths.activity_file, entry);
+        }
+        Ok((decision, changed))
     }
 
     /// Reject a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
     /// is `false` on the idempotent noop (already rejected). `actor` is the process facet, stamped onto
-    /// the `decision.rejected` event fired on a real transition.
+    /// the `decision.rejected` event fired on a real transition, and onto the activity line that goes
+    /// with it — the ledger twin of [`Store::finish_writing_decision`], written after the commit.
     pub fn reject_decision(
         &mut self,
         id: i64,
         actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
-        self.write_one(&[WriteTarget::Decision(id)], |tx| {
+        let (decision, changed, entry) = self.write_one(&[WriteTarget::Decision(id)], |tx| {
             let (decision, changed) = crate::ops::decision::reject(tx, id)?;
-            if changed {
-                emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_REJECTED, actor)?;
+            if !changed {
+                return Ok((decision, false, None));
             }
-            Ok((decision, changed))
-        })
+            emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_REJECTED, actor)?;
+            let event = crate::activity_log::event::decision_rejected(&decision.title);
+            let entry = decision_ledger_entry(tx, &decision, actor, event)?;
+            Ok((decision, true, Some(entry)))
+        })?;
+        if let Some(entry) = &entry {
+            crate::activity_log::append(&self.paths.activity_file, entry);
+        }
+        Ok((decision, changed))
     }
 
     /// Return an accepted decision to discussion (one operation = one transaction). Returns
@@ -1290,7 +1332,9 @@ impl Store {
 
     /// Supersede one decision with another (one operation = one transaction) — one `supersedes` edge
     /// and nothing else. Neither row is rewritten: the old decision stops being current because the
-    /// edge says so, and settling the new side is `finish_writing_decision`'s business (`AMB-D-918`).
+    /// edge says so, and settling the new side is [`Store::finish_writing_decision`]'s business
+    /// (`AMB-D-918`), which is also where that side's `decision.decided` line comes from. Drawing an
+    /// edge settles nothing, so this writes neither an event nor a ledger line.
     /// Returns `(new_decision, changed)`; `changed` is `false` when the edge was already there.
     pub fn supersede_decision(
         &mut self,

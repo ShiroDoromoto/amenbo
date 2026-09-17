@@ -128,6 +128,23 @@ pub mod event {
         json!({ "kind": "decision.proposed", "title": title })
     }
 
+    /// A decision was written to the end — the second stage of its creation, after which it is a
+    /// decision on the record (`AMB-D-918`).
+    ///
+    /// `decided_at` / `decided_by` say when and by whom, but only until a reopen clears them, and
+    /// neither says which pane it was settled from. The line keeps the moment whatever the columns
+    /// go on to hold.
+    pub fn decision_decided(title: &str) -> Value {
+        json!({ "kind": "decision.decided", "title": title })
+    }
+
+    /// A decision was withdrawn — considered and not taken (`AMB-D-918`). The counterpart of
+    /// [`decision_decided`], and the reason the timeline does not read the withdrawal as a bare
+    /// "updated".
+    pub fn decision_rejected(title: &str) -> Value {
+        json!({ "kind": "decision.rejected", "title": title })
+    }
+
     /// A decision is gone.
     pub fn decision_deleted(title: Option<&str>) -> Value {
         json!({ "kind": "decision.deleted", "title": title })

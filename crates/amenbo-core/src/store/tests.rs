@@ -1311,6 +1311,59 @@ fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// Every door a decision's writing ends by leaves a line, and the ends are told apart.
+///
+/// The columns cannot tell them apart: `status_changed_at` moves for either end, and `decided_at` is
+/// cleared by a reopen. Without a line of its own each end reached the timeline as a bare "updated"
+/// (`AMB-T-5054`). The line is written by the store, not by the caller, so the CLI and the GUI narrate
+/// the same moment.
+#[test]
+fn every_door_a_decisions_writing_ends_by_leaves_its_line() {
+    let (mut s, dir) = fresh_store("ledger-decision-ends");
+    let pid = s.project_add(project("PJ")).unwrap().id;
+    let new = |title: &str| crate::ops::decision::NewDecision {
+        title: title.to_string(),
+        body: String::new(),
+        project_id: pid,
+        made_in: None,
+    };
+    let settled = s.add_decision(new("どちらの道を採るか")).unwrap();
+    let turned_down = s.add_decision(new("三つ目の道")).unwrap();
+
+    let (_, changed) = s
+        .finish_writing_decision(settled.id, Some("ai".to_string()), crate::model::ActorKind::Ai)
+        .unwrap();
+    assert!(changed);
+    let line = ledger(&s).pop().unwrap();
+    assert_eq!(line["event"]["kind"], serde_json::json!("decision.decided"));
+    assert_eq!(line["event"]["title"], serde_json::json!("どちらの道を採るか"));
+    assert_eq!(line["decision"].as_i64(), Some(settled.id));
+    assert_eq!(line["task"], serde_json::Value::Null, "a decision's line names no task");
+    assert_eq!(line["project"].as_i64(), Some(pid), "a line carries its own project");
+    assert_eq!(line["actor"], serde_json::json!("ai"));
+
+    let (_, changed) = s.reject_decision(turned_down.id, crate::model::ActorKind::Human).unwrap();
+    assert!(changed);
+    let line = ledger(&s).pop().unwrap();
+    assert_eq!(line["event"]["kind"], serde_json::json!("decision.rejected"));
+    assert_eq!(line["event"]["title"], serde_json::json!("三つ目の道"));
+    assert_eq!(line["decision"].as_i64(), Some(turned_down.id));
+    assert_eq!(line["actor"], serde_json::json!("human"));
+
+    // Superseding settles nothing, so it is no such door and narrates nothing.
+    let replacement = s.add_decision(new("四つ目の道")).unwrap();
+    let before = ledger(&s).len();
+    s.supersede_decision(replacement.id, settled.id).unwrap();
+    assert_eq!(ledger(&s).len(), before, "drawing an edge is not a moment in a decision's writing");
+
+    // The idempotent no-op is not a moment either: repeating the call writes no second line.
+    s.finish_writing_decision(settled.id, Some("ai".to_string()), crate::model::ActorKind::Ai).unwrap();
+    s.reject_decision(turned_down.id, crate::model::ActorKind::Human).unwrap();
+    assert_eq!(ledger(&s).len(), before, "nothing changed, so nothing is narrated");
+
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// A deletion leaves no DB row, but it **still spends an activity sequence number**. Skip the
 /// increment and two consecutive deletions produce two lines with the same id, breaking the
 /// `(at, source, id)` tie-break that gives the ledger and the comment table a single total order.

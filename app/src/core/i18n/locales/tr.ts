@@ -521,6 +521,8 @@ export const tr: Translation = {
     "act.unassigned": "“{title}” sorumlusuz bırakıldı",
     "act.moved": "“{title}” taşındı", "act.unblocked": "“{title}” artık engelli değil (hazır)",
     "act.proposed": "“{title}” önerildi",
+    "act.decided": "“{title}” kararlaştırıldı",
+    "act.rejected": "“{title}” reddedildi",
     "act.deleted": "“{title}” silindi",
     "act.deletedWith": "“{title}” silindi ({tasks}, {decisions})",
     "act.updated": "“{title}” güncellendi",

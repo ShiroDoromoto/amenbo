@@ -527,6 +527,8 @@ export const ja: Translation = {
     "act.unassigned": "「{title}」の担当を外す",
     "act.moved": "「{title}」を移動", "act.unblocked": "「{title}」が着手可能に（依存解除）",
     "act.proposed": "「{title}」を提案",
+    "act.decided": "「{title}」を決定",
+    "act.rejected": "「{title}」を取り下げ",
     "act.deleted": "「{title}」を削除",
     "act.deletedWith": "「{title}」を削除（{tasks}・{decisions}）",
     "act.updated": "「{title}」を更新",

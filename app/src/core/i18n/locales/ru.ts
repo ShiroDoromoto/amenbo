@@ -536,6 +536,8 @@ export const ru: Translation = {
     "act.unassigned": "Снял ответственного с «{title}»",
     "act.moved": "Переместил «{title}»", "act.unblocked": "«{title}» больше не заблокирована (готова)",
     "act.proposed": "Предложено «{title}»",
+    "act.decided": "Решено «{title}»",
+    "act.rejected": "Отклонено «{title}»",
     "act.deleted": "Удалил «{title}»",
     "act.deletedWith": "Удалил «{title}» ({tasks}, {decisions})",
     "act.updated": "Обновил «{title}»",

@@ -521,6 +521,8 @@ export const hi: Translation = {
     "act.unassigned": "“{title}” की ज़िम्मेदारी हटाई",
     "act.moved": "“{title}” हटाकर कहीं और रखा", "act.unblocked": "“{title}” अब रुका नहीं है (तैयार)",
     "act.proposed": "“{title}” प्रस्तावित की",
+    "act.decided": "“{title}” तय की",
+    "act.rejected": "“{title}” अस्वीकार की",
     "act.deleted": "“{title}” मिटाया",
     "act.deletedWith": "“{title}” मिटाया ({tasks}, {decisions})",
     "act.updated": "“{title}” बदला",

@@ -2122,9 +2122,9 @@ pub fn decision_reject(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["decisions"]).decision(id))
 }
 
-/// Put an accepted decision back under discussion (Accepted → Proposed, clearing decided_*). The
-/// sanctioned way to fix a minor flaw without dirtying the supersession chain, while keeping the
-/// freeze meaningful. Non-destructive, reversible, auditable.
+/// Put a settled decision back in hand — `draft` up again, `decided_*` cleared (`AMB-D-918`). The
+/// sanctioned way to fix a minor flaw without dirtying the supersession chain. Non-destructive,
+/// reversible, auditable.
 #[tauri::command]
 pub fn decision_reopen(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -2134,7 +2134,7 @@ pub fn decision_reopen(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["decisions"]).decision(id))
 }
 
-/// Edit a decision's title/body in place — proposed or accepted alike (`AMB-D-363`); rejected is terminal.
+/// Edit a decision's title/body in place — still being written or settled alike (`AMB-D-363`); rejected is terminal.
 #[tauri::command]
 pub fn decision_edit(id: i64, title: Option<String>, body: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -5925,7 +5925,8 @@ pub(crate) mod tests {
 
         let c = card(head);
         assert_eq!(c.r#ref, amenbo_core::idref::decision(head), "the conversational ref is the display form of the id");
-        assert_eq!(c.status, "accepted", "the writing ended, so the card reads it as settled");
+        assert_eq!(c.status, "decided", "the verdict a saved decision carries");
+        assert!(!c.draft, "the writing ended, so the card reads it as settled");
         assert!(c.decided_at.is_some(), "a settled decision has a decided-on date");
         assert!(!c.decided_by.as_ref().unwrap().name.is_empty(), "who decided is carried too");
         assert_eq!(c.supersedes.len(), 1, "the decision it superseded");

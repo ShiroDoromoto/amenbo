@@ -200,7 +200,10 @@ impl ActorKind {
     }
 }
 
-/// The lifecycle state of a decision record: `Proposed` (under discussion) → `Accepted` / `Rejected`.
+/// The lifecycle state of a decision record: `Decided`, or `Rejected` — the two ways a decision can
+/// end, and there is no third (`AMB-D-918`). Saving one is what decides it (`AMB-D-917`), so there is
+/// no stage before the verdict for a status to name: **"still being written" is `Decision::draft`**, a
+/// flag beside this one, the shape the task side has carried since `AMB-D-553`.
 /// Decisions have no todo/in_progress workflow the way tasks do, and they never show up in a mailbox.
 /// **"Superseded" is not a state.** It is a *relationship between decisions* — the `supersedes` edge —
 /// and currency is a projection derived from it (`current` = not pointed at by a live `supersedes` edge).
@@ -209,11 +212,11 @@ impl ActorKind {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DecisionStatus {
-    /// Under discussion. Not settled yet, and still editable.
+    /// Decided. The word `decided_at` / `decided_by` already speak, so the three read as one
+    /// (`AMB-D-918`). It is what a decision is from the moment it is recorded; the stamps are filled
+    /// in one stage on, where the writing ends.
     #[default]
-    Proposed,
-    /// Accepted and settled. `decided_at` / `decided_by` are set.
-    Accepted,
+    Decided,
     /// Rejected — considered, and not adopted.
     Rejected,
 }
@@ -221,16 +224,14 @@ pub enum DecisionStatus {
 impl DecisionStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            DecisionStatus::Proposed => "proposed",
-            DecisionStatus::Accepted => "accepted",
+            DecisionStatus::Decided => "decided",
             DecisionStatus::Rejected => "rejected",
         }
     }
 
     pub fn parse(s: &str) -> Option<DecisionStatus> {
         match s {
-            "proposed" => Some(DecisionStatus::Proposed),
-            "accepted" => Some(DecisionStatus::Accepted),
+            "decided" => Some(DecisionStatus::Decided),
             "rejected" => Some(DecisionStatus::Rejected),
             _ => None,
         }
@@ -666,18 +667,23 @@ pub struct Decision {
     /// column means.
     #[serde(default)]
     pub draft: bool,
-    /// When the current `status` began — updated **only** on a status transition (propose / accept / reject
-    /// / reopen, and the promotion `supersede` performs), never on an ordinary edit: a body rewritten in
-    /// place moves `updated_at` and leaves this still answering "when did this decision last change what it
-    /// is". The symmetric twin of [`Task::status_changed_at`], and the far side of the comparison that says
-    /// a premise re-opened *after* a task was reserved (`AMB-D-373`).
+    /// When the decision last moved between settled and unsettled — stamped by the four routes that move
+    /// it (recording it, ending the writing, rejecting, reopening) and never by an ordinary edit: a body
+    /// rewritten in place moves `updated_at` and leaves this still answering "when did this decision last
+    /// change what it is". The symmetric twin of [`Task::status_changed_at`], and the far side of the
+    /// comparison that says a premise came back open *after* a task was reserved (`AMB-D-373`).
+    ///
+    /// **It outlived the column's name.** Ending the writing and reopening move `draft` rather than
+    /// `status` (`AMB-D-918`), and they are exactly the two the reopen axis has to date, so they keep
+    /// stamping it. Reading it as "when `status` last changed" would leave that axis deaf.
     ///
     /// Not `decided_at`: that one is the moment of *settling* and is cleared by a reopen, so it cannot
-    /// answer for a decision that is back under discussion — which is the one state the reopen axis judges.
+    /// answer for a decision that is being written again — which is the one state the reopen axis judges.
     /// `None` only for a decision no migration reached (every existing row was backfilled).
     #[serde(default)]
     pub status_changed_at: Option<Timestamp>,
-    /// When it was accepted (set on `Accepted`).
+    /// When the writing ended and the decision was settled — unset while it is still being written, and
+    /// cleared again by a reopen.
     #[serde(default)]
     pub decided_at: Option<Timestamp>,
     /// The decider token, for display.

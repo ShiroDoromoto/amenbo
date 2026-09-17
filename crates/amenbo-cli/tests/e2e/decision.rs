@@ -30,8 +30,8 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     let after_accept = cli.json(&["decision", "comment", "list", &did, "--json"]);
     assert_eq!(after_accept["count"], 2, "one reason comment is added");
     assert_eq!(after_accept["comments"][1]["text"], "レビュー後に合意");
-    // The decision itself becomes accepted — the sugar does not get in the way of the transition.
-    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "accepted");
+    // The writing ends — the sugar does not get in the way of the transition.
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["draft"], false);
 
     // reject --reason behaves the same way.
     let d2 = cli.json(&["decision", "add", "--project", &pid, "--title", "却下される案", "--json"]);
@@ -70,7 +70,7 @@ fn finishing_the_writing_settles_a_decision_and_releases_the_work_on_it() {
 
     let done = cli.json(&["decision", "finish-writing", &did, "--reason", "レビュー後に合意", "--json"]);
     assert_eq!(done["noop"], false);
-    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "accepted");
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "decided");
     assert_eq!(cli.json(&["decision", "list", "--filter", "draft:no", "--json"])["count"], 1);
     assert_eq!(cli.json(&["task", "show", &tid, "--json"])["ready"], true);
     let said = cli.json(&["decision", "comment", "list", &did, "--json"]);
@@ -177,7 +177,7 @@ fn a_decision_comment_promotes_into_a_record_that_stands_alone() {
         cli.json(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める2", "--json"])["decision"]
             .clone();
     assert_eq!(promoted["body"], "表示の桁は別問題だ", "the comment's text is the new body");
-    assert_eq!(promoted["status"], "proposed", "it is a proposal, not a settled decision");
+    assert_eq!(promoted["draft"], true, "it is still being written, not a settled decision");
     assert_eq!(id_str(&promoted["project"]["id"]), pid, "the home comes from the comment's decision");
     for edge in ["linked_tasks", "builds_on", "supersedes", "amends"] {
         assert!(promoted[edge].as_array().unwrap().is_empty(), "the new record draws no {edge}: {promoted}");

@@ -192,7 +192,7 @@ export const uk: Translation = {
     "dec.newBodyPh": "Висновок + підстави (не вставляйте сиру дискусію)", "dec.add": "Записати", "dec.cancel": "Скасувати",
     "dec.accept": "Прийняти", "dec.reject": "Відхилити", "dec.reopen": "Повернути до обговорення",
     "dec.editAcceptedHint": "Редагувати прийняте рішення — це виправити формулювання, а не вирішити наново (дата рішення не змінюється). Щоб його скасувати, замініть новим рішенням через «Прив'язати рішення» нижче.",
-    "dec.status.proposed": "Запропоноване", "dec.status.accepted": "Прийняте", "dec.status.rejected": "Відхилене",
+    "dec.status.proposed": "Запропоноване", "dec.status.decided": "Прийняте", "dec.status.rejected": "Відхилене",
     "dec.filterSuperseded": "Замінені",
     "dec.supersededByRef": "замінено на {by}",
     "dec.supersedes": "Замінює", "dec.supersededBy": "Замінено на", "dec.amends": "Змінює", "dec.amendedBy": "Змінено", "dec.linkedTasks": "Прив'язані завдання",

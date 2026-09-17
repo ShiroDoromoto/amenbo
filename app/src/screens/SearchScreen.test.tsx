@@ -302,7 +302,7 @@ describe("the search screen", () => {
             labels: [{ axis: "Area", value: "core" }, { axis: "Phase", value: "second" }],
           },
         }),
-        hit({ ref: "AMB-D-2", standing: { status: "accepted", labels: [] } }),
+        hit({ ref: "AMB-D-2", standing: { status: "decided", labels: [] } }),
         hit({ ref: "AMB-T-3" }),
       ],
       totalMatched: 3,
@@ -320,7 +320,7 @@ describe("the search screen", () => {
     expect(standing(0)!.textContent).toContain("Area=core");
     expect(standing(0)!.textContent).toContain("Phase=second");
     // The other side reads the same field from its own dictionary, and has only the one thing to say.
-    expect(standing(1)!.textContent).toContain(t("dec.status.accepted"));
+    expect(standing(1)!.textContent).toContain(t("dec.status.decided"));
     // A record that stopped being readable between the page and the read draws no line at all — and the
     // row stays, because the words really are written there.
     expect(standing(2)).toBeNull();

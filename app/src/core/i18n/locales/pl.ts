@@ -192,7 +192,7 @@ export const pl: Translation = {
     "dec.newBodyPh": "Wniosek + uzasadnienie (nie wklejaj surowej dyskusji)", "dec.add": "Zapisz", "dec.cancel": "Anuluj",
     "dec.accept": "Przyjmij", "dec.reject": "Odrzuć", "dec.reopen": "Wróć do dyskusji",
     "dec.editAcceptedHint": "Edycja przyjętej decyzji to poprawka sformułowania, a nie ponowne rozstrzygnięcie (data decyzji się nie zmienia). Żeby ją obalić, zastąp ją nową decyzją przez „Podepnij decyzję” poniżej.",
-    "dec.status.proposed": "Zaproponowana", "dec.status.accepted": "Przyjęta", "dec.status.rejected": "Odrzucona",
+    "dec.status.proposed": "Zaproponowana", "dec.status.decided": "Przyjęta", "dec.status.rejected": "Odrzucona",
     "dec.filterSuperseded": "Zastąpione",
     "dec.supersededByRef": "zastąpiona przez {by}",
     "dec.supersedes": "Zastępuje", "dec.supersededBy": "Zastąpiona przez", "dec.amends": "Zmienia", "dec.amendedBy": "Zmieniona przez", "dec.linkedTasks": "Podpięte zadania",

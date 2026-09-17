@@ -55,11 +55,11 @@ pub(crate) fn still_open<E: Expr<Ty = SqlText>>(status: E) -> Pred {
     !closed(status)
 }
 
-/// The premise decision `dc` is **unsettled** — it is still being written, or it is not `accepted`, or
+/// The premise decision `dc` is **unsettled** — it is still being written, or it is not `decided`, or
 /// it is not current because a live decision holds a `supersedes` edge at it (currency is derived from
 /// the edges, never a status). The draft arm is the one `AMB-D-918` adds: what says "still being put
 /// together" moves off `status` and onto a flag of its own, the shape the task side has carried since
-/// `AMB-D-553`. The single definition every premise read shares — the `ready:` filter, `task_detail`, the task card
+/// `AMB-D-553`, which leaves the status arm catching the one verdict that is not a premise — `rejected`. The single definition every premise read shares — the `ready:` filter, `task_detail`, the task card
 /// and [`reserve_blockers`] — so they cannot drift into disagreeing about what blocks a reserve. The
 /// premise is named by whatever alias the caller gave it, so the sharing costs no assumption about the
 /// query it lands in. It carries no bind values, on purpose: besides riding in a `WHERE`, this predicate
@@ -71,7 +71,7 @@ fn unsettled_premise(dc: col::decision::Cols) -> Pred {
         .or(Pred::plain(format!(
             "{} <> '{}'",
             dc.status.to_sql(),
-            crate::model::DecisionStatus::Accepted.as_str()
+            crate::model::DecisionStatus::Decided.as_str()
         )))
         .or(superseded(dc))
 }
@@ -2856,7 +2856,7 @@ pub struct LinkedDecisionRow {
     /// The decision id — which is the conversational number `D-<id>` itself.
     pub id: i64,
     pub title: String,
-    /// Lifecycle status as stored (`proposed` / `accepted` / `rejected` / `superseded`).
+    /// Lifecycle status as stored (`decided` / `rejected`).
     pub status: String,
 }
 
@@ -3027,7 +3027,7 @@ pub struct DecisionRow {
     pub project_name: Option<String>,
     pub title: String,
     pub body: String,
-    /// `DecisionStatus` as snake_case wire text (proposed/accepted/rejected).
+    /// `DecisionStatus` as snake_case wire text (decided/rejected).
     pub status: String,
     /// Whether the writing is still unfinished (`AMB-D-918`) — what `draft:` on `decision list` asks.
     pub draft: bool,
@@ -3156,6 +3156,10 @@ pub struct DecisionDetailRow {
     pub title: String,
     pub body: String,
     pub status: String,
+    /// Whether the writing is still unfinished (`AMB-D-918`). It is read beside `status` and not off
+    /// it: the two say different things, and since the acceptance was folded away `status` alone
+    /// cannot tell a decision still being written from one that is settled.
+    pub draft: bool,
     /// The decision→decision edges, both directions.
     pub edges: DecisionEdges,
     pub decided_at: Option<String>,
@@ -3189,6 +3193,7 @@ pub fn decision_detail(conn: &Connection, decision_id: i64) -> Result<Option<Dec
     // `decision_list`.
     let project_name = sel.col(P.name.nullable());
     let (title, body, status) = (sel.col(D.title), sel.col(D.body), sel.col(D.status));
+    let draft = sel.col(D.draft);
     // `decided_by` is TEXT (a name string, not an fk), read into both fields.
     let (decided_at, decided_by) = (sel.col(D.decided_at), sel.col(D.decided_by));
     let (created_at, updated_at) = (sel.col(D.created_at), sel.col(D.updated_at));
@@ -3204,6 +3209,7 @@ pub fn decision_detail(conn: &Connection, decision_id: i64) -> Result<Option<Dec
                 title: title.get(r)?,
                 body: body.get(r)?,
                 status: status.get(r)?,
+                draft: draft.get(r)?,
                 // The edges are two indexed seeks of their own (`decision_edges`), filled below.
                 edges: DecisionEdges::default(),
                 decided_at: decided_at.get(r)?,
@@ -6817,7 +6823,7 @@ mod tests {
         assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![reopened]);
 
         // A ground reopened *before* the reservation is a premise the holder took the task with.
-        tx.set_field("decision", stayed, "status", text("proposed")).unwrap();
+        tx.set_field("decision", stayed, "draft", Value::Integer(1)).unwrap();
         tx.set_field("decision", stayed, "status_changed_at", text("2019-06-01T00:00:00Z")).unwrap();
         let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
         assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![reopened]);
@@ -6976,7 +6982,7 @@ mod tests {
                 ("project_id", Value::Integer(1)),
                 ("title", text("索引を退役させる")),
                 ("body", text("読み手がいない")),
-                ("status", text("accepted")),
+                ("status", text("decided")),
                 ("decided_at", text(DECIDED_AT)),
                 at("2026-07-05T00:00:00Z"),
             ],
@@ -7280,8 +7286,8 @@ mod tests {
             )
             .1
         };
-        assert_eq!(ask_with("status:accepted"), vec!["Title AMB-D-1"]);
-        assert!(ask_with("status:proposed").is_empty(), "the fixture's decision was accepted");
+        assert_eq!(ask_with("status:decided"), vec!["Title AMB-D-1"]);
+        assert!(ask_with("status:rejected").is_empty(), "the fixture's decision was not turned down");
         assert!(ask_with("superseded:yes").is_empty(), "nothing overturned it");
         assert_eq!(ask_with("superseded:no"), vec!["Title AMB-D-1"]);
         assert_eq!(ask_with("number:1"), vec!["Title AMB-D-1"], "the id is the number");

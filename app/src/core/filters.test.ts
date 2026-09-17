@@ -156,17 +156,17 @@ describe("filters: the decisions tab narrows the same way the board does", () =>
   const assign = { 1: { 1: [11] }, 2: { 1: [12] } };
   const dims = decisionFilterDimensions([dim], assign);
   const decision = (id: number, status: string, supersededBy: unknown[] = []) =>
-    ({ id, status, supersededBy }) as unknown as DecisionDto;
+    ({ id, status, draft: false, supersededBy }) as unknown as DecisionDto;
 
   it("offers the status axis, then the project's own axes", () => {
     expect(dims.map((d) => d.id)).toEqual(["status", "dim:1"]);
-    expect(dims[0].options.map((o) => o.value)).toEqual(["proposed", "accepted", "rejected", "superseded"]);
+    expect(dims[0].options.map((o) => o.value)).toEqual(["draft", "decided", "rejected", "superseded"]);
   });
 
   it("narrows by classification, and an axis with nothing chosen narrows nothing", () => {
-    const mine = decision(1, "accepted");
-    const theirs = decision(2, "accepted");
-    const unfiled = decision(3, "accepted");
+    const mine = decision(1, "decided");
+    const theirs = decision(2, "decided");
+    const unfiled = decision(3, "decided");
     expect(passesFilters(mine, dims, { "dim:1": ["11"] })).toBe(true);
     expect(passesFilters(theirs, dims, { "dim:1": ["11"] })).toBe(false);
     expect(passesFilters(unfiled, dims, { "dim:1": ["11"] })).toBe(false);
@@ -175,8 +175,8 @@ describe("filters: the decisions tab narrows the same way the board does", () =>
   });
 
   it("reads superseded off the edge and not off the status, and ANDs the two axes", () => {
-    const overturned = decision(1, "accepted", [{ id: 9, name: null }]);
-    const standing = decision(2, "accepted");
+    const overturned = decision(1, "decided", [{ id: 9, name: null }]);
+    const standing = decision(2, "decided");
     expect(passesFilters(overturned, dims, { status: ["superseded"] })).toBe(true);
     expect(passesFilters(standing, dims, { status: ["superseded"] })).toBe(false);
     // The two axes are ANDed: the overturned one is filed under the first value, so it survives that

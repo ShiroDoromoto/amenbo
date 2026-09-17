@@ -186,7 +186,7 @@ export const ja: Translation = {
     "dec.newBodyPh": "結論と根拠（議論の生ログは貼らない）", "dec.add": "記録する", "dec.cancel": "やめる",
     "dec.accept": "採択", "dec.reject": "却下", "dec.reopen": "議論に戻す",
     "dec.editAcceptedHint": "採択済みの編集は文言の訂正であって再決定ではありません（決定日時は変わりません）。覆すなら下の「リンクを張る」で新しい決定に置き換えてください。",
-    "dec.status.proposed": "議論中", "dec.status.accepted": "採択済み", "dec.status.rejected": "却下",
+    "dec.status.proposed": "議論中", "dec.status.decided": "採択済み", "dec.status.rejected": "却下",
     "dec.filterSuperseded": "置換済み",
     "dec.supersededByRef": "{by} が置き換えた",
     "dec.supersedes": "置き換えた決定", "dec.supersededBy": "置き換えた新しい決定", "dec.amends": "一部改訂した決定", "dec.amendedBy": "一部改訂した新しい決定", "dec.linkedTasks": "関連タスク",

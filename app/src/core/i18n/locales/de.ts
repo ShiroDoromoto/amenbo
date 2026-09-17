@@ -187,7 +187,7 @@ export const de: Translation = {
     "dec.newBodyPh": "Ergebnis + Begründung (keine rohe Diskussion einfügen)", "dec.add": "Festhalten", "dec.cancel": "Abbrechen",
     "dec.accept": "Annehmen", "dec.reject": "Ablehnen", "dec.reopen": "Zurück in die Diskussion",
     "dec.editAcceptedHint": "Eine angenommene Entscheidung zu bearbeiten ist eine Korrektur der Formulierung, keine neue Entscheidung (das Entscheidungsdatum ändert sich nicht). Zum Umstoßen ersetze sie unten über „Entscheidung verknüpfen“ durch eine neue.",
-    "dec.status.proposed": "Vorgeschlagen", "dec.status.accepted": "Angenommen", "dec.status.rejected": "Abgelehnt",
+    "dec.status.proposed": "Vorgeschlagen", "dec.status.decided": "Angenommen", "dec.status.rejected": "Abgelehnt",
     "dec.filterSuperseded": "Ersetzt",
     "dec.supersededByRef": "ersetzt durch {by}",
     "dec.supersedes": "Ersetzt", "dec.supersededBy": "Ersetzt durch", "dec.amends": "Ändert", "dec.amendedBy": "Geändert durch", "dec.linkedTasks": "Verknüpfte Aufgaben",

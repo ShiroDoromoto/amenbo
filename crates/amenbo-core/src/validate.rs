@@ -320,7 +320,7 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
 /// environment checks instead. `doctor` is the cheap always-on half: it runs at the CLI's startup and,
 /// in the GUI, on every store-changed tick (`compute_startup_health`, which no open calls —
 /// `AMB-D-857`). This check reads the bodies of
-/// every outstanding task and proposed decision on the device and parses each as Markdown, which is the same
+/// every outstanding task and unfinished decision on the device and parses each as Markdown, which is the same
 /// reason the environment's filesystem walk is kept out of that path. It also answers a different question:
 /// `doctor`'s checks say a row is broken, and this one says a *sentence* has rotted while every row around it
 /// is intact.
@@ -333,7 +333,7 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
 ///
 /// **Only a body that still sends someone somewhere is scanned** (`AMB-D-402`). Four surfaces carry prose,
 /// and two of them are read: a task's notes while the task is still work, and a decision's body while it is
-/// still proposed. A finished task's notes, a settled decision's body, and every comment are frozen — the
+/// still being written. A finished task's notes, a settled decision's body, and every comment are frozen — the
 /// number they name was live when it was written, and the reading it belongs to is history, not an entrance.
 /// The question this check answers is whether a reader arriving *now* is sent somewhere empty, so a body
 /// nobody is arriving through has no answer to give. The practical half is that the two frozen surfaces are
@@ -374,16 +374,17 @@ pub fn dead_ref_issues(conn: &Connection, reach: Reach) -> StoreEngineResult<Vec
     );
     issues.extend(scan_bodies(conn, &sql, "task", &id, &body, &live_tasks, &live_decisions)?);
 
-    // A decision's body, while it is still proposed — the one decision status whose body is still open to
-    // editing, and the one still waiting on a reader. `decision.project_id` is NOT NULL, so a closed reach
-    // narrows it outright.
+    // A decision's body, while the writing is not finished — the one still waiting on a reader.
+    // `AMB-D-918` moved that from a status to a flag, so the clause reads `draft` where it read
+    // `proposed`; widening it to the settled bodies as well is `AMB-T-5030`. `decision.project_id` is
+    // NOT NULL, so a closed reach narrows it outright.
     let mut sel = Select::new();
     let (id, body) = (sel.col(DEC.id), sel.col(DEC.body));
     let mut sql = Sql::from(&sel, DEC.table);
     sql.push_where(
         Pred::all(
             [
-                Some(Pred::eq(DEC.status, crate::model::DecisionStatus::Proposed.as_str())),
+                Some(Pred::eq(DEC.draft, true)),
                 reach.project().map(|p| Pred::eq(DEC.project_id, p)),
             ]
             .into_iter()
@@ -680,7 +681,7 @@ mod tests {
         e.put_record(
             "decision",
             5,
-            &[("project_id", Value::Integer(8)), ("title", text("d")), ("status", text("proposed"))],
+            &[("project_id", Value::Integer(8)), ("title", text("d")), ("draft", Value::Integer(1))],
         )
         .unwrap();
         e.put_record("task_comment", 30, &[("task_id", Value::Integer(1)), ("text", text("c"))]).unwrap();
@@ -871,7 +872,7 @@ mod tests {
             &[
                 ("project_id", Value::Integer(7)),
                 ("title", text("d")),
-                ("status", text("proposed")),
+                ("draft", Value::Integer(1)),
                 ("body", text("supersedes AMB-D-4")),
             ],
         )
@@ -1033,7 +1034,7 @@ mod tests {
 
     /// The whole truth table of `AMB-D-402`, both ways round: every one of the four surfaces, in every state
     /// it can be in, carrying the same dead ref. What is raised is exactly the bodies a reader can still
-    /// arrive through — an outstanding task's notes and a proposed decision's body — and every frozen body is
+    /// arrive through — an outstanding task's notes and the body of a decision still being written — and every frozen body is
     /// silent. Both directions matter: a state that stopped being scanned would pass a test that only listed
     /// what stays.
     #[test]
@@ -1070,8 +1071,9 @@ mod tests {
             .unwrap();
         }
 
-        // The same, per decision status, each with a comment of its own.
-        for (id, status) in [(11, "proposed"), (12, "accepted"), (13, "rejected")] {
+        // The same for the decisions, over the two shapes a reader can meet: the writing still open,
+        // and each of the two ways it can have ended (`AMB-D-918`). Each gets a comment of its own.
+        for (id, status, draft) in [(11, "decided", 1), (12, "decided", 0), (13, "rejected", 0)] {
             e.put_record(
                 "decision",
                 id,
@@ -1079,6 +1081,7 @@ mod tests {
                     ("project_id", Value::Integer(7)),
                     ("title", text("d")),
                     ("status", text(status)),
+                    ("draft", Value::Integer(draft)),
                     ("body", text("supersedes AMB-D-9")),
                 ],
             )
@@ -1096,8 +1099,8 @@ mod tests {
         assert_eq!(
             dead_targets(&issues),
             vec!["decision:11", "task:1", "task:2", "task:3"],
-            "outstanding notes and a proposed body are raised; a task that has ended, a settled decision \
-             and every comment are history: {issues:?}",
+            "outstanding notes and a body still being written are raised; a task that has ended, a \
+             settled decision and every comment are history: {issues:?}",
         );
     }
 

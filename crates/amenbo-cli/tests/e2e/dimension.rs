@@ -536,18 +536,18 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     assert_ne!(code, 0);
     let refused: serde_json::Value = serde_json::from_str(&refused).expect("the refusal is JSON");
     assert_eq!(refused["error"]["code"], "invalid_decision_required_dimension");
-    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "proposed");
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["draft"], true);
 
     // `supersede` settles nothing (`AMB-D-918`), so it is not that door: the new side draws the edge
     // with the axis still blank, and comes back still under discussion.
     cli.json(&["dimension", "set", &decision_ref(&old_id), "影響半径", "この一箇所", "--json"]);
     cli.json(&["decision", "finish-writing", &old_id, "--json"]);
     cli.json(&["decision", "supersede", &did, "--replaces", &old_id, "--json"]);
-    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "proposed");
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["draft"], true);
 
     // Answer the axis and the one door goes through.
     cli.json(&["dimension", "set", &decision_ref(&did), "影響半径", "この一箇所", "--json"]);
-    assert_eq!(cli.json(&["decision", "finish-writing", &did, "--json"])["decision"]["status"], "accepted");
+    assert_eq!(cli.json(&["decision", "finish-writing", &did, "--json"])["decision"]["draft"], false);
 
     // Which side the flag holds is the axis's own to say. A task-only required axis asks nothing of a
     // decision...
@@ -562,9 +562,9 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     ]);
     let free_id = id_str(&free["decision"]["id"]);
     assert_eq!(
-        cli.json(&["decision", "finish-writing", &free_id, "--json"])["decision"]["status"],
-        "accepted",
-        "an axis that classifies only tasks holds no acceptance",
+        cli.json(&["decision", "finish-writing", &free_id, "--json"])["decision"]["draft"],
+        false,
+        "an axis that classifies only tasks holds back no decision",
     );
 
     // ...and a decision-only one asks nothing of a task.

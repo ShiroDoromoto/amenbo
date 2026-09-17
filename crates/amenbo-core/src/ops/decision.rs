@@ -1,12 +1,12 @@
 //! Decision-record operations.
 //!
-//! A decision records *why*. Its body is **edited in place**, whatever its status: a proposed
-//! decision while it is still under discussion, and an accepted one for a later correction or
-//! refinement (`AMB-D-363`). Editing is not re-deciding — an edit leaves the `decided_*` stamps
-//! standing — and there is no revision history. What edit does *not* do is overturn: to replace an
-//! accepted decision with a different conclusion, `supersede` it (the old one stays readable in the
-//! chain); to pull a too-hastily accepted one back into debate, `reopen` it to `Proposed`. A rejected
-//! decision is terminal. Decisions have no mailbox workflow the way tasks do.
+//! A decision records *why*. Its body is **edited in place**, while it is still being written and
+//! after it is settled alike, the second for a later correction or refinement (`AMB-D-363`). Editing
+//! is not re-deciding — an edit leaves the `decided_*` stamps standing — and there is no revision
+//! history. What edit does *not* do is overturn: to replace a settled decision with a different
+//! conclusion, `supersede` it (the old one stays readable in the chain); to put one back in hand,
+//! `reopen` it, which raises `draft` again. A rejected decision is terminal. Decisions have no mailbox
+//! workflow the way tasks do.
 //! They are numbered and resolved in a namespace of their own, separate from tasks, and displayed
 //! as `D-N`.
 //!
@@ -92,7 +92,8 @@ pub struct NewDecision {
     pub made_in: Option<MadeIn>,
 }
 
-/// Create a decision as `Proposed` (under discussion), assigning the conversational number (`D-N`)
+/// Create a decision — `Decided` from the moment it is saved (`AMB-D-917`), with `draft` up because
+/// the writing is not finished (`AMB-D-918`) — assigning the conversational number (`D-N`)
 /// that is its id. Tasks and decisions live in **separate number spaces**, so the next number comes
 /// from looking at decisions alone. `next_id` is read inside the same `BEGIN IMMEDIATE` as the
 /// write — read it outside and two concurrent writers take the same number.
@@ -111,12 +112,12 @@ pub fn add(tx: &WriteTx<'_>, input: NewDecision) -> Result<Decision> {
         project_id: input.project_id,
         title: input.title,
         body: input.body,
-        status: DecisionStatus::Proposed,
+        status: DecisionStatus::Decided,
         // Writing has begun and is not finished — the first stage of the two creation takes
-        // (`AMB-D-918`). What lowers it is the second stage, which is `accept` until
-        // `decision finish-writing` arrives to take the name.
+        // (`AMB-D-918`). What lowers it is the second stage, `decision finish-writing`.
         draft: true,
-        // Proposing *is* the first status transition, so the status clock starts here (`AMB-D-373`).
+        // Recording it is the first thing the settledness clock has to date, so it starts here
+        // (`AMB-D-373`).
         status_changed_at: Some(now),
         decided_at: None,
         decided_by: None,
@@ -151,11 +152,11 @@ pub struct DecisionPatch {
     pub body: Option<String>,
 }
 
-/// Edit a decision's title/body in place. Both a `Proposed` decision (edit-while-proposed) and an
-/// `Accepted` one edit directly — accepting no longer freezes the body (`AMB-D-363`). Editing is not
-/// re-deciding, so `decided_at`/`decided_by` are left untouched, and there is no versioning: to
-/// overturn an accepted decision rather than refine it, `supersede` it. A `Rejected` decision is
-/// terminal and cannot be edited.
+/// Edit a decision's title/body in place. A decision still being written and a settled one edit
+/// alike — settling does not freeze the body (`AMB-D-363`). Editing is not re-deciding, so
+/// `decided_at`/`decided_by` are left untouched, and there is no versioning: to overturn a settled
+/// decision rather than refine it, `supersede` it. A `Rejected` decision is terminal and cannot be
+/// edited.
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decision> {
     let before = live_before(tx, id)?;
     if before.status == DecisionStatus::Rejected {
@@ -213,7 +214,9 @@ fn settle(tx: &WriteTx<'_>, before: &Decision, decided_by: Option<String>) -> Re
     refuse_unmet_required_axes(tx, before)?;
     let now = Timestamp::now();
     let after = Decision {
-        status: DecisionStatus::Accepted,
+        // The status does not move here — a decision has been `Decided` since it was saved
+        // (`AMB-D-917`). What ends is the writing, and the stamps that name who ended it.
+        status: DecisionStatus::Decided,
         draft: false,
         status_changed_at: Some(now),
         decided_at: Some(now),
@@ -269,23 +272,26 @@ pub fn unmet_required_axes(conn: &rusqlite::Connection, decision: &Decision) -> 
     Ok(empty)
 }
 
-/// Reject a decision (`Proposed` → `Rejected`). Idempotent when it is already `Rejected`.
-/// Rejecting an `Accepted` decision is an error — a settled decision is replaced by superseding it.
+/// Reject a decision — the writing ends with the decision turned down rather than taken. **Only a
+/// decision still being written can be rejected** (`AMB-D-918`): it is the other way out of the draft,
+/// beside `finish-writing`. Idempotent when it is already `Rejected`. Rejecting one whose writing is
+/// over is an error — a settled decision is replaced by superseding it.
 ///
 /// Returns `(decision, changed)`. `changed` is `false` on the idempotent noop (already `Rejected`), so
 /// the caller does not report a fresh rejection that never happened.
 pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     let before = live_before(tx, id)?;
-    match before.status {
-        DecisionStatus::Rejected => return Ok((before, false)), // idempotent: already rejected, nothing changed
-        DecisionStatus::Proposed => {}
-        other => {
-            return Err(Error::Invalid(
-                Msg::new(format!("decision '{id}' is {} and cannot be rejected", other.as_str()))
-                .coded(ErrorCode::InvalidDecisionRejectAccepted)
-                .with("ref", crate::idref::decision(id)),
-            ))
-        }
+    // Rejected first, and `draft` after: a rejected decision carries `draft` down too, so reading the
+    // flag alone would send the idempotent case into the refusal.
+    if before.status == DecisionStatus::Rejected {
+        return Ok((before, false)); // idempotent: already rejected, nothing changed
+    }
+    if !before.draft {
+        return Err(Error::Invalid(
+            Msg::new(format!("decision '{id}' is {} and cannot be rejected", before.status.as_str()))
+            .coded(ErrorCode::InvalidDecisionRejectAccepted)
+            .with("ref", crate::idref::decision(id)),
+        ));
     }
     let now = Timestamp::now();
     let after = Decision {
@@ -301,12 +307,12 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     Ok((after, true))
 }
 
-/// Return an accepted decision to discussion (`Accepted` → `Proposed`), un-settling it. It clears
+/// Put a settled decision back in hand — raise `draft` again, un-settling it. It clears
 /// `decided_at`/`decided_by` and, as a side effect unique to this route, sends the tasks that rest on
-/// it back to `ready:no`. Use it to pull a too-hastily accepted decision back into debate — a use
-/// neither `reject` (a negative verdict) nor `supersede` (a replacement) expresses. It is **not** a
-/// precondition for editing: an accepted decision edits in place ([`update`], `AMB-D-363`), so reopen
-/// is only for un-deciding. Idempotent (a noop) when it is already `Proposed`. A `Rejected` decision
+/// it back to `ready:no`. Use it to pull a decision settled too hastily back open — a use neither
+/// `reject` (a verdict) nor `supersede` (a replacement) expresses. It is **not** a precondition for
+/// editing: a settled decision edits in place ([`update`], `AMB-D-363`), so reopen is only for
+/// un-settling. Idempotent (a noop) when the writing is already unfinished. A `Rejected` decision
 /// cannot be reopened — reject has no inverse. A superseded decision *can* be, because being
 /// superseded is not a status but a projection of the edges: drop the edge behind an erroneous
 /// supersede and the target is current again. Reopen is non-destructive and reversible, so it is open
@@ -314,23 +320,23 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
 /// noop from a premise it has just un-settled.
 pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     let before = live_before(tx, id)?;
-    match before.status {
-        DecisionStatus::Proposed => return Ok((before, false)), // idempotent (already editable)
-        DecisionStatus::Accepted => {}
-        other => {
-            return Err(Error::Invalid(
-                Msg::new(format!("decision '{id}' is {} and cannot be reopened", other.as_str()))
-                .coded(ErrorCode::InvalidDecisionReopenRejected)
-                .with("ref", crate::idref::decision(id)),
-            ))
-        }
+    // Rejected first, for the reason `reject` reads its two in the order it does: a rejected
+    // decision's `draft` is down as well, so the flag alone cannot tell the two apart.
+    if before.status == DecisionStatus::Rejected {
+        return Err(Error::Invalid(
+            Msg::new(format!("decision '{id}' is {} and cannot be reopened", before.status.as_str()))
+            .coded(ErrorCode::InvalidDecisionReopenRejected)
+            .with("ref", crate::idref::decision(id)),
+        ));
+    }
+    if before.draft {
+        return Ok((before, false)); // idempotent: the writing is open already
     }
     let now = Timestamp::now();
     let after = Decision {
-        status: DecisionStatus::Proposed,
-        // Back under discussion is back to being written (`AMB-D-918`), which is the same thing the
-        // status says here — the two were set together on the way out and are cleared together on the
-        // way back in.
+        // The status stays `Decided`: what a reopen undoes is the *end of the writing*, not the
+        // verdict, and there is no status left to move it to (`AMB-D-918`).
+        status: DecisionStatus::Decided,
         draft: true,
         // The one stamp the reopen axis is built on: a decision that re-opened *after* a task was reserved
         // is a premise that moved under it (`AMB-D-373`). `decided_at` is cleared on this very route, which
@@ -492,8 +498,8 @@ fn put_edge(
     Ok(true)
 }
 
-/// Hard-delete a decision, `Accepted` ones included: deleting retires a record outright, a different
-/// act from editing its body or superseding it — if all you want is to replace an accepted decision
+/// Hard-delete a decision, settled ones included: deleting retires a record outright, a different
+/// act from editing its body or superseding it — if all you want is to replace a settled decision
 /// while keeping it readable, use `supersede`.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let before = live_before(tx, id)?;
@@ -675,12 +681,13 @@ mod tests {
         assert!(settled.draft, "a decision begins half-written");
         let (settled, _) = finish_writing(tx, settled.id, None).unwrap();
         assert!(!settled.draft);
-        assert_eq!(settled.status, DecisionStatus::Accepted);
+        assert_eq!(settled.status, DecisionStatus::Decided);
 
-        // And sending it back into discussion begins it again.
+        // And putting it back in hand begins it again. The verdict does not move with it: what a
+        // reopen undoes is the end of the writing (`AMB-D-918`).
         let (reopened, _) = reopen(tx, settled.id).unwrap();
         assert!(reopened.draft);
-        assert_eq!(reopened.status, DecisionStatus::Proposed);
+        assert_eq!(reopened.status, DecisionStatus::Decided);
 
         // Rejecting it ends the writing too — nobody goes back to finish a decision not taken.
         let turned_down = new_decision(tx, pid, "却下される決定");
@@ -730,12 +737,13 @@ mod tests {
     }
 
     #[test]
-    fn add_creates_a_proposed_decision() {
+    fn add_creates_a_decided_decision_whose_writing_is_unfinished() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "RDB を真実源にする");
-        assert_eq!(d.status, DecisionStatus::Proposed);
+        assert_eq!(d.status, DecisionStatus::Decided, "saving it is what decides it (`AMB-D-917`)");
+        assert!(d.draft, "and the writing is where the second stage still has work");
         assert_eq!(d.project_id, pid);
         assert_eq!(d.id, 1, "the first decision is D-1 (a space separate from tasks)");
         assert!(d.decided_at.is_none());
@@ -757,7 +765,7 @@ mod tests {
         let (written, changed) = finish_writing(tx, d.id, Some("  ai  ".to_string())).unwrap();
         assert!(changed);
         assert!(!written.draft);
-        assert_eq!(written.status, DecisionStatus::Accepted);
+        assert_eq!(written.status, DecisionStatus::Decided);
         assert!(written.decided_at.is_some());
         assert_eq!(written.decided_by.as_deref(), Some("ai"), "the facet is trimmed on the way in");
 
@@ -836,7 +844,7 @@ mod tests {
         let d = new_decision(tx, pid, "分類のない決定");
         assert!(finish_writing(tx, d.id, None).is_err(), "a fresh one is still held");
         crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
-        assert_eq!(finish_writing(tx, d.id, None).unwrap().0.status, DecisionStatus::Accepted);
+        assert_eq!(finish_writing(tx, d.id, None).unwrap().0.status, DecisionStatus::Decided);
     }
 
     /// `supersede` draws one edge and settles nothing (`AMB-D-918`), so the required-classification
@@ -864,7 +872,7 @@ mod tests {
         let (d, changed) = supersede(tx, fresh.id, old.id).unwrap();
         assert!(changed, "the edge landed");
         assert!(d.draft, "and the new side is still being written");
-        assert_eq!(d.status, DecisionStatus::Proposed);
+        assert_eq!(d.status, DecisionStatus::Decided);
         assert_eq!(targets(tx, fresh.id, DecisionEdgeKind::Supersedes), vec![old.id]);
     }
 
@@ -1171,12 +1179,13 @@ mod tests {
             body: "README とコミットは英語".to_string(),
             project_id: pid,
             made_in: None,
-        }).unwrap(); // still Proposed
+        }).unwrap(); // the writing is still open
 
-        // status:accepted matches d1 alone.
+        // Both are `decided` — saving one is what decides it — so what tells them apart is the
+        // writing (`AMB-D-918`), and `draft:no` matches d1 alone.
         let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
             project_id: Some(pid),
-            filter_expr: Some("status:accepted".to_string()),
+            filter_expr: Some("status:decided draft:no".to_string()),
             sort: "-created".to_string(),
             ..Default::default()
         }).unwrap();
@@ -1403,12 +1412,12 @@ mod tests {
     }
 
     #[test]
-    fn update_edits_proposed_and_accepted_but_not_rejected() {
+    fn update_edits_a_draft_and_a_settled_decision_but_not_a_rejected_one() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "old title");
-        // While proposed, edit freely.
+        // While the writing is open, edit freely.
         let edited = update(tx, d.id, DecisionPatch {
             title: Some("new title".to_string()),
             body: Some("詳しい根拠".to_string()),
@@ -1420,7 +1429,7 @@ mod tests {
         let (accepted, _) = finish_writing(tx, d.id, Some("user-1".to_string())).unwrap();
         let decided_at = accepted.decided_at;
         let reedited = update(tx, d.id, DecisionPatch { body: Some("採択後に直した本文".to_string()), ..Default::default() }).unwrap();
-        assert_eq!(reedited.status, DecisionStatus::Accepted, "editing an accepted decision does not un-settle it");
+        assert_eq!(reedited.status, DecisionStatus::Decided, "editing a settled decision does not un-settle it");
         assert_eq!(reedited.body, "採択後に直した本文");
         assert_eq!(reedited.decided_by.as_deref(), Some("user-1"), "edit leaves decided_by untouched");
         assert_eq!(reedited.decided_at, decided_at, "edit leaves decided_at untouched");
@@ -1431,7 +1440,7 @@ mod tests {
     }
 
     #[test]
-    fn reject_only_from_proposed() {
+    fn reject_only_from_a_decision_still_being_written() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
@@ -1443,8 +1452,8 @@ mod tests {
         let (r2, changed2) = reject(tx, d.id).unwrap();
         assert!(!changed2, "re-rejecting an already-rejected decision reports unchanged");
         assert_eq!(r2.status, DecisionStatus::Rejected);
-        // An accepted decision cannot be rejected.
-        let d2 = new_decision(tx, pid, "採択済み");
+        // A decision whose writing is over cannot be rejected.
+        let d2 = new_decision(tx, pid, "書き終えた決定");
         finish_writing(tx, d2.id, None).unwrap();
         assert!(reject(tx, d2.id).is_err());
     }
@@ -1460,13 +1469,14 @@ mod tests {
         // (editing does not need it: an accepted decision edits in place, see the update test).
         let (re, changed) = reopen(tx, d.id).unwrap();
         assert!(changed, "an accepted decision really reopens");
-        assert_eq!(re.status, DecisionStatus::Proposed);
+        assert_eq!(re.status, DecisionStatus::Decided, "the verdict stands; the writing is open again");
+        assert!(re.draft, "the writing is open again");
         assert!(re.decided_at.is_none(), "decided_at is cleared");
         assert!(re.decided_by.is_none(), "decided_by is cleared");
         // Finishing the writing again settles it again — a real transition.
         let (reaccepted, changed) = finish_writing(tx, d.id, Some("user-1".to_string())).unwrap();
         assert!(changed, "settling it again after a reopen is a real transition");
-        assert_eq!(reaccepted.status, DecisionStatus::Accepted);
+        assert_eq!(reaccepted.status, DecisionStatus::Decided);
         assert!(reaccepted.decided_at.is_some());
     }
 
@@ -1523,15 +1533,15 @@ mod tests {
     }
 
     #[test]
-    fn reopen_is_idempotent_on_proposed_and_rejects_terminal_states() {
+    fn reopen_is_idempotent_on_an_open_writing_and_rejects_terminal_states() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
-        // Proposed is idempotent: it is already un-settled.
-        let d = new_decision(tx, pid, "議論中の決定");
+        // A writing still open is idempotent: it is already un-settled.
+        let d = new_decision(tx, pid, "書きかけの決定");
         let (again, changed) = reopen(tx, d.id).unwrap();
-        assert_eq!(again.status, DecisionStatus::Proposed);
-        assert!(!changed, "reopening a proposed decision changes nothing");
+        assert!(again.draft);
+        assert!(!changed, "reopening a decision still being written changes nothing");
         // Rejected cannot be reopened: reject has no inverse.
         let r = new_decision(tx, pid, "却下した決定");
         reject(tx, r.id).unwrap();
@@ -1541,7 +1551,7 @@ mod tests {
         finish_writing(tx, old.id, None).unwrap();
         let newer = new_decision(tx, pid, "新: 置き換える");
         supersede(tx, newer.id, old.id).unwrap();
-        assert_eq!(reopen(tx, old.id).unwrap().0.status, DecisionStatus::Proposed);
+        assert!(reopen(tx, old.id).unwrap().0.draft, "being superseded is no bar to reopening");
     }
 
     #[test]
@@ -1559,10 +1569,10 @@ mod tests {
         // Re-running it changes nothing: the edge is already there.
         let (_, changed2) = supersede(tx, new.id, old.id).unwrap();
         assert!(!changed2, "re-superseding an already-superseded pair reports unchanged");
-        assert_eq!(res.status, DecisionStatus::Accepted, "the new side is whatever it was settled as");
-        // The old row is untouched: its status stays accepted, and being superseded shows up in the
+        assert_eq!(res.status, DecisionStatus::Decided, "the new side is whatever it was settled as");
+        // The old row is untouched: its status stays decided, and being superseded shows up in the
         // derived currency instead.
-        assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Accepted, "the old side's status is unchanged");
+        assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Decided, "the old side's status is unchanged");
         assert!(is_superseded(tx, old.id), "the edge points at the target");
         assert!(!is_superseded(tx, new.id), "nothing points at the superseding side");
         // Self-reference is rejected.
@@ -1614,7 +1624,7 @@ mod tests {
 
         delete(tx, new.id).unwrap();
         assert!(!is_superseded(tx, old.id), "retiring the superseding side takes its edge with it (no orphaned superseded is left behind)");
-        assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Accepted);
+        assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Decided);
     }
 
     /// A superseded decision is queryable through the edges (`superseded:`).
@@ -1645,8 +1655,8 @@ mod tests {
         };
         assert_eq!(list("superseded:yes"), vec![old.id], "the decision an edge points at");
         assert_eq!(list("superseded:no"), vec![new.id], "the decision nothing points at");
-        // status has only three values, so a superseded decision still comes back as accepted.
-        assert_eq!(list("status:accepted").len(), 2);
+        // status has only two values, so a superseded decision still comes back as decided.
+        assert_eq!(list("status:decided").len(), 2);
         // `status:superseded` is refused: being superseded is not a status.
         assert!(decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
             project_id: Some(pid),
@@ -1690,11 +1700,11 @@ mod tests {
         // Outside the window it drops out.
         assert!(list("decided_before:-1d").is_empty(), "it was not decided by yesterday");
         assert!(list("decided_after:+1d").is_empty(), "nor was it decided tomorrow or later");
-        // An unaccepted decision has no such day, so it matches neither direction — though it is
-        // still queryable as proposed.
+        // A decision nobody has finished writing has no such day, so it matches neither direction —
+        // though it is still queryable by the flag that says so.
         assert!(!list("decided_before:+1d").contains(&open.id));
         assert!(!list("decided_after:-1d").contains(&open.id));
-        assert_eq!(list("status:proposed"), vec![open.id]);
+        assert_eq!(list("draft:yes"), vec![open.id]);
         // Compose with the edge filter to get what had been settled as of T and nothing has replaced.
         assert_eq!(list("decided_before:today superseded:no"), vec![settled.id]);
         // A range, with both ends inclusive.
@@ -1792,8 +1802,8 @@ mod tests {
         assert_eq!(found("dim:テーマ=メイン"), vec![format!("AMB-D-{}", on_main.id)]);
         assert_eq!(found("dim:テーマ=会話の窓"), vec![format!("AMB-D-{}", on_talk.id)]);
         assert!(found("dim:テーマ=none").is_empty(), "neither of the two the words reach is unclassified");
-        assert_eq!(list("dim:テーマ=メイン status:proposed"), vec![on_main.id]);
-        assert!(list("dim:テーマ=メイン status:accepted").is_empty());
+        assert_eq!(list("dim:テーマ=メイン draft:yes"), vec![on_main.id]);
+        assert!(list("dim:テーマ=メイン draft:no").is_empty());
         // A name that resolves to nothing is an error, not a silent zero — and on the `=none` arm a
         // silent pass would answer with *every* decision.
         for expr in ["dim:無い軸=メイン", "dim:テーマ=無い値", "dim:無い軸=none"] {
@@ -1838,7 +1848,7 @@ mod tests {
         assert!(is_superseded(tx, a.id));
         assert!(is_superseded(tx, b.id));
         assert!(!is_superseded(tx, c.id), "amend draws no supersedes edge at its target");
-        assert_eq!(read::decision(tx.conn(), c.id).unwrap().unwrap().status, DecisionStatus::Accepted);
+        assert_eq!(read::decision(tx.conn(), c.id).unwrap().unwrap().status, DecisionStatus::Decided);
     }
 
     /// A pair never carries two kinds (`decision_edge_pair` UNIQUE): the kind drawn later
@@ -1878,8 +1888,8 @@ mod tests {
 
         let res = builds_on(tx, standing.id, premise.id).unwrap();
         assert_eq!(targets(tx, standing.id, DecisionEdgeKind::BuildsOn), vec![premise.id]);
-        assert_eq!(res.status, DecisionStatus::Proposed, "the drawing side's status is not moved");
-        assert_eq!(read::decision(tx.conn(), premise.id).unwrap().unwrap().status, DecisionStatus::Accepted);
+        assert!(res.draft, "the drawing side is left as it was — still being written");
+        assert_eq!(read::decision(tx.conn(), premise.id).unwrap().unwrap().status, DecisionStatus::Decided);
         assert!(!is_superseded(tx, premise.id), "builds_on draws no supersedes edge at the premise");
         // Redrawing the same premise adds nothing (idempotent). Self-reference is rejected.
         builds_on(tx, standing.id, premise.id).unwrap();
@@ -1960,8 +1970,8 @@ mod tests {
         // `a_decision_can_supersede_and_amend_many_others`.
         assert_eq!(
             read::decision(tx.conn(), old.id).unwrap().unwrap().status,
-            DecisionStatus::Accepted,
-            "the amended target stays Accepted (it is not made Superseded)"
+            DecisionStatus::Decided,
+            "the amended target stays Decided (it is not made Superseded)"
         );
         // Self-reference is rejected.
         assert!(amend(tx, new.id, new.id).is_err());
@@ -1978,20 +1988,16 @@ mod tests {
         let target = new_decision(tx, pid, "通信ゼロ");
         finish_writing(tx, target.id, None).unwrap();
         let amending = new_decision(tx, pid, "更新チェックを解禁");
-        assert_eq!(amending.status, DecisionStatus::Proposed);
+        assert!(amending.draft);
 
         let res = amend(tx, amending.id, target.id).unwrap();
-        assert_eq!(
-            res.status,
-            DecisionStatus::Proposed,
-            "amending leaves the new side Proposed (no side-effect accept)"
-        );
+        assert!(res.draft, "amending leaves the new side still being written (it settles nothing)");
         assert!(res.decided_at.is_none(), "decided_at is not set");
         assert!(res.decided_by.is_none(), "decided_by is not set");
         assert_eq!(targets(tx, amending.id, DecisionEdgeKind::Amends), vec![target.id]);
-        // accept still works as a separate operation, and leaves the edge as it is.
-        let (accepted, _) = finish_writing(tx, amending.id, None).unwrap();
-        assert_eq!(accepted.status, DecisionStatus::Accepted);
+        // Finishing the writing still works as a separate operation, and leaves the edge as it is.
+        let (settled, _) = finish_writing(tx, amending.id, None).unwrap();
+        assert!(!settled.draft);
         assert_eq!(targets(tx, amending.id, DecisionEdgeKind::Amends), vec![target.id]);
     }
 

@@ -189,7 +189,7 @@ export const th: Translation = {
     "dec.newBodyPh": "ข้อสรุป + เหตุผล (อย่าวางบทสนทนาดิบ)", "dec.add": "บันทึก", "dec.cancel": "ยกเลิก",
     "dec.accept": "รับ", "dec.reject": "ตีตก", "dec.reopen": "ส่งกลับไปถกกันต่อ",
     "dec.editAcceptedHint": "การแก้การตัดสินใจที่รับแล้วคือการแก้ถ้อยคำ ไม่ใช่การตัดสินใจใหม่ (วันที่ตัดสินไม่เปลี่ยน) ถ้าจะพลิกมัน ให้แทนที่ด้วยการตัดสินใจใหม่ผ่าน “เชื่อมการตัดสินใจ” ด้านล่าง",
-    "dec.status.proposed": "เสนอไว้", "dec.status.accepted": "รับแล้ว", "dec.status.rejected": "ตีตกแล้ว",
+    "dec.status.proposed": "เสนอไว้", "dec.status.decided": "รับแล้ว", "dec.status.rejected": "ตีตกแล้ว",
     "dec.filterSuperseded": "ถูกแทนที่แล้ว",
     "dec.supersededByRef": "ถูกแทนที่ด้วย {by}",
     "dec.supersedes": "แทนที่", "dec.supersededBy": "ถูกแทนที่ด้วย", "dec.amends": "แก้ไข", "dec.amendedBy": "ถูกแก้ไขโดย", "dec.linkedTasks": "งานที่เชื่อมไว้",

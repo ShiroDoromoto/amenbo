@@ -187,7 +187,7 @@ export const zhHant: Translation = {
     "dec.newBodyPh": "結論＋理由（不要貼原始討論）", "dec.add": "記錄", "dec.cancel": "取消",
     "dec.accept": "採納", "dec.reject": "否決", "dec.reopen": "退回討論",
     "dec.editAcceptedHint": "編輯已採納的決策屬於措辭修正，不是重新決策（決定日期不會改變）。要推翻它，請用下方的「連結決策」以新決策取代它。",
-    "dec.status.proposed": "提案中", "dec.status.accepted": "已採納", "dec.status.rejected": "已否決",
+    "dec.status.proposed": "提案中", "dec.status.decided": "已採納", "dec.status.rejected": "已否決",
     "dec.filterSuperseded": "已被取代",
     "dec.supersededByRef": "已被 {by} 取代",
     "dec.supersedes": "取代", "dec.supersededBy": "被取代於", "dec.amends": "修訂", "dec.amendedBy": "被修訂於", "dec.linkedTasks": "相關任務",

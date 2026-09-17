@@ -111,15 +111,15 @@ export function filterDimensions(
 }
 
 /**
- * The axes the decisions tab filters on: the decision's own status, then the project's user-defined
+ * The axes the decisions tab filters on: how far the decision has got, then the project's user-defined
  * axes — the same shape the board has, built from the same pieces, because narrowing a list of
  * decisions is the same act as narrowing a list of tasks and the two tabs should not ask for it
  * differently. The caller hands in the axes that classify decisions (`axesFor("decision", …)`,
  * `AMB-D-789`) and their assignments, read in bulk the way the board reads its own.
  *
- * "Superseded" rides on the status axis while keeping a label of its own: it is an edge and not a
- * status (`AMB-D-410`), so it is offered where a reader looks for it without the status namespace
- * being made to hold something that is not one.
+ * "Superseded" and the unfinished writing both ride on the status axis while keeping labels of their
+ * own: one is an edge (`AMB-D-410`) and the other a flag (`AMB-D-918`), so each is offered where a
+ * reader looks for it without the status namespace being made to hold something that is not one.
  */
 export function decisionFilterDimensions(
   userDims: DimensionDto[] = [],
@@ -130,6 +130,13 @@ export function decisionFilterDimensions(
     label: () => t("filter.dim.status"),
     cliKey: "status:",
     options: [
+      {
+        // The writing, offered where the reader looks for the state — it is a flag and not a status
+        // (`AMB-D-918`), the same accommodation "superseded" gets below.
+        value: "draft",
+        label: () => t("dec.status.proposed"),
+        test: (d: DecisionDto) => d.draft,
+      },
       ...DECISION_STATUSES.map((s) => ({
         value: s,
         label: () => t(`dec.status.${s}`),
@@ -145,7 +152,7 @@ export function decisionFilterDimensions(
   return [status, ...customDimensions<DecisionDto>(userDims, dimAssign, (d) => d.id)];
 }
 
-const DECISION_STATUSES: DecisionDto["status"][] = ["proposed", "accepted", "rejected"];
+const DECISION_STATUSES: DecisionDto["status"][] = ["decided", "rejected"];
 
 /**
  * The user-defined axes as filter dimensions, for whichever side is asking. An axis with no values

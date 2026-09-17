@@ -77,12 +77,17 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             } else {
                 human(flags, count_header(result.count, result.total_matched, "decision"));
                 for d in &result.decisions {
-                    // "Superseded" is not a status, and does not stand in place of one: a rejected decision
-                    // that was later replaced is both, so the edge is said after the status, not instead of it.
+                    // While the writing is unfinished the status has nothing to tell apart — a decision
+                    // is `decided` from the moment it is saved (`AMB-D-918`) — so the row says the draft
+                    // instead, which is the fact a reader is after on that side.
+                    // "Superseded" is not a status either, and does not stand in place of one: a rejected
+                    // decision that was later replaced is both, so the edge is said after the status, not
+                    // instead of it.
+                    let state = if d.draft { "draft" } else { d.status.as_str() };
                     let state = if d.superseded_by.is_empty() {
-                        d.status.as_str().to_string()
+                        state.to_string()
                     } else {
-                        format!("{}, superseded", d.status.as_str())
+                        format!("{state}, superseded")
                     };
                     human(flags, format!("  {}  [{}] {} (tasks: {})", d.r#ref, state, d.title, d.linked_task_count));
                     // `--with-body`: follow with the body, indented — a body column on a narrowed page.
@@ -112,7 +117,10 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 print_json(&v);
             } else {
                 human(flags, format!("{}  {}", detail.r#ref, detail.title));
-                human(flags, format!("status: {}", detail.status.as_str()));
+                // The draft is said beside the status, not in place of it: the two answer different
+                // questions, and the page is where a reader asks both (`AMB-D-918`).
+                let still_writing = if detail.draft { " (still being written)" } else { "" };
+                human(flags, format!("status: {}{still_writing}", detail.status.as_str()));
                 // How fresh the record is — the one thing a reader cannot get from the body. `recorded`
                 // is when it was written down, `decided` when it was settled (a proposed decision has no
                 // such moment, and a reopen clears it again). `last changed` moves on any write, an
@@ -245,7 +253,7 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             if changed {
                 // Only attach the reason on a real rejection; a re-reject changes nothing.
                 add_reason_comment(store, flags, did, reason)?;
-                write_envelope(flags, "decision.reject", "decision", resource, Some(vec!["status".to_string()]), false, format!("✓ Rejected decision: {}", decision_label(d.id)));
+                write_envelope(flags, "decision.reject", "decision", resource, Some(vec!["draft".to_string(), "status".to_string()]), false, format!("✓ Rejected decision: {}", decision_label(d.id)));
                 note_revisit(flags, did, &standing);
             } else {
                 write_envelope(flags, "decision.reject", "decision", resource, Some(vec![]), true, format!("• Decision {} is already rejected — no change.", decision_label(d.id)));
@@ -257,11 +265,12 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             if changed {
                 warn_if_unsettled_under_reserved(d.id, &detail, "reopening it");
-                write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Reopened decision: {}", decision_label(d.id)));
+                write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["draft".to_string()]), false, format!("✓ Reopened decision: {}", decision_label(d.id)));
             } else {
-                // Already proposed: reopening changes nothing, so say so plainly instead of a bare "✓"
-                // that reads as "just now reopened" — the same two-branch shape as accept/reject.
-                write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already proposed — no change.", decision_label(d.id)));
+                // The writing is open already: reopening changes nothing, so say so plainly instead of
+                // a bare "✓" that reads as "just now reopened" — the same two-branch shape the other
+                // verdicts have.
+                write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is still being written — no change.", decision_label(d.id)));
             }
         }
         DecisionCmd::Delete { id } => {

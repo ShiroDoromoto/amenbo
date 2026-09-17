@@ -205,7 +205,7 @@ const ui = {
   "dec.newBodyPh": "Conclusion + rationale (don't paste raw discussion)", "dec.add": "Record", "dec.cancel": "Cancel",
   "dec.accept": "Accept", "dec.reject": "Reject", "dec.reopen": "Return to discussion",
   "dec.editAcceptedHint": "Editing an accepted decision is a wording fix, not a re-decision (the decided date does not change). To overturn it, supersede it with a new decision via “Link a decision” below.",
-  "dec.status.proposed": "Proposed", "dec.status.accepted": "Accepted", "dec.status.rejected": "Rejected",
+  "dec.status.proposed": "Proposed", "dec.status.decided": "Accepted", "dec.status.rejected": "Rejected",
   "dec.filterSuperseded": "Superseded",
   "dec.supersededByRef": "superseded by {by}",
   "dec.supersedes": "Supersedes", "dec.supersededBy": "Superseded by", "dec.amends": "Amends", "dec.amendedBy": "Amended by", "dec.linkedTasks": "Linked tasks",

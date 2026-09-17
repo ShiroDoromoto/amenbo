@@ -186,7 +186,7 @@ export const ko: Translation = {
     "dec.newBodyPh": "결론 + 근거(논의 원문을 붙여넣지 마세요)", "dec.add": "기록", "dec.cancel": "취소",
     "dec.accept": "채택", "dec.reject": "기각", "dec.reopen": "논의로 되돌리기",
     "dec.editAcceptedHint": "채택된 결정을 고치는 것은 문구 수정이지 다시 결정하는 것이 아닙니다(결정한 날짜는 바뀌지 않습니다). 뒤집으려면 아래 “결정 연결”에서 새 결정으로 대체하세요.",
-    "dec.status.proposed": "제안됨", "dec.status.accepted": "채택됨", "dec.status.rejected": "기각됨",
+    "dec.status.proposed": "제안됨", "dec.status.decided": "채택됨", "dec.status.rejected": "기각됨",
     "dec.filterSuperseded": "대체됨",
     "dec.supersededByRef": "{by}(으)로 대체됨",
     "dec.supersedes": "대체함", "dec.supersededBy": "대체된 곳", "dec.amends": "수정함", "dec.amendedBy": "수정된 곳", "dec.linkedTasks": "연결된 작업",

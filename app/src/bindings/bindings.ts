@@ -322,10 +322,11 @@ export type DecisionDto = { id: number,
  */
 ref: string, title: string, body: string, 
 /**
- * proposed / accepted / rejected. "Superseded" is not a status — it is an edge, and
- * `superseded_by` is where it is read.
+ * decided / rejected — the two ways a decision ends (`AMB-D-918`). "Superseded" is not a status
+ * — it is an edge, and `superseded_by` is where it is read; neither is "still being written",
+ * which is `draft` below.
  */
-status: "proposed" | "accepted" | "rejected", 
+status: "decided" | "rejected", 
 /**
  * Is this decision still being written (`AMB-D-918`)? The pane draws its doors off this rather
  * than off the status: while it is up, the decision is unfinished and the tasks resting on it are
@@ -1936,8 +1937,8 @@ totalMatched: number, };
  */
 export type SearchStandingDto = { 
 /**
- * `todo` / `in_progress` / `done` / `blocked` / `rejected` for a task, `proposed` / `accepted` /
- * `rejected` for a decision.
+ * `todo` / `in_progress` / `done` / `blocked` / `rejected` for a task, `decided` / `rejected`
+ * for a decision.
  */
 status: string, 
 /**

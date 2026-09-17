@@ -127,8 +127,8 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     assert!(e1.contains('⚠') && e1.contains(&t_ref), "the warn names the reserved task {t_ref}: {e1}");
     assert!(e1.contains(&d_ref), "the warn names the decision {d_ref}: {e1}");
 
-    // Reopening what is already proposed settles nothing anew — no second warn, and the envelope
-    // flags it as a no-op instead of reporting "✓ Reopened" as if it just changed.
+    // Reopening a writing that is open already settles nothing anew — no second warn, and the
+    // envelope flags it as a no-op instead of reporting "✓ Reopened" as if it just changed.
     let (o2, e2, c2) = cli.run_both(&["decision", "reopen", &did, "--json"]);
     assert_eq!(c2, 0);
     assert!(!e2.contains('⚠'), "an idempotent reopen must not warn: {e2}");
@@ -138,7 +138,7 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     // The human line says so too, distinct from the "✓ Reopened" of a real change.
     let (h, _he, hc) = cli.run_both(&["decision", "reopen", &did]);
     assert_eq!(hc, 0);
-    assert!(h.contains("already proposed") && h.contains("no change"), "idempotent reopen reports no change: {h}");
+    assert!(h.contains("still being written") && h.contains("no change"), "idempotent reopen reports no change: {h}");
 }
 
 /// The other act that unsettles a premise: superseding leaves the old decision accepted but no longer
@@ -1245,7 +1245,7 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
     };
     assert_eq!(standing(&format!("AMB-T-{open}")), "todo [high] · エリア=実装", "state, urgency and filing");
     assert_eq!(standing(&format!("AMB-T-{over}")), "done", "work that is over says so, and has nothing else to say");
-    assert_eq!(standing(&format!("AMB-D-{did}")), "proposed", "a decision has a state and no more");
+    assert_eq!(standing(&format!("AMB-D-{did}")), "decided", "a decision has a state and no more");
 
     // The same standing, unabridged, for a caller that parses instead of reading.
     let hit = cli.json(&["search", "掃引", "--project", &pid, "--limit", "100", "--json"])

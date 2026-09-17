@@ -189,7 +189,7 @@ export const id: Translation = {
     "dec.newBodyPh": "Kesimpulan + alasan (jangan tempelkan diskusi mentah)", "dec.add": "Catat", "dec.cancel": "Batal",
     "dec.accept": "Terima", "dec.reject": "Tolak", "dec.reopen": "Kembalikan ke diskusi",
     "dec.editAcceptedHint": "Menyunting keputusan yang sudah diterima adalah perbaikan kata, bukan keputusan ulang (tanggal keputusannya tidak berubah). Untuk membatalkannya, gantikan dengan keputusan baru lewat “Tautkan keputusan” di bawah.",
-    "dec.status.proposed": "Diusulkan", "dec.status.accepted": "Diterima", "dec.status.rejected": "Ditolak",
+    "dec.status.proposed": "Diusulkan", "dec.status.decided": "Diterima", "dec.status.rejected": "Ditolak",
     "dec.filterSuperseded": "Digantikan",
     "dec.supersededByRef": "digantikan oleh {by}",
     "dec.supersedes": "Menggantikan", "dec.supersededBy": "Digantikan oleh", "dec.amends": "Mengubah", "dec.amendedBy": "Diubah oleh", "dec.linkedTasks": "Tugas yang tertaut",

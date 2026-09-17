@@ -294,7 +294,8 @@ pub enum Command {
     Export {
         /// The **export directory** to create — `export.json` plus `attachments/` with every
         /// attachment's bytes. Must not exist yet. With no `--out` the dump streams to stdout (records
-        /// only — no attachments).
+        /// only — no attachments), except on a closed reach, which is handed a directory named
+        /// `amenbo-export-<UTC stamp>` under the current folder instead of the stream.
         #[arg(long)]
         out: Option<String>,
     },

@@ -118,12 +118,12 @@ pub mod event {
         json!({ "kind": "project.deleted", "name": name, "tasks": tasks, "decisions": decisions })
     }
 
-    /// A decision was put up for discussion — the moment `proposed` began.
+    /// A decision was opened — the moment its writing began.
     ///
-    /// The column says a decision *is* proposed; it cannot say who put it up or which pane they were
-    /// in, and `status_changed_at` is overwritten by the verdict. That is the gap this line fills:
-    /// a proposal nobody ever settled is only findable if something recorded that it was made
-    /// (`AMB-T-3600`, `AMB-T-3639`).
+    /// No column holds that moment: `status` reads `decided` from the start, it cannot say who opened
+    /// the decision or which pane they were in, and `status_changed_at` is overwritten by whatever ends
+    /// the writing. That is the gap this line fills: a decision nobody ever finished writing is only
+    /// findable if something recorded that it was opened (`AMB-T-3600`, `AMB-T-3639`).
     pub fn decision_proposed(title: &str) -> Value {
         json!({ "kind": "decision.proposed", "title": title })
     }

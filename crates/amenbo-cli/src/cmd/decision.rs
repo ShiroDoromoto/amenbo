@@ -47,8 +47,8 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 title, body, project_id,
                 made_in,
             }, &dimension_values).map_err(CliError::from)?;
-            // The proposal is a moment, and the column cannot hold it: `status` says a decision is
-            // proposed and `status_changed_at` is overwritten by the verdict (`AMB-T-3639`).
+            // Recording it is a moment, and no column holds that moment: `status` reads `decided` from
+            // the start and `status_changed_at` is overwritten by whatever ends the writing (`AMB-T-3639`).
             emit_decision_event(store, flags, d.id, activity_log::event::decision_proposed(&d.title));
             // And the pane it was typed in is told, for the reason `task add` says it there
             // (`AMB-D-897`).
@@ -122,15 +122,15 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 let still_writing = if detail.draft { " (still being written)" } else { "" };
                 human(flags, format!("status: {}{still_writing}", detail.status.as_str()));
                 // How fresh the record is — the one thing a reader cannot get from the body. `recorded`
-                // is when it was written down, `decided` when it was settled (a proposed decision has no
-                // such moment, and a reopen clears it again). `last changed` moves on any write, an
-                // accept included, so it is said only where it is news: not when it merely repeats the
-                // instant the decision was recorded or settled at.
+                // is when it was written down, `decided` when it was settled (a decision still being
+                // written has no such moment, and a reopen clears it again). `last changed` moves on any
+                // write, the end of the writing included, so it is said only where it is news: not when it
+                // merely repeats the instant the decision was recorded or settled at.
                 human(flags, format!("recorded: {}", detail.created_at.to_rfc3339_z()));
                 if let Some(at) = detail.decided_at {
                     // Who settled it rides on the same line as when, because the two are one fact about
-                    // the ruling — and a reader who is deciding whether to trust it wants both at once
-                    // (`AMB-D-788`, now that an AI may accept as well as a person).
+                    // the settling — and a reader who is deciding whether to trust it wants both at once
+                    // (`AMB-D-918`: an AI ends the writing as readily as a person).
                     let by = detail.decided_by.as_ref().map(|r| format!(" by {}", decider_name(&r.id))).unwrap_or_default();
                     human(flags, format!("decided: {}{by}", at.to_rfc3339_z()));
                 }
@@ -237,7 +237,7 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             } else {
                 // Already written: say so plainly rather than a bare "✓" that reads as "just now
                 // settled". Who settled it is frozen, and `reopen` is the sanctioned way to change it.
-                write_envelope(flags, "decision.finish-writing", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already written{} — no change. To write it again, `reopen` it first.", decision_label(d.id), accepted_by_suffix(&d)));
+                write_envelope(flags, "decision.finish-writing", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already written{} — no change. To write it again, `reopen` it first.", decision_label(d.id), settled_by_suffix(&d)));
             }
         }
         DecisionCmd::Reject { id, reason } => {
@@ -358,8 +358,8 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 (None, Some(cid)) => (promote_decision_comment(store, cid, title, project, &dim)?, decision_comment_label(cid)),
                 (None, None) => return Err(comment_not_found(&comment)),
             };
-            // Promoted or filed outright, a decision is proposed the moment it exists — the line is
-            // written where the two roads meet rather than on each of them (`AMB-T-3639`).
+            // Promoted or filed outright, a decision is on the record the moment it exists — the line
+            // is written where the two roads meet rather than on each of them (`AMB-T-3639`).
             let title = store.decision_detail(did).map_err(CliError::from)?.title;
             emit_decision_event(store, flags, did, activity_log::event::decision_proposed(&title));
             // The pane is told here for the same reason the line above is written here: a decision
@@ -488,9 +488,10 @@ fn decider_name(token: &str) -> String {
     }
 }
 
-/// A `" (by <facet>, <utc>)"` suffix naming who settled an already-accepted decision, empty when the
-/// stamps are missing. Shown on the idempotent re-accept so `reopen` is an informed choice, not a guess.
-fn accepted_by_suffix(d: &amenbo_core::model::Decision) -> String {
+/// A `" (by <facet>, <utc>)"` suffix naming who settled a decision already written out, empty when the
+/// stamps are missing. Shown on the idempotent re-run of `finish-writing`, so `reopen` is an informed
+/// choice, not a guess.
+fn settled_by_suffix(d: &amenbo_core::model::Decision) -> String {
     match (&d.decided_by, &d.decided_at) {
         (Some(who), Some(at)) => format!(" (by {}, {})", decider_name(who), at.to_rfc3339_z()),
         (Some(who), None) => format!(" (by {})", decider_name(who)),

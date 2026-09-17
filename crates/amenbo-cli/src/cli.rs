@@ -878,7 +878,7 @@ pub enum HardEraseCmd {
         #[arg(required = true)]
         ids: Vec<String>,
     },
-    /// Redact an accepted decision's body: overwrite it in place with the given text and scrub the prior
+    /// Redact a settled decision's body: overwrite it in place with the given text and scrub the prior
     /// bytes from the file (which `decision edit` alone does not). The decision — its number, links and other fields — stays.
     Decision {
         /// decision reference (AMB-D-n)
@@ -1451,7 +1451,7 @@ pub enum CommentCmd {
 
 #[derive(Subcommand, Debug)]
 pub enum DecisionCmd {
-    /// Record a new decision (proposed). The project defaults to the bound project
+    /// Open a new decision, as a draft — only what the human settled with you belongs on one. The project defaults to the bound project
     Add {
         #[arg(long)]
         title: String,
@@ -1471,7 +1471,7 @@ pub enum DecisionCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
-    /// List decisions (filter by status:/draft: (yes|no — whether the writing is still unfinished)/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/`dim:<axis>=<value>` and its `time_axis:<value>` sugar (the same axes tasks are classified on: different axes AND, the same axis ORs, `=none` is unclassified)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
+    /// List decisions (filter by status:/draft: (yes|no — whether the writing is still unfinished)/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/`dim:<axis>=<value>` and its `time_axis:<value>` sugar (the same axes tasks are classified on: different axes AND, the same axis ORs, `=none` is unclassified)/decided_before:/decided_after: (the day a decision was settled, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
     List {
         #[arg(long)]
         project: Option<String>,
@@ -1496,7 +1496,7 @@ pub enum DecisionCmd {
         /// decision ref (AMB-D-n)
         id: String,
     },
-    /// Edit a decision's title/body in place — proposed or accepted alike (supersede to overturn an accepted one, not edit)
+    /// Edit a decision's title/body in place — one still being written and a settled one alike (supersede to overturn a settled one, not edit)
     Edit {
         id: String,
         #[arg(long)]
@@ -1513,18 +1513,18 @@ pub enum DecisionCmd {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Reject a decision (proposed → rejected)
+    /// Turn down a decision still being written (draft → rejected) — a settled one is refused, and a record written in error goes by `decision delete`
     Reject {
         id: String,
         /// reason for rejecting — recorded as a decision comment, not a dedicated field. Pass `-` to read it from stdin
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Return an accepted decision to discussion (accepted → proposed) — un-settle it. Editing does not need it. Non-destructive and audited
+    /// Put a settled decision back in hand — raise the draft flag again and clear decided_at/decided_by (the status stays decided). Editing does not need it. Non-destructive and audited
     Reopen {
         id: String,
     },
-    /// Delete (retire) a decision — accepted ones included; the row goes, the bytes stay in the file (confirms unless --yes)
+    /// Delete (retire) a decision — settled ones included; the row goes, the bytes stay in the file (confirms unless --yes)
     Delete {
         /// decision ref (AMB-D-n)
         id: String,
@@ -1614,7 +1614,7 @@ pub enum DecisionCmd {
 
 /// Decision comment operations (`add`/`list`/`rm`/`edit`) — a decision's timeline (a comment
 /// posted by mistake is deleted outright or rewritten in place, not retracted).
-/// Mirrors the task [`CommentCmd`]; `accept`/`reject --reason` are thin sugar over `comment add`.
+/// Mirrors the task [`CommentCmd`]; `finish-writing`/`reject --reason` are thin sugar over `comment add`.
 #[derive(Subcommand, Debug)]
 pub enum DecisionCommentCmd {
     /// Add a comment to a decision's timeline

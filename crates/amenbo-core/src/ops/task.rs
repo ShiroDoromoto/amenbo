@@ -355,7 +355,7 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                 // nobody is still writing goes through without reaching here.
                 DecisionStatus::Decided => {
                     reasons.push(
-                        Msg::new(format!("premise {label} is not settled — wait for the ruling, or unlink it"))
+                        Msg::new(format!("premise {label} is not settled — wait for the writing to be finished, or unlink it"))
                             .coded(ErrorCode::NotReadyPremiseUnsettled)
                             .with("ref", label),
                     );
@@ -849,27 +849,27 @@ mod tests {
         // A decision that is not alive as a premise points at a different way out for each state (under one
         // code).
         with_numbered_task(|tx, pid, tid| {
-            // proposed: wait for the ruling, or unlink it.
-            let proposed = new_decision(tx, pid, "まだ議論中");
-            crate::ops::decision::link(tx, proposed, tid).unwrap();
+            // still being written: wait for the writing to be finished, or unlink it.
+            let drafted = new_decision(tx, pid, "まだ議論中");
+            crate::ops::decision::link(tx, drafted, tid).unwrap();
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 is not settled"), "{}", err.message_en());
 
-            // accepted: the premise is alive, so the reservation goes through.
-            crate::ops::decision::finish_writing(tx, proposed, None).unwrap();
+            // written out: the premise is alive, so the reservation goes through.
+            crate::ops::decision::finish_writing(tx, drafted, None).unwrap();
             set_status(tx, tid, TaskStatus::InProgress).unwrap();
             set_status(tx, tid, TaskStatus::Todo).unwrap();
 
             // superseded: tell them to relink to the successor.
             let successor = new_decision(tx, pid, "置き換える決定");
-            crate::ops::decision::supersede(tx, successor, proposed).unwrap();
+            crate::ops::decision::supersede(tx, successor, drafted).unwrap();
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 was superseded by AMB-D-2"), "{}", err.message_en());
 
             // rejected: the task itself needs rethinking.
-            crate::ops::decision::unlink(tx, proposed, tid).unwrap();
+            crate::ops::decision::unlink(tx, drafted, tid).unwrap();
             let rejected = new_decision(tx, pid, "却下された案");
             crate::ops::decision::reject(tx, rejected).unwrap();
             crate::ops::decision::link(tx, rejected, tid).unwrap();

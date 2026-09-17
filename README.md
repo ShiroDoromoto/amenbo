@@ -296,8 +296,8 @@ amenbo task list --filter "commit:<full-sha>" --json # walk history -> task insi
 # Dependencies: this task must wait for a blocker to be done first
 amenbo task depend 13 --on 12                # 13 is blocked until 12 is done
 amenbo task undepend 13 --on 12
-# A task is ready when no blocker is open, every decision linked to it is accepted, its
-# declared start day has arrived, and it is no longer being created; ready:yes hides what
+# A task is ready when no blocker is open, every decision linked to it is settled and written
+# out, its declared start day has arrived, and it is no longer being created; ready:yes hides what
 # is not ready, ready:no lists what's waiting — and every task says which of the four is
 # holding it back. Reserving a task that is not ready is refused (not_ready) — resolve the
 # premise; there is no --force
@@ -318,13 +318,13 @@ amenbo decision add --title "…" --body "…" --dim "Area=Core"  # or classify 
 # response names what is still to classify, and the demand is read where the writing ends
 amenbo decision finish-writing AMB-D-<n>      # end the writing: the draft flag goes down and the decision is settled
 amenbo decision finish-writing AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
-amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # proposed -> rejected, with a reason comment
-amenbo decision edit AMB-D-<n> --body "…refined rationale…" # edit title/body in place — proposed or accepted alike (supersede to overturn; rejected is terminal)
+amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # turn down one still being written (draft -> rejected), with a reason comment
+amenbo decision edit AMB-D-<n> --body "…refined rationale…" # edit title/body in place — still being written or settled alike (supersede to overturn; rejected is terminal)
 amenbo decision comment add AMB-D-<n> --text "revisited after the 10k benchmark — still holds" # discuss on the timeline (comments are the discussion around the body)
 amenbo decision comment list AMB-D-<n> --json # oldest first; --limit/--offset page
 amenbo decision comment edit 7 --text "corrected" # rewrite one in place (this edits a comment, not the decision's own body)
 amenbo decision comment rm 7 --yes           # delete one posted by mistake (permanent, attachments go too)
-amenbo decision reopen AMB-D-<n>              # accepted -> proposed: un-settle a too-hasty acceptance (editing needs no reopen)
+amenbo decision reopen AMB-D-<n>              # raise the draft flag again on one finished too soon (the status stays decided; editing needs no reopen)
 amenbo decision supersede AMB-D-<n> --replaces AMB-D-<m> # record a replacement (chain)
 amenbo decision amend AMB-D-<n> --amends AMB-D-<m> # partial revision (target stays current, not superseded)
 amenbo decision builds-on AMB-D-<n> --on AMB-D-<m> # the premise: read it first, and revisit this one if it is overturned
@@ -332,9 +332,9 @@ amenbo decision delete AMB-D-<n> --yes        # retire a decision (permanent; su
 amenbo decision link AMB-D-<n> AMB-T-<n>       # cross-link a decision and its task
 amenbo task list --filter "decision:AMB-D-<n> status:todo" --json # walk the link: the open work a decision produced
 amenbo decision list --filter "task:AMB-T-<n>" --json          # ...and the other way: the decisions a task rests on
-amenbo decision list --filter "status:accepted" --json
+amenbo decision list --filter "status:decided draft:no" --json
 amenbo decision list --filter "dim:Area=Design" --json           # the same axes the tasks are filed on, folded the same way (`=none` is unclassified)
-amenbo decision list --filter "status:accepted superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
+amenbo decision list --filter "status:decided superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary

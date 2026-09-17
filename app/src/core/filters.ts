@@ -134,7 +134,7 @@ export function decisionFilterDimensions(
         // The writing, offered where the reader looks for the state — it is a flag and not a status
         // (`AMB-D-918`), the same accommodation "superseded" gets below.
         value: "draft",
-        label: () => t("dec.status.proposed"),
+        label: () => t("dec.status.draft"),
         test: (d: DecisionDto) => d.draft,
       },
       ...DECISION_STATUSES.map((s) => ({

@@ -94,11 +94,11 @@ describe("errLabel", () => {
 
   it("writes each of a refusal's reasons from its own template and joins them the language's way", () => {
     expect(errLabel(notReady, "en")).toBe(
-      "AMB-T-12 cannot be reserved yet: AMB-T-9 is not done; AMB-D-4 is not settled — wait for the ruling, or unlink it",
+      "AMB-T-12 cannot be reserved yet: AMB-T-9 is not done; AMB-D-4 is not settled — wait for it to be written to the end, or unlink it",
     );
     // Japanese joins a list with its own mark, and nothing of the English survives.
     expect(errLabel(notReady, "ja")).toBe(
-      "AMB-T-12 はまだ予約できません: AMB-T-9 が完了していません、AMB-D-4 が未確定です。裁定を待つかリンクを外してください",
+      "AMB-T-12 はまだ予約できません: AMB-T-9 が完了していません、AMB-D-4 が未確定です。書き終わるのを待つかリンクを外してください",
     );
     expect(errLabel(notReady, "ja")).not.toContain("is not done");
   });

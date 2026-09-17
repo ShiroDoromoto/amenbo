@@ -118,11 +118,11 @@ pub mod event {
         json!({ "kind": "project.deleted", "name": name, "tasks": tasks, "decisions": decisions })
     }
 
-    /// A decision was put up for discussion — the moment `proposed` began.
+    /// A decision was filed as a draft — the moment its writing began (`AMB-D-918`).
     ///
-    /// The column says a decision *is* proposed; it cannot say who put it up or which pane they were
-    /// in, and `status_changed_at` is overwritten by the verdict. That is the gap this line fills:
-    /// a proposal nobody ever settled is only findable if something recorded that it was made
+    /// The flag says a decision *is* being written; it cannot say who filed it or which pane they
+    /// were in, and it is lowered again wherever the writing ends. That is the gap this line fills:
+    /// a draft nobody ever finished is only findable if something recorded that it was filed
     /// (`AMB-T-3600`, `AMB-T-3639`).
     pub fn decision_proposed(title: &str) -> Value {
         json!({ "kind": "decision.proposed", "title": title })

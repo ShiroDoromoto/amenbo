@@ -245,7 +245,7 @@ function statusColor(s: DecisionStatus, draft: boolean): string {
 }
 
 function statusWord(s: DecisionStatus, draft: boolean): string {
-  return draft ? t("dec.status.proposed") : t(`dec.status.${s}`);
+  return draft ? t("dec.status.draft") : t(`dec.status.${s}`);
 }
 
 // Format the decision date (decidedAt, else createdAt) as a calendar date, in the locale dates are

@@ -4,37 +4,53 @@
 // engine, never wasm, which this window's CSP refuses (`AMB-D-769`). A grammar is therefore data
 // we ship rather than code we run, and this file is the whole list of what we ship.
 //
-// **Twelve, not the 361 `@shikijs/langs` holds.** The package declares itself MIT, but the grammars
-// inside it come from as many different projects under as many different terms: five are GPL-3.0,
-// and thirty-three name nothing that could be judged at all. A wildcard import would ride every one
-// of them into an Apache-2.0 bundle, so the set is named here one at a time, and
+// **Twelve, not the 260 `tm-grammars` holds.** The package declares itself MIT, but the grammars
+// inside it come from as many different projects under as many different terms: a handful are
+// GPL-3.0 and a good many name nothing that could be judged at all. A wildcard import would ride
+// every one of them into an Apache-2.0 bundle, so the set is named here one at a time, and
 // `guards/check-grammar-licenses.mjs` holds each name to a licence somebody read at its source.
+//
+// **What a language is drawn into is named here too, rather than arriving with it** (`AMB-D-908`).
+// The set this replaces handed over one module per language with everything that language descends
+// into already inside it: asking for Ruby brought thirty grammars, one of which claims no licence at
+// all, and a static import leaves no way to take that one back out. Here a language is a list, and
+// the list is ours — HTML is drawn with JavaScript and CSS because it descends into them, and
+// nothing else rides along.
 //
 // Twelve covers 94.1% of this repository's text files (`AMB-T-3737`). Each entry is its own dynamic
 // import, so opening a Rust file fetches the Rust grammar and nothing else.
 
-/** A language this editor can colour: the id `@shikijs/langs` publishes its grammar under. */
+// The one thing the registry is handed is a grammar, so its own type is what a loaded one is read
+// as. It is a type and nothing else: the library itself is still fetched when a file is opened.
+import type { IRawGrammar } from "@shikijs/vscode-textmate";
+
+/** A language this editor can colour: the id `tm-grammars` publishes its grammar under. */
 export type LangId = keyof typeof GRAMMARS;
 
 /**
  * The bundled grammars, by language id.
  *
- * A value loads one module, and a module carries every grammar it embeds — `html` arrives with the
- * JavaScript and CSS grammars its `<script>` and `<style>` blocks descend into.
+ * A value is every grammar that language is drawn with: its own first, then whatever it descends
+ * into. `html` is the only one with anything behind it — a `<script>` is JavaScript and a `<style>`
+ * is CSS — and a language whose list is one entry is drawn out of that one grammar and nothing else.
  */
 export const GRAMMARS = {
-  css: () => import("@shikijs/langs/css"),
-  go: () => import("@shikijs/langs/go"),
-  html: () => import("@shikijs/langs/html"),
-  json: () => import("@shikijs/langs/json"),
-  markdown: () => import("@shikijs/langs/markdown"),
-  python: () => import("@shikijs/langs/python"),
-  rust: () => import("@shikijs/langs/rust"),
-  shellscript: () => import("@shikijs/langs/shellscript"),
-  sql: () => import("@shikijs/langs/sql"),
-  toml: () => import("@shikijs/langs/toml"),
-  tsx: () => import("@shikijs/langs/tsx"),
-  yaml: () => import("@shikijs/langs/yaml"),
+  css: () => [import("tm-grammars/grammars/css.json")],
+  go: () => [import("tm-grammars/grammars/go.json")],
+  html: () => [
+    import("tm-grammars/grammars/html.json"),
+    import("tm-grammars/grammars/javascript.json"),
+    import("tm-grammars/grammars/css.json"),
+  ],
+  json: () => [import("tm-grammars/grammars/json.json")],
+  markdown: () => [import("tm-grammars/grammars/markdown.json")],
+  python: () => [import("tm-grammars/grammars/python.json")],
+  rust: () => [import("tm-grammars/grammars/rust.json")],
+  shellscript: () => [import("tm-grammars/grammars/shellscript.json")],
+  sql: () => [import("tm-grammars/grammars/sql.json")],
+  toml: () => [import("tm-grammars/grammars/toml.json")],
+  tsx: () => [import("tm-grammars/grammars/tsx.json")],
+  yaml: () => [import("tm-grammars/grammars/yaml.json")],
 } as const;
 
 /** The scope a language's own grammar is registered under — where tokenizing a file starts. */
@@ -121,11 +137,12 @@ export function langFor(name: string): LangId | null {
  * across files would hold every grammar ever opened for as long as the window is up.
  */
 export async function loadGrammar(lang: LangId) {
-  const [{ INITIAL, Registry }, { createJavaScriptRegexEngine }, module] = await Promise.all([
+  const [{ INITIAL, Registry }, { createJavaScriptRegexEngine }, ...loaded] = await Promise.all([
     import("@shikijs/vscode-textmate"),
     import("@shikijs/engine-javascript"),
-    GRAMMARS[lang](),
+    ...GRAMMARS[lang](),
   ]);
+  const carried = loaded.map((one) => one.default as IRawGrammar);
 
   // The engine speaks shiki's vocabulary and the registry speaks TextMate's; the two differ by the
   // names of two methods. `forgiving` drops a pattern that will not translate into a JavaScript
@@ -138,8 +155,8 @@ export async function loadGrammar(lang: LangId) {
       createOnigScanner: (patterns) => engine.createScanner(patterns),
     },
     // Synchronous by design: every grammar this call can reach is already in hand, so a scope the
-    // module does not carry is a scope nothing will ever supply.
-    loadGrammar: (scope) => module.default.find((g) => g.scopeName === scope) ?? null,
+    // list does not carry is a scope nothing will ever supply.
+    loadGrammar: (scope) => carried.find((one) => one.scopeName === scope) ?? null,
   });
 
   const grammar = registry.loadGrammar(SCOPES[lang]);

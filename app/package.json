@@ -25,7 +25,6 @@
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
     "@shikijs/engine-javascript": "^4.4.3",
-    "@shikijs/langs": "^4.4.3",
     "@shikijs/vscode-textmate": "^10.0.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
@@ -41,7 +40,8 @@
     "react-markdown": "^10.1.0",
     "rehype-slug": "^6.0.0",
     "remark-breaks": "^4.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "tm-grammars": "^1.32.20"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

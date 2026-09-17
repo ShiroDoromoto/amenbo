@@ -4,8 +4,8 @@
 //
 // Its sibling, check-npm-licenses.mjs, reads what npm declares: one license field per package. That
 // is the right question for code, where a package is written by the people who publish it. It is
-// the wrong question for `@shikijs/langs`, which declares itself MIT and then ships 361 TextMate
-// grammars collected from as many different projects — five of them GPL-3.0, a dozen more asserting
+// the wrong question for `tm-grammars`, which declares itself MIT and then ships 260 TextMate
+// grammars collected from as many different projects — some of them GPL-3.0, a good many asserting
 // nothing at all. The package's own field says nothing about any of them, so a grammar riding into
 // an Apache-2.0 bundle would pass the npm gate on a license it does not have.
 //
@@ -57,13 +57,15 @@ const GRANTS = {
   },
 }
 
-// Every grammar the panel ships, by the `@shikijs/langs` module it arrives in. A module carries the
-// grammars it embeds as well as its own — `html` descends into `<script>` and `<style>`, so it
-// brings JavaScript and CSS with it, and those are as shipped as anything named directly.
+// Every grammar the panel ships, by the name `tm-grammars` publishes it under. Each name is one
+// grammar and one file: what a language is drawn into is chosen and named beside the language
+// in the catalog, so `html`, `javascript` and `css` are three entries here rather than one carrying
+// the other two.
 //
 // `license` is an SPDX expression judged against deny.toml's allow-list; `grant` names an entry
 // above instead, for a source that states terms without an identifier. Exactly one of the two.
-// `source` is the revision the license was read at.
+// `source` is the revision the license was read at — `tm-grammars` publishes the same revisions the
+// set this replaces did, so moving between them read nothing back.
 const GRAMMARS = {
   css: [
     { grammar: 'css', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/css/syntaxes/css.tmLanguage.json' },
@@ -73,8 +75,9 @@ const GRAMMARS = {
   ],
   html: [
     { grammar: 'html', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/45324363153075dab0482312ae24d8c068d81e4f/extensions/html/syntaxes/html.tmLanguage.json' },
+  ],
+  javascript: [
     { grammar: 'javascript', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/210541906e5a96ab39f9c753f921b1bd35f4138b/extensions/javascript/syntaxes/JavaScript.tmLanguage.json' },
-    { grammar: 'css', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/css/syntaxes/css.tmLanguage.json' },
   ],
   json: [
     { grammar: 'json', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/d6af4893ed9a3545163a4cb748fa5548bd1e51a5/extensions/json/syntaxes/JSON.tmLanguage.json' },
@@ -113,12 +116,13 @@ const refuse = (msg) => {
 // --- what the panel actually bundles -----------------------------------------------------------
 
 // The catalog is TypeScript and node has no TypeScript parser, but the shape we need is every
-// `@shikijs/langs/<id>` specifier in it. Reading the specifiers rather than the map's keys is
-// deliberate: the specifier is what the bundler acts on, so it is what actually ships.
+// `tm-grammars/grammars/<id>.json` specifier in it. Reading the specifiers rather than the map's
+// keys is deliberate: the specifier is what the bundler acts on, so it is what actually ships — and
+// now that a language names the grammars it is drawn into, the keys are not even the same set.
 export function bundledGrammars(source) {
-  const ids = [...source.matchAll(/["']@shikijs\/langs\/([\w.-]+)["']/g)].map((m) => m[1])
+  const ids = [...source.matchAll(/["']tm-grammars\/grammars\/([\w.-]+)\.json["']/g)].map((m) => m[1])
   if (ids.length === 0) {
-    refuse(`${CATALOG} imports no @shikijs/langs grammar — the catalog moved; fix this gate`)
+    refuse(`${CATALOG} imports no tm-grammars grammar — the catalog moved; fix this gate`)
   }
   return new Set(ids)
 }
@@ -240,7 +244,7 @@ function main() {
     return 1
   }
 
-  console.log(`→ grammar licenses: ${judged.size} grammars in ${bundled.size} bundled modules, all within deny.toml's allow-list`)
+  console.log(`→ grammar licenses: ${judged.size} grammars named by the panel's catalog, all within deny.toml's allow-list`)
   console.log(`→ language configurations: ${config.judged} files, ${manifest.licence} from ${manifest.repository} at ${manifest.tag}`)
   for (const grant of usedGrants) {
     console.log(`  (${grant}: no SPDX identifier — the grant is quoted in this file, read from ${GRANTS[grant].from})`)

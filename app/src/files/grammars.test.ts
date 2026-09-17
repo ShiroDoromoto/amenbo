@@ -66,6 +66,21 @@ describe("loadGrammar", () => {
     expect(scopes).toContain("comment.line.double-slash.rust");
   });
 
+  // What a language is drawn into is chosen in the catalog now rather than arriving with the
+  // language (`AMB-D-908`), so the one language with anything behind it is the one to hold: an HTML
+  // file whose `<script>` came back as plain text would be a list with a grammar missing from it.
+  it("descends into the grammars the catalog names behind a language", async () => {
+    const { grammar, initial } = await loadGrammar("html");
+    const inside = grammar.tokenizeLine("<script>const x = 1;</script>", initial)
+      .tokens.flatMap((t) => t.scopes);
+    expect(inside).toContain("source.js");
+    expect(inside).toContain("storage.type.js");
+
+    const styled = grammar.tokenizeLine("<style>a { color: red; }</style>", initial)
+      .tokens.flatMap((t) => t.scopes);
+    expect(styled).toContain("source.css");
+  });
+
   // The stack is what carries a block comment across a line break, and the whole painter is built
   // on handing it back in.
   it("carries what a line left open into the next one", async () => {

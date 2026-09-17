@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewKind } from "./attachmentView";
+import { PDF_PREVIEW_CAP, pdfFitsThePane, previewKind } from "./attachmentView";
 
 describe("previewKind", () => {
   it("keeps executable types off the render surface and falls back to source view", () => {
@@ -34,5 +34,19 @@ describe("previewKind", () => {
     expect(previewKind("application/x-msdownload")).toBe("none");
     expect(previewKind(null)).toBe("none");
     expect(previewKind("")).toBe("none");
+  });
+});
+
+describe("pdfFitsThePane", () => {
+  it("draws what is at the cap and refuses what is past it", () => {
+    expect(pdfFitsThePane(PDF_PREVIEW_CAP)).toBe(true);
+    expect(pdfFitsThePane(PDF_PREVIEW_CAP + 1)).toBe(false);
+    expect(pdfFitsThePane(BigInt(PDF_PREVIEW_CAP) + 1n)).toBe(false);
+  });
+
+  /** A size nobody recorded is not a refusal: the reader is shown the document, and a read that fails says so. */
+  it("draws one whose size was never recorded", () => {
+    expect(pdfFitsThePane(null)).toBe(true);
+    expect(pdfFitsThePane(undefined)).toBe(true);
   });
 });

@@ -33,11 +33,11 @@ describe("a system event as a line", () => {
     expect(eventText(empty, "空の PJ", "en")).toBe("Deleted “空の PJ”");
   });
 
-  // A proposal is the one thing about a decision the ledger holds and the columns cannot: what
-  // `status` says is that a decision *is* proposed, not that anybody put it up (`AMB-T-3639`).
-  it("says a decision was put up, in its own words rather than the generic line", () => {
-    expect(eventText({ kind: "decision.proposed" }, "どちらの道を採るか", "ja")).toBe("「どちらの道を採るか」を提案");
-    expect(eventText({ kind: "decision.proposed" }, "Which road", "en")).toBe("Proposed “Which road”");
+  // Filing a draft is the one thing about a decision the ledger holds and the columns cannot: what
+  // `draft` says is that a decision *is* being written, not that anybody filed it (`AMB-T-3639`).
+  it("says a decision was filed as a draft, in its own words rather than the generic line", () => {
+    expect(eventText({ kind: "decision.proposed" }, "どちらの道を採るか", "ja")).toBe("「どちらの道を採るか」を書きかけとして記録");
+    expect(eventText({ kind: "decision.proposed" }, "Which road", "en")).toBe("Recorded “Which road” as a draft");
   });
 
   // Both ends of a decision's writing used to arrive as "updated", which said nothing about which

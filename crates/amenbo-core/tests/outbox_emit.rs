@@ -538,6 +538,35 @@ fn decision_verdicts_fire_once_on_the_real_transition() {
     assert_eq!(ev.project, Some(project));
 }
 
+/// The other door onto the same transition (`AMB-D-918`): ending the writing settles the decision, so
+/// it fires the same `decision.accepted`, once, and a re-run over a decision already written fires
+/// nothing. The name is deliberately the one `accept` carries — subscribers listen for a settled
+/// decision, not for which verb settled it.
+#[test]
+fn finishing_the_writing_fires_the_same_acceptance_once() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+
+    let written = store.add_decision(new_decision("書き終える案", project)).unwrap().id;
+    let h = head(&store);
+    let (d, changed) =
+        store.finish_writing_decision(written, Some("ai".to_string()), ActorKind::Ai).unwrap();
+    assert!(changed && !d.draft);
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "decision.accepted");
+    assert_eq!(ev.record_id, written);
+    assert_eq!(ev.actor, "ai");
+    assert_eq!(ev.new_state, None, "the name is the whole state");
+    assert_eq!(ev.project, Some(project));
+
+    // Written already: nothing changes, so nothing fires.
+    let h = head(&store);
+    let (_, changed) =
+        store.finish_writing_decision(written, Some("ai".to_string()), ActorKind::Ai).unwrap();
+    assert!(!changed);
+    assert!(since(&store, h).is_empty(), "a second run over a written decision observes nothing");
+}
+
 /// Superseding with a still-`Proposed` decision promotes it to `Accepted` on the way, and that promotion
 /// is a real verdict — so `decision.accepted` fires once, stamped with the caller's actor. Drawing the
 /// edge again over the now-accepted side promotes nothing and observes nothing.

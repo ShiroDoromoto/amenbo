@@ -1266,6 +1266,28 @@ impl Store {
         })
     }
 
+    /// End the writing of a decision (one operation = one transaction) — the second stage of its
+    /// creation (`AMB-D-918`). Returns `(decision, changed)`; `changed` is `false` when the writing
+    /// was already finished, which is what keeps `decision.accepted` to one firing per decision.
+    ///
+    /// The event is the same one [`Store::accept_decision`] fires and carries the same name: the name
+    /// is baked into `project_notify_event`'s `CHECK`, and moving the door a decision leaves by is no
+    /// reason to make every subscriber relearn what to listen for.
+    pub fn finish_writing_decision(
+        &mut self,
+        id: i64,
+        decided_by: Option<String>,
+        actor: crate::model::ActorKind,
+    ) -> Result<(crate::model::Decision, bool)> {
+        self.write_one(&[WriteTarget::Decision(id)], |tx| {
+            let (decision, changed) = crate::ops::decision::finish_writing(tx, id, decided_by)?;
+            if changed {
+                emit_decision_verdict(tx, &decision, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
+            }
+            Ok((decision, changed))
+        })
+    }
+
     /// Reject a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
     /// is `false` on the idempotent noop (already rejected). `actor` is the process facet, stamped onto
     /// the `decision.rejected` event fired on a real transition.

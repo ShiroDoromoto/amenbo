@@ -417,6 +417,26 @@ pub struct Expectation {
     pub present: bool,
 }
 
+/// What the operator is told beside an expectation, where standing the screen up is not enough on
+/// its own.
+///
+/// **A shot is read for the words that are in it.** A card the window cuts at its bottom edge is
+/// drawn — the listing holds it, the filter found it, a person scrolling would see it — and the
+/// half of its title below the edge is in no photograph of that window, so the step goes red on a
+/// screen that is right. It happened on a board whose first card was pushed down by the standing
+/// invitation to wire an AI, and the title came back cut mid-word.
+///
+/// Said on every step that will be read off its shot rather than once at the top of the run: a
+/// caution given at the start is one nobody is holding by the seventeenth step, which is where this
+/// one was needed. Nothing is said where the reading is the window's own listing — a name the window
+/// cuts is whole on that listing, which is why those asserts read it instead.
+pub fn bring_it_into_the_window(from_the_tree: bool, expectation: &Expectation) -> Option<&'static str> {
+    (!from_the_tree && expectation.present).then_some(
+        "bring what is to be read fully into the window first — a line the window cuts off is a line \
+         no shot of it can be read for",
+    )
+}
+
 /// Renders each step into a plain-language screen instruction and, for an assert OCR can judge, an
 /// [`Expectation`]. It remembers the human label a binding stands for so a later step that refers
 /// back by `target:` reads — and is judged — by name, not by id.
@@ -10307,6 +10327,24 @@ steps_gui:
             std::fs::read_to_string(dir.join("02-assert-files-listed.txt")).expect("the listing");
         assert!(kept.contains("AXRow"), "the listing is filed as the tool gave it — got: {kept}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The caution is for the step that will be read off its shot, and for the half of it that a
+    /// photograph can miss: a card cut off at the window's bottom edge is drawn and unreadable at
+    /// once. Its absent half needs none — a line the window cut is a line the shot does not read,
+    /// which is the answer that step wanted anyway — and a reading taken off the window's own
+    /// listing needs none either, since that listing carries what the window cut.
+    #[test]
+    fn what_is_to_be_read_off_a_shot_is_asked_for_whole() {
+        let present = Expectation { text: "SCENARIO SEED".to_string(), present: true };
+        let absent = Expectation { text: "SCENARIO SEED".to_string(), present: false };
+        assert!(
+            bring_it_into_the_window(false, &present)
+                .is_some_and(|said| said.contains("fully into the window")),
+            "a step read off its shot asks for the whole of what it reads",
+        );
+        assert!(bring_it_into_the_window(false, &absent).is_none(), "an absence is not cut into");
+        assert!(bring_it_into_the_window(true, &present).is_none(), "the listing carries it whole");
     }
 
     /// The failure the narrowing was written for: a `present: false` step reded a screen that was

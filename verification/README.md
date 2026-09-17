@@ -638,6 +638,13 @@ What an assert expects OCR to find is shown with it at the hand-over. The readin
 match and nothing more, so the driver — who can see the screen — is the one who can tell a check that
 genuinely passed from one the words happened to satisfy, and say so when the evidence is read back.
 
+**And what is to be read has to be whole in the window.** A card the window cuts at its bottom edge
+is drawn — the listing holds it, the filter found it — and the half of its title below the edge is
+in no photograph of that window, so the step goes red on a screen that is right. One did, on a board
+whose first card was pushed down by the standing invitation to wire an AI. The hand-over says so on
+every step that will be read off its shot, rather than once at the top of a run nobody is still
+holding it by step seventeen.
+
 The moves themselves are written in the scenario, not in a note beside it. Getting from one screen
 to the next is an action step like any other (`folder open-existing-card`, `folder choose-project`),
 and it earns the two things a note never can: the screen it arrives at is shot, so the middle of the

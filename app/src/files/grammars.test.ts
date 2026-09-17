@@ -29,6 +29,18 @@ describe("langFor", () => {
     expect(langFor("layout.blade.php")).toBe("php");
   });
 
+  // Ruby's tools keep one file each at the root of a project, and not one of them has a suffix.
+  // `Gemfile.lock` is the exception written down: it has one, and what is in it is not Ruby.
+  it("reads the Ruby files that are named rather than suffixed", () => {
+    for (const name of ["Gemfile", "Rakefile", "Vagrantfile", ".irbrc", "app.rb", "tasks.rake"]) {
+      expect(langFor(name)).toBe("ruby");
+    }
+    expect(langFor("Gemfile.lock")).toBeNull();
+    // A template is named for what it produces first, and the suffix is read off the last dot.
+    expect(langFor("index.html.erb")).toBe("erb");
+    expect(langFor("form.rhtml")).toBe("erb");
+  });
+
   it("reads a name that has no suffix to read", () => {
     expect(langFor(".zshrc")).toBe("shellscript");
     // The leading dot of a dotfile is not a suffix, so an unknown one is unknown rather than
@@ -103,6 +115,19 @@ describe("loadGrammar", () => {
     expect(scopes).toContain("meta.attribute.class.html");
     expect(scopes).toContain("source.php");
     expect(scopes).toContain("support.function.construct.output.php");
+    expect(scopes.some((one) => one.startsWith("invalid."))).toBe(false);
+  });
+
+  // An ERB template is the same shape as a PHP file and is read the same way: the HTML root, with
+  // Ruby inside the tags. Its own comment form is the third thing in it, and it belongs to neither
+  // language — `<%# %>` is the template's.
+  it("reads an ERB template as HTML, with the Ruby inside its tags", async () => {
+    const { grammar, initial } = await loadGrammar("erb");
+    const line = '<h1 class="a"><%= user.name %></h1><%# note %>';
+    const scopes = grammar.tokenizeLine(line, initial).tokens.flatMap((t) => t.scopes);
+    expect(scopes).toContain("entity.name.tag.html");
+    expect(scopes).toContain("source.ruby");
+    expect(scopes).toContain("comment.block.erb");
     expect(scopes.some((one) => one.startsWith("invalid."))).toBe(false);
   });
 

@@ -36,6 +36,15 @@ export type LangId = keyof typeof GRAMMARS;
  */
 export const GRAMMARS = {
   css: () => [import("tm-grammars/grammars/css.json")],
+  // A template is HTML with Ruby cut into it, so it is read like a PHP file: the HTML root first,
+  // then what goes inside the tags and inside `<%= %>`.
+  erb: () => [
+    import("tm-grammars/grammars/erb.json"),
+    import("tm-grammars/grammars/ruby.json"),
+    import("tm-grammars/grammars/html.json"),
+    import("tm-grammars/grammars/javascript.json"),
+    import("tm-grammars/grammars/css.json"),
+  ],
   go: () => [import("tm-grammars/grammars/go.json")],
   html: () => [
     import("tm-grammars/grammars/html.json"),
@@ -63,6 +72,10 @@ export const GRAMMARS = {
     import("tm-grammars/grammars/java.json"),
   ],
   python: () => [import("tm-grammars/grammars/python.json")],
+  // Ruby alone. The grammar names twelve languages it can descend into — a heredoc may hold SQL,
+  // C++ or Lua — and the set that came with it was 1.41 MB against Ruby's own 51 KB (`AMB-T-4903`
+  // weighed it). What a heredoc holds comes back plain; the file around it is coloured.
+  ruby: () => [import("tm-grammars/grammars/ruby.json")],
   rust: () => [import("tm-grammars/grammars/rust.json")],
   shellscript: () => [import("tm-grammars/grammars/shellscript.json")],
   sql: () => [import("tm-grammars/grammars/sql.json")],
@@ -74,12 +87,14 @@ export const GRAMMARS = {
 /** The scope a language's own grammar is registered under — where tokenizing a file starts. */
 export const SCOPES: Record<LangId, string> = {
   css: "source.css",
+  erb: "text.html.erb",
   go: "source.go",
   html: "text.html.basic",
   json: "source.json",
   markdown: "text.html.markdown",
   php: "text.html.php",
   python: "source.python",
+  ruby: "source.ruby",
   rust: "source.rust",
   shellscript: "source.shell",
   sql: "source.sql",
@@ -92,16 +107,23 @@ export const SCOPES: Record<LangId, string> = {
 // of the other three — it reads plain JavaScript and JSX as well as TypeScript — so a second copy
 // of nearly the same 100 KB would buy nothing.
 const BY_EXTENSION: Record<string, LangId> = {
+  ".arb": "ruby",
   ".bash": "shellscript",
   ".cjs": "tsx",
   ".css": "css",
   ".ctp": "php",
   ".cts": "tsx",
+  // A template is named for what it produces and then for what writes it, so `index.html.erb` ends
+  // in the one that matters — the suffix is read off the last dot (`langFor`), and `.js.erb` and
+  // `.css.erb` land here too, which is where VS Code puts them as well (`AMB-T-4903`).
+  ".erb": "erb",
+  ".gemspec": "ruby",
   ".go": "go",
   ".htm": "html",
   ".html": "html",
   ".js": "tsx",
   ".json": "json",
+  ".jbuilder": "ruby",
   ".jsonc": "json",
   ".jsx": "tsx",
   // The panel draws `.md` and `.markdown` as rendered Markdown rather than as text
@@ -121,9 +143,15 @@ const BY_EXTENSION: Record<string, LangId> = {
   ".php4": "php",
   ".php5": "php",
   ".phtml": "php",
+  ".podspec": "ruby",
   ".py": "python",
   ".pyi": "python",
+  ".rake": "ruby",
+  ".rb": "ruby",
+  ".rbi": "ruby",
+  ".rhtml": "erb",
   ".rs": "rust",
+  ".ru": "ruby",
   ".sh": "shellscript",
   ".sql": "sql",
   ".toml": "toml",
@@ -139,8 +167,23 @@ const BY_EXTENSION: Record<string, LangId> = {
 const BY_NAME: Record<string, LangId> = {
   ".bash_profile": "shellscript",
   ".bashrc": "shellscript",
+  ".irbrc": "ruby",
+  ".pryrc": "ruby",
   ".zprofile": "shellscript",
   ".zshrc": "shellscript",
+  // Ruby's tools each keep one file at the root of a project and none of them has a suffix. The
+  // name is matched in lower case, so `Gemfile` is found here (`langFor`). `Gemfile.lock` is not
+  // one of them: it ends in a suffix, and what is written in it is not Ruby.
+  appraisals: "ruby",
+  brewfile: "ruby",
+  capfile: "ruby",
+  dangerfile: "ruby",
+  fastfile: "ruby",
+  gemfile: "ruby",
+  guardfile: "ruby",
+  podfile: "ruby",
+  rakefile: "ruby",
+  vagrantfile: "ruby",
 };
 
 /**

@@ -812,8 +812,9 @@ function rowsIn(which: Which | null, rows: GitEntryDto[]): GitEntryDto[] {
  * over one row and acting on others.
  */
 function rowsAbout(rows: GitEntryDto[], picked: string[], path: string[]): string[][] {
-  if (!picked.includes(path.join("/"))) return [path];
-  return rows.filter((row) => picked.includes(whole(row))).map((row) => row.path);
+  const inPicked = new Set(picked);
+  if (!inPicked.has(path.join("/"))) return [path];
+  return rows.filter((row) => inPicked.has(whole(row))).map((row) => row.path);
 }
 
 /**
@@ -915,11 +916,14 @@ function picking(
   onMenu: (path: string[], x: number, y: number) => void,
 ) {
   const keys = rows.map(whole);
-  const mine = keysIn(which, picked);
+  // Something a row can be looked up in, rather than a list to walk: every drawn row asks whether
+  // it is picked, and a reader who picks the whole list makes each of those questions as long as
+  // the list (`AMB-T-5016` measured the wait it grows into).
+  const mine = new Set(keysIn(which, picked));
   return {
     keys,
     /** Whether this row is one of the picked. */
-    has: (key: string): boolean => mine.includes(key),
+    has: (key: string): boolean => mine.has(key),
     /** Where the tab stop is: the end the range is measured from, or the first row before a reader
      *  has touched the list. Every list keeps one, so Tab reaches each of them. */
     stop: (picked.which === which ? picked.anchor : null) ?? keys[0],
@@ -937,7 +941,7 @@ function picking(
      * gathered.
      */
     menu: (path: string[], x: number, y: number): void => {
-      if (!mine.includes(path.join("/"))) onPicked(pick(which, keys, picked, path.join("/"), "one"));
+      if (!mine.has(path.join("/"))) onPicked(pick(which, keys, picked, path.join("/"), "one"));
       onMenu(path, x, y);
     },
   };
@@ -1183,6 +1187,16 @@ function Changes({
    *  is not, which is the rule every act on these rows is read by (`rowsAbout`). */
   const about = (row: GitEntryDto): string[][] =>
     rowsAbout(rows, keysIn(which, picked), row.path);
+  /**
+   * How many rows an act aimed at a picked row is about, which is the same number under every one
+   * of them: the gathered rows of this list.
+   *
+   * Counted once for the whole list rather than again beneath each row. Asked per row it was the
+   * list walked again for every row drawn, with the set walked again inside that — the wait a
+   * reader who gathers the whole list then sits through (`AMB-T-5016`). A row that is not in the
+   * set is about itself alone, which is one.
+   */
+  const gathered = rows.filter((row) => on.has(whole(row))).length;
   /** Take this row up, and remember what a second press on it would open. */
   const carry = (row: GitEntryDto, e: RowPress<HTMLElement>): void => {
     const paths = about(row);
@@ -1244,7 +1258,7 @@ function Changes({
                 onPress={(how) => on.press(whole(row), how)}
                 onCarry={(e) => carry(row, e)}
                 onToggle={() => toggle(whole(row))}
-                takes={about(row).length}
+                takes={on.has(whole(row)) ? gathered : 1}
                 onMenu={on.menu}
                 onOpen={onOpen === undefined ? undefined : () => read(row)}
               />

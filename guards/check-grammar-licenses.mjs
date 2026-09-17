@@ -61,7 +61,7 @@ const GRANTS = {
       'claim as to its suitability for any purpose.',
     why: 'Grants copying, modification, sale and distribution with no condition attached — no ' +
       'notice to carry, no source to publish. Nothing in it can make an Apache-2.0 bundle ' +
-      'undistributable. The same README license covers toml.tmbundle verbatim.',
+      'undistributable. The same README license covers toml.tmbundle and html.tmbundle verbatim.',
   },
 }
 
@@ -92,6 +92,20 @@ const GRAMMARS = {
   ],
   markdown: [
     { grammar: 'markdown', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/6d8ab9737d58fc5eaf07e2ae6553b38183a5de47/extensions/markdown-basics/syntaxes/markdown.tmLanguage.json' },
+  ],
+  php: [
+    { grammar: 'php', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/php/syntaxes/php.tmLanguage.json' },
+  ],
+  // Converted out of textmate/html.tmbundle, which is the grant below and not VS Code's own licence
+  // — the file says where it came from, and the bundle's README is where the terms are.
+  'html-derivative': [
+    { grammar: 'html-derivative', grant: 'textmate-bundle', source: 'https://github.com/textmate/html.tmbundle/blob/390c8870273a2ae80244dae6db6ba064a802f407/Syntaxes/HTML%20(Derivative).tmLanguage' },
+  ],
+  java: [
+    { grammar: 'java', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/3c86ede5f554f6e196c832394e126b291a1de606/extensions/java/syntaxes/java.tmLanguage.json' },
+  ],
+  xml: [
+    { grammar: 'xml', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/10a1d2a50a2882f5ae85bdb51eb04d3064fb9de9/extensions/xml/syntaxes/xml.tmLanguage.json' },
   ],
   python: [
     { grammar: 'python', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/cf4c9e469d521fa5f33353737e8157eb0789ad02/extensions/python/syntaxes/MagicPython.tmLanguage.json' },

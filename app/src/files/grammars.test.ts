@@ -19,6 +19,16 @@ describe("langFor", () => {
     }
   });
 
+  // A Laravel template's name ends in `.php`, so the suffix answers for it and the file is read as
+  // the PHP it is. What Blade adds on top comes back plain, which is what the panel would have
+  // shown for the whole file before (`AMB-T-4907`).
+  it("sends every name PHP claims to PHP, a Blade template among them", () => {
+    for (const name of ["index.php", "old.php4", "old.php5", "page.phtml", "view.ctp"]) {
+      expect(langFor(name)).toBe("php");
+    }
+    expect(langFor("layout.blade.php")).toBe("php");
+  });
+
   it("reads a name that has no suffix to read", () => {
     expect(langFor(".zshrc")).toBe("shellscript");
     // The leading dot of a dotfile is not a suffix, so an unknown one is unknown rather than
@@ -79,6 +89,21 @@ describe("loadGrammar", () => {
     const styled = grammar.tokenizeLine("<style>a { color: red; }</style>", initial)
       .tokens.flatMap((t) => t.scopes);
     expect(styled).toContain("source.css");
+  });
+
+  // Why a PHP file is read from the HTML root rather than from `source.php`, held as a test because
+  // the wrong root still colours something and would not go red on its own: with `source.php` at
+  // the top, `<h1 class="a">` reads as PHP operators and constants, and with plain HTML there the
+  // `<?php` reads as an illegal angle bracket (`AMB-T-4907` measured both).
+  it("reads a PHP file as the HTML it sits in, and the PHP cut into it", async () => {
+    const { grammar, initial } = await loadGrammar("php");
+    const line = '<h1 class="a"><?php echo $x; ?></h1>';
+    const scopes = grammar.tokenizeLine(line, initial).tokens.flatMap((t) => t.scopes);
+    expect(scopes).toContain("entity.name.tag.html");
+    expect(scopes).toContain("meta.attribute.class.html");
+    expect(scopes).toContain("source.php");
+    expect(scopes).toContain("support.function.construct.output.php");
+    expect(scopes.some((one) => one.startsWith("invalid."))).toBe(false);
   });
 
   // The stack is what carries a block comment across a line break, and the whole painter is built

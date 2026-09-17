@@ -134,7 +134,7 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
         ),
         DoctorIssueKind::DeadRef => format!(
             "Edit the body it names - `{cmd} task update <task> --notes` for a task's notes, \
-             `{cmd} decision edit <decision> --body` for a proposed decision - and drop the ref, or point \
+             `{cmd} decision edit <decision> --body` for a decision's body - and drop the ref, or point \
              it at what stands in its place. Nothing rewrites a body on your behalf - only a person knows \
              what it meant to say."
         ),

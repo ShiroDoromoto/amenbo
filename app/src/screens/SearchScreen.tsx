@@ -298,9 +298,14 @@ function HitRow({
  * on it, so `task` is what says which of the two vocabularies reads it — the same job `kind` does for
  * everything else the two sides share on a hit. A value neither dictionary has a word for is shown as it
  * came, rather than letting a key escape onto the screen.
+ *
+ * On the decision side the draft is read before the status, as DecisionsScreen and DecisionDetailPane
+ * read it (`AMB-D-918`): a decision is `decided` from the moment it is saved, so the status alone would
+ * draw a half-written one and a settled one with the same word.
  */
-function statusWord(status: string, task: boolean): string {
+function statusWord(status: string, task: boolean, draft: boolean): string {
   if (task) return isStatus(status) ? statusLabel(status) : status;
+  if (draft) return t("dec.status.proposed");
   const key = `dec.status.${status}`;
   const word = t(key);
   return word === key ? status : word;
@@ -322,11 +327,11 @@ function statusWord(status: string, task: boolean): string {
  */
 function Standing({ hit }: { hit: SearchHit }) {
   if (!hit.standing) return null;
-  const { status, priority, labels } = hit.standing;
+  const { status, priority, draft, labels } = hit.standing;
   const task = sideOf(hit) === "task";
   return (
     <div className="srch__standing">
-      <span className="chip">{statusWord(status, task)}</span>
+      <span className="chip">{statusWord(status, task, draft)}</span>
       {priority !== undefined && isPriority(priority) && <PriorityDot priority={priority} />}
       {labels.map((l) => (
         <span key={`${l.axis}=${l.value}`} className="chip srch__filed">

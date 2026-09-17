@@ -1087,7 +1087,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                                     .collect::<Vec<_>>().join(", ")
                             ),
                         };
-                        human(flags, format!("      {}{pri}{filed}", standing.status));
+                        // While a decision's writing is unfinished the status has nothing to tell
+                        // apart — it is `decided` from the moment it is saved (`AMB-D-918`) — so the
+                        // row says the draft in its place, the same substitution `decision list` makes.
+                        let state = if standing.draft { "draft" } else { standing.status.as_str() };
+                        human(flags, format!("      {state}{pri}{filed}"));
                     }
                     // The excerpt says where the words are; this says where in the excerpt they are, which
                     // is the question a two-word search leaves open (`AMB-D-566`).

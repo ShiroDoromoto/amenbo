@@ -2657,7 +2657,7 @@ fn read_hits(conn: &Connection, sql: &Sql, slots: &HitSlots) -> Result<Vec<Searc
 }
 
 /// Where the records a page of hits points at stand: a task's status, priority and classification, and a
-/// decision's status and classification.
+/// decision's status, whether it is still being written, and its classification.
 ///
 /// Keyed by record id, not by hit — a record the words reach on three faces is three hits and one entry,
 /// which is also why this is not a column of [`search_hits`]: folding it in would read the same task once
@@ -2667,7 +2667,9 @@ pub struct HitStandingRows {
     /// `(axis, value)` names per task, in axis order — a task sits on as many axes as it was placed on,
     /// and on none at all just as often, so an id absent here is a task with no classification.
     pub labels: HashMap<i64, Vec<(String, String)>>,
-    pub decisions: HashMap<i64, DecisionStatus>,
+    /// `(status, draft)` per decision. The draft rides along because the status cannot stand in for it —
+    /// a decision is `decided` from the moment it is saved (`AMB-D-918`).
+    pub decisions: HashMap<i64, (DecisionStatus, bool)>,
     /// The same, per decision (`AMB-D-781`). A separate map because the two sides' ids are separate
     /// numberings — one map keyed by id alone would let a task's placement answer for a decision.
     pub decision_labels: HashMap<i64, Vec<(String, String)>>,
@@ -2733,7 +2735,7 @@ pub fn hit_standings(
     if !decision_ids.is_empty() {
         const DE: col::decision::Cols = col::decision::ALL;
         let mut sel = Select::new();
-        let (id, status) = (sel.col(DE.id), sel.col(DE.status));
+        let (id, status, draft) = (sel.col(DE.id), sel.col(DE.status), sel.col(DE.draft));
         let mut pred = Pred::is_in(DE.id, decision_ids.iter().copied());
         if let Some(pid) = reach.project() {
             pred = pred.and(Pred::eq(DE.project_id, pid));
@@ -2743,12 +2745,16 @@ pub fn hit_standings(
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
         let rows = stmt
             .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok((id.get(r)?, card_enum_req(DE.status, status.get(r)?, DecisionStatus::parse)?))
+                Ok((
+                    id.get(r)?,
+                    card_enum_req(DE.status, status.get(r)?, DecisionStatus::parse)?,
+                    draft.get(r)?,
+                ))
             })
             .map_err(StoreEngineError::from)?;
         for row in rows {
-            let (id, status) = row.map_err(StoreEngineError::from)?;
-            out.decisions.insert(id, status);
+            let (id, status, draft) = row.map_err(StoreEngineError::from)?;
+            out.decisions.insert(id, (status, draft));
         }
     }
 

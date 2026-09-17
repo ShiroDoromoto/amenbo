@@ -1946,6 +1946,11 @@ status: string,
  */
 priority?: string, 
 /**
+ * Whether the writing is still unfinished — decisions only, and `false` for a task. The status
+ * cannot stand in for it: a decision is `decided` from the moment it is saved (`AMB-D-918`).
+ */
+draft: boolean, 
+/**
  * Tasks only, in axis order — empty for a task placed on no axis.
  */
 labels: Array<SearchLabelDto>, };

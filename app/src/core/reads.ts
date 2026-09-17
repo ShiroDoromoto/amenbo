@@ -354,9 +354,10 @@ export function useSearch(q: SearchQuery): { answer: SearchAnswer | null; loadin
  * row shows no time rather than an invented one.
  *
  * The standing is filled from the same fixture the hit came off, down to what a fixture actually holds:
- * the state and the priority, and no placements, because nothing here is filed on an axis. An empty list
- * is what that is — the absent standing means something else entirely (a record that stopped being
- * readable), and handing one back here would draw a row the Tauri path never draws.
+ * the state, the priority and whether a decision is still being written, and no placements, because
+ * nothing here is filed on an axis. An empty list is what that is — the absent standing means something
+ * else entirely (a record that stopped being readable), and handing one back here would draw a row the
+ * Tauri path never draws.
  */
 function mockSearch(text: string, q: SearchQuery): SearchAnswer {
   const needles = text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -397,7 +398,7 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
   if (q.kind !== "decision") {
     for (const t of getSnapshot().tasks) {
       if (!inScope(t.projectId)) continue;
-      const standing = { status: t.status, priority: t.priority ?? undefined, labels: [] };
+      const standing = { status: t.status, priority: t.priority ?? undefined, draft: false, labels: [] };
       push("task", "title", taskRef(t.id), t.title, t.notes, standing);
       push("task", "body", taskRef(t.id), t.title, t.notes, standing);
     }
@@ -405,7 +406,7 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
   if (q.kind !== "task") {
     for (const d of getSnapshot().decisions) {
       if (!inScope(d.project?.id)) continue;
-      const standing = { status: d.status, labels: [] };
+      const standing = { status: d.status, draft: d.draft, labels: [] };
       push("decision", "title", decisionRef(d.id), d.title, d.body, standing);
       push("decision", "body", decisionRef(d.id), d.title, d.body, standing);
     }

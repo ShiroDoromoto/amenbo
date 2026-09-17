@@ -1232,6 +1232,12 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
     let did = id_str(
         &cli.json(&["decision", "add", "--project", &pid, "--title", "掃引を夜に回す", "--json"])["decision"]["id"],
     );
+    cli.json(&["decision", "finish-writing", &did, "--json"]);
+    // A second one left half-written: its status is `decided` like the one above from the moment it was
+    // saved (`AMB-D-918`), so the row has nothing but the draft to tell the two apart by.
+    let half = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "掃引を朝に回す", "--json"])["decision"]["id"],
+    );
 
     // Scoped with `--project`, not the filter: the filter's grammar is task vocabulary, and a search
     // carrying one drops the decision this row is about.
@@ -1246,6 +1252,7 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
     assert_eq!(standing(&format!("AMB-T-{open}")), "todo [high] · エリア=実装", "state, urgency and filing");
     assert_eq!(standing(&format!("AMB-T-{over}")), "done", "work that is over says so, and has nothing else to say");
     assert_eq!(standing(&format!("AMB-D-{did}")), "decided", "a decision has a state and no more");
+    assert_eq!(standing(&format!("AMB-D-{half}")), "draft", "and a half-written one says that instead");
 
     // The same standing, unabridged, for a caller that parses instead of reading.
     let hit = cli.json(&["search", "掃引", "--project", &pid, "--limit", "100", "--json"])
@@ -1260,6 +1267,25 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
     assert_eq!(hit["standing"]["priority"], "high");
     assert_eq!(hit["standing"]["labels"][0]["axis"], "エリア");
     assert_eq!(hit["standing"]["labels"][0]["value"], "実装");
+    assert_eq!(hit["standing"]["draft"], false, "the draft is a task's field too, and always false there");
+
+    // The decision side, where the draft is the whole of what the status cannot say.
+    let decision_hit = |want: &str| -> serde_json::Value {
+        cli.json(&["search", "掃引", "--project", &pid, "--kind", "decision", "--limit", "100", "--json"])
+            ["hits"]
+            .as_array()
+            .expect("hits is an array")
+            .iter()
+            .find(|h| h["ref"] == want)
+            .unwrap_or_else(|| panic!("{want} is among the hits"))
+            .clone()
+    };
+    let written = decision_hit(&format!("AMB-D-{did}"));
+    assert_eq!(written["standing"]["status"], "decided");
+    assert_eq!(written["standing"]["draft"], false);
+    let unwritten = decision_hit(&format!("AMB-D-{half}"));
+    assert_eq!(unwritten["standing"]["status"], "decided", "the status is the same word on both");
+    assert_eq!(unwritten["standing"]["draft"], true, "and only this tells them apart");
 }
 
 /// A creation the AI ends with nobody on it says so (`AMB-T-2875`). The step that files AI work already

@@ -9,25 +9,22 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 1190 842] /Resources << >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 297 >>
+<< /Length 242 >>
 stream
 0 0 0 rg
 90 480 40 240 re
 90 680 160 40 re
 90 580 120 40 re
-355 480 40 240 re
-295 480 160 40 re
+295 480 40 240 re
 295 680 160 40 re
+295 580 120 40 re
+295 480 160 40 re
 500 480 40 240 re
 500 680 160 40 re
 500 580 120 40 re
 500 480 160 40 re
-705 480 40 240 re
-705 480 160 40 re
-910 480 40 240 re
-910 680 160 40 re
-910 480 160 40 re
-1030 480 40 240 re
+765 480 40 240 re
+705 680 160 40 re
 f
 endstream
 endobj
@@ -41,5 +38,5 @@ xref
 trailer
 << /Size 5 /Root 1 0 R >>
 startxref
-567
+512
 %%EOF

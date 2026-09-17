@@ -1270,6 +1270,20 @@ impl Instructor {
                 "Open the decision \"{}\", press the button that ends its writing, and confirm.",
                 self.target_label(with)
             ),
+            // The other way out of the writing, on the same pane and behind the same confirmation. The
+            // reason is written where the confirmation asks for it rather than being a field of the
+            // record: what is typed there lands on the decision's timeline, so a road that means to
+            // read it back later has to put it in through this box.
+            (Domain::Decision, "reject") => match arg_str(with, "reason") {
+                Some(reason) => format!(
+                    "Open the decision \"{}\", press the button that turns it down, write \"{reason}\" where the confirmation asks why, and confirm.",
+                    self.target_label(with)
+                ),
+                None => format!(
+                    "Open the decision \"{}\", press the button that turns it down, and confirm.",
+                    self.target_label(with)
+                ),
+            },
             // The same move on the other side. It is written out rather than shared with the task's,
             // because the pane it is made in is the decision's own and the road has to say which screen
             // the operator is standing on.
@@ -3836,6 +3850,18 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // The decision's row on the one view that runs everything that has happened. The view is
+            // named inside the confirming, the way `found` names the search it asks: there is no
+            // standing screen a separate move could arrive at, and what the row says is the whole of
+            // what this reads. The event is said in words rather than by its key, because the row is
+            // drawn in whatever language the run is in and an operator matching a key would be matching
+            // something the screen never puts up.
+            (Domain::Decision, "activity") => format!(
+                "On the smart view that runs everything that has happened, confirm it carries {} saying the decision \"{}\" {}.",
+                if present(with) { "a row" } else { "no row" },
+                self.target_label(with),
+                decision_event(req(with, "event")?)?
+            ),
             // Which session the record says it was made in. Both halves read the pane's **name** rather
             // than the heading over it: the heading is a word of the interface's and is drawn in
             // whatever language the run is in, while the name is the road's own and is on that row and
@@ -5185,6 +5211,19 @@ fn ticked(with: &Args) -> Result<String, String> {
             names(with, "projects")?
         )),
     }
+}
+
+/// What the stream says of a decision, said as the operator has to read it off the row. The set is
+/// closed: an event outside it is refused here rather than handed on as a row to go and look for.
+fn decision_event(kind: &str) -> Result<&'static str, String> {
+    Ok(match kind {
+        "decision.proposed" => "was recorded",
+        "decision.decided" => "was decided",
+        "decision.rejected" => "was turned down",
+        other => {
+            return Err(format!("`event: {other}` is not something the stream says of a decision"))
+        }
+    })
 }
 
 /// What a smart view's row stands for, said without its label. The sidebar is translated, so a road

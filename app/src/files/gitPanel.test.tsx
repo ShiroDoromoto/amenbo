@@ -1184,17 +1184,48 @@ describe("the rail's git half, with a row in hand", () => {
 /// is told which paths and which of git's two halves — and that the press that opens it is a second
 /// one on the row, the way it is in the tree.
 describe("the rail's git half, read across the panes", () => {
-  /** Press a row, the way a reader picking one out does. */
-  const pressRow = (what: Element) => act(async () => {
-    what.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  /** One press, as the browser sends it: the button goes down and only then does the click land.
+   *  The row reads the set it is about on the way down, so a test that sent the click alone would
+   *  be walking a gesture no hand can make. */
+  const pressRow = (what: Element, keys: MouseEventInit = {}) => act(async () => {
+    what.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, ...keys }));
+    what.dispatchEvent(new MouseEvent("click", { bubbles: true, ...keys }));
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  /** The second press, which is what asks for the patches. */
+  /** The second press, which is what asks for the patches — both presses and the pair on top of
+   *  them, which is what the browser sends. */
   const pressAgain = (what: Element) => act(async () => {
+    what.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    what.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    what.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     what.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     what.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 0));
+  });
+
+  /** The key this machine adds a row to a selection with. */
+  const ADD: MouseEventInit = { metaKey: true, ctrlKey: true };
+
+  /** Long enough that the next press on the same row is a press of its own rather than the second
+   *  half of a pair. */
+  const afterThePair = () => act(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+  });
+
+  /** The rows of one list that say they are picked out, by their names. */
+  const pickedIn = (under: string): string[] =>
+    [...(sectionOf(under)?.querySelectorAll("[aria-selected=\"true\"]") ?? [])]
+      .map((one) => one.querySelector(".gitpanel__name")?.textContent ?? "");
+
+  /** Four changed paths, which is enough for two picked rows to have one standing between them. */
+  const four = (): FolderGitDto => says({
+    rows: [
+      row({ path: ["a.rs"], worktree: "M" }),
+      row({ path: ["b.rs"], worktree: "M" }),
+      row({ path: ["c.rs"], worktree: "M" }),
+      row({ path: ["d.rs"], worktree: "M" }),
+    ],
   });
 
   /** One changed path and one staged one, which is enough to tell the two halves apart. */
@@ -1240,6 +1271,46 @@ describe("the rail's git half, read across the panes", () => {
 
     await pressAgain(rowOf(t("git.changes"), "a.rs"));
     expect(asked).toBe(1);
+  });
+
+  /// What a reader gathered is what they are reading. The press that opens the rows puts the set
+  /// down to the row it landed on — that is what a plain press does — so what is read is the set as
+  /// it stood when the button went down.
+  it("opens every row picked out, on a second press of one of them", async () => {
+    hoisted.git[ROOT] = four();
+    const seen: (DiffPick | null)[] = [];
+    let asked = 0;
+    await draw(ROOT, undefined, undefined, {
+      onPicked: (one) => seen.push(one),
+      onDiff: () => { asked += 1; },
+    });
+
+    await pressRow(rowOf(t("git.changes"), "a.rs"));
+    await pressRow(rowOf(t("git.changes"), "c.rs"), ADD);
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"], ["c.rs"]], staged: false });
+
+    await pressAgain(rowOf(t("git.changes"), "a.rs"));
+    expect(asked).toBe(1);
+    // Both, and still gathered afterwards: opening what was picked is not putting it down.
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"], ["c.rs"]], staged: false });
+    expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "c.rs"]);
+  });
+
+  /// And the other half of that press: a reader who narrowed a set of four to one row and then
+  /// opened that row is opening the one. What was gathered before the narrowing is gone.
+  it("opens the one row a press narrowed the set to", async () => {
+    hoisted.git[ROOT] = four();
+    const seen: (DiffPick | null)[] = [];
+    await draw(ROOT, undefined, undefined, { onPicked: (one) => seen.push(one), onDiff: () => {} });
+
+    await pressRow(rowOf(t("git.changes"), "a.rs"));
+    await pressRow(rowOf(t("git.changes"), "c.rs"), ADD);
+    await pressRow(rowOf(t("git.changes"), "a.rs"));
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], staged: false });
+
+    await afterThePair();
+    await pressAgain(rowOf(t("git.changes"), "a.rs"));
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], staged: false });
   });
 
   /// The box is what the list does to a path. Pressing it twice is staging and unstaging, and a

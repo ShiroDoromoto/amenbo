@@ -108,6 +108,21 @@ import type { DiffPick } from "./GitDiff";
 /** What git wrote on the way back from a door of this half, and whether it was a refusal. */
 type Said = { text: string; refused: boolean };
 
+/**
+ * How long after a press on a row another on the same row is read as the second half of a pair,
+ * rather than as a press of its own.
+ *
+ * **A double press is two presses close together, and the browser hands the pair over without
+ * saying which press began it.** What is needed here is the set as it stood before the first of the
+ * two, and by the time the pair is announced that set has been put down — so the window is held
+ * here and the set is kept across it.
+ *
+ * Long enough for a slow hand, and short enough that a reader who narrowed a set to one row and
+ * then opened that row opens the one. Two deliberate gestures inside it on the same row are what a
+ * third press looks like anyway.
+ */
+const PAIR_MS = 700;
+
 /** Nothing read yet, and what a folder that is no repository answers with. */
 const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false, said: null };
 
@@ -215,6 +230,20 @@ export function GitPanel({
   // How many conflicts are still written into each path the merge could not settle, by the whole
   // path. A path the count has not come back for yet is not in it, which is not the same as nought.
   const [marks, setMarks] = useState<Record<string, number>>({});
+
+  /**
+   * Read `paths` in the column across the panes, as one of the two lists asks for it.
+   *
+   * **The set is put back before the column is asked.** The press that opened the rows put it down
+   * to the row it landed on — that is what a plain press does — and what a reader gathered is what
+   * they are reading, so it goes back and stays gathered once the patches are up (`./GitDiff`).
+   */
+  const readAcross = (which: Which) => (onDiff === undefined ? undefined : (
+    (paths: string[][], anchor: string): void => {
+      setPicked({ which, keys: paths.map((one) => one.join("/")), anchor });
+      onDiff();
+    }
+  ));
 
   // git's three answers about a path, kept apart here because the reader does a different thing to
   // each (`rowsIn`).
@@ -567,7 +596,7 @@ export function GitPanel({
           over={overList === "staged"}
           onToggle={(paths) => void ask(() => folderGitUnstage(projectId, root, paths), true)}
           onMenu={(path, x, y) => setMenu({ which: "staged", path, x, y })}
-          onOpen={onDiff}
+          onOpen={readAcross("staged")}
         />
         <Changes
           what={t("git.changes")}
@@ -588,7 +617,7 @@ export function GitPanel({
           over={overList === "changed"}
           onToggle={(paths) => void ask(() => folderGitStage(projectId, root, paths), true)}
           onMenu={(path, x, y) => setMenu({ which: "changed", path, x, y })}
-          onOpen={onDiff}
+          onOpen={readAcross("changed")}
         />
       </div>
       <div className="gitpanel__commit">
@@ -1115,9 +1144,14 @@ function Changes({
   onToggle: (paths: string[][]) => void;
   /** Open the menu this row carries, at the point the pointer was (`./FileMenu`). */
   onMenu: (path: string[], x: number, y: number) => void;
-  /** Read what the picked rows are holding, in the column across the panes. Absent where there is
-   *  nowhere to read it. */
-  onOpen?: () => void;
+  /**
+   * Read `paths` in the column across the panes, with `anchor` the row that was pressed — which is
+   * the end a range is measured from afterwards. Absent where there is nowhere to read them.
+   *
+   * The paths travel rather than being read off the set over there, because the press that opens
+   * them has already put the set down (`opening`).
+   */
+  onOpen?: (paths: string[][], anchor: string) => void;
   /** The folder these rows are spelled from, which is what a pane is handed them as. */
   root: string;
   /** Take up a row of this list (`./handDrag`). Absent where nothing holds the gesture. */
@@ -1126,11 +1160,32 @@ function Changes({
   over: boolean;
 }) {
   const on = picking(which, rows, picked, onPicked, onMenu);
-  /** Take this row up, with what the press is about — the set where the row is in it, and the row
-   *  alone where it is not, which is the rule every act on these rows is read by (`rowsAbout`). */
+  /**
+   * The rows a second press on one of them would read: the set as it stood when the button went
+   * down, kept across the press that puts it down to the row it landed on.
+   *
+   * It is written on every press, and a press on the same row inside `PAIR_MS` leaves what is
+   * there — which is what makes the second half of a pair read the set the first half collapsed.
+   */
+  const opening = useRef<{ key: string; at: number; paths: string[][] } | null>(null);
+  /** What a press on this row is about — the set where the row is in it, and the row alone where it
+   *  is not, which is the rule every act on these rows is read by (`rowsAbout`). */
+  const about = (row: GitEntryDto): string[][] =>
+    rowsAbout(rows, keysIn(which, picked), row.path);
+  /** Take this row up, and remember what a second press on it would open. */
   const carry = (row: GitEntryDto, e: RowPress<HTMLElement>): void => {
-    const paths = rowsAbout(rows, keysIn(which, picked), row.path);
+    const paths = about(row);
+    const key = whole(row);
+    const held = opening.current;
+    const again = held !== null && held.key === key && e.timeStamp - held.at <= PAIR_MS;
+    opening.current = { key, at: e.timeStamp, paths: again ? held.paths : paths };
     onCarry?.({ wholes: paths.map((one) => fileAt(root, one)), root, paths }, e);
+  };
+  /** Read what was gathered, and let go of it: the next pair is about its own set. */
+  const read = (row: GitEntryDto): void => {
+    const paths = opening.current?.paths ?? [row.path];
+    opening.current = null;
+    onOpen?.(paths, whole(row));
   };
   /** What pressing one row's box is about: the set, where that row is in it, and the row alone
    *  where it is not — the rule the menu is read by (`rowsAbout`). */
@@ -1178,9 +1233,9 @@ function Changes({
                 onPress={(how) => on.press(whole(row), how)}
                 onCarry={(e) => carry(row, e)}
                 onToggle={() => toggle(whole(row))}
-                takes={rowsAbout(rows, keysIn(which, picked), row.path).length}
+                takes={about(row).length}
                 onMenu={on.menu}
-                onOpen={onOpen}
+                onOpen={onOpen === undefined ? undefined : () => read(row)}
               />
             ))}
           </RowList>

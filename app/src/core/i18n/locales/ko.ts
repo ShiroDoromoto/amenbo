@@ -778,7 +778,7 @@ export const ko: Translation = {
     "files.newlineChoose": "어느 줄바꿈으로 저장할지",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "이 이미지는 너무 커서 여기에 보여줄 수 없습니다.",
+    "files.tooBig": "이 파일은 너무 커서 여기에 보여줄 수 없습니다.",
     "files.tooBigPixels": "{width} × {height} 픽셀",
     "talk.elevated.title": "Amenbo가 관리자 권한으로 실행 중입니다",
     "talk.elevated.body": "여기서 연 터미널도 그 권한을 물려받습니다. 관리자 권한은 scoop이 패키지를 두는 링크를 따라가지 않으므로, 이 창에서는 그 도구에 닿을 수 없습니다. 설치되어 있어도 Amenbo는 설치되지 않았다고 답합니다.",

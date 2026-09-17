@@ -780,7 +780,7 @@ export const hi: Translation = {
     "files.newlineChoose": "किस लाइन ब्रेक के साथ सहेजना है",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "यह छवि इतनी बड़ी है कि यहाँ नहीं दिखाई जा सकती।",
+    "files.tooBig": "यह फ़ाइल इतनी बड़ी है कि यहाँ नहीं दिखाई जा सकती।",
     "files.tooBigPixels": "{width} × {height} पिक्सेल",
     "talk.elevated.title": "Amenbo व्यवस्थापक के रूप में चल रहा है",
     "talk.elevated.body": "यहाँ खोला गया टर्मिनल भी वही अधिकार पाता है, और व्यवस्थापक उन लिंक का अनुसरण नहीं करता जिनके पीछे scoop अपने पैकेज रखता है। उन उपकरणों तक इस विंडो से नहीं पहुँचा जा सकता — Amenbo उन्हें अनइंस्टॉल बताएगा, जबकि वे इंस्टॉल हैं।",

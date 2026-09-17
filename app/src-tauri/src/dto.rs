@@ -2125,10 +2125,10 @@ pub enum FolderLineEndingDto {
 
 /// What a file has to show for itself, as far as a panel can show it (`crate::folder`).
 ///
-/// At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
-/// is none of them — what a reader is then told is that it cannot be read here, which is the honest
-/// answer for a binary. Text is cut at a cap, because a panel is not a pager and a very long file
-/// would be paid for in full to draw a screen of it.
+/// At most one of `text`, `image`, `pdf` and `oversize` is filled, and all four are empty for a
+/// file that is none of them — what a reader is then told is that it cannot be read here, which is
+/// the honest answer for a binary. Text is cut at a cap, because a panel is not a pager and a very
+/// long file would be paid for in full to draw a screen of it.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -2143,7 +2143,12 @@ pub struct FolderFileDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) image: Option<FolderImageDto>,
-    /// The picture that was refused, where it is one and there are too many of it to carry.
+    /// The PDF, where the bytes say they are one and there are few enough of them to draw.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) pdf: Option<FolderPdfDto>,
+    /// The file that was refused, where it is a picture or a PDF and there is too much of it to
+    /// carry.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) oversize: Option<FolderOversizeDto>,
@@ -2172,27 +2177,31 @@ pub struct FolderFileDto {
     /// mark travels back into the save, which refuses to write over a file that moved since — this
     /// side remembers nothing between the two calls, so what remembers is the panel.
     ///
-    /// **A picture is marked too, over the whole of it** (`AMB-D-797`). Its bytes are not carried
-    /// here, so the mark is also what makes the redraw happen: it rides on the door's URL, and an
-    /// `<img>` whose address never changes is never fetched again however the file moved.
+    /// **A picture is marked too, over the whole of it** (`AMB-D-797`), and so is a PDF. Their bytes
+    /// are not carried here, so the mark is also what makes the redraw happen: it rides on the
+    /// door's URL, and an `<img>` whose address never changes is never fetched again however the
+    /// file moved.
     ///
     /// Absent where there is nothing drawn to mark, or where marking it would mean reading a file
-    /// with no cap on it: a picture too large to draw, and a binary, both come back without one.
+    /// with no cap on it: a file too large to draw, and a binary, both come back without one.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) digest: Option<String>,
 }
 
-/// A picture the panel would not carry, and what it was measured against (`AMB-D-783`).
+/// A file the panel would not carry — a picture (`AMB-D-783`) or a PDF (`AMB-D-907`) — and what it
+/// was measured against.
 ///
 /// **The numbers travel because silence reads as a broken file.** A reader shown nothing where a
 /// picture was concludes the file is damaged; one shown how large it is concludes it is large, and
 /// goes on to open it in something built for that.
 ///
-/// Two of them, because two caps are being kept and they guard different things: the bytes stand
-/// for what the host would hold, the pixels for what the webview would decode. The pixels are
-/// absent where the front of the file did not say — a picture whose size could not be read is let
-/// through on the bytes alone, so a refusal with no size in it is always a refusal about bytes.
+/// The pixels belong to a picture alone, and they are there because two caps are being kept and
+/// they guard different things: the bytes stand for what the host would hold, the pixels for what
+/// the webview would decode. They are absent where the front of the file did not say — a picture
+/// whose size could not be read is let through on the bytes alone — and absent for a PDF, which is
+/// refused on its bytes and nothing else. So a refusal with no size in it is always a refusal about
+/// bytes.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -2248,6 +2257,24 @@ pub struct FolderImageDto {
     ///
     /// It travels because the door is told what to serve as: the sniff happened here, and asking the
     /// webview to name the type of a file it has not read would be asking it to guess from the name.
+    pub(crate) mime: String,
+}
+
+/// A PDF out of a folder, named rather than carried — the seam a picture crosses, on the same terms
+/// and for the same reasons ([`FolderImageDto`], `AMB-D-907`).
+///
+/// **It is the one form judged before the text judgement.** A PDF written without compression holds
+/// no NUL in its head, so the NUL test took it and the panel drew its insides as a document to read
+/// and to write back over ([`crate::folder_bytes`]).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPdfDto {
+    /// The type the bytes themselves say they are — `application/pdf`, read off the first of them.
+    ///
+    /// It travels rather than being written on the panel's side for the reason a picture's does: the
+    /// door that hands out the bytes is told what to serve as, and the one place that has read them
+    /// is this one.
     pub(crate) mime: String,
 }
 

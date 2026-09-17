@@ -795,7 +795,7 @@ export const ru: Translation = {
     "files.newlineChoose": "С каким переносом строк сохранить",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Это изображение слишком большое, чтобы показать его здесь.",
+    "files.tooBig": "Этот файл слишком большой, чтобы показать его здесь.",
     "files.tooBigPixels": "{width} × {height} пикселей",
     "talk.elevated.title": "Amenbo запущен от имени администратора",
     "talk.elevated.body": "Открытый здесь терминал наследует это, а администратор не переходит по ссылкам, за которыми scoop размещает свои пакеты. Из этого окна такие инструменты недоступны — Amenbo сообщит, что они не установлены, хотя они установлены.",

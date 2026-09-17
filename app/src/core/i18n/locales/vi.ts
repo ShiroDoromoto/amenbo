@@ -782,7 +782,7 @@ export const vi: Translation = {
     "files.newlineChoose": "Lưu với kiểu xuống dòng nào",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Ảnh này quá lớn để hiển thị ở đây.",
+    "files.tooBig": "Tệp này quá lớn để hiển thị ở đây.",
     "files.tooBigPixels": "{width} × {height} pixel",
     "talk.elevated.title": "Amenbo đang chạy với quyền quản trị",
     "talk.elevated.body": "Cửa sổ dòng lệnh mở ở đây cũng thừa hưởng quyền đó, và quyền quản trị không đi theo các liên kết mà scoop dùng để đặt gói của nó. Không thể tiếp cận những công cụ đó từ cửa sổ này — Amenbo sẽ báo là chưa cài, dù chúng đã được cài.",

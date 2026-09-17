@@ -783,7 +783,7 @@ export const zhHans: Translation = {
     "files.newlineChoose": "用哪种换行保存",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "这张图太大了，没法在这里显示。",
+    "files.tooBig": "这个文件太大了，没法在这里显示。",
     "files.tooBigPixels": "{width} × {height} 像素",
     "talk.elevated.title": "Amenbo 正以管理员身份运行",
     "talk.elevated.body": "在此打开的终端会继承该权限，而管理员不会跟随 scoop 安放软件包所用的链接。这些工具在本窗口中无法访问——即使已经安装，Amenbo 也会报告为未安装。",

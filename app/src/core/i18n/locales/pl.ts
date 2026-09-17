@@ -795,7 +795,7 @@ export const pl: Translation = {
     "files.newlineChoose": "Którym końcem wiersza zapisać",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Ten obraz jest za duży, żeby pokazać go tutaj.",
+    "files.tooBig": "Ten plik jest za duży, żeby pokazać go tutaj.",
     "files.tooBigPixels": "{width} × {height} pikseli",
     "talk.elevated.title": "Amenbo działa jako administrator",
     "talk.elevated.body": "Terminal otwarty tutaj dziedziczy te uprawnienia, a administrator nie podąża za dowiązaniami, za którymi scoop instaluje swoje pakiety. Tych narzędzi nie da się osiągnąć z tego okna — Amenbo zgłosi je jako niezainstalowane, choć są.",

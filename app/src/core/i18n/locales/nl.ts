@@ -780,7 +780,7 @@ export const nl: Translation = {
     "files.newlineChoose": "Met welk regeleinde opslaan",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Deze afbeelding is te groot om hier te tonen.",
+    "files.tooBig": "Dit bestand is te groot om hier te tonen.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "talk.elevated.title": "Amenbo draait als administrator",
     "talk.elevated.body": "Een terminal die hier opent, erft dat, en een administrator volgt de koppelingen niet waarachter scoop zijn pakketten installeert. Die tools zijn vanuit dit venster onbereikbaar — Amenbo meldt ze als niet geïnstalleerd, terwijl ze dat wel zijn.",

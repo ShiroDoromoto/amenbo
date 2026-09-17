@@ -786,7 +786,7 @@ export const ja: Translation = {
     "files.newlineChoose": "どちらの改行で保存するか",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "この画像は大きすぎて、ここには出せません。",
+    "files.tooBig": "このファイルは大きすぎて、ここには出せません。",
     "files.tooBigPixels": "{width} × {height} ピクセル",
     "talk.elevated.title": "Amenbo を管理者として実行しています",
     "talk.elevated.body": "ここで開いた端末にも管理者の権限が引き継がれます。管理者の権限では scoop がパッケージを置くリンクをたどれないので、このウィンドウからはその道具に届きません。入っていても、Amenbo は「入っていない」と答えます。",

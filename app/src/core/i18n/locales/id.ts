@@ -782,7 +782,7 @@ export const id: Translation = {
     "files.newlineChoose": "Simpan dengan pemisah baris yang mana",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Gambar ini terlalu besar untuk ditampilkan di sini.",
+    "files.tooBig": "Berkas ini terlalu besar untuk ditampilkan di sini.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "talk.elevated.title": "Amenbo berjalan sebagai administrator",
     "talk.elevated.body": "Terminal yang dibuka di sini mewarisi hak itu, dan administrator tidak mengikuti tautan tempat scoop memasang paketnya. Alat-alat itu tidak dapat dijangkau dari jendela ini — Amenbo akan melaporkannya tidak terpasang, padahal terpasang.",

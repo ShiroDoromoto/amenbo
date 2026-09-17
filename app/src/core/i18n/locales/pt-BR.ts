@@ -792,7 +792,7 @@ export const ptBR: Translation = {
     "files.newlineChoose": "Com qual quebra de linha salvar",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Esta imagem é grande demais para ser mostrada aqui.",
+    "files.tooBig": "Este arquivo é grande demais para ser mostrado aqui.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "talk.elevated.title": "O Amenbo está sendo executado como administrador",
     "talk.elevated.body": "Um terminal aberto aqui herda isso, e um administrador não segue os links por trás dos quais o scoop instala seus pacotes. Essas ferramentas não podem ser alcançadas desta janela — o Amenbo dirá que não estão instaladas, embora estejam.",

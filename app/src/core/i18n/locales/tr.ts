@@ -780,7 +780,7 @@ export const tr: Translation = {
     "files.newlineChoose": "Hangi satır sonuyla kaydedilecek",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Bu görsel burada gösterilemeyecek kadar büyük.",
+    "files.tooBig": "Bu dosya burada gösterilemeyecek kadar büyük.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "talk.elevated.title": "Amenbo yönetici olarak çalışıyor",
     "talk.elevated.body": "Burada açılan bir terminal bunu devralır ve bir yönetici, scoop'un paketlerini arkasına kurduğu bağlantıları izlemez. Bu araçlara bu pencereden ulaşılamaz — kurulu olsalar da Amenbo kurulu değil diyecektir.",

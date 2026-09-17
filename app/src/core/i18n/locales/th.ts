@@ -782,7 +782,7 @@ export const th: Translation = {
     "files.newlineChoose": "จะบันทึกด้วยการขึ้นบรรทัดใหม่แบบไหน",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "ภาพนี้ใหญ่เกินกว่าจะแสดงที่นี่",
+    "files.tooBig": "ไฟล์นี้ใหญ่เกินกว่าจะแสดงที่นี่",
     "files.tooBigPixels": "{width} × {height} พิกเซล",
     "talk.elevated.title": "Amenbo กำลังทำงานในฐานะผู้ดูแลระบบ",
     "talk.elevated.body": "เทอร์มินัลที่เปิดที่นี่จะได้รับสิทธิ์นั้นต่อ และผู้ดูแลระบบจะไม่ตามลิงก์ที่ scoop ใช้วางแพ็กเกจของมัน เครื่องมือเหล่านั้นจึงเข้าถึงไม่ได้จากหน้าต่างนี้ — Amenbo จะรายงานว่ายังไม่ได้ติดตั้ง ทั้งที่ติดตั้งไว้แล้ว",

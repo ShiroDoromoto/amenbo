@@ -10,8 +10,9 @@
 // **Why pdf.js and not the webview's own viewer** (`AMB-D-907`): handing a PDF to the built-in
 // viewer needs the sandbox taken off the frame it is shown in, which would leave PDFs — and PDFs
 // alone — a defence short. Every comparable application ships pdf.js for the same reason, and on
-// Linux the built-in viewer *is* pdf.js. The version is the last one that carries no wasm, which
-// `AMB-D-769` does not allow.
+// Linux the built-in viewer *is* pdf.js. The version is the last one that publishes no wasm file of
+// its own, which `AMB-D-769` does not allow; what it does carry, inlined in the worker, is the
+// JPEG 2000 decoder, and a document holding such an image is the only thing that reaches it.
 //
 // **The bytes are fetched, not carried.** The address is the door the picture beside the document is
 // drawn from — a file by its path for the panel (`../core/fileUrl`), an attachment by its hash for a

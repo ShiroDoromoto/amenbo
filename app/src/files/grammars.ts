@@ -1,7 +1,7 @@
 // What the editor can colour, and where each grammar comes from.
 //
 // Colour comes from TextMate grammars — JSON data run through the JavaScript regular-expression
-// engine, never wasm, which this window's CSP refuses (`AMB-D-769`). A grammar is therefore data
+// engine, never wasm, which this window does not admit (`AMB-D-769`). A grammar is therefore data
 // we ship rather than code we run, and this file is the whole list of what we ship.
 //
 // **Twelve, not the 260 `tm-grammars` holds.** The package declares itself MIT, but the grammars

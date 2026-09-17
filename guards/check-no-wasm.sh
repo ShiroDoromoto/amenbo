@@ -37,10 +37,15 @@ dist=$app/dist
 # The one package allowed to carry an inlined module, and what the allowance rests on.
 #
 # `pdfjs-dist` 4.10.38 inlines an Emscripten build of OpenJPEG — 260,823 bytes, as a `data:` URL —
-# into its worker, its sandbox and its image decoders. It is the JPEG 2000 decoder, reached only from
-# `JpxImage`, and it is allowed to sit there because the window never runs it: the CSP refuses to
-# compile it, so a PDF holding a JPEG 2000 image loses that image and the rest of the document still
-# draws. Nothing calls into it otherwise.
+# into its worker, its sandbox and its image decoders. It is the JPEG 2000 decoder, reached from
+# `JpxImage` and from nowhere else, so the only thing that asks for it is a PDF holding such an image.
+#
+# **It runs where the engine lets it, and this window is one of those.** Measured on macOS: a PDF
+# whose image is a `/JPXDecode` stream drew that image in the pane, which only the decoder can have
+# done — `script-src 'self'` does not gate WebAssembly on WebKit. On an engine that does gate it
+# there, the compile is refused and that image is what the document loses; the rest of the page draws
+# either way. So the allowance is not "it cannot run" but "nothing we draw goes near it unless a
+# document brought a JPEG 2000 image with it".
 #
 # **The allowance is a claim about that one decoder, not about the package.** A wasm file published
 # beside the code is caught by the scan above it regardless of who published it.

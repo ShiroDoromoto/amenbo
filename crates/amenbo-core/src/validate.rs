@@ -320,8 +320,9 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
 /// environment checks instead. `doctor` is the cheap always-on half: it runs at the CLI's startup and,
 /// in the GUI, on every store-changed tick (`compute_startup_health`, which no open calls —
 /// `AMB-D-857`). This check reads the bodies of
-/// every outstanding task and unfinished decision on the device and parses each as Markdown, which is the same
-/// reason the environment's filesystem walk is kept out of that path. It also answers a different question:
+/// every outstanding task and every decision but the rejected ones on the device and parses each as
+/// Markdown, which is the same reason the environment's filesystem walk is kept out of that path. It also
+/// answers a different question:
 /// `doctor`'s checks say a row is broken, and this one says a *sentence* has rotted while every row around it
 /// is intact.
 ///
@@ -332,15 +333,20 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
 /// `duplicate_order_key` does, for the same reason.)
 ///
 /// **Only a body that still sends someone somewhere is scanned** (`AMB-D-402`). Four surfaces carry prose,
-/// and two of them are read: a task's notes while the task is still work, and a decision's body while it is
-/// still being written. A finished task's notes, a settled decision's body, and every comment are frozen — the
-/// number they name was live when it was written, and the reading it belongs to is history, not an entrance.
-/// The question this check answers is whether a reader arriving *now* is sent somewhere empty, so a body
-/// nobody is arriving through has no answer to give. The practical half is that the two frozen surfaces are
-/// also the two nobody can repair: an accepted decision's body is frozen against editing outright, and a
-/// comment recording that `AMB-T-833` was deleted is *correct* to keep naming it. Counting them would grow a
-/// warning list that can only ever grow — deletion is physical (`AMB-D-166`), so the gone numbers never come
-/// back.
+/// and two of them are read: a task's notes while the task is still work, and a decision's body unless the
+/// decision was rejected. A finished task's notes, a rejected decision's body, and every comment are frozen
+/// — the number they name was live when it was written, and the reading it belongs to is history, not an
+/// entrance. The question this check answers is whether a reader arriving *now* is sent somewhere empty, so
+/// a body nobody is arriving through has no answer to give. The practical half is that the frozen surfaces
+/// are also the ones nobody can repair: a rejected decision's body is frozen against editing outright
+/// ([`crate::ops::decision::update`]), and a comment recording that `AMB-T-833` was deleted is *correct* to
+/// keep naming it. Counting them would grow a warning list that can only ever grow — deletion is physical
+/// (`AMB-D-166`), so the gone numbers never come back.
+///
+/// **A settled decision is read too**, which is the half `AMB-D-918` moved. It was left out while settling
+/// meant being accepted and the body froze with it; `AMB-D-363` unfroze it, and once settled became the
+/// ordinary state of every decision the old narrowing was reading drafts alone — while the decision nobody
+/// is still writing is exactly the one people arrive at.
 ///
 /// **Reach narrows what is read, never what resolves.** Which bodies are scanned is the binding's business,
 /// as everywhere else. But a ref is dead when the number exists *nowhere*, so the liveness sets are the whole
@@ -374,17 +380,18 @@ pub fn dead_ref_issues(conn: &Connection, reach: Reach) -> StoreEngineResult<Vec
     );
     issues.extend(scan_bodies(conn, &sql, "task", &id, &body, &live_tasks, &live_decisions)?);
 
-    // A decision's body, while the writing is not finished — the one still waiting on a reader.
-    // `AMB-D-918` moved that from a status to a flag, so the clause reads `draft` where it read
-    // `proposed`; widening it to the settled bodies as well is `AMB-T-5030`. `decision.project_id` is
-    // NOT NULL, so a closed reach narrows it outright.
+    // A decision's body, unless the decision was rejected. Written as the negative of the one terminal
+    // rather than as `= 'decided'` for the reason the task arm leans on `still_open`: a verdict added
+    // later is left out of the scan only once someone says so, and the `''` a row written without its
+    // status carries reads as the model's default — `Decided` — rather than dropping out unannounced.
+    // `decision.project_id` is NOT NULL, so a closed reach narrows it outright.
     let mut sel = Select::new();
     let (id, body) = (sel.col(DEC.id), sel.col(DEC.body));
     let mut sql = Sql::from(&sel, DEC.table);
     sql.push_where(
         Pred::all(
             [
-                Some(Pred::eq(DEC.draft, true)),
+                Some(Pred::ne(DEC.status, crate::model::DecisionStatus::Rejected.as_str())),
                 reach.project().map(|p| Pred::eq(DEC.project_id, p)),
             ]
             .into_iter()
@@ -842,8 +849,8 @@ mod tests {
     // ─────────────────────── dead refs ───────────────────────
 
     /// A store with prose on all four body surfaces, every one of them in the state that *is* scanned (an
-    /// outstanding task, a proposed decision). Live: task 1 and 2, decision 5. Everything else a body names
-    /// is a number nothing was ever issued under.
+    /// outstanding task, a decision that was not rejected). Live: task 1 and 2, decision 5. Everything else
+    /// a body names is a number nothing was ever issued under.
     fn bodies() -> StoreEngine {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
         for (pid, name) in [(7, "Alpha"), (8, "Beta")] {
@@ -1034,9 +1041,9 @@ mod tests {
 
     /// The whole truth table of `AMB-D-402`, both ways round: every one of the four surfaces, in every state
     /// it can be in, carrying the same dead ref. What is raised is exactly the bodies a reader can still
-    /// arrive through — an outstanding task's notes and the body of a decision still being written — and every frozen body is
-    /// silent. Both directions matter: a state that stopped being scanned would pass a test that only listed
-    /// what stays.
+    /// arrive through — an outstanding task's notes, and a decision's body whether the writing is open or
+    /// over (`AMB-D-918`) — and every frozen body is silent. Both directions matter: a state that stopped
+    /// being scanned would pass a test that only listed what stays.
     #[test]
     fn only_a_body_that_is_still_an_entrance_is_scanned() {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
@@ -1098,9 +1105,9 @@ mod tests {
 
         assert_eq!(
             dead_targets(&issues),
-            vec!["decision:11", "task:1", "task:2", "task:3"],
-            "outstanding notes and a body still being written are raised; a task that has ended, a \
-             settled decision and every comment are history: {issues:?}",
+            vec!["decision:11", "decision:12", "task:1", "task:2", "task:3"],
+            "outstanding notes and every decision the writing did not turn down are raised; a task that \
+             has ended, a rejected decision and every comment are history: {issues:?}",
         );
     }
 

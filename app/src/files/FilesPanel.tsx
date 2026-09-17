@@ -1250,9 +1250,9 @@ function FileReader({
           </div>
         )}
         {refused !== null && <p className="files__none">{refused}</p>}
-        {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
-            damaged file, so the refusal says what it measured and hands the file on to something
-            built to open it (`AMB-D-783`). */}
+        {/* A file refused is not a file missing — a picture (`AMB-D-783`) or a PDF (`AMB-D-907`).
+            Drawn as nothing at all it reads as a damaged file, so the refusal says what it measured
+            and hands the file on to something built to open it. */}
         {file?.oversize !== undefined && (
           <>
             <p className="files__none">{t("files.tooBig")}</p>
@@ -1357,11 +1357,12 @@ function EncodingMenu({ at, onPick, onClose }: {
 }
 
 /**
- * What a refused picture is refused for, in the two numbers that were measured.
+ * What a refused file is refused for, in the numbers that were measured.
  *
  * The pixels are absent where the front of the file did not say — a picture that would not say its
  * size is refused on its bytes alone (`crate::folder`), and printing a size nobody read would be
- * inventing one.
+ * inventing one. They are absent for a PDF as well, which is measured in bytes and nothing else
+ * (`AMB-D-907`).
  */
 function measured(oversize: NonNullable<FolderFileDto["oversize"]>): string {
   const size = fileSize(oversize.bytes);

@@ -983,10 +983,10 @@ const ui = {
   "files.newlineChoose": "Which line break to save it in",
   "files.newlineLf": "Unix (LF)",
   "files.newlineCrlf": "Windows (CRLF)",
-  // A picture the panel would not draw. What it is refused for travels with the
-  // refusal, because a reader shown nothing at all reads it as a damaged file
-  // (`AMB-D-783`).
-  "files.tooBig": "This picture is too large to show here.",
+  // A file the panel would not draw — a picture (`AMB-D-783`) or a PDF (`AMB-D-907`). What it is
+  // refused for travels with the refusal, because a reader shown nothing at all reads it as a
+  // damaged file. The line below it is a picture's alone: a PDF is refused on its bytes.
+  "files.tooBig": "This file is too large to show here.",
   "files.tooBigPixels": "{width} × {height} pixels",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:

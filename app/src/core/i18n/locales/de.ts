@@ -784,7 +784,7 @@ export const de: Translation = {
     "files.newlineChoose": "Womit soll gespeichert werden",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Dieses Bild ist zu groß, um es hier zu zeigen.",
+    "files.tooBig": "Diese Datei ist zu groß, um sie hier zu zeigen.",
     "files.tooBigPixels": "{width} × {height} Pixel",
     "talk.elevated.title": "Amenbo läuft als Administrator",
     "talk.elevated.body": "Ein hier geöffnetes Terminal erbt das, und ein Administrator folgt den Verknüpfungen nicht, hinter denen scoop seine Pakete ablegt. Diese Werkzeuge sind aus diesem Fenster nicht erreichbar – Amenbo meldet sie als nicht installiert, obwohl sie es sind.",

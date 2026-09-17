@@ -791,7 +791,7 @@ export const es: Translation = {
     "files.newlineChoose": "Con qué salto de línea guardarlo",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Esta imagen es demasiado grande para mostrarla aquí.",
+    "files.tooBig": "Este archivo es demasiado grande para mostrarlo aquí.",
     "files.tooBigPixels": "{width} × {height} píxeles",
     "talk.elevated.title": "Amenbo se está ejecutando como administrador",
     "talk.elevated.body": "Una terminal abierta aquí lo hereda, y un administrador no sigue los enlaces tras los que scoop instala sus paquetes. Esas herramientas no se pueden alcanzar desde esta ventana: Amenbo dirá que no están instaladas, aunque lo estén.",

@@ -795,7 +795,7 @@ export const uk: Translation = {
     "files.newlineChoose": "З яким переносом рядків зберегти",
     "files.newlineLf": "Unix (LF)",
     "files.newlineCrlf": "Windows (CRLF)",
-    "files.tooBig": "Це зображення завелике, щоб показати його тут.",
+    "files.tooBig": "Цей файл завеликий, щоб показати його тут.",
     "files.tooBigPixels": "{width} × {height} пікселів",
     "talk.elevated.title": "Amenbo запущено від імені адміністратора",
     "talk.elevated.body": "Термінал, відкритий тут, успадковує це, а адміністратор не переходить за посиланнями, за якими scoop розміщує свої пакунки. З цього вікна такі інструменти недосяжні — Amenbo повідомить, що їх не встановлено, хоча вони встановлені.",

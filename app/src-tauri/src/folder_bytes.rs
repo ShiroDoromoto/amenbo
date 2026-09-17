@@ -11,7 +11,9 @@
 
 use std::path::Path;
 
-use crate::dto::{FolderFileDto, FolderImageDto, FolderLineEndingDto, FolderOversizeDto};
+use crate::dto::{
+    FolderFileDto, FolderImageDto, FolderLineEndingDto, FolderOversizeDto, FolderPdfDto,
+};
 use crate::error::CmdError;
 use crate::folder_fence::{gone, open_no_follow, rooted, under};
 
@@ -35,6 +37,22 @@ const TEXT_CAP: usize = 5 * 1024 * 1024;
 /// this process to answer a request with no range on it, so the number guards the same thing it
 /// always did.
 const IMAGE_CAP: u64 = 5 * 1024 * 1024;
+
+/// The largest PDF the panel draws, in bytes. Past it the reader is told how large it is and sent on
+/// to something built for it (`AMB-D-907`).
+///
+/// **It guards what the picture cap guards** — what this process holds to answer a request with no
+/// range on it — and it is a different number because what people keep in PDFs is a different
+/// distribution. Of the 2,161 PDFs on the machine this was measured against, half are under 0.1 MB,
+/// one in twenty is over 4.5 MB and one in a hundred over 69 MB. [`IMAGE_CAP`] would refuse 4.9% of
+/// them; this refuses 1.2%, and those 25 files are scanned books and sheet music — not the kind of
+/// PDF that sits in a project's folder. Raising it to 100 MB would let 1.0% more through for half
+/// again as much held here.
+///
+/// There is no second cap to keep beside it. A picture's pixels stand for what the webview decodes
+/// in one go; a PDF is drawn a page at a time by a reader that is handed the file, so the bytes are
+/// the whole of what there is to weigh.
+const PDF_CAP: u64 = 64 * 1024 * 1024;
 
 /// The largest picture a webview is asked to draw, in pixels — the second cap, and not a
 /// restatement of the first (`AMB-D-783`).
@@ -143,6 +161,45 @@ pub fn folder_read(
     let size = meta.len();
     let head = read_head(&file, HEAD).map_err(|_| gone())?;
 
+    // Asked ahead of the text judgement, and that order is the point: a PDF written without
+    // compression holds no NUL in its head, so the judgement below would take it and hand the panel
+    // a document to read and to save over (`pdf` below).
+    if pdf(&head) {
+        if size > PDF_CAP {
+            return Ok(FolderFileDto {
+                text: None,
+                truncated: false,
+                image: None,
+                pdf: None,
+                encoding: None,
+                bom: false,
+                line_ending: FolderLineEndingDto::Lf,
+                clean: false,
+                digest: None,
+                // On bytes alone: a PDF says how many pages it holds and nothing about how large
+                // they are, and neither number is what the cap was set against.
+                oversize: Some(FolderOversizeDto { bytes: size, width: None, height: None }),
+            });
+        }
+        return Ok(FolderFileDto {
+            text: None,
+            truncated: false,
+            image: None,
+            // Named and not carried, the way a picture is: the bytes come from `crate::fileproto`,
+            // addressed with the project, folder and path this call was made with (`AMB-D-907`).
+            pdf: Some(FolderPdfDto { mime: "application/pdf".to_string() }),
+            oversize: None,
+            encoding: None,
+            bom: false,
+            line_ending: FolderLineEndingDto::Lf,
+            clean: false,
+            // Marked over the whole of it, for the reason a picture is (`AMB-D-797`): the address
+            // the reader fetches from carries the mark, so a PDF rewritten under an open panel is
+            // fetched again instead of standing still on the screen.
+            digest: Some(digest_whole(&file, PDF_CAP).map_err(|_| gone())?),
+        });
+    }
+
     // The one judgement, made on bytes: text is what has no NUL in its head. Which encoding that
     // text is in is a separate question and never this one's — a page of Shift_JIS is text to the
     // person who wrote it — and it is `crate::encoding`'s to answer.
@@ -163,6 +220,7 @@ pub fn folder_read(
             truncated,
             text: Some(read.text),
             image: None,
+            pdf: None,
             oversize: None,
             encoding: Some(read.encoding.name().to_string()),
             bom: read.bom,
@@ -179,6 +237,7 @@ pub fn folder_read(
             text: None,
             truncated: false,
             image: None,
+            pdf: None,
             oversize: None,
             encoding: None,
             bom: false,
@@ -209,18 +268,20 @@ pub fn folder_read(
             text: None,
             truncated: false,
             image: Some(FolderImageDto { mime: mime.to_string() }),
+            pdf: None,
             oversize: None,
             encoding: None,
             bom: false,
             line_ending: FolderLineEndingDto::Lf,
             clean: false,
-            digest: Some(digest_whole(&file).map_err(|_| gone())?),
+            digest: Some(digest_whole(&file, IMAGE_CAP).map_err(|_| gone())?),
         });
     }
     Ok(FolderFileDto {
         text: None,
         truncated: false,
         image: None,
+        pdf: None,
         encoding: None,
         bom: false,
         line_ending: FolderLineEndingDto::Lf,
@@ -253,6 +314,17 @@ fn picture(head: &[u8]) -> Option<&'static str> {
         return Some("image/webp");
     }
     None
+}
+
+/// Whether these bytes are a PDF — the one question asked ahead of the NUL test, and asked of
+/// nothing else (`AMB-D-907`).
+///
+/// **The order is what this is for.** A PDF is usually binary and was answered for by the NUL test
+/// as one, but a PDF written without compression has no NUL in its head: 8 of the 558 PDFs on one
+/// machine are that, and every one of them opened in the editor as text. What they are is written
+/// where every PDF writes it, in the first five bytes.
+fn pdf(head: &[u8]) -> bool {
+    head.starts_with(b"%PDF-")
 }
 
 /// Whether a picture this large is one the panel draws — both caps, asked as one question
@@ -458,18 +530,19 @@ pub fn digest_of(file: &std::fs::File) -> std::io::Result<String> {
 
 /// The same mark over a whole file, taken without ever holding it (`AMB-D-797`).
 ///
-/// **This is the picture's mark.** A picture's bytes never reach [`folder_read`] — the webview
-/// fetches them from [`crate::fileproto`] — so there is nothing in hand to give to [`digest`], and
-/// a picture with no mark is one the panel cannot watch. The file is passed through the hasher a
-/// chunk at a time instead, so what this costs is the read: a mark is wanted here and the bytes
-/// are not, and a [`digest`] of them would have to hold the whole picture to say the same thing.
+/// **This is the mark of what the panel does not carry** — a picture, and a PDF. Their bytes never
+/// reach [`folder_read`]; the webview fetches them from [`crate::fileproto`], so there is nothing in
+/// hand to give to [`digest`], and a file with no mark is one the panel cannot watch. The file is
+/// passed through the hasher a chunk at a time instead, so what this costs is the read: a mark is
+/// wanted here and the bytes are not, and a [`digest`] of them would have to hold the whole file to
+/// say the same thing.
 ///
-/// The caller has already refused anything over [`IMAGE_CAP`], and the cap is applied here as well
-/// rather than trusted: the size was read off the metadata, and a file that grew between that read
-/// and this one would otherwise be hashed however large it had become.
-fn digest_whole(path: &Path) -> std::io::Result<String> {
+/// `cap` is the cap the caller already refused this file against ([`IMAGE_CAP`], [`PDF_CAP`]), and
+/// it is applied here again rather than trusted: the size was read off the metadata, and a file that
+/// grew between that read and this one would otherwise be hashed however large it had become.
+fn digest_whole(path: &Path, cap: u64) -> std::io::Result<String> {
     use std::io::Read as _;
-    let mut file = open_no_follow(path)?.take(IMAGE_CAP);
+    let mut file = open_no_follow(path)?.take(cap);
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; 64 * 1024];
     loop {
@@ -541,17 +614,17 @@ mod tests {
         let mut was = png(1920, 1080);
         was.extend(vec![0xAA; 200_000]);
         std::fs::write(&file, &was).expect("a picture");
-        let before = digest_whole(&file).expect("the mark");
+        let before = digest_whole(&file, IMAGE_CAP).expect("the mark");
 
         let mut now = png(1920, 1080);
         now.extend(vec![0xBB; 200_000]);
         std::fs::write(&file, &now).expect("the agent redrawing it");
 
         assert_eq!(was.len(), now.len(), "the same length, and the same first bytes");
-        assert_ne!(digest_whole(&file).expect("the mark"), before);
+        assert_ne!(digest_whole(&file, IMAGE_CAP).expect("the mark"), before);
         // And what is streamed past the hasher is the file itself: the mark is the one the bytes
         // in hand would have given, so a picture and a text file are known by the same kind of mark.
-        assert_eq!(digest_whole(&file).expect("the mark"), digest(&now));
+        assert_eq!(digest_whole(&file, IMAGE_CAP).expect("the mark"), digest(&now));
     }
 
     /// The last name is not resolved, so a link there passes the fence — and is refused where the
@@ -643,6 +716,43 @@ mod tests {
         assert_eq!(picture(b"RIFF\0\0\0\0WEBPVP8 "), Some("image/webp"));
         assert_eq!(picture(b"RIFF\0\0\0\0WAVEfmt "), None);
         assert_eq!(picture(b"# a heading"), None);
+    }
+
+    /// A PDF is asked about before the NUL test, and that is the whole of what the order buys: the
+    /// bytes below are a PDF and hold no NUL, so the text judgement would have taken them
+    /// (`AMB-D-907`).
+    #[test]
+    fn a_pdf_is_judged_ahead_of_the_nul_test() {
+        let head = uncompressed_pdf();
+        assert!(pdf(&head));
+        assert!(!head.contains(&0), "which is why the NUL test would have called it text");
+        // Nothing else is asked ahead of anything: a PDF is not a picture, and text is still text.
+        assert_eq!(picture(&head), None);
+        assert!(!pdf(b"# a heading"));
+        assert!(!pdf(b"\x89PNG\r\n\x1a\n"));
+        // The five bytes are where a PDF writes what it is, and a file that writes them later is
+        // not asked about again — what is judged is the front.
+        assert!(!pdf(b"  %PDF-1.4"));
+    }
+
+    /// What the old order handed back for such a file, measured rather than assumed: text, and text
+    /// this offered to write back over the file. `clean` refuses a read that was cut or could not be
+    /// decoded, and an uncompressed PDF is neither (`AMB-D-907`).
+    #[test]
+    fn an_uncompressed_pdf_came_back_as_text_a_reader_could_save_over() {
+        let bytes = uncompressed_pdf();
+        let read = crate::encoding::read(&bytes, false, None);
+        assert_eq!(read.encoding.name(), "UTF-8");
+        assert!(read.clean, "so the editor was reachable and the save behind it was offered");
+        assert!(read.text.starts_with("%PDF-"), "and what it drew was the file's own insides");
+    }
+
+    /// The front of a PDF written without compression: no NUL in it, and every byte of it decodes.
+    fn uncompressed_pdf() -> Vec<u8> {
+        b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+          4 0 obj\n<< /Length 44 >>\nstream\nBT /F1 24 Tf 72 720 Td (hello) Tj ET\nendstream\n\
+          endobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
+            .to_vec()
     }
 
     /// A picture with a bare header of the given form, long enough to be measured and nothing more.

@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { bundledGrammars, judgeGrammars, judgeLangConfig } from './check-grammar-licenses.mjs'
+import { bundledGrammars, judgeGrammars, judgeLangConfig, judgeTmGrammar } from './check-grammar-licenses.mjs'
 
 const ALLOW = new Set(['MIT', 'Apache-2.0'])
 const GRANTS = { open: { from: 'https://example.invalid', text: 'anything goes', why: 'no condition attached' } }
@@ -156,6 +156,38 @@ test('a file recorded against some other revision than the pinned one is refused
   const files = [{ lang: 'rust', source: 'https://example.invalid/main/rust' }]
   const { violations } = judgeLangConfig({ ...MANIFEST, files }, ['rust.json'], ALLOW)
   assert.ok(violations.some((v) => /not recorded against the pinned revision/.test(v)))
+})
+
+// --- the baked grammars -------------------------------------------------------------------------
+
+// The second baked tree, judged by the same function and named by the scope its files answer to
+// rather than by a language. A grammar that arrives outside npm is one no dependency gate sees, so
+// the manifest is the only place its licence was ever read.
+const BAKED = {
+  licence: 'MIT',
+  repository: 'https://github.com/microsoft/vscode',
+  revision: 'b'.repeat(40),
+  files: [{ scope: 'text.html.php', source: `https://example.invalid/${'b'.repeat(40)}/php` }],
+}
+
+test('a baked grammar set that matches its manifest passes', () => {
+  const { violations, judged } = judgeTmGrammar(BAKED, ['text.html.php.json'], ALLOW)
+  assert.deepEqual(violations, [])
+  assert.equal(judged, 1)
+})
+
+// The file is named after the scope, so a manifest naming the language instead would leave the tree
+// and the record disagreeing about every file in it — which is the case the agreement check exists
+// for, and the one a shared judgment could get wrong by reading the other tree's field.
+test('a baked grammar recorded under any other name than its scope is refused', () => {
+  const files = [{ lang: 'php', source: `https://example.invalid/${'b'.repeat(40)}/php` }]
+  const { violations } = judgeTmGrammar({ ...BAKED, files }, ['text.html.php.json'], ALLOW)
+  assert.ok(violations.some((v) => /text\.html\.php\.json is in the tree but not in SOURCE\.json/.test(v)))
+})
+
+test('a baked grammar under a licence we may not ship is refused', () => {
+  const { violations } = judgeTmGrammar({ ...BAKED, licence: 'GPL-3.0' }, ['text.html.php.json'], ALLOW)
+  assert.ok(violations.some((v) => /tmgrammar: GPL-3\.0/.test(v)))
 })
 
 test('the catalog we actually ship passes', async () => {

@@ -19,6 +19,8 @@
 //                                                — with `--within <class>` to list one part of the window:
 //                                                  the box the interface draws under that CSS class, and
 //                                                  what is inside it
+//                                                — refuses with 3, and not 1, where there was nothing to
+//                                                  list: no such box, or nothing named inside it
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //                                                — with `--role <role>` when the name is on several kinds
 //   swift screen.swift click <x> <y>             left-click at a screen point
@@ -109,9 +111,19 @@ import Vision
 
 let src = CGEventSource(stateID: .hidSystemState)
 
-func fail(_ msg: String) -> Never {
+/// What `find` refuses with when it had nothing to list: the box a caller named is not drawn, or it
+/// is drawn and nothing named stands inside it.
+///
+/// **A code of its own, apart from every other refusal.** A person driving a screen wants to be
+/// told — they asked after a box and there is none — while a caller reading one has been answered:
+/// a name is not on a list that holds nothing, which is exactly what a step saying it is absent
+/// asked (`verification/gui`). One code lets the second tell the two apart without reading the
+/// sentence the first is written for.
+let nothingToList: Int32 = 3
+
+func fail(_ msg: String, _ code: Int32 = 1) -> Never {
     FileHandle.standardError.write("screen: \(msg)\n".data(using: .utf8)!)
-    exit(1)
+    exit(code)
 }
 
 // ---------------------------------------------------------------------------
@@ -689,7 +701,7 @@ func windowAndElements(
     // where the window stands, and a caller aiming at one of them is still aiming inside the window.
     guard let marker else { return (axFrame(w) ?? .infinite, elements(under: w)) }
     guard let part = markedBy(marker, under: w) else {
-        fail("no part of the window is drawn under \(marker) — it is a CSS class the interface puts on the box being asked about, and nothing on this screen carries it")
+        fail("no part of the window is drawn under \(marker) — it is a CSS class the interface puts on the box being asked about, and nothing on this screen carries it", nothingToList)
     }
     return (axFrame(w) ?? .infinite, elements(under: part))
 }
@@ -825,7 +837,7 @@ func find(pid: Int, name: String?, role: String?, window: String?, within: Strin
     }
     if found.isEmpty {
         let here = within.map { " inside the part of the window drawn under \($0)" } ?? ""
-        fail("nothing on screen is \(aimedAt(name, role))\(here)")
+        fail("nothing on screen is \(aimedAt(name, role))\(here)", nothingToList)
     }
 }
 

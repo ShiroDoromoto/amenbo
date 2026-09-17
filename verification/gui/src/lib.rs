@@ -105,25 +105,66 @@ pub struct Reading {
     pub raw: String,
 }
 
-/// Run one of the tool's subcommands and hand back its stdout. A window named by the step is passed
-/// on as the tool's own qualifier on the aim — one more thing said about *where*, never an argument
-/// of the subcommand.
-fn tool(screen: &Path, cmd: &str, args: &[&OsStr], window: Option<&str>) -> Result<Vec<u8>, String> {
+/// The code `screen find` refuses with when it had nothing to list: the box the road named is not
+/// drawn, or it is drawn and nothing named stands inside it (`scripts/screen.swift`). Every other
+/// refusal comes back 1, which is how [`a_refusal_as_a_reading`] tells an answer from a failure.
+const NOTHING_TO_LIST: i32 = 3;
+
+/// A refusal from the tool: what it said, and the code it said it with — `None` where a signal ended
+/// it, which no code stands for.
+struct Refused {
+    code: Option<i32>,
+    said: String,
+}
+
+/// Run one of the tool's subcommands and hand back its stdout, keeping the code a refusal came with
+/// for the one caller that reads it ([`tool`] is this for everybody else). A window named by the step
+/// is passed on as the tool's own qualifier on the aim — one more thing said about *where*, never an
+/// argument of the subcommand.
+fn run(screen: &Path, cmd: &str, args: &[&OsStr], window: Option<&str>) -> Result<Vec<u8>, Refused> {
     let mut command = Command::new("swift");
     command.arg(screen).arg(cmd).args(args);
     if let Some(window) = window {
         command.arg("--window").arg(window);
     }
-    let out = command
-        .output()
-        .map_err(|e| format!("could not run `swift {} {cmd}`: {e}", screen.display()))?;
+    let out = command.output().map_err(|e| Refused {
+        code: None,
+        said: format!("could not run `swift {} {cmd}`: {e}", screen.display()),
+    })?;
     if !out.status.success() {
-        return Err(format!(
-            "`screen {cmd}` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        return Err(Refused {
+            code: out.status.code(),
+            said: format!(
+                "`screen {cmd}` failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+        });
     }
     Ok(out.stdout)
+}
+
+/// Run one of the tool's subcommands, for a caller to whom every refusal is a failure.
+fn tool(screen: &Path, cmd: &str, args: &[&OsStr], window: Option<&str>) -> Result<Vec<u8>, String> {
+    run(screen, cmd, args, window).map_err(|refused| refused.said)
+}
+
+/// What a refusal from `screen find` is to a reading.
+///
+/// **A listing with nothing on it is an answer and not a failure.** The interface draws each of these
+/// boxes only while it has something to hold — the list of what is staged is a line saying nothing is
+/// staged yet, and a folder that is no repository draws no list of changes at all — so a box that is
+/// not there is a box the name being asked after is not on, which is what a `present: false` step
+/// asked. The tool refuses because a person driving a screen wants to be told there is no such box;
+/// read here, that refusal is the reading.
+///
+/// What the tool said is kept as the raw half, since that is the evidence the step is filed with, and
+/// the half held to the match is empty: no name was listed, and the words of a refusal are not names
+/// on a screen. A step that said the name *should* be there still reds, on the same listing.
+fn a_refusal_as_a_reading(refused: Refused) -> Result<Reading, String> {
+    match refused.code {
+        Some(NOTHING_TO_LIST) => Ok(Reading { text: String::new(), raw: refused.said }),
+        _ => Err(refused.said),
+    }
 }
 
 /// Bring the app under test to the front, so the window the tool goes looking for counts as
@@ -180,6 +221,9 @@ pub fn read_shot(image: &Path, screen: &Path) -> Result<Reading, String> {
 /// The fold is taken here rather than in the tool, which is the one place this differs from a shot's
 /// reading: `screen find` prints a listing for whoever is driving the screen, and folding it there
 /// would take that listing away from them.
+///
+/// A listing with nothing on it comes back as an empty reading rather than as an error, the way a
+/// shot the reader found no text in does ([`a_refusal_as_a_reading`]).
 pub fn read_tree(
     pid: i64,
     window: Option<&str>,
@@ -192,7 +236,10 @@ pub fn read_tree(
         args.push(OsStr::new("--within"));
         args.push(OsStr::new(marker));
     }
-    let out = tool(screen, "find", &args, window)?;
+    let out = match run(screen, "find", &args, window) {
+        Ok(out) => out,
+        Err(refused) => return a_refusal_as_a_reading(refused),
+    };
     let raw = String::from_utf8_lossy(&out).into_owned();
     Ok(Reading { text: fold(&raw), raw })
 }
@@ -4702,7 +4749,7 @@ impl Instructor {
                     req(with, "name")?
                 ),
                 false => format!(
-                    "In {}, confirm \"{}\" is not among the rows — the section is drawn, and this is not on it.",
+                    "In {}, confirm \"{}\" is not among the rows. It is that section being asked about and no other — and a section the screen draws nowhere holds nothing either.",
                     section(with)?,
                     req(with, "name")?
                 ),
@@ -10461,6 +10508,33 @@ steps_gui:
         assert_eq!(rec.verdict, Verdict::Pass);
         assert_eq!(rec.found, Some(false));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// And the other half of that narrowing: the box is drawn only while it has something to hold, so
+    /// the list a road asks an absence of is often not on the screen at all — the staged list once
+    /// what was staged has been recorded, the list of changes in a folder that is no repository. The
+    /// tool refuses, a person driving a screen wants that refusal, and a step asking whether a name is
+    /// on that list has been answered by it.
+    #[test]
+    fn a_box_that_is_not_drawn_is_a_list_the_name_is_not_on() {
+        let said = "`screen find` failed: screen: no part of the window is drawn under \
+                    gitpanel__list--staged";
+        let read = a_refusal_as_a_reading(Refused { code: Some(NOTHING_TO_LIST), said: said.into() })
+            .expect("nothing to list is an answer, not a failure");
+        assert_eq!(read.text, "", "nothing was listed, so no name is on it");
+        assert!(read.raw.contains("gitpanel__list--staged"), "what the tool said is the evidence");
+        assert!(
+            !held_whatever_the_spacing(&read.text, &fold("alpha.md")).found,
+            "which is what a `present: false` step asked",
+        );
+        assert!(
+            a_refusal_as_a_reading(Refused { code: Some(1), said: "no such window".into() }).is_err(),
+            "every other refusal is still a failure",
+        );
+        assert!(
+            a_refusal_as_a_reading(Refused { code: None, said: "could not run swift".into() }).is_err(),
+            "and so is an end no code stands for",
+        );
     }
 
     /// And the half that keeps it a reading: a row the face is not drawing is on neither the shot nor

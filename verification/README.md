@@ -364,6 +364,14 @@ word of the interface's, in whatever language the machine is set to, and nothing
 those. `amenbo_verify_gui::marks_the_section` is the one table that pairs a road's word for a
 section with the class the interface marks it by.
 
+**A box that is not drawn is a list the name is not on.** The interface draws each of these boxes
+only while it has something to hold: the list of what is staged is a line saying nothing is staged
+yet once the changes have been recorded, and a folder that is no repository draws no list of changes
+at all. The tool refuses to list a box it cannot find — which is what a person driving a screen
+wants to be told — and refuses it with its own exit code, so a reading can make the answer of it
+that it is: no name was listed, which is what the step asking whether one is absent asked. A step
+that said the name should be *there* reds on the same listing.
+
 **The shot is still taken and still filed.** The reading moves; the evidence does not — the picture
 is what an eye reads the step back from, and a tree read is no more legible to a person than a
 photograph of a screen nobody kept.

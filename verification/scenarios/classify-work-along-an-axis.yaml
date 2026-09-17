@@ -236,9 +236,9 @@ steps_cli:
     as: ruling
 
   # The same create-and-file on this side, because it is the same flag and has to answer alike. It
-  # matters more here than on the board: an axis a project requires is read where a decision is
-  # settled, and that press belongs to whoever accepts it — so filing at the create is the only moment
-  # its writer has.
+  # matters more here than on the board: an axis a project requires is read where a decision's writing
+  # ends, and a record turned away there is one its writer has to go back and file — so filing at the
+  # create is the trip back not taken.
   - type: action
     domain: decision
     op: create

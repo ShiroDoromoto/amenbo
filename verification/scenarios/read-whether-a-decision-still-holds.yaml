@@ -22,7 +22,7 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: premise
 
@@ -35,7 +35,7 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: old
 
@@ -46,8 +46,8 @@ steps_cli:
       title: SCENARIO DECISION — the policy that replaces it
     as: new
 
-  # The body is written while the decision is still proposed. So it is set — and read back — before
-  # the writing ends.
+  # The body is written while the writing is still open. So it is set — and read back — before the
+  # stage that ends it.
   - type: action
     domain: decision
     op: edit
@@ -63,10 +63,10 @@ steps_cli:
       field: body
       equals: The rule this decision settles, as the reader will find it.
 
-  # Superseding draws one edge and settles nothing, so the successor is settled on its own first.
+  # Superseding draws one edge and ends nobody's writing, so the successor's own is ended first.
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: new
 
@@ -93,14 +93,14 @@ steps_cli:
       target: new
       on: premise
 
-  # The successor's own card: settled, unreplaced, and carrying both relations.
+  # The successor's own card: written out, unreplaced, and carrying both relations.
   - type: assert
     domain: decision
     op: field
     with:
       target: new
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
   - type: assert
     domain: decision
@@ -136,15 +136,15 @@ steps_cli:
       field: builds_on.0.name
       equals: SCENARIO DECISION — the store is one file on the device
 
-  # The replaced decision, read from its own side: still accepted — the row is not touched — and
-  # naming what replaced it.
+  # The replaced decision, read from its own side: still a finished record — the row is not touched —
+  # and naming what replaced it.
   - type: assert
     domain: decision
     op: field
     with:
       target: old
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
   - type: assert
     domain: decision

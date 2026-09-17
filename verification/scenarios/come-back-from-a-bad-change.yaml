@@ -47,7 +47,7 @@ steps_cli:
 
   - type: action
     domain: decision
-    op: accept
+    op: finish-writing
     with:
       target: settled
 
@@ -151,8 +151,8 @@ steps_cli:
     op: field
     with:
       target: settled
-      field: status
-      equals: accepted
+      field: draft
+      equals: false
 
   # And what happened after it is not: a restore that merged would leave this one standing.
   - type: assert

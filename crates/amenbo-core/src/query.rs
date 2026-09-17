@@ -1501,13 +1501,18 @@ fn activity_item(it: crate::activity::Item) -> ActivityItem {
 
 // ───────────────────────── decision list / search ─────────────────────────
 
-/// Search filter for decision records (`status:` / `superseded:` / `project:` / `number:` / `task:` /
-/// `dim:` / `time_axis:` / `decided_before:` / `decided_after:`). Decisions have no mailbox state the way tasks do, so there are
-/// few keys: status, time and the edges are enough. Words are not among them — they are `search`'s
-/// ([`search`], `AMB-D-449`) — though [`DecisionFilter::text`] is still how the read carries them.
+/// Search filter for decision records (`status:` / `draft:` / `superseded:` / `project:` / `number:` /
+/// `task:` / `dim:` / `time_axis:` / `decided_before:` / `decided_after:`). Decisions have no mailbox
+/// state the way tasks do, so there are few keys: status, the writing, time and the edges are enough.
+/// Words are not among them — they are `search`'s ([`search`], `AMB-D-449`) — though
+/// [`DecisionFilter::text`] is still how the read carries them.
 #[derive(Clone, Debug, Default)]
 pub struct DecisionFilter {
     pub status: Option<DecisionStatus>,
+    /// `draft:yes|no` — whether the decision is still being written (`AMB-D-918`). The twin of
+    /// [`Filter::draft`] on the task side, and asked for the same reason: what is half-written is on
+    /// the board like everything else, so the only way to see it as a set is to ask.
+    pub draft: Option<bool>,
     /// `superseded:yes|no` — whether another decision draws a `supersedes` edge at this one. It keys on
     /// the edge itself, which is a fact the author declared, rather than on a word for "still in force"
     /// that nothing here can know (`AMB-D-410`).
@@ -1572,6 +1577,14 @@ impl DecisionFilter {
                         Error::invalid("status must be proposed / accepted / rejected")
                     })?)
                 }
+                // `draft:yes|no` — the premise that says the writing is not finished.
+                "draft" => {
+                    f.draft = Some(match value {
+                        "yes" | "true" => true,
+                        "no" | "false" => false,
+                        _ => return Err(Error::invalid("draft must be yes / no")),
+                    })
+                }
                 "superseded" => {
                     f.superseded = Some(match value {
                         "yes" | "true" => true,
@@ -1604,7 +1617,7 @@ impl DecisionFilter {
                 }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (status/superseded/project/number/ref/task/dim/time_axis/decided_before/decided_after)"),
+                        format!("unknown filter key '{other}' (status/draft/superseded/project/number/ref/task/dim/time_axis/decided_before/decided_after)"),
                     ))
                 }
             }
@@ -1638,6 +1651,11 @@ impl DecisionFilter {
         }
         if let Some(status) = self.status {
             if d.status != status {
+                return false;
+            }
+        }
+        if let Some(want) = self.draft {
+            if d.draft != want {
                 return false;
             }
         }
@@ -1808,6 +1826,7 @@ pub fn decision_list(
                 title: r.title,
                 body: r.body,
                 status: crate::model::DecisionStatus::parse(&r.status).unwrap_or_default(),
+                draft: r.draft,
                 decided_at: r.decided_at.as_deref().and_then(crate::time::Timestamp::parse_rfc3339),
                 created_at: crate::time::Timestamp::parse_rfc3339(&r.created_at).unwrap_or_default(),
                 ..Default::default()

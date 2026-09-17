@@ -838,6 +838,23 @@ pub const STEPS: &[Step] = &[
                ON decision_made_in(decision_id);",
         ),
     },
+    Step {
+        to: 47,
+        name: "add decision.draft, the premise that says the writing is not finished",
+        // `AMB-D-918`. A decision under discussion stops being a status and becomes a flag, the shape
+        // `task.draft` has carried since v21 — so it arrives as a column on `decision`, not as a
+        // widened `CHECK`. `status` is left exactly where it is; the step that folds `proposed` away
+        // comes later.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** A decision that already exists
+        // was written by a build with no second stage, so its writing is finished by construction —
+        // there is no half-written decision anywhere in an older store to mistake for one.
+        // `NOT NULL DEFAULT 0` is what writes that into every existing row, so there is nothing
+        // further to backfill.
+        apply: Apply::Sql(
+            "ALTER TABLE decision ADD COLUMN draft BOOLEAN NOT NULL DEFAULT 0 CHECK(draft IN (0, 1));",
+        ),
+    },
 ];
 
 /// v43: take the plugin mechanism's tables and its execution log away (`AMB-D-884`).

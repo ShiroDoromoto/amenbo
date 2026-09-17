@@ -305,6 +305,7 @@ pub(super) fn decision_row(r: &Row) -> rusqlite::Result<Decision> {
         title: get(r, C.title)?,
         body: get(r, C.body)?,
         status: enum_req(r, C.status, DecisionStatus::parse)?,
+        draft: get(r, C.draft)?,
         status_changed_at: ts_opt(r, C.status_changed_at)?,
         decided_at: ts_opt(r, C.decided_at)?,
         decided_by: get(r, C.decided_by)?,
@@ -614,6 +615,9 @@ mod tests {
                 title: "RDB を真実源にする".to_string(),
                 body: "結論と根拠".to_string(),
                 status: DecisionStatus::Rejected,
+                // Seeded `true` for the reason the task's is: `false` is the field's default, so an
+                // empty-vs-empty compare would hide a dropped column.
+                draft: true,
                 status_changed_at: Some(now),
                 decided_at: Some(now),
                 decided_by: Some("user-1".to_string()),

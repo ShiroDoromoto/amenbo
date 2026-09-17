@@ -349,9 +349,10 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                 }
                 // `proposed` (not settled). "It was superseded" is caught by the arm above (successor
                 // present) — currency is a derived projection and never surfaces in status, so a premise that
-                // is no longer current with no successor cannot reach here. Nor can `accepted`
-                // (`reserve_blockers` judges on `unsettled_premise`, which lets an accepted premise
-                // that nothing supersedes through).
+                // is no longer current with no successor cannot reach here. `accepted` can, and by one
+                // route only: a decision whose writing is not finished (`AMB-D-918`), which
+                // `unsettled_premise` holds back whatever its status says. An accepted premise that
+                // nothing supersedes and nobody is still writing goes through without reaching here.
                 DecisionStatus::Proposed | DecisionStatus::Accepted => {
                     reasons.push(
                         Msg::new(format!("premise {label} is not settled — wait for the ruling, or unlink it"))
@@ -877,6 +878,42 @@ mod tests {
 
             // Unlink the premise and the task is startable at once — that is the way out.
             crate::ops::decision::unlink(tx, rejected, tid).unwrap();
+            assert_eq!(set_status(tx, tid, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
+        });
+    }
+
+    /// The arm `AMB-D-918` adds to the premise: a decision whose writing is not finished holds the
+    /// reserve, whatever its `status` says. Today `accept` lowers the flag as it settles the decision,
+    /// so the only way to stand a decision up in that pair is to write it — which is what this does,
+    /// and what `decision finish-writing` will reach through the front door.
+    #[test]
+    fn an_accepted_premise_still_being_written_holds_the_reserve() {
+        with_numbered_task(|tx, pid, tid| {
+            let premise = new_decision(tx, pid, "書きかけのまま採択された決定");
+            crate::ops::decision::link(tx, premise, tid).unwrap();
+            crate::ops::decision::accept(tx, premise, None).unwrap();
+
+            let before = crate::store_engine::read::decision(tx.conn(), premise).unwrap().unwrap();
+            let after = crate::model::Decision { draft: true, ..before.clone() };
+            crate::ops::emit_update(
+                tx,
+                crate::store_engine::record::decision(&before),
+                crate::store_engine::record::decision(&after),
+            )
+            .unwrap();
+
+            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            assert_eq!(err.code(), "not_ready");
+            assert!(err.message_en().contains("premise AMB-D-1 is not settled"), "{}", err.message_en());
+
+            // Lower the flag again and the reservation goes through — nothing else about the premise
+            // moved, so the flag is the whole of what refused it.
+            crate::ops::emit_update(
+                tx,
+                crate::store_engine::record::decision(&after),
+                crate::store_engine::record::decision(&before),
+            )
+            .unwrap();
             assert_eq!(set_status(tx, tid, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
         });
     }

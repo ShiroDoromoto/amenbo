@@ -55,9 +55,11 @@ pub(crate) fn still_open<E: Expr<Ty = SqlText>>(status: E) -> Pred {
     !closed(status)
 }
 
-/// The premise decision `dc` is **unsettled** — it is not `accepted`, or it is not current because a
-/// live decision holds a `supersedes` edge at it (currency is derived from the edges, never a status).
-/// The single definition every premise read shares — the `ready:` filter, `task_detail`, the task card
+/// The premise decision `dc` is **unsettled** — it is still being written, or it is not `accepted`, or
+/// it is not current because a live decision holds a `supersedes` edge at it (currency is derived from
+/// the edges, never a status). The draft arm is the one `AMB-D-918` adds: what says "still being put
+/// together" moves off `status` and onto a flag of its own, the shape the task side has carried since
+/// `AMB-D-553`. The single definition every premise read shares — the `ready:` filter, `task_detail`, the task card
 /// and [`reserve_blockers`] — so they cannot drift into disagreeing about what blocks a reserve. The
 /// premise is named by whatever alias the caller gave it, so the sharing costs no assumption about the
 /// query it lands in. It carries no bind values, on purpose: besides riding in a `WHERE`, this predicate
@@ -65,12 +67,13 @@ pub(crate) fn still_open<E: Expr<Ty = SqlText>>(status: E) -> Pred {
 /// and a select item has no placeholders to bind — the only literals in it are the store's own enum
 /// spellings, grammar here rather than data, which is exactly what [`Pred::plain`] is for.
 fn unsettled_premise(dc: col::decision::Cols) -> Pred {
-    Pred::plain(format!(
-        "{} <> '{}'",
-        dc.status.to_sql(),
-        crate::model::DecisionStatus::Accepted.as_str()
-    ))
-    .or(superseded(dc))
+    Pred::plain(format!("{} <> 0", dc.draft.to_sql()))
+        .or(Pred::plain(format!(
+            "{} <> '{}'",
+            dc.status.to_sql(),
+            crate::model::DecisionStatus::Accepted.as_str()
+        )))
+        .or(superseded(dc))
 }
 
 /// A live decision holds a `supersedes` edge at `dc` — the whole of what "not current" means (currency
@@ -3026,6 +3029,8 @@ pub struct DecisionRow {
     pub body: String,
     /// `DecisionStatus` as snake_case wire text (proposed/accepted/rejected).
     pub status: String,
+    /// Whether the writing is still unfinished (`AMB-D-918`) — what `draft:` on `decision list` asks.
+    pub draft: bool,
     /// The live decisions that superseded this one, in the order the edges were drawn — the reverse view
     /// `decision show` carries, brought down onto the list row. Whether it was replaced is read off this
     /// alone (`AMB-D-410`), so there is no second field to come to disagree with it.
@@ -3094,6 +3099,7 @@ pub fn decision_list(
     // it optional, not the column — so it is the registry's column, widened (`Col::nullable`).
     let project_name = sel.col(P.name.nullable());
     let status = sel.col(D.status);
+    let draft = sel.col(D.draft);
     let (decided_at, created_at) = (sel.col(D.decided_at), sel.col(D.created_at));
     let linked_task_count = sel.count_of(
         Count::over(L.table)
@@ -3118,6 +3124,7 @@ pub fn decision_list(
             title: title.get(r)?,
             body: body.get(r)?,
             status: status.get(r)?,
+            draft: draft.get(r)?,
             superseded_by: successors.get(&id).cloned().unwrap_or_default(),
             decided_at: decided_at.get(r)?,
             created_at: created_at.get(r)?,

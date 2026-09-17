@@ -844,6 +844,9 @@ pub struct SearchStandingDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) priority: Option<String>,
+    /// Whether the writing is still unfinished — decisions only, and `false` for a task. The status
+    /// cannot stand in for it: a decision is `decided` from the moment it is saved (`AMB-D-918`).
+    pub(crate) draft: bool,
     /// Tasks only, in axis order — empty for a task placed on no axis.
     pub(crate) labels: Vec<SearchLabelDto>,
 }

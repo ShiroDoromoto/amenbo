@@ -2293,7 +2293,7 @@ pub struct SearchHit {
 }
 
 /// What a record is, past its ref and its title: enough to tell a task still to be done from one that is
-/// over, and a decision that was adopted from one that was not (`AMB-D-567`).
+/// over, and a decision still being written from one that is settled (`AMB-D-567`).
 ///
 /// Read after the page is cut, on the records the page names — which is why it is not a column of the hit
 /// query ([`crate::store_engine::read::hit_standings`] says why at length).
@@ -2305,6 +2305,13 @@ pub struct HitStanding {
     pub status: String,
     /// How urgent it is — tasks only, and only where one was set.
     pub priority: Option<String>,
+    /// Whether the writing is still unfinished — decisions only, and `false` for a task (`AMB-D-918`).
+    ///
+    /// Said beside the status because the status cannot say it: a decision reads `decided` from the
+    /// moment it is saved, so a draft and a finished one are the same word without this. A task's own
+    /// draft (`AMB-D-553`) is not carried here — neither face draws it on a hit row, and the task
+    /// statuses do not collapse into one the way the decision statuses do.
+    pub draft: bool,
     /// What it is filed under, in axis order, and empty for a record placed on no axis — a decision
     /// carries a classification as well (`AMB-D-781`). It is also what a hit on the label face landed
     /// in, so a row can show why it came back.
@@ -2557,13 +2564,17 @@ fn stand(
             Some((TypedKind::Task, id)) => rows.tasks.get(&id).map(|(status, priority)| HitStanding {
                 status: status.as_str().to_string(),
                 priority: priority.map(|p| p.as_str().to_string()),
+                draft: false,
                 labels: labels(&rows.labels, id),
             }),
-            Some((TypedKind::Decision, id)) => rows.decisions.get(&id).map(|status| HitStanding {
-                status: status.as_str().to_string(),
-                priority: None,
-                labels: labels(&rows.decision_labels, id),
-            }),
+            Some((TypedKind::Decision, id)) => {
+                rows.decisions.get(&id).map(|(status, draft)| HitStanding {
+                    status: status.as_str().to_string(),
+                    priority: None,
+                    draft: *draft,
+                    labels: labels(&rows.decision_labels, id),
+                })
+            }
             None => None,
         };
     }

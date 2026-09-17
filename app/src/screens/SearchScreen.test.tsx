@@ -299,13 +299,15 @@ describe("the search screen", () => {
           standing: {
             status: "in_progress",
             priority: "high",
+            draft: false,
             labels: [{ axis: "Area", value: "core" }, { axis: "Phase", value: "second" }],
           },
         }),
-        hit({ ref: "AMB-D-2", standing: { status: "decided", labels: [] } }),
+        hit({ ref: "AMB-D-2", standing: { status: "decided", draft: false, labels: [] } }),
         hit({ ref: "AMB-T-3" }),
+        hit({ ref: "AMB-D-4", standing: { status: "decided", draft: true, labels: [] } }),
       ],
-      totalMatched: 3,
+      totalMatched: 4,
     };
     render();
     type(inputs()[0], "search");
@@ -324,7 +326,11 @@ describe("the search screen", () => {
     // A record that stopped being readable between the page and the read draws no line at all — and the
     // row stays, because the words really are written there.
     expect(standing(2)).toBeNull();
-    expect(rows()).toHaveLength(3);
+    // A decision still being written says so in place of its status: it is `decided` from the moment it
+    // is saved (`AMB-D-918`), so the status alone would read the same as the settled one two rows up.
+    expect(standing(3)!.textContent).toContain(t("dec.status.draft"));
+    expect(standing(3)!.textContent).not.toContain(t("dec.status.decided"));
+    expect(rows()).toHaveLength(4);
   });
 
   it("says a search could not run rather than showing it as nothing matched", () => {

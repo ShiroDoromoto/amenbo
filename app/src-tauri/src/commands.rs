@@ -1177,6 +1177,7 @@ pub fn search(
                 standing: h.standing.map(|s| SearchStandingDto {
                     status: s.status,
                     priority: s.priority,
+                    draft: s.draft,
                     labels: s
                         .labels
                         .into_iter()

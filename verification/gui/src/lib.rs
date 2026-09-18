@@ -3931,6 +3931,18 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // What that pane offers to press, which is decided by whether the writing is finished. The
+            // control is named by what it does rather than by its label, for `task_control`'s reason:
+            // the words on it are the interface's own and are drawn in whatever language the run is in,
+            // and what the operator is sent to find is a button.
+            (Domain::Decision, "offers") => {
+                let (there, gone) = decision_control(req(with, "control")?)?;
+                format!(
+                    "Open the decision \"{}\" on its own pane, and confirm {}.",
+                    self.target_label(with),
+                    if present(with) { there } else { gone }
+                )
+            }
             // The decision's row on the one view that runs everything that has happened. The view is
             // named inside the confirming, the way `found` names the search it asks: there is no
             // standing screen a separate move could arrive at, and what the row says is the whole of
@@ -5372,6 +5384,34 @@ fn task_control(control: &str) -> Result<(&'static str, &'static str), String> {
         ),
         other => return Err(format!(
             "`control: {other}` is not a control a task's face keeps (status / drag / finish-creating / delete)"
+        )),
+    })
+}
+
+/// What a decision's pane offers to press, as the phrase for the button being there and the phrase for
+/// it not being there. Both halves are written out for [`task_control`]'s reason: a button that is not
+/// drawn leaves no words behind to look for, so the absent half has to say what is not there.
+///
+/// The three are the doors the draft flag turns on and off (`app/src/screens/DecisionDetailPane.tsx`).
+/// Each is said as what it does to the decision rather than as the word on it, because a run in any of
+/// the nineteen languages draws a different word and the same button.
+fn decision_control(control: &str) -> Result<(&'static str, &'static str), String> {
+    Ok(match control {
+        "finish-writing" => (
+            "the button that ends the decision's writing is there to press",
+            "no button offers to end the decision's writing",
+        ),
+        "reject" => (
+            "the button that turns the decision down is there to press",
+            "no button offers to turn the decision down",
+        ),
+        "reopen" => (
+            "the button that puts the decision back to being written is there to press",
+            "no button offers to put it back to being written",
+        ),
+        other => return Err(format!(
+            "`control: {other}` is not a control a decision's pane keeps \
+             (finish-writing / reject / reopen)"
         )),
     })
 }
@@ -7868,6 +7908,74 @@ steps_gui:
             e,
             Expectation { text: "SCENARIO — the retention window".into(), present: false }
         );
+    }
+
+    /// What a decision's pane offers, read as a button being there and as one not being there. Both
+    /// halves are rendered because the absent one is the half the two stages are told apart by: a
+    /// build drawing every door at both stages would pass a road that only pressed them.
+    #[test]
+    fn a_door_a_decision_keeps_is_read_both_ways() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: decision
+    op: create
+    with: { title: SCENARIO — the retention window }
+    as: retention
+steps_gui:
+  - type: assert
+    domain: decision
+    op: offers
+    with: { target: retention, control: finish-writing, present: true }
+  - type: assert
+    domain: decision
+    op: offers
+    with: { target: retention, control: reopen, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+
+        let there = ins.render(&steps[0]).unwrap();
+        assert!(there.contains("SCENARIO — the retention window"), "got: {there}");
+        assert!(there.contains("ends the decision's writing is there to press"), "got: {there}");
+
+        let gone = ins.render(&steps[1]).unwrap();
+        assert!(gone.contains("no button offers to put it back to being written"), "got: {gone}");
+
+        // An eye, like every other reading of what a pane offers: a button that is not drawn leaves
+        // no words on the shot for a reading to match.
+        assert!(ins.expectation(&steps[0]).is_none(), "a control is read by an eye");
+    }
+
+    /// A control the pane keeps none of is refused at the step rather than turned into a line nobody
+    /// can walk.
+    #[test]
+    fn a_door_a_decision_has_no_such_thing_as_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: decision
+    op: create
+    with: { title: SCENARIO — the retention window }
+    as: retention
+steps_gui:
+  - type: assert
+    domain: decision
+    op: offers
+    with: { target: retention, control: supersede, present: true }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let e = ins.render(&steps[0]).expect_err("no such control");
+        assert!(e.contains("finish-writing / reject / reopen"), "got: {e}");
     }
 
     /// The card the narrowing left, read the same way whichever narrowing left it — the line names none,

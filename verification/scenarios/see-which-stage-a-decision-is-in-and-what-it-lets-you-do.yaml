@@ -1,0 +1,131 @@
+# Which of a decision's two stages it is in, read off the screen rather than off the store.
+#
+# A decision is saved decided — the talking is over before anybody types it — and what is still open
+# afterwards is the writing. So a record has two stages and one status, and the pane has to say which
+# stage this one is in without a second word for it. It does that twice over: with the chip beside the
+# title, which draws the stage rather than the status, and with the doors under the body, which are
+# the stage in the only form that matters to a reader — what they are allowed to do next.
+#
+# ── Why this is not `record-a-decision` on the screen ────────────────────────────────────────────
+# That road walks the two stages through the store and reads the flag back. It is the same goal by
+# either driver, which is why it is one file with two roads in it. **This is a different goal**: the
+# store being right about the stage is not the pane being right about it. A build whose flag moved
+# correctly and whose chip never changed, or whose doors all stood open at both stages, would walk
+# that road green from end to end.
+#
+# ── Why the chip is read as the status ───────────────────────────────────────────────────────────
+# The pane draws one chip where the store keeps two things, and while the writing is unfinished the
+# chip says so instead of saying what the status is. That is the design and not a slip — "decided,
+# still being written" is not a thing to put on a chip — so the road reads the chip by the word it
+# actually draws at each stage.
+#
+# ── Why every door is read at both stages ────────────────────────────────────────────────────────
+# Three doors, twice: each one present where it belongs and absent where it does not. Pressing a
+# button says that button is there and says nothing about the other stage, so the half that catches a
+# build drawing them all at once is the absent half — and the present half beside it is what keeps a
+# build drawing none of them from reading green in its place.
+#
+# ── Why the writing is finished in the middle rather than seeded that way ────────────────────────
+# Two records, one at each stage, would read the same two screens. What it would not say is that the
+# screen moved: the doors this road reads after the press are on the pane the press left behind, so
+# a build that drew the right thing on arrival and never redrew is caught here and not there.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# What a terminal offers is commands, and a command nobody may run says so by refusing when it is
+# run. There is nothing at a shell that corresponds to a button not being drawn.
+id: see-which-stage-a-decision-is-in-and-what-it-lets-you-do
+title: A decision's pane says which of its two stages it is in, by the word on its chip and by the doors it draws
+description: >
+  Record a decision on the screen and read its pane while the writing is still open: the chip says so,
+  and the pane offers to end the writing or to turn the record down while offering no way to put a
+  finished record back in hand. End the writing from that same pane. The chip now says the record is
+  decided, the two doors that were there are gone, and the one that was not is drawn in their place.
+
+steps_gui:
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the retention window
+    as: window
+
+  # The chip, while the writing is open. It draws the stage rather than the status, which is why the
+  # word here is not the one the store keeps.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: window
+      field: status
+      equals: draft
+
+  # The two doors a record still being written has.
+  - type: assert
+    domain: decision
+    op: offers
+    with:
+      target: window
+      control: finish-writing
+      present: true
+
+  - type: assert
+    domain: decision
+    op: offers
+    with:
+      target: window
+      control: reject
+      present: true
+
+  # And the one it has not. Putting a record back in hand is a way out of the other stage, and a pane
+  # offering it here would be offering to undo something nobody has done.
+  - type: assert
+    domain: decision
+    op: offers
+    with:
+      target: window
+      control: reopen
+      present: false
+
+  - type: action
+    domain: decision
+    op: finish-writing
+    with:
+      target: window
+
+  # The same chip, on the same pane, after one press.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: window
+      field: status
+      equals: decided
+
+  # Both doors gone. This is the half the road is written for: a build that drew them off the status
+  # rather than off the writing would leave them standing here, and every road that only ever presses
+  # them would go green over it.
+  - type: assert
+    domain: decision
+    op: offers
+    with:
+      target: window
+      control: finish-writing
+      present: false
+
+  - type: assert
+    domain: decision
+    op: offers
+    with:
+      target: window
+      control: reject
+      present: false
+
+  # And the way back, which is the only one there is. A record whose writing is over is not edited
+  # into being unfinished again; it is put back in hand by this door and written further.
+  - type: assert
+    domain: decision
+    op: offers
+    with:
+      target: window
+      control: reopen
+      present: true

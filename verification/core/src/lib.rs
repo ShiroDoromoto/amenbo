@@ -1263,6 +1263,22 @@ const REGISTRY: &[OpSpec] = &[
     // already `status`'s `refused:`.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "offers", required: &["target", "control", "where", "present"], refs: &["target"], strings: &["control", "where"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
+    // The same reading on the other side of the store, for the same reason the task's own exists: a
+    // decision's pane draws its doors off whether the writing is finished, and a build that drew them
+    // all at both stages would let every road that only presses one of them read green. Pressing a
+    // button says the button is there; nothing a road can press says a button is gone.
+    //
+    // **There is no `where`.** A task wears its controls on two faces and a road that did not say
+    // which would pass on either half; a decision has one pane and nothing else draws these at all.
+    //
+    // The three are the ones the draft flag turns on and off, and the note about editing a settled
+    // decision is not among them: it is drawn inside the form for editing rather than on the pane, so
+    // reading it is a road that has opened that form — which is a different claim from what the pane
+    // offers at rest.
+    //
+    // A screen road alone, like the task's: what a terminal offers is commands, and what it refuses is
+    // said by the refusal itself.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "offers", required: &["target", "control", "present"], refs: &["target"], strings: &["control"], binds: false },
     // What that row carries, which is a name and never an id: a reader who cannot get back to the pane
     // still has something to read, and that is the whole of why the name is kept beside the way back.
     //

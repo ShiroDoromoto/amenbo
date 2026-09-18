@@ -1739,10 +1739,18 @@ input[type="color"] {
    narrow, pushing the file down by that much. One row, one field that takes the room, and marks
    instead of words for the rest — which is also what keeps it out of the nineteen dictionaries. */
 .cmfind {
-  display: flex; align-items: center; gap: var(--s-1);
+  display: flex; flex-direction: column; gap: var(--s-1);
   padding: var(--s-1);
   font-size: var(--fs-xs);
 }
+/* One row of it. Finding is the row that is always there; replacing is the one under it, drawn only
+   for a file this column could write back and only once the reader has asked for it
+   (`../files/editorFind`). */
+.cmfind__row { display: flex; align-items: center; gap: var(--s-1); }
+.cmfind__row[hidden] { display: none; }
+/* The two fields start at the same place, so the row under reads as the same row again rather than
+   as something else that happens to be there. */
+.cmfind__under { flex: 0 0 auto; width: 20px; }
 /* The field takes whatever the controls beside it leave. Narrower than that and a reader cannot see
    what they typed; wider and the controls wrap, which is the thing being avoided. */
 .cmfind__field {
@@ -1753,14 +1761,26 @@ input[type="color"] {
   font: inherit;
 }
 .cmfind__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
-.cmfind__step, .cmfind__switch, .cmfind__close {
+.cmfind__step, .cmfind__switch, .cmfind__close, .cmfind__more {
   flex: 0 0 auto;
   min-width: 20px; padding: 2px var(--s-1);
   border: 1px solid transparent; border-radius: var(--r-sm);
   background: transparent; color: var(--c-text-muted);
   font: inherit; line-height: 1; cursor: pointer;
 }
-.cmfind__step:hover, .cmfind__switch:hover, .cmfind__close:hover { color: var(--c-text); background: var(--c-sunken); }
+.cmfind__step:hover, .cmfind__switch:hover, .cmfind__close:hover, .cmfind__more:hover {
+  color: var(--c-text); background: var(--c-sunken);
+}
+/* What a replacement is made with. Words rather than marks, because there are two of them and the
+   row under has the room the row above does not. */
+.cmfind__does {
+  flex: 0 0 auto;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-surface); color: var(--c-text);
+  font: inherit; line-height: 1.4; white-space: nowrap; cursor: pointer;
+}
+.cmfind__does:hover { background: var(--c-sunken); }
 /* A switch that is on says so by being filled, not by a colour alone: three marks two characters
    long are too small to read a shade off. */
 .cmfind__switch[aria-pressed="true"] {

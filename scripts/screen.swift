@@ -35,7 +35,8 @@
 //                                                leave it standing under its mark, settled by nothing
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //                                                — held under `--cmd` / `--shift` / `--opt` / `--ctrl` when the press is a
-//                                                  shortcut: ⌘C is `key 8 --cmd`, ⌘V is `key 9 --cmd`
+//                                                  shortcut: ⌘C is `key 8 --cmd`, ⌘V is `key 9 --cmd`, and
+//                                                  ⌃C — what ends what a terminal is running — is `key 8 --ctrl`
 //                                                  (the presses take the same four — see below)
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window, in points (+dy is back
 //                                                toward the top) — over `--at <x> <y>` when what is to move is
@@ -68,8 +69,9 @@
 // `key` and the presses — `click` / `right-click` / `dblclick` and the three `-named` forms — take
 // `--cmd` / `--shift` / `--opt` / `--ctrl` anywhere in the line, for a press held under a modifier.
 // A list that adds to a selection with a held key has no other road to two rows at once, so
-// `click-named <pid> <name> --cmd` is how the second row is reached. The modifier rides on the
-// event's own flags and is never pressed as a key of its own, so nothing is left held afterwards.
+// `click-named <pid> <name> --cmd` is how the second row is reached. The modifier is really held for
+// the length of the press — put down before it and taken back up after, however the press comes out
+// — because a flag written on an event alone is read by nobody.
 //
 // Reach for `click-named` over a point. A point costs two conversions a name costs neither of: a
 // shot's pixels are the window's points times the scale of *that* display, which is 2 on a built-in
@@ -1040,10 +1042,10 @@ func hover(_ p: CGPoint) {
 /// listening reads the count off the field rather than timing the pair itself. A drag's events carry
 /// it too — a webview handed a `pointerdown` whose count is zero has been handed a press nobody made.
 ///
-/// **The modifiers ride on the event's own flags**, the way `key` sends its own, and are never
-/// pressed as keys around the press. Every event written here says what it is held under, empty
-/// included: one left with nothing written on it carries whatever the machine is holding at that
-/// moment, and a stray ⌘ turns an ordinary press into a shortcut nobody asked for.
+/// **Every event written here says what it is held under, empty included**: one left with nothing
+/// written on it carries whatever the machine is holding at that moment, and a stray ⌘ turns an
+/// ordinary press into a shortcut nobody asked for. The flags are not the whole of a modifier, though
+/// — what puts one down is [`under`], and the press goes out inside it.
 func mouse(
     _ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1, button: CGMouseButton = .left,
     flags: CGEventFlags = []
@@ -1069,7 +1071,7 @@ func click(x: Double, y: Double, flags: CGEventFlags = []) {
     let p = CGPoint(x: x, y: y)
     mustBeOnAScreen(p, "the click")
     hover(p)
-    press(at: p, clickState: 1, flags: flags)
+    under(flags) { press(at: p, clickState: 1, flags: flags) }
 }
 
 /// The pointer moved to a point and left there, the coordinate half of `point-named`. It is for the
@@ -1093,9 +1095,11 @@ func rightClick(x: Double, y: Double, flags: CGEventFlags = []) {
     let p = CGPoint(x: x, y: y)
     mustBeOnAScreen(p, "the right-click")
     hover(p)
-    for phase in [CGEventType.rightMouseDown, CGEventType.rightMouseUp] {
-        mouse(phase, at: p, button: .right, flags: flags)
-        usleep(60_000)
+    under(flags) {
+        for phase in [CGEventType.rightMouseDown, CGEventType.rightMouseUp] {
+            mouse(phase, at: p, button: .right, flags: flags)
+            usleep(60_000)
+        }
     }
 }
 
@@ -1106,8 +1110,10 @@ func doubleClick(x: Double, y: Double, flags: CGEventFlags = []) {
     let p = CGPoint(x: x, y: y)
     mustBeOnAScreen(p, "the double click")
     hover(p)
-    press(at: p, clickState: 1, flags: flags)
-    press(at: p, clickState: 2, flags: flags)
+    under(flags) {
+        press(at: p, clickState: 1, flags: flags)
+        press(at: p, clickState: 2, flags: flags)
+    }
 }
 
 /// Press at one point, cross to another with the button held, and let go there.
@@ -1348,23 +1354,64 @@ func type(_ s: String) {
     }
 }
 
-/// One keycode, pressed and released, under whatever modifiers were asked for. A shortcut is one
-/// press to a caller — ⌘C, ⌘V — so it is said as one here rather than as a key and the keys around it.
+/// The key each modifier is held down by, in the order a hand reaches for them.
+let modifierKeys: [(CGEventFlags, CGKeyCode)] = [
+    (.maskShift, 56), (.maskControl, 59), (.maskAlternate, 58), (.maskCommand, 55),
+]
+
+/// Send something with those modifiers standing down, and let them go however it ends.
 ///
-/// **The modifiers ride on the event's own flags**, and are never pressed as keys of their own. A run
-/// that failed between pressing ⌘ and letting it go would leave the machine holding a key nobody
-/// pressed, and everything sent after it would arrive as a shortcut. A press is sent the same way,
-/// so a ⌘-click leaves nothing held either.
+/// **A flag written on an event is not a modifier the window sees.** A flag is a fact about one
+/// event; a modifier is a state the machine keeps, and nothing but a `flagsChanged` moves that state.
+/// Measured at the HID tap in the verification VM: ⌃C posted with `.maskControl` on its flags
+/// arrived carrying that flag, and the terminal it was aimed at went on sleeping — the flag rode
+/// along, read by nobody, and what landed was a plain `c`. Writing the control character onto the
+/// event as well was measured the same way and changed nothing, for the same reason: what a window is
+/// handed is rebuilt from the state, not copied off the event.
+///
+/// So the modifier is put down and taken back up, and the cost is the one this used to avoid: between
+/// the two, the machine really is holding a key nobody pressed. `defer` is what pays it — every road
+/// out, a refusal included, goes through the release — and what is left over is a run killed
+/// outright, where a session's keyboard state is lost either way.
+func under(_ flags: CGEventFlags, _ body: () -> Void) {
+    var standing: CGEventFlags = []
+    for (flag, code) in modifierKeys where flags.contains(flag) {
+        standing.insert(flag)
+        modifiersNowStand(standing, movedBy: code, down: true)
+    }
+    defer {
+        for (flag, code) in modifierKeys.reversed() where flags.contains(flag) {
+            standing.remove(flag)
+            modifiersNowStand(standing, movedBy: code, down: false)
+        }
+    }
+    body()
+}
+
+/// One `flagsChanged`: which modifier key moved, and everything standing once it had.
+func modifiersNowStand(_ standing: CGEventFlags, movedBy code: CGKeyCode, down: Bool) {
+    let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
+    e?.type = .flagsChanged
+    e?.flags = standing
+    e?.post(tap: .cghidEventTap)
+    usleep(20_000) // the state has to have moved before the event that is read against it goes out
+}
+
+/// One keycode, pressed and released, under whatever modifiers were asked for. A shortcut is one
+/// press to a caller — ⌘C, ⌘V, ⌃C — so it is said as one here rather than as a key and the keys
+/// around it. Holding the modifiers for the length of it is [`under`]'s.
 ///
 /// Not every key arrives. Return, Tab, Backspace and Page Down reach the webview; Page Up, Home, End
 /// and the arrows were posted the same way and nothing moved. So a key is not the way to walk a page:
 /// `scroll` is, and it goes where these do not.
 func key(_ code: CGKeyCode, flags: CGEventFlags = []) {
-    for down in [true, false] {
-        let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
-        e?.flags = flags
-        e?.post(tap: .cghidEventTap)
-        if down { usleep(40_000) }
+    under(flags) {
+        for down in [true, false] {
+            let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
+            e?.flags = flags
+            e?.post(tap: .cghidEventTap)
+            if down { usleep(40_000) }
+        }
     }
 }
 

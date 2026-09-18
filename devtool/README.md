@@ -708,10 +708,14 @@ screen is on, so what is dragged in is a path in there — `devtool vm push` is 
 one gets there. The drag takes the front for as long as it lasts and gives it back
 after, so a road can read the window it was dropped on straight away.
 
-**A shortcut is one press: `key <keycode> --cmd`.** ⌘C is `key 8 --cmd` and ⌘V is
-`key 9 --cmd`. The modifier rides on the event's flags and is never held as a key
-of its own, so nothing is left pressed if the run stops between the two.
-`--shift` / `--opt` / `--ctrl` are there the same way.
+**A shortcut is one press: `key <keycode> --cmd`.** ⌘C is `key 8 --cmd`, ⌘V is
+`key 9 --cmd`, and ⌃C — what ends what a terminal is running — is `key 8 --ctrl`.
+`--shift` / `--opt` are there the same way. The modifier is really held down for
+the length of the press and let go after: a flag written on the event alone is
+read by nobody, and a ⌃C sent that way arrived at the HID tap carrying the flag
+while the terminal it was aimed at went on sleeping. What that costs is the
+window between the two — a run killed outright in there leaves the guest holding
+a key nobody pressed, and the guest is thrown away.
 
 **A press takes the same four.** `click` / `right-click` / `dblclick` and the
 three `-named` forms are held under a modifier the way `key` is, on the event's

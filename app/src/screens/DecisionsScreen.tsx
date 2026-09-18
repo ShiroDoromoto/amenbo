@@ -336,6 +336,7 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
       <input
         {...asTyped}
         style={{ width: "100%", marginBottom: 8 }}
+        aria-label={t("dec.newTitlePh")}
         placeholder={t("dec.newTitlePh")}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -343,6 +344,7 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
       <textarea
         {...asTyped}
         style={{ width: "100%", minHeight: 80, marginBottom: 8 }}
+        aria-label={t("dec.newBodyPh")}
         placeholder={t("dec.newBodyPh")}
         value={body}
         onChange={(e) => setBody(e.target.value)}

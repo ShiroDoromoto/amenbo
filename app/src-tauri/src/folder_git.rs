@@ -132,7 +132,15 @@ pub async fn folder_git_status(project_id: i64, root: String) -> Result<FolderGi
         // `--branch` puts one more line at the front and costs nothing to ask for. Counting the
         // same thing with `rev-list --count` would be a second process, which is 14ms of a call
         // that is 20ms whole (`AMB-T-4899`).
-        let args = ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--branch", "--", "."];
+        //
+        // `-uall` names every untracked file instead of answering for a wholly untracked folder with
+        // a single `?? worker/`. That one line hides what is inside it, counts as one change where
+        // there are many, and is replaced by a different line the moment one file under it is staged
+        // (`AMB-D-919`). What it costs is the answer's size and not the walk: git descends into an
+        // untracked directory either way, to learn whether all of it is ignored — 35,000 untracked
+        // files took 99ms and 52 bytes without it, 134ms and 759 KB with it (`AMB-T-5016`).
+        let args =
+            ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--branch", "-uall", "--", "."];
         let out = match refusable(&dir, &args) {
             Some(Ok(out)) => out,
             // git ran and would not answer. The folder is a repository — `rev-parse` said so a few
@@ -584,10 +592,14 @@ fn refusable(dir: &Path, args: &[&str]) -> Option<Result<String, String>> {
 /// `-z` the current path comes first, which is the reverse of the arrow form git writes for people.
 ///
 /// A path git ends in `/` is a folder it is answering for as a whole rather than naming what is
-/// inside it, and the row says so: a folded folder is somewhere a colour still has to appear. When
-/// nothing under the bound folder is tracked, the folder git names that way is the bound folder
-/// itself, and the row for it carries no segments at all — zero segments *is* the bound folder, in
-/// the same spelling every other row is measured from.
+/// inside it, and the row says so: a folded folder is somewhere a colour still has to appear. Asked
+/// with `-uall` git names untracked files one by one, so the only folder it still answers for whole
+/// is one it cannot walk into — a repository of its own sitting inside this one (`AMB-D-919`).
+///
+/// A row whose path is the bound folder itself carries no segments at all — zero segments *is* the
+/// bound folder, in the same spelling every other row is measured from. That is the shape a folder
+/// with nothing tracked under it came back as before `-uall`, and it is still read because what this
+/// reads is the format and not one call's options.
 fn rows(out: &str, prefix: &str) -> Vec<GitEntryDto> {
     let mut rows = Vec::new();
     let mut fields = out.split('\0');
@@ -824,13 +836,13 @@ mod tests {
         assert_eq!(rows[1].path, vec!["other.txt".to_string()]);
     }
 
-    /// git names an untracked folder rather than everything in it, and the row keeps that apart
-    /// from a file of the same name.
+    /// A folder git answers for as a whole — under `-uall`, one it cannot walk into — and the row
+    /// keeps it apart from a file of the same name.
     #[test]
     fn a_folder_git_answers_for_as_a_whole_says_it_is_one() {
-        let rows = rows(&z(&["?? app/newdir/", "?? app/newdir.txt"]), "app/");
-        assert_eq!((rows[0].path.clone(), rows[0].is_dir), (vec!["newdir".to_string()], true));
-        assert_eq!((rows[1].path.clone(), rows[1].is_dir), (vec!["newdir.txt".to_string()], false));
+        let rows = rows(&z(&["?? app/nested/", "?? app/nested.txt"]), "app/");
+        assert_eq!((rows[0].path.clone(), rows[0].is_dir), (vec!["nested".to_string()], true));
+        assert_eq!((rows[1].path.clone(), rows[1].is_dir), (vec!["nested.txt".to_string()], false));
     }
 
     /// Everything about a path that is not under the bound folder, on the way in rather than in
@@ -841,10 +853,10 @@ mod tests {
         assert!(rows(&z(&["?? other/thing.txt"]), "app/").is_empty());
     }
 
-    /// Nothing under the folder is tracked, so the folder git names is the bound folder — the one
-    /// row whose path has no segments in it.
+    /// The bound folder named as itself — the one row whose path has no segments in it. Nothing git
+    /// is asked now comes back in this shape, but the format carries it and the parser reads it.
     #[test]
-    fn a_wholly_untracked_folder_is_named_as_itself() {
+    fn the_bound_folder_named_as_itself_is_no_segments_at_all() {
         let rows = rows(&z(&["?? app/"]), "app/");
         assert_eq!(rows.len(), 1);
         assert!(rows[0].path.is_empty(), "the bound folder is no segments, not one empty one");
@@ -856,6 +868,11 @@ mod tests {
         assert!(rows("", "").is_empty());
         assert!(rows("\0", "").is_empty());
     }
+
+    /// The options the status road really asks with, minus `--branch` — the line it puts at the
+    /// front is `branch_of`'s to read and not the parser's.
+    const STATUS: [&str; 7] =
+        ["--no-optional-locks", "status", "--porcelain=v1", "-z", "-uall", "--", "."];
 
     /// The whole of it against a real git: the options in the order git takes them, the front it
     /// puts on every path, and a name that is not ASCII surviving both. None of that can be pinned
@@ -872,19 +889,55 @@ mod tests {
         std::fs::write(app.join("keep.txt"), "k").unwrap();
         std::fs::write(app.join("日本語.txt"), "n").unwrap();
         run(&repo, &["init", "-q"]).expect("git init");
-        // One path is tracked, so git names what is left one by one instead of answering for the
-        // folder as a whole — which is what puts a path in front of the parser at all.
         run(&app, &["add", "keep.txt"]).expect("git add");
 
         let repo_of_app = repo_of(&app).expect("the folder is inside a repository");
         assert_eq!(repo_of_app.prefix, "app/", "git answers from its own root, not from the folder");
 
-        let out = run(&app, &["--no-optional-locks", "status", "--porcelain=v1", "-z", "--", "."])
-            .expect("git status");
+        let out = run(&app, &STATUS).expect("git status");
         let mut named: Vec<String> =
             rows(&out, &repo_of_app.prefix).iter().map(|row| row.path.join("/")).collect();
         named.sort();
         assert_eq!(named, vec!["keep.txt".to_string(), "日本語.txt".to_string()]);
+    }
+
+    /// What `-uall` is asked for (`AMB-D-919`), against a real git: a folder with nothing tracked
+    /// under it comes back a file at a time instead of as one `?? app/` line, however deep the files
+    /// sit. The one folder still answered for whole is a repository of its own, which git cannot walk
+    /// into — and that is the row `is_dir` is left for.
+    #[test]
+    fn an_untracked_folder_comes_back_a_file_at_a_time() {
+        if amenbo_core::sys::git().is_none() {
+            return; // Nothing to pin on a machine with no git: every road here answers nothing.
+        }
+        let repo = amenbo_scratch::scratch("app-foldergit-untracked");
+        let app = repo.join("app");
+        std::fs::create_dir_all(app.join("sub")).unwrap();
+        std::fs::create_dir_all(app.join("nested")).unwrap();
+        std::fs::write(app.join("a.txt"), "a").unwrap();
+        std::fs::write(app.join("sub").join("b.txt"), "b").unwrap();
+        std::fs::write(app.join("nested").join("n.txt"), "n").unwrap();
+        run(&repo, &["init", "-q"]).expect("git init");
+        run(&app.join("nested"), &["init", "-q"]).expect("git init");
+
+        let prefix = repo_of(&app).expect("the folder is inside a repository").prefix;
+        let out = run(&app, &STATUS).expect("git status");
+        let rows = rows(&out, &prefix);
+        let mut named: Vec<(String, bool)> =
+            rows.iter().map(|row| (row.path.join("/"), row.is_dir)).collect();
+        named.sort();
+        assert_eq!(
+            named,
+            vec![
+                ("a.txt".to_string(), false),
+                ("nested".to_string(), true),
+                ("sub/b.txt".to_string(), false),
+            ]
+        );
+        assert!(
+            !rows.iter().any(|row| row.path.is_empty()),
+            "and the bound folder is not named as a whole any more"
+        );
     }
 
     // ── where the branch stands ──────────────────────────────────────────────────────────────

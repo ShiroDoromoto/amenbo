@@ -2225,6 +2225,99 @@ pub struct FolderOversizeDto {
     pub(crate) height: Option<u32>,
 }
 
+/// A batch of what a folder-wide search has found so far (`crate::folder_search`).
+///
+/// **The answer arrives in pieces because it is found in pieces.** The first one percent of the
+/// hits is ready in 5-9 ms and the last of them a second later (`AMB-T-4917`), so a face handed the
+/// whole answer at the end would stand still through a search that was all but done at once.
+///
+/// `tag` is the face's own count of which search this is, handed to the command and given back on
+/// every event: a batch from a search the reader has already typed past is dropped rather than
+/// drawn.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSearchFoundDto {
+    /// Which folder this is about, spelled the way the caller asked for it.
+    pub(crate) root: String,
+    /// Which search it belongs to.
+    #[ts(type = "number")]
+    pub(crate) tag: u64,
+    /// The files in this batch. A file appears in one batch only, with all of its lines.
+    pub(crate) files: Vec<FolderSearchFileDto>,
+}
+
+/// One file a search found something in.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSearchFileDto {
+    /// The path under the searched folder, one name per segment - the same spelling the reading
+    /// doors take (`crate::folder_bytes::folder_read`).
+    pub(crate) path: Vec<String>,
+    /// The matching lines, in the order they stand in the file.
+    pub(crate) lines: Vec<FolderSearchLineDto>,
+    /// Whether this file holds more than is carried here - more matching lines than one file's
+    /// share, or more matches on one line than are marked. A minified bundle is one file and one
+    /// line, and it can hold thousands of either.
+    pub(crate) more: bool,
+}
+
+/// One matching line, and where on it the matches are.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSearchLineDto {
+    /// Which line of the file, counted from one.
+    pub(crate) line: u32,
+    /// Where `text` starts in the line, in UTF-16 code units. Zero unless the line was too long to
+    /// carry whole.
+    pub(crate) from: u32,
+    /// The line itself, or - where it was too long - a window of it holding the first match.
+    pub(crate) text: String,
+    /// Whether `text` is a window rather than the whole line.
+    pub(crate) cut: bool,
+    /// Every match on the line, counted from the start of the **line** and not of `text`.
+    pub(crate) spans: Vec<FolderSearchSpanDto>,
+}
+
+/// Where one match sits on its line.
+///
+/// **Counted in UTF-16 code units**, which is what a webview counts a string in: the face slices
+/// the line it is handed with these numbers, and a count in bytes or in characters would be wrong
+/// by however much of the line is Japanese or an emoji respectively.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSearchSpanDto {
+    /// Where the match starts.
+    pub(crate) at: u32,
+    /// How long it is.
+    pub(crate) length: u32,
+}
+
+/// That a search is over, and how it ended (`crate::folder_search`).
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSearchDoneDto {
+    /// Which folder this is about, spelled the way the caller asked for it.
+    pub(crate) root: String,
+    /// Which search it belongs to.
+    #[ts(type = "number")]
+    pub(crate) tag: u64,
+    /// How many files were read and looked through.
+    pub(crate) files: u32,
+    /// How many matching lines were sent.
+    pub(crate) hits: u32,
+    /// Whether the search stopped at the ceiling on the answer rather than at the end of the
+    /// folder. What is drawn is then a part of what is there, and a face that did not say so would
+    /// be telling the reader there is no more.
+    pub(crate) capped: bool,
+    /// Whether it was called off - by the reader leaving, or by their next search taking over.
+    pub(crate) stopped: bool,
+}
+
 /// What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
 ///
 /// It crosses on its own, out of a command of its own, because **no operating system puts the

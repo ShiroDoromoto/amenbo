@@ -66,6 +66,13 @@ ignore = "0.4"
 # tree with it.
 blake3 = "1"
 
+# What a word is looked for with when a whole folder is searched (`crate::folder_search`). A literal
+# is escaped into a pattern rather than searched for as bytes, so one engine answers for all three
+# switches the face offers — and a pattern whose body is a literal is searched with the same
+# `memchr` a bare literal would have used. Already in the lockfile through `tauri-utils`, so naming
+# it here adds nothing to the tree.
+regex = "1"
+
 # The pseudo-terminal a pane of the talk window is filled with: what runs in one draws full-screen,
 # so the pane is a real terminal rather than a rendering of one. wezterm's implementation, chosen
 # because it is Rust the whole way down — no build.rs, no C toolchain, no sidecar binary to ship —

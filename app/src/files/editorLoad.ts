@@ -65,6 +65,8 @@ export type Mounted = {
    * text: it travels beside it, out of the read and back into the save (`crate::folder_save`).
    */
   text(): string;
+  /** Open the panel that finds things in this file, the same one `Mod-f` opens (`./editorFind`). */
+  find(): void;
   /** Take the editor off the page. */
   close(): void;
 };
@@ -92,7 +94,7 @@ export async function mountEditor(
 ): Promise<Mounted> {
   // Fetched beside the editor, not after it: a file that appears uncoloured and then repaints reads
   // as a glitch, where one that was never coloured reads as a plain file.
-  const [{ EditorState, Compartment }, view, commands, { finding }, manners] = await Promise.all([
+  const [{ EditorState, Compartment }, view, commands, { finding, findIn }, manners] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
@@ -249,6 +251,9 @@ export async function mountEditor(
     },
     text() {
       return editor.state.doc.toString();
+    },
+    find() {
+      findIn(editor);
     },
     close() {
       stopPaste();

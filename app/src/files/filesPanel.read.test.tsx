@@ -44,6 +44,47 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
+  /** A Markdown file opens on its rendering, where there is no editor for the key that finds things
+   *  to be pressed in — so the press did nothing at all on the one kind of file an agent writes
+   *  most. Searching the rendering instead would be a second answer to where a match is and a
+   *  second road from there into changing it; the text already has both. */
+  it("turns a Markdown file to its text on the key that finds things, and opens the panel", async () => {
+    hoisted.file = aFile({ text: "# A heading\nneedle\n" });
+    await drawOpen();
+    await openFile(button("a.md"));
+    await settle();
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+    expect(hoisted.found).toBe(0);
+
+    await press(container.querySelector(".files--reading") as Element, "f", { metaKey: true });
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+    expect(last(hoisted.editing)?.text).toBe("# A heading\nneedle\n");
+    expect(hoisted.found).toBe(1);
+
+    // And it is put down again: the next editor this column puts up is not asked for a panel
+    // nobody has pressed for.
+    await click(button(t("files.read")));
+    await settle();
+    await click(button(t("files.edit")));
+    await settle();
+    expect(hoisted.found).toBe(1);
+  });
+
+  /** On a file that is already its own text there is an editor on the page, and the key is the
+   *  editor's own (`./editorFind`) — this column does not take it first. */
+  it("leaves the key alone on a file that is already text", async () => {
+    hoisted.entries[""] = [{ name: "notes.txt", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "needle\n" });
+    await drawOpen();
+    await openFile(button("notes.txt"));
+    await settle();
+
+    await press(container.querySelector(".files--reading") as Element, "f", { metaKey: true });
+    await settle();
+    expect(hoisted.found).toBe(0);
+  });
+
   /** Switching over to the rendering takes the editor off the page, and what a person typed is
    *  only in there — so it is caught on the way out, and the rendering and the editor that comes
    *  back are both drawn from what was caught. Nothing on this road warns or asks, which is why

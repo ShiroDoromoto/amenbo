@@ -85,6 +85,16 @@ function openReplace(view: EditorView): boolean {
   return true;
 }
 
+/** Open the panel, from something that is not a key.
+ *
+ * The column above reaches for this when a Markdown file is being drawn rather than edited: `Mod-f`
+ * has nothing to press there, because there is no editor on the page at all, so the column puts one
+ * up and then asks it for the panel (`./FilesPanel`).
+ */
+export function findIn(view: EditorView): void {
+  openSearchPanel(view);
+}
+
 /** Close the panel, or leave the press to whoever else wants it. */
 function shut(view: EditorView): boolean {
   if (!searchPanelOpen(view.state)) return false;

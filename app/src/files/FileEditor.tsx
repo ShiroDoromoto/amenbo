@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 import { mountEditor, type Mounted } from "./editorLoad";
 
 /** One file's text, in an editor once one has loaded. */
-export function FileEditor({ text, editable, name, onEdit, hold }: {
+export function FileEditor({ text, editable, name, onEdit, hold, findWanted, onFound }: {
   text: string;
   editable: boolean;
   name: string;
@@ -30,6 +30,17 @@ export function FileEditor({ text, editable, name, onEdit, hold }: {
   onEdit?: () => void;
   /** Handed the way to read the text back, and handed nothing when the editor goes away. */
   hold?: (read: (() => string) | null) => void;
+  /**
+   * That the column wants this file's find panel open as soon as there is an editor to open it in.
+   *
+   * **It is asked for here rather than pressed**, because the press happened where there was no
+   * editor: a Markdown file is drawn rather than edited, and `Mod-f` on the drawing reaches nothing.
+   * The column turns the file to its text and says so here; the editor loads asynchronously, so the
+   * ask has to wait for it (`./FilesPanel`).
+   */
+  findWanted?: boolean;
+  /** Told once the panel is open, so the column can put the ask down. */
+  onFound?: () => void;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const mounted = useRef<Mounted | null>(null);
@@ -37,8 +48,8 @@ export function FileEditor({ text, editable, name, onEdit, hold }: {
   // The callbacks as they are now, so the effect below does not take them as reasons to build
   // another editor: a panel that re-renders on every keystroke would otherwise rebuild it on every
   // keystroke.
-  const told = useRef({ onEdit, hold });
-  told.current = { onEdit, hold };
+  const told = useRef({ onEdit, hold, onFound });
+  told.current = { onEdit, hold, onFound };
 
   useEffect(() => {
     // A file that changed which file it is takes a new editor: read-only-ness and the language its
@@ -67,6 +78,14 @@ export function FileEditor({ text, editable, name, onEdit, hold }: {
     );
     return () => { alive = false; };
   }, [text, editable, name]);
+
+  // The column's ask, answered once there is an editor to answer it with. `drawn` is what says
+  // there is: the editor arrives asynchronously, and an ask made before it does would reach nothing.
+  useEffect(() => {
+    if (findWanted !== true || !drawn) return;
+    mounted.current?.find();
+    told.current.onFound?.();
+  }, [findWanted, drawn]);
 
   // Taking the editor down is its own effect, run when this leaves the page rather than whenever
   // the text changes — the one above replaces the text in the editor that already stands.

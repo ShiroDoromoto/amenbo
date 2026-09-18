@@ -736,6 +736,10 @@ function FileReader({
   // is to read it, and a choice that outlived the file would be a setting nobody set — one edit and
   // every Markdown file afterwards opens as source, the ones they only wanted to read included.
   const [asText, setAsText] = useState(false);
+
+  // That a reader pressed the key that finds things while this file was being drawn rather than
+  // edited. It is put down again as soon as the editor that comes up answers it (`./FileEditor`).
+  const [findWanted, setFindWanted] = useState(false);
   // The editor's text as it stood the last time the editor went away, and nothing while it stands.
   // Switching a Markdown file over to the rendering takes the editor down with it, and the text a
   // person typed is only in there (`./FileEditor`) — so it is caught on the way out and both sides
@@ -1074,6 +1078,28 @@ function FileReader({
   // leaves this face: what a record opens on is the ledger.
   const nav = useLedgerNav(onOpenLedger);
 
+  /**
+   * **The key that finds things, on a file that is being drawn rather than edited.**
+   *
+   * A Markdown file opens on its rendering, and there is no editor on the page to press this in — so
+   * the press did nothing at all, on the one kind of file an agent writes most. Here it turns the
+   * file to its text and asks the editor that comes up for its panel (`./FileEditor`).
+   *
+   * **Searching the rendering instead is a second answer to two questions the text already answers**
+   * — where a match is, and how a reader gets from one into changing it. Everything else the column
+   * takes is the column's own (`onKey`), so anything this does not want goes there.
+   */
+  const onReadingKey = (e: ReactKeyboardEvent) => {
+    const finding = (e.key === "f" || e.key === "F") && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
+    if (finding && markdown && !asText && file?.text !== undefined) {
+      e.preventDefault();
+      showAsText(true);
+      setFindWanted(true);
+      return;
+    }
+    onKey(e);
+  };
+
   // What the row under the name has on it. Named here rather than asked three times in the markup,
   // because whether the row exists at all is the same question as whether anything would be on it.
   const switchable = file?.text !== undefined && markdown;
@@ -1093,7 +1119,7 @@ function FileReader({
   );
 
   return (
-    <div className="files files--reading" tabIndex={-1} onKeyDown={onKey}>
+    <div className="files files--reading" tabIndex={-1} onKeyDown={onReadingKey}>
       {/* **The name has a row to itself, and what to do with the file has another.** The two used to
           share one, and the name was the only thing on it that could give way — every control beside
           it is as wide as its own words — so the name is what disappeared: `run.sh` came up as
@@ -1213,6 +1239,8 @@ function FileReader({
                 name={name}
                 onEdit={() => setEdited(true)}
                 hold={(read) => { typed.current = read; }}
+                findWanted={findWanted}
+                onFound={() => setFindWanted(false)}
               />
             )
         )}

@@ -391,3 +391,87 @@ describe("a project bound to several folders", () => {
     expect(container.textContent).toContain(t("files.folderGone"));
   });
 });
+
+// The tree narrowed by name: a reader looking for a file instead of opening folders one after
+// another to find it (`AMB-D-910` gives what is *inside* the files a screen of its own).
+describe("narrowing the tree by name", () => {
+  /** The names the tree is drawing, in the order they are drawn. */
+  const treeRows = () =>
+    [...container.querySelectorAll<HTMLElement>('[role="treeitem"]')]
+      .map((one) => one.dataset.key ?? "");
+
+  const box = () => container.querySelector<HTMLInputElement>(".treefind__field");
+
+  it("puts a box up on the key that finds things, and takes it down on Escape", async () => {
+    await drawOpen();
+    await settle();
+    expect(box()).toBeNull();
+
+    await press(container.querySelector(".files") as Element, "f", { metaKey: true });
+    await settle();
+    expect(box()).not.toBeNull();
+
+    await pressOn(box() as Element, "Escape");
+    await settle();
+    expect(box()).toBeNull();
+  });
+
+  it("draws what the host found, with every folder on the way down to it", async () => {
+    hoisted.named = {
+      rows: [
+        { path: ["src", "deep", "needle.txt"], isDir: false, ignored: false },
+        { path: ["needle.md"], isDir: false, ignored: false },
+      ],
+      capped: false,
+    };
+    await drawOpen();
+    await settle();
+    await press(container.querySelector(".files") as Element, "f", { metaKey: true });
+    await type(box() as HTMLInputElement, "needle");
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
+    await settle();
+
+    expect(hoisted.asked).toContain(`names:${ROOT}:needle`);
+    expect(treeRows()).toEqual(["src", "src/deep", "src/deep/needle.txt", "needle.md"]);
+  });
+
+  it("says so where nothing is called that, and where there is more than it drew", async () => {
+    hoisted.named = { rows: [], capped: false };
+    await drawOpen();
+    await settle();
+    await press(container.querySelector(".files") as Element, "f", { metaKey: true });
+    await type(box() as HTMLInputElement, "zzz");
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
+    await settle();
+    expect(container.textContent).toContain(t("files.filterNone"));
+
+    hoisted.named = {
+      rows: [{ path: ["needle.md"], isDir: false, ignored: false }],
+      capped: true,
+    };
+    await type(box() as HTMLInputElement, "n");
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
+    await settle();
+    expect(container.textContent).toContain(t("files.filterCapped"));
+  });
+
+  it("gives the whole tree back when the box goes away", async () => {
+    hoisted.named = {
+      rows: [{ path: ["needle.md"], isDir: false, ignored: false }],
+      capped: false,
+    };
+    await drawOpen();
+    await settle();
+    const whole = treeRows();
+
+    await press(container.querySelector(".files") as Element, "f", { metaKey: true });
+    await type(box() as HTMLInputElement, "needle");
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
+    await settle();
+    expect(treeRows()).toEqual(["needle.md"]);
+
+    await pressOn(box() as Element, "Escape");
+    await settle();
+    expect(treeRows()).toEqual(whole);
+  });
+});

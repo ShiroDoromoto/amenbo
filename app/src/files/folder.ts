@@ -17,7 +17,8 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderGitDto, FolderRestoredDto, FolderTrashedDto, GitAskDto, GitBranchDto, GitCommitDto,
+  FolderGitDto, FolderNamesDto, FolderRestoredDto, FolderTrashedDto, GitAskDto, GitBranchDto,
+  GitCommitDto,
   GitFileDto, GitStashDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
@@ -37,6 +38,21 @@ export async function folderEntries(
 ): Promise<FolderEntryDto[]> {
   if (!inTauri()) return [];
   return await invoke<FolderEntryDto[]>("folder_entries", { projectId, root, path });
+}
+
+/**
+ * Every name under one bound folder that holds `query`, wherever it stands in it.
+ *
+ * It looks past what is open, which is the whole of what it is for: a reader narrowing a tree is
+ * doing it instead of opening folders to look (`crate::folder::folder_names`).
+ */
+export async function folderNames(
+  projectId: number,
+  root: string,
+  query: string,
+): Promise<FolderNamesDto> {
+  if (!inTauri()) return { rows: [], capped: false };
+  return await invoke<FolderNamesDto>("folder_names", { projectId, root, query });
 }
 
 /**

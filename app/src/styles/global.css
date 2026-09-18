@@ -1869,6 +1869,27 @@ input[type="color"] {
 .gitask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 
 /* ---------- the two halves of the panel ---------- */
+/* The box the tree is narrowed with (`../files/FolderTree`). Above the tree and not in it: what it
+   narrows is everything drawn below, and a box that scrolled away with the rows would be one a
+   reader could not get back to. */
+.treefind { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-1); }
+.treefind__field {
+  flex: 1 1 auto; min-width: 4ch;
+  padding: 2px var(--s-1);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-sunken); color: var(--c-text);
+  font: inherit; font-size: var(--fs-xs);
+}
+.treefind__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
+.treefind__close {
+  flex: 0 0 auto;
+  min-width: 20px; padding: 2px var(--s-1);
+  border: 1px solid transparent; border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text-muted);
+  font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
+}
+.treefind__close:hover { color: var(--c-text); background: var(--c-sunken); }
+
 /* The row above whichever half is up. It holds the way out and nothing else: the switch between
    files and the page written on is the terminal face's top row, which is where it can be reached
    from whether the panel is open or closed (`app/src/files/FilesPanel.tsx`). */

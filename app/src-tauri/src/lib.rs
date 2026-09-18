@@ -657,6 +657,7 @@ pub fn run() {
       folder_git_askpass::folder_git_askpass_said,
       folder_bytes::folder_read,
       folder_bytes::folder_encodings,
+      folder::folder_names,
       folder::folder_open_file,
       folder::folder_reveal_file,
       dropped::drop_effect,

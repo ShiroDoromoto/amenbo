@@ -39,6 +39,7 @@ import { FileDiff } from "./FileDiff";
 import { GitHistory, type At } from "./GitHistory";
 import { GitDiff, type DiffPick } from "./GitDiff";
 import { MemoPage } from "./MemoPage";
+import { SearchPanel } from "./SearchPanel";
 import { Icon } from "../components/Icon";
 import type { SideTab } from "../talk/columns";
 
@@ -76,7 +77,7 @@ export type Typed = { text: string; edited: boolean; seen: string | undefined };
 export function FilesPanel({
   projectId, tab, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone, onClose,
   wide, onWide, gitRoot = null, gitPrefix = "", history = false, historyOnly = null, onHistoryOnly,
-  diff = false, diffPick = null,
+  diff = false, diffPick = null, search = false, searchRoot = null, onOpenAt, goTo = null, onWent,
   onFileHistory, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
@@ -157,6 +158,22 @@ export function FilesPanel({
   onOpenLedger?: () => void;
   /** Hand the file being read to the pane the reader is working in (`../shell/TerminalFace`). */
   onHandOver?: (wholes: string[]) => void;
+  /** Whether the folder-wide search has been opened. The tab stands from then on, the way the
+   *  history's does: the column says nothing about it until somebody has asked (`AMB-D-905`). */
+  search?: boolean;
+  /**
+   * The folder the window is on, which is what a folder-wide search is about (`AMB-D-905`).
+   *
+   * **Not `gitRoot`**, which the history moves off the window's own folder while it is narrowed to
+   * one file's. What is searched is what the selector in the rail says, always.
+   */
+  searchRoot?: string | null;
+  /** Open one file at a line, which is what a hit in that search is (`./SearchPanel`). */
+  onOpenAt?: (at: OpenFile, line: number) => void;
+  /** The file to take to a line as soon as its editor is up, by its key (`openKey`), or nothing. */
+  goTo?: { key: string; line: number } | null;
+  /** Told once it has been taken there, so the face can put the ask down. */
+  onWent?: () => void;
 }) {
   // The bin, for the file on the screen. The tree in the rail holds one of its own for the rows
   // picked out there: what is shared is how a press behaves, not one question for the two of them
@@ -325,10 +342,25 @@ export function FilesPanel({
       onHistory={() => onTab("history")}
       diff={diff ? tab === "diff" : null}
       onDiff={() => onTab("diff")}
+      // The one face here that is about the folder and is opened by a key rather than by a press
+      // in the rail. It stands from the moment it is opened, so a reader who walked off to a hit
+      // has the list of them to come back to.
+      search={search ? tab === "search" : null}
+      onSearch={() => onTab("search")}
       onPick={(one) => { onTab("files"); onPick(one); }}
       onCloseTab={(one) => { void letGo(one, () => onCloseTab(one)); }}
     />
   );
+
+  if (projectId !== null && tab === "search") {
+    return (
+      <div className="files" tabIndex={-1} onKeyDown={onKey}>
+        {top}
+        {tabs}
+        <SearchPanel projectId={projectId} root={searchRoot} onOpen={onOpenAt ?? (() => {})} />
+      </div>
+    );
+  }
 
   if (projectId !== null && tab === "diff") {
     return (
@@ -431,6 +463,8 @@ export function FilesPanel({
             : undefined,
         }}
         onEdited={(edited) => setUnsaved(edited ? openKey(reading) : null)}
+        goTo={goTo?.key === openKey(reading) ? goTo.line : null}
+        onWent={onWent}
       />
     </div>
   );
@@ -457,7 +491,8 @@ export function FilesPanel({
  * row would be a face saying which tab is on to a reader who cannot see it.
  */
 function FileTabs({
-  open, showing, unsaved, memo, onMemo, history, onHistory, diff, onDiff, onPick, onCloseTab,
+  open, showing, unsaved, memo, onMemo, history, onHistory, diff, onDiff, search, onSearch,
+  onPick, onCloseTab,
 }: {
   open: readonly OpenFile[];
   showing: OpenFile | null;
@@ -474,6 +509,10 @@ function FileTabs({
    *  the history's tab gives (`./GitDiff`). */
   diff: boolean | null;
   onDiff: () => void;
+  /** Whether the folder-wide search is on top, and `null` where nobody has opened it — the same
+   *  answer the two above give (`./SearchPanel`). */
+  search: boolean | null;
+  onSearch: () => void;
   onPick: (at: OpenFile) => void;
   onCloseTab: (at: OpenFile) => void;
 }) {
@@ -504,7 +543,7 @@ function FileTabs({
     const watch = new ResizeObserver(measure);
     watch.observe(row);
     return () => watch.disconnect();
-  }, [open, memo, history, diff, unsaved.size]);
+  }, [open, memo, history, diff, search, unsaved.size]);
 
   // A list opened at a control that has since gone is one nothing can close in the way it was
   // opened, so the row that took the control away takes the list with it.
@@ -557,6 +596,20 @@ function FileTabs({
               onClick={onDiff}
             >
               {t("git.diff")}
+            </button>
+          </span>
+        )}
+        {/* And beside those two, the one that is opened by a key rather than by a press in the
+            rail. It is about the folder like they are, so it stands with them and before the files
+            a reader opened. */}
+        {search !== null && (
+          <span className={`files__tab${search ? " files__tab--on" : ""}`}>
+            <button
+              className="files__tabname"
+              aria-current={search ? "true" : undefined}
+              onClick={onSearch}
+            >
+              {t("files.search")}
             </button>
           </span>
         )}
@@ -655,7 +708,7 @@ function changedUnderneath(e: unknown): boolean {
 /** One file, as far as a panel can show it. */
 function FileReader({
   projectId, root, path, wasTyped, onTyped, onBack, onOpenLedger, onTrash, onKey, aside,
-  onHandOver, onEdited, git,
+  onHandOver, onEdited, git, goTo, onWent,
 }: {
   projectId: number;
   root: string;
@@ -676,6 +729,10 @@ function FileReader({
   aside: ReactNode;
   /** Hand this file to the pane being worked in, where there is one (`./FilesPanel`). */
   onHandOver?: (wholes: string[]) => void;
+  /** The line to take the editor to as soon as it is up, or nothing (`./SearchPanel`). */
+  goTo?: number | null;
+  /** Told once it has been taken there. */
+  onWent?: () => void;
   /**
    * Told whether this file is holding something that is not on the disk, so the row of tabs above
    * can mark it (`./FilesPanel`).
@@ -740,6 +797,13 @@ function FileReader({
   // That a reader pressed the key that finds things while this file was being drawn rather than
   // edited. It is put down again as soon as the editor that comes up answers it (`./FileEditor`).
   const [findWanted, setFindWanted] = useState(false);
+
+  // **A line asked for is asked of the text, so the file is turned to it.** A hit in the
+  // folder-wide search names a line, and a Markdown file opens on its rendering where there are no
+  // lines to go to (`./SearchPanel`).
+  useEffect(() => {
+    if (goTo !== null && goTo !== undefined) setAsText(true);
+  }, [goTo]);
   // The editor's text as it stood the last time the editor went away, and nothing while it stands.
   // Switching a Markdown file over to the rendering takes the editor down with it, and the text a
   // person typed is only in there (`./FileEditor`) — so it is caught on the way out and both sides
@@ -1241,6 +1305,8 @@ function FileReader({
                 hold={(read) => { typed.current = read; }}
                 findWanted={findWanted}
                 onFound={() => setFindWanted(false)}
+                goTo={goTo ?? null}
+                onWent={onWent}
               />
             )
         )}

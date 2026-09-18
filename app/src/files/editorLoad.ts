@@ -67,6 +67,15 @@ export type Mounted = {
   text(): string;
   /** Open the panel that finds things in this file, the same one `Mod-f` opens (`./editorFind`). */
   find(): void;
+  /**
+   * Put the caret on one line, counted from one, and bring it into view.
+   *
+   * What asks is a hit in the folder-wide search (`./SearchPanel`): the file it names is opened and
+   * then taken to the line it was found on. A line past the end of the file is the end of it — the
+   * file moved between the search and the press, and the nearest thing to what was asked is better
+   * than refusing to move at all.
+   */
+  goTo(line: number): void;
   /** Take the editor off the page. */
   close(): void;
 };
@@ -254,6 +263,15 @@ export async function mountEditor(
     },
     find() {
       findIn(editor);
+    },
+    goTo(line) {
+      const at = editor.state.doc.line(Math.min(Math.max(line, 1), editor.state.doc.lines));
+      editor.dispatch({
+        selection: { anchor: at.from },
+        effects: EditorView.scrollIntoView(at.from, { y: "center" }),
+        userEvent: "panel",
+      });
+      editor.focus();
     },
     close() {
       stopPaste();

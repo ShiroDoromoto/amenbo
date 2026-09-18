@@ -10,7 +10,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FolderSearchDoneDto, FolderSearchFoundDto } from "../bindings/bindings";
-import { t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import type { OpenFile } from "./FilesPanel";
 
 const hoisted = vi.hoisted(() => ({
@@ -20,6 +20,11 @@ const hoisted = vi.hoisted(() => ({
   stopped: [] as number[],
   /** What the host would refuse the next ask with, or nothing. */
   refuse: null as unknown,
+  /** Every replacement asked for, in order. */
+  replaced: [] as { files: unknown[]; withText: string }[],
+  /** What the host answers a replacement with, or what it refuses one with. */
+  wrote: { done: [], skipped: [] } as unknown,
+  refuseWrite: null as unknown,
   /** The two listeners the screen puts on. */
   found: null as ((one: FolderSearchFoundDto) => void) | null,
   done: null as ((one: FolderSearchDoneDto) => void) | null,
@@ -35,6 +40,11 @@ vi.mock("./folder", () => ({
     if (hoisted.refuse !== null) throw hoisted.refuse;
   },
   folderSearchStop: async (tag: number) => { hoisted.stopped.push(tag); },
+  folderReplace: async (_projectId: number, _root: string, files: unknown[], withText: string) => {
+    hoisted.replaced.push({ files, withText });
+    if (hoisted.refuseWrite !== null) throw hoisted.refuseWrite;
+    return hoisted.wrote;
+  },
   onFolderSearchFound: async (take: (one: FolderSearchFoundDto) => void) => {
     hoisted.found = take;
     return () => { hoisted.found = null; };
@@ -94,6 +104,20 @@ const oneFile = (tag: number): FolderSearchFoundDto => ({
   }],
 });
 
+/** Two files' worth, which is what makes a replacement one the screen asks about. */
+const twoFiles = (tag: number): FolderSearchFoundDto => ({
+  ...oneFile(tag),
+  files: [
+    ...oneFile(tag).files,
+    {
+      path: ["b.txt"],
+      digest: "other",
+      more: false,
+      lines: [{ line: 1, from: 0, text: "needle up top", cut: false, spans: [{ at: 0, length: 6 }] }],
+    },
+  ],
+});
+
 const over = (tag: number, some: Partial<FolderSearchDoneDto> = {}): FolderSearchDoneDto => ({
   root: ROOT, tag, files: 1, hits: 1, capped: false, stopped: false, ...some,
 });
@@ -102,6 +126,9 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.stopped = [];
   hoisted.refuse = null;
+  hoisted.replaced = [];
+  hoisted.wrote = { done: [], skipped: [] };
+  hoisted.refuseWrite = null;
   hoisted.found = null;
   hoisted.done = null;
   container = document.createElement("div");
@@ -206,6 +233,111 @@ describe("looking through the whole folder", () => {
     });
     expect(container.textContent).not.toContain(t("files.searchTreeNote"));
     await walked();
+  });
+
+  it("hides what it would write until the reader asks for it", async () => {
+    await draw();
+    expect(container.querySelector(".search__does")).toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-expanded="false"]')?.click();
+    });
+    expect(container.querySelector(".search__does")).not.toBeNull();
+    // Said where it is about to happen: the question below is not asked at all for one file.
+    expect(container.textContent).toContain(t("files.searchNoUndo"));
+  });
+
+  it("writes only what is left in the list, and asks first where that is more than one file",
+    async () => {
+      await draw();
+      await type("needle");
+      await walked();
+      const tag = hoisted.asked[0]?.tag ?? 0;
+      await act(async () => { hoisted.found?.(twoFiles(tag)); });
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[aria-expanded="false"]')?.click();
+      });
+
+      // Two files, so the press asks rather than writing.
+      await act(async () => { container.querySelector<HTMLButtonElement>(".search__does")?.click(); });
+      expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(hoisted.replaced).toEqual([]);
+
+      await act(async () => {
+        [...document.body.querySelectorAll<HTMLButtonElement>(".trashask__action")][0]?.click();
+      });
+      expect(hoisted.replaced).toHaveLength(1);
+      expect(hoisted.replaced[0]?.files).toHaveLength(2);
+    });
+
+  it("leaves out what the reader took out, and stops asking once that is one file", async () => {
+    await draw();
+    await type("needle");
+    await walked();
+    await act(async () => { hoisted.found?.(twoFiles(hoisted.asked[0]?.tag ?? 0)); });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-expanded="false"]')?.click();
+    });
+
+    // The whole of the second file, taken out of the list.
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>(".search__head .search__drop")][1]?.click();
+    });
+    expect(container.querySelectorAll(".search__file")).toHaveLength(1);
+
+    // One file now, so the press writes without asking.
+    await act(async () => { container.querySelector<HTMLButtonElement>(".search__does")?.click(); });
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(hoisted.replaced).toHaveLength(1);
+    expect(hoisted.replaced[0]?.files).toHaveLength(1);
+  });
+
+  it("says what a run came to, and goes on saying it while the list is asked again", async () => {
+    hoisted.wrote = {
+      done: [{ path: ["src", "a.rs"], hits: 1, digest: "after" }],
+      skipped: [{ path: ["b.txt"], why: "changed" }],
+    };
+    await draw();
+    await type("needle");
+    await walked();
+    await act(async () => { hoisted.found?.(twoFiles(hoisted.asked[0]?.tag ?? 0)); });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-expanded="false"]')?.click();
+    });
+    await act(async () => { container.querySelector<HTMLButtonElement>(".search__does")?.click(); });
+    await act(async () => {
+      [...document.body.querySelectorAll<HTMLButtonElement>(".trashask__action")][0]?.click();
+    });
+
+    expect(container.textContent).toContain(tf("files.searchReplaced", { hits: 1, files: 1 }));
+    expect(container.textContent).toContain(tf("files.searchLeftAlone", { files: 1 }));
+    // The run asks for the word again over what is there now, and what it came to is still said:
+    // a line gone before it was read is a line nobody was told.
+    await walked();
+    expect(container.textContent).toContain(tf("files.searchReplaced", { hits: 1, files: 1 }));
+  });
+
+  it("says one file nothing may write to stopped every file in the run", async () => {
+    // The refusal the host makes when one file of a run cannot be written to. It carries a code,
+    // so what a reader is shown is this layer's own sentence for it rather than the English one.
+    hoisted.refuseWrite = {
+      code: "folder_replace_read_only",
+      message_en: "2 of these files cannot be written to",
+      fields: { count: 2, paths: ["src/a.rs", "b.txt"] },
+    };
+    await draw();
+    await type("needle");
+    await walked();
+    await act(async () => { hoisted.found?.(twoFiles(hoisted.asked[0]?.tag ?? 0)); });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-expanded="false"]')?.click();
+    });
+    await act(async () => { container.querySelector<HTMLButtonElement>(".search__does")?.click(); });
+    await act(async () => {
+      [...document.body.querySelectorAll<HTMLButtonElement>(".trashask__action")][0]?.click();
+    });
+    expect(container.textContent).toContain(errText(hoisted.refuseWrite));
+    expect(container.querySelector(".search__none")).not.toBeNull();
   });
 
   it("calls the walk off when the reader leaves the screen", async () => {

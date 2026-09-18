@@ -407,6 +407,26 @@ export async function settle() {
 }
 
 /**
+ * Wait until what was asked for has happened, rather than for a fixed tick.
+ *
+ * **One tick is a guess about how long a road is**, and the roads out of this panel are not all one
+ * tick long. A drop's is the longest: what the host says the reader was holding is asked for with a
+ * real `invoke` (`../core/hostDrop`), and the first `invoke` a worker makes pays for the dynamic
+ * import inside it (`../core/ipc`). Under the whole suite, where every file has a worker of its own,
+ * that import can land after the tick — and the drop then reaches the panel after the test has
+ * already looked. The test passes on its own and fails one run in three, saying nothing about the
+ * code (`AMB-T-5063`).
+ *
+ * So the wait is on the thing being waited for. Nothing is thrown when it never comes: what the test
+ * asserts next says that better than a timeout would.
+ */
+export async function settleUntil(ready: () => boolean, tries = 100): Promise<void> {
+  for (let n = 0; n < tries && !ready(); n += 1) {
+    await act(async () => { await new Promise((r) => setTimeout(r, 1)); });
+  }
+}
+
+/**
  * Hold the host's refusal of a name back, and hand over the way to let it arrive.
  *
  * The order of the two is the whole of what the refusal test is about: the box blurs while the

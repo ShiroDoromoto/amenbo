@@ -14,7 +14,7 @@ import { act } from "react";
 import { describe, expect, it } from "vitest";
 import {
   aFile, button, click, container, draw, drawOpen, hoisted, labelOf, openFile, press, pressable,
-  ROOT, root, settle, standUpAgain, tell,
+  ROOT, root, settle, settleUntil, standUpAgain, tell,
 } from "./filesPanelKit";
 import { formatNumber, t, tf } from "../core/i18n";
 import { subscribeNotice } from "../core/notice";
@@ -512,6 +512,7 @@ describe("the file face", () => {
     });
 
     await drop(button("main.rs"), ["/Users/someone/Desktop/note.md"]);
+    await settleUntil(() => hoisted.imported.length > 0);
     expect(hoisted.imported).toEqual([{
       paths: ["/Users/someone/Desktop/note.md"],
       toRoot: ROOT,
@@ -544,6 +545,7 @@ describe("the file face", () => {
     // The machine's own words, carried through as they came: no code, so nothing here rewrites them.
     hoisted.carried = { arrived: [], stopped: { name: "note.md", code: null, why: "no room left" } };
     await drop(["/a/note.md"]);
+    await settleUntil(() => said.length > 0);
     expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
 
     hoisted.carried = {
@@ -551,6 +553,7 @@ describe("the file face", () => {
       stopped: { name: "note.md", code: null, why: "no room left" },
     };
     await drop(["/a/one.md", "/a/note.md"]);
+    await settleUntil(() => said.length > 1);
     expect(said[1]).toBe(
       tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
     );
@@ -558,6 +561,9 @@ describe("the file face", () => {
     // A carry that got the whole way through says nothing at all.
     hoisted.carried = { arrived: ["one.md"], stopped: null };
     await drop(["/a/one.md"]);
+    // Nothing to wait for here — a carry that got the whole way through says nothing — so what
+    // this waits out is the road itself, once.
+    await settle();
     expect(said).toHaveLength(2);
     stop();
   });
@@ -581,6 +587,7 @@ describe("the file face", () => {
       stopped: { name: "note.md", code: "taken", why: "note.md is already there" },
     };
     await drop(["/a/note.md"]);
+    await settleUntil(() => said.length > 0);
     expect(said).toEqual([
       tf("files.dropStopped", { name: "note.md", why: t("files.stoppedTaken") }),
     ]);

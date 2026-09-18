@@ -8,7 +8,7 @@ import { act } from "react";
 import { describe, expect, it } from "vitest";
 import {
   aFile, button, click, clickWith, container, draw, drawOpen, goRoot, hoisted, holdRefusal, leave,
-  menuOn, namebox, openFile, pickedIn, press, pressOn, ROOT, rowFor, settle, tell, type,
+  menuOn, namebox, openFile, pickedIn, press, pressOn, ROOT, rowFor, settle, settleUntil, tell, type,
 } from "./filesPanelKit";
 import { type CmdError, errLabel, t } from "../core/i18n";
 
@@ -154,6 +154,9 @@ describe("a project bound to several folders", () => {
     expect(container.querySelectorAll(".files__into")).toHaveLength(1);
 
     await at(button("src"), "drop");
+    // Waited for rather than ticked past: what the host was holding is asked for with a real
+    // `invoke` on the way to the panel (`./filesPanelKit`).
+    await settleUntil(() => hoisted.imported.length > 0);
     expect(hoisted.imported[0]?.toRoot).toBe(ROOT);
     expect(hoisted.imported[0]?.to).toEqual(["src"]);
   });

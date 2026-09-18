@@ -111,6 +111,8 @@ const hoisted = vi.hoisted(() => ({
   /** The answers waiting for those questions, in order. An empty list is a reader who says yes —
    *  which is what a test about anything else wants. */
   answers: [] as boolean[],
+  /** How many times an editor was asked for its find panel (`./FileEditor`). */
+  found: 0,
 }));
 
 // Handed on in a statement of its own: what `vi.hoisted` returns is moved above this file's imports,
@@ -132,6 +134,7 @@ vi.mock("./editorLoad", () => ({
     return {
       show(next: string) { hoisted.shown.push(next); drawn.textContent = next; },
       text() { return drawn.textContent ?? ""; },
+      find() { hoisted.found += 1; },
       close() { drawn.remove(); hoisted.typing = null; },
     };
   },
@@ -708,8 +711,8 @@ export const type = (box: HTMLInputElement, text: string) => act(async () => {
   await new Promise((r) => setTimeout(r, 0));
 });
 
-export const press = (el: Element, key: string) => act(async () => {
-  el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+export const press = (el: Element, key: string, held: KeyboardEventInit = {}) => act(async () => {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...held }));
   await new Promise((r) => setTimeout(r, 0));
 });
 
@@ -758,6 +761,7 @@ beforeEach(() => {
   hoisted.refuseRead = null;
   hoisted.confirmed = [];
   hoisted.answers = [];
+  hoisted.found = 0;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();

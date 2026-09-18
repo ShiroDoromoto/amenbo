@@ -1,0 +1,134 @@
+# Coming down to the names holding a word, instead of opening folders to look for them.
+#
+# A tree fetches one level at a time — the names under a folder arrive when the folder is opened —
+# which is what keeps a large repository drawable, and also what makes finding a file by name a
+# matter of guessing which folder it is in. This road is the way past that guess: a word typed above
+# the tree, and every name holding it drawn wherever in the folder it lives.
+#
+# ── Why the file is read as absent first ─────────────────────────────────────────────────────────
+# **The reach past what is open is the whole of the road.** A file already drawn on the screen would
+# still be drawn after a word was typed, and a road that only read it afterwards would pass on a
+# filter that did nothing at all. So the file the word is in sits a level down in a folder nobody
+# opened, and the road reads that it is not on the screen before it types anything.
+#
+# ── Why a second file is read as gone ────────────────────────────────────────────────────────────
+# The other half of narrowing is what it leaves out. A filter that drew every name in the folder
+# would satisfy the reading above and be no filter, so the road also reads that the name without the
+# word has gone from a screen it was on a moment earlier.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# `find` at a shell answers this, and answers it well. What it does not do is leave the reader
+# standing on the row, one press from opening it, which is what the tree is for.
+id: narrow-the-tree-to-the-names-that-hold-a-word
+title: A word typed above the tree brings it down to the names holding it, reaching into folders nobody opened
+description: >
+  Open the terminal face on a project whose folder holds files a level down, and unfold the tree to
+  its first level only. Read that a file in a folder nobody opened is not on the screen. Press the
+  key that finds things with the keyboard standing on the tree, type part of that file's name, and
+  read it standing there — with the folder on the way to it drawn open above. A name without the
+  word has gone.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # A level down, in a folder the road never opens. That is what makes the filter's reach readable.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # And a name at the top, holding none of the word typed below. It is what the narrowing has to take
+  # away.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: pruning.md
+      content: SCENARIO cut back the old wood before the sap rises
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The first level and no further. Nothing below `notes` has been fetched, which is the state the
+  # reading under this one is about.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: pruning.md
+      section: tree
+
+  # Not on the screen, because the folder holding it was never opened. Without this reading the one
+  # after the filter would pass on a filter that did nothing.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+      present: false
+
+  - type: action
+    domain: files
+    op: filter
+    with:
+      what: water
+
+  # Reached into a folder nobody pressed.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  # And the folder on the way to it, drawn open above the name rather than left for the reader to
+  # find: a row with no path over it says which file it is only by luck.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: notes
+      section: tree
+
+  # The half that makes it a narrowing. This name was on the screen a moment ago and holds none of
+  # what was typed, so it is gone.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: pruning.md
+      section: tree
+      present: false

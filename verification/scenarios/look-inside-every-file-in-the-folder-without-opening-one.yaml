@@ -1,0 +1,117 @@
+# Asking what is inside a folder, and landing on the line that answered.
+#
+# The two roads beside this one are about a file on the screen and about names on the tree. This is
+# the third question and the one neither of them can reach: what is *in* the files, in all of them,
+# including the ones nobody has opened and would not have thought to.
+#
+# ── Why the list is read for a line and not only for a file ──────────────────────────────────────
+# A list of file names is what a reader gets from a search that only counted. What makes this one
+# worth a screen is that each hit carries the line it is on and the words around it, so the reader
+# decides which of them to open from the list itself rather than by opening all of them. The road
+# reads a hit's own words for that reason: a heading alone would pass on a list that had lost them.
+#
+# ── Why the press is walked, and read afterwards ─────────────────────────────────────────────────
+# The list is a way in or it is a report. Pressing a hit puts the file in the column at that line,
+# and the reading after the press is of the file rather than of the list — which is the difference
+# between the two.
+#
+# ── Why two files hold the word ──────────────────────────────────────────────────────────────────
+# One would prove the search runs. Two prove it kept walking after it found something, which is the
+# part a reader is trusting when they stop opening folders by hand.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# `grep -rn` answers the same question and is older than any of this. What it does not do is hand the
+# reader the file open at that line in the column they are already working in.
+id: look-inside-every-file-in-the-folder-without-opening-one
+title: A word looked for across the whole folder comes back as lines, and pressing one opens its file there
+description: >
+  Open the terminal face on a project whose folder holds the same word in two files, one of them a
+  level down. Press the key that looks through a whole folder, type the word, and read both files in
+  the list that comes back — the second one for the words on the line it was found on, not just for
+  its name. Press that line, and the file is in the column with the line on the screen.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # A level down, which is the half a reader cannot do by opening what is in front of them. The word
+  # stands on the second line, so the number the press names is a number the list had to report.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/benches.md
+      content: |
+        SCENARIO the bench by the door
+        SCENARIO the seedlings on it are moved out in May
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: search
+    with:
+      what: seedlings
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+
+  # The second file, read for the words on the line rather than for its name. A list that had kept
+  # the names and lost the lines would pass the reading above and fail this one — and it is the lines
+  # a reader chooses from.
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: notes/benches.md
+      line: 2
+      shows: the seedlings on it are moved out in May
+
+  - type: action
+    domain: files
+    op: search-open
+    with:
+      name: notes/benches.md
+      line: 2
+
+  # Read off the file in the column, not off the list. This is the step that says the hits are a way
+  # in rather than a report.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings on it are moved out in May

@@ -3278,12 +3278,16 @@ impl Instructor {
             ),
             (Domain::Files, "search") => {
                 let what = req(with, "what")?;
+                // The box the ignored half is asked for by, said as the state to end in rather than
+                // as a press. The screen stands once it is opened, so a road looking through the
+                // same folder twice comes back to a box that is already ticked or already not — and
+                // a line that said "tick it" would untick it on the second of the two.
                 let also = match with.get("ignored").and_then(|v| v.as_bool()) {
-                    Some(true) => " Then tick the box under it that says the files the repository ignores are searched too; the folder is looked through again with them in it.",
-                    _ => "",
+                    Some(true) => " Under that box stands one saying the files the repository ignores are searched too, and it has to end up ticked: tick it if a press before this one has not already, and the folder is looked through again with them in it.",
+                    _ => " Under that box stands one saying the files the repository ignores are searched too, and it has to end up unticked: untick it if a press before this one left it ticked.",
                 };
                 format!(
-                    "Press the key this machine looks through a whole folder with — ⌘⇧F on a Mac, Ctrl+Shift+F elsewhere. It can be pressed from anywhere on this face. The column across the panes opens on a screen of its own, with the keyboard already in its box. Type `{what}` into it and wait for the list under it to stand still.{also}"
+                    "Press the key this machine looks through a whole folder with — ⌘⇧F on a Mac, Ctrl+Shift+F elsewhere. It can be pressed from anywhere on this face. The column across the panes opens on a screen of its own, with the keyboard already in its box. Empty that box of anything a search before this one left in it, type `{what}` into it, and wait for the list under it to stand still.{also}"
                 )
             },
             (Domain::Files, "search-open") => format!(

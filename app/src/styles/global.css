@@ -1890,6 +1890,62 @@ input[type="color"] {
 }
 .treefind__close:hover { color: var(--c-text); background: var(--c-sunken); }
 
+/* Looking through the whole folder (`../files/SearchPanel`). It is a face of the reading column, so
+   it scrolls in the column and stands under the same row of tabs the files do. */
+.search { display: flex; flex-direction: column; gap: var(--s-2); min-height: 0; }
+.search__row { display: flex; align-items: center; gap: var(--s-1); }
+.search__field {
+  flex: 1 1 auto; min-width: 4ch;
+  padding: 2px var(--s-1);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-sunken); color: var(--c-text);
+  font: inherit; font-size: var(--fs-xs);
+}
+.search__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
+/* The same three marks the editor's own panel draws, so the two read as the same pair of switches
+   rather than as two screens that happen to both search (`../files/editorFind`). */
+.search__switch {
+  flex: 0 0 auto;
+  min-width: 20px; padding: 2px var(--s-1);
+  border: 1px solid transparent; border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text-muted);
+  font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
+}
+.search__switch:hover { color: var(--c-text); background: var(--c-sunken); }
+.search__switch[aria-pressed="true"] {
+  background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text);
+}
+.search__ignored {
+  display: flex; align-items: center; gap: var(--s-1);
+  font-size: var(--fs-xs); color: var(--c-text);
+}
+.search__note, .search__none, .search__count {
+  margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.search__files { margin: 0; padding: 0; list-style: none; min-height: 0; }
+.search__file { margin-bottom: var(--s-2); }
+/* The path is the head of the group, cut at the end it can afford to lose: what tells two files of
+   the same name apart is the folders above them. */
+.search__path {
+  margin: 0;
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}
+.search__lines { margin: 0; padding: 0; list-style: none; }
+/* One hit, drawn as the press it is: what it opens is the file at that line. */
+.search__hit {
+  display: flex; gap: var(--s-2); width: 100%;
+  padding: 1px var(--s-1);
+  border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text);
+  font-family: var(--font-mono); font-size: var(--fs-xs);
+  text-align: left; cursor: pointer;
+}
+.search__hit:hover { background: var(--c-sunken); }
+.search__lineno { flex: 0 0 auto; min-width: 4ch; text-align: right; color: var(--c-text-faint); }
+.search__text { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.search__mark { background: var(--c-accent-weak); color: inherit; }
+
 /* The row above whichever half is up. It holds the way out and nothing else: the switch between
    files and the page written on is the terminal face's top row, which is where it can be reached
    from whether the panel is open or closed (`app/src/files/FilesPanel.tsx`). */

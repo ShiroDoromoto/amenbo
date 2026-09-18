@@ -22,7 +22,9 @@ import { useEffect, useRef, useState } from "react";
 import { mountEditor, type Mounted } from "./editorLoad";
 
 /** One file's text, in an editor once one has loaded. */
-export function FileEditor({ text, editable, name, onEdit, hold, findWanted, onFound }: {
+export function FileEditor({
+  text, editable, name, onEdit, hold, findWanted, onFound, goTo, onWent,
+}: {
   text: string;
   editable: boolean;
   name: string;
@@ -41,6 +43,10 @@ export function FileEditor({ text, editable, name, onEdit, hold, findWanted, onF
   findWanted?: boolean;
   /** Told once the panel is open, so the column can put the ask down. */
   onFound?: () => void;
+  /** The line to put the caret on as soon as there is an editor, or nothing (`./SearchPanel`). */
+  goTo?: number | null;
+  /** Told once it has been taken there, so the column can put that ask down too. */
+  onWent?: () => void;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const mounted = useRef<Mounted | null>(null);
@@ -48,8 +54,8 @@ export function FileEditor({ text, editable, name, onEdit, hold, findWanted, onF
   // The callbacks as they are now, so the effect below does not take them as reasons to build
   // another editor: a panel that re-renders on every keystroke would otherwise rebuild it on every
   // keystroke.
-  const told = useRef({ onEdit, hold, onFound });
-  told.current = { onEdit, hold, onFound };
+  const told = useRef({ onEdit, hold, onFound, onWent });
+  told.current = { onEdit, hold, onFound, onWent };
 
   useEffect(() => {
     // A file that changed which file it is takes a new editor: read-only-ness and the language its
@@ -86,6 +92,14 @@ export function FileEditor({ text, editable, name, onEdit, hold, findWanted, onF
     mounted.current?.find();
     told.current.onFound?.();
   }, [findWanted, drawn]);
+
+  // The same shape as the ask above, and for the same reason: the editor arrives asynchronously, so
+  // a line asked for before it does would be asked of nothing.
+  useEffect(() => {
+    if (goTo === null || goTo === undefined || !drawn) return;
+    mounted.current?.goTo(goTo);
+    told.current.onWent?.();
+  }, [goTo, drawn]);
 
   // Taking the editor down is its own effect, run when this leaves the page rather than whenever
   // the text changes — the one above replaces the text in the editor that already stands.

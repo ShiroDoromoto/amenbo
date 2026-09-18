@@ -398,7 +398,7 @@ export function setTabsCompact(want: boolean): boolean {
  * until somebody presses for it (`AMB-D-905`), and a face that came back up on either of them would
  * be putting it there on a run where nobody asked.
  */
-export type SideTab = "files" | "memo" | "history" | "diff";
+export type SideTab = "files" | "memo" | "history" | "diff" | "search";
 
 /**
  * The half this device had up, or the one the face opens on where nothing has been kept.

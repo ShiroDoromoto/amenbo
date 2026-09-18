@@ -17,7 +17,8 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderGitDto, FolderNamesDto, FolderRestoredDto, FolderTrashedDto, GitAskDto, GitBranchDto,
+  FolderGitDto, FolderNamesDto, FolderRestoredDto, FolderSearchDoneDto, FolderSearchFoundDto,
+  FolderTrashedDto, GitAskDto, GitBranchDto,
   GitCommitDto,
   GitFileDto, GitStashDto,
 } from "../bindings/bindings";
@@ -53,6 +54,62 @@ export async function folderNames(
 ): Promise<FolderNamesDto> {
   if (!inTauri()) return { rows: [], capped: false };
   return await invoke<FolderNamesDto>("folder_names", { projectId, root, query });
+}
+
+/** The two words a folder-wide search says as it goes: a batch of what it found, and that there is
+ *  no more coming (`crate::folder_search`). */
+const SEARCH_FOUND_EVENT = "folder-search-found";
+const SEARCH_DONE_EVENT = "folder-search-done";
+
+/**
+ * Look through the whole of one bound folder for `query`, and hear about it as it is found.
+ *
+ * It answers as soon as the folder and the pattern are known to be good; everything found arrives on
+ * {@link onFolderSearchFound}, and {@link onFolderSearchDone} says there is no more. `tag` is this
+ * face's own count of which search it is, and it comes back on both — a batch from a search the
+ * reader has typed past is dropped rather than drawn.
+ *
+ * **Starting one is what stops the one before it** in the same window, so nothing here has to
+ * remember to (`crate::folder_search`).
+ */
+export async function folderSearch(
+  projectId: number,
+  root: string,
+  ask: {
+    query: string;
+    regex: boolean;
+    caseSensitive: boolean;
+    wholeWord: boolean;
+    ignored: boolean;
+    tag: number;
+  },
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("folder_search", { projectId, root, ...ask });
+}
+
+/** Call off the search this window is running, where the one running is the one being named. */
+export async function folderSearchStop(tag: number): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("folder_search_stop", { tag });
+}
+
+/** Hear each batch of what a search finds, as it is found. */
+export async function onFolderSearchFound(
+  take: (found: FolderSearchFoundDto) => void,
+): Promise<() => void> {
+  if (!inTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return await listen<FolderSearchFoundDto>(SEARCH_FOUND_EVENT, ({ payload }) => take(payload));
+}
+
+/** Hear that a search is over, and how it ended. */
+export async function onFolderSearchDone(
+  take: (done: FolderSearchDoneDto) => void,
+): Promise<() => void> {
+  if (!inTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return await listen<FolderSearchDoneDto>(SEARCH_DONE_EVENT, ({ payload }) => take(payload));
 }
 
 /**

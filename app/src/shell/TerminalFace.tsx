@@ -250,6 +250,12 @@ export function TerminalFace({
   // draws, and it goes on moving under the face while the reader presses other rows
   // (`../files/GitDiff`). Neither is kept, for the reason the history's press is not.
   const [diffOpen, setDiffOpen] = useState(false);
+  /** Whether the folder-wide search has been opened. Like the two above, it is a face somebody
+   *  pressed for rather than one the column holds (`../files/SearchPanel`). */
+  const [searchOpen, setSearchOpen] = useState(false);
+  /** Which line a file about to be opened should be taken to, and which file that is — put down
+   *  again the moment the editor has been (`../files/FileEditor`). */
+  const [goTo, setGoTo] = useState<{ key: string; line: number } | null>(null);
   const [diffPick, setDiffPick] = useState<DiffPick | null>(null);
   // The front the folder the window is on sits at inside its repository, said as git answers it.
   // Whichever half of the rail is up reads it, so one of the two always has it.
@@ -804,6 +810,26 @@ export function TerminalFace({
     // `nth` is what makes the same folder asked for twice two answers.
   }, [openIn?.nth, settled]);
 
+  /**
+   * **The key that looks through the whole folder** (`AMB-D-910`). It is heard on the window rather
+   * than on any one column, because what it opens is a face of the column across the panes and a
+   * reader presses it from wherever they are — the rail, a pane, a file they are reading.
+   *
+   * It opens the column too. A key that put a face up behind a closed column would be a key that
+   * did nothing, on the one face nothing else opens.
+   */
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "f" || !(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      setSearchOpen(true);
+      setSideShownState(setSideShown(true));
+      setTabState(setSideTab("search"));
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+
   /** Ask for a half. The answer is kept: which of the two a person is on is theirs, not the run's. */
   const takeTab = useCallback((which: SideTab) => {
     setTabState(setSideTab(which));
@@ -823,6 +849,7 @@ export function TerminalFace({
     if (!want) {
       setHistoryOpen(false);
       setDiffOpen(false);
+      setSearchOpen(false);
     }
   }, []);
 
@@ -1512,6 +1539,15 @@ export function TerminalFace({
               gitPrefix={gitPrefix}
               history={historyOpen}
               diff={diffOpen}
+              search={searchOpen}
+              searchRoot={gitRoot}
+              goTo={goTo}
+              onWent={() => setGoTo(null)}
+              onOpenAt={(one, line) => {
+                setGoTo({ key: openKey(one), line });
+                openFile(one);
+                takeTab("files");
+              }}
               diffPick={diffPick}
               historyOnly={historyOnly?.path ?? null}
               onHistoryOnly={(one) => setHistoryOnly(

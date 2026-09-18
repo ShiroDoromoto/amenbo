@@ -1,14 +1,13 @@
-//! Decision-record operations.
+//! Decision operations.
 //!
-//! A decision records *why*. Its body is **edited in place**, while it is still being written and
-//! after it is settled alike, the second for a later correction or refinement (`AMB-D-363`). Editing
-//! is not re-deciding — an edit leaves the `decided_*` stamps standing — and there is no revision
-//! history. What edit does *not* do is overturn: to replace a settled decision with a different
-//! conclusion, `supersede` it (the old one stays readable in the chain); to put one back in hand,
-//! `reopen` it, which raises `draft` again. A rejected decision is terminal. Decisions have no mailbox
-//! workflow the way tasks do.
-//! They are numbered and resolved in a namespace of their own, separate from tasks, and displayed
-//! as `D-N`.
+//! A decision is a premise that holds now. Its body is **edited in place**, while it is still being
+//! written and after it is settled alike, the second for a later correction or refinement
+//! (`AMB-D-363`). Editing is not re-deciding — an edit leaves the `decided_*` stamps standing — and
+//! there is no revision history. What edit does *not* do is overturn: to replace a settled decision
+//! with a different conclusion, `supersede` it (the old one stays readable in the chain); to put one
+//! back in hand, `reopen` it, which raises `draft` again. A rejected decision is terminal. Decisions
+//! have no mailbox workflow the way tasks do. They are numbered and resolved in a namespace of their
+//! own, separate from tasks, and displayed as `D-N`.
 //!
 //! Every mutator takes a [`WriteTx`] (`BEGIN IMMEDIATE`) opened by the caller (the write wrappers
 //! on [`crate::Store`]) and does all of its reading **inside that same transaction**: the `before`

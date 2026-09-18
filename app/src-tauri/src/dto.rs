@@ -2255,6 +2255,10 @@ pub struct FolderSearchFileDto {
     /// The path under the searched folder, one name per segment - the same spelling the reading
     /// doors take (`crate::folder_bytes::folder_read`).
     pub(crate) path: Vec<String>,
+    /// The mark of the bytes the search read (`crate::folder_bytes::digest`). A replacement hands
+    /// it back, and a file that no longer answers to it is left alone rather than written at the
+    /// places a search of the file as it was found them (`AMB-D-911`).
+    pub(crate) digest: String,
     /// The matching lines, in the order they stand in the file.
     pub(crate) lines: Vec<FolderSearchLineDto>,
     /// Whether this file holds more than is carried here - more matching lines than one file's
@@ -2316,6 +2320,119 @@ pub struct FolderSearchDoneDto {
     pub(crate) capped: bool,
     /// Whether it was called off - by the reader leaving, or by their next search taking over.
     pub(crate) stopped: bool,
+}
+
+/// One file a replacement is to be written into, named the way the search named it
+/// (`crate::folder_replace`).
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderReplaceFileDto {
+    /// The path under the searched folder, one name per segment.
+    pub(crate) path: Vec<String>,
+    /// The mark the search read this file by ([`FolderSearchFileDto::digest`]). A file that does not
+    /// answer to it any more is left alone (`AMB-D-911`).
+    pub(crate) seen: String,
+    /// Which of the file's hits to write over. A file named with none is a file this run has
+    /// nothing to do to, and it is dropped before anything is checked.
+    pub(crate) at: Vec<FolderReplaceAtDto>,
+}
+
+/// Where one replacement goes, in the numbers the search gave for it.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderReplaceAtDto {
+    /// Which line of the file, counted from one.
+    pub(crate) line: u32,
+    /// Where on the line it starts, in UTF-16 code units ([`FolderSearchSpanDto`]).
+    pub(crate) at: u32,
+    /// How long it is, in the same units.
+    pub(crate) length: u32,
+}
+
+/// What a replacement run came to (`crate::folder_replace`).
+///
+/// **Three lists rather than one answer**, because a run over many files has three outcomes and a
+/// reader needs all of them: what was written, what was left alone and why, and — where the
+/// filesystem stopped it part way — which file it stopped on. What was written before that stays
+/// written; there is no undo of Amenbo's own (`AMB-D-911`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderReplacedDto {
+    /// The files written, in the order they were.
+    pub(crate) done: Vec<FolderReplacedFileDto>,
+    /// The files left alone, each with why.
+    pub(crate) skipped: Vec<FolderSkippedFileDto>,
+    /// Where the run stopped, where it did not reach the end.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) stopped: Option<FolderStoppedFileDto>,
+}
+
+/// One file a replacement was written into.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderReplacedFileDto {
+    /// The path under the searched folder.
+    pub(crate) path: Vec<String>,
+    /// How many places were written over.
+    pub(crate) hits: u32,
+    /// The mark of what was written, which is what a panel holding this file goes on knowing it by.
+    pub(crate) digest: String,
+}
+
+/// One file a replacement was not written into, and why.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSkippedFileDto {
+    /// The path under the searched folder.
+    pub(crate) path: Vec<String>,
+    /// Which of the reasons it was.
+    pub(crate) why: FolderSkippedDto,
+}
+
+/// Why one file of a replacement was left alone.
+///
+/// Every one of these is about that file alone, which is what separates them from the refusal that
+/// stops a whole run before it starts: a file nothing may write to is the run's business, because a
+/// run half applied over a folder is the thing this shape has to avoid (`AMB-D-911`).
+#[derive(Clone, Copy, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub enum FolderSkippedDto {
+    /// It moved between the search and the replacement, so the places found in it name something
+    /// else now.
+    Changed,
+    /// It is no longer there, or no longer a file.
+    Unreadable,
+    /// Its bytes are not text — a picture put where a text file was.
+    NotText,
+    /// Its bytes and its text are not the same thing said twice, so writing the text back would
+    /// change what was not replaced: a file cut at the read cap, or one in an encoding nothing here
+    /// promises to write (`AMB-D-773`).
+    NotClean,
+    /// A place named does not land on this file, although its mark says it has not moved — a line
+    /// past its end, a column inside a character, or two places over each other.
+    Unplaced,
+    /// The replacement holds a character this file's encoding cannot write — a tick typed into a
+    /// Shift_JIS file (`AMB-D-773`).
+    Unwritable,
+}
+
+/// The file a replacement run stopped on, and what the machine said.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderStoppedFileDto {
+    /// The path under the searched folder.
+    pub(crate) path: Vec<String>,
+    /// What the filesystem said, in its own words — a disk that filled up, a folder taken away. A
+    /// sentence written here instead would be a guess at which it was.
+    pub(crate) reason: String,
 }
 
 /// What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).

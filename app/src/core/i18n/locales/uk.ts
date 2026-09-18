@@ -1017,6 +1017,7 @@ export const uk: Translation = {
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Не вдалося зберегти цей файл: {reason}",
+    folder_replace_read_only: "У {count} із цих файлів неможливо записати, тому нічого не замінено.",
     folder_unwritable_character: "«{character}» не можна записати в {encoding}, тому нічого не збережено.",
     // And the save the panel does not make: the file moved between the read and the save,
     // so what the editor holds is older than the file (`AMB-D-784`).

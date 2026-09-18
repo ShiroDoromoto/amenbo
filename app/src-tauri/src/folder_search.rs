@@ -246,6 +246,9 @@ fn hunt(
     stop: &AtomicBool,
     sent: &(dyn Fn(Vec<FolderSearchFileDto>) + Sync),
 ) -> Tally {
+    // Asked once rather than per file: it reads the reader's config off the disk, and the walk
+    // below opens tens of thousands of files.
+    let tld = crate::folder_bytes::language_tld();
     let files = AtomicUsize::new(0);
     let hits = AtomicUsize::new(0);
     let batch: Mutex<(Vec<FolderSearchFileDto>, Instant)> = Mutex::new((Vec::new(), Instant::now()));
@@ -273,11 +276,15 @@ fn hunt(
             // The same three steps `crate::encoding` reads an open file with, in the same order:
             // what the file says about itself, then UTF-8, then a guess over what is left.
             let truncated = bytes.len() >= TEXT_CAP;
-            let read = crate::encoding::read(&bytes, truncated, None);
+            let read = crate::encoding::read(&bytes, truncated, tld);
             let Some(path) = named(root, entry.path()) else {
                 return ignore::WalkState::Continue;
             };
-            let Some(file) = looked(&read.text, path, matcher) else {
+            // The mark is taken over the bytes that were read, which is the same stretch of the
+            // file `crate::folder_bytes::digest_of` takes one over — so a replacement can hold what
+            // it reads against what the search read (`AMB-D-911`).
+            let Some(file) = looked(&read.text, path, crate::folder_bytes::digest(&bytes), matcher)
+            else {
                 return ignore::WalkState::Continue;
             };
 
@@ -347,7 +354,7 @@ fn named(root: &Path, file: &Path) -> Option<Vec<String>> {
 /// **Opened once.** The head decides whether these bytes are text — a NUL in it is what says they
 /// are not, the same judgement `crate::folder_bytes` makes and for the same reason — and where they
 /// are, the rest is read from the handle that is already open.
-fn text(file: &Path) -> std::io::Result<Option<Vec<u8>>> {
+pub(crate) fn text(file: &Path) -> std::io::Result<Option<Vec<u8>>> {
     let mut open = open_no_follow(file)?;
     let mut bytes = Vec::with_capacity(HEAD);
     open.by_ref().take(HEAD as u64).read_to_end(&mut bytes)?;
@@ -361,7 +368,12 @@ fn text(file: &Path) -> std::io::Result<Option<Vec<u8>>> {
 }
 
 /// The matching lines of one file, or nothing where it has none.
-fn looked(text: &str, path: Vec<String>, matcher: &Regex) -> Option<FolderSearchFileDto> {
+fn looked(
+    text: &str,
+    path: Vec<String>,
+    digest: String,
+    matcher: &Regex,
+) -> Option<FolderSearchFileDto> {
     let mut lines = Vec::new();
     let mut more = false;
     for (n, line) in text.lines().enumerate() {
@@ -399,7 +411,7 @@ fn looked(text: &str, path: Vec<String>, matcher: &Regex) -> Option<FolderSearch
     if lines.is_empty() {
         return None;
     }
-    Some(FolderSearchFileDto { path, lines, more })
+    Some(FolderSearchFileDto { path, digest, lines, more })
 }
 
 /// As much of a line as is worth carrying, and where in the line it starts.

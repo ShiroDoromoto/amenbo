@@ -992,6 +992,7 @@ export const vi: Translation = {
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Không lưu được tệp này: {reason}",
+    folder_replace_read_only: "Không thể ghi vào {count} tệp trong số này, nên không có gì được thay thế.",
     folder_unwritable_character: "“{character}” không viết được trong {encoding}, nên không có gì được lưu.",
     // And the save the panel does not make: the file moved between the read and the save,
     // so what the editor holds is older than the file (`AMB-D-784`).

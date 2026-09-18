@@ -861,6 +861,82 @@ export type FolderPdfDto = {
 mime: string, };
 
 /**
+ * Where one replacement goes, in the numbers the search gave for it.
+ */
+export type FolderReplaceAtDto = { 
+/**
+ * Which line of the file, counted from one.
+ */
+line: number, 
+/**
+ * Where on the line it starts, in UTF-16 code units ([`FolderSearchSpanDto`]).
+ */
+at: number, 
+/**
+ * How long it is, in the same units.
+ */
+length: number, };
+
+/**
+ * One file a replacement is to be written into, named the way the search named it
+ * (`crate::folder_replace`).
+ */
+export type FolderReplaceFileDto = { 
+/**
+ * The path under the searched folder, one name per segment.
+ */
+path: Array<string>, 
+/**
+ * The mark the search read this file by ([`FolderSearchFileDto::digest`]). A file that does not
+ * answer to it any more is left alone (`AMB-D-911`).
+ */
+seen: string, 
+/**
+ * Which of the file's hits to write over. A file named with none is a file this run has
+ * nothing to do to, and it is dropped before anything is checked.
+ */
+at: Array<FolderReplaceAtDto>, };
+
+/**
+ * What a replacement run came to (`crate::folder_replace`).
+ *
+ * **Three lists rather than one answer**, because a run over many files has three outcomes and a
+ * reader needs all of them: what was written, what was left alone and why, and — where the
+ * filesystem stopped it part way — which file it stopped on. What was written before that stays
+ * written; there is no undo of Amenbo's own (`AMB-D-911`).
+ */
+export type FolderReplacedDto = { 
+/**
+ * The files written, in the order they were.
+ */
+done: Array<FolderReplacedFileDto>, 
+/**
+ * The files left alone, each with why.
+ */
+skipped: Array<FolderSkippedFileDto>, 
+/**
+ * Where the run stopped, where it did not reach the end.
+ */
+stopped?: FolderStoppedFileDto, };
+
+/**
+ * One file a replacement was written into.
+ */
+export type FolderReplacedFileDto = { 
+/**
+ * The path under the searched folder.
+ */
+path: Array<string>, 
+/**
+ * How many places were written over.
+ */
+hits: number, 
+/**
+ * The mark of what was written, which is what a panel holding this file goes on knowing it by.
+ */
+digest: string, };
+
+/**
  * What came back out of the bin, and what it stopped on (`crate::trash`).
  *
  * The names are in the order they were put back, which is the reverse of the order they went in:
@@ -918,6 +994,12 @@ export type FolderSearchFileDto = {
  * doors take (`crate::folder_bytes::folder_read`).
  */
 path: Array<string>, 
+/**
+ * The mark of the bytes the search read (`crate::folder_bytes::digest`). A replacement hands
+ * it back, and a file that no longer answers to it is left alone rather than written at the
+ * places a search of the file as it was found them (`AMB-D-911`).
+ */
+digest: string, 
 /**
  * The matching lines, in the order they stand in the file.
  */
@@ -998,6 +1080,28 @@ at: number,
 length: number, };
 
 /**
+ * Why one file of a replacement was left alone.
+ *
+ * Every one of these is about that file alone, which is what separates them from the refusal that
+ * stops a whole run before it starts: a file nothing may write to is the run's business, because a
+ * run half applied over a folder is the thing this shape has to avoid (`AMB-D-911`).
+ */
+export type FolderSkippedDto = "changed" | "unreadable" | "notText" | "notClean" | "unplaced" | "unwritable";
+
+/**
+ * One file a replacement was not written into, and why.
+ */
+export type FolderSkippedFileDto = { 
+/**
+ * The path under the searched folder.
+ */
+path: Array<string>, 
+/**
+ * Which of the reasons it was.
+ */
+why: FolderSkippedDto, };
+
+/**
  * Why a run stopped, where it was Amenbo that stopped it (`crate::folder_write`, `crate::trash`).
  *
  * **Only Amenbo's own refusals are named.** They are decided before anything is written and they
@@ -1031,6 +1135,20 @@ code: FolderStopDto | null,
  * code something to say rather than nothing.
  */
 why: string, };
+
+/**
+ * The file a replacement run stopped on, and what the machine said.
+ */
+export type FolderStoppedFileDto = { 
+/**
+ * The path under the searched folder.
+ */
+path: Array<string>, 
+/**
+ * What the filesystem said, in its own words — a disk that filled up, a folder taken away. A
+ * sentence written here instead would be a guess at which it was.
+ */
+reason: string, };
 
 /**
  * What went to the machine's bin, and what it stopped on (`crate::trash`).

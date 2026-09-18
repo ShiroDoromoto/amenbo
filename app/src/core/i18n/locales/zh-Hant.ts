@@ -993,6 +993,7 @@ export const zhHant: Translation = {
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "無法儲存這個檔案：{reason}",
+    folder_replace_read_only: "其中 {count} 個檔案無法寫入，因此沒有替換任何檔案。",
     folder_unwritable_character: "「{character}」在 {encoding} 裡寫不出來，所以什麼都沒儲存。",
     // And the save the panel does not make: the file moved between the read and the save,
     // so what the editor holds is older than the file (`AMB-D-784`).

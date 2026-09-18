@@ -11,6 +11,7 @@ import { EditorView } from "@codemirror/view";
 import { getSearchQuery, openSearchPanel, searchPanelOpen } from "@codemirror/search";
 import { EditorState } from "@codemirror/state";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { t } from "../core/i18n";
 import { finding } from "./editorFind";
 
 // Every editor a test built. Taken down after it, because moving to a match asks the editor to
@@ -102,17 +103,17 @@ describe("the panel the editor finds things from", () => {
     type(field, "needle");
     expect(getSearchQuery(view.state).caseSensitive).toBe(false);
 
-    toggle(panel, "Match case").click();
+    toggle(panel, t("files.findCase")).click();
     expect(getSearchQuery(view.state).caseSensitive).toBe(true);
-    expect(toggle(panel, "Match case").getAttribute("aria-pressed")).toBe("true");
+    expect(toggle(panel, t("files.findCase")).getAttribute("aria-pressed")).toBe("true");
 
-    toggle(panel, "Regular expression").click();
-    toggle(panel, "Whole word").click();
+    toggle(panel, t("files.findRegex")).click();
+    toggle(panel, t("files.findWord")).click();
     const query = getSearchQuery(view.state);
     expect([query.regexp, query.wholeWord]).toEqual([true, true]);
 
     // And off again, which is the same press.
-    toggle(panel, "Match case").click();
+    toggle(panel, t("files.findCase")).click();
     expect(getSearchQuery(view.state).caseSensitive).toBe(false);
   });
 

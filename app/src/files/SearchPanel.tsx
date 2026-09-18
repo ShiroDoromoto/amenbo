@@ -34,11 +34,12 @@ import { ReplaceAsk } from "./ReplaceAsk";
 /** How long after the last letter the folder is walked. */
 const WAIT = 200;
 
-/** The three switches, drawn the way the editor's own panel draws them (`./editorFind`). */
+/** The three switches, drawn and named the way the editor's own panel draws and names them
+ *  (`./editorFind`) — one pair of switches in two places, not two that happen to look alike. */
 const SWITCHES = [
-  { of: "caseSensitive", mark: "Aa", says: "Match case" },
-  { of: "regex", mark: ".*", says: "Regular expression" },
-  { of: "wholeWord", mark: "ab", says: "Whole word" },
+  { of: "caseSensitive", mark: "Aa", says: "files.findCase" },
+  { of: "regex", mark: ".*", says: "files.findRegex" },
+  { of: "wholeWord", mark: "ab", says: "files.findWord" },
 ] as const;
 
 /** What the reader has asked for, which is the whole of what a search is. */
@@ -232,8 +233,8 @@ export function SearchPanel({ projectId, root, onOpen }: {
             key={of}
             className="search__switch"
             type="button"
-            title={says}
-            aria-label={says}
+            title={t(says)}
+            aria-label={t(says)}
             aria-pressed={asked[of]}
             onClick={() => change({ [of]: !asked[of] })}
           >

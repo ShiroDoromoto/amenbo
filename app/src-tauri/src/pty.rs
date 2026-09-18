@@ -904,9 +904,9 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
         let ended = crate::handover::hand_over(
             &instruction,
             TRIES,
-            // A pane being started: ten seconds of a screen that will not stand still buys the paste
-            // anyway, because what the movement means here is a program still drawing itself.
-            Some(crate::handover::RESTLESS),
+            // A pane being started: movement here is a program still drawing itself, so ten seconds
+            // of it buys the paste, and a screen that moves right after one has answered it.
+            crate::handover::Terms::Opening,
             || pane.briefed(),
             || open(&app).then(|| pane.look()),
             |bytes| {
@@ -972,9 +972,10 @@ fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
             let ended = crate::handover::hand_over(
                 &line,
                 RENAME_TRIES,
-                // Nothing but stillness buys the paste. A pane that is moving here is one an agent is
-                // answering in, and that ends by itself (`crate::handover::RESTLESS`).
-                None,
+                // A pane somebody is working in: movement here is an agent answering, and that ends
+                // by itself, so nothing but stillness buys the paste and nothing but the words
+                // coming back submits it.
+                crate::handover::Terms::Rename,
                 // There is no fact to get off on: what would answer "the provider has this name" is
                 // the provider's own list of sessions, which is the thing being written to.
                 || false,

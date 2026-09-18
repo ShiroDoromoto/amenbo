@@ -1922,6 +1922,34 @@ input[type="color"] {
 .search__note, .search__none, .search__count {
   margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted);
 }
+/* The two fields line up under each other, so the row below reads as the same row again rather than
+   as something else that happens to be there (`../files/SearchPanel`). */
+.search__under { flex: 0 0 auto; width: 20px; }
+/* What a replacement is made with. A word rather than a mark: it writes the files, and the one
+   control here that cannot be walked back is the last one to draw as two characters. */
+.search__does {
+  flex: 0 0 auto;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-surface); color: var(--c-text);
+  font: inherit; font-size: var(--fs-xs); line-height: 1.4; white-space: nowrap; cursor: pointer;
+}
+.search__does:hover:not(:disabled) { background: var(--c-sunken); }
+.search__does:disabled { opacity: 0.5; cursor: default; }
+/* The way out of one row of the list, or of a whole file's worth of it. Quiet, and drawn only while
+   there is a replacement to leave it out of. */
+.search__head { display: flex; align-items: center; gap: var(--s-1); }
+.search__head .search__path { flex: 1 1 auto; min-width: 0; }
+.search__linerow { display: flex; align-items: center; gap: var(--s-1); }
+.search__linerow .search__hit { flex: 1 1 auto; min-width: 0; }
+.search__drop {
+  flex: 0 0 auto;
+  min-width: 18px; padding: 0 2px;
+  border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text-faint);
+  font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
+}
+.search__drop:hover { color: var(--c-text); background: var(--c-sunken); }
 .search__files { margin: 0; padding: 0; list-style: none; min-height: 0; }
 .search__file { margin-bottom: var(--s-2); }
 /* The path is the head of the group, cut at the end it can afford to lose: what tells two files of

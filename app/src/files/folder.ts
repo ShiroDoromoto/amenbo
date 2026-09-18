@@ -17,7 +17,8 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderGitDto, FolderNamesDto, FolderRestoredDto, FolderSearchDoneDto, FolderSearchFoundDto,
+  FolderGitDto, FolderNamesDto, FolderReplaceFileDto, FolderReplacedDto, FolderRestoredDto,
+  FolderSearchDoneDto, FolderSearchFoundDto,
   FolderTrashedDto, GitAskDto, GitBranchDto,
   GitCommitDto,
   GitFileDto, GitStashDto,
@@ -110,6 +111,26 @@ export async function onFolderSearchDone(
   if (!inTauri()) return () => {};
   const { listen } = await import("@tauri-apps/api/event");
   return await listen<FolderSearchDoneDto>(SEARCH_DONE_EVENT, ({ payload }) => take(payload));
+}
+
+/**
+ * Write other text at the places a search found, over as many of its files as it found them in.
+ *
+ * **Nothing is written until every file has been found writable**, and a file that moved since the
+ * search is left alone rather than written at places that now name something else. What comes back
+ * says which of the three each file was (`crate::folder_replace`, `AMB-D-911`).
+ *
+ * **There is no undo.** What takes a replacement back is git, and a folder outside one cannot take
+ * it back at all.
+ */
+export async function folderReplace(
+  projectId: number,
+  root: string,
+  files: FolderReplaceFileDto[],
+  withText: string,
+): Promise<FolderReplacedDto> {
+  if (!inTauri()) return { done: [], skipped: [] };
+  return await invoke<FolderReplacedDto>("folder_replace", { projectId, root, files, with: withText });
 }
 
 /**

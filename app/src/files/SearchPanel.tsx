@@ -19,12 +19,17 @@
 // are 24,042 files against 177,752 and 148 MB against 1,652 MB. A file on the screen in the rail
 // that this does not find is the one thing that reads as broken, so the screen says so.
 
-import { useEffect, useRef, useState } from "react";
-import type { FolderSearchFileDto, FolderSearchLineDto } from "../bindings/bindings";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  FolderReplaceFileDto, FolderReplacedDto, FolderSearchFileDto, FolderSearchLineDto,
+} from "../bindings/bindings";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import type { OpenFile } from "./FilesPanel";
-import { folderSearch, folderSearchStop, onFolderSearchDone, onFolderSearchFound } from "./folder";
+import {
+  folderReplace, folderSearch, folderSearchStop, onFolderSearchDone, onFolderSearchFound,
+} from "./folder";
+import { ReplaceAsk } from "./ReplaceAsk";
 
 /** How long after the last letter the folder is walked. */
 const WAIT = 200;
@@ -67,6 +72,27 @@ export function SearchPanel({ projectId, root, onOpen }: {
   const [refused, setRefused] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const field = useRef<HTMLInputElement | null>(null);
+
+  /** Whether the replacing half is showing, and what it would write. */
+  const [replacing, setReplacing] = useState(false);
+  const [withText, setWithText] = useState("");
+  /**
+   * The hits the reader has taken out of the list, by their keys.
+   *
+   * **Taking one out is what keeps it from being written**, which is the only thing the list does
+   * besides opening files — so it is a set of what is left out rather than a set of what is picked.
+   * A reader who wants one file replaced takes the others out, and a reader who wants all of them
+   * takes nothing out and presses.
+   */
+  const [dropped, setDropped] = useState<ReadonlySet<string>>(new Set());
+  /** The question before a run that spans more than one file, or nothing. */
+  const [asking, setAsking] = useState<{ hits: number; files: number } | null>(null);
+  /** What the last run came to, or nothing before there has been one. */
+  const [wrote, setWrote] = useState<FolderReplacedDto | null>(null);
+  /** Why a whole run was refused — one file nothing may write to stops every file in it. */
+  const [refusedWrite, setRefusedWrite] = useState<string | null>(null);
+  /** Bumped after a replacement, so the same word is looked for again over what is there now. */
+  const [round, setRound] = useState(0);
 
   // The screen is opened by a key and by nothing else, so a reader who pressed it is already typing.
   useEffect(() => { field.current?.focus(); }, []);
@@ -124,7 +150,58 @@ export function SearchPanel({ projectId, root, onOpen }: {
         });
     }, WAIT);
     return () => { alive = false; window.clearTimeout(soon); };
-  }, [projectId, root, asked]);
+  }, [projectId, root, asked, round]);
+
+  // Every hit is back in the list when the question changes: what was taken out was taken out of an
+  // answer that is gone.
+  //
+  // **What a replacement came to is not cleared with them.** The run itself asks for the word again
+  // (`round`), and a line saying what was written would be gone before it had been read — which is
+  // exactly the moment the list stops holding the answer it is about.
+  useEffect(() => { setDropped(new Set()); setWrote(null); setRefusedWrite(null); }, [asked]);
+  useEffect(() => { setDropped(new Set()); }, [round]);
+
+  /** What is left in the list — the whole of what a press would write. */
+  const kept = useMemo(
+    () => files
+      .filter((one) => !dropped.has(one.path.join("/")))
+      .map((one) => ({
+        ...one,
+        lines: one.lines.filter((line) => !dropped.has(hitKey(one.path, line.line))),
+      }))
+      .filter((one) => one.lines.length > 0),
+    [files, dropped],
+  );
+
+  const drop = (key: string) => setDropped((was) => new Set(was).add(key));
+
+  /** What is left, in the shape the host writes from. */
+  const payload = (): FolderReplaceFileDto[] => kept.map((one) => ({
+    path: one.path,
+    seen: one.digest,
+    at: one.lines.flatMap((line) => line.spans.map((span) => ({
+      line: line.line,
+      at: span.at,
+      length: span.length,
+    }))),
+  }));
+
+  const write = async () => {
+    setAsking(null);
+    if (projectId === null || root === null) return;
+    setWrote(null);
+    setRefusedWrite(null);
+    try {
+      const done = await folderReplace(projectId, root, payload(), withText);
+      setWrote(done);
+      // The files are not what they were, so what the list is drawing is not either.
+      setRound((n) => n + 1);
+    } catch (why: unknown) {
+      setRefusedWrite(errText(why));
+    }
+  };
+
+  const hits = kept.reduce((n, one) => n + one.lines.reduce((m, line) => m + line.spans.length, 0), 0);
 
   const change = (some: Partial<Asked>) => setAsked((was) => ({ ...was, ...some }));
 
@@ -140,6 +217,16 @@ export function SearchPanel({ projectId, root, onOpen }: {
           onChange={(e) => change({ query: e.target.value })}
           {...asTyped}
         />
+        <button
+          className="search__switch"
+          type="button"
+          title={replacing ? t("files.searchReplaceHide") : t("files.searchReplaceShow")}
+          aria-label={replacing ? t("files.searchReplaceHide") : t("files.searchReplaceShow")}
+          aria-expanded={replacing}
+          onClick={() => setReplacing((was) => !was)}
+        >
+          {replacing ? "⌄" : "›"}
+        </button>
         {SWITCHES.map(({ of, mark, says }) => (
           <button
             key={of}
@@ -154,6 +241,41 @@ export function SearchPanel({ projectId, root, onOpen }: {
           </button>
         ))}
       </div>
+      {/* Under the field, and drawn only once the reader has asked for it. What it writes is the
+          files themselves, so it is not something to meet on the way to a search. */}
+      {replacing && (
+        <div className="search__row">
+          <span className="search__under" />
+          <input
+            className="search__field"
+            aria-label={t("files.searchReplaceWith")}
+            placeholder={t("files.searchReplaceWith")}
+            value={withText}
+            onChange={(e) => setWithText(e.target.value)}
+            {...asTyped}
+          />
+          <button
+            className="search__does"
+            type="button"
+            disabled={hits === 0}
+            onClick={() => {
+              // **The question is asked where a press reaches more than one file**, and not at all
+              // where it reaches one. A reader replacing inside one file can see what they are
+              // about to do; over four of them they cannot (`AMB-T-4952` — the one product of four
+              // that asks this way).
+              if (kept.length >= 2) setAsking({ hits, files: kept.length });
+              else void write();
+            }}
+          >
+            {t("files.searchReplaceGo")}
+          </button>
+        </div>
+      )}
+      {/* Said where it is about to happen rather than in the question, because the question is not
+          asked at all for one file. What takes a replacement back is git, and a folder outside one
+          cannot take it back at all (`AMB-D-911`). */}
+      {replacing && <p className="search__note">{t("files.searchNoUndo")}</p>}
+
       {/* The switch `AMB-D-910` puts on the screen, and the sentence that says why it is there: a
           file drawn in the tree and not found here is the one thing about this that reads as
           broken. */}
@@ -178,13 +300,54 @@ export function SearchPanel({ projectId, root, onOpen }: {
       )}
       {over?.capped === true && <p className="search__none">{t("files.searchCapped")}</p>}
 
+      {refusedWrite !== null && <p className="search__none">{refusedWrite}</p>}
+      {wrote !== null && (
+        <>
+          <p className="search__count">
+            {tf("files.searchReplaced", {
+              hits: wrote.done.reduce((n, one) => n + one.hits, 0),
+              files: wrote.done.length,
+            })}
+          </p>
+          {wrote.skipped.length > 0 && (
+            <p className="search__none">
+              {tf("files.searchLeftAlone", { files: wrote.skipped.length })}
+            </p>
+          )}
+          {wrote.stopped !== undefined && wrote.stopped !== null && (
+            <p className="search__none">
+              {tf("files.searchStopped", {
+                path: wrote.stopped.path.join("/"),
+                reason: wrote.stopped.reason,
+              })}
+            </p>
+          )}
+        </>
+      )}
+
       <ul className="search__files">
-        {files.map((one) => (
+        {kept.map((one) => (
           <li key={one.path.join("/")} className="search__file">
-            <p className="search__path" title={one.path.join("/")}>{one.path.join("/")}</p>
+            <div className="search__head">
+              <p className="search__path" title={one.path.join("/")}>{one.path.join("/")}</p>
+              {/* Drawn only while there is something a press would write. A list nobody is
+                  replacing from is a list to read, and a way out of one row of it is a control
+                  with nothing behind it. */}
+              {replacing && (
+                <button
+                  className="search__drop"
+                  type="button"
+                  title={t("files.searchDrop")}
+                  aria-label={t("files.searchDrop")}
+                  onClick={() => drop(one.path.join("/"))}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <ul className="search__lines">
               {one.lines.map((line) => (
-                <li key={`${line.line}:${line.from}`}>
+                <li key={`${line.line}:${line.from}`} className="search__linerow">
                   <button
                     className="search__hit"
                     type="button"
@@ -193,6 +356,17 @@ export function SearchPanel({ projectId, root, onOpen }: {
                     <span className="search__lineno">{line.line}</span>
                     <span className="search__text">{marked(line)}</span>
                   </button>
+                  {replacing && (
+                    <button
+                      className="search__drop"
+                      type="button"
+                      title={t("files.searchDrop")}
+                      aria-label={t("files.searchDrop")}
+                      onClick={() => drop(hitKey(one.path, line.line))}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -202,8 +376,21 @@ export function SearchPanel({ projectId, root, onOpen }: {
       {running && files.length === 0 && refused === null && (
         <p className="search__note">{t("files.searchLooking")}</p>
       )}
+      {asking !== null && (
+        <ReplaceAsk
+          hits={asking.hits}
+          files={asking.files}
+          onGo={() => { void write(); }}
+          onCancel={() => setAsking(null)}
+        />
+      )}
     </div>
   );
+}
+
+/** One hit's key: the file it is in and the line it is on. */
+function hitKey(path: string[], line: number): string {
+  return `${path.join("/")}\0${line}`;
 }
 
 /**

@@ -86,11 +86,10 @@ const SUBMIT: &[u8] = b"\r";
 
 /// How much of the instruction is looked for on the screen.
 ///
-/// Short, because the screen is not a transcript: a pane narrow enough wraps the sentence, and a TUI
-/// draws its own escape sequences between the characters it lays down, so the longer the run looked
-/// for the likelier it is broken up by something that is not text. Fourteen characters is well
-/// inside any pane a person works in and is still the instruction's own opening rather than a phrase
-/// a program could write by itself.
+/// Short, because the screen is rows rather than a transcript: a pane narrow enough wraps the
+/// sentence, and what wraps onto the next row is no longer a run of anything. Fourteen characters is
+/// well inside any pane a person works in and is still the instruction's own opening rather than a
+/// phrase a program could write by itself.
 const HEAD: usize = 14;
 
 /// How many looks in a row must find the pane holding exactly what it held before, for it to count
@@ -135,8 +134,7 @@ pub enum Handover {
 }
 
 /// The leading run of `instruction` that a screen is searched for — the longest prefix of at most
-/// [`HEAD`] characters. Cut on a character boundary, since the search is over the bytes a screen was
-/// drawn with and half a character matches nothing.
+/// [`HEAD`] characters.
 fn head(instruction: &str) -> &str {
     match instruction.char_indices().nth(HEAD) {
         Some((at, _)) => &instruction[..at],
@@ -144,13 +142,32 @@ fn head(instruction: &str) -> &str {
     }
 }
 
+/// What one look at the pane finds: the bytes the terminal wrote, and the screen they draw.
+///
+/// **They are two readings of one moment, and each answers a different half.** The words are looked
+/// for on the screen, because the screen is where a person would see them: a TUI lays its own escape
+/// sequences down between the characters it draws, and a run of text plainly in the input box is not
+/// a run of anything in the bytes. Whether the pane moved is read off the bytes, where everything the
+/// program did shows — including what it drew off-screen and what it drew and then painted over.
+pub struct Look {
+    /// What the terminal has written lately, as it arrived — escape sequences and all
+    /// (`crate::pty`'s `Recent`).
+    pub tail: Vec<u8>,
+    /// The screen those bytes draw: the characters standing in the terminal's cells, row by row
+    /// (`crate::pty`'s `Drawn`).
+    pub drawn: String,
+}
+
 /// Whether what the pane has drawn holds that run of text.
 ///
-/// A plain search over the bytes, which is what the screen is: the pane keeps the terminal's output
-/// as it arrived, escape sequences and all, and the agent draws the text it was given as text.
-fn echoed(screen: &[u8], head: &str) -> bool {
-    let head = head.as_bytes();
-    !head.is_empty() && screen.windows(head.len()).any(|run| run == head)
+/// A plain search over the screen. The search is over the characters in the terminal's cells rather
+/// than over the bytes that put them there, which is what lets it answer for itself: a program that
+/// writes a colour between two letters has still drawn the two letters side by side.
+///
+/// A screen is rows, so what is looked for has to fit on one — hence [`HEAD`] being short enough for
+/// any pane a person works in.
+fn echoed(screen: &str, head: &str) -> bool {
+    !head.is_empty() && screen.contains(head)
 }
 
 /// The instruction as it is safe to paste: its control characters dropped.
@@ -201,8 +218,8 @@ fn moved(screen: &[u8]) -> u64 {
 /// for it to be drawn or answered for, and submit it when either happens.
 ///
 /// `briefed` answers whether the fact has arrived that the agent ran `amenbo agent` here; while it
-/// says no this goes on, and the pass it says yes on is the last. `screen` answers with what the pane
-/// has drawn so far, or `None` once the terminal is gone. `send` writes to the terminal and answers
+/// says no this goes on, and the pass it says yes on is the last. `look` answers with the pane as it
+/// stands ([`Look`]), or `None` once the terminal is gone. `send` writes to the terminal and answers
 /// whether it could. `wait` is the pause between passes — the caller's, so that what this does can be
 /// walked without a clock. `tries` bounds the whole of it: the patience is passes × the length of
 /// `wait`.
@@ -218,7 +235,7 @@ pub fn hand_over(
     tries: usize,
     blind_after: Option<usize>,
     mut briefed: impl FnMut() -> bool,
-    mut screen: impl FnMut() -> Option<Vec<u8>>,
+    mut look: impl FnMut() -> Option<Look>,
     mut send: impl FnMut(&[u8]) -> bool,
     wait: impl Fn(),
 ) -> Handover {
@@ -246,11 +263,11 @@ pub fn hand_over(
         if briefed() {
             return Handover::Briefed;
         }
-        let Some(drawn) = screen() else { return Handover::Gone };
-        if echoed(&drawn, head) {
+        let Some(pane) = look() else { return Handover::Gone };
+        if echoed(&pane.drawn, head) {
             return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
         }
-        let now = moved(&drawn);
+        let now = moved(&pane.tail);
         stood = if now == held { stood + 1 } else { 1 };
         held = now;
 
@@ -308,13 +325,23 @@ mod tests {
         Swallows,
     }
 
+    /// The screen those bytes draw, through the emulator a pane draws them with (`crate::pty`'s
+    /// `Drawn`). A test double mostly writes plain text and gets it back, which is the point: the one
+    /// that writes what a TUI writes is the one this has to be real for.
+    fn drawn(wrote: &[u8]) -> String {
+        let mut screen = vt100::Parser::new(40, 120, 0);
+        screen.process(wrote);
+        screen.screen().contents()
+    }
+
     /// A stand-in for the program in a pane.
     ///
     /// Its screen moves for two reasons, and telling those apart is the whole of what this module
     /// does: what it draws of its own accord — one entry of `own` per look, on a schedule owing
     /// nothing to what was written at it — and what it draws back when pasted into (`takes`).
     struct Agent {
-        drawn: RefCell<Vec<u8>>,
+        /// What it has written at the terminal, in the order it wrote it — not the screen.
+        wrote: RefCell<Vec<u8>>,
         writes: RefCell<Vec<Vec<u8>>>,
         own: RefCell<VecDeque<&'static [u8]>>,
         takes: Takes,
@@ -332,7 +359,7 @@ mod tests {
     impl Agent {
         fn new(takes: Takes, own: impl IntoIterator<Item = &'static [u8]>) -> Self {
             Self {
-                drawn: RefCell::new(Vec::new()),
+                wrote: RefCell::new(Vec::new()),
                 writes: RefCell::new(Vec::new()),
                 own: RefCell::new(own.into_iter().collect()),
                 takes,
@@ -406,22 +433,23 @@ mod tests {
             },
             || {
                 if let Some(next) = agent.own.borrow_mut().pop_front() {
-                    agent.drawn.borrow_mut().extend_from_slice(next);
+                    agent.wrote.borrow_mut().extend_from_slice(next);
                 }
                 // What it repaints does not matter and is not searched for; that it is different every
                 // look is the whole of what makes it restless.
                 if agent.restless_from.get().is_some_and(|from| agent.looks.get() >= from) {
-                    agent.drawn.borrow_mut().push(b'.');
+                    agent.wrote.borrow_mut().push(b'.');
                 }
-                Some(agent.drawn.borrow().clone())
+                let wrote = agent.wrote.borrow().clone();
+                Some(Look { drawn: drawn(&wrote), tail: wrote })
             },
             |bytes| {
                 agent.writes.borrow_mut().push(bytes.to_vec());
                 if bytes != SUBMIT {
-                    let mut drawn = agent.drawn.borrow_mut();
+                    let mut wrote = agent.wrote.borrow_mut();
                     match agent.takes {
-                        Takes::Echoes => drawn.extend_from_slice(instruction.as_bytes()),
-                        Takes::Acknowledges => drawn.extend_from_slice(b"[Pasted ~1 lines]"),
+                        Takes::Echoes => wrote.extend_from_slice(instruction.as_bytes()),
+                        Takes::Acknowledges => wrote.extend_from_slice(b"[Pasted ~1 lines]"),
                         Takes::Swallows => {}
                     }
                 }
@@ -552,7 +580,7 @@ mod tests {
             8,
             Some(RESTLESS),
             || false,
-            || Some(Vec::new()),
+            || Some(Look { tail: Vec::new(), drawn: String::new() }),
             |_| {
                 writes.set(writes.get() + 1);
                 true
@@ -579,7 +607,7 @@ mod tests {
                 4,
                 Some(RESTLESS),
                 || false,
-                || Some(b"> ".to_vec()),
+                || Some(Look { tail: b"> ".to_vec(), drawn: "> ".to_owned() }),
                 |_| false,
                 || {}
             ),
@@ -639,13 +667,37 @@ mod tests {
     fn the_run_looked_for_is_short_enough_to_survive_a_narrow_pane() {
         let instruction = "Before you act on any request in this directory";
         assert_eq!(head(instruction), "Before you act");
-        assert!(echoed(b"\x1b[2J\x1b[H> Before you act on any request", head(instruction)));
-        assert!(!echoed(b"\x1b[2J\x1b[H> Do you trust this folder?", head(instruction)));
+        assert!(echoed(&drawn(b"\x1b[2J\x1b[H> Before you act on any request"), head(instruction)));
+        assert!(!echoed(&drawn(b"\x1b[2J\x1b[H> Do you trust this folder?"), head(instruction)));
     }
 
     #[test]
     fn an_instruction_shorter_than_the_run_is_looked_for_whole() {
         assert_eq!(head("hello"), "hello");
-        assert!(echoed(b"say hello there", head("hello")));
+        assert!(echoed(&drawn(b"say hello there"), head("hello")));
+    }
+
+    #[test]
+    fn words_a_tui_drew_with_a_colour_between_them_are_found_on_the_screen() {
+        // Why the search is over the screen and not over the bytes. A program that changes colour
+        // part-way through the sentence has still drawn the sentence; the bytes it drew it with have
+        // an escape sequence through the middle of the run being looked for.
+        let instruction = "Before you act on any request in this directory";
+        let wrote = b"> Before you \x1b[1mact\x1b[0m on any request";
+        assert!(echoed(&drawn(wrote), head(instruction)));
+        let looked_for = head(instruction).as_bytes();
+        assert!(
+            !wrote.windows(looked_for.len()).any(|run| run == looked_for),
+            "and it is not there in the bytes, which is what the second test was covering for"
+        );
+    }
+
+    #[test]
+    fn what_a_program_painted_over_is_no_longer_on_the_screen() {
+        // The other half of reading a screen rather than a tail: the sentence was drawn, and then the
+        // program cleared the screen and drew its prompt again. The tail holds it forever; the screen
+        // does not.
+        let instruction = "Before you act on any request in this directory";
+        assert!(!echoed(&drawn(b"> Before you act\x1b[2J\x1b[H> "), head(instruction)));
     }
 }

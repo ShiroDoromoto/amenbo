@@ -78,6 +78,15 @@ regex = "1"
 # because it is Rust the whole way down — no build.rs, no C toolchain, no sidecar binary to ship —
 # and because its Windows half is ConPTY direct, with no `winpty-agent.exe` to bundle beside the app.
 portable-pty = "0.9"
+# The terminal emulator the host draws its own screen with (`src/pty.rs`'s `Drawn`). The hand-over
+# looks on that screen for the text it pasted, and it has to be a screen: a TUI lays its own escape
+# sequences down between the characters it draws, so a run of text plainly in the input box is not a
+# run of anything in the bytes (`src/handover.rs`). Chosen over wezterm's own emulator and
+# alacritty_terminal as the cheapest of the three that can hold a screen at all — three crates rather
+# than seven or thirty-one, 155 KB per pane, 64 KB of binary. What it costs is synchronised updates
+# (`?2026`), which it reads and drops; measured over 1,429 samples of the one product that uses them,
+# that changed no verdict.
+vt100 = "0.16.2"
 # What a chunk of terminal output travels to the webview as. The bytes a PTY hands back are not
 # text — an escape sequence is split wherever the read happened to end, and a multi-byte character
 # with it — so they are carried whole and decoded on the far side by the terminal that understands

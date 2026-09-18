@@ -327,6 +327,60 @@ impl Terminals {
     }
 }
 
+/// How much of what has scrolled off the top is kept. None of it: what this is here to be read for is
+/// the screen a person is looking at, and a line that has scrolled away is not on it.
+const SCROLLBACK: usize = 0;
+
+/// The screen a terminal's output draws — the characters standing in its cells, as the program in the
+/// pane means them to look.
+///
+/// **It is kept beside [`Recent`] rather than instead of it, because the two are read for different
+/// things.** A pane adopting the session is handed the bytes to draw for itself, and a screen cannot
+/// be turned back into those. What is read here is the other question: what is on the screen now.
+///
+/// **Why the bytes would not answer that.** A TUI draws by moving the cursor about and writing its
+/// own escape sequences between the characters it lays down, so a run of text plainly in the input
+/// box is not a run of anything in the bytes — which is what left the hand-over's search for the
+/// words needing a weaker test beside it (`crate::handover`). It also writes over what it drew
+/// before, and the tail keeps every version.
+///
+/// It costs about 155 KB a pane and takes about 28 µs per chunk to feed; what it saves is the
+/// hand-over's half-second look, which searched a quarter of a megabyte and now searches a screen
+/// (`AMB-T-5076`).
+struct Drawn(vt100::Parser);
+
+impl Drawn {
+    fn new(at: Size) -> Self {
+        let (cols, rows) = held(at);
+        Self(vt100::Parser::new(rows, cols, SCROLLBACK))
+    }
+
+    /// Take in a chunk, the same bytes [`Recent::push`] is given.
+    fn push(&mut self, bytes: &[u8]) {
+        self.0.process(bytes);
+    }
+
+    /// Say what size the terminal is now. The screen is that many cells, so unlike the tail there is
+    /// nothing here that belongs to an older size: what was drawn at the last one is refolded.
+    fn resized(&mut self, at: Size) {
+        let (cols, rows) = held(at);
+        self.0.screen_mut().set_size(rows, cols);
+    }
+
+    /// The screen as text, one row per line.
+    fn contents(&self) -> String {
+        self.0.screen().contents()
+    }
+}
+
+/// A size with no zero in it. A terminal of no width has no cells to draw in, and the emulator
+/// subtracts its way off the end of one rather than refusing it — so a pane measured before the
+/// window has laid out would take the process down. The size the pane is really at arrives on the
+/// next [`Pane::resized`], so one cell is enough to stand in until then.
+fn held(at: Size) -> Size {
+    (at.0.max(1), at.1.max(1))
+}
+
 /// Where a session's output is going, and what it has said lately.
 ///
 /// Both are held apart from [`Terminal`] because the thread draining the terminal reaches for them
@@ -340,6 +394,10 @@ struct Pane {
     /// The tail of what the terminal has written, for whatever pane draws it next ([`Recent`],
     /// capped at [`RECENT`]).
     recent: Mutex<Recent>,
+    /// The screen that same output draws ([`Drawn`]) — what the hand-over reads the words it pasted
+    /// off. Its own lock, so the chunk-by-chunk feeding of it is not behind the one a pane adopting
+    /// the session takes.
+    drawn: Mutex<Drawn>,
     /// Whether the agent in this pane has read Amenbo's canon — whether it ran `amenbo agent` here
     /// (`AMB-D-805`).
     ///
@@ -394,6 +452,7 @@ impl Pane {
         Self {
             target: Mutex::new(target.to_owned()),
             recent: Mutex::new(Recent::new(at)),
+            drawn: Mutex::new(Drawn::new(at)),
             briefed: AtomicBool::new(false),
             unsent: Mutex::new(None),
             opening: AtomicBool::new(false),
@@ -497,6 +556,7 @@ impl Pane {
     /// as an event, and would draw it twice; taking the same two locks in the same order in both
     /// places is what leaves the chunk on exactly one side of the handover.
     fn keep(&self, bytes: &[u8]) -> String {
+        self.drawn.lock().expect("pane drawn lock").push(bytes);
         self.recent.lock().expect("pane recent lock").push(bytes);
         self.target()
     }
@@ -508,17 +568,21 @@ impl Pane {
     /// program writing to the width it already had, and a run opened for a size nothing is being
     /// written at would hand the next pane a fold that never happened.
     fn resized(&self, at: Size) {
+        self.drawn.lock().expect("pane drawn lock").resized(at);
         self.recent.lock().expect("pane recent lock").at = at;
     }
 
-    /// The tail as it stands — what the pane has drawn lately, for a reader that is not a pane.
+    /// The pane as it stands, for a reader that is not a pane ([`crate::handover::Look`]).
     ///
-    /// The handover ([`crate::handover`]) is that reader: it is looking for the words it pasted, and
-    /// — where a program answers a paste without drawing it — for the tail moving at all. It takes
-    /// the same copy a pane adopting the session is given, rather than a window onto the buffer, so
-    /// nothing holds this lock while it searches.
-    fn screen(&self) -> Vec<u8> {
-        self.recent.lock().expect("pane recent lock").bytes()
+    /// The hand-over ([`crate::handover`]) is that reader, and it asks two things of one moment: the
+    /// screen, where it looks for the words it pasted, and the tail, whose moving at all is what
+    /// answers for a program that takes a paste without drawing it. Both come away as copies rather
+    /// than as windows onto the buffers, so neither lock is held while they are searched.
+    fn look(&self) -> crate::handover::Look {
+        crate::handover::Look {
+            tail: self.recent.lock().expect("pane recent lock").bytes(),
+            drawn: self.drawn.lock().expect("pane drawn lock").contents(),
+        }
     }
 
     /// Send what follows to this window, and answer with the tail as it stood at that moment — in
@@ -844,7 +908,7 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
             // anyway, because what the movement means here is a program still drawing itself.
             Some(crate::handover::RESTLESS),
             || pane.briefed(),
-            || open(&app).then(|| pane.screen()),
+            || open(&app).then(|| pane.look()),
             |bytes| {
                 let terminals = app.state::<Terminals>();
                 let mut open = terminals.0.lock().expect("terminals lock");
@@ -914,7 +978,7 @@ fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
                 // There is no fact to get off on: what would answer "the provider has this name" is
                 // the provider's own list of sessions, which is the thing being written to.
                 || false,
-                || open(&app).then(|| pane.screen()),
+                || open(&app).then(|| pane.look()),
                 |bytes| {
                     let terminals = app.state::<Terminals>();
                     let mut open = terminals.0.lock().expect("terminals lock");
@@ -1970,6 +2034,37 @@ mod tests {
         assert_eq!(replay.len(), 1, "the wide run is wholly out of the tail");
         assert_eq!((replay[0].cols, replay[0].rows), (26, 30));
         assert_eq!(run_bytes(&replay).len(), RECENT);
+    }
+
+    /// What the pane draws is the screen, not the bytes it was drawn with. A program that writes its
+    /// own escape sequences between the characters it lays down has still drawn the characters, and
+    /// that is what the hand-over looks for ([`crate::handover`]).
+    #[test]
+    fn the_screen_holds_what_was_drawn_rather_than_what_drew_it() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"> Before you \x1b[1mact\x1b[0m");
+
+        let look = pane.look();
+        assert_eq!(look.drawn, "> Before you act", "the colour is not on the screen");
+        assert!(
+            look.tail.windows(3).any(|w| w == b"\x1b[1"),
+            "and the tail still carries every byte, which is what a pane adopting this replays"
+        );
+    }
+
+    /// A pane measured before the window has laid out. The emulator has no cell to draw in and
+    /// subtracts its way off the end of the grid, so the size is held at one until the pane says
+    /// what it really is.
+    #[test]
+    fn a_pane_opened_or_resized_at_no_size_still_draws() {
+        let pane = Pane::new("main", (0, 0));
+        pane.keep(b"x");
+        pane.resized((0, 0));
+        pane.keep(b"y");
+        pane.resized(OPENED_AT);
+        pane.keep(b"drawn");
+
+        assert!(pane.look().drawn.contains("drawn"));
     }
 
     /// A terminal nobody has written in yet hands over nothing at all — there is no run to read and

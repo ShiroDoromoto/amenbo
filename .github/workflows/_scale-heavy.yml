@@ -59,7 +59,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.87.11
+        uses: taiki-e/install-action@v2.87.13
         with:
           tool: cargo-nextest
 

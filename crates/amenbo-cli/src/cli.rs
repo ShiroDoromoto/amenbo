@@ -272,7 +272,7 @@ pub enum Command {
         #[command(subcommand)]
         sub: CommentCmd,
     },
-    /// Decision records (append-only "why we chose X"; a Task sibling, not a task)
+    /// Decisions (the premises that hold now; a Task sibling, not a task)
     Decision {
         #[command(subcommand)]
         sub: DecisionCmd,

@@ -309,7 +309,7 @@ amenbo task list --filter "start:future" --json
 # together, which are listed like any other but cannot be reserved (draft:no is the rest)
 amenbo task list --filter "draft:yes" --json
 
-# Decision records: durable "why we chose X" (a Task sibling, not a task —
+# Decisions: the premises that hold now (a Task sibling, not a task —
 # no mailbox workflow, its own device-global number space)
 amenbo decision add --title "SQLite as the source of truth" \
   --body "the local SQLite store is the single truth source" --project "Website refresh"

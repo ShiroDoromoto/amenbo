@@ -642,10 +642,12 @@ pub struct ProjectNotifyEvent {
     pub updated_at: Timestamp,
 }
 
-/// A decision record — a decision, and *why* we made it — as a first-class entity that sits beside Task,
-/// under Project. **Append-only**: you do not edit a decision, you write a new one that `supersedes` it.
-/// Decisions have no status workflow and take no part in the mailbox, so they never clutter a task list.
-/// Their numbers are a global sequence in a space of their own, separate from tasks.
+/// A decision — a premise that holds now, settled with the human — as a first-class entity that sits
+/// beside Task, under Project. Its body is edited in place, while it is still being written and after it
+/// is settled alike; what an edit cannot do is overturn, and a conclusion that changes is a new decision
+/// that `supersedes` this one (`AMB-D-363`). It carries a status of its own ([`DecisionStatus`]) and, while
+/// the writing is still open, a `draft` flag — but no mailbox workflow, so decisions never clutter a task
+/// list. Their numbers are a global sequence in a space of their own, separate from tasks.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Decision {
     /// The primary key, and also the decision number (displayed as `AMB-D-<n>` — a number space separate from

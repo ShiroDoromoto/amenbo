@@ -44,7 +44,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-app"
-version = "29.0.0"
+version = "29.1.0"
 dependencies = [
  "amenbo-askpass",
  "amenbo-core",
@@ -97,11 +97,11 @@ dependencies = [
 
 [[package]]
 name = "amenbo-askpass"
-version = "29.0.0"
+version = "29.1.0"
 
 [[package]]
 name = "amenbo-core"
-version = "29.0.0"
+version = "29.1.0"
 dependencies = [
  "base64 0.23.1",
  "blake3",
@@ -140,11 +140,11 @@ dependencies = [
 
 [[package]]
 name = "amenbo-scratch"
-version = "29.0.0"
+version = "29.1.0"
 
 [[package]]
 name = "amenbo-static-host"
-version = "29.0.0"
+version = "29.1.0"
 
 [[package]]
 name = "android_log-sys"

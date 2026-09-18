@@ -1734,6 +1734,38 @@ input[type="color"] {
    the editor grows to its text rather than scrolling inside a box of its own. */
 .files__editor { font-size: var(--fs-xs); }
 .files__editor .cm-editor { height: auto; }
+/* The row that finds things in the file being read (`../files/editorFind`). It is drawn here rather
+   than by CodeMirror because its own is six words wide and folds to four rows in a column this
+   narrow, pushing the file down by that much. One row, one field that takes the room, and marks
+   instead of words for the rest — which is also what keeps it out of the nineteen dictionaries. */
+.cmfind {
+  display: flex; align-items: center; gap: var(--s-1);
+  padding: var(--s-1);
+  font-size: var(--fs-xs);
+}
+/* The field takes whatever the controls beside it leave. Narrower than that and a reader cannot see
+   what they typed; wider and the controls wrap, which is the thing being avoided. */
+.cmfind__field {
+  flex: 1 1 auto; min-width: 4ch;
+  padding: 2px var(--s-1);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-sunken); color: var(--c-text);
+  font: inherit;
+}
+.cmfind__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
+.cmfind__step, .cmfind__switch, .cmfind__close {
+  flex: 0 0 auto;
+  min-width: 20px; padding: 2px var(--s-1);
+  border: 1px solid transparent; border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text-muted);
+  font: inherit; line-height: 1; cursor: pointer;
+}
+.cmfind__step:hover, .cmfind__switch:hover, .cmfind__close:hover { color: var(--c-text); background: var(--c-sunken); }
+/* A switch that is on says so by being filled, not by a colour alone: three marks two characters
+   long are too small to read a shade off. */
+.cmfind__switch[aria-pressed="true"] {
+  background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text);
+}
 .files__image { max-width: 100%; height: auto; }
 /* The PDF's pages, stacked down the panel the way the reader scrolls them (`../files/pdfLoad`).
    Each page holds its room before anything is drawn into it, so the column does not jump as the

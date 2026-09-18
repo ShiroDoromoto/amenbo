@@ -2435,6 +2435,33 @@ pub struct FolderStoppedFileDto {
     pub(crate) reason: String,
 }
 
+/// The rows a name filter found under one bound folder (`crate::folder::folder_names`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderNamesDto {
+    /// What was found, in the order the tree reads them.
+    pub(crate) rows: Vec<FolderNameDto>,
+    /// Whether the walk stopped at a cap rather than at the end of the folder — either too many
+    /// matches to draw, or too many names to look at. The face says so: a list that stopped and did
+    /// not say would be telling the reader there is no more.
+    pub(crate) capped: bool,
+}
+
+/// One name a filter found, wherever in the folder it stands.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderNameDto {
+    /// Its path under the bound folder, one name per segment.
+    pub(crate) path: Vec<String>,
+    /// Whether it is a folder.
+    pub(crate) is_dir: bool,
+    /// Whether the repository ignores it — drawn all the same, and drawn as ignored
+    /// (`AMB-D-786`).
+    pub(crate) ignored: bool,
+}
+
 /// What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
 ///
 /// It crosses on its own, out of a command of its own, because **no operating system puts the

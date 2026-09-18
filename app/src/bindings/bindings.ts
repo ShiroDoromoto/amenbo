@@ -813,6 +813,39 @@ mime: string, };
 export type FolderLineEndingDto = "lf" | "crlf" | "mixed";
 
 /**
+ * One name a filter found, wherever in the folder it stands.
+ */
+export type FolderNameDto = { 
+/**
+ * Its path under the bound folder, one name per segment.
+ */
+path: Array<string>, 
+/**
+ * Whether it is a folder.
+ */
+isDir: boolean, 
+/**
+ * Whether the repository ignores it — drawn all the same, and drawn as ignored
+ * (`AMB-D-786`).
+ */
+ignored: boolean, };
+
+/**
+ * The rows a name filter found under one bound folder (`crate::folder::folder_names`).
+ */
+export type FolderNamesDto = { 
+/**
+ * What was found, in the order the tree reads them.
+ */
+rows: Array<FolderNameDto>, 
+/**
+ * Whether the walk stopped at a cap rather than at the end of the folder — either too many
+ * matches to draw, or too many names to look at. The face says so: a list that stopped and did
+ * not say would be telling the reader there is no more.
+ */
+capped: boolean, };
+
+/**
  * A file the panel would not carry — a picture (`AMB-D-783`) or a PDF (`AMB-D-907`) — and what it
  * was measured against.
  *

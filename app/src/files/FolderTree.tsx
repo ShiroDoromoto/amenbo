@@ -50,7 +50,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as RowPress, RefObject,
 } from "react";
-import type { FolderChangesDto, FolderEntryDto, GitEntryDto } from "../bindings/bindings";
+import type {
+  FolderChangesDto, FolderEntryDto, FolderNamesDto, GitEntryDto,
+} from "../bindings/bindings";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { errText, t } from "../core/i18n";
@@ -60,8 +62,10 @@ import { hostOs } from "../core/platform";
 import {
   folderClipCopy, folderClipPaste, folderCopy, folderEntries, folderGitIgnore, folderGitStatus,
   folderGitUntrack, folderImport,
-  folderMake, folderMove, folderRename, folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
+  folderMake, folderMove, folderNames, folderRename, folderUnwatch, folderWatch, nextWatchTag,
+  onFolderChanged,
 } from "./folder";
+import { linesOfNames } from "./treeFilter";
 import { stoppedLine } from "./stopped";
 import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
@@ -295,6 +299,50 @@ export function FolderTree({
   // the same path inside two bound folders is two places, and what goes to the host has to say
   // which — the tree draws one folder, but the landing is carried out by path.
   const [landing, setLanding] = useState<Landing | null>(null);
+
+  /**
+   * What the tree is narrowed to, or nothing where the box is not up.
+   *
+   * **An empty string is a box with nothing typed in it yet**, which is not the same as no box: the
+   * tree is whole either way, and the difference is whether there is somewhere to type.
+   */
+  const [filter, setFilter] = useState<string | null>(null);
+  const filterBox = useRef<HTMLInputElement | null>(null);
+
+  /**
+   * What the host found for it, or nothing where the tree is whole — which is what the tree below
+   * reads to know which of the two lists it is drawing.
+   */
+  const [found, setFound] = useState<FolderNamesDto | null>(null);
+
+  /**
+   * The filter's answer, asked again on every letter.
+   *
+   * **Waited on rather than asked at once.** The walk is the cheapest part of looking through a
+   * folder — 344 ms over 177,752 names, all eighteen folders of a real store at once
+   * (`AMB-T-4917`) — but a reader types faster than that, and a walk per letter on the way to a
+   * word is four walks for one question. A tenth of a second is under what a person notices and
+   * over what a keystroke takes.
+   *
+   * **A stale answer is dropped rather than drawn.** Two walks can be in the air at once, and the
+   * older one coming back last would leave the rows for a word nobody is looking at any more.
+   */
+  useEffect(() => {
+    const root = drawn?.path;
+    if (projectId === null || root === undefined || filter === null || filter === "") {
+      setFound(null);
+      return;
+    }
+    let alive = true;
+    const soon = window.setTimeout(() => {
+      void folderNames(projectId, root, filter)
+        .then((answer) => { if (alive) setFound(answer); })
+        // A folder that has gone, or a walk the host refused: an empty list says the same thing the
+        // filter would have said, which is that nothing here is called that.
+        .catch(() => { if (alive) setFound({ rows: [], capped: false }); });
+    }, 100);
+    return () => { alive = false; window.clearTimeout(soon); };
+  }, [projectId, drawn?.path, filter]);
   // How each bound folder's tree is opened, by the folder it is about — the folder is the key
   // because only one of them is drawn at a time and a reader coming back to another one is asking
   // for the tree they left (`Opened`).
@@ -470,6 +518,19 @@ export function FolderTree({
       trash.undo();
       return;
     }
+
+    // **The key that finds things, over the names of the tree.** What is inside the files is the
+    // other search and a screen of its own (`AMB-D-910`); here it is the name, which is what a
+    // reader opening folders one after another was looking for.
+    //
+    // Pressed again while the box is up it puts the caret back in it, the way it does in an editor.
+    if (pressed === "f") {
+      e.preventDefault();
+      setFilter((was) => was ?? "");
+      // After this drawing, because the box may not be on the page yet.
+      window.setTimeout(() => filterBox.current?.select(), 0);
+      return;
+    }
     if (projectId === null) return;
 
     // The rows the copy is about, found from the row the keyboard is on: the ones picked out where
@@ -519,6 +580,45 @@ export function FolderTree({
     <div className="files" ref={box} tabIndex={-1} onKeyDown={onKey}>
       {trash.aside}
       {restore.aside}
+      {/* Above the tree and not in it: what it narrows is the whole of what is drawn below, and a
+          box that scrolled away with the rows would be one a reader could not get back to. */}
+      {filter !== null && (
+        <div className="treefind">
+          <input
+            ref={filterBox}
+            className="treefind__field"
+            aria-label={t("files.filterNames")}
+            placeholder={t("files.filterNames")}
+            value={filter}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              // Kept off the tree around it: Escape there means something else, and one press is
+              // one layer (`./FilesPanel`).
+              e.stopPropagation();
+              setFilter(null);
+              box.current?.focus();
+            }}
+          />
+          <button
+            className="treefind__close"
+            type="button"
+            aria-label={t("files.filterClose")}
+            onClick={() => { setFilter(null); box.current?.focus(); }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {/* What the filter came to, where it is not the rows themselves. Said under the box rather
+          than in place of the tree: what a reader does next is type another letter. */}
+      {found !== null && found.rows.length === 0 && (
+        <p className="files__none">{t("files.filterNone")}</p>
+      )}
+      {found?.capped === true && <p className="files__none">{t("files.filterCapped")}</p>}
       {/* Keyed by the folder, so going to another one is a tree torn down and a tree put up rather
           than one tree handed a different root: what a section reads off the disk is its own, and
           none of it is about the folder the reader has just left. */}
@@ -529,6 +629,7 @@ export function FolderTree({
         bound={drawn.exists}
         landing={landing}
         scroller={box}
+        found={found}
         opened={opened[drawn.path] ?? AT_FIRST}
         onOpened={(change) => setOpened((was) => ({
           ...was,
@@ -618,11 +719,13 @@ export function FolderTree({
  * they stand above it.
  */
 function FolderSection({
-  projectId, root, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
+  projectId, root, bound, landing, scroller, found, opened, onOpened, edit, onEdit, onRead, onMenu,
   onTrash, onPicked, chosen, onCarry, onGit,
 }: {
   projectId: number;
   root: string;
+  /** What the filter found, or nothing where the tree is not narrowed (`FolderTree`). */
+  found: FolderNamesDto | null;
   /** Whether the store's own read found the folder. The watch answers the same question later. */
   bound: boolean;
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
@@ -819,6 +922,7 @@ function FolderSection({
             root={root}
             landing={landing}
             scroller={scroller}
+            found={found}
             marks={marks}
             moved={moved}
             open={open}
@@ -912,7 +1016,7 @@ const SPARE = 6;
  * It is also the order the keys walk, which is why the walk holds up when a row on the screen and
  * a row in the document stop being the same thing.
  */
-type Row = {
+export type Row = {
   /** The row's path from the bound folder, joined — what everything about it is named by. */
   key: string;
   path: string[];
@@ -999,11 +1103,19 @@ function linesOf(
 
 /** One bound folder's tree: every open row of it, drawn as one list. */
 function Tree({
-  projectId, root, landing, scroller, marks, moved, open, onOpen, naming, onRead, onMenu,
+  projectId, root, landing, scroller, found, marks, moved, open, onOpen, naming, onRead, onMenu,
   onTrash, cursor, onCursor, picked, anchor, onPicked, chosen, onCarry,
 }: {
   projectId: number;
   root: string;
+  /**
+   * What the filter found, or nothing where the tree is not narrowed.
+   *
+   * **Narrowed, the tree is not the same list.** What is drawn is what the host found under the
+   * whole folder and the folders on the way down to each of them — not the levels this has read,
+   * which are only the ones somebody opened (`./treeFilter`).
+   */
+  found: FolderNamesDto | null;
   /**
    * Where a file being dragged in would land — the whole panel's, because a drag hangs over one
    * folder of one section and every other row has to be able to stop drawing the highlight it was
@@ -1113,8 +1225,10 @@ function Tree({
   }, [projectId, root, shown, moved]);
 
   const lines = useMemo(
-    () => linesOf(levels, open, making, makingDir, []),
-    [levels, open, making, makingDir],
+    () => (found === null
+      ? linesOf(levels, open, making, makingDir, [])
+      : linesOfNames(found.rows).map((row) => ({ kind: "row" as const, ...row }))),
+    [found, levels, open, making, makingDir],
   );
   /**
    * The rows alone, in the order a reader goes down them — what the keys walk.

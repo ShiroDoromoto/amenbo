@@ -113,6 +113,8 @@ const hoisted = vi.hoisted(() => ({
   answers: [] as boolean[],
   /** How many times an editor was asked for its find panel (`./FileEditor`). */
   found: 0,
+  /** What the tree's name filter comes back with, or nothing for an empty answer. */
+  named: null as { rows: { path: string[]; isDir: boolean; ignored: boolean }[]; capped: boolean } | null,
 }));
 
 // Handed on in a statement of its own: what `vi.hoisted` returns is moved above this file's imports,
@@ -261,6 +263,12 @@ vi.mock("./folder", () => ({
   folderEntries: async (_projectId: number, root: string, path: string[]): Promise<FolderEntryDto[]> => {
     hoisted.asked.push(`entries:${root}:${path.join("/")}`);
     return hoisted.entries[path.join("/")] ?? [];
+  },
+  // The walk that narrows the tree. It looks past what is open, so a test says what it found
+  // rather than building it out of the levels above (`./treeFilter`).
+  folderNames: async (_projectId: number, root: string, query: string) => {
+    hoisted.asked.push(`names:${root}:${query}`);
+    return hoisted.named ?? { rows: [], capped: false };
   },
   folderRead: async (
     _projectId: number,
@@ -762,6 +770,7 @@ beforeEach(() => {
   hoisted.confirmed = [];
   hoisted.answers = [];
   hoisted.found = 0;
+  hoisted.named = null;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();

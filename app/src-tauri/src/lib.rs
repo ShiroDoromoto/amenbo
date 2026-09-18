@@ -53,6 +53,9 @@ mod folder_git_askpass;
 /// tree with one and a watch per pruned folder where it does not (`AMB-D-779`), and a scan to say
 /// what actually moved (`AMB-T-3604`).
 mod folder_watch;
+/// Looking through the whole of that folder for a word, sent back while it is being found and
+/// called off when the reader types the next one (`AMB-D-910`).
+mod folder_search;
 /// Changing what that folder holds — making a name, renaming one, moving and copying — behind the
 /// same fence the reading doors are behind, and answering a carry that stopped part way with where
 /// it got to (`AMB-D-782`).
@@ -283,6 +286,7 @@ pub fn run() {
     // different threads and long after the call that opened it returned (`pty`).
     .manage(pty::Terminals::default())
     .manage(folder_watch::FolderWatches::default())
+    .manage(folder_search::FolderSearches::default())
     // What this run of the app has put in the machine's bin, held for the life of the app rather
     // than of the command that binned it: undo is a later press, and what it needs is the pair of
     // paths the bin handed back at the time (`trash`).
@@ -657,6 +661,8 @@ pub fn run() {
       open_with::folder_open_file_with,
       folder_watch::folder_watch,
       folder_watch::folder_unwatch,
+      folder_search::folder_search,
+      folder_search::folder_search_stop,
       folder_save::folder_save,
       folder_write::folder_make,
       folder_write::folder_rename,

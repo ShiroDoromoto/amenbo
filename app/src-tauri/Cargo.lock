@@ -71,6 +71,7 @@ dependencies = [
  "objc2-service-management",
  "objc2-user-notifications",
  "portable-pty",
+ "regex",
  "serde",
  "serde_json",
  "tauri",

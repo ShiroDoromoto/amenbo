@@ -18,7 +18,7 @@ use crate::error::CmdError;
 use crate::folder_fence::{gone, open_no_follow, rooted, under};
 
 /// How much of a file is read to decide whether it is text (`AMB-T-3547`).
-const HEAD: usize = 8000;
+pub(crate) const HEAD: usize = 8000;
 
 /// The most text a panel is handed. A file longer than this is drawn as far as this goes and said
 /// to be cut — the face reads, it does not page.
@@ -27,7 +27,7 @@ const HEAD: usize = 8000;
 /// repository alone are over it, and a cut one written back drops its tail without saying so
 /// (`AMB-D-783`). What is cut is what `truncated` is for — a face that lets a file be edited reads
 /// it and refuses to save.
-const TEXT_CAP: usize = 5 * 1024 * 1024;
+pub(crate) const TEXT_CAP: usize = 5 * 1024 * 1024;
 
 /// The largest picture the panel draws, in bytes. Past it the reader is told there is a picture and
 /// not made to wait for it.

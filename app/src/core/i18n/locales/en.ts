@@ -203,6 +203,7 @@ const ui = {
   "dec.title": "Decisions",
   "dec.empty": "No decisions yet", "dec.new": "Record a decision", "dec.newTitlePh": "Decision title",
   "dec.newBodyPh": "Conclusion + rationale (don't paste raw discussion)", "dec.add": "Record", "dec.cancel": "Cancel",
+  "dec.editTitlePh": "Rewrite the title", "dec.editBodyPh": "Rewrite the conclusion and rationale",
   "dec.accept": "Finish writing", "dec.reject": "Reject", "dec.reopen": "Return to draft",
   "dec.editAcceptedHint": "Editing a decision already decided is a wording fix, not a re-decision (the decided date does not change). To overturn it, supersede it with a new decision via “Link a decision” below.",
   "dec.status.draft": "Draft", "dec.status.decided": "Decided", "dec.status.rejected": "Rejected",

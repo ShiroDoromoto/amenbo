@@ -189,6 +189,7 @@ export const it: Translation = {
     "dec.title": "Decisioni",
     "dec.empty": "Ancora nessuna decisione", "dec.new": "Registra una decisione", "dec.newTitlePh": "Titolo della decisione",
     "dec.newBodyPh": "Conclusione + motivi (non incollare la discussione grezza)", "dec.add": "Registra", "dec.cancel": "Annulla",
+    "dec.editTitlePh": "Riscrivi il titolo", "dec.editBodyPh": "Riscrivi la conclusione e i motivi",
     "dec.accept": "Termina la stesura", "dec.reject": "Respingi", "dec.reopen": "Rimetti in bozza",
     "dec.editAcceptedHint": "Modificare una decisione già presa è una correzione di forma, non una nuova decisione (la data della decisione non cambia). Per ribaltarla, sostituiscila con una nuova decisione da «Collega una decisione», qui sotto.",
     "dec.status.draft": "Bozza", "dec.status.decided": "Decisa", "dec.status.rejected": "Respinta",

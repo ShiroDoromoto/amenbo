@@ -190,6 +190,7 @@ export const pl: Translation = {
     "dec.title": "Decyzje",
     "dec.empty": "Nie ma jeszcze decyzji", "dec.new": "Zapisz decyzję", "dec.newTitlePh": "Tytuł decyzji",
     "dec.newBodyPh": "Wniosek + uzasadnienie (nie wklejaj surowej dyskusji)", "dec.add": "Zapisz", "dec.cancel": "Anuluj",
+    "dec.editTitlePh": "Przepisz tytuł", "dec.editBodyPh": "Przepisz wniosek i uzasadnienie",
     "dec.accept": "Zakończ pisanie", "dec.reject": "Odrzuć", "dec.reopen": "Wróć do szkicu",
     "dec.editAcceptedHint": "Edycja rozstrzygniętej decyzji to poprawka sformułowania, a nie ponowne rozstrzygnięcie (data decyzji się nie zmienia). Żeby ją obalić, zastąp ją nową decyzją przez „Podepnij decyzję” poniżej.",
     "dec.status.draft": "Szkic", "dec.status.decided": "Zdecydowana", "dec.status.rejected": "Odrzucona",

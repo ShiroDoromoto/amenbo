@@ -185,6 +185,7 @@ export const de: Translation = {
     "dec.title": "Entscheidungen",
     "dec.empty": "Noch keine Entscheidungen", "dec.new": "Entscheidung festhalten", "dec.newTitlePh": "Titel der Entscheidung",
     "dec.newBodyPh": "Ergebnis + Begründung (keine rohe Diskussion einfügen)", "dec.add": "Festhalten", "dec.cancel": "Abbrechen",
+    "dec.editTitlePh": "Titel neu schreiben", "dec.editBodyPh": "Ergebnis und Begründung neu schreiben",
     "dec.accept": "Fertig schreiben", "dec.reject": "Ablehnen", "dec.reopen": "Zurück in den Entwurf",
     "dec.editAcceptedHint": "Eine entschiedene Entscheidung zu bearbeiten ist eine Korrektur der Formulierung, keine neue Entscheidung (das Entscheidungsdatum ändert sich nicht). Zum Umstoßen ersetze sie unten über „Entscheidung verknüpfen“ durch eine neue.",
     "dec.status.draft": "Entwurf", "dec.status.decided": "Entschieden", "dec.status.rejected": "Abgelehnt",

@@ -189,6 +189,7 @@ export const es: Translation = {
     "dec.title": "Decisiones",
     "dec.empty": "Todavía no hay decisiones", "dec.new": "Registrar una decisión", "dec.newTitlePh": "Título de la decisión",
     "dec.newBodyPh": "Conclusión + razones (no pegues la discusión en bruto)", "dec.add": "Registrar", "dec.cancel": "Cancelar",
+    "dec.editTitlePh": "Reescribe el título", "dec.editBodyPh": "Reescribe la conclusión y las razones",
     "dec.accept": "Terminar de escribir", "dec.reject": "Rechazar", "dec.reopen": "Devolver a borrador",
     "dec.editAcceptedHint": "Editar una decisión ya decidida es corregir la redacción, no volver a decidir (la fecha de la decisión no cambia). Para revocarla, sustitúyela por una nueva decisión desde «Enlazar una decisión», más abajo.",
     "dec.status.draft": "Borrador", "dec.status.decided": "Decidida", "dec.status.rejected": "Rechazada",

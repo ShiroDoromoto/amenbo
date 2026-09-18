@@ -185,6 +185,7 @@ export const zhHans: Translation = {
     "dec.title": "决策",
     "dec.empty": "还没有决策", "dec.new": "记录一条决策", "dec.newTitlePh": "决策标题",
     "dec.newBodyPh": "结论＋依据（不要粘贴原始讨论）", "dec.add": "记录", "dec.cancel": "取消",
+    "dec.editTitlePh": "重写标题", "dec.editBodyPh": "重写结论与依据",
     "dec.accept": "完成撰写", "dec.reject": "否决", "dec.reopen": "退回草稿",
     "dec.editAcceptedHint": "编辑已决定的决策属于措辞修正，不是重新决策（决定日期不会改变）。要推翻它，请用下方的“关联决策”以新决策取代它。",
     "dec.status.draft": "草稿", "dec.status.decided": "已决定", "dec.status.rejected": "已否决",

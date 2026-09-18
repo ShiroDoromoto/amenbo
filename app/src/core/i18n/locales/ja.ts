@@ -184,6 +184,7 @@ export const ja: Translation = {
     "dec.title": "決定事項",
     "dec.empty": "まだ決定はありません", "dec.new": "決定を記録", "dec.newTitlePh": "決定のタイトル",
     "dec.newBodyPh": "結論と根拠（議論の生ログは貼らない）", "dec.add": "記録する", "dec.cancel": "やめる",
+    "dec.editTitlePh": "タイトルを書き直す", "dec.editBodyPh": "結論と根拠を書き直す",
     "dec.accept": "書き終える", "dec.reject": "却下", "dec.reopen": "書きかけに戻す",
     "dec.editAcceptedHint": "決定済みの編集は文言の訂正であって再決定ではありません（決定日時は変わりません）。覆すなら下の「リンクを張る」で新しい決定に置き換えてください。",
     "dec.status.draft": "書きかけ", "dec.status.decided": "決定済み", "dec.status.rejected": "却下",

@@ -185,6 +185,7 @@ export const nl: Translation = {
     "dec.title": "Besluiten",
     "dec.empty": "Nog geen besluiten", "dec.new": "Besluit vastleggen", "dec.newTitlePh": "Titel van het besluit",
     "dec.newBodyPh": "Conclusie + onderbouwing (plak geen rauwe discussie)", "dec.add": "Vastleggen", "dec.cancel": "Annuleren",
+    "dec.editTitlePh": "Titel herschrijven", "dec.editBodyPh": "Conclusie en onderbouwing herschrijven",
     "dec.accept": "Schrijven afronden", "dec.reject": "Afwijzen", "dec.reopen": "Terug naar concept",
     "dec.editAcceptedHint": "Een besloten besluit bewerken is een tekstuele correctie, geen nieuw besluit (de besluitdatum verandert niet). Wil je het omkeren, vervang het dan door een nieuw besluit via “Besluit koppelen” hieronder.",
     "dec.status.draft": "Concept", "dec.status.decided": "Besloten", "dec.status.rejected": "Afgewezen",

@@ -189,6 +189,7 @@ export const fr: Translation = {
     "dec.title": "Décisions",
     "dec.empty": "Aucune décision pour l'instant", "dec.new": "Enregistrer une décision", "dec.newTitlePh": "Titre de la décision",
     "dec.newBodyPh": "Conclusion + raisons (ne collez pas la discussion brute)", "dec.add": "Enregistrer", "dec.cancel": "Annuler",
+    "dec.editTitlePh": "Réécrire le titre", "dec.editBodyPh": "Réécrire la conclusion et les raisons",
     "dec.accept": "Terminer la rédaction", "dec.reject": "Rejeter", "dec.reopen": "Remettre en brouillon",
     "dec.editAcceptedHint": "Modifier une décision déjà prise relève de la formulation, pas d'une nouvelle décision (la date de décision ne change pas). Pour la renverser, remplacez-la par une nouvelle décision via « Lier une décision », ci-dessous.",
     "dec.status.draft": "Brouillon", "dec.status.decided": "Décidée", "dec.status.rejected": "Rejetée",

@@ -187,6 +187,7 @@ export const vi: Translation = {
     "dec.title": "Quyết định",
     "dec.empty": "Chưa có quyết định nào", "dec.new": "Ghi một quyết định", "dec.newTitlePh": "Tiêu đề quyết định",
     "dec.newBodyPh": "Kết luận + căn cứ (đừng dán nguyên cuộc thảo luận)", "dec.add": "Ghi", "dec.cancel": "Huỷ",
+    "dec.editTitlePh": "Viết lại tiêu đề", "dec.editBodyPh": "Viết lại kết luận và căn cứ",
     "dec.accept": "Viết xong", "dec.reject": "Bác", "dec.reopen": "Đưa lại bản nháp",
     "dec.editAcceptedHint": "Sửa một quyết định đã quyết là sửa câu chữ, không phải quyết lại (ngày quyết không đổi). Muốn lật nó thì hãy thay thế bằng một quyết định mới qua “Nối một quyết định” ở dưới.",
     "dec.status.draft": "Bản nháp", "dec.status.decided": "Đã quyết", "dec.status.rejected": "Bị bác",

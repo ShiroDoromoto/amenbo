@@ -19,6 +19,22 @@ export function isComposing(e: KeyboardEvent): boolean {
   return e.nativeEvent.isComposing || e.keyCode === 229;
 }
 
+/**
+ * The same test, asked of the press itself rather than of React's wrapper around one.
+ *
+ * React is not everywhere a press is read: the panel the editor finds things from listens on its own
+ * DOM (`../files/editorFind`), and what a listener there is handed is the event. The two read the
+ * same two fields off the two shapes; neither can be written in terms of the other, because
+ * {@link isComposing} reads React's normalised `keyCode` and this one the event's own.
+ *
+ * **The keyCode is not only for environments too old to have the flag.** macOS sends the Escape that
+ * takes a conversion back with `isComposing` already 0 and the code still 229, so the code is the
+ * only thing that tells it from an Escape the reader meant (`AMB-T-4916` measured it).
+ */
+export function composing(e: globalThis.KeyboardEvent): boolean {
+  return e.isComposing || e.keyCode === 229;
+}
+
 // The IME-safe test for a "submit" Enter. In CJK input the Enter that accepts a conversion also fires keydown, so
 // {@link isComposing} rejects it, and only an Enter that really means submit or next returns true.
 // Modified Enter (⌘/Ctrl+Enter and friends) is each caller's own call.

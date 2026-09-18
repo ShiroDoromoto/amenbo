@@ -92,10 +92,13 @@ export async function mountEditor(
 ): Promise<Mounted> {
   // Fetched beside the editor, not after it: a file that appears uncoloured and then repaints reads
   // as a glitch, where one that was never coloured reads as a plain file.
-  const [{ EditorState, Compartment }, view, commands, manners] = await Promise.all([
+  const [{ EditorState, Compartment }, view, commands, { finding }, manners] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
+    // Behind the editor's own import, like everything else here: a panel nobody has opened is a
+    // panel nobody has paid for.
+    import("./editorFind"),
     mannersFor(langFor(name)),
   ]);
   const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = view;
@@ -116,6 +119,7 @@ export async function mountEditor(
         highlightActiveLineGutter(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
+        ...finding(),
         // The panel's own type and colours, so an editor in it reads as part of it rather than as
         // something embedded. Everything here is a token the rest of the panel already uses.
         EditorView.theme({
@@ -154,6 +158,23 @@ export async function mountEditor(
             borderRadius: "var(--r-sm)",
             color: "var(--c-text-muted)",
             padding: "0 var(--s-2)",
+          },
+          // Whatever is put above or below the file — the find panel, and the box `Mod-Alt-g` opens
+          // to go to a line — stands on the panel's own surface. CodeMirror draws its panels white
+          // whatever is around them, which under the dark theme is a white band across the file.
+          ".cm-panels": {
+            backgroundColor: "var(--c-surface)",
+            color: "var(--c-text)",
+            border: "none",
+          },
+          ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--c-edge)" },
+          ".cm-panels.cm-panels-bottom": { borderTop: "1px solid var(--c-edge)" },
+          // The match the reader is on, and the others. Both are CodeMirror's own fixed colours
+          // otherwise, which is the same trouble the active line had.
+          ".cm-searchMatch": { backgroundColor: "var(--c-accent-weak)" },
+          ".cm-searchMatch.cm-searchMatch-selected": {
+            backgroundColor: "var(--c-accent)",
+            color: "var(--c-on-accent)",
           },
           "&.cm-focused": { outline: "none" },
         }),

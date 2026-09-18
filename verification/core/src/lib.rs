@@ -3118,8 +3118,11 @@ const REGISTRY: &[OpSpec] = &[
     // The tree narrowed to the names holding a word. It reaches past what is open, which is what it
     // is for — a reader narrowing a tree is doing it instead of opening folders to look.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "filter", required: &["what"], refs: &[], strings: &["what"], binds: false },
-    // And the inside of every file under the folder. `ignored` turns on the half the repository
-    // leaves out; left off, the search follows the ignore file the way the screen does.
+    // And the inside of every file under the folder. `ignored` is the half the repository leaves
+    // out, and it names the state the box ends in rather than a press on it — the screen stands from
+    // the moment it is opened, so a road looking through the same folder twice comes back to a box
+    // already answering one way, and a step that meant "tick it" would turn it off on the second of
+    // the two. Left off, the search follows the ignore file the way the screen does.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "search", required: &["what"], refs: &[], strings: &["what"], binds: false },
     // One hit pressed, which opens its file at its line. Both halves are named because a file is
     // drawn once in the list however many lines of it were found, and which line the press was on

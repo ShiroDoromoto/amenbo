@@ -1,0 +1,210 @@
+# Writing over what a folder-wide search found, in files nobody opened, minus the one hit the reader
+# took out.
+#
+# This is the far end of the search screen and the only act on it that changes anything. What makes
+# it worth a road of its own is that the reader is not looking at what is about to be written: the
+# files are shut, some of them are in folders nobody has opened, and the whole of what says what
+# will happen is the list. So the list has to be a thing a reader can *edit* before pressing, and
+# the press has to ask first.
+#
+# ── Why one hit is taken out ─────────────────────────────────────────────────────────────────────
+# A replacement that always reaches everything it found is a replacement a reader has to be sure
+# about before they search, which is the wrong way round — the list is what they are getting sure
+# *with*. The way out at the end of a line is what lets them be nearly sure. So the road takes one
+# hit out and reads afterwards that it is still the word it was: an act that wrote every hit it found
+# would pass every other reading here and fail that one.
+#
+# ── Why the question is met, and not merely tripped ──────────────────────────────────────────────
+# The question stands in front of a reach nobody can see, and it is asked on the count of files left
+# in the list **after** the hits that were taken out have gone — which is why this road takes its hit
+# out of a file that still has another. Two files are left, so it is asked; a road that dropped the
+# whole file would be walking a one-file replacement, where it is not asked at all, and would go
+# green never having met it.
+#
+# ── Why the list is read again before the files are ──────────────────────────────────────────────
+# The list re-runs once the writing is through, because what it was drawing is not what is in the
+# folder any more. The file that was written over drops out of it, which is the one reading that
+# covers a file this road never opens.
+#
+# ── Why the files are then opened ────────────────────────────────────────────────────────────────
+# A list is the app's own answer about the disk, and this road is about the disk. The spared line and
+# the written-over one sit in the same file, so opening it once reads both — and the second file is
+# opened from the tree, because it is the one the reader never saw at all.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# `sed -i` over a `grep` reaches further and faster. What it has no form of is the list in between:
+# the reader seeing each line, striking one out, and being asked before the rest go.
+id: write-over-what-was-found-across-files-and-spare-one-line
+title: A word found across the folder is written over in files nobody opened, except the one hit that was struck out
+description: >
+  Open the terminal face on a project whose folder holds the same word in two files, one of them
+  twice. Look through the whole folder for it, take one of the three hits out of the list, and write
+  over the rest. Two files are still in the list, so the panel asks before it goes; answer that it
+  should. The list comes back holding only the hit that was struck out. Open both files: the two hits
+  that were left in are the new word, and the one that was taken out is what it always was.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Two hits in one file, which is what lets a hit be taken out with the file still left in the list.
+  # Without that the drop would take the file with it and the question would never be reached.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: |
+        SCENARIO the seedlings are watered every second morning
+        SCENARIO the bench by the door
+        SCENARIO the seedlings are fed on the first of the month
+
+  # The second file. Nothing in this road opens it before the writing, which is the point of it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: benches.md
+      content: SCENARIO the seedlings on the bench are moved out in May
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: search
+    with:
+      what: seedlings
+
+  # All three hits, read before anything is struck out. What the list holds now is what the readings
+  # at the end are measured against.
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+      line: 1
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+      line: 3
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: benches.md
+      line: 1
+
+  # One hit out of a file that keeps another. Two files are still in the list, which is what the
+  # question is asked on.
+  - type: action
+    domain: files
+    op: search-drop
+    with:
+      name: watering.md
+      line: 3
+
+  - type: action
+    domain: files
+    op: search-replace
+    with:
+      with: cuttings
+
+  # Met rather than tripped: this is the only door in the app that stands in front of a change to
+  # files nobody is looking at.
+  - type: action
+    domain: files
+    op: answer
+    with:
+      about: replace
+      answer: yes
+
+  # The list run again over a folder that is not what it was. The hit that was struck out is the only
+  # one the word is still in — which says both that it was spared and that the other two were not.
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+      line: 3
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: benches.md
+      present: false
+
+  - type: action
+    domain: files
+    op: search-open
+    with:
+      name: watering.md
+      line: 3
+
+  # Off the disk now, not off the list. Written over —
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO cuttings are watered every second morning
+
+  # — and spared, in the same file. The hit that was taken out of the list is the word it always was.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are fed on the first of the month
+
+  # And the file nobody opened until now. It is reached from the tree rather than from the list,
+  # because the list no longer draws it — which is what made the reading above it a reading of an
+  # absence and this one a reading of the text.
+  - type: action
+    domain: files
+    op: back
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: benches.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the cuttings on the bench are moved out in May

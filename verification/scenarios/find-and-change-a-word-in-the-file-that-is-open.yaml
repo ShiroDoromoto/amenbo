@@ -1,0 +1,137 @@
+# Finding a word in the file on the screen, and writing over it.
+#
+# Reading a file and typing into it are already roads of their own
+# (`read-a-file-in-the-folder-the-ai-can-see`, `change-a-file-without-leaving-amenbo`). This one is
+# about the panel over the file: the box a word is looked for in, the arrow that walks to a match,
+# and the second box that writes over the one being stood on.
+#
+# ── Why the file is opened twice ─────────────────────────────────────────────────────────────────
+# The same reason a road about typing opens it twice: what the panel draws the moment a save is
+# through is a reading of the control rather than of the file. Leaving and coming back sends the app
+# to the disk, and what comes up then is what is really in it.
+#
+# ── Why the match is walked to before it is written over ─────────────────────────────────────────
+# **Replacing is about the match the editor is standing on**, and after a word has just been typed
+# into the box it is standing on none. The arrow is what puts it on one. A road that pressed the
+# replacing control straight after typing would be walking a press that only walks — and would go
+# green having changed nothing, because the reading afterwards would find the word it was looking
+# for still in the file and the one it wrote nowhere.
+#
+# ── Why the word appears twice in the file ───────────────────────────────────────────────────────
+# One match is written over and the other is not, which is what tells a replacement of one from a
+# replacement of all. A file with a single match would pass either way.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# Looking through a file at a shell is the shell's own vocabulary, and Amenbo is the subject of none
+# of it.
+id: find-and-change-a-word-in-the-file-that-is-open
+title: A word is found in the open file from the panel over it, walked to, written over, and the change is really on the disk
+description: >
+  Open the terminal face on a project whose folder holds a file of plain text with the same word on
+  two of its lines. Press the key that finds things, type that word into the box that comes up, walk
+  to a match and write over it — one, not all of them. Keep the file, leave it and open it again,
+  and read back both the line that was written over and the line that was not.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Plain text under a name the face draws in an editor rather than as Markdown, which is the side of
+  # that line a road about a panel over an editor has to be on. The word stands on two lines,
+  # because one match cannot tell a replacement of one from a replacement of all.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.txt
+      content: |
+        SCENARIO seedlings are watered every second morning
+        SCENARIO the bench by the door
+        SCENARIO seedlings are fed on the first of the month
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  - type: action
+    domain: files
+    op: find
+    with:
+      what: seedlings
+
+  # The press that puts the editor on a match. Without it the replacing control below only walks,
+  # and the road would go green having written nothing.
+  - type: action
+    domain: files
+    op: find-next
+
+  - type: action
+    domain: files
+    op: replace
+    with:
+      with: cuttings
+      all: false
+
+  - type: action
+    domain: files
+    op: save
+
+  # Out and back in, which is what makes the readings below readings of the disk.
+  - type: action
+    domain: files
+    op: back
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO cuttings are watered every second morning
+
+  # And the match that was not written over. A press that had done all of them would have taken this
+  # line with it.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO seedlings are fed on the first of the month

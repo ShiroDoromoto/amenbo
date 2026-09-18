@@ -1,0 +1,155 @@
+# The half of the folder the search leaves out, and the box that puts it back.
+#
+# A folder-wide search that walked everything would spend most of a repository's files on things
+# nobody wrote — what a build left behind, what a package manager fetched — and bury the three lines
+# the reader was after. So it follows the same `.gitignore` the repository does, and by default the
+# answer is about the part of the folder somebody types in.
+#
+# **That default is wrong exactly often enough to need a way out.** What an agent has been at work in
+# is `.env` and `.amenbo` and whatever the run wrote, and those are ignored in most repositories: the
+# moment a reader wants to know what happened rather than what is committed, the files they want are
+# the ones left out.
+#
+# ── Why the same word is looked for twice ────────────────────────────────────────────────────────
+# The whole of this road is the difference between two answers, so both are walked with everything
+# but the box held still. A road that only ticked the box and read a hit would pass on a search that
+# had never left anything out — which is to say, on the bug this box exists because of.
+#
+# ── Why the tree is read in between ──────────────────────────────────────────────────────────────
+# Being left out of the search is not being hidden. The ignored file is on the tree the whole time,
+# and the road reads it there between the two searches, because the two things a reader could
+# conclude from "it is not in the list" are that the search left it out and that it is not in the
+# folder — and only one of them is true.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# `git grep` leaves the same files out and `grep -r` leaves nothing out, and a reader at a shell
+# picks their tool to say which they meant. The box is that choice, made after the question rather
+# than before it.
+id: look-through-the-files-the-repository-ignores
+title: A folder-wide search follows the repository's ignore rules, and the box under it puts the ignored files back
+description: >
+  Open the terminal face on a project whose folder is a repository that ignores one of its folders,
+  with the same word written inside and outside it. Look through the whole folder for that word: only
+  the file the repository records comes back. The ignored file is on the tree all the same. Tick the
+  box that says the ignored files are searched too, and it is in the list.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The rules are the repository's, so there has to be one for them to belong to.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse
+
+  # Written before the files it covers, because what a walk leaves out is decided as it runs.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: .gitignore
+      content: compost/
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # The same word, in the folder the rules cover. Everything this road reads is the difference
+  # between this file being in the answer and not.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: compost/heap.md
+      content: SCENARIO the seedlings go on the heap when they fail
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: search
+    with:
+      what: seedlings
+      ignored: false
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+
+  # Left out, because the repository was told to leave it out.
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: compost/heap.md
+      present: false
+
+  # And on the tree the whole time. Without this the reading above says only that the list is short,
+  # which a folder holding one file would also say.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: compost
+      section: tree
+
+  # The same word again, with nothing moved but the box.
+  - type: action
+    domain: files
+    op: search
+    with:
+      what: seedlings
+      ignored: true
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: compost/heap.md
+      shows: the seedlings go on the heap when they fail
+
+  # And the file that was always in the answer is still in it: the box widens the search rather than
+  # turning it into a different one.
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md

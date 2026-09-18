@@ -37,6 +37,7 @@ import {
 } from "@codemirror/search";
 import { Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { EditorView, keymap, runScopeHandlers, type Panel } from "@codemirror/view";
+import { t } from "../core/i18n";
 import { composing } from "../core/keys";
 
 /** What the editor needs to be able to find things in: the state, the panel and the keys. */
@@ -104,12 +105,12 @@ function shut(view: EditorView): boolean {
 
 /** The three switches, in the order they are drawn. The mark is what the editors people come from
  *  draw for each: two letters for the letters themselves, a pattern's own two characters, and the
- *  word a boundary is drawn around. A word in the mark would be a word in nineteen languages, and
- *  this row has no room for one. */
+ *  word a boundary is drawn around. **The mark is the same in every language and the name is not**
+ *  — a word in the mark would be a word in nineteen of them, and this row has room for none. */
 const SWITCHES = [
-  { of: "caseSensitive", mark: "Aa", says: "Match case" },
-  { of: "regexp", mark: ".*", says: "Regular expression" },
-  { of: "wholeWord", mark: "ab", says: "Whole word" },
+  { of: "caseSensitive", mark: "Aa", says: "files.findCase" },
+  { of: "regexp", mark: ".*", says: "files.findRegex" },
+  { of: "wholeWord", mark: "ab", says: "files.findWord" },
 ] as const;
 
 /** One panel, for one editor. */
@@ -135,13 +136,14 @@ function drawn(view: EditorView): Panel {
   // What `openSearchPanel` looks for when it is pressed a second time: the field to put the focus
   // back in, and to fill from whatever is selected.
   field.setAttribute("main-field", "true");
-  field.setAttribute("aria-label", "Find");
-  field.placeholder = "Find";
+  field.setAttribute("aria-label", t("files.find"));
+  field.placeholder = t("files.find");
   field.spellcheck = false;
   field.autocapitalize = "off";
   field.autocomplete = "off";
 
-  const switches = SWITCHES.map(({ of, mark, says }) => {
+  const switches = SWITCHES.map(({ of, mark, says: key }) => {
+    const says = t(key);
     const button = document.createElement("button");
     button.className = "cmfind__switch";
     button.type = "button";
@@ -172,8 +174,8 @@ function drawn(view: EditorView): Panel {
   close.className = "cmfind__close";
   close.type = "button";
   close.textContent = "✕";
-  close.title = "Close";
-  close.setAttribute("aria-label", "Close");
+  close.title = t("files.findClose");
+  close.setAttribute("aria-label", t("files.findClose"));
   close.addEventListener("click", () => closeSearchPanel(view));
 
   // The way to the replacing half for a reader who does not know `Mod-Alt-f`. Every editor people
@@ -192,8 +194,8 @@ function drawn(view: EditorView): Panel {
 
   const replace = document.createElement("input");
   replace.className = "cmfind__field cmfind__replace";
-  replace.setAttribute("aria-label", "Replace with");
-  replace.placeholder = "Replace";
+  replace.setAttribute("aria-label", t("files.searchReplaceWith"));
+  replace.placeholder = t("files.searchReplaceWith");
   replace.spellcheck = false;
   replace.autocapitalize = "off";
   replace.autocomplete = "off";
@@ -213,15 +215,20 @@ function drawn(view: EditorView): Panel {
   if (writable) finds.append(more);
   finds.append(
     field,
-    step("Previous match", "↑", findPrevious),
-    step("Next match", "↓", findNext),
+    step(t("files.findPrev"), "↑", findPrevious),
+    step(t("files.findNext"), "↓", findNext),
     ...switches.map(({ button }) => button),
     close,
   );
   // A spacer the width of the toggle, so the two fields start at the same place.
   const under = document.createElement("span");
   under.className = "cmfind__under";
-  replaces.append(under, replace, does("Replace", replaceNext), does("Replace all", replaceAll));
+  replaces.append(
+    under,
+    replace,
+    does(t("files.searchReplaceGo"), replaceNext),
+    does(t("files.replaceAll"), replaceAll),
+  );
   dom.append(finds);
   if (writable) dom.append(replaces);
 
@@ -257,7 +264,7 @@ function drawn(view: EditorView): Panel {
   /** Draw the replacing half, or leave it out of the row entirely. */
   const showing = (open: boolean) => {
     if (!writable) return;
-    const says = open ? "Hide replace" : "Show replace";
+    const says = t(open ? "files.searchReplaceHide" : "files.searchReplaceShow");
     more.setAttribute("aria-expanded", String(open));
     more.setAttribute("aria-label", says);
     more.title = says;

@@ -3119,10 +3119,16 @@ const REGISTRY: &[OpSpec] = &[
     // is for — a reader narrowing a tree is doing it instead of opening folders to look.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "filter", required: &["what"], refs: &[], strings: &["what"], binds: false },
     // And the inside of every file under the folder. `ignored` is the half the repository leaves
-    // out, and it names the state the box ends in rather than a press on it — the screen stands from
-    // the moment it is opened, so a road looking through the same folder twice comes back to a box
-    // already answering one way, and a step that meant "tick it" would turn it off on the second of
-    // the two. Left off, the search follows the ignore file the way the screen does.
+    // out and `regex` is whether the query is a pattern rather than a word, and both name the state
+    // their control ends in rather than a press on it — the screen stands from the moment it is
+    // opened, so a road looking through the same folder twice comes back to controls already
+    // answering one way, and a step that meant "press it" would turn one off on the second of the
+    // two. Left off, the search follows the ignore file the way the screen does and reads the query
+    // as the letters it is.
+    //
+    // `regex` is named on the search rather than on the replacement although it is the replacement
+    // it changes most: `$1` in `search-replace` is the first thing the *pattern* put in brackets,
+    // and there is no pattern unless this control is in. A road writing a group says so here.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "search", required: &["what"], refs: &[], strings: &["what"], binds: false },
     // One hit pressed, which opens its file at its line. Both halves are named because a file is
     // drawn once in the list however many lines of it were found, and which line the press was on

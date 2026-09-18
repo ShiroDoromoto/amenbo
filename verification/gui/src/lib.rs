@@ -3286,8 +3286,15 @@ impl Instructor {
                     Some(true) => " Under that box stands one saying the files the repository ignores are searched too, and it has to end up ticked: tick it if a press before this one has not already, and the folder is looked through again with them in it.",
                     _ => " Under that box stands one saying the files the repository ignores are searched too, and it has to end up unticked: untick it if a press before this one left it ticked.",
                 };
+                // How the query itself is read, which is the row of small controls beside the box.
+                // Said as the state to end in for `ignored`'s reason, and named here because what a
+                // group in a replacement means is decided by it and nothing else.
+                let how = match with.get("regex").and_then(|v| v.as_bool()) {
+                    Some(true) => " Beside the box stands a row of small controls for how the query is read, and the one marked `.*` — the query is a pattern — has to end up pressed in: press it if a search before this one has not already.",
+                    _ => " Beside the box stands a row of small controls for how the query is read, and the one marked `.*` — the query is a pattern — has to end up out: press it back out if a search before this one left it in.",
+                };
                 format!(
-                    "Press the key this machine looks through a whole folder with — ⌘⇧F on a Mac, Ctrl+Shift+F elsewhere. It can be pressed from anywhere on this face. The column across the panes opens on a screen of its own, with the keyboard already in its box. Empty that box of anything a search before this one left in it, type `{what}` into it, and wait for the list under it to stand still.{also}"
+                    "Press the key this machine looks through a whole folder with — ⌘⇧F on a Mac, Ctrl+Shift+F elsewhere. It can be pressed from anywhere on this face. The column across the panes opens on a screen of its own, with the keyboard already in its box. Empty that box of anything a search before this one left in it, and type `{what}` into it.{how}{also} Then wait for the list under it to stand still."
                 )
             },
             (Domain::Files, "search-open") => format!(
@@ -3308,7 +3315,7 @@ impl Instructor {
                 }
             },
             (Domain::Files, "search-replace") => format!(
-                "On the screen that looks through the whole folder, press the control beside the box that shows the second box, and type `{text}` into it. Then press the control at the end of that row that makes the replacement. Answer nothing yet: whether a question comes up at all is what the step after this one is about.",
+                "On the screen that looks through the whole folder, press the control beside the box that shows the second box, and type `{text}` into it. Then press the control at the end of that row that makes the replacement, and press nothing after it. Whether a question stands in front of the writing is decided by how many files are left in the list, and the step after this one either answers it or carries on past it.",
                 text = req(with, "with")?,
             ),
             (Domain::Files, "press") => match req(with, "key")? {

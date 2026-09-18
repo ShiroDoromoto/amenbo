@@ -20,8 +20,8 @@ const hoisted = vi.hoisted(() => ({
   stopped: [] as number[],
   /** What the host would refuse the next ask with, or nothing. */
   refuse: null as unknown,
-  /** Every replacement asked for, in order. */
-  replaced: [] as { files: unknown[]; withText: string }[],
+  /** Every replacement asked for, in order — the query with it, which the host reads groups by. */
+  replaced: [] as { files: unknown[]; withText: string; asked: unknown }[],
   /** What the host answers a replacement with, or what it refuses one with. */
   wrote: { done: [], skipped: [] } as unknown,
   refuseWrite: null as unknown,
@@ -40,8 +40,14 @@ vi.mock("./folder", () => ({
     if (hoisted.refuse !== null) throw hoisted.refuse;
   },
   folderSearchStop: async (tag: number) => { hoisted.stopped.push(tag); },
-  folderReplace: async (_projectId: number, _root: string, files: unknown[], withText: string) => {
-    hoisted.replaced.push({ files, withText });
+  folderReplace: async (
+    _projectId: number,
+    _root: string,
+    files: unknown[],
+    withText: string,
+    asked: unknown,
+  ) => {
+    hoisted.replaced.push({ files, withText, asked });
     if (hoisted.refuseWrite !== null) throw hoisted.refuseWrite;
     return hoisted.wrote;
   },
@@ -269,6 +275,37 @@ describe("looking through the whole folder", () => {
       expect(hoisted.replaced).toHaveLength(1);
       expect(hoisted.replaced[0]?.files).toHaveLength(2);
     });
+
+  it("sends the query down with the replacement, so the host can read a group out of it", async () => {
+    await draw();
+    // The switch that says the query is a pattern. Turning it on is what makes `$1` mean anything,
+    // and the host is the only side that can read it — a column says where a match was, not what
+    // was in its brackets.
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>(".search__switch")]
+        .find((one) => one.textContent === ".*")
+        ?.click();
+    });
+    await type("(need)le");
+    await walked();
+    await act(async () => { hoisted.found?.(oneFile(hoisted.asked[hoisted.asked.length - 1]?.tag ?? 0)); });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-expanded="false"]')?.click();
+    });
+
+    const fields = container.querySelectorAll<HTMLInputElement>(".search__field");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(fields[1], "<$1>");
+      fields[1]?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { container.querySelector<HTMLButtonElement>(".search__does")?.click(); });
+
+    expect(hoisted.replaced).toHaveLength(1);
+    expect(hoisted.replaced[0]?.withText).toBe("<$1>");
+    // The same query the hits came from. Anything else and the host finds no match where they are.
+    expect(hoisted.replaced[0]?.asked).toMatchObject({ query: "(need)le", regex: true });
+  });
 
   it("leaves out what the reader took out, and stops asking once that is one file", async () => {
     await draw();

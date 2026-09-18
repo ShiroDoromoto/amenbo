@@ -1,0 +1,106 @@
+# The other answer `$1` has, and the control that decides which of the two a reader gets.
+#
+# `$1` is the first thing a pattern put in brackets — and it is also two characters somebody wanted
+# in a file. Both readings are right, and neither can be guessed from the replacement text: what
+# decides it is the control beside the box that says whether the query is a pattern at all. This
+# road walks the half that is easy to break by being clever.
+#
+# ── Why it is a road and not a unit test ─────────────────────────────────────────────────────────
+# There is a unit test for the expansion. What it cannot reach is the control: the panel has to send
+# the state of that control down with the replacement, and a screen that sent the query and forgot
+# the switch would pass every test in the host and write nothing recognisable into the file. This is
+# the road that touches the switch and then reads a file.
+#
+# ── Why the word looked for is not a pattern ─────────────────────────────────────────────────────
+# `price` holds nothing a pattern reads specially, so the search finds the same places either way.
+# That is the point: what changes between this road and its pair is not what was found but what was
+# written, and a query that behaved differently under the two would be a second variable.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# Quoting is what a shell does instead of this control, and it is the part people get wrong.
+id: write-a-dollar-into-a-file-searched-for-a-word
+title: A replacement typed as a dollar and a digit goes into the file as those characters when the query is a word
+description: >
+  Open the terminal face on a project whose folder holds a file with a word in it. Look through the
+  folder for that word with the control that says the query is a pattern left out. Write over what
+  was found with a replacement that reads like a group. Open the file: the characters that were
+  typed are the characters that are in it, because there was no pattern to have brackets.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: seeds.md
+      content: SCENARIO the price is on the label
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # A word, with the control for patterns out. That is the whole of what this road turns on.
+  - type: action
+    domain: files
+    op: search
+    with:
+      what: price
+      regex: false
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: seeds.md
+      line: 1
+      shows: the price is on the label
+
+  - type: action
+    domain: files
+    op: search-replace
+    with:
+      with: $1
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: seeds.md
+      section: tree
+
+  # What was typed, as characters. A screen that had read it as a group would have written nothing
+  # here at all, and the line would be short two characters rather than wrong in a way anybody sees.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the $1 is on the label

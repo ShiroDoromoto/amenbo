@@ -2418,6 +2418,11 @@ pub enum FolderSkippedDto {
     /// A place named does not land on this file, although its mark says it has not moved — a line
     /// past its end, a column inside a character, or two places over each other.
     Unplaced,
+    /// The pattern the replacement was asked with no longer calls any of this file's places a match,
+    /// so there are no groups to read out for them. It is the seam being checked rather than the
+    /// file: the mark says the bytes have not moved, so this is a caller that looked with one
+    /// pattern and wrote with another (`crate::folder_replace`).
+    Unmatched,
     /// The replacement holds a character this file's encoding cannot write — a tick typed into a
     /// Shift_JIS file (`AMB-D-773`).
     Unwritable,

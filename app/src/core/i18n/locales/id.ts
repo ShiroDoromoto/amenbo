@@ -187,6 +187,7 @@ export const id: Translation = {
     "dec.title": "Keputusan",
     "dec.empty": "Belum ada keputusan", "dec.new": "Catat keputusan", "dec.newTitlePh": "Judul keputusan",
     "dec.newBodyPh": "Kesimpulan + alasan (jangan tempelkan diskusi mentah)", "dec.add": "Catat", "dec.cancel": "Batal",
+    "dec.editTitlePh": "Tulis ulang judul", "dec.editBodyPh": "Tulis ulang kesimpulan dan alasan",
     "dec.accept": "Selesai menulis", "dec.reject": "Tolak", "dec.reopen": "Kembalikan ke draf",
     "dec.editAcceptedHint": "Menyunting keputusan yang sudah diputuskan adalah perbaikan kata, bukan keputusan ulang (tanggal keputusannya tidak berubah). Untuk membatalkannya, gantikan dengan keputusan baru lewat “Tautkan keputusan” di bawah.",
     "dec.status.draft": "Draf", "dec.status.decided": "Diputuskan", "dec.status.rejected": "Ditolak",

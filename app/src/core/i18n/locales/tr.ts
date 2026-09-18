@@ -185,6 +185,7 @@ export const tr: Translation = {
     "dec.title": "Kararlar",
     "dec.empty": "Henüz karar yok", "dec.new": "Karar kaydet", "dec.newTitlePh": "Karar başlığı",
     "dec.newBodyPh": "Sonuç + gerekçe (tartışmanın ham hâlini yapıştırmayın)", "dec.add": "Kaydet", "dec.cancel": "Vazgeç",
+    "dec.editTitlePh": "Başlığı yeniden yaz", "dec.editBodyPh": "Sonucu ve gerekçeyi yeniden yaz",
     "dec.accept": "Yazmayı bitir", "dec.reject": "Reddet", "dec.reopen": "Taslağa geri döndür",
     "dec.editAcceptedHint": "Karara bağlanmış bir kararı düzenlemek söz düzeltmektir, yeniden karar vermek değil (karar tarihi değişmez). Onu devirmek için aşağıdaki “Karar bağla” ile yeni bir kararla yerine geçirin.",
     "dec.status.draft": "Taslak", "dec.status.decided": "Karara bağlanmış", "dec.status.rejected": "Reddedilmiş",

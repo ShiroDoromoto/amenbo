@@ -185,6 +185,7 @@ export const zhHant: Translation = {
     "dec.title": "決策",
     "dec.empty": "還沒有決策", "dec.new": "記錄一則決策", "dec.newTitlePh": "決策標題",
     "dec.newBodyPh": "結論＋理由（不要貼原始討論）", "dec.add": "記錄", "dec.cancel": "取消",
+    "dec.editTitlePh": "重寫標題", "dec.editBodyPh": "重寫結論與理由",
     "dec.accept": "完成撰寫", "dec.reject": "否決", "dec.reopen": "退回草稿",
     "dec.editAcceptedHint": "編輯已決定的決策屬於措辭修正，不是重新決策（決定日期不會改變）。要推翻它，請用下方的「連結決策」以新決策取代它。",
     "dec.status.draft": "草稿", "dec.status.decided": "已決定", "dec.status.rejected": "已否決",

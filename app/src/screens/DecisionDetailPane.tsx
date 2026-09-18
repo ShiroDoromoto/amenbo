@@ -183,8 +183,8 @@ export function DecisionDetailPane({
             style={{ minHeight: "unset", flex: 1 }}
             autoFocus
             value={titleDraft}
-            aria-label={t("dec.newTitlePh")}
-            placeholder={t("dec.newTitlePh")}
+            aria-label={t("dec.editTitlePh")}
+            placeholder={t("dec.editTitlePh")}
             onChange={(e) => setTitleDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setEditing(false); } }}
           />
@@ -208,8 +208,8 @@ export function DecisionDetailPane({
             className="writebox__input"
             rows={8}
             value={bodyDraft}
-            aria-label={t("dec.newBodyPh")}
-            placeholder={t("dec.newBodyPh")}
+            aria-label={t("dec.editBodyPh")}
+            placeholder={t("dec.editBodyPh")}
             onChange={(e) => setBodyDraft(e.target.value)}
             onKeyDown={(e) => {
               if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void saveEdit(); }

@@ -190,6 +190,7 @@ export const ptBR: Translation = {
     "dec.title": "Decisões",
     "dec.empty": "Ainda não há decisões", "dec.new": "Registrar uma decisão", "dec.newTitlePh": "Título da decisão",
     "dec.newBodyPh": "Conclusão + motivos (não cole a discussão crua)", "dec.add": "Registrar", "dec.cancel": "Cancelar",
+    "dec.editTitlePh": "Reescreva o título", "dec.editBodyPh": "Reescreva a conclusão e os motivos",
     "dec.accept": "Concluir a redação", "dec.reject": "Recusar", "dec.reopen": "Devolver a rascunho",
     "dec.editAcceptedHint": "Editar uma decisão já decidida é ajuste de redação, não uma nova decisão (a data de decisão não muda). Para derrubá-la, substitua-a por uma nova decisão em “Vincular uma decisão”, abaixo.",
     "dec.status.draft": "Rascunho", "dec.status.decided": "Decidida", "dec.status.rejected": "Recusada",

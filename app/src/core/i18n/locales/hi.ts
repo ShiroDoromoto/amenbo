@@ -185,6 +185,7 @@ export const hi: Translation = {
     "dec.title": "निर्णय",
     "dec.empty": "अभी कोई निर्णय नहीं", "dec.new": "निर्णय दर्ज करें", "dec.newTitlePh": "निर्णय का शीर्षक",
     "dec.newBodyPh": "निष्कर्ष + आधार (चर्चा जैसी है वैसी न चिपकाएँ)", "dec.add": "दर्ज करें", "dec.cancel": "रद्द करें",
+    "dec.editTitlePh": "शीर्षक फिर से लिखें", "dec.editBodyPh": "निष्कर्ष और आधार फिर से लिखें",
     "dec.accept": "लिखना पूरा करें", "dec.reject": "अस्वीकारें", "dec.reopen": "मसौदे पर लौटाएँ",
     "dec.editAcceptedHint": "तय हो चुके निर्णय को संपादित करना शब्दों का सुधार है, दोबारा निर्णय लेना नहीं (निर्णय की तारीख नहीं बदलती)। उसे पलटना हो तो नीचे “निर्णय जोड़ें” से नए निर्णय द्वारा अधिक्रमित करें।",
     "dec.status.draft": "मसौदा", "dec.status.decided": "तय", "dec.status.rejected": "अस्वीकृत",

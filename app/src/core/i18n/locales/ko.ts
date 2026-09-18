@@ -184,6 +184,7 @@ export const ko: Translation = {
     "dec.title": "결정",
     "dec.empty": "아직 결정이 없습니다", "dec.new": "결정 기록하기", "dec.newTitlePh": "결정 제목",
     "dec.newBodyPh": "결론 + 근거(논의 원문을 붙여넣지 마세요)", "dec.add": "기록", "dec.cancel": "취소",
+    "dec.editTitlePh": "제목 다시 쓰기", "dec.editBodyPh": "결론과 근거 다시 쓰기",
     "dec.accept": "작성 마치기", "dec.reject": "기각", "dec.reopen": "초안으로 되돌리기",
     "dec.editAcceptedHint": "결정된 내용을 고치는 것은 문구 수정이지 다시 결정하는 것이 아닙니다(결정한 날짜는 바뀌지 않습니다). 뒤집으려면 아래 “결정 연결”에서 새 결정으로 대체하세요.",
     "dec.status.draft": "초안", "dec.status.decided": "결정됨", "dec.status.rejected": "기각됨",

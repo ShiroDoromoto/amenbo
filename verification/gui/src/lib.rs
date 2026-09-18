@@ -1079,6 +1079,16 @@ impl Instructor {
             (Domain::Files, "listed") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
+            // A hit in the folder-wide search's list. The words a road gave are what is looked for
+            // where it gave them, and the file's name otherwise: a heading drawn for a file nothing
+            // was found in is the failure worth catching, and the name is what says it is there.
+            (Domain::Files, "found") => Some(Expectation {
+                text: match with.get("shows").and_then(|v| v.as_str()) {
+                    Some(words) => words.to_string(),
+                    None => arg_str(with, "name")?.to_string(),
+                },
+                present: present(with),
+            }),
             // The encoding the row names. It is drawn as words and read as words, and the fold takes
             // the punctuation with it — `Shift_JIS` and `UTF-8` come back as their letters and digits
             // either way, which is the whole of what is being compared.
@@ -3237,6 +3247,66 @@ impl Instructor {
             // The vocabulary is closed here rather than in the registry — a key the face has no
             // answer for is a road nobody can walk, and it fails on the way in rather than on a
             // screen.
+            // ── looking for words ─────────────────────────────────────────────────────────────
+            // Each of these folds a key and a box into one act, because that is one thing a reader
+            // does. The key is named all the same: what these roads prove is that it reaches the
+            // page, which is not true of every key a machine has.
+            (Domain::Files, "find") => format!(
+                "With the file's own text clicked so the keyboard is standing in it, press the key this machine finds with — ⌘F on a Mac, Ctrl+F elsewhere. A row comes up over the file, holding a box and a handful of small controls. Type `{what}` into that box. Nothing is pressed after it: what the row does with what is typed is the step after this one.",
+                what = req(with, "what")?,
+            ),
+            (Domain::Files, "find-next") =>
+                "In the row over the file, press the arrow that goes to the next match — the one pointing down, beside the box. What the editor is standing on moves to a match, and the file scrolls to it if it has to."
+                    .to_string(),
+            (Domain::Files, "replace") => {
+                let text = req(with, "with")?;
+                match with.get("all").and_then(|v| v.as_bool()) {
+                    Some(true) => format!(
+                        "In the row over the file, press the control that shows the second box — the small one at the near end of the row, pointing the way it would open — and type `{text}` into the box that appears. Then press the control beside it that does all of them at once. Every match in the file is written over; nothing is saved yet."
+                    ),
+                    Some(false) => format!(
+                        "In the row over the file, press the control that shows the second box — the small one at the near end of the row — and type `{text}` into the box that appears. Then press the control beside it that does one. The match the editor is standing on is written over and the standing place moves to the next; nothing is saved yet."
+                    ),
+                    _ => return Err(
+                        "action `replace` needs `all` as a yes or a no — one match or every one of them".to_string()
+                    ),
+                }
+            },
+            (Domain::Files, "filter") => format!(
+                "With a row of the folder's section clicked so the keyboard is standing on the tree, press the key this machine finds with — ⌘F on a Mac, Ctrl+F elsewhere. A box appears above the tree. Type `{what}` into it. The tree comes down to the names holding those characters, wherever in the folder they are, with the folders on the way to each of them drawn open above it.",
+                what = req(with, "what")?,
+            ),
+            (Domain::Files, "search") => {
+                let what = req(with, "what")?;
+                let also = match with.get("ignored").and_then(|v| v.as_bool()) {
+                    Some(true) => " Then tick the box under it that says the files the repository ignores are searched too; the folder is looked through again with them in it.",
+                    _ => "",
+                };
+                format!(
+                    "Press the key this machine looks through a whole folder with — ⌘⇧F on a Mac, Ctrl+Shift+F elsewhere. It can be pressed from anywhere on this face. The column across the panes opens on a screen of its own, with the keyboard already in its box. Type `{what}` into it and wait for the list under it to stand still.{also}"
+                )
+            },
+            (Domain::Files, "search-open") => format!(
+                "In the list of what was found, under the heading `{name}`, press the line numbered {line}. That file opens in the column, with what is standing in it on that line.",
+                name = req(with, "name")?,
+                line = numbered(with, "line")?,
+            ),
+            (Domain::Files, "search-drop") => {
+                let name = req(with, "name")?;
+                match with.get("line") {
+                    Some(_) => format!(
+                        "In the list of what was found, under the heading `{name}`, press the small control at the far end of the line numbered {line} — the one that takes that line out of the list. The line goes and the rest of the list stays where it was.",
+                        line = numbered(with, "line")?,
+                    ),
+                    None => format!(
+                        "In the list of what was found, press the small control at the far end of the heading `{name}` — the one that takes that whole file out of the list. Every line under it goes with it."
+                    ),
+                }
+            },
+            (Domain::Files, "search-replace") => format!(
+                "On the screen that looks through the whole folder, press the control beside the box that shows the second box, and type `{text}` into it. Then press the control at the end of that row that makes the replacement. Answer nothing yet: whether a question comes up at all is what the step after this one is about.",
+                text = req(with, "with")?,
+            ),
             (Domain::Files, "press") => match req(with, "key")? {
                 "escape" => "With the keyboard standing on the column the file is drawn in — which is where opening it has left it — press the key this machine leaves things with. It is one layer per press: the wide width goes first, and the column itself once it is standing narrow. Click the file's own text first only if something outside that column has been clicked since, because the terminal beside it hears the same key as meaning something of its own."
                     .to_string(),
@@ -4769,6 +4839,28 @@ impl Instructor {
                 }
             }
             // ── the file face ─────────────────────────────────────────────────────────────────
+            // What the folder-wide search found, read off its list. The line is named where a road
+            // gave one: a file is drawn once in that list however many of its lines were found, so
+            // the file alone says it is in there and the line says which part of it.
+            (Domain::Files, "found") => {
+                let name = req(with, "name")?;
+                let at = match with.get("line") {
+                    Some(_) => format!(" numbered {}", numbered(with, "line")?),
+                    None => String::new(),
+                };
+                let shows = match with.get("shows").and_then(|v| v.as_str()) {
+                    Some(words) => format!(", holding \"{words}\""),
+                    None => String::new(),
+                };
+                match present(with) {
+                    true => format!(
+                        "In the list of what was found, confirm there is a heading `{name}` with a line under it{at}{shows}."
+                    ),
+                    false => format!(
+                        "In the list of what was found, confirm there is no heading `{name}`. It is that list being asked about and no other — the tree beside it draws files this screen was not asked to look in."
+                    ),
+                }
+            },
             (Domain::Files, "listed") => match present(with) {
                 true => format!(
                     "In {}, confirm \"{}\" is one of the rows.",
@@ -5674,6 +5766,17 @@ fn landing(with: &Args) -> Result<&'static str, String> {
 /// the two rows stand together under one heading and the two questions read alike. What comes back is
 /// the question, what its yes does, and what its no keeps, since a step naming the question alone
 /// would leave the operator to work out which button was which.
+/// One `with` key read as the number of a line.
+///
+/// **Refused rather than printed as it stands** where it is not one: a line is counted, and a step
+/// that wrote a word there is a step whose instruction would name a line nobody can find. YAML types
+/// an unquoted scalar by its shape, so what arrives here is a number wherever a road wrote one.
+fn numbered(with: &Args, key: &str) -> Result<i64, String> {
+    with.get(key)
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| format!("arg `{key}` is the number of a line, counted from one"))
+}
+
 fn question(with: &Args) -> Result<(&'static str, &'static str, &'static str), String> {
     match with.get("about").and_then(|v| v.as_str()) {
         Some("bin") => Ok((
@@ -5686,8 +5789,15 @@ fn question(with: &Args) -> Result<(&'static str, &'static str, &'static str), S
             "throws the change away",
             "keeps the change",
         )),
+        // The one in front of a replacement that reaches more than one file. It is not asked at all
+        // for one file, which is what makes a road that answers it a road about the reach.
+        Some("replace") => Ok((
+            "writing over what was found in more than one file",
+            "writes every one of them",
+            "leaves the files as they are",
+        )),
         Some(other) => Err(format!(
-            "`about` does not know `{other}` — it is bin or restore"
+            "`about` does not know `{other}` — it is bin, restore or replace"
         )),
         None => Err("arg `about` must say which of the two questions".to_string()),
     }

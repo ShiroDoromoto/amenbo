@@ -3094,6 +3094,44 @@ const REGISTRY: &[OpSpec] = &[
     // when it is wrong, so this door is the only thing standing between a reader and a file that
     // quietly says something else — and a door nobody walks is a door nobody knows is shut.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "reopen-with", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
+
+    // ---- looking for words: in the file that is open, in the names of the tree, in the folder ----
+    // **Three surfaces and three ops, because they are three questions.** What is in this file, what
+    // a name in this folder is called, and what is inside every file under it: a road that said only
+    // "find" would leave which of the three it meant to the operator, and the three answer with
+    // different things on different parts of the screen.
+    //
+    // **Each folds the key into the act.** Opening a panel and typing into it is one thing a reader
+    // does, and a road that parted them would have a step whose whole content is that a panel came
+    // up. The key is named in the line all the same — it is what the road is proving reaches the
+    // page, which is not true of every key a machine has: one of them is taken by the webview on
+    // one operating system and reloads it, and the page never hears it at all.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "find", required: &["what"], refs: &[], strings: &["what"], binds: false },
+    // Walking the matches. It is its own op because replacing is about the match the editor is
+    // standing on, and after a word has just been typed it is standing on none.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "find-next", required: &[], refs: &[], strings: &[], binds: false },
+    // What goes in their place, in the file that is open. `all` is the difference between the two
+    // presses beside the box, and it is required rather than defaulted: which of them a road means
+    // is the whole of what it is walking, and a road that left it out would be walking whichever one
+    // this file happened to choose for it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "replace", required: &["with", "all"], refs: &[], strings: &["with"], binds: false },
+    // The tree narrowed to the names holding a word. It reaches past what is open, which is what it
+    // is for — a reader narrowing a tree is doing it instead of opening folders to look.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "filter", required: &["what"], refs: &[], strings: &["what"], binds: false },
+    // And the inside of every file under the folder. `ignored` turns on the half the repository
+    // leaves out; left off, the search follows the ignore file the way the screen does.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "search", required: &["what"], refs: &[], strings: &["what"], binds: false },
+    // One hit pressed, which opens its file at its line. Both halves are named because a file is
+    // drawn once in the list however many lines of it were found, and which line the press was on
+    // is what the step after this one reads.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "search-open", required: &["name", "line"], refs: &[], strings: &["name"], binds: false },
+    // One hit, or a whole file's worth of them, taken out of the list so that a replacement does not
+    // reach it. `line` left out is the file's own way out, which takes every hit in it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "search-drop", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // What goes in the place of everything left in that list. **It is not `replace` with a wider
+    // reach**: that one is the file on the screen and this one is files nobody has opened, and the
+    // question in front of it is asked on that difference alone.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "search-replace", required: &["with"], refs: &[], strings: &["with"], binds: false },
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
     // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
@@ -3124,6 +3162,15 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+    // A hit standing in the folder-wide search's list. `name` is the file it is in and `line` the
+    // line it is on; `shows` is words off that line, for a road proving *what* was found rather than
+    // that something was. `present: false` is the half the switch is walked by — a file the
+    // repository ignores is not in the list until the reader asks for it.
+    //
+    // The words looked for are `shows` where a road gave one and the file's name otherwise: a list
+    // drawing the name of a file it found nothing in would be the failure, and the name is what says
+    // it is there at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "found", required: &["name"], refs: &[], strings: &["name", "shows"], binds: false },
     // Why a carry stopped, said on the line that comes up at the foot of the window and goes on its
     // own (`app/src/components/NoticeToast.tsx`). A carry is not one act — it takes the rows it was
     // given in order and stops on the first that will not go — so what is on that line is the row it

@@ -488,7 +488,7 @@ fn line_ending(read: crate::encoding::LineEnding) -> FolderLineEndingDto {
 /// `config.json` is a file of its own, read here rather than held, because the only caller is the
 /// one file in 645 that is not UTF-8 — holding it would be caching a read that almost never happens
 /// against a setting that can change under it.
-fn language_tld() -> Option<&'static [u8]> {
+pub(crate) fn language_tld() -> Option<&'static [u8]> {
     let language = amenbo_core::config::Paths::resolve()
         .ok()
         .and_then(|paths| amenbo_core::config::Config::load(&paths.config_file).language)?;

@@ -166,6 +166,9 @@ export const CORE_ERROR_CODES = [
  * it), the file having moved between the read and the save
  * (`folder_changed_underneath` — an agent in the pane wrote to it while the editor held what was
  * there before), and everything else the filesystem said (`folder_not_saved`); and the one a read is
+ * the one a replacement over a folder refuses outright with (`folder_replace_read_only` — one file
+ * that cannot be written stops every file in the run, so that none of them is half applied,
+ * `AMB-D-911`); and the one a read is
  * turned away with when the name is a link (`folder_link` — `AMB-D-782` refuses it on purpose, and
  * answering that with the same "not there" every other rule uses told the reader their file was
  * broken). */
@@ -177,6 +180,7 @@ export const TAURI_ERROR_CODES = [
   "folder_name",
   "folder_not_saved",
   "folder_rename",
+  "folder_replace_read_only",
   "folder_taken",
   "folder_unwritable_character",
   "init_ambiguous_owners",

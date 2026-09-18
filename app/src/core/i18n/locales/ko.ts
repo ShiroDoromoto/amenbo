@@ -988,6 +988,7 @@ export const ko: Translation = {
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "이 파일을 저장하지 못했습니다: {reason}",
+    folder_replace_read_only: "이 중 {count}개 파일에 쓸 수 없어 아무것도 바꾸지 않았습니다.",
     folder_unwritable_character: "“{character}”는 {encoding}에서 쓸 수 없어서 아무것도 저장하지 않았습니다.",
     // And the save the panel does not make: the file moved between the read and the save,
     // so what the editor holds is older than the file (`AMB-D-784`).

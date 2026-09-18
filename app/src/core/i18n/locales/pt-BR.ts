@@ -1010,6 +1010,7 @@ export const ptBR: Translation = {
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Não foi possível salvar este arquivo: {reason}",
+    folder_replace_read_only: "Não é possível gravar em {count} destes arquivos, então nada foi substituído em nenhum deles.",
     folder_unwritable_character: "“{character}” não pode ser escrito em {encoding}, então nada foi salvo.",
     // And the save the panel does not make: the file moved between the read and the save,
     // so what the editor holds is older than the file (`AMB-D-784`).

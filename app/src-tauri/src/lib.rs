@@ -56,6 +56,9 @@ mod folder_watch;
 /// Looking through the whole of that folder for a word, sent back while it is being found and
 /// called off when the reader types the next one (`AMB-D-910`).
 mod folder_search;
+/// Writing other text where that search found something, over as many files as it found it in —
+/// every one of them checked for writability before any of them is written (`AMB-D-911`).
+mod folder_replace;
 /// Changing what that folder holds — making a name, renaming one, moving and copying — behind the
 /// same fence the reading doors are behind, and answering a carry that stopped part way with where
 /// it got to (`AMB-D-782`).
@@ -663,6 +666,7 @@ pub fn run() {
       folder_watch::folder_unwatch,
       folder_search::folder_search,
       folder_search::folder_search_stop,
+      folder_replace::folder_replace,
       folder_save::folder_save,
       folder_write::folder_make,
       folder_write::folder_rename,

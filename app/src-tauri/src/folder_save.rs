@@ -123,9 +123,17 @@ pub fn folder_save(
     let shared = shares_its_bytes(&opened, &meta);
     drop(opened);
 
-    if shared { in_place(&target, &bytes) } else { replace(&target, &bytes) }
-        .map_err(not_saved)?;
+    written(&target, &bytes, shared).map_err(not_saved)?;
     Ok(digest(&bytes))
+}
+
+/// Put these bytes where that file's are, in whichever of the two shapes this file asks for.
+///
+/// Named here rather than written twice because the choice between them is this module's whole
+/// subject, and the other door that writes a file back whole — a replacement run over a folder
+/// ([`crate::folder_replace`]) — has the same choice to make on every file it touches.
+pub(crate) fn written(target: &Path, bytes: &[u8], shared: bool) -> std::io::Result<()> {
+    if shared { in_place(target, bytes) } else { replace(target, bytes) }
 }
 
 /// The text with the newline the file has, from an editor that hands back only one kind.
@@ -196,7 +204,7 @@ fn put(path: &Path, bytes: &[u8], create: bool) -> std::io::Result<()> {
 
 /// Whether this file's bytes have more than one name — the one file written into directly.
 #[cfg(unix)]
-fn shares_its_bytes(_file: &std::fs::File, meta: &std::fs::Metadata) -> bool {
+pub(crate) fn shares_its_bytes(_file: &std::fs::File, meta: &std::fs::Metadata) -> bool {
     use std::os::unix::fs::MetadataExt as _;
     meta.nlink() > 1
 }
@@ -206,7 +214,7 @@ fn shares_its_bytes(_file: &std::fs::File, meta: &std::fs::Metadata) -> bool {
 /// call the standard library makes underneath. A handle that will not answer is read as one name,
 /// which is what all but a vanishingly small number of files have.
 #[cfg(windows)]
-fn shares_its_bytes(file: &std::fs::File, _meta: &std::fs::Metadata) -> bool {
+pub(crate) fn shares_its_bytes(file: &std::fs::File, _meta: &std::fs::Metadata) -> bool {
     use std::os::windows::io::AsRawHandle as _;
     use windows_sys::Win32::Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,

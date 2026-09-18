@@ -992,6 +992,7 @@ export const th: Translation = {
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "บันทึกไฟล์นี้ไม่ได้: {reason}",
+    folder_replace_read_only: "เขียนลงไฟล์ {count} รายการในนี้ไม่ได้ จึงไม่ได้แทนที่อะไรเลย",
     folder_unwritable_character: "“{character}” เขียนใน {encoding} ไม่ได้ จึงไม่ได้บันทึกอะไรเลย",
     // And the save the panel does not make: the file moved between the read and the save,
     // so what the editor holds is older than the file (`AMB-D-784`).

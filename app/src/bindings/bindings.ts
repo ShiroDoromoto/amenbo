@@ -1119,7 +1119,7 @@ length: number, };
  * stops a whole run before it starts: a file nothing may write to is the run's business, because a
  * run half applied over a folder is the thing this shape has to avoid (`AMB-D-911`).
  */
-export type FolderSkippedDto = "changed" | "unreadable" | "notText" | "notClean" | "unplaced" | "unwritable";
+export type FolderSkippedDto = "changed" | "unreadable" | "notText" | "notClean" | "unplaced" | "unmatched" | "unwritable";
 
 /**
  * One file a replacement was not written into, and why.

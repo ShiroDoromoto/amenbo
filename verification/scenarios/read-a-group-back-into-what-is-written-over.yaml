@@ -1,0 +1,146 @@
+# Writing part of what was found back into what goes in its place.
+#
+# A replacement over a folder is the one act on the search screen where the reader is not looking at
+# the files, and the thing that makes it worth the risk is that it can carry a piece of each match
+# with it. `bench 3` and `bench 7` become `bed 3` and `bed 7` in one press, and the numbers were
+# never typed — the pattern put them in brackets and the replacement read them back out.
+#
+# ── Why this is not the folder-replacement road with a different word in it ──────────────────────
+# That road writes the same letters into every place it reaches, and a column is all it needs to
+# know where they go. This one needs the *match*: `$1` is a stretch of what the pattern found, and
+# a line and a column say where something was, not what was inside its brackets. So the search's own
+# query travels down with the replacement and is laid back over each place before the text is
+# expanded. Nothing on the screen shows that happening, and a road is the only thing that can say it
+# did.
+#
+# ── Why two lines carry different numbers ────────────────────────────────────────────────────────
+# One group could be a replacement that happens to hold the right digit. Two, reading differently at
+# each place from one press, is the group being read at each place — which is the claim.
+#
+# ── Why the control is pressed rather than assumed ───────────────────────────────────────────────
+# `$1` means the first bracket of a pattern, and it means the two characters `$` and `1` when the
+# query is a word. The road says which of the two the screen is in, because both are right answers
+# and the difference between them is one control (`write-a-dollar-into-a-file-searched-for-a-word`).
+#
+# ── Why one file ─────────────────────────────────────────────────────────────────────────────────
+# The question in front of a replacement is asked on more than one file, and it has a road of its
+# own. Here it would be a second thing to answer on the way to the one being asked about.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# `sed -E 's/bench ([0-9]+)/bed \1/'` is this, and older. What it is not is a reader who has just
+# looked at the list of what would change, pressing once.
+id: read-a-group-back-into-what-is-written-over
+title: A replacement over a folder writes back part of each match, read out of the pattern that found it
+description: >
+  Open the terminal face on a project whose folder holds one file with the same word in front of two
+  different numbers. Look through the folder with the control that says the query is a pattern
+  pressed in, and put the numbers in brackets. Write over what was found with a replacement that
+  names that bracket. The list empties, because the pattern finds nothing now; open the file and
+  both lines carry their own number, neither of which was typed.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Two numbers rather than one. A replacement that read the group once and wrote it at both places
+  # would pass on a file where they were the same.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: |
+        SCENARIO bench 3 holds the seedlings
+        SCENARIO bench 7 holds the cuttings
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: search
+    with:
+      what: bench (\d+)
+      regex: true
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+      line: 1
+      shows: bench 3
+
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+      line: 2
+      shows: bench 7
+
+  # `$1` is the brackets. Nothing about the numbers is typed here.
+  - type: action
+    domain: files
+    op: search-replace
+    with:
+      with: bed $1
+
+  # One file, so no question stands between the press and the writing.
+
+  # The list is run again over a folder the pattern now finds nothing in. It is the first thing that
+  # says the writing happened at all — everything under it reads the file itself.
+  - type: assert
+    domain: files
+    op: found
+    with:
+      name: watering.md
+      present: false
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO bed 3 holds the seedlings
+
+  # The other place, carrying its own number. One press, two groups, read where each match was.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO bed 7 holds the cuttings

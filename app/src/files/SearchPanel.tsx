@@ -193,7 +193,10 @@ export function SearchPanel({ projectId, root, onOpen }: {
     setWrote(null);
     setRefusedWrite(null);
     try {
-      const done = await folderReplace(projectId, root, payload(), withText);
+      // `asked` and not a copy of it: the hits in `payload()` came from this query, and the host
+      // reads `$1` out of the match it finds at each of them. A query that had moved would be a
+      // pattern that matches nothing there, and the file would be left alone.
+      const done = await folderReplace(projectId, root, payload(), withText, asked);
       setWrote(done);
       // The files are not what they were, so what the list is drawing is not either.
       setRound((n) => n + 1);

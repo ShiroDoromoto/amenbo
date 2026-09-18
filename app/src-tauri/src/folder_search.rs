@@ -198,7 +198,12 @@ pub fn folder_search_stop(window: tauri::Window, searches: tauri::State<'_, Fold
 ///
 /// **A pattern the reader is still typing is refused, not ignored.** `(` is half of something, and a
 /// search that answered it with nothing would read as "no such text in this folder".
-fn pattern(query: &str, regex: bool, case_sensitive: bool, whole_word: bool) -> Result<Regex, CmdError> {
+pub(crate) fn pattern(
+    query: &str,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> Result<Regex, CmdError> {
     if query.is_empty() {
         return Err(CmdError::coded(
             "folder.search",

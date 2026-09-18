@@ -122,15 +122,31 @@ export async function onFolderSearchDone(
  *
  * **There is no undo.** What takes a replacement back is git, and a folder outside one cannot take
  * it back at all.
+ *
+ * **The query goes back down with it** so that `$1` in `withText` can be read as the first thing the
+ * pattern put in brackets. A group is a stretch of the match and a column cannot say what that is,
+ * so the host builds the pattern again and lays it over each place (`AMB-T-5061`). It has to be the
+ * query the hits came from; anything else and the host finds no match at those places and leaves
+ * the file alone. Where `regex` is off there are no groups and `withText` goes in as its letters.
  */
 export async function folderReplace(
   projectId: number,
   root: string,
   files: FolderReplaceFileDto[],
   withText: string,
+  asked: { query: string; regex: boolean; caseSensitive: boolean; wholeWord: boolean },
 ): Promise<FolderReplacedDto> {
   if (!inTauri()) return { done: [], skipped: [] };
-  return await invoke<FolderReplacedDto>("folder_replace", { projectId, root, files, with: withText });
+  return await invoke<FolderReplacedDto>("folder_replace", {
+    projectId,
+    root,
+    files,
+    with: withText,
+    query: asked.query,
+    regex: asked.regex,
+    caseSensitive: asked.caseSensitive,
+    wholeWord: asked.wholeWord,
+  });
 }
 
 /**

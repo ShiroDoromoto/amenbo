@@ -26,10 +26,18 @@
 //! any other of a program's own sentences: those differ per product and per version. What is looked
 //! for is the text this loop itself pasted.
 //!
-//! **But a pane does not always show it, so there is a second test: the pane answered.** OpenCode
-//! 1.18.23 folds a bracketed paste into a `[Pasted ~1 lines]` chip and never draws the body. Against
-//! that program the words never arrive however long they are waited for — six pastes went in and all
-//! six were read as "not there" (`AMB-T-4008`) — so the sentence would sit in a box nobody submits.
+//! **But a pane does not always show it, so the opening instruction has a second test: the pane
+//! answered.** OpenCode 1.18.23 folds a bracketed paste into a `[Pasted ~1 lines]` chip and never
+//! draws the body. Against that program the words never arrive however long they are waited for —
+//! six pastes went in and all six were read as "not there" (`AMB-T-4008`) — so the sentence would
+//! sit in a box nobody submits.
+//!
+//! **The rename does not have it, because what it would buy is a dialogue answered.** No program
+//! that takes a `/rename` swallows one silently, and the one the second test exists for has no
+//! rename to type — so all it ever reached was a pane holding a question, where the bytes a program
+//! writes back at a paste it never showed are read as the paste landing and the newline picks the
+//! first choice. Twenty-four times in one store, some of them on choices that run something
+//! (`AMB-T-5074`, `AMB-T-5124`, [`crate::handover::Terms`]).
 //!
 //! **"The pane answered" means it moved when nothing else was going to move it.** The sentence goes
 //! into a screen that has held the same bytes across a run of looks (`STILL` of them), and the
@@ -114,8 +122,60 @@ const STILL: usize = 3;
 /// buy is a program that is up and reading, which is the question a pane being started asks. A pane
 /// that has been worked in for an hour is past that question and is moving for the opposite reason —
 /// an agent is answering in it — so what goes in there waits for the answer to end
-/// ([`hand_over`]'s `blind_after`, `AMB-D-872`).
-pub const RESTLESS: usize = 20;
+/// ([`Terms::Rename`], `AMB-D-872`).
+const RESTLESS: usize = 20;
+
+/// Which sentence is being handed over — the whole of what the two callers differ on.
+///
+/// **A screen moves for two reasons and only the caller knows which it is waiting out**: a program
+/// drawing its own interface stops when it is up, and an agent answering in a pane stops when the
+/// answer is done. Both roads write into one input box and read one screen, and neither can tell the
+/// two reasons apart by looking; what tells them apart is which road is being walked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Terms {
+    /// The opening instruction, handed to a pane that has just been started (`AMB-D-793`).
+    Opening,
+    /// The pane's name, carried to the provider running in a pane somebody is working in
+    /// (`AMB-D-872`).
+    Rename,
+}
+
+impl Terms {
+    /// How many passes of unbroken movement buy the paste anyway, or `None` where nothing but
+    /// stillness ever does.
+    ///
+    /// Ten seconds of a restless screen says a program is up and reading, which is the question a
+    /// pane being started asks ([`RESTLESS`]). A pane worked in for an hour is past that question and
+    /// is moving for the opposite reason, so a blind paste there would win a line sitting in the box
+    /// of a pane that was going to stand still by itself.
+    fn blind_after(self) -> Option<usize> {
+        match self {
+            Self::Opening => Some(RESTLESS),
+            Self::Rename => None,
+        }
+    }
+
+    /// Whether a still screen moving on the look after the paste is read as the pane answering for
+    /// it — the second of the two tests (`AMB-D-802`).
+    ///
+    /// **It buys the opening instruction a program that takes the paste without drawing it.**
+    /// OpenCode folds one into a `[Pasted ~1 lines]` chip and never draws the body, so the words
+    /// would never come back and the sentence would sit in a box nobody submits (`AMB-T-4008`).
+    ///
+    /// **It buys a rename nothing, and costs it the dialogue a pane is holding.** The four providers
+    /// that take a `/rename` all draw what is pasted into their input box, and OpenCode — the one
+    /// the test exists for — has no rename to type (`amenbo_core::harness`). What the test does reach
+    /// is a pane holding a question: Claude Code writes twenty bytes of keyboard-protocol back at a
+    /// paste its dialogue swallowed, the screen never shows the words, and the newline answers the
+    /// question instead. That happened twenty-four times in one store (`AMB-T-5124`), some of them on
+    /// choices that run something (`AMB-T-5074`).
+    fn movement_answers(self) -> bool {
+        match self {
+            Self::Opening => true,
+            Self::Rename => false,
+        }
+    }
+}
 
 /// How this ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -224,16 +284,12 @@ fn moved(screen: &[u8]) -> u64 {
 /// walked without a clock. `tries` bounds the whole of it: the patience is passes × the length of
 /// `wait`.
 ///
-/// `blind_after` is how many passes of unbroken movement buy the paste anyway ([`RESTLESS`]), or
-/// `None` where nothing but stillness ever does. **A screen moves for two reasons and only the caller
-/// knows which it is waiting out**: a program drawing its own interface stops when it is up, and an
-/// agent answering stops when the answer is done. The first is worth giving up on after ten seconds
-/// because a person is waiting on the sentence; the second is not, because what a blind paste would
-/// win is a line sitting in the box of a pane that is going to stand still by itself (`AMB-D-872`).
+/// `terms` says which sentence this is, and the two roads part on what a moving screen is allowed to
+/// buy ([`Terms`]).
 pub fn hand_over(
     instruction: &str,
     tries: usize,
-    blind_after: Option<usize>,
+    terms: Terms,
     mut briefed: impl FnMut() -> bool,
     mut look: impl FnMut() -> Option<Look>,
     mut send: impl FnMut(&[u8]) -> bool,
@@ -252,10 +308,11 @@ pub fn hand_over(
     // The screen the sentence last went into, and whether that paste's answer falls due this look.
     let mut pasted_into: Option<u64> = None;
     let mut answer_due = false;
-    // Whether the sentence went into a screen that never stood still. It is its own flag rather than
-    // a reading of `pasted_into`, which on a moving screen names a screen that is already gone by the
-    // next look — and what this has to answer is "has it had one", not "was it this one".
-    let mut pasted_blind = false;
+    // Whether the sentence is in and nothing but the words coming back can submit it — which is also
+    // what stops a second copy going in. It is its own flag rather than a reading of `pasted_into`,
+    // which names a screen that is already gone by the next look on anything that moves — and what
+    // this has to answer is "has it had one", not "was it this one".
+    let mut words_only = false;
 
     for pass in 0..tries {
         // First, and before the screen is looked at: the fact outranks anything read off one, so a
@@ -271,10 +328,10 @@ pub fn hand_over(
         stood = if now == held { stood + 1 } else { 1 };
         held = now;
 
-        if pasted_blind {
-            // The sentence is in a pane that will not hold still, so the only thing left that can
-            // submit it is the words coming back. Movement here is the program's own and says
-            // nothing, and a second copy of the sentence is worse than none.
+        if words_only {
+            // The sentence is in and movement here says nothing about it — either because the screen
+            // was never going to hold still, or because this road never reads movement as an answer
+            // (`Terms`). A second copy of the sentence is worse than none.
         } else if std::mem::take(&mut answer_due) {
             // Owed on this look and no later: the pane was standing still when the sentence went in,
             // so nothing but the sentence was going to move it.
@@ -286,8 +343,15 @@ pub fn hand_over(
                 return Handover::Gone;
             }
             pasted_into = Some(now);
-            answer_due = true;
-        } else if blind_after.is_some_and(|after| pass + 1 >= after)
+            // The answer is owed on the next look where movement is allowed to answer. Where it is
+            // not, the sentence is simply in: the words are the only thing that will submit it, and
+            // nothing goes into this pane again (`Terms`).
+            if terms.movement_answers() {
+                answer_due = true;
+            } else {
+                words_only = true;
+            }
+        } else if terms.blind_after().is_some_and(|after| pass + 1 >= after)
             && now != nothing
             && pasted_into.is_none()
         {
@@ -297,7 +361,7 @@ pub fn hand_over(
             if !send(&bytes) {
                 return Handover::Gone;
             }
-            pasted_blind = true;
+            words_only = true;
         }
 
         // No pause after the last pass: what follows it is the answer, not another look.
@@ -411,22 +475,17 @@ mod tests {
     }
 
     /// Drive [`hand_over`] against one of those, with no clock — on the opening instruction's terms,
-    /// which is the pane being started ([`RESTLESS`]).
+    /// which is the pane being started ([`Terms::Opening`]).
     fn walk(agent: &Agent, instruction: &str, tries: usize) -> Handover {
-        walk_after(agent, instruction, tries, Some(RESTLESS))
+        walk_on(agent, instruction, tries, Terms::Opening)
     }
 
-    /// The same, saying for itself what a restless screen buys.
-    fn walk_after(
-        agent: &Agent,
-        instruction: &str,
-        tries: usize,
-        blind_after: Option<usize>,
-    ) -> Handover {
+    /// The same, saying for itself which road is being walked.
+    fn walk_on(agent: &Agent, instruction: &str, tries: usize, terms: Terms) -> Handover {
         hand_over(
             instruction,
             tries,
-            blind_after,
+            terms,
             || {
                 agent.looks.set(agent.looks.get() + 1);
                 agent.briefed_on.get().is_some_and(|on| agent.looks.get() >= on)
@@ -480,6 +539,25 @@ mod tests {
     }
 
     #[test]
+    fn a_pane_that_answers_without_showing_the_words_is_left_alone_on_a_rename() {
+        // The same pane, on the other road. A rename goes into a pane somebody is working in, and one
+        // that took the paste without drawing it is as likely to be holding a question as an input
+        // box that folds pastes away — Claude Code writes twenty bytes of keyboard protocol back at a
+        // paste its dialogue swallowed, and the newline would pick the first choice (`AMB-T-5074`).
+        let agent = Agent::waiting(Takes::Acknowledges);
+        assert_eq!(
+            walk_on(&agent, "/rename a pane", 60, Terms::Rename),
+            Handover::LeftForTheReader
+        );
+        assert!(!agent.submitted(), "nothing was sent at a pane that never showed the name");
+        assert_eq!(
+            agent.pastes(),
+            1,
+            "and the name went in once — the screen it moved to is not a pane owed another copy"
+        );
+    }
+
+    #[test]
     fn a_pane_that_never_answers_is_pasted_into_once_and_left_with_the_sentence() {
         let agent = Agent::waiting(Takes::Swallows);
         assert_eq!(walk(&agent, "Before you act on any request", 12), Handover::LeftForTheReader);
@@ -516,7 +594,7 @@ mod tests {
         // a pane that was going to be still in a moment (`AMB-D-872`).
         let agent = Agent::restless(Takes::Echoes);
         assert_eq!(
-            walk_after(&agent, "/rename a pane", 60, None),
+            walk_on(&agent, "/rename a pane", 60, Terms::Rename),
             Handover::LeftForTheReader,
             "the patience ran out rather than the sentence going in blind"
         );
@@ -529,7 +607,7 @@ mod tests {
         // And the stillness rule itself is untouched by that: the pane the rename is waiting for is
         // the one that has stopped, and it is pasted into on the same three looks as any other.
         let agent = Agent::waiting(Takes::Echoes);
-        assert_eq!(walk_after(&agent, "/rename a pane", 10, None), Handover::Sent);
+        assert_eq!(walk_on(&agent, "/rename a pane", 10, Terms::Rename), Handover::Sent);
         assert_eq!(agent.pastes(), 1);
         assert!(agent.submitted());
     }
@@ -578,7 +656,7 @@ mod tests {
         let verdict = hand_over(
             "Before you act on any request",
             8,
-            Some(RESTLESS),
+            Terms::Opening,
             || false,
             || Some(Look { tail: Vec::new(), drawn: String::new() }),
             |_| {
@@ -594,7 +672,7 @@ mod tests {
     #[test]
     fn a_terminal_that_has_gone_ends_it() {
         assert_eq!(
-            hand_over("Before you act", 4, Some(RESTLESS), || false, || None, |_| true, || {}),
+            hand_over("Before you act", 4, Terms::Opening, || false, || None, |_| true, || {}),
             Handover::Gone
         );
     }
@@ -605,7 +683,7 @@ mod tests {
             hand_over(
                 "Before you act",
                 4,
-                Some(RESTLESS),
+                Terms::Opening,
                 || false,
                 || Some(Look { tail: b"> ".to_vec(), drawn: "> ".to_owned() }),
                 |_| false,

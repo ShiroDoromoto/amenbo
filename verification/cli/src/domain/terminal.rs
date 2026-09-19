@@ -315,11 +315,11 @@ enum After {
     ///
     /// It is the pane a rename is the dangerous thing to carry into: a program drawing a dialogue
     /// swallows what is pasted at it and draws not one character differently, so a newline sent on
-    /// the strength of the screen having moved answers the dialogue instead. Three things make that
-    /// pane on a machine with no such program installed — the terminal's own echo turned off, so
-    /// nothing written in comes back; a bracketed paste asked for, which is the one of them a real
-    /// program says for itself and no shell does; and a mark printed for each line given, so a line
-    /// arriving is readable where its words must not be.
+    /// the strength of the screen having moved answers the dialogue instead. Two things make that pane
+    /// on a machine with no such program installed — the terminal's own echo turned off, so nothing
+    /// written in comes back, and a mark printed for each line given, so a line arriving is readable
+    /// where its words must not be. The third, asking for a bracketed paste, every shape that stays
+    /// says.
     Asks,
 }
 
@@ -383,13 +383,20 @@ fn program(
     ));
     body.push_str(&format!("for arg in \"$@\"; do printf '{ARG} %s\\n' \"$arg\"; done\n"));
     if after == After::Asks {
-        // Last of what is printed, so the question is what the pane is left holding — and after the
-        // echo goes off, so that nothing written in from here on comes back by the terminal's own
-        // hand. The paste is asked for in the same breath: a pane that has not asked is one nothing
-        // is pasted into at all, and a road standing this shape up to read a paste would be reading
-        // one that never happened.
+        // The echo off, so that nothing written in from here on comes back by the terminal's own hand
+        // — which is what a program drawing its own interface leaves the pane doing.
         body.push_str("stty -echo 2>/dev/null\n");
+    }
+    if after.stays() {
+        // **Said by every shape that stays.** A pane that has not asked for a bracketed paste is one
+        // Amenbo writes nothing into — the markers would arrive as keys and the escape that opens
+        // them as cancel — so a road reading what the app pasted into one of these would be reading a
+        // paste that never happened. Every provider measured asks within a second of being able to
+        // take one; a shell script reading lines asks for nothing, so the stand-in says it itself.
         body.push_str("printf '\\033[?2004h'\n");
+    }
+    if after == After::Asks {
+        // Last of what is printed, so the question is what the pane is left holding.
         body.push_str(&format!("echo '{ASKING}'\n"));
         body.push_str(&format!("echo '{CHOICES}'\n"));
     }
@@ -924,6 +931,33 @@ mod tests {
 
         assert!(printed.contains(&format!("{SAID} [echo SCENARIO carried out]")), "{printed}");
         assert!(printed.contains("SCENARIO carried out"), "and it was run: {printed}");
+    }
+
+    /// Every stand-in that stays asks for a bracketed paste.
+    ///
+    /// **It is what makes one of these a pane Amenbo writes into at all.** Nothing is pasted into a
+    /// pane that has not asked — the markers would arrive as keys and the escape that opens them as
+    /// cancel — so a road reading what the app put into one of these would be reading a paste that
+    /// never happened, and reading it as the app having withheld something. Every provider measured
+    /// asks within a second of being able to take one; a shell script reading lines asks for nothing,
+    /// which is the gap this closes.
+    ///
+    /// The one that ends is not asked for it: nothing is running in that pane to be written to.
+    #[test]
+    fn every_stand_in_that_stays_asks_for_a_bracketed_paste() {
+        for (tag, after, stays) in [
+            ("ends", After::Ends, false),
+            ("reads", After::Reads, true),
+            ("runs", After::Runs, true),
+            ("asks", After::Asks, true),
+        ] {
+            let body = program("claude", &[], None, 0, after, true);
+            assert_eq!(
+                body.contains("[?2004h"),
+                stays,
+                "the {tag} shape and the paste it does or does not ask for",
+            );
+        }
     }
 
     /// A stand-in holding a question asks it, asks for a paste, and says only that a line arrived.

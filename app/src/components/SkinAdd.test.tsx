@@ -118,9 +118,12 @@ describe("reading a skin file over", () => {
   it("names each thing the check set aside", async () => {
     hoisted.read = judgement({
       warnings: [
-        { kind: "unknown", theme: null, key: "radius_scale" },
-        { kind: "closed", theme: "light", key: "k-slack" },
-        { kind: "notText", theme: "light", key: "s-3" },
+        { kind: "unknown", theme: null, key: "radius_scale", detail: null },
+        { kind: "closed", theme: "light", key: "k-slack", detail: null },
+        { kind: "notText", theme: "light", key: "s-3", detail: null },
+        // One dropped font can be four different things, so the reason travels with it rather
+        // than being named by the kind.
+        { kind: "font", theme: null, key: "font_file", detail: "format is 'ttf'; woff2 is the one taken" },
       ],
     });
     await drawAndPick();
@@ -128,6 +131,7 @@ describe("reading a skin file over", () => {
     expect(said).toContain("radius_scale");
     expect(said).toContain("light.k-slack");
     expect(said).toContain("light.s-3");
+    expect(said).toContain("woff2 is the one taken");
   });
 
   it("says a skin made for one side is made for one side", async () => {

@@ -251,6 +251,14 @@ fn refused(path: &Path, refusal: Refusal) -> CliError {
             format!("'{name}' is not a name a skin can be kept under"),
             Some("Use lowercase letters, digits, '-' and '_', opening on a letter or a digit.".to_string()),
         ),
+        Refusal::FontWithoutLicenceText => (
+            "the embedded font has no license_text".to_string(),
+            Some(
+                "A font's terms have to travel with it. Put the licence in full under \
+                 font_file.license_text, or take the font out."
+                    .to_string(),
+            ),
+        ),
     };
     CliError { code: "skin_refused", message: format!("{}: {message}", path.display()), hint, exit: 1 }
 }
@@ -273,6 +281,7 @@ fn warnings_json(taken: &Taken) -> Vec<serde_json::Value> {
             Warning::UnknownToken { theme, key } => json!({ "kind": "unknown_token", "theme": theme.as_str(), "key": key }),
             Warning::ClosedToken { theme, key } => json!({ "kind": "closed_token", "theme": theme.as_str(), "key": key }),
             Warning::NotText { theme, key } => json!({ "kind": "not_text", "theme": theme.as_str(), "key": key }),
+            Warning::FontDropped(why) => json!({ "kind": "font_dropped", "why": why.en() }),
         })
         .collect()
 }
@@ -298,6 +307,7 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
             Warning::UnknownToken { theme, key } => format!("  · {theme}.{key}: not a name this Amenbo has — dropped"),
             Warning::ClosedToken { theme, key } => format!("  · {theme}.{key}: this one is not a skin's to move — dropped"),
             Warning::NotText { theme, key } => format!("  · {theme}.{key}: the value is not text — dropped"),
+            Warning::FontDropped(why) => format!("  · the embedded font: {} — dropped", why.en()),
         };
         human(flags, line);
     }

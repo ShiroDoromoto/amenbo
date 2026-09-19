@@ -47,9 +47,40 @@ pub struct Skin {
     pub homepage: Option<String>,
     pub light: ThemeTable,
     pub dark: ThemeTable,
+    /// The one font a skin may carry, as the document writes it. A pixel face is a look the name
+    /// stack cannot reach: pointing at a family the reader does not have leaves the author's screen
+    /// and theirs as different pictures, so the bytes travel with the colours.
+    ///
+    /// One, and no weights. Bold is synthesised. A second would raise the question of whether the
+    /// size limit is per font or for the pair, and there is nothing a second buys that answers it.
+    pub font: Option<FontFile>,
     /// The header keys this build does not know, in order. A skin written for a later amenbo is read
     /// as far as it goes, so these are carried out to be warned about rather than to refuse on.
     pub unknown_keys: Vec<String>,
+}
+
+/// A skin's one embedded font, as it comes off the document. Held as written — the check is what
+/// decodes it and rules on it, for the reason the tables are held as written.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct FontFile {
+    /// The name the generated `@font-face` is given, and the one `font` puts at the head of its
+    /// stack.
+    #[serde(default)]
+    pub family: String,
+    /// `woff2`, and nothing else is taken.
+    #[serde(default)]
+    pub format: String,
+    /// The licence's name, for the line beside the skin.
+    #[serde(default)]
+    pub license: String,
+    /// The licence in full. OFL asks that it travel with the font, and a skin is what the font
+    /// travels in — so this is not a field that may be left out.
+    #[serde(default)]
+    pub license_text: String,
+    /// The bytes, base64. A block scalar leaves its wrapping newlines in the value, so what arrives
+    /// here is not clean base64 and is not decoded until the check strips them.
+    #[serde(default)]
+    pub data: String,
 }
 
 /// The values one side of a skin sets. Token names come without the leading `--`: what the document
@@ -80,6 +111,7 @@ impl Skin {
             homepage: w.homepage,
             light: ThemeTable::split(w.light.unwrap_or_default()),
             dark: ThemeTable::split(w.dark.unwrap_or_default()),
+            font: w.font_file,
             unknown_keys: w.rest.into_keys().collect(),
         })
     }
@@ -100,6 +132,34 @@ impl ThemeTable {
         }
         ThemeTable { values, not_text }
     }
+}
+
+/// The bytes of one embedded font, or why it was set aside.
+///
+/// The newlines a block scalar leaves in the value are taken out first: what a YAML parser hands
+/// back for `data: |` is wrapped at the column the author's editor wrapped it at, which is not
+/// base64 any decoder accepts. Whitespace is all that is stripped — anything else that does not
+/// decode is the file saying it is not what it claims.
+fn read_font(file: &FontFile) -> Result<Vec<u8>, FontProblem> {
+    use base64::Engine as _;
+
+    if file.family.trim().is_empty() {
+        return Err(FontProblem::NoFamily);
+    }
+    if file.format.trim() != "woff2" {
+        return Err(FontProblem::Format(file.format.trim().to_string()));
+    }
+    let packed: String = file.data.chars().filter(|c| !c.is_whitespace()).collect();
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(packed)
+        .map_err(|_| FontProblem::Unreadable)?;
+    if bytes.len() > FONT_MAX_BYTES {
+        return Err(FontProblem::TooLarge { bytes: bytes.len() });
+    }
+    if !bytes.starts_with(WOFF2_MAGIC) {
+        return Err(FontProblem::Unreadable);
+    }
+    Ok(bytes)
 }
 
 /// The document as serde reads it. Separate from [`Skin`] so the shape on disk can be forgiving —
@@ -123,6 +183,8 @@ struct Wire {
     light: Option<BTreeMap<String, Value>>,
     #[serde(default)]
     dark: Option<BTreeMap<String, Value>>,
+    #[serde(default)]
+    font_file: Option<FontFile>,
     #[serde(flatten)]
     rest: BTreeMap<String, Value>,
 }
@@ -164,6 +226,18 @@ pub const CLOSED: &[&str] = &[
 /// the skin is kept under, so what it may hold is what a filename may hold on every platform amenbo
 /// runs on. Lowercase ASCII, digits, `-` and `_`, opening on a letter or a digit.
 pub const NAME_MAX: usize = 64;
+
+/// The most an embedded font may weigh, decoded.
+///
+/// Set where a Japanese face fits: a Latin-only pixel font is a few kilobytes, and DotGothic16 —
+/// which carries kana and han — is 500,480 bytes as one woff2. **It is not a time budget.** Two
+/// megabytes takes about 48ms from file to glyphs, which nobody waits on. What it turns away is a
+/// file that is not a font at all sitting in `data`.
+pub const FONT_MAX_BYTES: usize = 2 * 1024 * 1024;
+
+/// What a woff2 file opens with. Read so that "not woff2" is what the bytes say rather than what
+/// the document claims about them.
+const WOFF2_MAGIC: &[u8; 4] = b"wOF2";
 
 /// The extension a skin's file carries. The one shape a skin is kept in, and read back by everything
 /// that enumerates the directory — the device's own, and an archive's entries.
@@ -262,6 +336,9 @@ pub struct Taken {
     /// The skin with everything the check dropped removed, so applying it cannot reach a name the
     /// check refused.
     pub skin: Skin,
+    /// The embedded font's bytes, decoded, where one came through. `None` where the skin carried
+    /// none and where the one it carried was set aside — which side it was is in the warnings.
+    pub font: Option<Vec<u8>>,
     pub warnings: Vec<Warning>,
 }
 
@@ -277,6 +354,40 @@ pub enum Warning {
     ClosedToken { theme: Side, key: String },
     /// A value that did not arrive as text: a length where a colour belongs, a list, a nested map.
     NotText { theme: Side, key: String },
+    /// The embedded font was set aside. The colours are taken either way — a look built on a face
+    /// nobody can read still has its palette, and refusing the file over it would throw that away.
+    FontDropped(FontProblem),
+}
+
+/// Why an embedded font was set aside.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FontProblem {
+    /// Not `woff2`. It is the one format taken, so there is nothing to try.
+    Format(String),
+    /// The base64 did not decode, or what came out is not a woff2 file.
+    Unreadable,
+    /// Larger than [`FONT_MAX_BYTES`].
+    TooLarge { bytes: usize },
+    /// No family name, so there is nothing to put at the head of the stack.
+    NoFamily,
+}
+
+impl FontProblem {
+    /// Why the font was set aside, in one phrase. English on both faces, the way a refusal is: a
+    /// person told it in the terminal and a person shown it in the window are told the same thing.
+    pub fn en(&self) -> String {
+        match self {
+            FontProblem::Format(said) if said.is_empty() => {
+                "no format; woff2 is the one taken".to_string()
+            }
+            FontProblem::Format(said) => format!("format is '{said}'; woff2 is the one taken"),
+            FontProblem::Unreadable => "the data is not a woff2 file".to_string(),
+            FontProblem::TooLarge { bytes } => {
+                format!("{bytes} bytes, over the {FONT_MAX_BYTES} this build takes")
+            }
+            FontProblem::NoFamily => "no family name to put at the head of the stack".to_string(),
+        }
+    }
 }
 
 /// Why a whole skin was turned away. Four shapes, and each of them is a statement the document makes
@@ -296,6 +407,10 @@ pub enum Refusal {
     SideNotDeclared(Side),
     /// Named itself something that cannot be a filename, and so cannot be kept.
     UnusableName(String),
+    /// Carried a font and no licence text. Unlike everything else about a font this is not a thing
+    /// to drop and go on with: a face whose terms of redistribution are unknown is not one to put
+    /// on somebody's machine, and the file it came in is what those terms have to travel in.
+    FontWithoutLicenceText,
 }
 
 /// One of the two sides a skin may hold.
@@ -364,8 +479,26 @@ impl Skin {
             .map(|k| Warning::UnknownHeaderKey(k.clone()))
             .collect();
 
+        // The font, before the tables: its one refusal is about the whole document, and a licence
+        // nobody can read is not a thing to get past by dropping the face and going on.
+        let mut font_bytes = None;
+        if let Some(file) = &self.font {
+            if file.license_text.trim().is_empty() {
+                return Err(Refusal::FontWithoutLicenceText);
+            }
+            match read_font(file) {
+                Ok(bytes) => font_bytes = Some(bytes),
+                Err(why) => warnings.push(Warning::FontDropped(why)),
+            }
+        }
+
         let mut skin = self;
         skin.unknown_keys = Vec::new();
+        if font_bytes.is_none() {
+            // Dropped, so it is not carried on: what is left names a family nothing supplies, and
+            // `font` falls back to the stack the author wrote beside it.
+            skin.font = None;
+        }
         for side in [Side::Light, Side::Dark] {
             let table = match side {
                 Side::Light => &mut skin.light,
@@ -387,7 +520,7 @@ impl Skin {
             table.values = kept;
         }
 
-        Ok(Taken { skin, warnings })
+        Ok(Taken { skin, font: font_bytes, warnings })
     }
 
     /// One side's table, by name.
@@ -459,7 +592,9 @@ dark:
     #[test]
     fn a_header_key_this_build_does_not_know_is_carried_out_by_name() {
         let s = Skin::read("name: n\ntitle: t\nskin_v: 2\nthemes: [dark]\nradius_scale: 1.5\nfont_file:\n  family: Silkscreen\n").unwrap();
-        assert_eq!(s.unknown_keys, ["font_file", "radius_scale"]);
+        // `font_file` is one this build has, so it is read rather than carried out as unknown.
+        assert_eq!(s.unknown_keys, ["radius_scale"]);
+        assert_eq!(s.font.as_ref().unwrap().family, "Silkscreen");
         assert_eq!(s.skin_v, 2);
     }
 
@@ -603,6 +738,109 @@ dark:
             .check()
             .unwrap_err();
         assert_eq!(e, Refusal::UnknownSide("sepia".into()));
+    }
+
+    /// A skin document carrying a font, built from the bytes the test wants in it.
+    fn with_font(fields: &str, bytes: &[u8]) -> String {
+        use base64::Engine as _;
+        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        format!(
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{fields}  data: {data}\n"
+        )
+    }
+
+    /// The four fields a usable font needs, with the bytes left to the caller.
+    const FONT_HEAD: &str =
+        "  family: Silkscreen\n  format: woff2\n  license: OFL-1.1\n  license_text: Copyright…\n";
+
+    #[test]
+    fn a_font_that_is_what_it_says_comes_through_decoded() {
+        let bytes = [b"wOF2".as_slice(), &[0u8; 64]].concat();
+        let taken = Skin::read(&with_font(FONT_HEAD, &bytes)).unwrap().check().unwrap();
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+        assert_eq!(taken.font.as_deref(), Some(bytes.as_slice()));
+        assert_eq!(taken.skin.font.as_ref().unwrap().family, "Silkscreen");
+        assert_eq!(taken.skin.font.as_ref().unwrap().license, "OFL-1.1");
+    }
+
+    #[test]
+    fn the_newlines_a_block_scalar_leaves_in_are_not_the_fonts_fault() {
+        // What a parser hands back for `data: |` is wrapped at the column the author's editor
+        // wrapped it at, which is not base64 any decoder takes.
+        use base64::Engine as _;
+        let bytes = [b"wOF2".as_slice(), &[7u8; 200]].concat();
+        let wrapped: String = base64::engine::general_purpose::STANDARD
+            .encode(&bytes)
+            .as_bytes()
+            .chunks(76)
+            .map(|line| format!("    {}\n", std::str::from_utf8(line).unwrap()))
+            .collect();
+        let yaml = format!(
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{FONT_HEAD}  data: |\n{wrapped}"
+        );
+        let taken = Skin::read(&yaml).unwrap().check().unwrap();
+        assert_eq!(taken.font.as_deref(), Some(bytes.as_slice()));
+    }
+
+    #[test]
+    fn a_font_that_is_not_what_it_says_is_set_aside_and_the_colours_are_taken() {
+        let cases: Vec<(String, FontProblem)> = vec![
+            (
+                with_font("  family: F\n  format: ttf\n  license: X\n  license_text: Y\n", b"wOF2...."),
+                FontProblem::Format("ttf".into()),
+            ),
+            (
+                // Says woff2 and is not: the bytes are read rather than the claim about them.
+                with_font(FONT_HEAD, b"not a font at all"),
+                FontProblem::Unreadable,
+            ),
+            (
+                with_font(
+                    "  family: \"\"\n  format: woff2\n  license: X\n  license_text: Y\n",
+                    b"wOF2....",
+                ),
+                FontProblem::NoFamily,
+            ),
+        ];
+        for (yaml, why) in cases {
+            let taken = Skin::read(&yaml).unwrap().check().unwrap();
+            assert_eq!(taken.warnings, [Warning::FontDropped(why)], "{yaml}");
+            assert!(taken.font.is_none());
+            assert!(taken.skin.font.is_none(), "and the family is not carried on");
+            assert_eq!(taken.skin.light.values["c-bg"], "#fff", "the colours are taken");
+        }
+    }
+
+    #[test]
+    fn a_font_past_the_size_this_build_takes_is_set_aside_with_its_weight() {
+        let bytes = [b"wOF2".as_slice(), &vec![0u8; FONT_MAX_BYTES]].concat();
+        let taken = Skin::read(&with_font(FONT_HEAD, &bytes)).unwrap().check().unwrap();
+        assert_eq!(taken.warnings, [Warning::FontDropped(FontProblem::TooLarge { bytes: bytes.len() })]);
+        assert!(taken.font.is_none());
+    }
+
+    #[test]
+    fn a_font_with_no_licence_text_turns_the_whole_skin_away() {
+        // The one thing about a font that is not dropped and gone on with: the terms it may be
+        // passed on under have to travel in the file it travels in.
+        let yaml = with_font(
+            "  family: F\n  format: woff2\n  license: OFL-1.1\n  license_text: \"  \"\n",
+            b"wOF2....",
+        );
+        assert_eq!(
+            Skin::read(&yaml).unwrap().check().unwrap_err(),
+            Refusal::FontWithoutLicenceText
+        );
+    }
+
+    #[test]
+    fn a_skin_that_carries_no_font_says_so_rather_than_warning_about_one() {
+        let taken = Skin::read("name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n")
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(taken.font.is_none());
+        assert!(taken.warnings.is_empty());
     }
 
     #[test]

@@ -869,21 +869,31 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                         kind: "unknown".into(),
                         theme: None,
                         key: key.clone(),
+                        detail: None,
                     },
                     Warning::UnknownToken { theme, key } => SkinWarningDto {
                         kind: "unknown".into(),
                         theme: Some(theme.as_str().to_string()),
                         key: key.clone(),
+                        detail: None,
                     },
                     Warning::ClosedToken { theme, key } => SkinWarningDto {
                         kind: "closed".into(),
                         theme: Some(theme.as_str().to_string()),
                         key: key.clone(),
+                        detail: None,
                     },
                     Warning::NotText { theme, key } => SkinWarningDto {
                         kind: "notText".into(),
                         theme: Some(theme.as_str().to_string()),
                         key: key.clone(),
+                        detail: None,
+                    },
+                    Warning::FontDropped(why) => SkinWarningDto {
+                        kind: "font".into(),
+                        theme: None,
+                        key: "font_file".into(),
+                        detail: Some(why.en()),
                     },
                 }
             })
@@ -969,6 +979,9 @@ fn refusal_sentence(refusal: &amenbo_core::skin::Refusal) -> String {
         }
         Refusal::UnusableName(name) => {
             format!("'{name}' is not a name a skin can be kept under")
+        }
+        Refusal::FontWithoutLicenceText => {
+            "the embedded font has no license_text; a font's terms have to travel with it".to_string()
         }
     }
 }

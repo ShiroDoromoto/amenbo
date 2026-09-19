@@ -231,6 +231,9 @@ pub enum Error {
     #[error("failed to parse JSON: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("failed to parse YAML: {0}")]
+    Yaml(#[from] serde_norway::Error),
+
     #[error("store (engine) operation failed: {0}")]
     Storage(String),
 
@@ -562,6 +565,7 @@ impl Error {
             | Error::BindingStale(_)
             | Error::Io(_)
             | Error::Json(_)
+            | Error::Yaml(_)
             | Error::Storage(_) => None,
         }
     }
@@ -580,6 +584,7 @@ impl Error {
             Error::FormatAhead(_) => ErrorCode::FormatAhead,
             Error::Io(_) => ErrorCode::IoError,
             Error::Json(_) => ErrorCode::ParseError,
+            Error::Yaml(_) => ErrorCode::ParseError,
             Error::Storage(_) => ErrorCode::StorageError,
             Error::StoreBusy(_) => ErrorCode::StoreBusy,
         }
@@ -766,6 +771,7 @@ mod tests {
             storage,
             Error::BindingStale("/gone".into()),
             Error::Json(serde_json::from_str::<i32>("{").unwrap_err()),
+            Error::Yaml(serde_norway::from_str::<i32>("a: [").unwrap_err()),
         ] {
             assert!(
                 !e.to_string().chars().any(|c| ('\u{3040}'..='\u{30ff}').contains(&c)),

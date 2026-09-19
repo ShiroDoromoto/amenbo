@@ -56,7 +56,6 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
- "serde_norway",
 ]
 
 [[package]]
@@ -90,6 +89,7 @@ dependencies = [
  "self-replace",
  "serde",
  "serde_json",
+ "serde_norway",
  "sha2",
  "tar",
  "thiserror",

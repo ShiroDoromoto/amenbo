@@ -16,11 +16,14 @@ const hoisted = vi.hoisted(() => ({
   tables: {} as Record<string, SkinTablesDto>,
   /** Every `skin_use` the screen asked for, in order. */
   worn: [] as (string | null)[],
+  /** What the host answers for a font's licence in full. */
+  licence: null as string | null,
 }));
 
 vi.mock("../core/ipc", () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => {
     if (cmd === "skin_list") return Promise.resolve(hoisted.list);
+    if (cmd === "skin_font_licence") return Promise.resolve(hoisted.licence);
     if (cmd === "skin_tables") return Promise.resolve(hoisted.tables[args?.name as string] ?? null);
     if (cmd === "skin_use") {
       hoisted.worn.push((args?.name as string | null) ?? null);
@@ -41,6 +44,8 @@ const row = (name: string, themes: string[]) => ({
   license: null,
   homepage: null,
   error: null,
+  fontFamily: null,
+  fontLicense: null,
 });
 
 let host: HTMLDivElement;
@@ -70,6 +75,7 @@ beforeEach(() => {
   hoisted.list = { on: null, skins: [] };
   hoisted.tables = {};
   hoisted.worn = [];
+  hoisted.licence = null;
   document.documentElement.dataset.theme = "light";
 });
 
@@ -120,6 +126,33 @@ describe("trying a skin on", () => {
 
     expect(hoisted.worn).toEqual(["washi"]);
     expect(host.querySelector(".skinfit")).toBe(null);
+  });
+});
+
+describe("the font a skin carries", () => {
+  it("says where it came from, and hands over the licence when it is asked for", async () => {
+    hoisted.list = {
+      on: "retro",
+      skins: [{ ...row("retro", ["dark"]), fontFamily: "Silkscreen", fontLicense: "OFL-1.1" }],
+    };
+    hoisted.licence = "Copyright 2001 The Silkscreen Project Authors";
+    await draw();
+
+    expect(host.textContent).toContain("Silkscreen");
+    expect(host.textContent).toContain("OFL-1.1");
+    expect(host.querySelector(".skinlicence"), "not until it is asked for").toBe(null);
+
+    const ask = [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === "ライセンス全文" || b.textContent === "Licence in full");
+    await act(async () => ask!.click());
+    await act(async () => {});
+    expect(host.querySelector(".skinlicence")?.textContent).toContain("Silkscreen Project Authors");
+  });
+
+  it("says nothing where the skin carries none", async () => {
+    hoisted.list = { on: "washi", skins: [row("washi", ["light", "dark"])] };
+    await draw();
+    expect(host.querySelector(".skinlicence")).toBe(null);
   });
 });
 

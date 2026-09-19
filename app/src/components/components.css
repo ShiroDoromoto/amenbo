@@ -69,6 +69,13 @@
   max-width: var(--measure-form);
 }
 .skinwell--over { border-color: var(--c-accent); background: var(--c-accent-faint); }
+/* A font's licence, in full, where the reader asked to see it. A document rather than a line, so
+   it is given a box with its own scroll rather than pushing the settings apart. */
+.skinlicence {
+  max-height: 14em; overflow: auto; margin-top: var(--s-2); padding: var(--s-2);
+  border: 1px solid var(--c-rule); border-radius: var(--r-sm); background: var(--c-sunken);
+  font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap;
+}
 /* The other way in: writing one out to start from. Beside the well rather than inside it — one is
    a place a file lands, the other a press that makes one. */
 .skinwrite { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }

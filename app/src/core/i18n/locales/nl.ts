@@ -360,6 +360,8 @@ export const nl: Translation = {
     "settings.skinContrastClear": "Alle {n} paren halen hun ondergrens.",
     "settings.skinContrastShort": "{n} van de {m} paren zitten onder hun ondergrens. Binnenhalen kan toch.",
     "settings.skinFontMissing": "Dit lettertype heeft geen tekens voor: {langs}. Daar leest het lettertype van de machine.",
+    "settings.skinFont": "Lettertype: {family} ({license})",
+    "settings.skinFontLicence": "Licentie voluit",
     "settings.developer": "Ontwikkelaar",
     "settings.perfLog": "Prestatielogboek (metingen)",
     "settings.perfLogNote": "Klokt de lees- en schrijflagen en geeft een WARN bij een budgetoverschrijding (de kern naar een roterend bestand, de voorkant naar de console). Werkt direct.",

@@ -362,6 +362,8 @@ export const de: Translation = {
     "settings.skinContrastClear": "Alle {n} Paarungen bleiben über ihrer Schwelle.",
     "settings.skinContrastShort": "{n} von {m} Paarungen liegen unter ihrer Schwelle. Übernehmen ist trotzdem möglich.",
     "settings.skinFontMissing": "Diese Schrift hat keine Zeichen für: {langs}. Dort zeichnet die Schrift des Geräts.",
+    "settings.skinFont": "Schrift: {family} ({license})",
+    "settings.skinFontLicence": "Lizenz im Wortlaut",
     "settings.developer": "Entwicklung",
     "settings.perfLog": "Leistungsprotokoll (Instrumentierung)",
     "settings.perfLogNote": "Misst die Lese- und Schreibschichten und meldet Budgetüberschreitungen mit WARN (der Kern in eine rotierende Datei, das Frontend in die Konsole). Gilt sofort.",

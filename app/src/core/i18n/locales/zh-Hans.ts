@@ -360,6 +360,8 @@ export const zhHans: Translation = {
     "settings.skinContrastClear": "{n} 组全部达到下限。",
     "settings.skinContrastShort": "{m} 组里有 {n} 组没到下限。仍然可以装进来。",
     "settings.skinFontMissing": "这个字体没有这些字: {langs}。那里用机器自带的字形显示。",
+    "settings.skinFont": "字体: {family}（{license}）",
+    "settings.skinFontLicence": "许可证全文",
     "settings.developer": "开发者",
     "settings.perfLog": "性能日志（埋点）",
     "settings.perfLogNote": "对读写层计时，超出预算时输出 WARN（核心写入滚动文件，前端写入控制台）。改动即时生效。",

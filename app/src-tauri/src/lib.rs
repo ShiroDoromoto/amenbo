@@ -452,6 +452,7 @@ pub fn run() {
       commands::version_status,
       commands::check_updates_fresh,
       commands::skin_add,
+      commands::skin_font_licence,
       commands::skin_in_use,
       commands::skin_read,
       commands::skin_template_to,

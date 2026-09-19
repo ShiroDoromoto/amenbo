@@ -794,6 +794,11 @@ pub fn skin_list() -> SkinListDto {
                 license: s.license,
                 homepage: s.homepage,
                 error: None,
+                // Off the file as written rather than off the check: a face the check would set
+                // aside is still a face the reader was handed, and the line is about where what
+                // they were handed came from.
+                font_family: s.font.as_ref().map(|f| f.family.clone()),
+                font_license: s.font.as_ref().map(|f| f.license.clone()),
             },
             Err(e) => SkinRowDto {
                 title: name.clone(),
@@ -804,6 +809,8 @@ pub fn skin_list() -> SkinListDto {
                 license: None,
                 homepage: None,
                 error: Some(e.to_string()),
+                font_family: None,
+                font_license: None,
             },
         })
         .collect();
@@ -816,6 +823,18 @@ pub fn skin_list() -> SkinListDto {
 pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
     Some(worn(amenbo_core::skin::Skin::installed(&paths, &name).ok()??.check().ok()?))
+}
+
+/// The licence of the font a held skin carries, in full.
+///
+/// Fetched when it is opened rather than carried in the listing: OFL's second condition is that
+/// the notice and the licence travel with the font, and what the screen owes is that a reader can
+/// **see** it — not that every list of skins has a licence document in it.
+#[tauri::command]
+pub fn skin_font_licence(name: String) -> Option<String> {
+    let paths = amenbo_core::config::Paths::resolve().ok()?;
+    let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    skin.font.map(|f| f.license_text)
 }
 
 /// Put a held skin on, or take whatever is on off (`None`). The name is checked against what is

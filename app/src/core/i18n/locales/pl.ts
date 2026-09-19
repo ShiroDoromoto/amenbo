@@ -369,6 +369,8 @@ export const pl: Translation = {
     "settings.skinContrastClear": "Wszystkie pary ({n}) przekraczają swój próg.",
     "settings.skinContrastShort": "Par poniżej progu: {n} z {m}. Mimo to można wczytać.",
     "settings.skinFontMissing": "Ten krój nie ma znaków dla: {langs}. Tam czyta się krojem urządzenia.",
+    "settings.skinFont": "Krój: {family} ({license})",
+    "settings.skinFontLicence": "Pełna treść licencji",
     "settings.developer": "Dla programistów",
     "settings.perfLog": "Dziennik wydajności (pomiary)",
     "settings.perfLogNote": "Mierzy czas warstw odczytu/zapisu i wypisuje WARN przy przekroczeniu budżetu (rdzeń do pliku rotowanego, front do konsoli). Działa od razu.",

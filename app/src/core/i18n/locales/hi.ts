@@ -360,6 +360,8 @@ export const hi: Translation = {
     "settings.skinContrastClear": "सभी {n} जोड़े अपनी सीमा पार करते हैं।",
     "settings.skinContrastShort": "{m} में से {n} जोड़े सीमा से नीचे हैं। फिर भी अंदर ले सकते हैं।",
     "settings.skinFontMissing": "इस फ़ॉन्ट में इनके अक्षर नहीं हैं: {langs}। वहाँ मशीन का अपना फ़ॉन्ट दिखेगा।",
+    "settings.skinFont": "फ़ॉन्ट: {family} ({license})",
+    "settings.skinFontLicence": "पूरी लाइसेंस",
     "settings.developer": "डेवलपर",
     "settings.perfLog": "प्रदर्शन लॉग (मापन)",
     "settings.perfLogNote": "पढ़ने/लिखने की परतों का समय मापता है और सीमा टूटने पर WARN देता है (कोर एक घूमती फ़ाइल में, फ़्रंट कंसोल में)। तुरंत लागू होता है।",

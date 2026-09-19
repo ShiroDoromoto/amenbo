@@ -97,6 +97,11 @@ export function writeSkinTemplate(path: string): Promise<void> {
   return invoke<void>("skin_template_to", { path });
 }
 
+/** The licence of the font a held skin carries, in full. `null` where it carries none. */
+export function skinFontLicence(name: string): Promise<string | null> {
+  return invoke<string | null>("skin_font_licence", { name });
+}
+
 /** One held skin's tables, for trying it on. */
 export function skinTables(name: string): Promise<SkinTablesDto | null> {
   return invoke<SkinTablesDto | null>("skin_tables", { name });

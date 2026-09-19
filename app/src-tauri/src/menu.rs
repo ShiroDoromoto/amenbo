@@ -21,6 +21,15 @@ const WEBSITE: &str = "https://amenbo.work/";
 /// date" note).
 pub const CHECK_UPDATES_ID: &str = "check-updates";
 
+/// The item that takes a skin off, by id.
+///
+/// The menu bar is drawn by the operating system, and a skin reaches no further than the webview —
+/// so this is the one way out of a set of colours that has made the window unreadable. It is always
+/// there and always pressable, including with no skin on, where it does nothing: an item that comes
+/// and goes is an item a reader cannot be told to look for, and the whole of its job is being
+/// findable without reading the screen.
+pub const SKIN_OFF_ID: &str = "skin-off";
+
 /// The words the native menu needs, in one language.
 ///
 /// This is the whole of the exception carved out in `AMB-D-396`: everywhere else the words live in
@@ -49,6 +58,7 @@ pub const CHECK_UPDATES_ID: &str = "check-updates";
 struct Labels {
   about: &'static str,
   check_updates: &'static str,
+  skin_off: &'static str,
   edit: &'static str,
   window: &'static str,
   file: &'static str,
@@ -82,6 +92,7 @@ struct Labels {
 /// even when every word is right.
 const EN: Labels = Labels {
   about: "About Amenbo", check_updates: "Check for Updates",
+  skin_off: "Take the Skin Off",
   edit: "Edit", window: "Window", file: "File", help: "Help", exit: "Exit",
   quit_app: "Quit Amenbo",
   services: "Services", hide_app: "Hide Amenbo", hide_others: "Hide Others", show_all: "Show All",
@@ -90,6 +101,7 @@ const EN: Labels = Labels {
 };
 const JA: Labels = Labels {
   about: "Amenbo について", check_updates: "更新を確認",
+  skin_off: "スキンを外す",
   edit: "編集", window: "ウインドウ", file: "ファイル", help: "ヘルプ", exit: "終了",
   quit_app: "Amenbo を終了",
   services: "サービス", hide_app: "Amenbo を隠す", hide_others: "ほかを隠す", show_all: "すべてを表示",
@@ -98,6 +110,7 @@ const JA: Labels = Labels {
 };
 const ZH_HANS: Labels = Labels {
   about: "关于 Amenbo", check_updates: "检查更新",
+  skin_off: "脱下皮肤",
   edit: "编辑", window: "窗口", file: "文件", help: "帮助", exit: "退出",
   quit_app: "退出 Amenbo",
   services: "服务", hide_app: "隐藏 Amenbo", hide_others: "隐藏其他", show_all: "全部显示",
@@ -106,6 +119,7 @@ const ZH_HANS: Labels = Labels {
 };
 const ZH_HANT: Labels = Labels {
   about: "關於 Amenbo", check_updates: "檢查更新",
+  skin_off: "脫下外觀主題",
   edit: "編輯", window: "視窗", file: "檔案", help: "說明", exit: "結束",
   quit_app: "結束 Amenbo",
   services: "服務", hide_app: "隱藏 Amenbo", hide_others: "隱藏其他", show_all: "全部顯示",
@@ -114,6 +128,7 @@ const ZH_HANT: Labels = Labels {
 };
 const KO: Labels = Labels {
   about: "Amenbo 정보", check_updates: "업데이트 확인",
+  skin_off: "스킨 벗기",
   edit: "편집", window: "윈도우", file: "파일", help: "도움말", exit: "종료",
   quit_app: "Amenbo 종료",
   services: "서비스", hide_app: "Amenbo 가리기", hide_others: "다른 항목 가리기", show_all: "모두 보기",
@@ -122,6 +137,7 @@ const KO: Labels = Labels {
 };
 const ES: Labels = Labels {
   about: "Acerca de Amenbo", check_updates: "Buscar actualizaciones",
+  skin_off: "Quitar el skin",
   edit: "Edición", window: "Ventana", file: "Archivo", help: "Ayuda", exit: "Salir",
   quit_app: "Salir de Amenbo",
   services: "Servicios", hide_app: "Ocultar Amenbo", hide_others: "Ocultar otros", show_all: "Mostrar todo",
@@ -130,6 +146,7 @@ const ES: Labels = Labels {
 };
 const PT_BR: Labels = Labels {
   about: "Sobre o Amenbo", check_updates: "Verificar atualizações",
+  skin_off: "Tirar o skin",
   edit: "Editar", window: "Janela", file: "Arquivo", help: "Ajuda", exit: "Sair",
   quit_app: "Encerrar Amenbo",
   services: "Serviços", hide_app: "Ocultar Amenbo", hide_others: "Ocultar Outros", show_all: "Mostrar Tudo",
@@ -138,6 +155,7 @@ const PT_BR: Labels = Labels {
 };
 const FR: Labels = Labels {
   about: "À propos d’Amenbo", check_updates: "Rechercher les mises à jour",
+  skin_off: "Retirer le skin",
   edit: "Édition", window: "Fenêtre", file: "Fichier", help: "Aide", exit: "Quitter",
   quit_app: "Quitter Amenbo",
   services: "Services", hide_app: "Masquer Amenbo", hide_others: "Masquer les autres", show_all: "Tout afficher",
@@ -146,6 +164,7 @@ const FR: Labels = Labels {
 };
 const DE: Labels = Labels {
   about: "Über Amenbo", check_updates: "Nach Updates suchen",
+  skin_off: "Skin ablegen",
   edit: "Bearbeiten", window: "Fenster", file: "Datei", help: "Hilfe", exit: "Beenden",
   quit_app: "Amenbo beenden",
   services: "Dienste", hide_app: "Amenbo ausblenden", hide_others: "Andere ausblenden", show_all: "Alle einblenden",
@@ -154,6 +173,7 @@ const DE: Labels = Labels {
 };
 const IT: Labels = Labels {
   about: "Informazioni su Amenbo", check_updates: "Verifica aggiornamenti",
+  skin_off: "Togli lo skin",
   edit: "Modifica", window: "Finestra", file: "File", help: "Aiuto", exit: "Esci",
   quit_app: "Esci da Amenbo",
   services: "Servizi", hide_app: "Nascondi Amenbo", hide_others: "Nascondi altre", show_all: "Mostra tutto",
@@ -162,6 +182,7 @@ const IT: Labels = Labels {
 };
 const RU: Labels = Labels {
   about: "О программе Amenbo", check_updates: "Проверить обновления",
+  skin_off: "Снять скин",
   edit: "Правка", window: "Окно", file: "Файл", help: "Справка", exit: "Выход",
   quit_app: "Завершить Amenbo",
   services: "Службы", hide_app: "Скрыть Amenbo", hide_others: "Скрыть остальные", show_all: "Показать все",
@@ -170,6 +191,7 @@ const RU: Labels = Labels {
 };
 const HI: Labels = Labels {
   about: "Amenbo के बारे में", check_updates: "अपडेट जाँचें",
+  skin_off: "स्किन हटाएँ",
   edit: "संपादन", window: "विंडो", file: "फ़ाइल", help: "सहायता", exit: "बाहर निकलें",
   quit_app: "Amenbo छोड़ें",
   services: "सेवाएँ", hide_app: "Amenbo छिपाएँ", hide_others: "अन्य छिपाएँ", show_all: "सभी दिखाएँ",
@@ -178,6 +200,7 @@ const HI: Labels = Labels {
 };
 const ID: Labels = Labels {
   about: "Tentang Amenbo", check_updates: "Periksa Pembaruan",
+  skin_off: "Lepas Skin",
   edit: "Edit", window: "Jendela", file: "Berkas", help: "Bantuan", exit: "Keluar",
   quit_app: "Keluar dari Amenbo",
   services: "Layanan", hide_app: "Sembunyikan Amenbo", hide_others: "Sembunyikan Lainnya", show_all: "Tampilkan Semua",
@@ -186,6 +209,7 @@ const ID: Labels = Labels {
 };
 const VI: Labels = Labels {
   about: "Giới thiệu về Amenbo", check_updates: "Kiểm tra bản cập nhật",
+  skin_off: "Gỡ skin",
   edit: "Chỉnh sửa", window: "Cửa sổ", file: "Tệp", help: "Trợ giúp", exit: "Thoát",
   quit_app: "Thoát Amenbo",
   services: "Dịch vụ", hide_app: "Ẩn Amenbo", hide_others: "Ẩn mục khác", show_all: "Hiển thị tất cả",
@@ -194,6 +218,7 @@ const VI: Labels = Labels {
 };
 const TH: Labels = Labels {
   about: "เกี่ยวกับ Amenbo", check_updates: "ตรวจสอบการอัปเดต",
+  skin_off: "ถอดสกินออก",
   edit: "แก้ไข", window: "หน้าต่าง", file: "ไฟล์", help: "ช่วยเหลือ", exit: "ออก",
   quit_app: "ออกจาก Amenbo",
   services: "บริการ", hide_app: "ซ่อน Amenbo", hide_others: "ซ่อนหน้าต่างอื่น", show_all: "แสดงทั้งหมด",
@@ -202,6 +227,7 @@ const TH: Labels = Labels {
 };
 const TR: Labels = Labels {
   about: "Amenbo Hakkında", check_updates: "Güncellemeleri Denetle",
+  skin_off: "Kaplamayı Çıkar",
   edit: "Düzen", window: "Pencere", file: "Dosya", help: "Yardım", exit: "Çıkış",
   quit_app: "Amenbo'dan Çık",
   services: "Hizmetler", hide_app: "Amenbo'yu Gizle", hide_others: "Diğerlerini Gizle", show_all: "Tümünü Göster",
@@ -210,6 +236,7 @@ const TR: Labels = Labels {
 };
 const PL: Labels = Labels {
   about: "O programie Amenbo", check_updates: "Sprawdź aktualizacje",
+  skin_off: "Zdejmij skórkę",
   edit: "Edycja", window: "Okno", file: "Plik", help: "Pomoc", exit: "Zakończ",
   quit_app: "Zakończ Amenbo",
   services: "Usługi", hide_app: "Ukryj Amenbo", hide_others: "Ukryj inne", show_all: "Pokaż wszystko",
@@ -218,6 +245,7 @@ const PL: Labels = Labels {
 };
 const NL: Labels = Labels {
   about: "Over Amenbo", check_updates: "Controleren op updates",
+  skin_off: "Skin afdoen",
   edit: "Bewerken", window: "Venster", file: "Bestand", help: "Help", exit: "Afsluiten",
   quit_app: "Stop Amenbo",
   services: "Diensten", hide_app: "Verberg Amenbo", hide_others: "Verberg andere", show_all: "Toon alles",
@@ -226,6 +254,7 @@ const NL: Labels = Labels {
 };
 const UK: Labels = Labels {
   about: "Про Amenbo", check_updates: "Перевірити оновлення",
+  skin_off: "Зняти скін",
   edit: "Редагування", window: "Вікно", file: "Файл", help: "Довідка", exit: "Вихід",
   quit_app: "Завершити Amenbo",
   services: "Служби", hide_app: "Сховати Amenbo", hide_others: "Сховати інші", show_all: "Показати все",
@@ -304,6 +333,11 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
     )?)
   };
 
+  // The way out of a skin, drawn by the OS rather than by the webview. No accelerator: it is
+  // reached for once, by somebody looking for it, and a chord would be one more thing to remember
+  // about a screen they cannot read.
+  let skin_off = MenuItem::with_id(handle, SKIN_OFF_ID, l.skin_off, true, None::<&str>)?;
+
   #[cfg(target_os = "macos")]
   {
     // The way out, with the shortcut this platform's readers reach for. It is the app's own item and
@@ -318,6 +352,8 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
       app_menu = app_menu.separator().item(check_updates);
     }
     let app_menu = app_menu
+      .separator()
+      .item(&skin_off)
       .separator()
       .services_with_text(l.services)
       .separator()
@@ -356,6 +392,8 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
     // (`crate::quit`). No accelerator, which is what the predefined one carried here too.
     let quit = MenuItem::with_id(handle, quit::QUIT_ID, l.exit, true, None::<&str>)?;
     let file_menu = SubmenuBuilder::new(handle, l.file)
+      .item(&skin_off)
+      .separator()
       .item(&quit)
       .build()?;
     let mut help_menu = SubmenuBuilder::new(handle, l.help).item(&about);
@@ -388,6 +426,21 @@ mod tests {
     // A region we do not narrow by is still the language it names.
     assert_eq!(labels(Some("de-AT")).about, DE.about);
     assert_eq!(labels(Some("ZH_hant")).about, ZH_HANT.about);
+  }
+
+  /// Every table carries every word. The words themselves are a translator's business, but a field
+  /// left at another language's — or at English inside a translated menu — is not.
+  #[test]
+  fn no_table_is_missing_the_way_out_of_a_skin() {
+    let tables = [
+      JA.skin_off, ZH_HANS.skin_off, ZH_HANT.skin_off, KO.skin_off, ES.skin_off, PT_BR.skin_off,
+      FR.skin_off, DE.skin_off, IT.skin_off, RU.skin_off, HI.skin_off, ID.skin_off, VI.skin_off,
+      TH.skin_off, TR.skin_off, PL.skin_off, NL.skin_off, UK.skin_off,
+    ];
+    for word in tables {
+      assert!(!word.is_empty());
+      assert_ne!(word, EN.skin_off, "a table is still reading in English");
+    }
   }
 
   /// `AMB-D-394`: an unset setting and a code from outside the nineteen both land on English —

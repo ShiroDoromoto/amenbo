@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { SkinRowDto } from "../bindings/bindings";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, skinTables, useSkin } from "../core/skin";
+import { fitOnto, listSkins, skinTables, useSkin, watchSkinChanged } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -44,6 +44,16 @@ export function AppearanceSettings() {
       .catch(() => {});
   };
   useEffect(reload, []);
+  // And again whenever it is changed from outside this screen — another window, or the menu bar's
+  // way out, whose click is answered by the host and never passes through here.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    void watchSkinChanged(reload).then((off) => {
+      stop = off;
+    });
+    return () => stop?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const pinned = pinnedSide(rows.find((r) => r.name === on));
   useEffect(() => {

@@ -78,6 +78,20 @@ export function addSkinFile(path: string, replace: boolean): Promise<string> {
   return invoke<string>("skin_add", { path, replace });
 }
 
+/**
+ * Be told whenever the skin changes, wherever it was changed — another window, or the menu bar,
+ * whose click never reaches the page at all. Answers with the way to stop listening.
+ */
+export async function watchSkinChanged(said: () => void): Promise<() => void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen(CHANGED, () => said());
+  } catch {
+    // Outside Tauri there is one window and nothing that can change it from outside this page.
+    return () => {};
+  }
+}
+
 /** Write a whole skin out to `path`, to start from — this build's, or the one that is on. */
 export function writeSkinTemplate(path: string): Promise<void> {
   return invoke<void>("skin_template_to", { path });

@@ -234,9 +234,10 @@ body.is-dragging { user-select: none; }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value).
 
-   **The height is said**: it is set in the smallest size there is, and what a browser gives a
-   `select` off its text alone is under the smallest a finger may be asked for (`--tap-min`). */
-.inlineselect { font-size: var(--fs-xs); padding: 0 2px; min-height: var(--tap-min); }
+   **The height is not said here.** It is set in the smallest size there is, which is under the smallest
+   a finger may be asked for — and that is true of every select, so the floor is the element's
+   (`../styles/global.css`) rather than this one class's. */
+.inlineselect { font-size: var(--fs-xs); padding: 0 2px; }
 /* The board's dimension row (add a category, manage them). It is what the detail pane takes width from
    (the toolbar above spans the pane, this does not), so it folds onto a second line rather than crushing
    the buttons. */
@@ -499,9 +500,15 @@ body.is-dragging { user-select: none; }
    for the ordinary move, `--primary` for the one the screen is for, `--danger` for a delete. A
    fourth look is not a variant to add here — a button that needs one is a button in the wrong
    system. What is not pressable carries neither a fill nor an edge. */
+/* The class names what a thing is for — it is pressed — so the smallest a finger may be asked for is
+   part of what it says (`--tap-min`). A button of this class already stands taller than that on its
+   text alone; what the floor is for is everything else that comes to wear it. **It does not reach a
+   select**: a select is drawn by the platform and answers to `height` alone, which is said on the
+   element (`../styles/global.css`). */
 .btn {
   border: 1px solid var(--c-edge); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-2); font-size: var(--fs-md);
+  min-height: var(--tap-min);
 }
 /* The pointer lifts the edge, which is the only thing the outlined one has to give. The two that
    carry a colour answer in that colour instead, below. */

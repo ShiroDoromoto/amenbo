@@ -2274,6 +2274,28 @@ text?: string,
 made?: SessionMadeDto, };
 
 /**
+ * What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —
+ * the file can be moved aside from underneath the setting, and saying so is better than quietly
+ * showing nothing selected.
+ */
+export type SkinListDto = { on: string | null, skins: Array<SkinRowDto>, };
+
+/**
+ * One skin this device holds, as the settings screen lists it. The fields are the header's, and
+ * `error` is what came back where the file would not read — it is one of the person's own files,
+ * sitting in the directory, so it is listed rather than left out.
+ */
+export type SkinRowDto = { name: string, title: string, author: string | null, version: string | null, 
+/**
+ * The sides the author says they made, `light` and `dark` in the order written.
+ */
+themes: Array<string>, license: string | null, homepage: string | null, 
+/**
+ * Why this file could not be read, where it could not. `null` on every skin that reads.
+ */
+error: string | null, };
+
+/**
  * The skin this device has on, as the window wears it: the two sides' tables of token name to
  * value, with the leading `--` left off the way the file writes them. `null` from the command
  * rather than an empty pair when nothing is on — "no skin" and "a skin that sets nothing" are not

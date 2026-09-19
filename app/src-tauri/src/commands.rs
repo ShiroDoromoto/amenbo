@@ -767,6 +767,76 @@ pub fn skin_in_use() -> Option<SkinTablesDto> {
     })
 }
 
+/// What this device holds and what is on, for the settings screen's list.
+#[tauri::command]
+pub fn skin_list() -> SkinListDto {
+    let Ok(paths) = amenbo_core::config::Paths::resolve() else {
+        return SkinListDto { on: None, skins: Vec::new() };
+    };
+    let on = amenbo_core::config::Config::load(&paths.config_file).skin;
+    let skins = amenbo_core::skin::Skin::installed_all(&paths)
+        .into_iter()
+        .map(|(name, read)| match read {
+            Ok(s) => SkinRowDto {
+                name,
+                title: s.title,
+                author: s.author,
+                version: s.version,
+                themes: s.themes,
+                license: s.license,
+                homepage: s.homepage,
+                error: None,
+            },
+            Err(e) => SkinRowDto {
+                title: name.clone(),
+                name,
+                author: None,
+                version: None,
+                themes: Vec::new(),
+                license: None,
+                homepage: None,
+                error: Some(e.to_string()),
+            },
+        })
+        .collect();
+    SkinListDto { on, skins }
+}
+
+/// One held skin's tables, for trying it on before it is worn. Separate from [`skin_in_use`] because
+/// the screen asks about a skin that is *not* on — which is the whole of a fitting.
+#[tauri::command]
+pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
+    let paths = amenbo_core::config::Paths::resolve().ok()?;
+    let taken = amenbo_core::skin::Skin::installed(&paths, &name).ok()??.check().ok()?;
+    Some(SkinTablesDto {
+        name: taken.skin.name,
+        title: taken.skin.title,
+        light: taken.skin.light.values,
+        dark: taken.skin.dark.values,
+    })
+}
+
+/// Put a held skin on, or take whatever is on off (`None`). The name is checked against what is
+/// actually held: a config naming a file that is not there says the device wears what it has not
+/// got, and a screen is the last place that should be able to write one.
+#[tauri::command]
+pub fn skin_use(name: Option<String>) -> Result<(), CmdError> {
+    let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
+    let mut config = amenbo_core::config::Config::load(&paths.config_file);
+    let value = match &name {
+        Some(name) => {
+            if amenbo_core::skin::Skin::installed(&paths, name).map_err(CmdError::from)?.is_none() {
+                return Err(CmdError::from(format!("no skin is kept as '{name}'")));
+            }
+            name.as_str()
+        }
+        None => "",
+    };
+    config.set("skin", value).map_err(CmdError::from)?;
+    config.save(&paths.config_file).map_err(CmdError::from)?;
+    Ok(())
+}
+
 /// Return the real path of the app-data root, for the "location" line under Settings > Data.
 #[tauri::command]
 pub fn store_locations() -> StoreLocationsDto {

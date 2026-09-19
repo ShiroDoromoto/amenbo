@@ -22,7 +22,7 @@
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
 import { invoke } from "./ipc";
-import type { SkinTablesDto } from "../bindings/bindings";
+import type { SkinListDto, SkinTablesDto } from "../bindings/bindings";
 
 /** The id of the one sheet a skin is worn through. */
 const SHEET_ID = "amenbo-skin";
@@ -57,6 +57,46 @@ const NOT_IN_A_VALUE = /\/\*|\*\/|url\s*\(/i;
 /** Is this a value a skin may set a token to? */
 function usable(value: string): boolean {
   return VALUE.test(value) && !NOT_IN_A_VALUE.test(value);
+}
+
+/** What this device holds, and which of them is on. */
+export function listSkins(): Promise<SkinListDto> {
+  return invoke<SkinListDto>("skin_list");
+}
+
+/** One held skin's tables, for trying it on. */
+export function skinTables(name: string): Promise<SkinTablesDto | null> {
+  return invoke<SkinTablesDto | null>("skin_tables", { name });
+}
+
+/**
+ * Put a held skin on, or take whatever is on off (`null`), and have every window wear the answer.
+ * The writing is the host's, so a window that changed it does not have to be the one that reads it
+ * back.
+ */
+export async function useSkin(name: string | null): Promise<void> {
+  await invoke<void>("skin_use", { name });
+  setSkin(name === null ? null : await skinTables(name));
+}
+
+/**
+ * Put one side's values on one element, so what is under it is drawn in them and nothing else is.
+ * This is what a fitting is: the frame wears the skin, the screen around it keeps the one that is
+ * on, and a set of colours nobody can read stays inside the box it is being read in.
+ *
+ * Inline rather than a rule, because a rule would need a selector for one element that has no name
+ * of its own; the properties inherit from here down, which is the whole of what is wanted.
+ */
+export function fitOnto(el: HTMLElement | null, values: Record<string, string> | null): void {
+  if (!el) return;
+  for (const name of [...el.style].filter((p) => p.startsWith("--"))) {
+    el.style.removeProperty(name);
+  }
+  if (!values) return;
+  for (const [name, value] of Object.entries(values)) {
+    if (!NAME.test(name) || !usable(value)) continue;
+    el.style.setProperty(`--${name}`, value);
+  }
 }
 
 /** The sheet this window wears a skin through, made on first use and emptied on every change. */

@@ -8,6 +8,7 @@ import {
   runExport, runRestore, setAutostart, setDefaultView, setFacetNames, setLanguage, setFacetAvatar, setPerfLog,
   setUpdateCheck,
 } from "../core/mutations";
+import { AppearanceSettings } from "../components/AppearanceSettings";
 import { ErrorNote } from "../components/ErrorNote";
 import { DoneNote } from "../components/DoneNote";
 import { useIsDevBuild } from "../core/devChannel";
@@ -18,7 +19,6 @@ import { perfMode } from "../core/ipc";
 import { Identicon } from "../components/identicon";
 import { DataProgressModal } from "../components/DataProgressModal";
 import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
-import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
 import { asksBeforeRestore, setAsksBeforeRestore } from "../files/askBeforeRestore";
 import { NotifyTargetsSetting } from "./NotifyTargetsSetting";
@@ -32,9 +32,7 @@ const VIEWS: ViewKind[] = ["list", "board", "calendar", "timeline"];
 // Settings: profile, appearance, AI policy, developer, and data (export and backup). The store is a
 // single local one, so there is no section for sharing, syncing, keys or members.
 export function SettingsScreen() {
-  const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const devBuild = useIsDevBuild();
-  const changeTheme = (p: ThemePref) => { setThemePref(p); setTheme(p); };
 
   return (
     <div className="settings">
@@ -43,15 +41,11 @@ export function SettingsScreen() {
         <AvatarSetting />
       </Category>
 
+      {/* The skin sits above the theme, and the two are drawn by one component: a skin written for
+          one side only leaves no theme to choose, so what the theme row may offer follows from what
+          the skin row holds (`../components/AppearanceSettings`). */}
       <Category title={t("settings.appearance")}>
-        <div className="settings__row">
-          <span className="settings__k">{t("settings.theme")}</span>
-          <select className="btn" value={theme} onChange={(e) => changeTheme(e.target.value as ThemePref)}>
-            <option value="os">{t("settings.themeOs")}</option>
-            <option value="dark">{t("settings.themeDark")}</option>
-            <option value="light">{t("settings.themeLight")}</option>
-          </select>
-        </div>
+        <AppearanceSettings />
         <LanguageSetting />
         <DefaultViewSetting />
       </Category>

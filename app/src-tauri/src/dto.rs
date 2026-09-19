@@ -754,6 +754,36 @@ pub struct SkinTablesDto {
     pub(crate) dark: std::collections::BTreeMap<String, String>,
 }
 
+/// One skin this device holds, as the settings screen lists it. The fields are the header's, and
+/// `error` is what came back where the file would not read — it is one of the person's own files,
+/// sitting in the directory, so it is listed rather than left out.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinRowDto {
+    pub(crate) name: String,
+    pub(crate) title: String,
+    pub(crate) author: Option<String>,
+    pub(crate) version: Option<String>,
+    /// The sides the author says they made, `light` and `dark` in the order written.
+    pub(crate) themes: Vec<String>,
+    pub(crate) license: Option<String>,
+    pub(crate) homepage: Option<String>,
+    /// Why this file could not be read, where it could not. `null` on every skin that reads.
+    pub(crate) error: Option<String>,
+}
+
+/// What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —
+/// the file can be moved aside from underneath the setting, and saying so is better than quietly
+/// showing nothing selected.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinListDto {
+    pub(crate) on: Option<String>,
+    pub(crate) skins: Vec<SkinRowDto>,
+}
+
 /// One row of the change feed. **Which row of which table changed, and how** — that is all; no
 /// values, no bodies (the caller refetches from the source of truth).
 #[derive(Clone, Debug, serde::Serialize)]

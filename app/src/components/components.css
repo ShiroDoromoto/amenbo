@@ -391,12 +391,14 @@ body.is-dragging { user-select: none; }
 /* A chip that marks one row among its like — the target a new project starts out pointing at. A tint
    rather than a stamp: it names a row already in a list the reader is reading. */
 .chip--accent { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); }
-/* A status said as a filled chip, the fill naming which status it is (`statusColor`, kept beside the
-   two places that draw it). White on a colour, so it reads as a stamp on the title rather than as one
-   more word after it, and rounder than the chips it can sit beside for the same reason. The white is
-   plain rather than `--c-on-accent`: that one flips with the theme, and these fills do not — they are
-   the same three colours in both, so what reads on them is the same in both. */
-.chip--status { border-radius: 10px; border-color: transparent; color: #fff; white-space: nowrap; }
+/* A status said as a filled chip, the fill naming which status it is (`decisionStatusChip`). It reads
+   as a stamp on the title rather than as one more word after it, and is rounder than the chips it can
+   sit beside for the same reason. The fill and the ink come as a pair off the family the step stands
+   on (`AMB-D-840`), so a theme or a skin that moves the family moves both ends together. */
+.chip--status { border-radius: 10px; border-color: transparent; white-space: nowrap; }
+.chip--status-draft { background: var(--c-dec-draft); color: var(--c-on-heed); }
+.chip--status-decided { background: var(--c-dec-decided); color: var(--c-on-done); }
+.chip--status-rejected { background: var(--c-dec-rejected); color: var(--c-on-stop); }
 /* The value a card carries on an axis its owner put on the card (`AMB-D-650`). Muted, because it states
    what the task is and not that anything is wrong with it — the chips it shares the card with report
    trouble, and a classification must not be read as one of those. */
@@ -684,8 +686,8 @@ button.feed__target:hover { color: var(--c-accent); }
 /* What carries a notification, said twice: a ground colour with a glyph on it, and the word. The tile
    alone stops being readable once there are four kinds, and the word alone cannot be skimmed down a
    column — so a new kind costs one `--k-*` and one glyph, and nothing else moves.
-   The glyph's white is plain rather than `--c-on-accent`, for `.chip--status`'s reason: these grounds
-   are the same in both themes, so what reads on them is too. */
+   The glyph's white is plain rather than a `--c-on-*`: these grounds name a service rather than a step,
+   so neither a theme nor a skin moves them (`AMB-D-928`) and what reads on them does not move either. */
 .kind { display: inline-flex; align-items: center; gap: var(--s-2); flex: none; }
 .kind__tile {
   width: 22px; height: 22px; border-radius: var(--r-sm); flex: none;

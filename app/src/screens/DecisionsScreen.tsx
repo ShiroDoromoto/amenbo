@@ -6,6 +6,7 @@ import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { useQuery } from "../core/query";
 import { axesFor } from "../core/appliesTo";
 import { isTimeAxis } from "../core/timeAxis";
+import { decisionStatusChip } from "../core/decisionStatus";
 import { Pager, usePager } from "../components/Pager";
 import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
@@ -235,15 +236,6 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   );
 }
 
-// Keep it matching DecisionDetailPane's pair, which says at length why the draft is read first.
-function statusColor(s: DecisionStatus, draft: boolean): string {
-  if (draft) return "#b88600";
-  switch (s) {
-    case "decided": return "#2e9e6b";
-    case "rejected": return "#c0504d";
-  }
-}
-
 function statusWord(s: DecisionStatus, draft: boolean): string {
   return draft ? t("dec.status.draft") : t(`dec.status.${s}`);
 }
@@ -277,7 +269,7 @@ function DecisionCard({ d, selected, onSelect }: {
     >
       {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</span>
-      <span className="chip chip--status" style={{ background: statusColor(d.status, d.draft) }}>{statusWord(d.status, d.draft)}</span>
+      <span className={`chip chip--status ${decisionStatusChip(d.status, d.draft)}`}>{statusWord(d.status, d.draft)}</span>
       {/* The edge, said in the row: which decision overturned this one. It sits beside the status rather
           than instead of it — a rejected decision that was later superseded is both, and a badge that
           picked one of the two would be hiding the other. */}

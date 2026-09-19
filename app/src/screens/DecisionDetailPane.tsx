@@ -26,21 +26,10 @@ import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { FacetAvatar } from "../components/atoms";
+import { decisionStatusChip } from "../core/decisionStatus";
 
-// Colour of the state badge — keep it matching DecisionsScreen's statusColor. The badge says how far
-// the decision has got and nothing else (`AMB-D-410`); that this decision was overturned is an edge,
-// and the edge list below is where it is read. An unfinished writing is read before the status,
-// because the status has nothing to tell apart while it is up: a decision is `decided` from the
-// moment it is saved (`AMB-D-918`).
-function statusColor(s: DecisionStatus, draft: boolean): string {
-  if (draft) return "#b88600";
-  switch (s) {
-    case "decided": return "#2e9e6b";
-    case "rejected": return "#c0504d";
-  }
-}
-
-// The word on that badge, off the same two facts and in the same order.
+// The word on the state badge, off the same two facts and in the same order as the fill it sits on
+// (`decisionStatusChip`).
 function statusWord(s: DecisionStatus, draft: boolean): string {
   return draft ? t("dec.status.draft") : t(`dec.status.${s}`);
 }
@@ -191,7 +180,7 @@ export function DecisionDetailPane({
         ) : (
           <span style={editable ? { cursor: "text" } : undefined} title={editable ? t("detail.edit") : undefined} onDoubleClick={editable ? startEdit : undefined}>{d.title}</span>
         )}
-        <span className="chip chip--status" style={{ background: statusColor(d.status, d.draft) }}>{statusWord(d.status, d.draft)}</span>
+        <span className={`chip chip--status ${decisionStatusChip(d.status, d.draft)}`}>{statusWord(d.status, d.draft)}</span>
         {!editing && editable && (
           <button className="btn" onClick={startEdit}>{t("detail.edit")}</button>
         )}
@@ -547,7 +536,7 @@ function DecisionEdges({ d, onOpenDecision }: {
             {r.target.ref ?? ""} {r.target.name ?? t("dec.unknownName")}
           </button>
           {r.staleBy && (
-            <span style={{ marginLeft: 6, color: "#c0504d" }}>
+            <span style={{ marginLeft: 6, color: "var(--c-stop)" }}>
               <Icon name="warning" /> {tf("dec.premiseStale", { premise: r.target.ref ?? decisionRef(r.target.id), by: r.staleBy })}
             </span>
           )}

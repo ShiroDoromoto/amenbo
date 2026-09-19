@@ -56,7 +56,8 @@ INKS = [
 # rows under a terminal are written on.
 GROUNDS = ["--c-bg", "--c-surface", "--c-sunken", "--c-hover", "--c-pane-frame"]
 # A fill and the ink it carries; the pair is read together and travels together.
-FILLS = [("--c-accent", "--c-on-accent"), ("--c-heed", "--c-on-heed"), ("--c-stop", "--c-on-stop")]
+FILLS = [("--c-accent", "--c-on-accent"), ("--c-heed", "--c-on-heed"), ("--c-stop", "--c-on-stop"),
+         ("--c-done", "--c-on-done")]
 # The outline of a control, which has to be found before the control can be used.
 OUTLINE = "--c-edge"
 

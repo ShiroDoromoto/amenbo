@@ -190,6 +190,14 @@
   --c-code-heading: #2f6aa8;
   --c-code-invalid: #c0392b;
 
+  /* ----- the avatar a facet with no picture wears (`components/identicon.tsx`) -----
+     The hue is not here and never will be: it is computed from the name, so it points at one person
+     and moving it would point at another (`AMB-D-928`). What is here is how strong and how light
+     that hue is drawn — the two a very dark or a very pale ground has to be able to move, or the
+     glyph sinks into whichever of the two it was not chosen against. */
+  --identicon-s: 58%;
+  --identicon-l: 52%;
+
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;

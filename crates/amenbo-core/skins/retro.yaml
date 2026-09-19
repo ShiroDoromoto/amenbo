@@ -16,7 +16,6 @@ dark:
   c-accent-weak: "#202850"
   c-ai: "#d8a0f8"
   c-bg: "#000000"
-  c-blocked: "#f8b800"
   c-code-attribute: "#78b8f8"
   c-code-comment: "#9098b0"
   c-code-constant: "#f8b800"
@@ -57,7 +56,6 @@ dark:
   c-pri-high: "#f87858"
   c-pri-low: "#b8b8c8"
   c-pri-med: "#f8b800"
-  c-progress: "#f8d878"
   c-rule: "#6878a0"
   c-stop: "#f87858"
   c-sunken: "#000820"
@@ -65,7 +63,6 @@ dark:
   c-text: "#ffffff"
   c-text-faint: "#8890a8"
   c-text-muted: "#b8b8c8"
-  c-todo: "#b8b8c8"
   font: '"DotGothic16", "Hiragino Sans", "Noto Sans JP", sans-serif'
   font-mono: '"DotGothic16", ui-monospace, monospace'
   fw-normal: "400"

@@ -62,7 +62,6 @@ const BASE: &[(&str, &str, &str)] = &[
     ("c-accent-weak", "#d6ecec", "#11403f"),
     ("c-ai", "#884bcf", "#b083ea"),
     ("c-bg", "#f7f6f3", "#1b1a17"),
-    ("c-blocked", "#995d18", "#e0a04a"),
     ("c-brand-mark", "#000000", "#ffffff"),
     ("c-code-attribute", "#2f6aa8", "#7fb0e8"),
     ("c-code-comment", "#7a7263", "#8d8578"),
@@ -104,7 +103,6 @@ const BASE: &[(&str, &str, &str)] = &[
     ("c-pri-high", "#c0392b", "#e37166"),
     ("c-pri-low", "#6f6a5e", "#a8a399"),
     ("c-pri-med", "#995d18", "#e0a04a"),
-    ("c-progress", "#0d7777", "#2ba6a4"),
     ("c-rule", "#beb6a3", "#514f48"),
     ("c-stop", "#c0392b", "#e37166"),
     ("c-sunken", "#f1efe9", "#1f1e1b"),
@@ -112,7 +110,6 @@ const BASE: &[(&str, &str, &str)] = &[
     ("c-text", "#23211c", "#ece9e1"),
     ("c-text-faint", "#9b958a", "#7d786e"),
     ("c-text-muted", "#6f6a5e", "#a8a399"),
-    ("c-todo", "#6f6a5e", "#a8a399"),
     ("k-mail", "#4e6a7d", "#4e6a7d"),
     ("k-slack", "#611f69", "#611f69"),
 ];
@@ -130,7 +127,6 @@ const ABOUT: &[(&str, &str)] = &[
     ("c-accent-weak", "a tint of the accent, for the row that is selected"),
     ("c-ai", "the AI facet"),
     ("c-bg", "the page"),
-    ("c-blocked", "a task held up"),
     ("c-code-attribute", "an attribute, in a file being read"),
     ("c-code-comment", "a comment, in a file being read"),
     ("c-code-constant", "a constant, in a file being read"),
@@ -171,7 +167,6 @@ const ABOUT: &[(&str, &str)] = &[
     ("c-pri-high", "high priority"),
     ("c-pri-low", "low priority"),
     ("c-pri-med", "medium priority"),
-    ("c-progress", "a task in progress"),
     ("c-rule", "a separator: a row's underline, a card's edge"),
     ("c-stop", "nothing moves until a hand is put to it"),
     ("c-sunken", "a well: a code block, a field set into the page"),
@@ -179,7 +174,6 @@ const ABOUT: &[(&str, &str)] = &[
     ("c-text", "what is read"),
     ("c-text-faint", "not for words: a separator mark, the pale side of an icon"),
     ("c-text-muted", "read when looked for: a date, a count, a note"),
-    ("c-todo", "a task not started"),
 ];
 
 /// A skin document, written out full: every colour a skin may set, on both sides, with a line

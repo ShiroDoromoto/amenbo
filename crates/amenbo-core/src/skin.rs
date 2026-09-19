@@ -343,14 +343,14 @@ struct Wire {
 /// between the two lists one somebody makes rather than one that happens.
 pub const OPEN: &[&str] = &[
     "border-style", "border-w", "c-accent", "c-accent-faint", "c-accent-text", "c-accent-weak", "c-ai",
-    "c-bg", "c-blocked", "c-code-attribute", "c-code-comment", "c-code-constant", "c-code-function",
+    "c-bg", "c-code-attribute", "c-code-comment", "c-code-constant", "c-code-function",
     "c-code-heading", "c-code-invalid", "c-code-keyword", "c-code-number", "c-code-operator",
     "c-code-string", "c-code-tag", "c-code-type", "c-code-variable", "c-dec-decided", "c-dec-draft",
     "c-dec-rejected", "c-done", "c-due-future", "c-due-overdue", "c-due-today", "c-due-tomorrow", "c-edge",
     "c-git-added", "c-git-modified", "c-git-untracked", "c-heed", "c-hover", "c-human", "c-on-accent",
     "c-on-done", "c-on-heed", "c-on-stop", "c-pane-bg", "c-pane-cursor", "c-pane-frame", "c-pane-text",
-    "c-plain", "c-pri-high", "c-pri-low", "c-pri-med", "c-progress", "c-rule", "c-stop", "c-sunken",
-    "c-surface", "c-text", "c-text-faint", "c-text-muted", "c-todo", "font", "font-mono", "fw-bold",
+    "c-plain", "c-pri-high", "c-pri-low", "c-pri-med", "c-rule", "c-stop", "c-sunken",
+    "c-surface", "c-text", "c-text-faint", "c-text-muted", "font", "font-mono", "fw-bold",
     "fw-medium", "fw-normal", "icon-lg", "icon-md", "icon-sm", "identicon-l", "identicon-s", "lh",
     "measure-form", "measure-prose"
 ];

@@ -449,9 +449,9 @@ body.is-dragging { user-select: none; }
 }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
    step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
-   stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its
-   --c-blocked, which is the heed step in the status range — the two must not be confused, and what
-   keeps them apart is that a premise nobody can pass is drawn one step above it. */
+   stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked —
+   the two must not be confused, and what keeps them apart is that a premise nobody can pass is
+   drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
 /* A chip that marks one row among its like — the target a new project starts out pointing at. A tint
    rather than a stamp: it names a row already in a list the reader is reading. */

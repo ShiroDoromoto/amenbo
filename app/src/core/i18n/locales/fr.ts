@@ -366,6 +366,7 @@ export const fr: Translation = {
     "settings.skinUnmeasured": "cette version ne peut pas en tirer un nombre",
     "settings.skinContrastClear": "Les {n} paires passent leur seuil.",
     "settings.skinContrastShort": "{n} paires sur {m} sont sous leur seuil. Vous pouvez tout de même l’intégrer.",
+    "settings.skinFontMissing": "Cette police n’a pas de lettres pour : {langs}. Là, c’est celle de la machine qui s’affiche.",
     "settings.developer": "Développement",
     "settings.perfLog": "Journal de performance (instrumentation)",
     "settings.perfLogNote": "Chronomètre les couches de lecture et d'écriture et signale par un WARN les dépassements de budget (le cœur dans un fichier tournant, le front dans la console). S'applique immédiatement.",

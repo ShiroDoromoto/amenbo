@@ -21,6 +21,8 @@ const hoisted = vi.hoisted(() => ({
   saveAs: null as string | null,
   /** Every path a template was written to. */
   written: [] as string[],
+  /** The languages the face under test has no glyphs for. */
+  missing: [] as string[],
 }));
 
 vi.mock("../core/dialog", () => ({
@@ -28,6 +30,12 @@ vi.mock("../core/dialog", () => ({
   pickSaveAs: () => Promise.resolve(hoisted.saveAs),
 }));
 vi.mock("../core/hostDrop", () => ({ watchHostDrop: () => Promise.resolve(() => {}) }));
+vi.mock("../core/skin", async (real) => ({
+  ...(await real<typeof import("../core/skin")>()),
+  // Asking a face what it draws needs a canvas, which this environment has none of. What the
+  // panel does with the answer is what these tests are about.
+  scriptsMissingFrom: () => Promise.resolve(hoisted.missing),
+}));
 vi.mock("../core/ipc", () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => {
     if (cmd === "skin_read") {
@@ -61,6 +69,7 @@ const judgement = (over: Partial<SkinJudgementDto> = {}): SkinJudgementDto => ({
   short: [],
   unread: [],
   measured: 35,
+  font: null,
   ...over,
 });
 
@@ -88,6 +97,7 @@ beforeEach(() => {
   hoisted.added = [];
   hoisted.saveAs = null;
   hoisted.written = [];
+  hoisted.missing = [];
   added = 0;
 });
 
@@ -132,6 +142,15 @@ describe("reading a skin file over", () => {
     expect(said).toContain("light.k-slack");
     expect(said).toContain("light.s-3");
     expect(said).toContain("woff2 is the one taken");
+  });
+
+  it("says which scripts the font it carries has no letters for", async () => {
+    hoisted.read = judgement({ font: { family: "Silkscreen", data: "d09GMg==" } });
+    hoisted.missing = ["ja", "ko"];
+    await drawAndPick();
+    const said = host.textContent ?? "";
+    expect(said).toContain("日本語");
+    expect(said).toContain("한국어");
   });
 
   it("says a skin made for one side is made for one side", async () => {

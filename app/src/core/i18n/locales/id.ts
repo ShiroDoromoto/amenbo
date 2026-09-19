@@ -361,6 +361,7 @@ export const id: Translation = {
     "settings.skinUnmeasured": "build ini tidak bisa membaca angkanya",
     "settings.skinContrastClear": "Semua {n} pasangan melewati batasnya.",
     "settings.skinContrastShort": "{n} dari {m} pasangan di bawah batas. Tetap bisa dimasukkan.",
+    "settings.skinFontMissing": "Fonta ini tidak punya huruf untuk: {langs}. Di situ yang tampil huruf mesin sendiri.",
     "settings.developer": "Pengembang",
     "settings.perfLog": "Log kinerja (instrumentasi)",
     "settings.perfLogNote": "Mengukur waktu lapisan baca/tulis dan memberi WARN saat anggarannya terlampaui (inti ke berkas bergilir, front ke konsol). Berlaku seketika.",

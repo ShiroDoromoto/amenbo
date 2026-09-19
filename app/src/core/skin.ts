@@ -22,7 +22,7 @@
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
 import { invoke } from "./ipc";
-import type { SkinJudgementDto, SkinListDto, SkinTablesDto } from "../bindings/bindings";
+import type { SkinFontDto, SkinJudgementDto, SkinListDto, SkinTablesDto } from "../bindings/bindings";
 
 /** The id of the one sheet a skin is worn through. */
 const SHEET_ID = "amenbo-skin";
@@ -132,6 +132,122 @@ export function fitOnto(el: HTMLElement | null, values: Record<string, string> |
   }
 }
 
+/**
+ * The face this window is wearing, so the next change can take it off again. A window holds at
+ * most one: a skin carries one font and no weights, bold being synthesised.
+ *
+ * Held here rather than looked up in `document.fonts`, which has every face the page loaded and no
+ * way to say which of them was ours.
+ */
+let worn: FontFace | null = null;
+
+/**
+ * Register the skin's font with this window, or take off whatever was registered (`null`).
+ *
+ * **The bytes go to `FontFace` rather than into a `data:` URI.** Measured, that is 19.5ms against
+ * 34ms for two megabytes, and it touches no CSP directive — a URI would have to be allowed under
+ * `font-src`, and the point of carrying the bytes is that nothing is fetched.
+ *
+ * Each window does this for itself: the webviews do not share a font cache, so the same assembly
+ * runs once per window and neither waits on the other.
+ *
+ * A face that will not load is dropped rather than raised. What the skin said about it was already
+ * read over on the way in (format, size, the bytes' own header); what is left here is the parser's
+ * own verdict, and the answer to it is the name stack the author wrote beside it.
+ */
+export async function wearFont(font: SkinFontDto | null): Promise<void> {
+  if (worn) {
+    document.fonts.delete(worn);
+    worn = null;
+  }
+  if (!font) return;
+  try {
+    const face = new FontFace(font.family, bytesOf(font.data));
+    await face.load();
+    document.fonts.add(face);
+    worn = face;
+  } catch {
+    // The stack the author wrote beside it is what draws instead.
+  }
+}
+
+/**
+ * One character per language this application is read in, for asking a face what it has glyphs
+ * for. A face is a set of drawings and nothing says what is in it but the drawings, so the only
+ * way to find out is to ask about a character.
+ *
+ * One character stands for a script rather than for a language: a face that draws one kana draws
+ * kana, and one that draws one han character draws han. The Latin ones are here for completeness
+ * and answer yes for anything that draws letters at all.
+ */
+const A_LETTER_OF: Record<string, string> = {
+  en: "A", ja: "あ", "zh-Hans": "汉", "zh-Hant": "漢", ko: "가", es: "ñ", "pt-BR": "ã",
+  fr: "é", de: "ä", it: "à", ru: "Я", hi: "अ", id: "A", vi: "ế", th: "ก", tr: "ğ",
+  pl: "ł", nl: "A", uk: "Ї",
+};
+
+/**
+ * Which of the nineteen this face has no glyphs for, by language code. A face that carries only
+ * Latin makes a Japanese screen half pixels and half the machine's own letters, and that is worth
+ * knowing before the file is taken in rather than after.
+ *
+ * The face is registered to be asked and taken straight back off, so nothing on screen changes and
+ * the cost is the decode.
+ *
+ * Empty where this window cannot answer — a face it will not read, and a page with no canvas to
+ * measure in. Saying nothing is the honest answer to a question that could not be put; the caller
+ * shows a line only when there is something in the list.
+ */
+export async function scriptsMissingFrom(font: SkinFontDto): Promise<string[]> {
+  const measure = document.createElement("canvas").getContext("2d");
+  if (!measure) return [];
+  let face: FontFace;
+  try {
+    face = new FontFace(font.family, bytesOf(font.data));
+    await face.load();
+  } catch {
+    // Not a face this window can read. What it covers is the parser's answer, and there is none.
+    return [];
+  }
+  document.fonts.add(face);
+  try {
+    return Object.entries(A_LETTER_OF)
+      .filter(([, letter]) => !hasGlyph(measure, font.family, letter))
+      .map(([lang]) => lang);
+  } finally {
+    document.fonts.delete(face);
+  }
+}
+
+/**
+ * Does this face draw that character?
+ *
+ * **`FontFaceSet.check` cannot answer this.** It says whether the faces a piece of text would use
+ * are loaded, decided by `unicode-range` — and a face declared without one claims every character,
+ * so it answers yes for a glyph it does not have.
+ *
+ * What does answer is the drawing. The character is measured with the face in front of two
+ * different fallbacks: where the face supplies the glyph, both measurements are its own and agree;
+ * where it does not, each falls through to a different family and they come out apart. Two
+ * fallbacks rather than one, because one comparison cannot tell "the face drew it" from "the face
+ * and the fallback happen to draw it the same width".
+ */
+function hasGlyph(measure: CanvasRenderingContext2D, family: string, letter: string): boolean {
+  const width = (stack: string) => {
+    measure.font = `12px ${stack}`;
+    return measure.measureText(letter).width;
+  };
+  return width(`"${family}", monospace`) === width(`"${family}", serif`);
+}
+
+/** base64 to bytes. The wrapping is already out — what arrives here is clean. */
+function bytesOf(base64: string): ArrayBuffer {
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out.buffer;
+}
+
 /** The sheet this window wears a skin through, made on first use and emptied on every change. */
 function sheet(): CSSStyleSheet | null {
   const head = document.head;
@@ -158,6 +274,8 @@ function sheet(): CSSStyleSheet | null {
  * somebody was handed, and the one place that has to hold is the one where they reach the document.
  */
 export function applySkin(tables: SkinTablesDto | null): void {
+  // The face first, so the values that name it land on a family the window already has.
+  void wearFont(tables?.font ?? null);
   const s = sheet();
   if (!s) return;
   if (!tables) return;

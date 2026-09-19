@@ -361,6 +361,7 @@ export const th: Translation = {
     "settings.skinUnmeasured": "รุ่นนี้อ่านค่าเป็นตัวเลขไม่ได้",
     "settings.skinContrastClear": "ทั้ง {n} คู่ผ่านเกณฑ์",
     "settings.skinContrastShort": "{n} จาก {m} คู่ต่ำกว่าเกณฑ์ จะรับเข้ามาก็ยังได้",
+    "settings.skinFontMissing": "ฟอนต์นี้ไม่มีตัวอักษรสำหรับ: {langs} ตรงนั้นจะขึ้นด้วยฟอนต์ของเครื่องเอง",
     "settings.developer": "นักพัฒนา",
     "settings.perfLog": "บันทึกสมรรถนะ (การวัด)",
     "settings.perfLogNote": "จับเวลาชั้นอ่าน/เขียน และขึ้น WARN เมื่อเกินงบที่ตั้งไว้ (แกนเขียนลงไฟล์แบบหมุนเวียน ส่วนหน้าเขียนลงคอนโซล) มีผลทันที",

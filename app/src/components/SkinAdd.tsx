@@ -14,7 +14,8 @@ import { ErrorNote } from "./ErrorNote";
 import { pickFiles, pickSaveAs } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { errText, t, tf } from "../core/i18n";
-import { addSkinFile, readSkinFile, writeSkinTemplate } from "../core/skin";
+import { langEndonym, type Lang } from "../core/i18n/lang";
+import { addSkinFile, readSkinFile, scriptsMissingFrom, writeSkinTemplate } from "../core/skin";
 
 /** What a warning's kind is said as. The key names it; the row carries the name it is about. */
 const WHY: Record<string, string> = {
@@ -28,19 +29,31 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
   const [path, setPath] = useState<string | null>(null);
   const [read, setRead] = useState<SkinJudgementDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The languages the file's font has no glyphs for. Empty where it carries none, and where this
+  // window could not put the question.
+  const [missing, setMissing] = useState<string[]>([]);
   const well = useRef<HTMLDivElement>(null);
 
   const look = (at: string) => {
     setPath(at);
     setRead(null);
     setError(null);
-    readSkinFile(at).then(setRead).catch((e) => setError(errText(e)));
+    setMissing([]);
+    readSkinFile(at)
+      .then((judged) => {
+        setRead(judged);
+        // A face that carries only Latin makes a Japanese screen half pixels and half the
+        // machine's own letters. Worth knowing before it is taken in rather than after.
+        if (judged.font) void scriptsMissingFrom(judged.font).then(setMissing).catch(() => {});
+      })
+      .catch((e) => setError(errText(e)));
   };
 
   const forget = () => {
     setPath(null);
     setRead(null);
     setError(null);
+    setMissing([]);
   };
 
   // A file dragged in from the desktop lands on the application rather than on the page, so the
@@ -119,6 +132,14 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
                 {tf("settings.skinReplace", {
                   held: read.heldVersion ?? t("settings.skinNoVersion"),
                   coming: read.version ?? t("settings.skinNoVersion"),
+                })}
+              </div>
+            )}
+
+            {missing.length > 0 && (
+              <div className="meta">
+                {tf("settings.skinFontMissing", {
+                  langs: missing.map((l) => langEndonym(l as Lang)).join("、"),
                 })}
               </div>
             )}

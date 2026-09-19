@@ -736,6 +736,20 @@ pub struct StoreLocationsDto {
     pub(crate) root: String,
 }
 
+/// The one font a skin carries, on the way to the window. The bytes ride as base64 with the
+/// wrapping already taken out — the window decodes once and hands the buffer to `FontFace`, which
+/// is measurably quicker than a `data:` URI and touches no CSP directive.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinFontDto {
+    /// The name the generated face is given, and the one the skin's `font` puts at the head of its
+    /// stack.
+    pub(crate) family: String,
+    /// The woff2, base64, clean.
+    pub(crate) data: String,
+}
+
 /// The skin this device has on, as the window wears it: the two sides' tables of token name to
 /// value, with the leading `--` left off the way the file writes them. `null` from the command
 /// rather than an empty pair when nothing is on — "no skin" and "a skin that sets nothing" are not
@@ -752,6 +766,8 @@ pub struct SkinTablesDto {
     pub(crate) light: std::collections::BTreeMap<String, String>,
     /// The dark side's values, on the same terms.
     pub(crate) dark: std::collections::BTreeMap<String, String>,
+    /// The font it carries, where it carries one the check took.
+    pub(crate) font: Option<SkinFontDto>,
 }
 
 /// One skin this device holds, as the settings screen lists it. The fields are the header's, and
@@ -837,6 +853,9 @@ pub struct SkinJudgementDto {
     pub(crate) unread: Vec<String>,
     /// How many pairings were measured, so "nothing fell" is told from "nothing ran".
     pub(crate) measured: u32,
+    /// The font it carries, where the check took one. Here as well as in the tables because the
+    /// screen asks what the face has glyphs for before the file is taken in, not after.
+    pub(crate) font: Option<SkinFontDto>,
 }
 
 /// One row of the change feed. **Which row of which table changed, and how** — that is all; no

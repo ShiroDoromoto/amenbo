@@ -2274,6 +2274,22 @@ text?: string,
 made?: SessionMadeDto, };
 
 /**
+ * The one font a skin carries, on the way to the window. The bytes ride as base64 with the
+ * wrapping already taken out — the window decodes once and hands the buffer to `FontFace`, which
+ * is measurably quicker than a `data:` URI and touches no CSP directive.
+ */
+export type SkinFontDto = { 
+/**
+ * The name the generated face is given, and the one the skin's `font` puts at the head of its
+ * stack.
+ */
+family: string, 
+/**
+ * The woff2, base64, clean.
+ */
+data: string, };
+
+/**
  * What reading one file gave, for the screen that is about to take it in. A file the check turns
  * away does not come back as one of these — it comes back as the command failing, because there is
  * nothing of it to show and nothing to decide.
@@ -2296,7 +2312,12 @@ unread: Array<string>,
 /**
  * How many pairings were measured, so "nothing fell" is told from "nothing ran".
  */
-measured: number, };
+measured: number, 
+/**
+ * The font it carries, where the check took one. Here as well as in the tables because the
+ * screen asks what the face has glyphs for before the file is taken in, not after.
+ */
+font: SkinFontDto | null, };
 
 /**
  * What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —
@@ -2348,7 +2369,11 @@ light: { [key in string]: string },
 /**
  * The dark side's values, on the same terms.
  */
-dark: { [key in string]: string }, };
+dark: { [key in string]: string }, 
+/**
+ * The font it carries, where it carries one the check took.
+ */
+font: SkinFontDto | null, };
 
 /**
  * One thing the check set aside while reading a file the reader is about to take in. `theme` is

@@ -367,6 +367,7 @@ export const ptBR: Translation = {
     "settings.skinUnmeasured": "esta versão não consegue ler um número disso",
     "settings.skinContrastClear": "Os {n} pares passam do mínimo.",
     "settings.skinContrastShort": "{n} de {m} pares ficam abaixo do mínimo. Ainda assim dá para trazer.",
+    "settings.skinFontMissing": "Esta fonte não tem letras para: {langs}. Ali aparece a fonte da máquina.",
     "settings.developer": "Desenvolvimento",
     "settings.perfLog": "Log de desempenho (instrumentação)",
     "settings.perfLogNote": "Cronometra as camadas de leitura e escrita e emite WARN ao estourar o orçamento (o núcleo em um arquivo rotativo, o front no console). Vale na hora.",

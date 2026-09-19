@@ -26,6 +26,28 @@ const PREFS: ThemePref[] = ["os", "dark", "light"];
  */
 const CHANGED = "theme-changed";
 
+/**
+ * The side a one-sided skin leaves, or nothing where there is a choice to make. **Not a
+ * preference**: it is held apart from the stored one, so what the reader last chose is still
+ * theirs and comes back the moment the skin comes off.
+ *
+ * It lives here because this is what writes `<html data-theme>`, and it is written from more than
+ * one place — the reader's answer, another window's, and the OS while the preference follows it. A
+ * pin applied once anywhere else is a pin the next `prefers-color-scheme` change undoes.
+ */
+let pinned: "light" | "dark" | undefined;
+
+/**
+ * Hold the appearance to one side, or let go of it (`undefined`). Called by whatever wears a skin:
+ * a skin written for one side has no other side to draw, and a window on the side it did not write
+ * shows this build's own colours under that skin's name, which reads as a fault rather than as a
+ * skin.
+ */
+export function pinTheme(side: "light" | "dark" | undefined): void {
+  pinned = side;
+  apply(getThemePref());
+}
+
 export function getThemePref(): ThemePref {
   const v = (typeof localStorage !== "undefined" && localStorage.getItem(KEY)) as ThemePref | null;
   return v && PREFS.includes(v) ? v : "os";
@@ -37,9 +59,13 @@ function prefersDark(): boolean {
     : false;
 }
 
-/** Resolve the preference to a concrete theme (dark|light) and put it on <html data-theme>. */
+/**
+ * Resolve the preference to a concrete theme (dark|light) and put it on <html data-theme>. A skin
+ * holding the appearance to one side wins over all of it — the preference is still stored, and it
+ * is what comes back when the pin is let go.
+ */
 function apply(pref: ThemePref): void {
-  const resolved = pref === "os" ? (prefersDark() ? "dark" : "light") : pref;
+  const resolved = pinned ?? (pref === "os" ? (prefersDark() ? "dark" : "light") : pref);
   document.documentElement.dataset.theme = resolved;
 }
 

@@ -65,6 +65,7 @@ pub mod self_update;
 pub mod session;
 pub mod skin;
 pub mod skin_contrast;
+pub mod skin_official;
 pub mod slug;
 pub mod store;
 pub mod swap_lock;

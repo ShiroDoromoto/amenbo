@@ -164,7 +164,8 @@ describe("a skin made for one side only", () => {
     const theme = selects()[1]!;
     expect(theme.disabled, "there is no theme to choose while it is on").toBe(true);
     expect(theme.value).toBe("dark");
-    expect(document.documentElement.dataset.theme).toBe("dark");
+    // What the window is actually drawn in is `applySkin`'s, not this screen's (core/skin.test.ts):
+    // a skin is worn at startup and in every window, and only one of those has this screen open.
 
     const out = host.querySelector<HTMLButtonElement>(".skinesc");
     expect(out, "and the way out is beside the reason").not.toBe(null);

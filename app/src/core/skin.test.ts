@@ -8,6 +8,7 @@ vi.mock("./ipc", () => ({ invoke: () => Promise.reject(new Error("no host")) }))
 
 import type { SkinTablesDto } from "../bindings/bindings";
 import { applySkin } from "./skin";
+import { setThemePref } from "./theme";
 
 /** A skin as the window receives it, with only the parts a test is about spelled out. */
 const wearing = (over: Partial<SkinTablesDto>): SkinTablesDto => ({
@@ -99,6 +100,34 @@ describe("applySkin", () => {
     expect(light).not.toContain("--c-text");
     expect(light).not.toContain("--c-surface");
     expect(light).not.toContain("--c-edge");
+  });
+
+  // A skin written for one side only takes the choice of appearance away while it is on. Held
+  // here rather than on the settings screen: a skin is worn at startup and in every window, and
+  // only one of those has that screen open.
+  it("holds the appearance to the one side a skin wrote", () => {
+    applySkin(wearing({ name: "retro", title: "Retro", light: {}, dark: { "c-bg": "#000" } }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("leaves the appearance alone for a skin that wrote both sides", () => {
+    setThemePref("light");
+    applySkin(wearing({ name: "retro", title: "Retro", light: {}, dark: { "c-bg": "#000" } }));
+    applySkin(wearing({
+      name: "washi",
+      title: "Washi",
+      light: { "c-bg": "#f2ebdc" },
+      dark: { "c-bg": "#1a1611" },
+    }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  it("gives the appearance back when the skin comes off", () => {
+    setThemePref("light");
+    applySkin(wearing({ name: "retro", title: "Retro", light: {}, dark: { "c-bg": "#000" } }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    applySkin(null);
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 
   it("writes only names that are names", () => {

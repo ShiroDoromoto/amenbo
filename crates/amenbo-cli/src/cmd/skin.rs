@@ -48,26 +48,30 @@ fn list(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                     "name": name, "title": s.title, "author": s.author, "version": s.version,
                     "themes": s.themes, "license": s.license, "homepage": s.homepage,
                     "on": Some(name) == on.as_ref(),
+                    "official": amenbo_core::skin_official::is_official(name),
                 }),
-                Err(e) => json!({ "name": name, "error": e.to_string(), "on": Some(name) == on.as_ref() }),
+                Err(e) => json!({
+                    "name": name, "error": e.to_string(), "on": Some(name) == on.as_ref(),
+                    "official": amenbo_core::skin_official::is_official(name),
+                }),
             }).collect::<Vec<_>>(),
         }));
         return Ok(0);
     }
 
-    if held.is_empty() {
-        human(flags, format!("no skins in {}", store.paths.skins_dir().display()));
-    }
     for (name, read) in &held {
         let mark = if Some(name) == on.as_ref() { "*" } else { " " };
+        // Said on the line rather than left to be discovered by `skin rm`: what this build ships
+        // is not on the device, so it is not there to take off.
+        let from = if amenbo_core::skin_official::is_official(name) { "  — shipped with Amenbo" } else { "" };
         match read {
             Ok(s) => {
                 let version = s.version.as_deref().unwrap_or("-");
-                human(flags, format!("{mark} {name}  {} ({version}) [{}]", s.title, s.themes.join(", ")));
+                human(flags, format!("{mark} {name}  {} ({version}) [{}]{from}", s.title, s.themes.join(", ")));
             }
             // A file that will not read is said out loud: it is in the directory, so a list that left
             // it out would have the reader hunting for a skin that is sitting right there.
-            Err(e) => human(flags, format!("{mark} {name}  cannot be read: {e}")),
+            Err(e) => human(flags, format!("{mark} {name}  cannot be read: {e}{from}")),
         }
     }
     match &on {
@@ -87,6 +91,17 @@ fn list(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 fn add(store: &mut Store, flags: &Flags, path: &Path, yes: bool) -> Result<i32, CliError> {
     let (yaml, taken, report) = judge(path)?;
     let name = taken.skin.name.clone();
+
+    // Asked before the one below, and not answerable with --yes: what this build ships is not a
+    // file on the device, so there is nothing here for a replace to replace.
+    if amenbo_core::skin_official::is_official(&name) {
+        return Err(CliError {
+            code: "skin_name_is_ours",
+            message: amenbo_core::skin_official::name_is_ours(&name),
+            hint: Some("Change the `name:` line; `title:` is the one shown on screen.".to_string()),
+            exit: 1,
+        });
+    }
 
     if let Some(there) = Skin::installed(&store.paths, &name).map_err(CliError::from)? {
         if !yes && !flags.yes {
@@ -147,6 +162,14 @@ fn wear(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
 /// Take one off the device. The one that is on goes off with it — a name in the config pointing at
 /// a file that is gone says the device is wearing something it has not got.
 fn remove(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    if amenbo_core::skin_official::is_official(name) {
+        return Err(CliError {
+            code: "skin_shipped",
+            message: amenbo_core::skin_official::not_on_the_device(name),
+            hint: Some(format!("`{} skin use none` takes off whatever is on.", Paths::command_name())),
+            exit: 1,
+        });
+    }
     let gone = Skin::uninstall(&store.paths, name).map_err(CliError::from)?;
     let was_on = store.config.skin.as_deref() == Some(name);
     if gone && was_on {

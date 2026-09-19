@@ -1,0 +1,120 @@
+# A pane is named twice in a row, and the second name is typed at the provider rather than assumed.
+#
+# **The names a reader gives one pane begin alike, and that is the whole of this road.** What Amenbo
+# looks for on the screen to know its rename landed is the leading run of what it typed — fourteen
+# characters, which is eight of `/rename ` and six of the name — because a screen is rows and a longer
+# run would be cut in half by a narrow pane (`app/src-tauri/src/handover.rs`, `HEAD`). Two names for
+# one pane are two names for one thing, so they begin with the same word more often than not, and the
+# first of them is still drawn where the provider echoed it.
+#
+# Read off that screen before anything has gone in, the first name's words say "the second one
+# arrived" — and what follows is the newline alone, into a pane nothing was written into. On a pane
+# holding a question that newline is the question answered, which is the fault this whole half is
+# arranged against.
+#
+# ── What the two readings are ────────────────────────────────────────────────────────────────────
+# The first name coming back off the program, and then the second. **They are read off the program
+# and not off the pane**: a pane echoes what is written into it, so the words are on the screen either
+# way, and only a line the program handed back says the line was ever submitted. The stand-in prints
+# each line it is given inside brackets, so the two readings cannot be each other's.
+#
+# ── Why the machine is stood up this way ─────────────────────────────────────────────────────────
+# A name is carried only to a program that has a rename command to type, so the pane has to be a
+# provider's (`amenbo_core::harness::Rename`) — hence `can-start`. And it has to be one that shows
+# what it is given, because the first name landing is what puts those words on the screen for the
+# second one to be read against. `then: reads` is that program.
+#
+# ── Why the names are these names ────────────────────────────────────────────────────────────────
+# Both open with the harness's own word, so their leading runs are identical to the character. That is
+# not a contrivance: every road here opens its words that way, and a reader naming one pane twice does
+# the same thing with whatever word their work is called.
+id: be-named-twice-running-without-the-second-name-being-swallowed
+title: A pane named twice over is told the second name, not credited with it
+description: >
+  Stand a machine up with agents that print back every line they are given. Open a pane on one, name
+  the pane, and the name reaches the provider — which echoes it, leaving those words on the screen.
+  Name the pane again, with a name that begins as the first one did. The second name is typed at the
+  provider too: it comes back off the program the way the first did, rather than the first one's words
+  on the screen being read as the second one having arrived.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Harbour
+      dir: harbour-side
+    as: harbour
+
+  # Two, because that is the fewest a machine can be stood up with, and the road opens on the first of
+  # them by name. `reads` is a program that stays and prints back every line it is given.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      then: reads
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Harbour
+
+  # One pane, so every step below means the one box on the page and none of them has to say so.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  # Named rather than taken by position: what the road needs of it is a provider with a rename command
+  # of its own, which is what a name is carried by and what a position cannot promise.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Claude Code
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # ── the first name ───────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO harbour lights
+
+  # It reached the program, which is what the brackets say: the pane would show those words whether or
+  # not anything was submitted, and only the program handing the line back says it was. This is also
+  # what leaves the first name's words standing on the screen for the second one to be read against.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO said [/rename SCENARIO harbour lights]
+
+  # ── and the second, which begins as the first one did ────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO harbour moorings
+
+  # The reading. A build that read the first name's words as the second one's arrival sends the
+  # newline and nothing else, and what comes back is a line with nothing in it — the same mark, and
+  # not this one. The words inside the brackets are what parts the two.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO said [/rename SCENARIO harbour moorings]

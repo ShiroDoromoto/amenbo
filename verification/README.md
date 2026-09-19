@@ -1546,9 +1546,14 @@ plain shell, and a shell is the one pane with no way back into it, so a record m
 session anybody could return to. `asks` stays holding a question of its own and shows nothing of what
 is written into it, which is the pane a name is the dangerous thing to carry into: a program drawing a
 dialogue swallows what is pasted at it, so a newline sent on the strength of the screen having moved
-picks the first choice. It is three things at once — the terminal's echo off, a bracketed paste asked
-for (nothing is pasted into a pane that has not asked), and a mark for every line it is given, the
-mark alone and never the line.
+picks the first choice. It is two things at once — the terminal's echo off, and a mark for every line
+it is given, the mark alone and never the line.
+
+**Every shape that stays asks for a bracketed paste**, and that is what makes one of them a pane
+Amenbo writes into at all: nothing is pasted into a pane that has not asked, the markers arriving as
+keys and the escape that opens them as cancel. Every provider measured asks within a second of being
+able to take one, and a shell script reading lines asks for nothing — so the stand-in says it itself.
+The one that ends is not asked for it, there being nothing running in that pane to write to.
 
 **`comes-back` is whether one honours a way back it is handed**, and it is true unless a road says
 otherwise. A stand-in issues no sessions, so every handle it ever sees is one it did not make: going

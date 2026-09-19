@@ -157,6 +157,11 @@ const FILE_SCHEME: &str = "amenbofile";
 /// the network call belongs on the UI side, where its progress and result can be shown.
 const CHECK_UPDATES_EVENT: &str = "menu://check-updates";
 
+/// What the windows are told when the skin changes, which is the same word the page uses when it is
+/// changed from the settings screen (`app/src/core/skin.ts`). Emitted here for the menu item, whose
+/// click never reaches the page.
+const SKIN_CHANGED_EVENT: &str = "skin-changed";
+
 /// Starts the long-lived threads that keep the store open. Call it **only once migration is
 /// through**, so nothing ever reads a store caught mid-version or left at an old one — which is why
 /// there are exactly two callers: startup (no migration needed, or migration succeeded) and a
@@ -304,6 +309,15 @@ pub fn run() {
       if event.id() == menu::CHECK_UPDATES_ID {
         use tauri::Emitter;
         let _ = app.emit(CHECK_UPDATES_EVENT, ());
+      }
+      // The one way out of a set of colours that made the window unreadable. It is written here
+      // rather than asked of the page, because the page is the thing that cannot be read — and
+      // every window is told, down the road a skin already travels (`app/src/core/skin.ts`).
+      if event.id() == menu::SKIN_OFF_ID {
+        use tauri::Emitter;
+        if commands::skin_use(None).is_ok() {
+          let _ = app.emit(SKIN_CHANGED_EVENT, Option::<()>::None);
+        }
       }
       // Quit is the app's own item rather than the platform's, so that this line exists at all
       // (`quit`, `menu`). What happens next is a question or an exit, depending on whether anything

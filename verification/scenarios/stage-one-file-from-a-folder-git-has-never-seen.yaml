@@ -1,0 +1,195 @@
+# A folder git has nothing recorded from, worked a file at a time.
+#
+# Asked the ordinary way, git answers for such a folder with one line naming the folder and stops
+# there. On that line a reader cannot see what is inside it, cannot read any of it, and cannot record
+# one file without recording every other file underneath it unseen — and the number beside the
+# heading counts folders where they wanted files. None of the products measured draws that line, and
+# neither does this one: the window asks for every file by name.
+#
+# ── Why nothing in the repository is recorded ────────────────────────────────────────────────────
+# A repository with one file recorded is one git already names the rest of one by one, whatever it is
+# asked — so a road built on one would pass on a build that had never stopped answering for folders.
+# What this road is about exists only where git has been given nothing at all, which is the state a
+# folder is in on the day somebody makes it a repository and the state an agent's output sits in an
+# hour later.
+#
+# ── Why the files are inside a folder ────────────────────────────────────────────────────────────
+# The line this road exists to be rid of names a folder, so there has to be one to name. A file lying
+# at the top of the repository was always named on its own.
+#
+# ── Why one file is staged and its neighbour read afterwards ─────────────────────────────────────
+# This is the reading the old line cost most. Staging one file used to take the folder's line off the
+# list and put a different one in its place, so the row a reader was about to press next moved under
+# their hand — and what they had ticked was every file underneath, not the one they had looked at. So
+# one file is staged and the other is read for where it is: the list either side of the press is the
+# whole of the reading.
+#
+# ── Why a file the folder ignores is written too ─────────────────────────────────────────────────
+# Asking for every file is asking git, not walking the disk, and the difference shows in what is left
+# out. `.gitignore` is what decides it, and a build that had gone to the filesystem for this list
+# would put the ignored file on the screen beside the rest.
+#
+# ── Why the patch is read ────────────────────────────────────────────────────────────────────────
+# Seeing the names is half of it. git writes no patch for a path it has never seen, so the column
+# across the panes answered for one with the sentence that says git wrote nothing — a file a reader
+# could see in the list, tick, and record without ever reading a line of it. What the column draws
+# now is the whole of the file, which is what there is to read about a file nothing has recorded yet.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. The list is a thing on a screen, and what the binary is handed is paths it
+# was told; nothing it prints is answered out of this question.
+id: stage-one-file-from-a-folder-git-has-never-seen
+title: Every file of a folder git has nothing recorded from is on the list, readable, and staged one at a time
+description: >
+  Bind a folder that is a repository with nothing recorded in it at all, holding two files inside a
+  folder of its own and one the folder's ignore rules cover. The git half names each file that is not
+  ignored, by its own name — not the folder holding them. Read one of them and its whole content
+  stands in the column across the panes. Stage that one, and it moves to the staged list while its
+  neighbour stays exactly where it was.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # What the folder ignores, said before the files so the rule is in place whenever git is asked.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: .gitignore
+      content: compost/
+
+  # The two inside a folder of their own — the folder git would otherwise answer for as a whole.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: orchard/pruning.md
+      content: SCENARIO cut back the old wood before the sap rises
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: orchard/sowing.md
+      content: SCENARIO the pips go in once the frosts are done
+
+  # And one the ignore rule covers, which git is asked about and says nothing back.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: compost/heap.md
+      content: SCENARIO turned twice a week
+
+  # Made a repository last, and nothing is recorded into it: the state this road is about.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Both files by their own names. This is the whole of what the old line hid.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: pruning.md
+      section: changes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sowing.md
+      section: changes
+
+  # And the one the folder said to ignore is on no list at all. The names come from git and not from
+  # a walk of the disk, and this is where the two answers differ.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: heap.md
+      section: changes
+      present: false
+
+  # ── one of them read ──────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: pruning.md
+      section: changes
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: pruning.md
+      section: changes
+
+  # Every line of a file git has never seen is a line it has never seen, so the whole of it stands in
+  # the patch — under the mark git writes on a line that is being added.
+  - type: assert
+    domain: files
+    op: patch
+    with:
+      shows: +SCENARIO cut back the old wood before the sap rises
+
+  # ── and one of them staged ────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: stage
+    with:
+      name: pruning.md
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: pruning.md
+      section: staged
+
+  # The reading this road is for. Its neighbour is where it was, under the name it had — nothing was
+  # taken off the list and nothing put in its place by the press.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sowing.md
+      section: changes

@@ -368,10 +368,18 @@ function DetailsRow() {
  * The account box is here because a token that reaches more than one account is one core will not choose
  * for them — it answers with the accounts it found and asks which. Left blank, which is the usual case,
  * nothing is asked.
+ *
+ * **The name box is the way past the one refusal this press can meet.** Where the reader names nothing
+ * and a server of the usual name is already standing in that account that this store holds no key to,
+ * core will not build over it — the owner of that server would stop being able to write to it and
+ * would be told nothing (`AMB-D-930`). Both ways past it are a name: another one stands a second server
+ * up, and the usual one said out loud is the reader saying that server is theirs. Without this box the
+ * refusal would point at a flag only the CLI beside the app carries.
  */
 function SetUpForm({ state, onDone }: { state: ViewerState; onDone: () => void }) {
   const [token, setToken] = useState("");
   const [account, setAccount] = useState("");
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -382,7 +390,11 @@ function SetUpForm({ state, onDone }: { state: ViewerState; onDone: () => void }
     setError(null);
     setSaid(null);
     try {
-      const stood = await setUpViewer(token.trim(), account.trim() === "" ? undefined : account.trim());
+      const stood = await setUpViewer(
+        token.trim(),
+        account.trim() === "" ? undefined : account.trim(),
+        name.trim() === "" ? undefined : name.trim(),
+      );
       // The token is spent. Clearing it is not tidiness: the box is on screen until the reader leaves,
       // and what is in it is the one credential that can create things in their account.
       setToken("");
@@ -434,6 +446,23 @@ function SetUpForm({ state, onDone }: { state: ViewerState; onDone: () => void }
             onKeyDown={(e) => { if (isEnterSubmit(e)) void stand(); }}
           />
           <span className="settings__fine">{t("viewer.accountNote")}</span>
+        </span>
+      </div>
+
+      <div className="settings__row">
+        <span className="settings__k">{t("viewer.name")}</span>
+        <span className="settings__v">
+          <input
+            {...asTyped}
+            className="btn"
+            value={name}
+            disabled={busy}
+            aria-label={t("viewer.name")}
+            placeholder={t("viewer.namePlaceholder")}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (isEnterSubmit(e)) void stand(); }}
+          />
+          <span className="settings__fine">{t("viewer.nameNote")}</span>
         </span>
       </div>
 

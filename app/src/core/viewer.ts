@@ -125,9 +125,14 @@ export function useViewerApps(): ViewerApp[] {
 export async function setUpViewer(
   apiToken: string,
   account?: string,
+  name?: string,
 ): Promise<ViewerStood | null> {
   if (!inTauri()) return null;
-  const stood = await invoke<ViewerStood>("viewer_setup", { apiToken, account: account ?? null });
+  const stood = await invoke<ViewerStood>("viewer_setup", {
+    apiToken,
+    account: account ?? null,
+    name: name ?? null,
+  });
   reloadState();
   reloadPairing();
   return stood;

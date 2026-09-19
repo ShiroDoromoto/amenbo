@@ -45,7 +45,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    page does. It is dragged taller and never wider — widening it breaks the column its neighbours
    are laid out in. */
 textarea { resize: vertical; max-width: var(--measure-prose); }
-select { cursor: pointer; }
+/* **A select never reaches the smallest a finger may be asked for on its text alone**, and only one
+   of the ways of saying how tall it should be reaches it (`--tap-min`, WCAG 2.2 SC 2.5.8).
+
+   What a select is drawn as is the platform's: with its own appearance left on — which is what keeps
+   the caret the machine draws — WebKit takes the control's height off the font and leaves `padding`
+   and `min-height` where they are. Measured in the app: a `.btn` select stayed at 22px under
+   `min-height` and came to 24 under `height`, and the same select with its appearance turned off
+   jumped to 36 as the form padding above suddenly applied. So it is `height`, and it is said here on
+   the element rather than on each class that happens to wear one — every select is under the floor on
+   its text alone, whatever it is wearing, and the three found short were wearing three different
+   classes with one of them wearing none at all. A select that has to stand taller than this says so
+   with a height of its own. */
+select { cursor: pointer; height: var(--tap-min); }
 /* A tick box is drawn by the platform and stays that way: the rule above is for boxes with a value
    typed into them, and its padding, ground and border would each take a piece of the tick. What it
    keeps from the rule is the accent, so the tick is the app's colour and not the system's. */

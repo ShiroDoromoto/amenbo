@@ -123,16 +123,19 @@ steps_gui:
     with:
       half: git
 
-  # Three, and three is the reading. Asked git's own default way, a folder with nothing recorded from
-  # it comes back as one line for the folder — so the heading would say two: the folder, and the
-  # ignore file beside it. Every file named one at a time makes it three, and the number over the list
-  # is the one place on the screen the two answers differ.
+  # Six, and six is the reading. **The three files a binding leaves are counted too**: linking a folder
+  # to a project puts `.amenbo`, `AGENTS.md` and `CLAUDE.md` in it, and git has nothing recorded from
+  # any of them either. So the list holds those three, the ignore file, and the two inside `orchard`.
+  #
+  # Asked git's own default way the heading would say five: the same four at the top of the folder,
+  # and one line standing for `orchard` whole. Every file named one at a time makes it six, and the
+  # number over the list is the one place on the screen the two answers differ.
   - type: assert
     domain: files
     op: counted
     with:
       section: changes
-      count: 3
+      count: 6
 
   # Both files by their own names. This is the whole of what the old line hid.
   - type: assert

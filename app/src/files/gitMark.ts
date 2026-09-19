@@ -43,11 +43,14 @@ const keyOf = (path: string[]) => path.join("\0");
 /**
  * Read git's answer once, and hand back what each tree row should wear.
  *
- * **A folder git named as a whole answers for everything inside it.** That is what git does with an
- * untracked folder — it names the folder and stops — so a tree that only matched paths exactly
- * would leave every file in a brand-new folder colourless. The bound folder itself is that case
- * spelled with no segments at all, which is a repository where nothing is tracked yet: dropping it
- * would leave a new repository with no colour anywhere.
+ * **A folder git named as a whole answers for everything inside it.** Asked with `-uall` git names
+ * untracked files one by one (`AMB-D-919`), so the only folder it still answers for whole is one it
+ * cannot walk into: a repository of its own sitting inside this one. Nothing under such a folder is
+ * ever named, so a tree that only matched paths exactly would leave the whole of it colourless.
+ *
+ * The walk up that reaches those folders ends at the bound folder, which the format spells with no
+ * segments at all. Nothing git is asked now comes back in that shape, and the walk reads it anyway
+ * because what it reads is the format and not one call's options.
  *
  * **What is folded rolls up; what is open does not** (`AMB-D-795`). A folded folder wears the mark
  * of the furthest-from-recorded thing under it, which is the row saying "there is something in here

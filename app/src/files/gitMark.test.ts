@@ -44,13 +44,16 @@ describe("what a folded folder wears", () => {
     expect(marks(["a", "b", "c"], true)).toBe("untracked");
   });
 
-  it("gives way to what git said about the folder itself", () => {
-    // git names an untracked folder and stops, so the folder has an answer of its own; a rollup that
-    // spoke over it would be the tree telling the reader something git did not say.
-    const marks = gitMarks([row(["fresh"], "?", true), row(["fresh", "one.md"], "A")]);
+  it("is what git said about a folder it answered for as a whole, all the way down", () => {
+    // Asked with `-uall`, the only folder git answers for whole is one it cannot walk into: a
+    // repository of its own sitting inside this one (`AMB-D-919`). It says nothing about what is in
+    // there, so the folder's own mark is the only answer there is, and it reaches every row below.
+    const marks = gitMarks([row(["nested"], "?", true)]);
 
-    expect(marks(["fresh"], true)).toBe("untracked");
-    expect(marks(["fresh"], false), "the folder git named keeps its own mark, open or folded")
+    expect(marks(["nested"], true)).toBe("untracked");
+    expect(marks(["nested"], false), "the folder git named keeps its own mark, open or folded")
+      .toBe("untracked");
+    expect(marks(["nested", "one.md"]), "and nothing under it is ever named on its own")
       .toBe("untracked");
   });
 });

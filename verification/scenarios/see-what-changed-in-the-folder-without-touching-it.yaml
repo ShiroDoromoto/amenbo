@@ -28,9 +28,11 @@
 # What git says about a row is drawn on the row as a colour, and that is the other half of the same
 # face. The bound folder is made a repository with nothing recorded in it, so what git reports on is
 # new to it — and the row that arrived while nothing was pressed is read for its colour as well as for
-# being there. The ignored one is read for the other half of the same answer: git reports nothing about
-# it, so it wears nothing. The reading is an eye's either way — a row wearing a colour says the same
-# letters as one that wears none, and words are all a shot gives back.
+# being there. That row is a folder, and git names the file inside it rather than the folder holding
+# it, so the colour on it is the one a folded folder wears for what it is hiding. The ignored one is
+# read for the other half of the same answer: git reports nothing about it, so it wears nothing. The
+# reading is an eye's either way — a row wearing a colour says the same letters as one that wears
+# none, and words are all a shot gives back.
 id: see-what-changed-in-the-folder-without-touching-it
 title: A file written outside Amenbo shows up in the tree, the folder's own ignore rules included
 description: >
@@ -149,7 +151,8 @@ steps_gui:
       section: tree
 
   # What git says about the row that arrived. Nothing has been recorded in this repository, so the
-  # folder written from outside is new to git, and the row is drawn in the colour that says so.
+  # file written from outside is new to git — and git names that file and not the folder holding it,
+  # so what the folded row wears is the colour of what it is hiding.
   - type: assert
     domain: files
     op: row-mark

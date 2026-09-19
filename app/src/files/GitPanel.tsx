@@ -1373,8 +1373,9 @@ function ChangedRow({
         />
         <span className="gitpanel__mark">{letters(row)}</span>
         {/* The name, cut in the middle where the row is too narrow for it (`RowName`). A folder git
-            named as a whole rather than naming what is inside it — which is what it does with an
-            untracked one — carries the slash git writes it with, and the tree reads. */}
+            named as a whole rather than naming what is inside it — under `-uall`, a repository of
+            its own sitting inside this one (`AMB-D-919`) — carries the slash git writes it with,
+            and the tree reads. */}
         <RowName name={name} after={row.isDir ? "/" : ""} />
         {holding !== "" && <span className="gitpanel__where">{holding}</span>}
       </span>

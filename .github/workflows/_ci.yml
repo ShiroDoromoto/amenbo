@@ -1191,6 +1191,11 @@ jobs:
           chmod +x guards/check-token-contrast.sh
           guards/check-token-contrast.sh
 
+      - name: Assert every token is named on exactly one of the skin vocabulary lists
+        run: |
+          chmod +x guards/check-skin-vocabulary.sh
+          guards/check-skin-vocabulary.sh
+
       # The one guard here that runs a generator rather than a scan, so it wants the node the
       # generator is written for — the dictionaries are TypeScript, and an older node reads them as
       # syntax errors rather than as modules. The guard skips quietly with no node at all, so without

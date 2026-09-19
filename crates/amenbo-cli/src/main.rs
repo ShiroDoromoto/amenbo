@@ -227,6 +227,9 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // One timer for the machine, answered on the device: it reads and writes a config key and no
         // store content at all, which is `config`'s class rather than the lint hook's.
         | Command::Tick { .. }
+        // A device's skins: files beside the store and one name in the config. Nothing of a
+        // project's content is read or written, which is `config`'s class.
+        | Command::Skin { .. }
         | Command::Lint { .. } // reads the text it is handed; no store to reach into
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
@@ -1025,6 +1028,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // whether this is the repository the task is worked in.
         Command::Worktree { sub } => return cmd::worktree::worktree(&store, flags, sub),
         Command::Config { sub } => return config(&mut store, flags, sub),
+        Command::Skin { sub } => return crate::cmd::skin::skin(&mut store, flags, sub),
         Command::Status { scope } => {
             let result = store.status(&scope).map_err(CliError::from)?;
             if flags.json {

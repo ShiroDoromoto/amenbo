@@ -165,6 +165,10 @@ pub const CLOSED: &[&str] = &[
 /// runs on. Lowercase ASCII, digits, `-` and `_`, opening on a letter or a digit.
 pub const NAME_MAX: usize = 64;
 
+/// The extension a skin's file carries. The one shape a skin is kept in, and read back by everything
+/// that enumerates the directory — the device's own, and an archive's entries.
+pub const FILE_EXT: &str = ".yaml";
+
 /// May this name be a skin's? Asked in two places for one reason: the name is what the skin is kept
 /// under (`<base>/skins/<name>.yaml`), so a name that is not a filename is a path somewhere else.
 pub fn usable_name(name: &str) -> bool {
@@ -181,6 +185,64 @@ impl Skin {
     /// A name that is not usable holds nothing, rather than reaching for a file: the answer to
     /// "what is installed as `../../etc/passwd`" is nothing, and it is not a question to ask the
     /// filesystem.
+    /// Every skin this device holds, by the name its file is under, with what reading that file
+    /// gave. A file that will not read is carried out as the failure rather than dropped: it is one
+    /// of the person's own files, and a list that quietly skipped it would leave them looking for a
+    /// skin that is right there.
+    pub fn installed_all(paths: &crate::config::Paths) -> Vec<(String, Result<Skin, Error>)> {
+        let Ok(entries) = std::fs::read_dir(paths.skins_dir()) else {
+            return Vec::new(); // no skins on this device
+        };
+        let mut found: Vec<(String, Result<Skin, Error>)> = entries
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .filter_map(|e| {
+                let file = e.file_name().to_string_lossy().into_owned();
+                let name = file.strip_suffix(FILE_EXT)?.to_string();
+                if !usable_name(&name) {
+                    return None;
+                }
+                let read = std::fs::read_to_string(e.path())
+                    .map_err(Error::from)
+                    .and_then(|yaml| Skin::read(&yaml));
+                Some((name, read))
+            })
+            .collect();
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        found
+    }
+
+    /// Keep this document on the device under `name`, replacing whatever was there. The bytes are
+    /// the author's own — a skin may carry a licence text and a font, and re-writing it from what
+    /// was parsed would hand on a different file from the one that arrived.
+    ///
+    /// Written aside and renamed into place, so a reader never sees half a skin.
+    pub fn install(paths: &crate::config::Paths, name: &str, yaml: &str) -> Result<(), Error> {
+        if !usable_name(name) {
+            return Err(Error::invalid(format!("'{name}' is not a name a skin can be kept under")));
+        }
+        let dir = paths.skins_dir();
+        std::fs::create_dir_all(&dir)?;
+        let dest = paths.skin_file(name);
+        let tmp = dir.join(format!("{name}{FILE_EXT}.tmp"));
+        std::fs::write(&tmp, yaml)?;
+        std::fs::rename(&tmp, &dest)?;
+        Ok(())
+    }
+
+    /// Take the skin kept under `name` off the device. `false` when there was none — removing what
+    /// is not there is the state the caller asked for, not a failure, and the caller says so.
+    pub fn uninstall(paths: &crate::config::Paths, name: &str) -> Result<bool, Error> {
+        if !usable_name(name) {
+            return Ok(false);
+        }
+        match std::fs::remove_file(paths.skin_file(name)) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(Error::from(e)),
+        }
+    }
+
     pub fn installed(paths: &crate::config::Paths, name: &str) -> Result<Option<Skin>, Error> {
         if !usable_name(name) {
             return Ok(None);

@@ -20,6 +20,7 @@ pub(crate) mod place;
 pub(crate) mod premise;
 pub(crate) mod project;
 pub(crate) mod setup;
+pub(crate) mod skin;
 pub(crate) mod status;
 pub(crate) mod talk;
 pub(crate) mod task;

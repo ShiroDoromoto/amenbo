@@ -131,10 +131,6 @@ fn blobs_prefix() -> String {
 /// directory beside the store.
 const SKINS_PREFIX: &str = "skins/";
 
-/// The extension a skin's file carries. Named here because it is read back on the way in: an entry
-/// under the prefix is placed only when it is one of these under a name a skin may have.
-const SKIN_EXT: &str = ".yaml";
-
 /// A device's live skin directory: `skins/` beside the truth source, the same place
 /// [`crate::config::Paths::skins_dir`] names.
 fn skins_dir_of(db_path: &Path) -> Option<PathBuf> {
@@ -155,7 +151,7 @@ fn list_skins(db_path: &Path) -> Vec<(String, PathBuf)> {
         .filter(|e| e.path().is_file())
         .filter_map(|e| {
             let file = e.file_name().to_string_lossy().into_owned();
-            let name = file.strip_suffix(SKIN_EXT)?.to_string();
+            let name = file.strip_suffix(crate::skin::FILE_EXT)?.to_string();
             crate::skin::usable_name(&name).then(|| (name, e.path()))
         })
         .collect();
@@ -515,7 +511,7 @@ pub fn backup_from(
 
         // The device's skins. Small text files, so they are appended without a phase of their own.
         for (name, path) in list_skins(&source.db_path) {
-            append_file(&mut builder, &format!("{SKINS_PREFIX}{name}{SKIN_EXT}"), &path)?;
+            append_file(&mut builder, &format!("{SKINS_PREFIX}{name}{}", crate::skin::FILE_EXT), &path)?;
             skins_bundled += 1;
         }
 
@@ -870,7 +866,7 @@ fn staging_dest(name: &str, stage: &Path) -> Option<PathBuf> {
     // A skin, under the one shape a skin has: a name it may be kept under, and nothing else in the
     // path. The rule the live tree keeps its files by is the rule an archive's entry is read by.
     let file = name.strip_prefix(SKINS_PREFIX)?;
-    let skin = file.strip_suffix(SKIN_EXT)?;
+    let skin = file.strip_suffix(crate::skin::FILE_EXT)?;
     crate::skin::usable_name(skin).then(|| staged_skins_dir(stage).join(file))
 }
 

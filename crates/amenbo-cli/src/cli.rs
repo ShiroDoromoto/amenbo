@@ -438,6 +438,18 @@ pub enum Command {
         sub: HooksCmd,
     },
 
+    /// The skins this device holds: what is in, what is on, and the two faces an author needs — a
+    /// check that says why a file would be turned away, and a starting point that is this build's
+    /// own colours. A skin is a file somebody was handed, so it is taken in from a path rather than
+    /// fetched: there is nowhere to fetch one from. One is worn at a time, so putting one on is a
+    /// choice among what is held rather than a switch, and `use none` is the way back to the
+    /// colours Amenbo ships with. All of it is here and not only in the window, because a skin's one
+    /// failure mode is a window nobody can read.
+    Skin {
+        #[command(subcommand)]
+        sub: SkinCmd,
+    },
+
     /// Manage the hourly tick: the one plain timer Amenbo asks this machine's scheduler to hold, so
     /// that what has to happen on time happens with no app open and nothing resident. What is
     /// registered carries no meaning — it wakes Amenbo once an hour, and Amenbo works out once awake
@@ -826,6 +838,50 @@ pub enum HooksCmd {
 
     /// Show what is in each hook slot and what this project answered — the two facts, side by side.
     Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SkinCmd {
+    /// What is held, and which of them is on. A file in the directory that will not read is listed
+    /// as unreadable rather than left out — it is one of your own files, sitting right there.
+    List,
+
+    /// Take a skin file in. It is read, checked and measured first: what the check refuses is
+    /// refused here, and what it only warns about is said and taken anyway. A pairing that falls
+    /// short of AA is said too and does not stop it — an author has to be able to try their own
+    /// work in progress.
+    Add {
+        /// The `.yaml` to take in.
+        path: std::path::PathBuf,
+        /// Replace the skin already kept under that name. Without it, a name that is taken is
+        /// refused with both versions named.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Put one of the held skins on, or `none` to go back to the colours this build ships with.
+    Use {
+        /// The skin's name, or `none`.
+        name: String,
+    },
+
+    /// Take a skin off the device. The one that is on goes off with it, rather than leaving the
+    /// config naming a file that is gone.
+    Rm {
+        /// The skin's name.
+        name: String,
+    },
+
+    /// Run the reading and the check over a file without taking it in — the author's face of what
+    /// an import does, so the reason a file will be turned away is learned before it is handed on.
+    Validate {
+        /// The `.yaml` to read.
+        path: std::path::PathBuf,
+    },
+
+    /// Write this build's own colours out as a skin, to start from. Both sides, every colour a skin
+    /// may set, so the first edit is to a value rather than to an empty file.
+    Template,
 }
 
 #[derive(Subcommand, Debug)]

@@ -117,6 +117,30 @@ const BASE: &[(&str, &str, &str)] = &[
     ("k-slack", "#611f69", "#611f69"),
 ];
 
+/// This build's own colours, written out as a skin document under `name`. Both sides, every colour,
+/// with the aliases already followed — an author starts from the screen they are looking at and
+/// edits the values, rather than from an empty file and a list of names to look up.
+///
+/// Two kinds of name are left out. The ones a skin may set that carry no colour (the type scale, the
+/// spacing, the font stacks) have nothing this table could write beside them, and are the author's
+/// to add — the check says whether a name is one. The ones a skin may not set are not written at
+/// all: a template that offered them would be teaching the author a line the check then drops.
+pub fn template(name: &str) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("name: {name}\n"));
+    out.push_str(&format!("title: {name}\n"));
+    out.push_str("skin_v: 1\n");
+    out.push_str("themes: [light, dark]\n");
+    for (side, pick) in [(Side::Light, 1usize), (Side::Dark, 2usize)] {
+        out.push_str(&format!("{side}:\n"));
+        for entry in BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()) {
+            let value = if pick == 1 { entry.1 } else { entry.2 };
+            out.push_str(&format!("  {}: \"{}\"\n", entry.0, value));
+        }
+    }
+    out
+}
+
 /// One pairing, measured.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Reading {
@@ -342,6 +366,22 @@ mod tests {
         assert_eq!(channels("#0a0"), channels("#00aa00"));
         assert_eq!(channels("#\u{65e5}\u{672c}"), None, "six bytes, two characters");
         assert_eq!(channels("#ggg"), None);
+    }
+
+    #[test]
+    fn the_template_is_a_skin_that_reads_back_clear() {
+        let yaml = template("my-skin");
+        let taken = Skin::read(&yaml).unwrap().check().expect("the template is a skin");
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+        let open_colours =
+            BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()).count();
+        assert_eq!(taken.skin.light.values.len(), open_colours, "every colour a skin may set");
+        assert_eq!(taken.skin.dark.values.len(), open_colours);
+        assert!(!yaml.contains("k-slack"), "and none it may not");
+        // The values are this build's, so what the template measures is what the screen measures.
+        let from_template = measure(&taken.skin);
+        assert!(from_template.unread.is_empty());
+        assert!(from_template.short.iter().all(|r| r.ink.starts_with("c-code-")));
     }
 
     #[test]

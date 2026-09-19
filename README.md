@@ -399,6 +399,18 @@ amenbo tick install                         # register it (idempotent — run it
 amenbo tick status                          # what the scheduler is holding, and what this device answered
 amenbo tick uninstall                       # take it away, and record that this device does not want it
 
+# The colours, as a file. A skin is one YAML of token values, kept beside the store and
+# handed from person to person as an attachment — nothing in it runs, and the `:root { … }`
+# built from it is amenbo's own. One is worn at a time, and which one is a device setting,
+# never synced. All of it is here as well as in the window, because a skin's one failure
+# mode is a window nobody can read.
+amenbo skin template > my-skin.yaml         # this build's own colours, to start from
+amenbo skin validate ./my-skin.yaml         # what would be dropped, and what falls under WCAG AA
+amenbo skin add ./my-skin.yaml              # take it in (a name already held needs --yes)
+amenbo skin list                            # what is held, and which is on
+amenbo skin use my-skin                     # wear it (`use none` goes back to the built-in colours)
+amenbo skin rm my-skin                      # take it off the device
+
 # Have this folder's AI run `amenbo agent` at session start, through its own tool's
 # session-start hook. Unlike the lint hooks above, amenbo writes nothing here: it
 # hands over a request to give the AI you work with (stdout is that text, and

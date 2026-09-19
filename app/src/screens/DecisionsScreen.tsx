@@ -140,7 +140,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   return (
     <>
       <div className="filterbar">
-        <span className="meta"><Icon name="scales" /> {t("dec.title")}</span>
+        <span className="meta"><Icon name="gavel" /> {t("dec.title")}</span>
         <input
           {...asTyped}
           className="board__search"

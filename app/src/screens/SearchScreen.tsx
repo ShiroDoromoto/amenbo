@@ -215,14 +215,14 @@ const FACE_ICON: Record<SearchFace, IconName> = {
  * (`AMB-D-565`). Which record and which of its faces are two questions, and one emoji answering both is
  * what left the side legible only in the ref — where a reader had to spell `AMB-T-` out to find it.
  *
- * The scales are the decision's mark everywhere else on the screen, so they are the decision's here too.
+ * The gavel is the decision's mark everywhere else on the screen, so it is the decision's here too.
  *
  * Both marks were once drawn in different kinds of glyph — one text-like, one a colour emoji — and it was that
  * difference in kind that made the pair read as two axes rather than one cluster. Drawn to one convention
  * (`AMB-D-686`) that difference is gone, so the reading is carried instead by the face's mark being the quieter
  * of the two, set apart from the record's (`.srch__face`).
  */
-const KIND_ICON = { task: "checkSquare", decision: "scales" } as const satisfies Record<string, IconName>;
+const KIND_ICON = { task: "checkSquare", decision: "gavel" } as const satisfies Record<string, IconName>;
 
 /** Which side a hit is on. The wire carries a bare string, and everything but `task` is the other side. */
 function sideOf(hit: SearchHit): keyof typeof KIND_ICON {

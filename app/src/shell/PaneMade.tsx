@@ -79,4 +79,4 @@ export function PaneMade({ made }: { made: Made[] }) {
 export type Made = { space: RefSpace; num: number };
 
 /** The mark each space wears, the same pair a search hit is drawn with (`../screens/SearchScreen`). */
-const KIND_ICON = { task: "checkSquare", decision: "scales" } as const satisfies Record<RefSpace, IconName>;
+const KIND_ICON = { task: "checkSquare", decision: "gavel" } as const satisfies Record<RefSpace, IconName>;

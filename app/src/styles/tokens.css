@@ -238,6 +238,12 @@
   --shadow-md: 0 4px 12px rgba(35, 33, 28, 0.1);
 
   /* ----- layout ----- */
+  /* The least a thing a finger presses may measure on its short side (WCAG 2.2 SC 2.5.8). Below it,
+     the neighbour is what gets pressed.
+
+     **It is a layout figure and not one of the steps above**, for the reason `--topbar-h` is: a skin
+     scales the ladder, and a minimum that scaled with it would stop being one. */
+  --tap-min: 24px;
   --topbar-h: 48px;
   --sidebar-w: 232px;
   --rightpane-w: 480px;

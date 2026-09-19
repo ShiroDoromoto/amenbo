@@ -132,8 +132,12 @@
 /* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
    one line. Left to shrink, a chip in a row that has lost width — the board's group row once the detail
    pane opens beside it — breaks its label a character at a time and reads as nothing. The rows that hold
-   chips wrap instead. */
-.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-edge); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
+   chips wrap instead.
+
+   **The height is said** rather than left to the padding and the line inside it: those came to within
+   a third of a pixel of the smallest a finger may be asked for, and which side of it they landed on
+   moved with the rounding of the line (`--tap-min`). */
+.filterchip { display: inline-flex; align-items: center; min-height: var(--tap-min); font-size: var(--fs-xs); border: 1px solid var(--c-edge); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
 .filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
 /* The filters, opened under the bar. One axis per line: a row of values is as wide as it needs to be,
    and axes read down the panel rather than running into one another. */
@@ -158,7 +162,9 @@
 /* The add button at the right end of a column header. Pressing it starts a new item in the
    right pane. */
 .column__addbtn {
-  margin-left: auto; width: 22px; height: 22px; flex: none;
+  /* The smallest a finger may be asked for, said as the figure that means that (`--tap-min`). It was
+     22px written out here, which is under it. */
+  margin-left: auto; width: var(--tap-min); height: var(--tap-min); flex: none;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
@@ -226,17 +232,26 @@ body.is-dragging { user-select: none; }
 .card__assign { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-muted); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
-/* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
-.inlineselect { font-size: var(--fs-xs); padding: 0 2px; }
+/* A compact select sat inline among a card's or row's chips (the status control, a dimension value).
+
+   **The height is said**: it is set in the smallest size there is, and what a browser gives a
+   `select` off its text alone is under the smallest a finger may be asked for (`--tap-min`). */
+.inlineselect { font-size: var(--fs-xs); padding: 0 2px; min-height: var(--tap-min); }
 /* The board's dimension row (add a category, manage them). It is what the detail pane takes width from
    (the toolbar above spans the pane, this does not), so it folds onto a second line rather than crushing
    the buttons. */
 .dimbar { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 
-/* The chip a task's ref is shown in; clicking it copies that same ref. */
+/* The chip a task's ref is shown in; clicking it copies that same ref.
+
+   **The height is said and the letters are centred in it**: the chip is set in the smallest size
+   there is, and what that gives it is well under the smallest a finger may be asked for
+   (`--tap-min`). What grows is the reach and not the mark — there is no ground and no border on it,
+   so the letters sit where they sat. */
 .idchip {
   font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-muted);
   background: none; border: none; padding: 0 2px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; min-height: var(--tap-min);
 }
 .idchip:hover { color: var(--c-accent); }
 

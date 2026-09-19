@@ -233,7 +233,7 @@ input[type="color"] {
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .termface__page--on {
-  background: var(--c-accent); border-color: var(--c-accent); color: #fff; font-weight: 600;
+  background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); font-weight: 600;
 }
 /* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
    take what is left: the panes are what the face is for, and a list of them that grew with their
@@ -694,7 +694,7 @@ input[type="color"] {
   flex: 0 0 auto;
   padding: var(--s-2) var(--s-5);
   border: 1px solid var(--c-accent); border-radius: var(--r-md);
-  background: var(--c-accent); color: #fff;
+  background: var(--c-accent); color: var(--c-on-accent);
   font-size: var(--fs-md); font-weight: 600;
 }
 .slot__open:hover { filter: brightness(1.08); }

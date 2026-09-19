@@ -138,12 +138,21 @@
   --c-on-accent: #ffffff;
   --c-on-heed: #ffffff;
   --c-on-stop: #ffffff;
+  --c-on-done: #ffffff;
 
   /* status */
   --c-todo: var(--c-plain);
   --c-progress: var(--c-accent);
   --c-done: #217a48;
   --c-blocked: var(--c-heed);
+
+  /* decision status — the three steps a decision reaches, each standing on the family that already
+     says that step: a writing still open is a heed, one that was settled went through, and one that
+     was turned down is a stop. Aliases rather than three colours of their own, so the ink over each
+     is the ink that family already carries (`AMB-D-840`) and a skin moves the family once. */
+  --c-dec-draft: var(--c-heed);
+  --c-dec-decided: var(--c-done);
+  --c-dec-rejected: var(--c-stop);
 
   /* priority */
   --c-pri-high: var(--c-stop);
@@ -290,6 +299,7 @@
   --c-on-accent: #0e3434;
   --c-on-heed: #5a3a10;
   --c-on-stop: #551610;
+  --c-on-done: #174c2e;
 
   --c-done: #46c97e;
 

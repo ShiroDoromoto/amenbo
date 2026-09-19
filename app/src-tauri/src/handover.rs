@@ -22,6 +22,14 @@
 //! whatever *is* being asked — and Claude Code 2.1.251 answers its trust prompt `No, exit`, so the
 //! blind newline is the one that closes the program (`AMB-T-4008`).
 //!
+//! **Nothing is pasted into a program that has not said it takes a paste.** The brackets are an
+//! escape sequence, and a program that never asked for them reads the `ESC` that opens one as a key
+//! of its own: Cursor Agent holds its trust question having declared nothing, takes that `ESC` for
+//! cancel, and ends (`AMB-T-5123`). It declares three quarters of a second after the question is
+//! answered, and the other three providers measured declare while their own question is still up
+//! (`AMB-T-5079`) — so this waits rather than refusing, and the wait is over the moment the program
+//! is ready to be written into.
+//!
 //! **The words are the test wherever there are words to test.** Nothing here looks for "trust" or
 //! any other of a program's own sentences: those differ per product and per version. What is looked
 //! for is the text this loop itself pasted.
@@ -236,6 +244,13 @@ pub struct Look {
     /// The screen those bytes draw: the characters standing in the terminal's cells, row by row
     /// (`crate::pty`'s `Drawn`).
     pub drawn: String,
+    /// Whether the program has said it takes a paste wrapped in brackets, and has not said otherwise
+    /// since (`crate::pty`'s `Modes`).
+    ///
+    /// **It is not read off either of the other two.** A program declares it once as it starts, and
+    /// those bytes fall out of the tail long before a pane is an hour old; the screen never carries
+    /// it at all.
+    pub takes_paste: bool,
 }
 
 /// Whether what the pane has drawn holds that run of text.
@@ -365,6 +380,11 @@ pub fn hand_over(
             if Some(shown) != drew {
                 return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
             }
+        } else if !pane.takes_paste {
+            // The program has not said it takes a bracketed paste, so the brackets would arrive as
+            // keys and the `ESC` that opens them as cancel (`crate::pty`'s `Modes`). Every provider
+            // measured says so within a second of being able to take one, so this is a wait and not
+            // a refusal.
         } else if stood >= STILL && now != nothing && Some(now) != pasted_into {
             if !send(&bytes) {
                 return Handover::Gone;
@@ -449,6 +469,10 @@ mod tests {
         restless_from: Cell<Option<usize>>,
         /// How many looks have been taken, which is what `briefed_on` is measured against.
         looks: Cell<usize>,
+        /// The look from which it says it takes a bracketed paste. One from the start is every
+        /// program that has drawn an input box; a later one is a program holding a question it has
+        /// declared nothing behind (`AMB-T-5079`).
+        declares_on: Cell<usize>,
     }
 
     impl Agent {
@@ -461,7 +485,16 @@ mod tests {
                 briefed_on: Cell::new(None),
                 looks: Cell::new(0),
                 restless_from: Cell::new(None),
+                declares_on: Cell::new(1),
             }
+        }
+
+        /// One that says nothing about pastes until the given look — a program holding a question
+        /// that declares only once it is answered (`AMB-T-5123`). `usize::MAX` is one that never
+        /// says so at all.
+        fn declares_on(self, look: usize) -> Self {
+            self.declares_on.set(look);
+            self
         }
 
         /// One that never stops drawing. It has come up — the prompt is there on the first look — and
@@ -531,7 +564,8 @@ mod tests {
                     agent.wrote.borrow_mut().push(b'.');
                 }
                 let wrote = agent.wrote.borrow().clone();
-                Some(Look { drawn: drawn(&wrote), tail: wrote })
+                let takes_paste = agent.looks.get() >= agent.declares_on.get();
+                Some(Look { drawn: drawn(&wrote), tail: wrote, takes_paste })
             },
             |bytes| {
                 agent.writes.borrow_mut().push(bytes.to_vec());
@@ -684,6 +718,28 @@ mod tests {
         assert_eq!(agent.pastes(), 2, "the settled screen was pasted into, and so was the next one");
     }
 
+    /// A program holding a question with nothing declared behind it. The brackets are an escape
+    /// sequence, so they would arrive as keys and the `ESC` that opens them as cancel — Cursor Agent
+    /// ends on its own trust question that way (`AMB-T-5123`).
+    #[test]
+    fn a_pane_that_has_not_asked_for_a_bracketed_paste_is_not_pasted_into() {
+        let agent = Agent::waiting(Takes::Echoes).declares_on(usize::MAX);
+        assert_eq!(walk(&agent, "Before you act on any request", 10), Handover::LeftForTheReader);
+        assert_eq!(agent.pastes(), 0, "nothing went into a program that takes no paste");
+        assert!(!agent.submitted());
+    }
+
+    /// And it is a wait and not a refusal. Cursor declares three quarters of a second after its
+    /// question is answered, and the other three providers measured declare while theirs is still up
+    /// (`AMB-T-5079`) — so the sentence goes in on the look the declaration arrives on.
+    #[test]
+    fn a_pane_that_asks_for_one_later_is_pasted_into_once_it_has() {
+        let agent = Agent::waiting(Takes::Echoes).declares_on(5);
+        assert_eq!(walk(&agent, "Before you act on any request", 12), Handover::Sent);
+        assert_eq!(agent.pastes(), 1, "once, and not once per look it was silent for");
+        assert!(agent.submitted());
+    }
+
     #[test]
     fn a_screen_still_drawing_itself_is_not_pasted_into() {
         // Startup, one piece per look. There is no still screen to paste into, so the sentence waits
@@ -706,7 +762,7 @@ mod tests {
             8,
             Terms::Opening,
             || false,
-            || Some(Look { tail: Vec::new(), drawn: String::new() }),
+            || Some(Look { tail: Vec::new(), drawn: String::new(), takes_paste: true }),
             |_| {
                 writes.set(writes.get() + 1);
                 true
@@ -733,7 +789,7 @@ mod tests {
                 4,
                 Terms::Opening,
                 || false,
-                || Some(Look { tail: b"> ".to_vec(), drawn: "> ".to_owned() }),
+                || Some(Look { tail: b"> ".to_vec(), drawn: "> ".to_owned(), takes_paste: true }),
                 |_| false,
                 || {}
             ),

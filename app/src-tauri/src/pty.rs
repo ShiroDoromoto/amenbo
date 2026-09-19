@@ -165,6 +165,10 @@ type Size = (u16, u16);
 /// The byte every escape sequence begins with.
 const ESC: u8 = 0x1b;
 
+/// The private mode a program sets to say that a paste will arrive wrapped in `ESC [ 2 0 0 ~` and
+/// `ESC [ 2 0 1 ~`, rather than as the keys it is made of.
+const BRACKETED_PASTE: u16 = 2004;
+
 /// How long a mode sequence is let run before it is given up on. `ESC [ ? 1000;1002;1003;1006 h` is
 /// longer than a program sends and far shorter than a chunk, so an `ESC` in the middle of a file
 /// being printed costs a handful of bytes rather than a buffer that grows with the file.
@@ -241,6 +245,18 @@ impl Modes {
                 self.latest.insert(mode, on);
             }
         }
+    }
+
+    /// Whether the program has said it takes a bracketed paste, and has not said otherwise since.
+    ///
+    /// **A program that has not said it does not get one.** The brackets are an escape sequence, and
+    /// a program that has not asked for them reads the `ESC` that opens `ESC [ 2 0 0 ~` as its own
+    /// key: Cursor Agent, which is holding a trust question and has declared nothing while it does,
+    /// takes that as cancel and ends (`AMB-T-5123`). The other three providers measured declare it
+    /// while their own trust question is up, and Cursor declares it three quarters of a second after
+    /// the question is answered (`AMB-T-5079`).
+    fn takes_paste(&self) -> bool {
+        self.latest.get(&BRACKETED_PASTE).copied().unwrap_or(false)
     }
 
     /// The sequences that put a terminal back into these modes, for a pane to read before the tail.
@@ -574,13 +590,23 @@ impl Pane {
 
     /// The pane as it stands, for a reader that is not a pane ([`crate::handover::Look`]).
     ///
-    /// The hand-over ([`crate::handover`]) is that reader, and it asks two things of one moment: the
-    /// screen, where it looks for the words it pasted, and the tail, whose moving at all is what
-    /// answers for a program that takes a paste without drawing it. Both come away as copies rather
-    /// than as windows onto the buffers, so neither lock is held while they are searched.
+    /// The hand-over ([`crate::handover`]) is that reader, and it asks three things of one moment:
+    /// the screen, where it looks for the words it pasted; the tail, whose standing still is what
+    /// says the program has finished drawing; and whether the program takes a bracketed paste at
+    /// all. The first two come away as copies rather than as windows onto the buffers, so neither
+    /// lock is held while they are searched.
+    ///
+    /// **The third is read off the modes and not off the tail.** A program declares bracketed paste
+    /// once, as it starts, and those bytes are the first to fall out of the tail — a pane that looked
+    /// there would find nothing and read a program that has been taking pastes for an hour as one
+    /// that takes none ([`Modes`]).
     fn look(&self) -> crate::handover::Look {
+        let recent = self.recent.lock().expect("pane recent lock");
+        let (tail, takes_paste) = (recent.bytes(), recent.modes.takes_paste());
+        drop(recent);
         crate::handover::Look {
-            tail: self.recent.lock().expect("pane recent lock").bytes(),
+            tail,
+            takes_paste,
             drawn: self.drawn.lock().expect("pane drawn lock").contents(),
         }
     }
@@ -2093,6 +2119,27 @@ mod tests {
             b"\x1b[?1004h\x1b[?2004h".to_vec(),
             "and the modes are read back before it, lowest number first"
         );
+    }
+
+    /// Whether the pane will take a bracketed paste, off the same modes and outliving the same bytes.
+    /// A program that has said nothing is one that gets nothing: the `ESC` that opens the brackets
+    /// arrives as a key, and Cursor Agent reads it as cancel and ends (`AMB-T-5123`).
+    #[test]
+    fn a_pane_takes_a_bracketed_paste_once_the_program_has_asked_for_one() {
+        let pane = Pane::new("main", OPENED_AT);
+        let asked = || pane.recent.lock().expect("recent").modes.takes_paste();
+        assert!(!asked(), "a program that has written nothing has asked for nothing");
+
+        pane.keep(b"\x1b[?1004h");
+        assert!(!asked(), "and another mode is not this one");
+
+        pane.keep(b"\x1b[?2004h");
+        assert!(asked());
+        pane.keep(&vec![b'x'; RECENT]);
+        assert!(asked(), "still, with the bytes that said so long out of the tail");
+
+        pane.keep(b"\x1b[?2004l");
+        assert!(!asked(), "and a program that turned it off again meant it");
     }
 
     /// The modes are handed over at the size the tail begins at. A run carrying no size would be

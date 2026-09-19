@@ -76,15 +76,15 @@ steps_gui:
     with:
       project: Lantern
 
-  # A command that draws as it starts and then reads, giving back what it is handed under a word of
-  # this road's own. Both halves are load-bearing and neither is a flourish — see the head of the
-  # file.
+  # A command that draws as it starts, asks for a bracketed paste, and then reads — giving back what
+  # it is handed under a word of this road's own. Every part is load-bearing and none is a flourish —
+  # see the head of the file.
   - type: action
     domain: terminal
     op: register-start
     with:
       name: Lamp log
-      line: printf 'SCENARIO the pane is ready\n'; sed 's/^/SCENARIO back> /'
+      line: printf 'SCENARIO the pane is ready\n\033[?2004h'; sed 's/^/SCENARIO back> /'
 
   - type: action
     domain: terminal

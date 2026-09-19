@@ -129,7 +129,10 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
                 <ul className="skinread__list">
                   {read.warnings.map((w) => (
                     <li key={`${w.theme ?? ""}.${w.key}`}>
-                      <code>{w.theme ? `${w.theme}.${w.key}` : w.key}</code> — {t(WHY[w.kind] ?? "settings.skinWarnUnknown")}
+                      <code>{w.theme ? `${w.theme}.${w.key}` : w.key}</code> —{" "}
+                      {/* The font's reason is the file's own, so it is said rather than named by
+                          kind — one dropped font can be four different things. */}
+                      {w.detail ?? t(WHY[w.kind] ?? "settings.skinWarnUnknown")}
                     </li>
                   ))}
                 </ul>

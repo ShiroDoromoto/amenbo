@@ -2356,10 +2356,15 @@ dark: { [key in string]: string }, };
  */
 export type SkinWarningDto = { 
 /**
- * `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself), or
- * `notText` (a value that did not arrive as text).
+ * `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself),
+ * `notText` (a value that did not arrive as text), or `font` (the one embedded font).
  */
-kind: string, theme: string | null, key: string, };
+kind: string, theme: string | null, key: string, 
+/**
+ * Why, where the kind alone does not say it — the font's reason, in English, the way a
+ * refusal reads. `null` for the three that are about one named key.
+ */
+detail: string | null, };
 
 /**
  * The slug in `.amenbo` disagrees with what the store actually holds

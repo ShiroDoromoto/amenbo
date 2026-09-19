@@ -790,11 +790,14 @@ pub struct SkinListDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct SkinWarningDto {
-    /// `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself), or
-    /// `notText` (a value that did not arrive as text).
+    /// `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself),
+    /// `notText` (a value that did not arrive as text), or `font` (the one embedded font).
     pub(crate) kind: String,
     pub(crate) theme: Option<String>,
     pub(crate) key: String,
+    /// Why, where the kind alone does not say it — the font's reason, in English, the way a
+    /// refusal reads. `null` for the three that are about one named key.
+    pub(crate) detail: Option<String>,
 }
 
 /// One pairing that came out under its floor, with the numbers. The names are token names and the

@@ -1181,6 +1181,17 @@ input[type="color"] {
   padding: 1px var(--s-1); margin: 0 calc(-1 * var(--s-1));
   border-radius: var(--r-sm);
 }
+/* The height of a row of the two lists, said rather than left to the line inside it: the rows
+   nobody is looking at are left out of the document and stood in for by a box of this height times
+   how many they are (`app/src/files/GitPanel.tsx`). It is the height these rows already had — every
+   box here is measured to its border (`* { box-sizing }` at the top), so the line inside one is the
+   21px it was.
+
+   **Not on the conflicts, which are drawn whole.** The press that says a conflict is settled stands
+   on the rows with nothing left to settle and on no others, so those rows are 25px and the rest 23px
+   — which is why that list has no window to read (`AMB-D-920`). */
+.gitpanel__list--changed .gitpanel__row,
+.gitpanel__list--staged .gitpanel__row { height: 23px; }
 /* What the row holds, on one line. It is a cell of the list rather than the row itself, because a
    row that is a cell may hold nothing to press and these hold a box and a button
    (`app/src/files/GitPanel.tsx`). */

@@ -79,7 +79,7 @@
 // What closes the hole instead is the shape of the call: every commit names its paths, so the
 // pane's half-staged work is not taken along with the reader's — measured at 0 of 3,855 against
 // every single time without it (`AMB-T-4901`).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent,
   PointerEvent as RowPress, ReactNode,
@@ -122,6 +122,25 @@ type Said = { text: string; refused: boolean };
  * third press looks like anyway.
  */
 const PAIR_MS = 700;
+
+/**
+ * How tall one row of a list is drawn, in pixels.
+ *
+ * **The stylesheet's figure, written here as well** (`../styles/global.css`). Every row of the two
+ * lists is the same height and none of them wraps, so where a row sits is a multiplication rather
+ * than something to be measured — which is what lets the rows nobody is looking at be left out of
+ * the document and still be stood in for by a box of the right size.
+ */
+const ROW = 23;
+
+/**
+ * How many rows above and below the window are drawn anyway.
+ *
+ * A scroll is told about after it has happened, so a window drawn exactly to the edges shows a band
+ * of nothing until the next drawing catches up. The tree beside this half keeps the same margin and
+ * for the same reason (`./FolderTree`).
+ */
+const SPARE = 6;
 
 /** Nothing read yet, and what a folder that is no repository answers with. */
 const NOTHING: FolderGitDto = { prefix: "", branch: null, rows: [], merging: false, said: null };
@@ -225,6 +244,14 @@ export function GitPanel({
   // And which list the rows in hand were taken up from. A ref rather than state: it is read when
   // they are let go, and nothing on the screen is drawn from it.
   const carriedFrom = useRef<Which | null>(null);
+  // The one box this half scrolls in, which is what each list reads its window off: the lists are
+  // drawn one under another inside it, so no list scrolls on its own and none of them can be asked
+  // how far down it stands without it (`RowList`).
+  //
+  // **Held as state rather than in a ref**, because what reads it is under it. A ref is put on a box
+  // after everything inside it has already run — so a list measuring the box on the drawing it
+  // appeared in would find nothing there, and nothing would ever tell it to look again.
+  const [lists, setLists] = useState<HTMLDivElement | null>(null);
   // Throwing away what git has not recorded, which the menu offers over a row that has some.
   const restore = useRestore(projectId);
   // How many conflicts are still written into each path the merge could not settle, by the whole
@@ -562,7 +589,7 @@ export function GitPanel({
           the order a reader works it in — and is drawn whenever git names an unmerged path, merge
           or not: a rebase leaves the same rows, and a list that appeared only for one of them would
           leave the other with rows in no list at all. */}
-      <div className="gitpanel__lists">
+      <div className="gitpanel__lists" ref={setLists}>
         {conflicts.length > 0 && (
           <Conflicts
             rows={conflicts}
@@ -581,6 +608,7 @@ export function GitPanel({
           what={t("git.staged")}
           none={t("git.nothingStaged")}
           rows={staged}
+          scroller={lists}
           staged
           running={running}
           which="staged"
@@ -602,6 +630,7 @@ export function GitPanel({
           what={t("git.changes")}
           none={t("git.nothingChanged")}
           rows={changed}
+          scroller={lists}
           staged={false}
           running={running}
           which="changed"
@@ -880,22 +909,27 @@ function Conflicts({ rows, marks, running, picked, onPicked, onOpen, onSettle, o
       <div className="gitpanel__headrow">
         <h3 className="gitpanel__head">{t("git.conflicts")} <span>{rows.length}</span></h3>
       </div>
-      <RowList what={t("git.conflicts")} which="conflict" on={on}>
-        {rows.map((row) => (
+      <RowList
+        what={t("git.conflicts")}
+        which="conflict"
+        on={on}
+        rows={rows}
+        row={(one, stop, at) => (
           <ConflictRow
-            key={whole(row)}
-            row={row}
-            left={marks[whole(row)]}
+            key={whole(one)}
+            row={one}
+            at={at}
+            left={marks[whole(one)]}
             running={running}
-            picked={on.has(whole(row))}
-            stop={on.stop === whole(row)}
-            onPress={(how) => on.press(whole(row), how)}
+            picked={on.has(whole(one))}
+            stop={stop}
+            onPress={(how) => on.press(whole(one), how)}
             onOpen={onOpen}
             onSettle={onSettle}
             onMenu={on.menu}
           />
-        ))}
-      </RowList>
+        )}
+      />
     </section>
   );
 }
@@ -924,9 +958,14 @@ function picking(
     keys,
     /** Whether this row is one of the picked. */
     has: (key: string): boolean => mine.has(key),
-    /** Where the tab stop is: the end the range is measured from, or the first row before a reader
-     *  has touched the list. Every list keeps one, so Tab reaches each of them. */
-    stop: (picked.which === which ? picked.anchor : null) ?? keys[0],
+    /**
+     * The row the reader was last on, or nothing before they have touched this list.
+     *
+     * **Where the tab stop goes is the list's to settle, not this.** Only some of the rows are in
+     * the document, and a stop on a row that is not drawn is one Tab walks straight past — so the
+     * list reads this against what it is drawing (`RowList`).
+     */
+    cursor: picked.which === which ? picked.anchor : null,
     press: (key: string, how: How): void => { onPicked(pick(which, keys, picked, key, how)); },
     /** Walking with the arrows, from the row the keyboard is on to the one beside it. */
     walk: (from: string, to: string, spread: boolean): void => {
@@ -962,7 +1001,7 @@ type Picking = ReturnType<typeof picking>;
  * (`./FolderTree`): what the reader means by ⌘ or Ctrl is the machine's word. Shift is the one
  * exception, and it reaches from the end the range is measured from to where the walk arrived.
  */
-function RowList({ what, which, on, onSpace, children }: {
+function RowList({ what, which, on, rows, scroller, onSpace, row }: {
   /** The name over the list, which is what this box is called by anything reading it out. */
   what: string;
   /**
@@ -978,6 +1017,24 @@ function RowList({ what, which, on, onSpace, children }: {
   which: Which;
   on: Picking;
   /**
+   * Every row of this list, in the order a reader goes down them — the whole of it, not the run
+   * that is drawn.
+   *
+   * The walk, the ends and the count are all read off this and never off the document, because the
+   * two are no longer the same set of rows.
+   */
+  rows: GitEntryDto[];
+  /**
+   * The one box this half scrolls in, which the window is read off (`.gitpanel__lists`) — or nothing
+   * while it has yet to be drawn.
+   *
+   * **Absent on the list of conflicts, which is drawn whole** (`AMB-D-920`). A window is a
+   * multiplication by one row's height, and the rows there are not all the same height: the one
+   * press that says a conflict is settled stands on the rows that have nothing left to settle and
+   * on no others.
+   */
+  scroller?: HTMLDivElement | null;
+  /**
    * Space on the row the keyboard is standing on, where the list has a box for it to press.
    *
    * **Absent on the list of conflicts.** The box is what the other two lists do to a row, and what
@@ -985,23 +1042,112 @@ function RowList({ what, which, on, onSpace, children }: {
    * not a thing to tick in passing (`AMB-D-906`, 2-7).
    */
   onSpace?: (key: string) => void;
-  children: ReactNode;
+  /** Draw one row: whether it carries the list's tab stop, and which row of the list it is. */
+  row: (one: GitEntryDto, stop: boolean, at: number) => ReactNode;
 }) {
+  const list = useRef<HTMLUListElement | null>(null);
+  /**
+   * Which run of the rows is in the document, or nothing for all of them.
+   *
+   * **Nothing until the box has been laid out**, and nothing again wherever it has no height to
+   * answer with: a box that has not been measured says nothing about what is in view, and drawing
+   * every row is the answer that is never wrong.
+   */
+  const [win, setWin] = useState<{ from: number; to: number } | null>(null);
+  /**
+   * The row a walk arrived at, as one answer per press — or nothing, with nowhere to be taken.
+   *
+   * **An answer and not a name**, because the same row can be named twice with something else in
+   * between: a reader who presses End, walks up and presses End again is asking for the last row
+   * both times, and a bare key would read as the answer already given.
+   */
+  const [named, setNamed] = useState<{ key: string } | null>(null);
+
+  // What is in view, read off the box this half scrolls in. Before the paint rather than after it,
+  // so that the first drawing of a list is already the run that is on the screen.
+  useLayoutEffect(() => {
+    const box = scroller ?? null;
+    if (box === null) return;
+    const look = () => {
+      const ul = list.current;
+      const tall = box.clientHeight;
+      if (ul === null || tall === 0) { setWin(null); return; }
+      // How far the list's top stands above the box's — negative while it is still below it, which
+      // is a first row of nought once it is floored.
+      const above = box.getBoundingClientRect().top - ul.getBoundingClientRect().top;
+      const first = Math.floor(above / ROW);
+      // Held inside the rows at both ends. `above` is read off the box the whole half scrolls in,
+      // so a list drawn under others is carried clean past it: once this list has gone by the box's
+      // top, `first` runs on past the last row and the height left behind for the rows above
+      // (`from * ROW`) grows taller than the list itself. The far end is held the same way, for a
+      // list still below the box — which is where the changes list sits while the staged one is
+      // being read (`./FolderTree` met the same thing on the tree).
+      const from = Math.min(rows.length, Math.max(0, first - SPARE));
+      const to = Math.max(0, Math.min(rows.length, first + Math.ceil(tall / ROW) + SPARE));
+      setWin((was) => (was !== null && was.from === from && was.to === to ? was : { from, to }));
+    };
+    look();
+    box.addEventListener("scroll", look, { passive: true });
+    if (typeof ResizeObserver === "undefined") return () => box.removeEventListener("scroll", look);
+    const sized = new ResizeObserver(look);
+    sized.observe(box);
+    return () => {
+      box.removeEventListener("scroll", look);
+      sized.disconnect();
+    };
+  }, [scroller, rows.length]);
+
+  const from = win?.from ?? 0;
+  const to = win?.to ?? rows.length;
+  const drawn = useMemo(() => rows.slice(from, to), [rows, from, to]);
+
+  /**
+   * Which of the drawn rows carries the list's one stop in the tab order.
+   *
+   * The row the reader was last on where it is drawn, and the first row on the screen where it is
+   * not: a list whose only stop has been scrolled out of the document is one Tab walks straight
+   * past, and the reader has no way back into it.
+   */
+  const stop = useMemo(() => {
+    const keys = drawn.map(whole);
+    return keys.find((key) => key === on.cursor) ?? keys[0] ?? null;
+  }, [drawn, on.cursor]);
+
+  /**
+   * Stand on the row the walk named.
+   *
+   * **Two turns where the row is not drawn.** The keys walk every row and the window holds only
+   * some of them, so a row named from the far end of the list has to be scrolled to before there is
+   * anything to stand on: the box is moved here, the drawing that follows puts the row in, and this
+   * runs again with it in hand.
+   */
+  useEffect(() => {
+    if (named === null) return;
+    const ul = list.current;
+    const el = ul?.querySelector<HTMLElement>(`[data-key="${CSS.escape(named.key)}"]`) ?? null;
+    if (el !== null) { el.focus(); setNamed(null); return; }
+    const box = scroller ?? null;
+    const at = rows.findIndex((one) => whole(one) === named.key);
+    if (ul === null || box === null || at < 0) return;
+    const y = ul.getBoundingClientRect().top - box.getBoundingClientRect().top + at * ROW;
+    if (y < 0) box.scrollTop += y;
+    else if (y + ROW > box.clientHeight) box.scrollTop += y + ROW - box.clientHeight;
+  }, [named, from, to]);
+
   const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const row = (e.target as HTMLElement).closest<HTMLElement>('[role="row"]');
-    if (row === null || !e.currentTarget.contains(row)) return;
-    const at = on.keys.indexOf(row.dataset.key ?? "");
+    const pressed = (e.target as HTMLElement).closest<HTMLElement>('[role="row"]');
+    if (pressed === null || !e.currentTarget.contains(pressed)) return;
+    const at = on.keys.indexOf(pressed.dataset.key ?? "");
     if (at < 0) return;
-    const list = e.currentTarget;
     const go = (to: string | undefined) => {
       if (to === undefined) return;
       e.preventDefault();
       on.walk(on.keys[at], to, e.shiftKey);
       // The row itself, because the stop follows the set and the set has only just been told to
       // move: a reader walking a list is standing on the row they arrived at, not on the one they
-      // left.
-      list.querySelector<HTMLElement>(`[data-key="${CSS.escape(to)}"]`)?.focus();
+      // left. It is named rather than reached for, since the row may be outside the window.
+      setNamed({ key: to });
     };
     switch (e.key) {
       case "ArrowDown": go(on.keys[at + 1]); break;
@@ -1021,15 +1167,26 @@ function RowList({ what, which, on, onSpace, children }: {
   };
   return (
     <ul
+      ref={list}
       className={`gitpanel__list gitpanel__list--${which}`}
       role="grid"
       aria-label={what}
+      // How many rows there are, and on each row which one it is. Said because the document holds
+      // only the drawn run: without them a reader being read to is told this list has as many rows
+      // as happen to be on the screen.
+      aria-rowcount={rows.length}
       // Said on the list, because it is a fact about the list and not about any one row: a reader
       // being read to is told the rows can be picked out several at a time before they meet one.
       aria-multiselectable
       onKeyDown={onKey}
     >
-      {children}
+      {/* What the rows nobody is looking at leave behind: their height, so that the list is as tall
+          as it would be whole and the scrollbar says how much of it there is. */}
+      {from > 0 && <li role="none" aria-hidden="true" style={{ height: from * ROW }} />}
+      {drawn.map((one, i) => row(one, whole(one) === stop, from + i + 1))}
+      {to < rows.length && (
+        <li role="none" aria-hidden="true" style={{ height: (rows.length - to) * ROW }} />
+      )}
     </ul>
   );
 }
@@ -1046,8 +1203,15 @@ function RowList({ what, which, on, onSpace, children }: {
  * stand together: while something is left to settle there is nothing to declare, and once nothing
  * is left the number would be a nought nobody needs to read.
  */
-function ConflictRow({ row, left, running, picked, stop, onPress, onOpen, onSettle, onMenu }: {
+function ConflictRow({ row, at, left, running, picked, stop, onPress, onOpen, onSettle, onMenu }: {
   row: GitEntryDto;
+  /**
+   * Which row of the list this is, counted from one.
+   *
+   * Said because the document holds only the drawn run: where a row sits among its siblings no
+   * longer says where it sits in the list (`RowList`).
+   */
+  at: number;
   left: number | undefined;
   running: boolean;
   /** Whether the reader has this row in the set they gathered (`./gitPick`). */
@@ -1078,6 +1242,7 @@ function ConflictRow({ row, left, running, picked, stop, onPress, onOpen, onSett
       className={`gitpanel__row gitpanel__row--conflict${picked ? " gitpanel__row--picked" : ""}`}
       role="row"
       data-key={path}
+      aria-rowindex={at}
       aria-selected={picked}
       tabIndex={stop ? 0 : -1}
       title={path}
@@ -1141,12 +1306,14 @@ function inBox(target: EventTarget | null): boolean {
 /** One of the two lists, under its name — drawn with nothing in it as well, since which of the two
  *  a path is in is the answer, and a list that disappeared would leave the other unnamed. */
 function Changes({
-  what, none, rows, staged, running, which, picked, onPicked, onToggle, onMenu, onOpen,
+  what, none, rows, scroller, staged, running, which, picked, onPicked, onToggle, onMenu, onOpen,
   root, onCarry, over,
 }: {
   what: string;
   none: string;
   rows: GitEntryDto[];
+  /** The one box this half scrolls in, which the list reads its window off (`RowList`). */
+  scroller: HTMLDivElement | null;
   /** Which of git's two answers this list is, which is what a box in it does when it is pressed. */
   staged: boolean;
   /** A door is out, so nothing here is pressed until it comes back. */
@@ -1246,24 +1413,31 @@ function Changes({
       {rows.length === 0
         ? <p className="files__none">{none}</p>
         : (
-          <RowList what={what} which={which} on={on} onSpace={toggle}>
-            {rows.map((row) => (
+          <RowList
+            what={what}
+            which={which}
+            on={on}
+            rows={rows}
+            scroller={scroller}
+            onSpace={toggle}
+            row={(one, stop, at) => (
               <ChangedRow
-                key={whole(row)}
-                row={row}
+                key={whole(one)}
+                row={one}
+                at={at}
                 staged={staged}
                 running={running}
-                picked={on.has(whole(row))}
-                stop={on.stop === whole(row)}
-                onPress={(how) => on.press(whole(row), how)}
-                onCarry={(e) => carry(row, e)}
-                onToggle={() => toggle(whole(row))}
-                takes={on.has(whole(row)) ? gathered : 1}
+                picked={on.has(whole(one))}
+                stop={stop}
+                onPress={(how) => on.press(whole(one), how)}
+                onCarry={(e) => carry(one, e)}
+                onToggle={() => toggle(whole(one))}
+                takes={on.has(whole(one)) ? gathered : 1}
                 onMenu={on.menu}
-                onOpen={onOpen === undefined ? undefined : () => read(row)}
+                onOpen={onOpen === undefined ? undefined : () => read(one)}
               />
-            ))}
-          </RowList>
+            )}
+          />
         )}
     </section>
   );
@@ -1300,9 +1474,16 @@ function Changes({
  * a press on a control that has gone down arrives at the row around it instead.
  */
 function ChangedRow({
-  row, staged, running, picked, stop, onPress, onCarry, onToggle, takes, onMenu, onOpen,
+  row, at, staged, running, picked, stop, onPress, onCarry, onToggle, takes, onMenu, onOpen,
 }: {
   row: GitEntryDto;
+  /**
+   * Which row of the list this is, counted from one.
+   *
+   * Said because the document holds only the drawn run: where a row sits among its siblings no
+   * longer says where it sits in the list (`RowList`).
+   */
+  at: number;
   staged: boolean;
   running: boolean;
   /** Whether the reader has this row in the set they gathered (`./gitPick`). */
@@ -1331,6 +1512,7 @@ function ChangedRow({
       className={`gitpanel__row gitpanel__row--${mark}${picked ? " gitpanel__row--picked" : ""}`}
       role="row"
       data-key={path}
+      aria-rowindex={at}
       aria-selected={picked}
       tabIndex={stop ? 0 : -1}
       title={path}

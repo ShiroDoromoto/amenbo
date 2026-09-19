@@ -137,8 +137,8 @@ pub(crate) fn run_backup(flags: &Flags, path: Option<String>) -> Result<i32, Cli
         print_json(&report);
     } else {
         human(flags, format!(
-            "✓ Backup written to {} ({} bytes, {} attachment(s))",
-            report.path, report.bytes, report.blobs
+            "✓ Backup written to {} ({} bytes, {} attachment(s), {} skin(s))",
+            report.path, report.bytes, report.blobs, report.skins
         ));
     }
     Ok(0)
@@ -329,7 +329,10 @@ pub(crate) fn run_restore(
     if flags.json {
         print_json(&report);
     } else {
-        human(flags, format!("✓ Restore complete ({} attachment(s) written)", report.blobs));
+        human(flags, format!(
+            "✓ Restore complete ({} attachment(s) and {} skin(s) written)",
+            report.blobs, report.skins
+        ));
         if let Some(prev) = &report.previous_saved_to {
             human(flags, format!("  Previous truth source set aside at {prev}"));
         }

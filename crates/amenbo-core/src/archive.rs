@@ -13,6 +13,12 @@
 //! **without extracting** the (potentially large) snapshot; the store's `VACUUM INTO` snapshot at
 //! `store.sqlite`; and the attachment bytes beside it, `blobs/<hash>`.
 //!
+//! Beside them, the skins this device holds, `skins/<name>.yaml`. A skin is named from the config by
+//! one word, so carrying the word without the file restores a device that says it is wearing a skin
+//! it does not have. The reason `identity.json` is left out — a restore must not overwrite the
+//! destination's own — does not reach these: they go in additively, so nothing of the destination's
+//! is written over.
+//!
 //! The engine carries only attachment *metadata*; the bytes live out-of-band in the store's
 //! content-addressed [`crate::blob`] store. An archive without them would restore rows pointing at
 //! files that do not exist on the destination machine, so every blob is bundled. `blobs/tmp/` (ingest
@@ -121,6 +127,42 @@ fn blobs_prefix() -> String {
     format!("{}/", crate::blob::BLOBS_SUBDIR)
 }
 
+/// The archive prefix the device's skins sit under — `skins/<name>.yaml`, mirroring the live
+/// directory beside the store.
+const SKINS_PREFIX: &str = "skins/";
+
+/// The extension a skin's file carries. Named here because it is read back on the way in: an entry
+/// under the prefix is placed only when it is one of these under a name a skin may have.
+const SKIN_EXT: &str = ".yaml";
+
+/// A device's live skin directory: `skins/` beside the truth source, the same place
+/// [`crate::config::Paths::skins_dir`] names.
+fn skins_dir_of(db_path: &Path) -> Option<PathBuf> {
+    db_path.parent().map(|dir| dir.join("skins"))
+}
+
+/// The skin files a device holds, by name, in a settled order. Anything in the directory that is not
+/// a `<usable name>.yaml` is not a skin this build put there, and is left where it is.
+fn list_skins(db_path: &Path) -> Vec<(String, PathBuf)> {
+    let Some(dir) = skins_dir_of(db_path) else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new(); // no skins on this device
+    };
+    let mut found: Vec<(String, PathBuf)> = entries
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .filter_map(|e| {
+            let file = e.file_name().to_string_lossy().into_owned();
+            let name = file.strip_suffix(SKIN_EXT)?.to_string();
+            crate::skin::usable_name(&name).then(|| (name, e.path()))
+        })
+        .collect();
+    found.sort();
+    found
+}
+
 /// The store as recorded in the archive manifest: its generation and what it carries. The generation
 /// fields (`schema_version` / `format_version`) are the part the restore gate reads; `bindings` is
 /// overview metadata carried for restore UX.
@@ -177,8 +219,8 @@ pub struct StoreSource {
     pub bindings: Vec<String>,
 }
 
-/// Outcome of a whole-device backup: where the archive landed, its on-disk size, and how many attachment
-/// blobs it bundled.
+/// Outcome of a whole-device backup: where the archive landed, its on-disk size, and how much of the
+/// device went with it.
 #[derive(Debug, Clone, Serialize)]
 pub struct BackupReport {
     /// Absolute-or-given path the archive was written to.
@@ -187,6 +229,8 @@ pub struct BackupReport {
     pub bytes: u64,
     /// Number of attachment blobs bundled.
     pub blobs: u64,
+    /// Number of skin files bundled.
+    pub skins: u64,
 }
 
 /// Deletes a directory tree on drop — cleans up the `VACUUM INTO` staging dir even on the early-return
@@ -446,6 +490,7 @@ pub fn backup_from(
 
     // Pass 2: build the archive — manifest first, then the verified snapshot plus the blobs.
     let mut blobs_bundled = 0u64;
+    let mut skins_bundled = 0u64;
     let build = (|| -> Result<u64> {
         let file = File::create(dest)?;
         let mut builder = tar::Builder::new(BufWriter::new(file));
@@ -468,6 +513,12 @@ pub fn backup_from(
         // are immutable, content-addressed files).
         blobs_bundled += append_blobs(&mut builder, source, progress)?;
 
+        // The device's skins. Small text files, so they are appended without a phase of their own.
+        for (name, path) in list_skins(&source.db_path) {
+            append_file(&mut builder, &format!("{SKINS_PREFIX}{name}{SKIN_EXT}"), &path)?;
+            skins_bundled += 1;
+        }
+
         builder.into_inner()?.flush()?;
         Ok(std::fs::metadata(dest)?.len())
     })();
@@ -477,6 +528,7 @@ pub fn backup_from(
             path: dest.display().to_string(),
             bytes,
             blobs: blobs_bundled,
+            skins: skins_bundled,
         }),
         Err(e) => {
             let _ = std::fs::remove_file(dest);
@@ -646,6 +698,9 @@ pub struct RestoreReport {
     /// Attachment blobs written into the live blob stores. Excludes those already present:
     /// blobs are content-addressed, so a hash the destination already holds is left alone.
     pub blobs: u64,
+    /// Skin files written beside the restored store. Excludes those already present: a skin is
+    /// identified by its name, and a name the destination already holds is one of its own.
+    pub skins: u64,
     /// What the version chain ran over the staged snapshot: an archive taken by an older build
     /// is carried forward before it is swapped in, and `migration.migrated()` says whether it was. The
     /// caller tells the human — a restore that quietly moved the data to a new shape is exactly the thing
@@ -809,8 +864,44 @@ fn staging_dest(name: &str, stage: &Path) -> Option<PathBuf> {
     if name == SNAPSHOT_ENTRY {
         return Some(stage.join(SNAPSHOT_ENTRY));
     }
-    let hash = name.strip_prefix(&blobs_prefix())?;
-    crate::blob::is_hash(hash).then(|| staged_blobs_dir(stage).join(hash))
+    if let Some(hash) = name.strip_prefix(&blobs_prefix()) {
+        return crate::blob::is_hash(hash).then(|| staged_blobs_dir(stage).join(hash));
+    }
+    // A skin, under the one shape a skin has: a name it may be kept under, and nothing else in the
+    // path. The rule the live tree keeps its files by is the rule an archive's entry is read by.
+    let file = name.strip_prefix(SKINS_PREFIX)?;
+    let skin = file.strip_suffix(SKIN_EXT)?;
+    crate::skin::usable_name(skin).then(|| staged_skins_dir(stage).join(file))
+}
+
+/// Where the extracted skins are staged: `stage/skins/<name>.yaml`, the live layout, so the placing
+/// half reads them back the way it would read a device's own.
+fn staged_skins_dir(stage: &Path) -> PathBuf {
+    stage.join("skins")
+}
+
+/// Move the archive's skins in beside the restored store, additively. A name the destination already
+/// holds is left alone: two files calling themselves the same skin are two people's answers to the
+/// same word, and the one already on the machine is the one its config may be naming.
+fn place_skins(stage: &Path, dest_db: &Path) -> Result<u64> {
+    let Some(live_dir) = skins_dir_of(dest_db) else {
+        return Ok(0);
+    };
+    let staged_dir = staged_skins_dir(stage);
+    let Ok(entries) = std::fs::read_dir(&staged_dir) else {
+        return Ok(0); // the archive carried none
+    };
+    let mut written = 0u64;
+    for entry in entries.flatten() {
+        let dest = live_dir.join(entry.file_name());
+        if dest.exists() {
+            continue;
+        }
+        std::fs::create_dir_all(&live_dir)?;
+        move_file(&entry.path(), &dest)?;
+        written += 1;
+    }
+    Ok(written)
 }
 
 /// Extract the snapshot and every blob from the tar into `stage`, streaming file-by-file (bounded
@@ -1158,11 +1249,20 @@ fn restore_staging(
     // Blobs first: additive, so the attachment bytes are already in place the moment the rows that
     // reference them land — and an abort here has nothing destructive to undo.
     let blobs = place_blobs(&stage, dest, progress)?;
+    // The skins go in beside them, for the same reason and in the same way: additive, so an abort
+    // here has nothing destructive to undo.
+    let skins = place_skins(&stage, dest)?;
 
     if !dest.exists() {
         move_file(&staged, dest)?;
         // No predecessor, so no aside — and nothing this restore's rewind point could supersede.
-        return Ok(RestoreReport { previous_saved_to: None, blobs, migration, superseded: Vec::new() });
+        return Ok(RestoreReport {
+            previous_saved_to: None,
+            blobs,
+            skins,
+            migration,
+            superseded: Vec::new(),
+        });
     }
     // Replace with no absence window: checkpoint → copy the old file to the aside → atomically rename the
     // migrated snapshot into place. A failure leaves the aside, which is the live store's faithful copy,
@@ -1182,6 +1282,7 @@ fn restore_staging(
             Ok(RestoreReport {
                 previous_saved_to: Some(aside.display().to_string()),
                 blobs,
+                skins,
                 migration,
                 superseded,
             })
@@ -2031,6 +2132,63 @@ mod tests {
         assert_eq!(bs.read(&two).unwrap(), b"more bytes");
     }
 
+    /// A skin is a file the device holds and the config names by one word, so the word alone does not
+    /// restore it. The files go in the archive and come out beside the restored store.
+    #[test]
+    fn bundles_and_restores_the_devices_skins() {
+        let base = scratch("skins-rt");
+        let a = base.join("a");
+        std::fs::create_dir_all(&a).unwrap();
+        seed_store(&a, &["alice"]);
+        let skins = a.join("skins");
+        std::fs::create_dir_all(&skins).unwrap();
+        std::fs::write(skins.join("washi.yaml"), b"name: washi\n").unwrap();
+        std::fs::write(skins.join("retro.yaml"), b"name: retro\n").unwrap();
+        // Something in the directory that is not a skin this build put there does not travel. (The
+        // name rule's other half — a capital, a dot, a path — is read on the way in, where a crafted
+        // archive is the thing being turned away; a case-insensitive filesystem cannot even hold the
+        // pair to write it here.)
+        std::fs::write(skins.join("notes.txt"), b"mine").unwrap();
+
+        let archive = base.join(format!("backup.{ARCHIVE_EXT}"));
+        let report = backup_from(&source(&a), &archive, &mut crate::progress::ignore).unwrap();
+        assert_eq!(report.skins, 2);
+        assert_eq!(read_entry(&archive, "skins/washi.yaml").as_deref(), Some(&b"name: washi\n"[..]));
+        assert!(read_entry(&archive, "skins/retro.yaml").is_some());
+        assert!(read_entry(&archive, "skins/notes.txt").is_none());
+
+        let live = base.join("live");
+        let dest = live.join(crate::config::STORE_FILE_NAME);
+        let report = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap();
+        assert_eq!(report.skins, 2);
+        assert_eq!(std::fs::read(live.join("skins/washi.yaml")).unwrap(), b"name: washi\n");
+        assert_eq!(std::fs::read(live.join("skins/retro.yaml")).unwrap(), b"name: retro\n");
+    }
+
+    /// Placing a skin is additive: a name the destination already holds is one of its own answers to
+    /// that word, and the archive does not overwrite it.
+    #[test]
+    fn a_skin_the_destination_already_holds_is_left_as_it_is() {
+        let base = scratch("skins-additive");
+        let a = base.join("a");
+        std::fs::create_dir_all(&a).unwrap();
+        seed_store(&a, &["alice"]);
+        std::fs::create_dir_all(a.join("skins")).unwrap();
+        std::fs::write(a.join("skins/washi.yaml"), b"from the archive").unwrap();
+
+        let archive = base.join(format!("backup.{ARCHIVE_EXT}"));
+        backup_from(&source(&a), &archive, &mut crate::progress::ignore).unwrap();
+
+        let live = base.join("live");
+        std::fs::create_dir_all(live.join("skins")).unwrap();
+        std::fs::write(live.join("skins/washi.yaml"), b"already here").unwrap();
+        let dest = live.join(crate::config::STORE_FILE_NAME);
+
+        let report = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap();
+        assert_eq!(report.skins, 0, "nothing was written over");
+        assert_eq!(std::fs::read(live.join("skins/washi.yaml")).unwrap(), b"already here");
+    }
+
     /// Placing blobs is additive and idempotent: a hash the destination already holds is left alone (the
     /// bytes are identical by content-addressing), so a second restore writes none and destroys none.
     #[test]
@@ -2074,6 +2232,13 @@ mod tests {
         assert_eq!(dest("blobs/tmp/0123456789abcdef"), None);
         assert_eq!(dest(&format!("blobs/evil/{hash}")), None);
         assert_eq!(dest("blobs/NOT-A-HASH"), None);
+        // A skin is placed under the one shape a skin has, and nothing else under that prefix is.
+        assert_eq!(dest("skins/washi.yaml"), Some(stage.join("skins/washi.yaml")));
+        assert_eq!(dest("skins/washi.txt"), None);
+        assert_eq!(dest("skins/Washi.yaml"), None);
+        assert_eq!(dest("skins/../../../etc/passwd.yaml"), None);
+        assert_eq!(dest("skins/nested/washi.yaml"), None);
+        assert_eq!(dest("skins/.yaml"), None);
         assert_eq!(dest(&format!("blobs/pinned/{hash}")), None);
         assert_eq!(dest("blobs/pinned/../../../etc/passwd"), None);
         assert_eq!(dest(&format!("stores/store/blobs/{hash}")), None);

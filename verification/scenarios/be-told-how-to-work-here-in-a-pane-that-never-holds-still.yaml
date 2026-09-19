@@ -20,7 +20,8 @@
 # never sent is a paste the program was never handed.
 #
 # ── Why the line is this line ────────────────────────────────────────────────────────────────────
-# It has to be restless, show what it is written, and hand back what it is given.
+# It has to be restless, show what it is written, hand back what it is given, and ask for a bracketed
+# paste.
 #
 # **Restless is a tick a second, and the arithmetic is the reason.** Amenbo looks every half second
 # and calls a screen still only after three looks running find it unchanged — and three looks span
@@ -32,6 +33,12 @@
 # is the point of this one: what is written into this pane comes back onto the screen, so the sending
 # is judged on the sentence being shown — the strong reading, and the only one used here. A pane that
 # is never still is one where movement after a paste says nothing about the paste.
+#
+# **Asking for a bracketed paste is the one of the four a real program says for itself**, and `sed`
+# does not. Nothing is pasted into a pane that has not asked, because the brackets would arrive as
+# keys and the `ESC` that opens them as cancel — so without it this road would be
+# reading a pane that was never written into rather than one written into despite never standing
+# still.
 #
 # **The first twelve ticks are counted out loud, and that is what times the road.** The app writes
 # into a restless pane after ten seconds, and no reading can be taken before then — an operator who
@@ -96,14 +103,14 @@ steps_gui:
     with:
       project: Beacon
 
-  # Draws as it starts, then never stops drawing, and hands back what it is given. Each of the three
-  # does a job — see the head of the file.
+  # Draws as it starts, asks for a bracketed paste, then never stops drawing, and hands back what it
+  # is given. Each of the four does a job — see the head of the file.
   - type: action
     domain: terminal
     op: register-start
     with:
       name: Ticking log
-      line: printf 'SCENARIO the pane is ready\n'; i=0; while [ $i -lt 150 ]; do sleep 1; i=$((i+1)); if [ $i -le 12 ]; then printf 'SCENARIO tick %s\n' "$i"; else printf .; fi; done & sed 's/^/SCENARIO back> /'
+      line: printf 'SCENARIO the pane is ready\n\033[?2004h'; i=0; while [ $i -lt 150 ]; do sleep 1; i=$((i+1)); if [ $i -le 12 ]; then printf 'SCENARIO tick %s\n' "$i"; else printf .; fi; done & sed 's/^/SCENARIO back> /'
 
   - type: action
     domain: terminal

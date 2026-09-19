@@ -24,15 +24,20 @@
 # sent afterwards, which is the rescue and nothing else.
 #
 # ── Why the line is this line ────────────────────────────────────────────────────────────────────
-# It has to show nothing, answer nothing, and hand back everything — the same three jobs the sibling
-# road's line does, for the same reasons, plus the counting. Turning the terminal's own echo off is
-# what makes the pane silent about what was written into it, which is the state a program drawing
-# its own interface is in, on a machine where no such program need be installed. Saying nothing at
-# the moment the paste lands is what line buffering gives for free: nothing is handed back until a
-# newline arrives, and none does until a person sends one — which is the reading that says the paste
-# was never answered and the sentence was never sent. It prints once as it starts because a pane
-# nothing has written to is not pasted into at all, so a road that skipped that would pass on a
-# build with no hand-over in it whatsoever.
+# It has to show nothing, answer nothing, hand back everything, and ask for a bracketed paste — the
+# same four jobs the sibling road's line does, for the same reasons, plus the counting. Turning the
+# terminal's own echo off is what makes the pane silent about what was written into it, which is the
+# state a program drawing its own interface is in, on a machine where no such program need be
+# installed. Saying nothing at the moment the paste lands is what line buffering gives for free:
+# nothing is handed back until a newline arrives, and none does until a person sends one — which is
+# the reading that says the paste was never answered and the sentence was never sent. It prints once
+# as it starts because a pane nothing has written to is not pasted into at all, so a road that
+# skipped that would pass on a build with no hand-over in it whatsoever.
+#
+# The `ESC [ ? 2004 h` is the fourth job and it stands in for something a real program says for
+# itself: nothing is pasted into a pane that has not asked for a bracketed paste, because the
+# brackets would arrive as keys and the `ESC` that opens them as cancel. Every provider
+# this road stands in for asks; `awk` does not, so the line asks on its behalf.
 #
 # ── Why the machine is stood up first ────────────────────────────────────────────────────────────
 # So the frame draws the row a command is registered under: where a machine can start one thing there
@@ -90,7 +95,7 @@ steps_gui:
     op: register-start
     with:
       name: Counted log
-      line: stty -echo; printf 'SCENARIO the pane is ready\n'; awk '{ print "SCENARIO back " NR "> " $0 }'
+      line: stty -echo; printf 'SCENARIO the pane is ready\n\033[?2004h'; awk '{ print "SCENARIO back " NR "> " $0 }'
 
   - type: action
     domain: terminal

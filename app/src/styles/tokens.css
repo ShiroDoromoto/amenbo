@@ -190,6 +190,17 @@
   --c-code-heading: #2f6aa8;
   --c-code-invalid: #c0392b;
 
+  /* ----- the ordinary frame -----
+     The two halves of how a plain border is drawn, together because they are always written
+     together and always changed together. A skin moves them as a pair: a look built on heavy
+     double rules is one edit, not a hundred and twenty.
+     What is not drawn from here is a border that is *saying* something (`AMB-D-928`). The dashed
+     five say "this can be dropped here" and "this is today"; the thick thirteen say quoted,
+     heeded, chosen. Those keep their own values, because a skin that flattened them would take the
+     meaning with the style. */
+  --border-w: 1px;
+  --border-style: solid;
+
   /* ----- the avatar a facet with no picture wears (`components/identicon.tsx`) -----
      The hue is not here and never will be: it is computed from the name, so it points at one person
      and moving it would point at another (`AMB-D-928`). What is here is how strong and how light

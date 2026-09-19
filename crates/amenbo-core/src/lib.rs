@@ -63,6 +63,7 @@ pub mod read_receipts;
 pub mod refscan;
 pub mod self_update;
 pub mod session;
+pub mod skin;
 pub mod slug;
 pub mod store;
 pub mod swap_lock;

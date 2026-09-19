@@ -1158,6 +1158,16 @@ fn device_or_any(rows: &PluginRows, plugin: &str, key: &str) -> Option<String> {
 
 /// The Viewer's three keys into `secret`, and its switch where it was off. Answers whether anything of
 /// the Viewer was there to carry.
+///
+/// **What is not in those two tables is not reported, and cannot be.** An absent row and an absent
+/// table read alike here, and both read as a device that never had the plugin — which is the ordinary
+/// case and the one this must stay quiet about. The shape it cannot tell from that is a store that
+/// wrote these under a project and later deleted it: the rows went with the project, these two tables
+/// keeping the cascade that Amenbo's own settings for a project keep (`RESTRICTED_TABLES`), long
+/// before this step ever ran. The notifiers lose theirs the same way and are right to — a notifier is
+/// the project's — and the Viewer is the device's, which is what makes the loss silent and wrong.
+/// The chain itself carries them, from as far down as the layer key has been open
+/// (`the_viewers_keys_ride_the_whole_chain_and_go_with_a_deleted_project`).
 fn carry_the_viewer(
     ctx: &Ctx<'_>,
     config: &PluginRows,
@@ -3582,6 +3592,73 @@ mod tests {
             engine.conn().query_row("SELECT COUNT(*) FROM viewer_switch", [], |r| r.get(0)).unwrap();
         assert_eq!(rows, 0, "an absent switch is the answer for a device that was carrying");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The Viewer's keys ride the whole chain — and go with the project they were written under.
+    ///
+    /// **The chain is not where a store loses them.** The step that carries them starts at v42, and the
+    /// test above it stands a store at v41 to read that step alone; what a store actually does is arrive
+    /// from far below, through every step between. This walks that: a store shaped as one left by the
+    /// build before the plugins were taken in, carried the whole way, with the keys landing where the
+    /// body reads them.
+    ///
+    /// **Both places they could have been written.** The Viewer declared itself the device's
+    /// (`AMB-D-601`), and builds before that layer existed wrote its settings under a project
+    /// (`AMB-D-434`). Either is carried, which is what `device_or_any` is for.
+    ///
+    /// **And the one way they go missing quietly.** These two tables keep their `ON DELETE CASCADE` on
+    /// the project — deliberately, as Amenbo's own settings for a project rather than rows standing for
+    /// a concept (`RESTRICTED_TABLES`, `AMB-D-403`) — so a store that wrote them under a project and
+    /// later deleted that project reaches the carrying step with nothing in hand. Nothing is said about
+    /// it at the time or afterwards: an absent row and an absent table read alike here, and both read as
+    /// a device that never had the plugin.
+    #[test]
+    fn the_viewers_keys_ride_the_whole_chain_and_go_with_a_deleted_project() {
+        // Where the row was written, and whether the project it hangs on is still there when the chain
+        // runs. The last of the three is the shape with nothing to carry.
+        for (tag, project, kept) in
+            [("device", "NULL", true), ("project", "1", true), ("project-deleted", "1", false)]
+        {
+            let dir = scratch(&format!("handover-viewer-chain-{tag}"));
+            // The oldest shape that already has the layer key open (`AMB-D-601`), which is where a store
+            // carrying the Viewer's own settings would have been written.
+            let engine = store_at(&dir, 27);
+            plugin_body(&dir, "viewer");
+            engine
+                .conn()
+                .execute_batch(&format!(
+                    "INSERT INTO project (id, name) VALUES (1, 'alpha');
+                     INSERT INTO plugin_config (project_id, plugin, field_key, value)
+                         VALUES ({project}, 'viewer', 'worker_url', 'https://carried.workers.dev');
+                     INSERT INTO plugin_secret (project_id, plugin, field_key, value) VALUES
+                         ({project}, 'viewer', 'auth_token', 'the-token'),
+                         ({project}, 'viewer', 'encryption_key', 'the-key');",
+                ))
+                .unwrap();
+            if !kept {
+                engine.conn().execute_batch("DELETE FROM project WHERE id = 1;").unwrap();
+            }
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let want = kept.then_some("https://carried.workers.dev");
+            assert_eq!(
+                secret_at(&engine, "viewer", None, "worker_url").as_deref(),
+                want,
+                "the address, carried from 27 ({tag})",
+            );
+            assert_eq!(
+                secret_at(&engine, "viewer", None, "auth_token").as_deref(),
+                kept.then_some("the-token"),
+                "the token ({tag})",
+            );
+            assert_eq!(
+                secret_at(&engine, "viewer", None, "encryption_key").as_deref(),
+                kept.then_some("the-key"),
+                "the key without which every paired phone reads nothing ({tag})",
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
     }
 
     /// A device that never installed one of the four is carried past this step untouched: no shelf, no

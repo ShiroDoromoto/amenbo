@@ -784,6 +784,58 @@ pub struct SkinListDto {
     pub(crate) skins: Vec<SkinRowDto>,
 }
 
+/// One thing the check set aside while reading a file the reader is about to take in. `theme` is
+/// `null` for a header key, which belongs to no side.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinWarningDto {
+    /// `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself), or
+    /// `notText` (a value that did not arrive as text).
+    pub(crate) kind: String,
+    pub(crate) theme: Option<String>,
+    pub(crate) key: String,
+}
+
+/// One pairing that came out under its floor, with the numbers. The names are token names and the
+/// numbers are numbers, so the row reads the same in every language.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinReadingDto {
+    pub(crate) theme: String,
+    pub(crate) ink: String,
+    pub(crate) ground: String,
+    pub(crate) ratio: f64,
+    pub(crate) floor: f64,
+}
+
+/// What reading one file gave, for the screen that is about to take it in. A file the check turns
+/// away does not come back as one of these — it comes back as the command failing, because there is
+/// nothing of it to show and nothing to decide.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinJudgementDto {
+    pub(crate) name: String,
+    pub(crate) title: String,
+    pub(crate) author: Option<String>,
+    pub(crate) version: Option<String>,
+    pub(crate) themes: Vec<String>,
+    /// The version of the skin already kept under this name, where one is. `Some(None)` cannot be
+    /// spelled here, so a held skin whose author wrote no version comes back as `held` with a null
+    /// version — the screen says "the one there" rather than naming it.
+    pub(crate) held: bool,
+    pub(crate) held_version: Option<String>,
+    pub(crate) warnings: Vec<SkinWarningDto>,
+    /// The pairings under their floor, worst first.
+    pub(crate) short: Vec<SkinReadingDto>,
+    /// The colours no number could be read from, as `side.name`.
+    pub(crate) unread: Vec<String>,
+    /// How many pairings were measured, so "nothing fell" is told from "nothing ran".
+    pub(crate) measured: u32,
+}
+
 /// One row of the change feed. **Which row of which table changed, and how** — that is all; no
 /// values, no bodies (the caller refetches from the source of truth).
 #[derive(Clone, Debug, serde::Serialize)]

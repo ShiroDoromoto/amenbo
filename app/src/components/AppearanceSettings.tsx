@@ -15,6 +15,7 @@ import type { SkinRowDto } from "../bindings/bindings";
 import { t, tf } from "../core/i18n";
 import { fitOnto, listSkins, skinTables, useSkin } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
+import { SkinAdd } from "./SkinAdd";
 
 /** The side a one-sided skin pins the theme to, or nothing where the skin has both (or none is on). */
 function pinnedSide(row: SkinRowDto | undefined): "light" | "dark" | undefined {
@@ -106,6 +107,10 @@ export function AppearanceSettings() {
           <div className="meta">{t("settings.skinHow")}</div>
         </span>
       </div>
+
+      {/* Taking one in sits under the list it lands in, so what was just added is the next thing
+          read. */}
+      <SkinAdd onAdded={reload} />
 
       {fitting && (
         <div className="settings__row">

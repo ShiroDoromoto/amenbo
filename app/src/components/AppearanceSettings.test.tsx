@@ -106,7 +106,8 @@ describe("trying a skin on", () => {
     await draw();
     await pick(selects()[0]!, "washi");
 
-    const press = [...host.querySelectorAll("button")].find((b) => b.className === "btn");
+    // The first of the two presses that end a fitting, which sit under the frame rather than in it.
+    const press = host.querySelector<HTMLButtonElement>(".skinfit__answer .btn");
     await act(async () => press!.click());
     await act(async () => {});
 

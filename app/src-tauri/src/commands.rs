@@ -837,6 +837,117 @@ pub fn skin_use(name: Option<String>) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// Read one file over, for the screen that is about to take it in. Nothing is written.
+///
+/// A file the check turns away comes back as this command failing rather than as a judgement with a
+/// refusal in it: there is nothing of such a file to show and nothing for the reader to decide, and
+/// the sentence is the one the terminal prints for the same file.
+#[tauri::command]
+pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
+    let yaml = std::fs::read_to_string(&path)
+        .map_err(|e| CmdError::from(format!("{path}: {e}")))?;
+    let read = amenbo_core::skin::Skin::read(&yaml).map_err(CmdError::from)?;
+    let taken = read.check().map_err(|r| CmdError::from(refusal_sentence(&r)))?;
+    let report = amenbo_core::skin_contrast::measure(&taken.skin);
+    let there = amenbo_core::skin::Skin::installed(&paths, &taken.skin.name).map_err(CmdError::from)?;
+    Ok(SkinJudgementDto {
+        name: taken.skin.name.clone(),
+        title: taken.skin.title.clone(),
+        author: taken.skin.author.clone(),
+        version: taken.skin.version.clone(),
+        themes: taken.skin.themes.clone(),
+        held: there.is_some(),
+        held_version: there.and_then(|s| s.version),
+        warnings: taken
+            .warnings
+            .iter()
+            .map(|w| {
+                use amenbo_core::skin::Warning;
+                match w {
+                    Warning::UnknownHeaderKey(key) => SkinWarningDto {
+                        kind: "unknown".into(),
+                        theme: None,
+                        key: key.clone(),
+                    },
+                    Warning::UnknownToken { theme, key } => SkinWarningDto {
+                        kind: "unknown".into(),
+                        theme: Some(theme.as_str().to_string()),
+                        key: key.clone(),
+                    },
+                    Warning::ClosedToken { theme, key } => SkinWarningDto {
+                        kind: "closed".into(),
+                        theme: Some(theme.as_str().to_string()),
+                        key: key.clone(),
+                    },
+                    Warning::NotText { theme, key } => SkinWarningDto {
+                        kind: "notText".into(),
+                        theme: Some(theme.as_str().to_string()),
+                        key: key.clone(),
+                    },
+                }
+            })
+            .collect(),
+        short: report
+            .short
+            .iter()
+            .map(|r| SkinReadingDto {
+                theme: r.side.as_str().to_string(),
+                ink: r.ink.to_string(),
+                ground: r.ground.to_string(),
+                ratio: (r.ratio * 100.0).round() / 100.0,
+                floor: r.floor,
+            })
+            .collect(),
+        unread: report.unread.iter().map(|u| format!("{}.{}", u.side, u.name)).collect(),
+        measured: report.measured as u32,
+    })
+}
+
+/// Take one file in, under the name it gives itself. `replace` is the answer to a name already
+/// held, which [`skin_read`] reported before the reader was asked.
+#[tauri::command]
+pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
+    let yaml = std::fs::read_to_string(&path)
+        .map_err(|e| CmdError::from(format!("{path}: {e}")))?;
+    let taken = amenbo_core::skin::Skin::read(&yaml)
+        .map_err(CmdError::from)?
+        .check()
+        .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
+    let name = taken.skin.name;
+    if !replace
+        && amenbo_core::skin::Skin::installed(&paths, &name).map_err(CmdError::from)?.is_some()
+    {
+        return Err(CmdError::from(format!("a skin is already kept as '{name}'")));
+    }
+    amenbo_core::skin::Skin::install(&paths, &name, &yaml).map_err(CmdError::from)?;
+    Ok(name)
+}
+
+/// The English sentence for a whole-skin refusal — the one the terminal prints for the same file, so
+/// a reader who is told it on one face and reads it on the other is told the same thing.
+fn refusal_sentence(refusal: &amenbo_core::skin::Refusal) -> String {
+    use amenbo_core::skin::Refusal;
+    match refusal {
+        Refusal::SkinVAhead { declared, understood } => format!(
+            "this skin is written for skin_v {declared}; this Amenbo reads {understood}"
+        ),
+        Refusal::UnknownSide(word) => {
+            format!("'{word}' in themes is not a side; light and dark are the two there are")
+        }
+        Refusal::SideDeclaredEmpty(side) => {
+            format!("themes says {side}, and the {side} table sets nothing")
+        }
+        Refusal::SideNotDeclared(side) => {
+            format!("the {side} table sets colours, and themes does not say {side}")
+        }
+        Refusal::UnusableName(name) => {
+            format!("'{name}' is not a name a skin can be kept under")
+        }
+    }
+}
+
 /// Return the real path of the app-data root, for the "location" line under Settings > Data.
 #[tauri::command]
 pub fn store_locations() -> StoreLocationsDto {

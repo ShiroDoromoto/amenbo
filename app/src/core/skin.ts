@@ -22,7 +22,7 @@
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
 import { invoke } from "./ipc";
-import type { SkinListDto, SkinTablesDto } from "../bindings/bindings";
+import type { SkinJudgementDto, SkinListDto, SkinTablesDto } from "../bindings/bindings";
 
 /** The id of the one sheet a skin is worn through. */
 const SHEET_ID = "amenbo-skin";
@@ -62,6 +62,20 @@ function usable(value: string): boolean {
 /** What this device holds, and which of them is on. */
 export function listSkins(): Promise<SkinListDto> {
   return invoke<SkinListDto>("skin_list");
+}
+
+/**
+ * Read one file over without taking it in: what it calls itself, what was set aside, what fell
+ * under its floor, and whether a skin is already kept under the name. A file the check turns away
+ * rejects instead, carrying the sentence the terminal prints for the same file.
+ */
+export function readSkinFile(path: string): Promise<SkinJudgementDto> {
+  return invoke<SkinJudgementDto>("skin_read", { path });
+}
+
+/** Take one in, under the name it gives itself. `replace` answers a name already held. */
+export function addSkinFile(path: string, replace: boolean): Promise<string> {
+  return invoke<string>("skin_add", { path, replace });
 }
 
 /** One held skin's tables, for trying it on. */

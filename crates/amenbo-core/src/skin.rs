@@ -487,8 +487,16 @@ impl Skin {
     /// of the person's own files, and a list that quietly skipped it would leave them looking for a
     /// skin that is right there.
     pub fn installed_all(paths: &crate::config::Paths) -> Vec<(String, Result<Skin, Error>)> {
+        // What this build ships comes first, in the order it names them, and the device's own
+        // follow sorted. One list rather than two: a reader choosing a skin is choosing among all
+        // of them, and a second place to look is a thing to remember. The order is not
+        // alphabetical because the first of them is the one somebody is looking for in a hurry.
+        let mut out: Vec<(String, Result<Skin, Error>)> = crate::skin_official::OFFICIAL
+            .iter()
+            .map(|o| (o.name.to_string(), Skin::read(o.yaml)))
+            .collect();
         let Ok(entries) = std::fs::read_dir(paths.skins_dir()) else {
-            return Vec::new(); // no skins on this device
+            return out; // nothing of this device's own
         };
         let mut found: Vec<(String, Result<Skin, Error>)> = entries
             .flatten()
@@ -506,7 +514,12 @@ impl Skin {
             })
             .collect();
         found.sort_by(|a, b| a.0.cmp(&b.0));
-        found
+        // A file under a shipped name cannot arrive through `install`, and one put there by hand
+        // is not a second entry under that name — the shipped one is what `installed` answers with,
+        // and a list that showed both would be showing a skin nothing can reach.
+        found.retain(|(name, _)| !crate::skin_official::is_official(name));
+        out.append(&mut found);
+        out
     }
 
     /// Keep this document on the device under `name`, replacing whatever was there. The bytes are
@@ -517,6 +530,12 @@ impl Skin {
     pub fn install(paths: &crate::config::Paths, name: &str, yaml: &str) -> Result<(), Error> {
         if !usable_name(name) {
             return Err(Error::invalid(format!("'{name}' is not a name a skin can be kept under")));
+        }
+        // The shipped names are the one thing a file cannot call itself. Taking it in would leave
+        // two skins under one name, and every later sentence — which one is on, which one is being
+        // replaced, which one `skin use` means — would have to say which.
+        if crate::skin_official::is_official(name) {
+            return Err(Error::invalid(crate::skin_official::name_is_ours(name)));
         }
         let dir = paths.skins_dir();
         std::fs::create_dir_all(&dir)?;
@@ -533,6 +552,11 @@ impl Skin {
         if !usable_name(name) {
             return Ok(false);
         }
+        // Said rather than quietly done nothing: the skin is right there in the list, so a caller
+        // told "no skin is kept as 'washi'" would go looking for a file that was never a file.
+        if crate::skin_official::is_official(name) {
+            return Err(Error::invalid(crate::skin_official::not_on_the_device(name)));
+        }
         match std::fs::remove_file(paths.skin_file(name)) {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -543,6 +567,9 @@ impl Skin {
     pub fn installed(paths: &crate::config::Paths, name: &str) -> Result<Option<Skin>, Error> {
         if !usable_name(name) {
             return Ok(None);
+        }
+        if let Some(yaml) = crate::skin_official::yaml(name) {
+            return Skin::read(yaml).map(Some);
         }
         match std::fs::read_to_string(paths.skin_file(name)) {
             Ok(yaml) => Skin::read(&yaml).map(Some),

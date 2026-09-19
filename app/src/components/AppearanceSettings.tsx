@@ -62,13 +62,10 @@ export function AppearanceSettings() {
   // is on otherwise. What is said under the select is about that one.
   const shownName = fitting ? fitting.name : on;
   const shown = rows.find((r) => r.name === shownName);
+  // What the select says about the theme while a one-sided skin is on. Applying it is not this
+  // screen's — `applySkin` holds the appearance to that side wherever a skin is worn, which is
+  // every window and every startup, not only here.
   const pinned = pinnedSide(rows.find((r) => r.name === on));
-  useEffect(() => {
-    // A pinned side is not a preference the reader typed, so it is applied rather than stored: what
-    // they last chose is still theirs, and it comes back the moment the skin comes off.
-    if (pinned) document.documentElement.dataset.theme = pinned;
-    else setThemePref(getThemePref());
-  }, [pinned]);
 
   const tryOn = (name: string | null, title: string) => {
     setFitting({ name, title });

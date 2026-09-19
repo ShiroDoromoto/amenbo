@@ -279,6 +279,15 @@ impl Report {
 /// The skin is read as it would be worn: a name it sets is its value, and a name it leaves is this
 /// build's. A side it did not declare is not measured — it is not shown while that skin is on.
 pub fn measure(skin: &Skin) -> Report {
+    measure_at(skin, TEXT, ASIDE)
+}
+
+/// The same measuring, against floors the caller names. **Not a setting** — the floors a skin is
+/// held to are [`TEXT`] and [`ASIDE`], and nothing offers to move them. It is here because one
+/// skin promises more than it is held to: `high-contrast` is the way back from an unreadable
+/// screen, so it clears AAA (7:1), and a promise with nothing measuring it is a promise that goes
+/// quietly wrong the first time a colour is touched.
+pub fn measure_at(skin: &Skin, text: f64, aside: f64) -> Report {
     let mut report = Report::default();
     for side in [Side::Light, Side::Dark] {
         if !skin.themes.iter().any(|w| w == side.as_str()) {
@@ -289,7 +298,8 @@ pub fn measure(skin: &Skin) -> Report {
                 .iter()
                 .flat_map(|ink| CODE_GROUNDS.iter().map(move |ground| (*ink, *ground, TEXT))),
         );
-        for (ink, ground, floor) in pairs {
+        for (ink, ground, written) in pairs {
+            let floor = if written == TEXT { text } else { aside };
             let (Some(a), Some(b)) = (
                 colour(skin, side, ink, &mut report),
                 colour(skin, side, ground, &mut report),

@@ -22,6 +22,7 @@
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
 import { invoke } from "./ipc";
+import { pinTheme } from "./theme";
 import type { SkinFontDto, SkinJudgementDto, SkinListDto, SkinTablesDto } from "../bindings/bindings";
 
 /** The id of the one sheet a skin is worn through. */
@@ -281,6 +282,11 @@ function sheet(): CSSStyleSheet | null {
 export function applySkin(tables: SkinTablesDto | null): void {
   // The face first, so the values that name it land on a family the window already has.
   void wearFont(tables?.font ?? null);
+  // Then the side, before the values: a skin written for one side only has no other side to draw,
+  // and a window standing on the side it did not write would show this build's own colours under
+  // that skin's name. Done here rather than on the screen that chooses a skin, because a skin is
+  // worn at startup and in every window, and only one of those has that screen open.
+  pinTheme(onlySide(tables));
   const s = sheet();
   if (!s) return;
   if (!tables) return;
@@ -295,6 +301,21 @@ export function applySkin(tables: SkinTablesDto | null): void {
       rule.style.setProperty(`--${name}`, value);
     }
   }
+}
+
+/**
+ * The one side a skin wrote, where it wrote one. Read off the tables rather than off `themes`,
+ * which is not in them: a side the author declared and left empty is refused by the check, so a
+ * table with values is a side that was declared and a table without one is a side that was not.
+ */
+function onlySide(tables: SkinTablesDto | null): "light" | "dark" | undefined {
+  if (!tables) return undefined;
+  const light = Object.keys(tables.light).length > 0;
+  const dark = Object.keys(tables.dark).length > 0;
+  // Neither is a skin that set nothing, and both is a skin with a choice left in it. Only one of
+  // the two takes the choice away.
+  if (light === dark) return undefined;
+  return light ? "light" : "dark";
 }
 
 /**

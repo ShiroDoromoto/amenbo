@@ -870,6 +870,12 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
         .map_err(|e| CmdError::from(format!("{path}: {e}")))?;
     let read = amenbo_core::skin::Skin::read(&yaml).map_err(CmdError::from)?;
     let taken = read.check().map_err(|r| CmdError::from(refusal_sentence(&r)))?;
+    // Turned away here rather than shown as a judgement: a file calling itself one of the names
+    // this build ships cannot be taken in under any answer the reader could give, so there is
+    // nothing on the panel for them to decide.
+    if amenbo_core::skin_official::is_official(&taken.skin.name) {
+        return Err(CmdError::from(amenbo_core::skin_official::name_is_ours(&taken.skin.name)));
+    }
     let report = amenbo_core::skin_contrast::measure(&taken.skin);
     let there = amenbo_core::skin::Skin::installed(&paths, &taken.skin.name).map_err(CmdError::from)?;
     Ok(SkinJudgementDto {

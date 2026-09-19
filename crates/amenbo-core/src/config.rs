@@ -1614,14 +1614,14 @@ mod tests {
         let paths = Paths::at(dir.clone());
         std::fs::create_dir_all(paths.skins_dir()).unwrap();
         std::fs::write(
-            paths.skin_file("washi"),
-            "name: washi\ntitle: t\nversion: 1.2.0\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n",
+            paths.skin_file("kozo"),
+            "name: kozo\ntitle: t\nversion: 1.2.0\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n",
         )
         .unwrap();
 
-        let found = crate::skin::Skin::installed(&paths, "washi").unwrap().expect("it is there");
+        let found = crate::skin::Skin::installed(&paths, "kozo").unwrap().expect("it is there");
         assert_eq!(found.version.as_deref(), Some("1.2.0"));
-        assert!(crate::skin::Skin::installed(&paths, "retro").unwrap().is_none(), "nothing under it");
+        assert!(crate::skin::Skin::installed(&paths, "mitsumata").unwrap().is_none(), "nothing under it");
         assert!(
             crate::skin::Skin::installed(&paths, "../../anything").unwrap().is_none(),
             "a name that is not one is not asked of the filesystem"

@@ -134,6 +134,72 @@ impl ThemeTable {
     }
 }
 
+/// Hold one side's frame values to what this build can draw, and say what was changed.
+///
+/// Two names and three rules. A style outside the three is dropped. A width that is not a length,
+/// or is past the cap, is put back inside it. And a `double` frame is drawn at the one width that
+/// splits on every engine measured, whatever the author asked for — which is the rule that cannot
+/// be left to the author, because the widths that work are not a range but a range with a hole in
+/// it, and the one that looks most sensible to write is inside the hole.
+fn frame(side: Side, table: &mut ThemeTable, warnings: &mut Vec<Warning>) {
+    if let Some(style) = table.values.get("border-style") {
+        if !BORDER_STYLES.contains(&style.trim()) {
+            let wrote = table.values.remove("border-style").unwrap_or_default();
+            warnings.push(Warning::Frame { theme: side, key: "border-style", wrote, used: None });
+        }
+    }
+    let doubled = table.values.get("border-style").is_some_and(|s| s.trim() == "double");
+
+    if let Some(wrote) = table.values.get("border-w").cloned() {
+        let held = match px(&wrote) {
+            None => None,
+            Some(n) if n < 0.0 => Some("0".to_string()),
+            Some(n) if n > BORDER_W_MAX_PX => Some(format!("{BORDER_W_MAX_PX}px")),
+            Some(_) => Some(wrote.trim().to_string()),
+        };
+        match held {
+            None => {
+                table.values.remove("border-w");
+                warnings.push(Warning::Frame { theme: side, key: "border-w", wrote, used: None });
+            }
+            Some(held) => {
+                table.values.insert("border-w".to_string(), held.clone());
+                if held != wrote.trim() {
+                    warnings.push(Warning::Frame {
+                        theme: side,
+                        key: "border-w",
+                        wrote,
+                        used: Some(held),
+                    });
+                }
+            }
+        }
+    }
+
+    if doubled {
+        let wrote = table
+            .values
+            .insert("border-w".to_string(), BORDER_W_DOUBLE.to_string())
+            .unwrap_or_default();
+        if wrote.trim() != BORDER_W_DOUBLE {
+            warnings.push(Warning::Frame {
+                theme: side,
+                key: "border-w",
+                wrote,
+                used: Some(BORDER_W_DOUBLE.to_string()),
+            });
+        }
+    }
+}
+
+/// A CSS length in pixels, or `None` where it is not one this build can read. Everything has to say
+/// `px` — it is the only unit these two are written in, and a bare `0` never reaches here anyway:
+/// YAML reads it as a number, which the check has already dropped as a value that is not text.
+fn px(value: &str) -> Option<f32> {
+    let v = value.trim();
+    v.strip_suffix("px")?.trim().parse::<f32>().ok().filter(|n| n.is_finite())
+}
+
 /// The bytes of one embedded font, or why it was set aside.
 ///
 /// The newlines a block scalar leaves in the value are taken out first: what a YAML parser hands
@@ -226,6 +292,27 @@ pub const CLOSED: &[&str] = &[
 /// the skin is kept under, so what it may hold is what a filename may hold on every platform amenbo
 /// runs on. Lowercase ASCII, digits, `-` and `_`, opening on a letter or a digit.
 pub const NAME_MAX: usize = 64;
+
+/// The widths of frame a skin may ask for. Zero is a frame taken away, which is a look; past four
+/// pixels a plain rule stops reading as a frame and starts reading as a band.
+pub const BORDER_W_MAX_PX: f32 = 4.0;
+
+/// The ways a frame may be drawn. `dashed` and `dotted` are not among them: they make a frame
+/// harder to read and build nothing that `solid` and `double` do not, and in this application a
+/// dashed rule is already saying something of its own (`AMB-D-928`).
+pub const BORDER_STYLES: &[&str] = &["double", "none", "solid"];
+
+/// The width a `double` frame is drawn at, whatever the author wrote.
+///
+/// Whether `double` splits into line, gap and line is decided by width × devicePixelRatio, and the
+/// widths that split on both engines measured are 3.00–3.75px and 5.00px and up. Between them, at
+/// 4.00–4.75px, WebKit draws one line. Five and up is past [`BORDER_W_MAX_PX`], so what is left is
+/// the lower band, and three is the bottom of it.
+///
+/// **The author does not get to pick inside that band.** A range with a hole in it is not a thing
+/// anybody remembers, and the one who writes the cap sees a single line and has no way to know it
+/// was their own number that did it.
+pub const BORDER_W_DOUBLE: &str = "3px";
 
 /// The most an embedded font may weigh, decoded.
 ///
@@ -354,6 +441,9 @@ pub enum Warning {
     ClosedToken { theme: Side, key: String },
     /// A value that did not arrive as text: a length where a colour belongs, a list, a nested map.
     NotText { theme: Side, key: String },
+    /// A frame value that was not taken as written. `used` is what was put there instead, or
+    /// `None` where the name was dropped and this build's own value stands.
+    Frame { theme: Side, key: &'static str, wrote: String, used: Option<String> },
     /// The embedded font was set aside. The colours are taken either way — a look built on a face
     /// nobody can read still has its palette, and refusing the file over it would throw that away.
     FontDropped(FontProblem),
@@ -518,6 +608,7 @@ impl Skin {
                 }
             }
             table.values = kept;
+            frame(side, table, &mut warnings);
         }
 
         Ok(Taken { skin, font: font_bytes, warnings })
@@ -752,6 +843,109 @@ dark:
     /// The four fields a usable font needs, with the bytes left to the caller.
     const FONT_HEAD: &str =
         "  family: Silkscreen\n  format: woff2\n  license: OFL-1.1\n  license_text: Copyright…\n";
+
+    /// A skin setting the frame however the case wants it.
+    fn framed(lines: &str) -> Taken {
+        Skin::read(&format!("name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n{lines}"))
+            .unwrap()
+            .check()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_frame_this_build_can_draw_is_taken_as_written() {
+        let taken = framed("  border-w: 2px\n  border-style: solid\n");
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+        assert_eq!(taken.skin.light.values["border-w"], "2px");
+        assert_eq!(taken.skin.light.values["border-style"], "solid");
+    }
+
+    #[test]
+    fn a_way_of_drawing_a_frame_this_build_does_not_offer_is_dropped() {
+        for style in ["dashed", "dotted", "groove", ""] {
+            let taken = framed(&format!("  border-style: \"{style}\"\n"));
+            assert!(!taken.skin.light.values.contains_key("border-style"), "{style}");
+            assert_eq!(
+                taken.warnings,
+                [Warning::Frame {
+                    theme: Side::Light,
+                    key: "border-style",
+                    wrote: style.into(),
+                    used: None
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn a_width_past_what_reads_as_a_frame_is_put_back_inside_it() {
+        let taken = framed("  border-w: 12px\n");
+        assert_eq!(taken.skin.light.values["border-w"], "4px");
+        assert_eq!(
+            taken.warnings,
+            [Warning::Frame {
+                theme: Side::Light,
+                key: "border-w",
+                wrote: "12px".into(),
+                used: Some("4px".into())
+            }]
+        );
+
+        // Below zero is not a frame drawn the other way round; it is nothing.
+        assert_eq!(framed("  border-w: -2px\n").skin.light.values["border-w"], "0");
+        // A frame taken away is a look somebody may want, so zero is a length. Written as `0px`:
+        // a bare `0` is a number to YAML, which the check drops the way it drops any value that
+        // did not arrive as text.
+        assert!(framed("  border-w: 0px\n").warnings.is_empty());
+        assert_eq!(framed("  border-w: 0px\n").skin.light.values["border-w"], "0px");
+        assert_eq!(
+            framed("  border-w: 0\n").warnings,
+            [Warning::NotText { theme: Side::Light, key: "border-w".into() }],
+            "a bare zero is a number, and the check says so"
+        );
+    }
+
+    #[test]
+    fn a_width_that_is_not_a_length_is_dropped() {
+        let taken = framed("  border-w: thick\n");
+        assert!(!taken.skin.light.values.contains_key("border-w"));
+        assert_eq!(
+            taken.warnings,
+            [Warning::Frame {
+                theme: Side::Light,
+                key: "border-w",
+                wrote: "thick".into(),
+                used: None
+            }]
+        );
+    }
+
+    #[test]
+    fn a_double_frame_is_drawn_at_the_width_that_splits_whatever_was_asked_for() {
+        // The widths that split on every engine measured are 3.00–3.75 and 5.00 up, and five is
+        // past the cap — so what is left is one band, and the author does not pick inside it.
+        for wrote in ["4px", "1px", "0"] {
+            let taken = framed(&format!("  border-w: {wrote}\n  border-style: double\n"));
+            assert_eq!(taken.skin.light.values["border-w"], BORDER_W_DOUBLE, "{wrote}");
+            assert!(
+                taken.warnings.iter().any(|w| matches!(
+                    w,
+                    Warning::Frame { key: "border-w", used: Some(used), .. } if used == BORDER_W_DOUBLE
+                )),
+                "the author is told which value was used instead: {:?}",
+                taken.warnings
+            );
+        }
+        // Asking for the width it would be drawn at anyway is not a thing to report.
+        let taken = framed("  border-w: 3px\n  border-style: double\n");
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+    }
+
+    #[test]
+    fn a_double_frame_with_no_width_of_its_own_still_gets_one() {
+        let taken = framed("  border-style: double\n");
+        assert_eq!(taken.skin.light.values["border-w"], BORDER_W_DOUBLE);
+    }
 
     #[test]
     fn a_font_that_is_what_it_says_comes_through_decoded() {

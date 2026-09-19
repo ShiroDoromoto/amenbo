@@ -61,6 +61,29 @@
   font-size: var(--fs-xs); cursor: pointer;
 }
 
+/* Where a skin file is handed over: a press that opens the machine's picker, and the same place as
+   somewhere to drop one on. The dashes say it takes a drop — the one thing a flat row cannot. */
+.skinwell {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-2); border: 1.5px dashed var(--c-edge); border-radius: var(--r-md);
+  max-width: var(--measure-form);
+}
+.skinwell--over { border-color: var(--c-accent); background: var(--c-accent-faint); }
+/* What reading the handed-over file gave, before anything is written. */
+.skinread {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  margin-top: var(--s-2); padding: var(--s-3);
+  border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken);
+  max-width: var(--measure-form);
+}
+.skinread__name { display: flex; align-items: center; gap: var(--s-2); font-weight: var(--fw-medium); }
+/* The names and the numbers. Held at the muted step: they are read when looked for, and the
+   sentence above each list is what is read through. */
+.skinread__list {
+  margin: 0; padding-left: var(--s-4);
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+
 /* The glyph drawn where no image was registered. Its hue comes in on the element, one per name; how
    strong and how light that hue is drawn are tokens, so a very dark or a very pale ground can move
    them without moving which colour belongs to whom (`AMB-D-928`). */

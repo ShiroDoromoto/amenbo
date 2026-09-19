@@ -2274,11 +2274,42 @@ text?: string,
 made?: SessionMadeDto, };
 
 /**
+ * What reading one file gave, for the screen that is about to take it in. A file the check turns
+ * away does not come back as one of these — it comes back as the command failing, because there is
+ * nothing of it to show and nothing to decide.
+ */
+export type SkinJudgementDto = { name: string, title: string, author: string | null, version: string | null, themes: Array<string>, 
+/**
+ * The version of the skin already kept under this name, where one is. `Some(None)` cannot be
+ * spelled here, so a held skin whose author wrote no version comes back as `held` with a null
+ * version — the screen says "the one there" rather than naming it.
+ */
+held: boolean, heldVersion: string | null, warnings: Array<SkinWarningDto>, 
+/**
+ * The pairings under their floor, worst first.
+ */
+short: Array<SkinReadingDto>, 
+/**
+ * The colours no number could be read from, as `side.name`.
+ */
+unread: Array<string>, 
+/**
+ * How many pairings were measured, so "nothing fell" is told from "nothing ran".
+ */
+measured: number, };
+
+/**
  * What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —
  * the file can be moved aside from underneath the setting, and saying so is better than quietly
  * showing nothing selected.
  */
 export type SkinListDto = { on: string | null, skins: Array<SkinRowDto>, };
+
+/**
+ * One pairing that came out under its floor, with the numbers. The names are token names and the
+ * numbers are numbers, so the row reads the same in every language.
+ */
+export type SkinReadingDto = { theme: string, ink: string, ground: string, ratio: number, floor: number, };
 
 /**
  * One skin this device holds, as the settings screen lists it. The fields are the header's, and
@@ -2318,6 +2349,17 @@ light: { [key in string]: string },
  * The dark side's values, on the same terms.
  */
 dark: { [key in string]: string }, };
+
+/**
+ * One thing the check set aside while reading a file the reader is about to take in. `theme` is
+ * `null` for a header key, which belongs to no side.
+ */
+export type SkinWarningDto = { 
+/**
+ * `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself), or
+ * `notText` (a value that did not arrive as text).
+ */
+kind: string, theme: string | null, key: string, };
 
 /**
  * The slug in `.amenbo` disagrees with what the store actually holds

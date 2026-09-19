@@ -368,6 +368,7 @@ export const ru: Translation = {
     "settings.skinUnmeasured": "эта сборка не читает отсюда число",
     "settings.skinContrastClear": "Все пары ({n}) проходят свой порог.",
     "settings.skinContrastShort": "Ниже порога: {n} из {m}. Взять всё равно можно.",
+    "settings.skinFontMissing": "В этом шрифте нет знаков для: {langs}. Там читается шрифт самой машины.",
     "settings.developer": "Для разработчика",
     "settings.perfLog": "Журнал производительности (замеры)",
     "settings.perfLogNote": "Замеряет слои чтения и записи и выдаёт WARN при выходе за бюджет (ядро — в файл с ротацией, интерфейс — в консоль). Применяется сразу.",

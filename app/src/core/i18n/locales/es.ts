@@ -366,6 +366,7 @@ export const es: Translation = {
     "settings.skinUnmeasured": "esta versión no puede medirlo",
     "settings.skinContrastClear": "Las {n} parejas superan su mínimo.",
     "settings.skinContrastShort": "{n} de {m} parejas quedan por debajo del mínimo. Aun así puedes incorporarlo.",
+    "settings.skinFontMissing": "Esta tipografía no tiene letras para: {langs}. Ahí se lee con la del equipo.",
     "settings.developer": "Desarrollo",
     "settings.perfLog": "Registro de rendimiento (instrumentación)",
     "settings.perfLogNote": "Cronometra las capas de lectura y escritura y avisa con WARN cuando se pasa del presupuesto (el núcleo en un archivo rotatorio, el front en la consola). Se aplica al momento.",

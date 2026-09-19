@@ -384,6 +384,7 @@ const ui = {
   "settings.skinUnmeasured": "this build cannot read a number from it",
   "settings.skinContrastClear": "All {n} pairings clear their floor.",
   "settings.skinContrastShort": "{n} of {m} pairings are under their floor. You can take it in anyway.",
+  "settings.skinFontMissing": "This font has no letters for: {langs}. Those read in the machine’s own face.",
   "settings.developer": "Developer",
   "settings.perfLog": "Perf log (instrumentation)",
   "settings.perfLogNote": "Times the read/write layers and WARNs on a budget bust (core to a rolling file, front to the console). Applies live.",

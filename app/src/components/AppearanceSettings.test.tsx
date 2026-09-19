@@ -86,6 +86,7 @@ describe("trying a skin on", () => {
       title: "和紙",
       light: { "c-bg": "#faf7f0" },
       dark: { "c-bg": "#1a1713" },
+      font: null,
     };
     await draw();
 
@@ -102,7 +103,13 @@ describe("trying a skin on", () => {
 
   it("wears it when it is chosen, and puts the frame away", async () => {
     hoisted.list = { on: null, skins: [row("washi", ["light", "dark"])] };
-    hoisted.tables.washi = { name: "washi", title: "washi", light: { "c-bg": "#faf7f0" }, dark: {} };
+    hoisted.tables.washi = {
+      name: "washi",
+      title: "washi",
+      light: { "c-bg": "#faf7f0" },
+      dark: {},
+      font: null,
+    };
     await draw();
     await pick(selects()[0]!, "washi");
 

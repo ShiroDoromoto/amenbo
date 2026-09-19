@@ -758,13 +758,21 @@ pub fn skin_in_use() -> Option<SkinTablesDto> {
     let config = amenbo_core::config::Config::load(&paths.config_file);
     let name = config.skin?;
     let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    let taken = skin.check().ok()?;
-    Some(SkinTablesDto {
+    Some(worn(skin.check().ok()?))
+}
+
+/// One checked skin, as the window wears it. The font's bytes go back to base64 on the way out —
+/// they came in as base64 with an author's line wrapping in them, and what leaves here is the same
+/// bytes with nothing for the window to clean.
+fn worn(taken: amenbo_core::skin::Taken) -> SkinTablesDto {
+    let font = font_of(&taken);
+    SkinTablesDto {
         name: taken.skin.name,
         title: taken.skin.title,
         light: taken.skin.light.values,
         dark: taken.skin.dark.values,
-    })
+        font,
+    }
 }
 
 /// What this device holds and what is on, for the settings screen's list.
@@ -807,13 +815,7 @@ pub fn skin_list() -> SkinListDto {
 #[tauri::command]
 pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
-    let taken = amenbo_core::skin::Skin::installed(&paths, &name).ok()??.check().ok()?;
-    Some(SkinTablesDto {
-        name: taken.skin.name,
-        title: taken.skin.title,
-        light: taken.skin.light.values,
-        dark: taken.skin.dark.values,
-    })
+    Some(worn(amenbo_core::skin::Skin::installed(&paths, &name).ok()??.check().ok()?))
 }
 
 /// Put a held skin on, or take whatever is on off (`None`). The name is checked against what is
@@ -911,6 +913,18 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
             .collect(),
         unread: report.unread.iter().map(|u| format!("{}.{}", u.side, u.name)).collect(),
         measured: report.measured as u32,
+        font: font_of(&taken),
+    })
+}
+
+/// The font a checked skin carries, on the way to the window. `None` where it carried none and
+/// where the one it carried was set aside — the warnings say which.
+fn font_of(taken: &amenbo_core::skin::Taken) -> Option<SkinFontDto> {
+    use base64::Engine as _;
+    let (file, bytes) = taken.skin.font.as_ref().zip(taken.font.as_ref())?;
+    Some(SkinFontDto {
+        family: file.family.clone(),
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
     })
 }
 

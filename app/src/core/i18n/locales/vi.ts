@@ -361,6 +361,7 @@ export const vi: Translation = {
     "settings.skinUnmeasured": "bản dựng này không đọc ra số",
     "settings.skinContrastClear": "Cả {n} cặp đều vượt ngưỡng.",
     "settings.skinContrastShort": "{n} trên {m} cặp dưới ngưỡng. Vẫn có thể nhận vào.",
+    "settings.skinFontMissing": "Phông này không có chữ cho: {langs}. Chỗ đó hiện bằng phông của máy.",
     "settings.developer": "Nhà phát triển",
     "settings.perfLog": "Nhật ký hiệu năng (đo đạc)",
     "settings.perfLogNote": "Đo thời gian các lớp đọc/ghi và ghi WARN khi vượt ngưỡng (lõi ghi vào tệp xoay vòng, phần giao diện ghi ra console). Áp dụng ngay.",

@@ -23,7 +23,7 @@
   flex: 0 0 auto;
   padding: var(--s-2) var(--s-5);
   background: var(--c-heed);
-  color: #fff;
+  color: var(--c-on-heed);
   font-size: var(--fs-md);
 }
 

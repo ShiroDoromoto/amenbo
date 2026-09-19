@@ -4916,6 +4916,35 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
+            // The number over one of git's lists. **The number and never the word beside it**: the
+            // word is the interface's own and is drawn in whatever language the machine is set to,
+            // and the digits are the same in all of them.
+            //
+            // It is also read off the heading rather than by counting the rows, which is said out
+            // loud: most of a long list is out of the document, so an operator who counted what they
+            // could see would answer a different question and answer it wrong.
+            (Domain::Files, "counted") => {
+                let n = count(with, "count")?;
+                let named = with.get("section").and_then(|v| v.as_str()).unwrap_or("");
+                if !matches!(named, "changes" | "staged" | "conflicts") {
+                    return Err(format!(
+                        "assert `counted` reads the number over one of git's three lists — changes, staged or conflicts — and `{named}` is not one of them. Nothing else on this face draws a heading with a count in it, so a road asking for one there is asking for something the screen has not got"
+                    ));
+                }
+                let which = section(with)?;
+                // The one list that draws its number even at nought. The other two draw one only
+                // where there is something to count, so their nought is a heading with no number on
+                // it at all.
+                let draws_nought = named == "conflicts";
+                match (n, draws_nought) {
+                    (0, false) => format!(
+                        "Over {which}, confirm the heading carries no number at all — just the word. Do not count the rows: the number is what is being read, and an empty list is a heading with none."
+                    ),
+                    (n, _) => format!(
+                        "Over {which}, confirm the heading carries the number {n}. Read that number rather than counting the rows — a long list has most of itself out of the document, so what can be counted on the screen is not what this asks. The word beside the number is the machine's own language and is no part of the reading."
+                    ),
+                }
+            }
             // Whether git has a merge open, which the band is drawn from. It is read apart from the
             // list of conflicts on purpose: the band outlives the list.
             (Domain::Files, "merging") => match present(with) {

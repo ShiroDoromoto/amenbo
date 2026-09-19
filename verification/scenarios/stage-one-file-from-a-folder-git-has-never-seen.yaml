@@ -123,6 +123,17 @@ steps_gui:
     with:
       half: git
 
+  # Three, and three is the reading. Asked git's own default way, a folder with nothing recorded from
+  # it comes back as one line for the folder — so the heading would say two: the folder, and the
+  # ignore file beside it. Every file named one at a time makes it three, and the number over the list
+  # is the one place on the screen the two answers differ.
+  - type: assert
+    domain: files
+    op: counted
+    with:
+      section: changes
+      count: 3
+
   # Both files by their own names. This is the whole of what the old line hid.
   - type: assert
     domain: files

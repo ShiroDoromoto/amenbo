@@ -3182,6 +3182,25 @@ const REGISTRY: &[OpSpec] = &[
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
     // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // The number the heading over one of git's lists carries — how many paths git named for it.
+    //
+    // **It is read off the heading and never counted off the rows.** A window is drawn over these
+    // lists, so most of what is in one is out of the document; counting what stands on the screen
+    // would answer how tall the box is. The heading is the one place the whole is said.
+    //
+    // **What it defends is the number meaning files.** Asked with git's default, a folder nothing is
+    // recorded from comes back as one line for the folder, and the heading then counts lines rather
+    // than the files a reader is about to stage. The two answers differ by a number and by nothing
+    // else on the screen, which is why a road needs this to tell them apart.
+    //
+    // `section` is which list, named the way `listed` names one, and it is one of git's three: the
+    // tree and the two lists in the column across the panes carry no such number.
+    //
+    // `count: 0` is the reading that no number stands there. The lists of what has changed and what
+    // is staged draw one only where there is something to count, so nought is an absence and the
+    // instruction says so rather than sending an operator hunting for a `0`; the list of conflicts
+    // draws its own number at nought like any other (`app/src/files/GitPanel.tsx`).
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "counted", required: &["section", "count"], refs: &[], strings: &["section"], binds: false },
     // What git says about a row, drawn on it as a colour. `mark` names which of the three
     // the row is wearing — `untracked`, `added`, `modified` — rather than the colour itself: what each
     // one is drawn in is a theme's to choose, and a road naming a colour would go red the day one moved.

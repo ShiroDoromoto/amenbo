@@ -994,6 +994,25 @@ function picking(
 type Picking = ReturnType<typeof picking>;
 
 /**
+ * The run of `count` rows to draw on the first drawing of a list, before the box it scrolls in has
+ * been measured.
+ *
+ * **Off the window, because the box cannot be reached yet.** This half draws nothing at all until
+ * git has answered (`GitPanel`), so the box and the rows arrive on one drawing and there is no
+ * measuring of it to be had on the drawing that has to be windowed. The window the app stands in is
+ * as tall as any box inside it can be, which makes a run that fills it a run that fills the box —
+ * with rows to spare where the box is the shorter of the two, and never short of the screen.
+ *
+ * **From the top of the rows rather than from where the reader stands**, since a list put up with
+ * its rows in hand is put up in a box holding nothing to scroll. Both of those are answered right
+ * by the window worked out before the paint, which this only stands in for: what it decides is how
+ * many rows are built and thrown away on the way there, not what anybody sees (`AMB-T-5143`).
+ */
+function firstWindow(count: number): { from: number; to: number } {
+  return { from: 0, to: Math.min(count, Math.ceil(window.innerHeight / ROW) + SPARE) };
+}
+
+/**
  * The box one list's rows are drawn in, and the arrows that walk them.
  *
  * **It is a grid and not a list of choices.** The rows carry things to press — a box that stages,
@@ -1053,11 +1072,18 @@ function RowList({ what, which, on, rows, scroller, onSpace, row }: {
   /**
    * Which run of the rows is in the document, or nothing for all of them.
    *
-   * **Nothing until the box has been laid out**, and nothing again wherever it has no height to
-   * answer with: a box that has not been measured says nothing about what is in view, and drawing
-   * every row is the answer that is never wrong.
+   * **Nothing wherever the box has no height to answer with**: a box that has been measured at
+   * nought says nothing about what is in view, and drawing every row is the answer that is never
+   * wrong.
+   *
+   * **The drawing the rows arrive on is windowed too**, off the screen rather than off the box
+   * (`firstWindow`). Left to the measuring below, the window would arrive one drawing too late —
+   * thirty-five thousand rows built, and every one of them thrown away before the paint
+   * (`AMB-T-5143`).
    */
-  const [win, setWin] = useState<{ from: number; to: number } | null>(null);
+  const [win, setWin] = useState<{ from: number; to: number } | null>(
+    () => firstWindow(rows.length),
+  );
   /**
    * The row a walk arrived at, as one answer per press — or nothing, with nowhere to be taken.
    *

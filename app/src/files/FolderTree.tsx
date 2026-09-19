@@ -1101,6 +1101,22 @@ function linesOf(
   return out;
 }
 
+/**
+ * The run of `count` lines to draw on the first drawing of a tree, before the box it scrolls in has
+ * been measured.
+ *
+ * **Off the window, because the box cannot be counted on yet.** A tree put up with its lines
+ * already in hand — a filtered section the reader took to another folder — is put up on the same
+ * drawing as everything around it, and the window the app stands in is the one height there is to
+ * go by. It is as tall as any box inside it can be, so a run that fills it fills the box.
+ *
+ * Both that and the top it counts from are answered right by the window worked out before the
+ * paint, which this only stands in for (`GitPanel` says the same of its lists, `AMB-T-5143`).
+ */
+function firstWindow(count: number): { from: number; to: number } {
+  return { from: 0, to: Math.min(count, Math.ceil(window.innerHeight / ROW) + SPARE) };
+}
+
 /** One bound folder's tree: every open row of it, drawn as one list. */
 function Tree({
   projectId, root, landing, scroller, found, marks, moved, open, onOpen, naming, onRead, onMenu,
@@ -1291,11 +1307,19 @@ function Tree({
   /**
    * Which run of the lines is in the document, or nothing for all of them.
    *
-   * **Nothing until the box has been laid out**, and nothing again wherever it has no height to
-   * answer with: a box that has not been measured says nothing about what is in view, and drawing
-   * the whole tree is the answer that is never wrong.
+   * **Nothing wherever the box has no height to answer with**: a box that has been measured at
+   * nought says nothing about what is in view, and drawing the whole tree is the answer that is
+   * never wrong.
+   *
+   * **The first drawing is windowed too**, off the screen rather than off the box (`firstWindow`).
+   * A tree usually reaches its first lines with a window already worked out, having been put up
+   * empty while the disk was read — but one put up with its lines in hand, which is what a filtered
+   * section does when the reader goes to another folder, would otherwise build every line of them
+   * and throw it away before the paint (`AMB-T-5143`).
    */
-  const [win, setWin] = useState<{ from: number; to: number } | null>(null);
+  const [win, setWin] = useState<{ from: number; to: number } | null>(
+    () => firstWindow(lines.length),
+  );
 
   // What is in view, read off the box the panel scrolls in. Before the paint rather than after it,
   // so that the first drawing of a tree is already the run that is on the screen.

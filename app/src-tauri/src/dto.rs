@@ -736,6 +736,24 @@ pub struct StoreLocationsDto {
     pub(crate) root: String,
 }
 
+/// The skin this device has on, as the window wears it: the two sides' tables of token name to
+/// value, with the leading `--` left off the way the file writes them. `null` from the command
+/// rather than an empty pair when nothing is on — "no skin" and "a skin that sets nothing" are not
+/// the same answer, and only one of them can happen.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinTablesDto {
+    /// The skin's own name, the one the config holds and the file is kept under.
+    pub(crate) name: String,
+    /// What it is called on screen, in the author's own words.
+    pub(crate) title: String,
+    /// The light side's values, as the check left them: known names a skin may set, text only.
+    pub(crate) light: std::collections::BTreeMap<String, String>,
+    /// The dark side's values, on the same terms.
+    pub(crate) dark: std::collections::BTreeMap<String, String>,
+}
+
 /// One row of the change feed. **Which row of which table changed, and how** — that is all; no
 /// values, no bodies (the caller refetches from the source of truth).
 #[derive(Clone, Debug, serde::Serialize)]

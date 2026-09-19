@@ -2274,6 +2274,30 @@ text?: string,
 made?: SessionMadeDto, };
 
 /**
+ * The skin this device has on, as the window wears it: the two sides' tables of token name to
+ * value, with the leading `--` left off the way the file writes them. `null` from the command
+ * rather than an empty pair when nothing is on — "no skin" and "a skin that sets nothing" are not
+ * the same answer, and only one of them can happen.
+ */
+export type SkinTablesDto = { 
+/**
+ * The skin's own name, the one the config holds and the file is kept under.
+ */
+name: string, 
+/**
+ * What it is called on screen, in the author's own words.
+ */
+title: string, 
+/**
+ * The light side's values, as the check left them: known names a skin may set, text only.
+ */
+light: { [key in string]: string }, 
+/**
+ * The dark side's values, on the same terms.
+ */
+dark: { [key in string]: string }, };
+
+/**
  * The slug in `.amenbo` disagrees with what the store actually holds
  * ([`amenbo_core::binding::SlugMismatch`]). The CLI prints an English warning in its location
  * header; the GUI hands over the raw material only and lets i18n compose the wording (same verdict,

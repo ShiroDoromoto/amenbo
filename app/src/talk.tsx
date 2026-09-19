@@ -44,6 +44,7 @@ import { RefNavProvider, type RefNav } from "./core/refNav";
 import { loadSnapshot, subscribe, watchStore } from "./core/snapshot";
 import { writesOn, writeUnwritten } from "./core/unwritten";
 import { initTheme } from "./core/theme";
+import { initSkin } from "./core/skin";
 import { ElevationBand } from "./talk/elevation";
 import { TerminalFace } from "./shell/TerminalFace";
 import "./styles/tokens.css";
@@ -52,6 +53,7 @@ import "./components/components.css";
 import "./styles/talk.css";
 
 initTheme();
+initSkin();
 
 /**
  * Name the window, so a list of windows tells this one from the board (`AMB-D-396`).

@@ -437,6 +437,7 @@ pub fn run() {
       commands::store_signature,
       commands::version_status,
       commands::check_updates_fresh,
+      commands::skin_in_use,
       commands::store_locations,
       commands::dev_badge,
       commands::cli_command_name,

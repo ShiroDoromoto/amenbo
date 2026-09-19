@@ -746,6 +746,27 @@ pub fn check_updates_fresh() -> Result<VersionStatusDto, CmdError> {
     Ok(dto)
 }
 
+/// The skin this device has on, ready to wear, or `null` for the colours this build ships with.
+///
+/// Three ways to nothing, and the window treats them alike because there is nothing it could do
+/// differently about any of them: no skin named, a name with no file behind it, and a file that no
+/// longer passes the check. What to *say* about the last two is the settings screen's, which reads
+/// the same files and can put a sentence beside them; a window coming up is not the place to be told.
+#[tauri::command]
+pub fn skin_in_use() -> Option<SkinTablesDto> {
+    let paths = amenbo_core::config::Paths::resolve().ok()?;
+    let config = amenbo_core::config::Config::load(&paths.config_file);
+    let name = config.skin?;
+    let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    let taken = skin.check().ok()?;
+    Some(SkinTablesDto {
+        name: taken.skin.name,
+        title: taken.skin.title,
+        light: taken.skin.light.values,
+        dark: taken.skin.dark.values,
+    })
+}
+
 /// Return the real path of the app-data root, for the "location" line under Settings > Data.
 #[tauri::command]
 pub fn store_locations() -> StoreLocationsDto {

@@ -39,14 +39,23 @@
 //! first choice. Twenty-four times in one store, some of them on choices that run something
 //! (`AMB-T-5074`, `AMB-T-5124`, [`crate::handover::Terms`]).
 //!
-//! **"The pane answered" means it moved when nothing else was going to move it.** The sentence goes
-//! into a screen that has held the same bytes across a run of looks (`STILL` of them), and the
-//! answer is owed on the very next look and no later. A program still drawing its interface is not
-//! standing still; one that has drawn it and is waiting is. Movement any later than that next look
-//! is a state the program went into by itself — a person answering the prompt it opened on — and is
-//! never read as an answer to the paste: the pane is waited on until it stands still again, and
-//! pasted into once more. What this cannot tell apart is a person answering inside that one look,
-//! which is why the stillness has to be held rather than caught in a single frame.
+//! **"The pane answered" means the screen it draws changed when nothing else was going to change
+//! it.** The sentence goes into a screen that has held the same bytes across a run of looks (`STILL`
+//! of them), and the answer is owed on the very next look and no later. A program still drawing its
+//! interface is not standing still; one that has drawn it and is waiting is. Movement any later than
+//! that next look is a state the program went into by itself — a person answering the prompt it
+//! opened on — and is never read as an answer to the paste: the pane is waited on until it stands
+//! still again, and pasted into once more. What this cannot tell apart is a person answering inside
+//! that one look, which is why the stillness has to be held rather than caught in a single frame.
+//!
+//! **What answers is the drawn screen and not the bytes.** The thing the test is for — a chip in
+//! place of the placeholder — is a line of the screen changing, and it was measured as one
+//! (`AMB-T-5075`). A program that swallows the paste at a dialogue writes bytes back at it all the
+//! same: Claude Code answers with twenty bytes of keyboard protocol and draws not one character
+//! differently, and read off the bytes that is the paste landing and the newline is the dialogue
+//! answered. Which is what a rename did twenty-four times in one store (`AMB-T-5124`) — the rename
+//! road has since stopped reading movement at all, and this is the same fault on the road that still
+//! does.
 //!
 //! **The sentence goes into a given screen once.** A screen already pasted into is not pasted into
 //! again, and a pane no program has written to yet is not pasted into at all — text that lands in a
@@ -155,12 +164,15 @@ impl Terms {
         }
     }
 
-    /// Whether a still screen moving on the look after the paste is read as the pane answering for
-    /// it — the second of the two tests (`AMB-D-802`).
+    /// Whether a still screen changing on the look after the paste is read as the pane answering for
+    /// it — the second of the two tests (`AMB-D-802`). What has to change is the screen the pane
+    /// draws and not the bytes behind it ([`Look`]).
     ///
     /// **It buys the opening instruction a program that takes the paste without drawing it.**
     /// OpenCode folds one into a `[Pasted ~1 lines]` chip and never draws the body, so the words
-    /// would never come back and the sentence would sit in a box nobody submits (`AMB-T-4008`).
+    /// would never come back and the sentence would sit in a box nobody submits (`AMB-T-4008`). The
+    /// chip is drawn over the placeholder that was there, which is the change this reads
+    /// (`AMB-T-5075`).
     ///
     /// **It buys a rename nothing, and costs it the dialogue a pane is holding.** The four providers
     /// that take a `/rename` all draw what is pasted into their input box, and OpenCode — the one
@@ -207,8 +219,16 @@ fn head(instruction: &str) -> &str {
 /// **They are two readings of one moment, and each answers a different half.** The words are looked
 /// for on the screen, because the screen is where a person would see them: a TUI lays its own escape
 /// sequences down between the characters it draws, and a run of text plainly in the input box is not
-/// a run of anything in the bytes. Whether the pane moved is read off the bytes, where everything the
-/// program did shows — including what it drew off-screen and what it drew and then painted over.
+/// a run of anything in the bytes.
+///
+/// **Whether the pane is standing still is read off the bytes**, where everything the program did
+/// shows — including what it drew off-screen and what it drew and then painted over. A program that
+/// is still putting its interface up is not one to paste into, whether or not the part of it a
+/// person can see has settled.
+///
+/// **Whether it answered a paste is read off the screen**, because bytes come back at a paste that
+/// was swallowed and never shown, and a paste nobody can see is not one to send a newline after
+/// (`AMB-T-5075`, [`hand_over`]).
 pub struct Look {
     /// What the terminal has written lately, as it arrived — escape sequences and all
     /// (`crate::pty`'s `Recent`).
@@ -305,8 +325,11 @@ pub fn hand_over(
     // way.
     let mut held = nothing;
     let mut stood = 1usize;
-    // The screen the sentence last went into, and whether that paste's answer falls due this look.
+    // The screen the sentence last went into — the bytes of it, which is what says it is the same
+    // screen — and what it was drawing at that moment, which is what says it answered.
     let mut pasted_into: Option<u64> = None;
+    let mut drew: Option<u64> = None;
+    // Whether that paste's answer falls due this look.
     let mut answer_due = false;
     // Whether the sentence is in and nothing but the words coming back can submit it — which is also
     // what stops a second copy going in. It is its own flag rather than a reading of `pasted_into`,
@@ -325,6 +348,7 @@ pub fn hand_over(
             return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
         }
         let now = moved(&pane.tail);
+        let shown = moved(pane.drawn.as_bytes());
         stood = if now == held { stood + 1 } else { 1 };
         held = now;
 
@@ -334,8 +358,11 @@ pub fn hand_over(
             // (`Terms`). A second copy of the sentence is worse than none.
         } else if std::mem::take(&mut answer_due) {
             // Owed on this look and no later: the pane was standing still when the sentence went in,
-            // so nothing but the sentence was going to move it.
-            if Some(now) != pasted_into {
+            // so nothing but the sentence was going to change what it draws. **The screen and not
+            // the bytes** — a dialogue that swallowed the paste writes bytes back at it and draws
+            // not one character differently, and a newline sent there answers the dialogue
+            // (`AMB-T-5075`, `Look`).
+            if Some(shown) != drew {
                 return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
             }
         } else if stood >= STILL && now != nothing && Some(now) != pasted_into {
@@ -343,6 +370,7 @@ pub fn hand_over(
                 return Handover::Gone;
             }
             pasted_into = Some(now);
+            drew = Some(shown);
             // The answer is owed on the next look where movement is allowed to answer. Where it is
             // not, the sentence is simply in: the words are the only thing that will submit it, and
             // nothing goes into this pane again (`Terms`).
@@ -387,6 +415,9 @@ mod tests {
         Acknowledges,
         /// It draws nothing at all: the paste reached something reading keys, not text.
         Swallows,
+        /// It writes bytes back and draws not one character of them — a dialogue that swallowed the
+        /// paste and answered with keyboard protocol (`AMB-T-5124`, `AMB-T-5075`).
+        AnswersWithoutDrawing,
     }
 
     /// The screen those bytes draw, through the emulator a pane draws them with (`crate::pty`'s
@@ -510,6 +541,9 @@ mod tests {
                         Takes::Echoes => wrote.extend_from_slice(instruction.as_bytes()),
                         Takes::Acknowledges => wrote.extend_from_slice(b"[Pasted ~1 lines]"),
                         Takes::Swallows => {}
+                        // Keyboard protocol: bytes for the program on the other end, and nothing a
+                        // terminal puts in a cell.
+                        Takes::AnswersWithoutDrawing => wrote.extend_from_slice(b"\x1b[>1u\x1b[<1u"),
                     }
                 }
                 true
@@ -555,6 +589,20 @@ mod tests {
             1,
             "and the name went in once — the screen it moved to is not a pane owed another copy"
         );
+    }
+
+    /// A dialogue that swallowed the paste writes bytes back at it and draws not one character
+    /// differently. Read off the bytes that is the paste landing, and the newline goes in and answers
+    /// the dialogue — which is what a rename did twenty-four times in one store (`AMB-T-5124`). Read
+    /// off the screen it is what it is: nothing arrived that a person could see.
+    #[test]
+    fn a_pane_that_writes_back_without_drawing_has_not_answered_for_the_paste() {
+        let agent = Agent::waiting(Takes::AnswersWithoutDrawing);
+        let wrote_back = drawn(b"\x1b[>1u\x1b[<1u");
+        assert_eq!(wrote_back, drawn(b""), "the stand-in's answer is bytes and not characters");
+
+        assert_eq!(walk(&agent, "Before you act on any request", 10), Handover::LeftForTheReader);
+        assert!(!agent.submitted(), "no newline went into a pane that showed nothing for the paste");
     }
 
     #[test]

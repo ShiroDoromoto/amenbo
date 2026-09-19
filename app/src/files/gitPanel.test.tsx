@@ -1244,11 +1244,32 @@ describe("the rail's git half, read across the panes", () => {
     expect(seen[0]).toBeNull();
 
     await pressRow(rowOf(t("git.changes"), "a.rs"));
-    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], staged: false });
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], untracked: [], staged: false });
 
     // Picking in the other list puts the first set down, and the half travels with the paths.
     await pressRow(rowOf(t("git.staged"), "b.rs"));
-    expect(seen[seen.length - 1]).toEqual({ paths: [["b.rs"]], staged: true });
+    expect(seen[seen.length - 1]).toEqual({ paths: [["b.rs"]], untracked: [], staged: true });
+  });
+
+  /// And which of them git has never seen, which is this half's answer to give: the letter is on the
+  /// row here and on nothing over there. git writes no patch for such a path, so the host takes the
+  /// diff off a copy of the index with those paths put into it (`AMB-D-921`).
+  it("says which of the picked paths git has never seen", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["new.md"], index: "?", worktree: "?" }),
+        row({ path: ["a.rs"], worktree: "M" }),
+      ],
+    });
+    const seen: (DiffPick | null)[] = [];
+    await draw(ROOT, undefined, undefined, { onPicked: (one) => seen.push(one) });
+
+    await pressRow(rowOf(t("git.changes"), "new.md"));
+    await pressRow(rowOf(t("git.changes"), "a.rs"), ADD);
+    // Both paths are asked about, and the new one alone is named as one git has nothing recorded
+    // about — handing the recorded one over as well would take its deletion into the copy.
+    expect(seen[seen.length - 1])
+      .toEqual({ paths: [["new.md"], ["a.rs"]], untracked: [["new.md"]], staged: false });
   });
 
   /// A conflict is neither of the two halves: what this half draws about one is how much of it is
@@ -1287,12 +1308,14 @@ describe("the rail's git half, read across the panes", () => {
 
     await pressRow(rowOf(t("git.changes"), "a.rs"));
     await pressRow(rowOf(t("git.changes"), "c.rs"), ADD);
-    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"], ["c.rs"]], staged: false });
+    expect(seen[seen.length - 1])
+      .toEqual({ paths: [["a.rs"], ["c.rs"]], untracked: [], staged: false });
 
     await pressAgain(rowOf(t("git.changes"), "a.rs"));
     expect(asked).toBe(1);
     // Both, and still gathered afterwards: opening what was picked is not putting it down.
-    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"], ["c.rs"]], staged: false });
+    expect(seen[seen.length - 1])
+      .toEqual({ paths: [["a.rs"], ["c.rs"]], untracked: [], staged: false });
     expect(pickedIn(t("git.changes"))).toEqual(["a.rs", "c.rs"]);
   });
 
@@ -1306,11 +1329,11 @@ describe("the rail's git half, read across the panes", () => {
     await pressRow(rowOf(t("git.changes"), "a.rs"));
     await pressRow(rowOf(t("git.changes"), "c.rs"), ADD);
     await pressRow(rowOf(t("git.changes"), "a.rs"));
-    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], staged: false });
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], untracked: [], staged: false });
 
     await afterThePair();
     await pressAgain(rowOf(t("git.changes"), "a.rs"));
-    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], staged: false });
+    expect(seen[seen.length - 1]).toEqual({ paths: [["a.rs"]], untracked: [], staged: false });
   });
 
   /// The box is what the list does to a path. Pressing it twice is staging and unstaging, and a

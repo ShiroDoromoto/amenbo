@@ -20,11 +20,18 @@
 //! so it cannot answer "has this one been put right yet"; the file's own bytes can, whoever wrote
 //! them (`AMB-D-906`, 2-7).
 //!
-//! **Everything here reads; nothing here writes** — the other half is
-//! [`crate::folder_git_write`] (`AMB-D-906`). The line between the two modules is what a road hands
-//! back when it comes to nothing: here it is an empty hand and never an error, because a folder
-//! that is no repository is the ordinary case and not a failure to report, and there a refusal is
-//! the error itself. What git said in refusing is drawn the same on both sides, word for word.
+//! **Nothing here changes the reader's repository** — the other half is
+//! [`crate::folder_git_write`] (`AMB-D-906`, `AMB-D-921`). The line between the two modules is what
+//! a road hands back when it comes to nothing: here it is an empty hand and never an error, because
+//! a folder that is no repository is the ordinary case and not a failure to report, and there a
+//! refusal is the error itself. What git said in refusing is drawn the same on both sides, word for
+//! word.
+//!
+//! **One road here writes a file, and it is not the reader's.** The patch for a path git has never
+//! seen is taken off a copy of the index, in a file of that call's own (`Spare`): `.git/index` is
+//! left as it was, and the one thing the object store can gain is the empty blob a new entry points
+//! at. "Reads and does not write" is read as "does not change the repository", which is what the
+//! line between the modules was drawn for.
 //!
 //! **What a commit costs is what is asked of it, and the asking is split up.** The history list is
 //! one call and carries no file names, because putting them on it takes one call from 19ms to
@@ -47,7 +54,9 @@
 //! the whole reason a second git call exists here at all.
 
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use crate::dto::{FolderGitDto, GitBranchDto, GitCommitDto, GitEntryDto, GitFileDto, GitStashDto};
@@ -306,19 +315,28 @@ pub async fn folder_git_diff(
 /// nothing points at nothing. A folder that is no repository answers the same way, as everything
 /// that reads here does.
 ///
+/// **`untracked` is the paths of `paths` git has never seen**, which the panel knows by the letter
+/// git wrote on the row. git writes no patch for such a path, so the answer for one was an empty
+/// diff and a sentence saying so — the file could be seen in the list and not read. Those paths are
+/// put into a copy of the index as entries with no content ([`Spare`], `add -N`), and the diff is
+/// taken against that copy: the reader's own index is left as it was, one git answers for however
+/// many paths still, and what `.gitattributes` says about a file holds for a new one the same as for
+/// a recorded one (`AMB-D-921`).
+///
 /// It is handed over as git's own text, for the reason [`folder_git_diff`] gives.
 #[tauri::command]
 pub async fn folder_git_tree_diff(
     project_id: i64,
     root: String,
     paths: Vec<Vec<String>>,
+    untracked: Vec<Vec<String>>,
     staged: bool,
 ) -> Result<String, CmdError> {
     off_thread(move || {
         let dir = root_of(project_id, &root)?;
-        if repo_of(&dir).is_none() || paths.is_empty() {
+        let (Some(repo), false) = (repo_of(&dir), paths.is_empty()) else {
             return Ok(String::new());
-        }
+        };
         let specs = pathspecs(&paths)?;
         let mut args = vec!["--no-optional-locks", "diff", "--patch"];
         if staged {
@@ -327,9 +345,75 @@ pub async fn folder_git_tree_diff(
         // After `--`, so a path that begins like an option is read as the path it is.
         args.push("--");
         args.extend(specs.iter().map(String::as_str));
-        Ok(run(&dir, &args).unwrap_or_default())
+        // Nothing git has never seen among them, so there is nothing a copy of the index would add.
+        let Some(spare) = (!untracked.is_empty()).then(|| Spare::of(&repo)).flatten() else {
+            return Ok(run(&dir, &args).unwrap_or_default());
+        };
+        let news = pathspecs(&untracked)?;
+        let mut adding = vec!["--no-optional-locks", "add", "-N", "--"];
+        adding.extend(news.iter().map(String::as_str));
+        // **What it answered is not read.** One path of the selection deleted between the status
+        // the rows were drawn from and the press that asked for this is `fatal: pathspec … did not
+        // match any files` and an exit of 128, with not one of the others put in — and the patch for
+        // the paths git does know is still worth drawing (`AMB-D-921`).
+        let _ = run_on(&dir, &adding, Some(&spare.0));
+        Ok(run_on(&dir, &args, Some(&spare.0)).unwrap_or_default())
     })
     .await
+}
+
+/// A copy of one repository's index, in a file of this call's own — taken away again when it is
+/// dropped, however the call ends.
+///
+/// **Not beside the index it was copied from.** The watch that tells the face a folder moved is laid
+/// on the repository's own directory as well as on the tree, and it wakes for anything written
+/// straight into it ([`crate::folder_watch`]): a file written there would wake the face, which would
+/// ask for the patch again, which would write the file again.
+///
+/// **A name no other call can take.** Two windows read a patch at the same moment, and git writes
+/// its lock beside whatever `GIT_INDEX_FILE` names — one name between them is one of the two being
+/// refused.
+///
+/// **Made rather than copied onto, and made for this user alone.** An index names every path in the
+/// repository, and the machine's temporary directory is one everybody logged into it can read on
+/// some systems. `create_new` is also what makes the name its own: a name that was somehow taken is
+/// a call that fails rather than one that writes over somebody else's.
+///
+/// **The reader's index is untouched, and their object store gains at most one thing.** An entry put
+/// in with `add -N` points at content nobody has given yet, which git spells as the empty blob — so
+/// a repository that has never held one is written 15 bytes nothing refers to, and `gc` sweeps them
+/// up. `AMB-D-921` says the object store gains nothing, which was measured on a repository that
+/// already had that blob (`AMB-T-5012`).
+struct Spare(PathBuf);
+
+impl Spare {
+    /// Take the copy, or `None` where it could not be taken — a repository with no index yet, a
+    /// temporary directory that will not be written to. The caller draws the patch it can without
+    /// one.
+    fn of(repo: &Repo) -> Option<Self> {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let held = std::fs::read(repo.git_dir.join("index")).ok()?;
+        let at = std::env::temp_dir().join(format!(
+            "amenbo-index-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed),
+        ));
+        let mut how = std::fs::OpenOptions::new();
+        how.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            how.mode(0o600);
+        }
+        how.open(&at).ok()?.write_all(&held).ok()?;
+        Some(Self(at))
+    }
+}
+
+impl Drop for Spare {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 /// The `--format` the branch list is read back by: the name, what it is measured against, and how
@@ -555,13 +639,21 @@ fn from_first_parent(dir: &Path, sha: &str, how: &[&str], about: &[&str]) -> Opt
 /// reader's screen when the thing they asked for arrived. Where it did not arrive, that same stderr
 /// is the only account there is, and [`refusable`] is the road that keeps it.
 fn run(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = amenbo_core::sys::git()?
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
+    run_on(dir, args, None)
+}
+
+/// [`run`], against `index` in place of the repository's own — or against the repository's own where
+/// it is `None`.
+///
+/// `GIT_INDEX_FILE` is how git is told which index to read and write, and it is the whole of what
+/// keeps the patch for a path git has never seen off the reader's own index ([`Spare`]).
+fn run_on(dir: &Path, args: &[&str], index: Option<&Path>) -> Option<String> {
+    let mut git = amenbo_core::sys::git()?;
+    git.arg("-C").arg(dir).args(args).stderr(std::process::Stdio::null());
+    if let Some(index) = index {
+        git.env("GIT_INDEX_FILE", index);
+    }
+    let out = git.output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
@@ -938,6 +1030,144 @@ mod tests {
             !rows.iter().any(|row| row.path.is_empty()),
             "and the bound folder is not named as a whole any more"
         );
+    }
+
+    // ── the patch for a path git has never seen ──────────────────────────────────────────────
+
+    /// Every file under a directory, however deep, by the path it sits at inside it — what
+    /// `.git/objects` is read by.
+    fn files_under(dir: &Path, at: &str) -> std::collections::BTreeSet<String> {
+        let Ok(here) = std::fs::read_dir(dir) else { return Default::default() };
+        here.filter_map(Result::ok)
+            .flat_map(|one| {
+                let name = format!("{at}{}", one.file_name().to_string_lossy());
+                match one.path().is_dir() {
+                    true => files_under(&one.path(), &format!("{name}/")),
+                    false => [name].into(),
+                }
+            })
+            .collect()
+    }
+
+    /// git's name for a file with nothing in it — the one object `add -N` can write, since an entry
+    /// put in that way points at content nobody has given yet.
+    const EMPTY_BLOB: &str = "e6/9de29bb2d1d6434b8b29ae775ad8c2e48c5391";
+
+    /// A repository with `kept.txt` recorded and then written over, and `new.txt` git has never
+    /// seen. The two are what one patch has to hold together.
+    fn one_of_each(name: &str) -> PathBuf {
+        let repo = amenbo_scratch::scratch(name);
+        std::fs::write(repo.join("kept.txt"), "was\n").unwrap();
+        run(&repo, &["init", "-q"]).expect("git init");
+        run(&repo, &["add", "kept.txt"]).expect("git add");
+        std::fs::write(repo.join("kept.txt"), "is\n").unwrap();
+        std::fs::write(repo.join("new.txt"), "fresh\n").unwrap();
+        repo
+    }
+
+    /// The copy is a file of its own, and it goes when the thing holding it does.
+    #[test]
+    fn the_copy_of_the_index_is_taken_away_with_what_held_it() {
+        if amenbo_core::sys::git().is_none() {
+            return; // Nothing to copy on a machine with no git: there is no repository to make one.
+        }
+        let repo = one_of_each("app-foldergit-spare");
+
+        let at = {
+            let spare = Spare::of(&repo_of(&repo).expect("the folder is a repository"))
+                .expect("the index is copied");
+            assert!(spare.0.is_file(), "the copy is a file of its own");
+            assert_ne!(
+                spare.0.parent(),
+                Some(repo.join(".git").as_path()),
+                "and not beside the index, where the watch would wake for it"
+            );
+            spare.0.clone()
+        };
+        assert!(!at.exists(), "and it is gone once nothing holds it");
+    }
+
+    /// The whole of the road against a real git: the path git has never seen goes into a copy of the
+    /// index, one diff answers for it and for a recorded file alike, and the repository is as it was
+    /// afterwards (`AMB-D-921`).
+    #[test]
+    fn a_path_git_has_never_seen_is_given_a_patch_off_a_copy_of_the_index() {
+        if amenbo_core::sys::git().is_none() {
+            return; // No git, no patch — every road here answers nothing on such a machine.
+        }
+        let repo = one_of_each("app-foldergit-newpatch");
+        let git_dir = repo.join(".git");
+        let index = std::fs::read(git_dir.join("index")).expect("the index");
+        let objects = files_under(&git_dir.join("objects"), "");
+
+        let spare = Spare::of(&repo_of(&repo).expect("the folder is a repository"))
+            .expect("the index is copied");
+        run_on(&repo, &["add", "-N", "--", ":(literal)new.txt"], Some(&spare.0))
+            .expect("the path git has never seen goes into the copy");
+        let patch = run_on(
+            &repo,
+            &["diff", "--patch", "--", ":(literal)kept.txt", ":(literal)new.txt"],
+            Some(&spare.0),
+        )
+        .expect("git writes the patch");
+
+        assert!(patch.contains("+is"), "the recorded file's change is in it: {patch}");
+        assert!(patch.contains("+fresh"), "and so is the new file's whole content: {patch}");
+        assert!(
+            patch.contains("diff --git a/new.txt b/new.txt"),
+            "both stand in one patch, under their own headings: {patch}"
+        );
+        assert_eq!(
+            std::fs::read(git_dir.join("index")).expect("the index"),
+            index,
+            "and the reader's own index is byte for byte what it was"
+        );
+        // **The one thing that does reach the object store.** An entry put in with `add -N` points
+        // at content nobody has given yet, which git spells as the empty blob — so a repository that
+        // has never held one gains it here. It is 15 bytes, nothing refers to it, and `gc` sweeps it
+        // up; the decision's "the object store gains nothing" was measured on a repository that
+        // already had one (`AMB-D-921`, `AMB-T-5012`).
+        let gained: Vec<String> = files_under(&git_dir.join("objects"), "")
+            .difference(&objects)
+            .cloned()
+            .collect();
+        assert!(
+            gained.is_empty() || gained == vec![EMPTY_BLOB.to_string()],
+            "the empty blob is the only thing that can be written: {gained:?}"
+        );
+    }
+
+    /// What `add -N` answered is not read, because a path of the selection may have gone between the
+    /// status the rows were drawn from and the press: git refuses the whole call and puts none of
+    /// the others in, and the patch for what it does know is still worth drawing (`AMB-D-921`).
+    #[test]
+    fn a_path_that_has_gone_does_not_take_the_patch_with_it() {
+        if amenbo_core::sys::git().is_none() {
+            return; // No git, no refusal to step over.
+        }
+        let repo = one_of_each("app-foldergit-newpatch-gone");
+
+        let spare = Spare::of(&repo_of(&repo).expect("the folder is a repository"))
+            .expect("the index is copied");
+        // `gone.txt` was on the list and is not on the disk, which is what git refuses over — and it
+        // takes `new.txt` down with it, since none of them goes in.
+        assert!(
+            run_on(
+                &repo,
+                &["add", "-N", "--", ":(literal)new.txt", ":(literal)gone.txt"],
+                Some(&spare.0),
+            )
+            .is_none(),
+            "git refuses the call"
+        );
+        let patch = run_on(
+            &repo,
+            &["diff", "--patch", "--", ":(literal)kept.txt", ":(literal)new.txt"],
+            Some(&spare.0),
+        )
+        .expect("and the diff still answers");
+        assert!(patch.contains("+is"), "with the recorded file's change in it: {patch}");
+        assert!(!patch.contains("+fresh"), "and only the new file left out of it: {patch}");
     }
 
     // ── where the branch stands ──────────────────────────────────────────────────────────────

@@ -856,10 +856,14 @@ function rowsAbout(rows: GitEntryDto[], picked: string[], path: string[]): strin
  */
 function diffOf(picked: Picked, rows: GitEntryDto[]): DiffPick | null {
   if (picked.which !== "changed" && picked.which !== "staged") return null;
-  const paths = rowsIn(picked.which, rows)
-    .filter((row) => picked.keys.includes(whole(row)))
-    .map((row) => row.path);
-  return paths.length === 0 ? null : { paths, staged: picked.which === "staged" };
+  const mine = rowsIn(picked.which, rows).filter((row) => picked.keys.includes(whole(row)));
+  const paths = mine.map((row) => row.path);
+  // Which of them git has never seen, told apart by the letter it wrote on the row. git writes no
+  // patch for such a path, and the answer for one used to be an empty diff and a sentence about it;
+  // the host draws it off a copy of the index instead, and this is what says which paths to put
+  // into that copy (`./folder`, `AMB-D-921`).
+  const untracked = mine.filter((row) => row.index === "?").map((row) => row.path);
+  return paths.length === 0 ? null : { paths, untracked, staged: picked.which === "staged" };
 }
 
 /** Which of the three a press is, by what the reader was holding down. Which key takes a row in is

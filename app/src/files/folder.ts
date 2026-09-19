@@ -260,6 +260,11 @@ export async function folderGitDiff(
  * index does not (`false`), or what the index holds that the last commit does not (`true`). A row
  * of the Git panel sits under one heading or the other.
  *
+ * `untracked` names the paths of `paths` that git has never seen. git writes no patch for such a
+ * path, so the host takes the diff off a copy of the index with those paths put into it, leaving
+ * the reader's own index as it was (`crate::folder_git`, `AMB-D-921`). Which of them those are is
+ * the panel's answer, read off the letter git wrote on each row.
+ *
  * Empty `paths` come back empty — pointing at nothing is not asking for the whole tree
  * (`crate::folder_git`).
  */
@@ -267,10 +272,14 @@ export async function folderGitTreeDiff(
   projectId: number,
   root: string,
   paths: string[][],
+  untracked: string[][],
   staged: boolean,
 ): Promise<string> {
   if (!inTauri()) return "";
-  return await invoke<string>("folder_git_tree_diff", { projectId, root, paths, staged });
+  return await invoke<string>(
+    "folder_git_tree_diff",
+    { projectId, root, paths, untracked, staged },
+  );
 }
 
 /** What has been put aside in the folder's repository, newest first (`stash@{0}` last made). */

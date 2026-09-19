@@ -348,6 +348,8 @@ export const th: Translation = {
     "settings.skinAdd": "เพิ่มสกิน",
     "settings.skinAddPick": "เลือกไฟล์…",
     "settings.skinAddDrop": "หรือปล่อยไฟล์ .yaml ลงตรงนี้",
+    "settings.skinWriteOut": "เขียนออกมาสักอัน",
+    "settings.skinWriteOutNote": "สีทั้งหมด พร้อมบรรทัดบอกว่าแต่ละสีใช้ทำอะไร เอาจากสกินที่ใส่อยู่",
     "settings.skinAddTake": "รับเข้ามา",
     "settings.skinOnlySide": "เฉพาะ{side}",
     "settings.skinReplace": "มีสกินชื่อนี้อยู่แล้ว ของเดิมคือ {held} ที่กำลังเข้ามาคือ {coming}",

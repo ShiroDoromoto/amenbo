@@ -350,6 +350,8 @@ export const ja: Translation = {
     "settings.skinAdd": "スキンを追加",
     "settings.skinAddPick": "ファイルを選ぶ…",
     "settings.skinAddDrop": "または .yaml をここへ落とす",
+    "settings.skinWriteOut": "ひな形を書き出す",
+    "settings.skinWriteOutNote": "色をすべて、それぞれ何の色かを添えて。当てているスキンがあれば、その値で。",
     "settings.skinAddTake": "取り込む",
     "settings.skinOnlySide": "{side}専用",
     "settings.skinReplace": "この名前のスキンが既に入っています。いまあるのが {held}、入ろうとしているのが {coming} です。",

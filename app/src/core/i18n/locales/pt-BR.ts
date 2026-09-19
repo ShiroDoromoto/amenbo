@@ -354,6 +354,8 @@ export const ptBR: Translation = {
     "settings.skinAdd": "Adicionar um skin",
     "settings.skinAddPick": "Escolher um arquivo…",
     "settings.skinAddDrop": "ou solte um .yaml aqui",
+    "settings.skinWriteOut": "Escrever um",
+    "settings.skinWriteOutNote": "Todas as cores, cada uma com uma linha dizendo para que serve. Tiradas do skin em uso.",
     "settings.skinAddTake": "Trazer para dentro",
     "settings.skinOnlySide": "só {side}",
     "settings.skinReplace": "Já existe um skin com este nome: está {held} e entra {coming}.",

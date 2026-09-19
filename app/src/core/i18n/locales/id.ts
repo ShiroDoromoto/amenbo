@@ -348,6 +348,8 @@ export const id: Translation = {
     "settings.skinAdd": "Tambah skin",
     "settings.skinAddPick": "Pilih berkas…",
     "settings.skinAddDrop": "atau jatuhkan .yaml di sini",
+    "settings.skinWriteOut": "Tulis satu",
+    "settings.skinWriteOutNote": "Semua warna, masing-masing dengan satu baris keterangan. Diambil dari skin yang dipakai.",
     "settings.skinAddTake": "Masukkan",
     "settings.skinOnlySide": "{side} saja",
     "settings.skinReplace": "Sudah ada skin dengan nama ini: yang ada {held}, yang masuk {coming}.",

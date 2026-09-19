@@ -346,6 +346,8 @@ export const nl: Translation = {
     "settings.skinAdd": "Een skin toevoegen",
     "settings.skinAddPick": "Bestand kiezen…",
     "settings.skinAddDrop": "of sleep hier een .yaml naartoe",
+    "settings.skinWriteOut": "Er een uitschrijven",
+    "settings.skinWriteOutNote": "Alle kleuren, elk met een regel waar hij voor is. Van de skin die aan is.",
     "settings.skinAddTake": "Binnenhalen",
     "settings.skinOnlySide": "alleen {side}",
     "settings.skinReplace": "Er ligt al een skin onder deze naam: {held} is er, {coming} komt erbij.",

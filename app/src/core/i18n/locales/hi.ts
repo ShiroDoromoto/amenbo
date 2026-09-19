@@ -346,6 +346,8 @@ export const hi: Translation = {
     "settings.skinAdd": "स्किन जोड़ें",
     "settings.skinAddPick": "फ़ाइल चुनें…",
     "settings.skinAddDrop": "या .yaml यहाँ छोड़ें",
+    "settings.skinWriteOut": "एक लिखकर निकालें",
+    "settings.skinWriteOutNote": "हर रंग, साथ में एक पंक्ति कि वह किसलिए है। जो स्किन लगी है, उसी के मानों से।",
     "settings.skinAddTake": "अंदर लें",
     "settings.skinOnlySide": "सिर्फ़ {side}",
     "settings.skinReplace": "इस नाम की स्किन पहले से है: अभी {held} है, आ रही है {coming}।",

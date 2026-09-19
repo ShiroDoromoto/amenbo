@@ -925,6 +925,31 @@ pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     Ok(name)
 }
 
+/// Write a whole skin out to `path`, to start from: every colour a skin may set, on both sides,
+/// each with a line saying what it is for. Taken from the skin that is on where there is one — an
+/// author editing what they are looking at starts from those values — and filled in from this
+/// build for every name that skin left alone, so what lands is a complete file either way.
+///
+/// The name it gives itself is not the one it was taken from: a file calling itself what is already
+/// held would replace that one on the way back in, which is not what writing your own from an
+/// existing one is asking for.
+#[tauri::command]
+pub fn skin_template_to(path: String) -> Result<(), CmdError> {
+    let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
+    let on = match amenbo_core::config::Config::load(&paths.config_file).skin {
+        Some(name) => amenbo_core::skin::Skin::installed(&paths, &name)
+            .map_err(CmdError::from)?
+            .and_then(|s| s.check().ok())
+            .map(|t| t.skin),
+        None => None,
+    };
+    let yaml = amenbo_core::skin_contrast::template(
+        &amenbo_core::skin_contrast::template_name(on.as_ref()),
+        on.as_ref(),
+    );
+    std::fs::write(&path, yaml).map_err(|e| CmdError::from(format!("{path}: {e}")))
+}
+
 /// The English sentence for a whole-skin refusal — the one the terminal prints for the same file, so
 /// a reader who is told it on one face and reads it on the other is told the same thing.
 fn refusal_sentence(refusal: &amenbo_core::skin::Refusal) -> String {

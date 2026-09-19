@@ -346,6 +346,8 @@ export const zhHans: Translation = {
     "settings.skinAdd": "添加皮肤",
     "settings.skinAddPick": "选文件…",
     "settings.skinAddDrop": "或把 .yaml 拖到这里",
+    "settings.skinWriteOut": "写一份出来",
+    "settings.skinWriteOutNote": "所有颜色，每个都附一句说明用途。取自当前所用的皮肤。",
     "settings.skinAddTake": "装进来",
     "settings.skinOnlySide": "仅{side}",
     "settings.skinReplace": "这个名字已经有皮肤了：现在是 {held}，要进来的是 {coming}。",

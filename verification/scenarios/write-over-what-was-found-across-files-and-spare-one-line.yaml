@@ -170,11 +170,16 @@ steps_gui:
       line: 3
 
   # Off the disk now, not off the list. Written over —
+  #
+  # The line is quoted from this road's own `given` and from no other's. The road beside this one
+  # (`find-and-change-a-word-in-the-file-that-is-open`) writes the same sentences without their
+  # article, so its reading of this line is a word shorter — and a reading borrowed from there is one
+  # the screen never draws, on a build that wrote the file correctly.
   - type: assert
     domain: files
     op: reading
     with:
-      shows: SCENARIO cuttings are watered every second morning
+      shows: SCENARIO the cuttings are watered every second morning
 
   # — and spared, in the same file. The hit that was taken out of the list is the word it always was.
   - type: assert

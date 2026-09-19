@@ -22,10 +22,16 @@ import { t } from "../core/i18n";
 import { folderGitTreeDiff, onFolderChanged } from "./folder";
 import { PatchText } from "./PatchText";
 
-/** The rows the rail has picked out, as the column is handed them: their paths, and which of git's
- *  two answers they are in — what the working tree holds that the index does not, or what the index
- *  holds that the last commit does not (`./gitPick`). */
-export type DiffPick = { paths: string[][]; staged: boolean };
+/**
+ * The rows the rail has picked out, as the column is handed them: their paths, and which of git's
+ * two answers they are in — what the working tree holds that the index does not, or what the index
+ * holds that the last commit does not (`./gitPick`).
+ *
+ * `untracked` is the part of `paths` git has never seen. It travels with them because the letter
+ * git wrote on a row is on the rail's side and not on this one, and it is what lets the host draw a
+ * patch for a path git writes none for (`./folder`, `AMB-D-921`).
+ */
+export type DiffPick = { paths: string[][]; untracked: string[][]; staged: boolean };
 
 /** Where one file's patch begins in what git wrote. A line of a patch's body is led by a space, a
  *  plus, a minus or a backslash, so this at the front of a line is a boundary and never content. */
@@ -67,7 +73,7 @@ export function GitDiff({ projectId, root, picked }: {
   useEffect(() => {
     if (projectId === null || root === null || picked === null) { setPatch(null); return; }
     let alive = true;
-    void folderGitTreeDiff(projectId, root, picked.paths, picked.staged)
+    void folderGitTreeDiff(projectId, root, picked.paths, picked.untracked, picked.staged)
       .then((now) => { if (alive) setPatch(now); })
       .catch(() => { if (alive) setPatch(""); });
     return () => { alive = false; };

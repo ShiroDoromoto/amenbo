@@ -228,10 +228,11 @@ vi.mock("./folder", () => ({
     return hoisted.patch[`${sha} ${path}`] ?? "";
   },
   folderGitTreeDiff: async (
-    _projectId: number, root: string, paths: string[][], staged: boolean,
+    _projectId: number, root: string, paths: string[][], untracked: string[][], staged: boolean,
   ): Promise<string> => {
     const asked = paths.map((one) => one.join("/")).join(",");
-    hoisted.asked.push(`tree:${root}:${staged}:${asked}`);
+    const news = untracked.map((one) => one.join("/")).join(",");
+    hoisted.asked.push(`tree:${root}:${staged}:${asked}${news === "" ? "" : `:new=${news}`}`);
     return hoisted.treePatch[`${staged} ${asked}`] ?? "";
   },
   folderGitIgnore: async (_projectId: number, root: string, paths: string[][]): Promise<string> => {

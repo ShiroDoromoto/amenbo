@@ -14,8 +14,8 @@ const patchFor = (path: string, body = "@@ -1 +1 @@\n-was\n+is\n") =>
   `diff --git a/${path} b/${path}\nindex 1111111..2222222 100644\n--- a/${path}\n+++ b/${path}\n${body}`;
 
 /** The column, on the diff face, with the folder the window is on handed down. */
-const open = (paths: string[][], staged = false) =>
-  draw({ tab: "diff", diff: true, diffPick: { paths, staged }, gitRoot: ROOT });
+const open = (paths: string[][], staged = false, untracked: string[][] = []) =>
+  draw({ tab: "diff", diff: true, diffPick: { paths, untracked, staged }, gitRoot: ROOT });
 
 /** The name over each patch, in the order they are drawn. */
 const names = () =>
@@ -81,6 +81,16 @@ describe("the picked rows' patches in the reading column", () => {
     expect(added.join("")).toContain("+written again");
   });
 
+  /// The paths git has never seen travel with the rest. git writes no patch for one, so the host
+  /// takes the diff off a copy of the index with those paths put into it — and which of them they
+  /// are is the rail's answer, read off the letter git wrote on each row (`AMB-D-921`).
+  it("says which of the picked paths git has never seen", async () => {
+    hoisted.treePatch["false new.md,README.md"] = patchFor("new.md") + patchFor("README.md");
+    await open([["new.md"], ["README.md"]], false, [["new.md"]]);
+
+    expect(hoisted.asked).toContain(`tree:${ROOT}:false:new.md,README.md:new=new.md`);
+  });
+
   /// No layer of its own: the history goes three deep and comes back up one press at a time, and
   /// there is nothing under a patch here to come up from. So the presses go to the column — its
   /// width first, then the column itself.
@@ -90,7 +100,7 @@ describe("the picked rows' patches in the reading column", () => {
     await draw({
       tab: "diff",
       diff: true,
-      diffPick: { paths: [["src", "lib.rs"]], staged: false },
+      diffPick: { paths: [["src", "lib.rs"]], untracked: [], staged: false },
       gitRoot: ROOT,
       onClose: () => { closed += 1; },
     });

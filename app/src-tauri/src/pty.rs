@@ -546,6 +546,17 @@ impl Pane {
         next
     }
 
+    /// Whether a newer name is already waiting for this pane.
+    ///
+    /// **It is what puts the name being carried down.** Only the newest name matters — the row above
+    /// the pane is already showing it, and the provider's list is a copy of what the row says
+    /// (`AMB-D-872`) — so a carry that can take ten minutes must not spend them on a name that has
+    /// been superseded and then type it in. [`next_rename`](Pane::next_rename) is what picks the
+    /// newer one up.
+    fn rename_owed(&self) -> bool {
+        self.renaming.lock().expect("pane renaming lock").owed.is_some()
+    }
+
     /// No more names will be carried into this pane — the terminal went, or the pane never came free
     /// of its opening sentence.
     fn rename_over(&self) {
@@ -977,6 +988,11 @@ const RENAME_TRIES: usize = 1200;
 /// has the box first — a rename pasted on top of one still going in would make a single line out of
 /// two — and after that the wait is for the pane to stand still, which is an agent's answer ending.
 /// Neither is hurried: what is being carried is a copy of a name the pane already shows.
+///
+/// **What it does not wait out is its own name going stale.** The wait can be ten minutes, which is
+/// long enough for the person to name the pane again, and the provider is to end up called what the
+/// row says — so a newer name puts the one in flight down where it stands
+/// ([`crate::handover::Handover::Overtaken`]) and the loop picks the newer one up.
 fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
     std::thread::spawn(move || {
         let open = |app: &tauri::AppHandle| {
@@ -1002,9 +1018,10 @@ fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
                 // by itself, so nothing but stillness buys the paste and nothing but the words
                 // coming back submits it.
                 crate::handover::Terms::Rename,
-                // There is no fact to get off on: what would answer "the provider has this name" is
-                // the provider's own list of sessions, which is the thing being written to.
-                || false,
+                // The name being carried is put down the moment a newer one comes for this pane:
+                // what the provider ends up called is to be what the row says, and a carry that
+                // waits out a dialogue could otherwise spend ten minutes on a name nothing shows.
+                || pane.rename_owed(),
                 || open(&app).then(|| pane.look()),
                 |bytes| {
                     let terminals = app.state::<Terminals>();
@@ -1950,6 +1967,28 @@ mod tests {
         assert_eq!(pane.next_rename(), None, "and nothing behind it");
         // The thread is down, so the naming after that starts one again.
         assert!(pane.rename_to("/rename fourth".to_owned()));
+    }
+
+    /// And the name being carried is put down the moment that newer one arrives.
+    ///
+    /// **Without this the wait outlives what it is waiting for.** A rename into a pane holding a
+    /// question waits for the question to go — up to ten minutes — and a person who renames the pane
+    /// again in that window would have the old name typed at the provider when it finally does
+    /// (`AMB-D-872`, `crate::handover::Handover::Overtaken`).
+    #[test]
+    fn a_pane_says_when_a_newer_name_is_waiting_for_it() {
+        let pane = Pane::new("main", OPENED_AT);
+        assert!(!pane.rename_owed(), "nothing has been asked for");
+
+        assert!(pane.rename_to("/rename first".to_owned()));
+        assert!(pane.rename_owed(), "the name the thread is about to take");
+        assert_eq!(pane.next_rename().as_deref(), Some("/rename first"));
+        assert!(!pane.rename_owed(), "and nothing behind it while that one is carried");
+
+        // The thread is still running — `next_rename` handed one out — so this queues rather than
+        // starting a second, and it is what says the carry in flight is already behind.
+        assert!(!pane.rename_to("/rename second".to_owned()));
+        assert!(pane.rename_owed());
     }
 
     /// A pane still being handed its opening sentence is not one a rename may type into.

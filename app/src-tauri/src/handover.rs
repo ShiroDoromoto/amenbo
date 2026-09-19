@@ -70,6 +70,15 @@
 //! program not yet reading is text that turns up twice later, as Crush's did by keeping it in the
 //! kernel's buffer and drawing it once it started (`AMB-T-3819`).
 //!
+//! **The rename gets one more go, and what buys it is the screen it went into being drawn over.** A
+//! dialogue that swallowed the name holds it out of sight, and while that dialogue is what the pane
+//! draws there is nothing to do but wait — but the moment the person answers it, the screen is
+//! another screen and the input box under it is free. That is the one reading that parts "the name is
+//! gone" from "the name is still in the way": the drawn screen, and not the bytes, which a program
+//! repainting the same dialogue changes on every look ([`crate::handover::Look`]). So the name goes
+//! in again there, once, and the words coming back submit it the ordinary way
+//! ([`crate::handover::Terms::more_copies`]).
+//!
 //! **A screen that never stands still is pasted into anyway, once, after a wait** (`AMB-D-802`). A
 //! program repainting something of its own — a spinner, a clock — never holds the same bytes for
 //! three looks running, so a rule that waited for stillness would hold the sentence back forever and
@@ -172,6 +181,28 @@ impl Terms {
         }
     }
 
+    /// How many more times the sentence goes into a pane that already holds a copy, once the screen
+    /// it went into has been drawn over.
+    ///
+    /// **The rename's one is the dialogue going away.** A pane holding a question takes the name out
+    /// of sight and gives nothing back to submit it on, so the name sits there unsendable while the
+    /// question is what the pane draws. The person answering it is a different screen, and on that
+    /// screen the name is worth typing again — it is the copy that finally lands (`AMB-T-5131`).
+    ///
+    /// **The opening instruction's none is the doubling this module exists against.** The program it
+    /// is handed to is one that has just started, and a screen that changes there is a program still
+    /// drawing itself rather than a question being answered — a second copy would be one of the six
+    /// `AMB-T-4008` collected out of an input box.
+    ///
+    /// One and not more, on either road. A pane that took the name twice without drawing it is a
+    /// pane folding pastes away, and what a third copy buys there is a third copy.
+    fn more_copies(self) -> usize {
+        match self {
+            Self::Opening => 0,
+            Self::Rename => 1,
+        }
+    }
+
     /// Whether a still screen changing on the look after the paste is read as the pane answering for
     /// it — the second of the two tests (`AMB-D-802`). What has to change is the screen the pane
     /// draws and not the bytes behind it ([`Look`]).
@@ -189,6 +220,11 @@ impl Terms {
     /// paste its dialogue swallowed, the screen never shows the words, and the newline answers the
     /// question instead. That happened twenty-four times in one store (`AMB-T-5124`), some of them on
     /// choices that run something (`AMB-T-5074`).
+    ///
+    /// **The movement is still read on the road that does not submit on it, and read for something
+    /// else.** Whatever the pane drew for the paste — a chip, a dialogue repainted over itself,
+    /// nothing at all — is the screen the sentence is sitting in from then on, and it is that screen
+    /// being drawn over *later* that says the question went away ([`Terms::more_copies`]).
     fn movement_answers(self) -> bool {
         match self {
             Self::Opening => true,
@@ -207,10 +243,12 @@ pub enum Handover {
     LeftForTheReader,
     /// The terminal ended, or would not take what was written to it, before either of those.
     Gone,
-    /// The agent said it had run `amenbo agent` in this pane, so the canon is already where this was
-    /// carrying it (`AMB-D-805`). Whether it arrived by the last pass's newline or by a person, the
-    /// question this loop was asking is answered.
-    Briefed,
+    /// What this was carrying is not worth carrying any further, and the caller is the one that says
+    /// so. The opening instruction's caller says it when the agent has said it ran `amenbo agent` in
+    /// this pane, so the canon is already where this was taking it (`AMB-D-805`); the rename's says
+    /// it when a newer name has come for the pane, since the name on the row is the one the provider
+    /// should end up with and this one is behind it (`AMB-D-872`).
+    Overtaken,
 }
 
 /// The leading run of `instruction` that a screen is searched for — the longest prefix of at most
@@ -312,7 +350,8 @@ fn moved(screen: &[u8]) -> u64 {
 /// Hand `instruction` to whatever is running in the pane: paste it into a pane standing still, watch
 /// for it to be drawn or answered for, and submit it when either happens.
 ///
-/// `briefed` answers whether the fact has arrived that the agent ran `amenbo agent` here; while it
+/// `overtaken` answers whether what this is carrying has stopped being worth carrying — the agent
+/// has the canon already, or a newer name has come for the pane ([`Handover::Overtaken`]); while it
 /// says no this goes on, and the pass it says yes on is the last. `look` answers with the pane as it
 /// stands ([`Look`]), or `None` once the terminal is gone. `send` writes to the terminal and answers
 /// whether it could. `wait` is the pause between passes — the caller's, so that what this does can be
@@ -325,7 +364,7 @@ pub fn hand_over(
     instruction: &str,
     tries: usize,
     terms: Terms,
-    mut briefed: impl FnMut() -> bool,
+    mut overtaken: impl FnMut() -> bool,
     mut look: impl FnMut() -> Option<Look>,
     mut send: impl FnMut(&[u8]) -> bool,
     wait: impl Fn(),
@@ -351,12 +390,16 @@ pub fn hand_over(
     // which names a screen that is already gone by the next look on anything that moves — and what
     // this has to answer is "has it had one", not "was it this one".
     let mut words_only = false;
+    // How many copies have gone in, which is what the allowance for another one is measured against
+    // (`Terms::more_copies`).
+    let mut copies = 0usize;
 
     for pass in 0..tries {
-        // First, and before the screen is looked at: the fact outranks anything read off one, so a
-        // pane whose agent has the canon is never pasted into on the strength of how it looks.
-        if briefed() {
-            return Handover::Briefed;
+        // First, and before the screen is looked at: what the caller knows outranks anything read off
+        // a screen, so a pane whose agent has the canon — or whose name this one is already behind —
+        // is never pasted into on the strength of how it looks.
+        if overtaken() {
+            return Handover::Overtaken;
         }
         let Some(pane) = look() else { return Handover::Gone };
         if echoed(&pane.drawn, head) {
@@ -367,19 +410,33 @@ pub fn hand_over(
         stood = if now == held { stood + 1 } else { 1 };
         held = now;
 
-        if words_only {
-            // The sentence is in and movement here says nothing about it — either because the screen
-            // was never going to hold still, or because this road never reads movement as an answer
-            // (`Terms`). A second copy of the sentence is worse than none.
-        } else if std::mem::take(&mut answer_due) {
+        if std::mem::take(&mut answer_due) {
             // Owed on this look and no later: the pane was standing still when the sentence went in,
             // so nothing but the sentence was going to change what it draws. **The screen and not
             // the bytes** — a dialogue that swallowed the paste writes bytes back at it and draws
             // not one character differently, and a newline sent there answers the dialogue
             // (`AMB-T-5075`, `Look`).
             if Some(shown) != drew {
-                return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
+                if terms.movement_answers() {
+                    return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
+                }
+                // The other road does not submit on it. But whatever the pane drew for the paste is
+                // the screen the sentence is sitting in now — a chip where the placeholder was, or a
+                // dialogue redrawn over itself — and it is that screen being drawn over *later* that
+                // says the world moved rather than the paste landing.
+                drew = Some(shown);
             }
+        } else if words_only && copies <= terms.more_copies() && Some(shown) != drew {
+            // The screen the sentence went into has been drawn over, later than the pane's own
+            // answer to the paste. On the rename's road that is the question going away, and the
+            // input box under it is free (`Terms::more_copies`). What is let go of is the hold and
+            // never the waiting: the sentence goes in again on the stillness rule like any other,
+            // and the change just read is what puts that stillness a few looks off.
+            words_only = false;
+        } else if words_only {
+            // The sentence is in and movement here says nothing about it — either because the screen
+            // was never going to hold still, or because this road never reads movement as an answer
+            // (`Terms`). A second copy of the sentence is worse than none.
         } else if !pane.takes_paste {
             // The program has not said it takes a bracketed paste, so the brackets would arrive as
             // keys and the `ESC` that opens them as cancel (`crate::pty`'s `Modes`). Every provider
@@ -389,16 +446,18 @@ pub fn hand_over(
             if !send(&bytes) {
                 return Handover::Gone;
             }
+            copies += 1;
             pasted_into = Some(now);
             drew = Some(shown);
-            // The answer is owed on the next look where movement is allowed to answer. Where it is
-            // not, the sentence is simply in: the words are the only thing that will submit it, and
-            // nothing goes into this pane again (`Terms`).
-            if terms.movement_answers() {
-                answer_due = true;
-            } else {
-                words_only = true;
-            }
+            // The answer is owed on the next look, on both roads and for two different reasons.
+            // Where movement is allowed to answer, it submits the sentence; where it is not, it is
+            // only ever the pane drawing something for the paste, and what it buys is the screen to
+            // measure a later change against (`Terms`).
+            answer_due = true;
+            // And where movement cannot answer, the sentence is simply in: the words are the one
+            // thing that will submit it, and nothing goes into this pane again until the screen it
+            // went into is drawn over.
+            words_only = !terms.movement_answers();
         } else if terms.blind_after().is_some_and(|after| pass + 1 >= after)
             && now != nothing
             && pasted_into.is_none()
@@ -409,6 +468,7 @@ pub fn hand_over(
             if !send(&bytes) {
                 return Handover::Gone;
             }
+            copies += 1;
             words_only = true;
         }
 
@@ -473,6 +533,11 @@ mod tests {
         /// program that has drawn an input box; a later one is a program holding a question it has
         /// declared nothing behind (`AMB-T-5079`).
         declares_on: Cell<usize>,
+        /// The look from which it draws what is pasted into it, whatever `takes` says before that —
+        /// a program whose question has been answered, so that what is written in reaches an input
+        /// box instead of being eaten by a dialogue. `None` for one that answers a paste the same
+        /// way all the way through.
+        echoes_from: Cell<Option<usize>>,
     }
 
     impl Agent {
@@ -486,7 +551,15 @@ mod tests {
                 looks: Cell::new(0),
                 restless_from: Cell::new(None),
                 declares_on: Cell::new(1),
+                echoes_from: Cell::new(None),
             }
+        }
+
+        /// One whose question is answered on the given look: from there it draws what is pasted into
+        /// it, the way any input box does.
+        fn echoes_from(self, look: usize) -> Self {
+            self.echoes_from.set(Some(look));
+            self
         }
 
         /// One that says nothing about pastes until the given look — a program holding a question
@@ -571,7 +644,11 @@ mod tests {
                 agent.writes.borrow_mut().push(bytes.to_vec());
                 if bytes != SUBMIT {
                     let mut wrote = agent.wrote.borrow_mut();
-                    match agent.takes {
+                    let takes = match agent.echoes_from.get() {
+                        Some(from) if agent.looks.get() >= from => Takes::Echoes,
+                        _ => agent.takes,
+                    };
+                    match takes {
                         Takes::Echoes => wrote.extend_from_slice(instruction.as_bytes()),
                         Takes::Acknowledges => wrote.extend_from_slice(b"[Pasted ~1 lines]"),
                         Takes::Swallows => {}
@@ -623,6 +700,47 @@ mod tests {
             1,
             "and the name went in once — the screen it moved to is not a pane owed another copy"
         );
+    }
+
+    /// And once that dialogue is gone, the name goes in again and lands.
+    ///
+    /// **This is the whole of what the rename's second copy is for.** A name a question swallowed is
+    /// out of sight and unsendable, and while the question is what the pane draws there is nothing to
+    /// be done about it. The person answering it is a different screen with a free input box under
+    /// it — the one moment worth typing the name again, and the only one readable from outside the
+    /// program (`AMB-T-5131`).
+    #[test]
+    fn a_name_a_dialogue_swallowed_goes_in_again_once_the_dialogue_is_gone() {
+        // The question is up from the first look; on the sixth the person answers it and the pane
+        // draws its prompt, and from there what is written in is drawn the way an input box draws it.
+        let agent = Agent::new(
+            Takes::AnswersWithoutDrawing,
+            [&b"Which way? 1) north  2) south"[..], b"", b"", b"", b"", b"\r\n> "],
+        )
+        .echoes_from(6);
+
+        assert_eq!(walk_on(&agent, "/rename a pane", 60, Terms::Rename), Handover::Sent);
+        assert_eq!(agent.pastes(), 2, "once into the question, and once into what took its place");
+        assert!(agent.submitted(), "and the words coming back are what sent it");
+    }
+
+    /// A third copy is not on offer, however many screens come and go.
+    ///
+    /// **A pane that took the name twice and drew neither is folding pastes away**, and what a third
+    /// copy buys there is a third copy in somebody's input box (`AMB-T-4008`). The allowance is one
+    /// more and not a fresh one per screen.
+    #[test]
+    fn a_name_no_screen_ever_draws_goes_in_twice_and_never_a_third_time() {
+        let agent = Agent::new(
+            Takes::AnswersWithoutDrawing,
+            [&b"Which way?"[..], b"", b"", b"", b"", b"\r\nand again?", b"", b"", b"", b"", b"\r\nand again?"],
+        );
+        assert_eq!(
+            walk_on(&agent, "/rename a pane", 60, Terms::Rename),
+            Handover::LeftForTheReader
+        );
+        assert_eq!(agent.pastes(), 2, "the one the stillness bought and the one the new screen did");
+        assert!(!agent.submitted());
     }
 
     /// A dialogue that swallowed the paste writes bytes back at it and draws not one character
@@ -802,7 +920,7 @@ mod tests {
         // It came in on the command line, or a person had already got it there: either way the fact is
         // in before the first look, and a sentence pasted now is one somebody has to clear out.
         let agent = Agent::waiting(Takes::Swallows).runs_agent_on(1);
-        assert_eq!(walk(&agent, "Before you act on any request", 12), Handover::Briefed);
+        assert_eq!(walk(&agent, "Before you act on any request", 12), Handover::Overtaken);
         assert_eq!(agent.pastes(), 0, "nothing went into a pane that did not need it");
         assert!(!agent.submitted());
     }
@@ -813,7 +931,7 @@ mod tests {
         // read the sentence all the same and ran the command. That settles it, and the loop stops
         // rather than pasting into every still screen for the rest of its patience.
         let agent = Agent::waiting(Takes::Swallows).runs_agent_on(6);
-        assert_eq!(walk(&agent, "Before you act on any request", 60), Handover::Briefed);
+        assert_eq!(walk(&agent, "Before you act on any request", 60), Handover::Overtaken);
         assert_eq!(agent.pastes(), 1, "the one paste it had already made, and no more");
     }
 

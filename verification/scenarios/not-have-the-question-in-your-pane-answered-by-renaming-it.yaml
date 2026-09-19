@@ -53,11 +53,14 @@
 # the screen, where the loop carrying the name reads them back as its own paste having landed. The
 # agent's hand on that door is `call-a-pane-by-a-name-of-your-own`'s.
 #
-# ── What this road stops before ──────────────────────────────────────────────────────────────────
-# A second name, given while the first is still being carried, is not walked here. The thread that
-# carries one takes them in turn (`app/src-tauri/src/pty.rs`, `rename_pane`), so a second name inside
-# the first one's ten minutes is queued rather than judged — a road that said it walked the second
-# paste would be reading a queue.
+# ── What the reading does not cover ──────────────────────────────────────────────────────────────
+# The name is put in again once the screen it went into has been drawn over, which on a real provider
+# is the question being answered and the input box under it coming free
+# (`app/src-tauri/src/handover.rs`, `Terms::more_copies`). This road cannot read that half: the
+# stand-in shows nothing of what is written into it at any point, so there is no screen for the words
+# to come back on and nothing that would submit them. What it reads is the half that matters most
+# — that the question was not answered on the reader's behalf — and a second name given while the
+# first is still being carried is another road again.
 id: not-have-the-question-in-your-pane-answered-by-renaming-it
 title: A pane holding a question is named, and the name is not sent into the question
 description: >

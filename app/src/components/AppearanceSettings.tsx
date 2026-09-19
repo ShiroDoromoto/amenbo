@@ -31,11 +31,16 @@ export function AppearanceSettings() {
   const [fitting, setFitting] = useState<{ name: string | null; title: string } | null>(null);
   const frame = useRef<HTMLDivElement>(null);
 
+  // A window with no host to ask — a browser `npm run dev`, a test — holds no skins and wears none,
+  // which is the screen the built-in colours are already on. Every road out of here says so the same
+  // way: the answer to "cannot ask" is the answer to "nothing is held".
   const reload = () => {
-    void listSkins().then((held) => {
-      setRows(held.skins);
-      setOn(held.on);
-    });
+    void listSkins()
+      .then((held) => {
+        setRows(held.skins);
+        setOn(held.on);
+      })
+      .catch(() => {});
   };
   useEffect(reload, []);
 
@@ -53,11 +58,13 @@ export function AppearanceSettings() {
       fitOnto(frame.current, null);
       return;
     }
-    void skinTables(name).then((tables) => {
-      // The frame shows the side the screen is on, which is the side the reader is judging it by.
-      const side = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-      fitOnto(frame.current, tables ? tables[side] : null);
-    });
+    void skinTables(name)
+      .then((tables) => {
+        // The frame shows the side the screen is on, which is the side the reader judges it by.
+        const side = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+        fitOnto(frame.current, tables ? tables[side] : null);
+      })
+      .catch(() => fitOnto(frame.current, null));
   };
 
   const keep = () => {
@@ -67,10 +74,12 @@ export function AppearanceSettings() {
 
   const wear = () => {
     if (!fitting) return;
-    void useSkin(fitting.name).then(() => {
-      keep();
-      reload();
-    });
+    void useSkin(fitting.name)
+      .then(() => {
+        keep();
+        reload();
+      })
+      .catch(() => {});
   };
 
   return (
@@ -149,7 +158,7 @@ export function AppearanceSettings() {
               })}{" "}
               {/* Drawn in colours of its own rather than in tokens: this is the way out of a skin
                   that is already on, and a way out the skin can paint over is not one. */}
-              <button className="skinesc" onClick={() => void useSkin(null).then(reload)}>
+              <button className="skinesc" onClick={() => void useSkin(null).then(reload).catch(() => {})}>
                 {t("settings.skinTakeOff")}
               </button>
             </div>

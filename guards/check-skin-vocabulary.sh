@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# check-skin-vocabulary.sh — hold the names a skin may set against the tokens that exist.
+# check-skin-vocabulary.sh — hold core's copy of the stylesheet against the stylesheet.
+#
+# Two copies, for two questions: which names a skin may set, and what this build's own value for
+# each of them is. Both are compiled into the binary, and both are read from the same file here.
 #
 # A skin names tokens. Which of them it may move is a judgement made once, per token: a colour is a
 # taste, and the two that say which service a notification goes to are not. The answer lives in
@@ -16,8 +19,13 @@
 # turns this red until somebody says which side it is on, which is the whole point — the choice is
 # made by a person, once, rather than defaulted to by whichever list was easier to reach.
 #
-# Usage: guards/check-skin-vocabulary.sh   (no args; reads the two files)
-# Exit codes: 0 = the three agree, 1 = one of them has a name the others do not.
+# The second copy is the values themselves (`skin_contrast::BASE`), which the contrast check reads
+# for every name a skin leaves alone. A value moved in the stylesheet and not there would be
+# measured against a colour nobody is looking at, and the report would be about a screen that does
+# not exist. Aliases are followed on both sides, so what is compared is the colour, not the spelling.
+#
+# Usage: guards/check-skin-vocabulary.sh   (no args; reads the three files)
+# Exit codes: 0 = the copies agree, 1 = one of them has a name or a value the others do not.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -25,27 +33,48 @@ cd "$root"
 
 tokens=app/src/styles/tokens.css
 vocabulary=crates/amenbo-core/src/skin.rs
+palette=crates/amenbo-core/src/skin_contrast.rs
 
-for f in "$tokens" "$vocabulary"; do
+for f in "$tokens" "$vocabulary" "$palette"; do
   if [ ! -f "$f" ]; then
     echo "✗ skin vocabulary: $f is missing — did it move?" >&2
     exit 1
   fi
 done
 
-python3 - "$tokens" "$vocabulary" <<'PY'
+python3 - "$tokens" "$vocabulary" "$palette" <<'PY'
 import re, sys
 
-tokens_path, vocabulary_path = sys.argv[1], sys.argv[2]
+tokens_path, vocabulary_path, palette_path = sys.argv[1], sys.argv[2], sys.argv[3]
 css = open(tokens_path).read()
 rust = open(vocabulary_path).read()
+palette_rust = open(palette_path).read()
 
 # The light theme's block is where every token is declared; dark only overrides a subset of it, so
 # reading `:root` alone is reading the whole vocabulary.
-root_at = css.index(":root")
-open_at = css.index("{", root_at)
-close_at = css.index("}", open_at)
-declared = {m.group(1) for m in re.finditer(r"--([a-z0-9-]+)\s*:", css[open_at + 1:close_at])}
+def rule(selector):
+    at = css.index(selector)
+    open_at = css.index("{", at)
+    close_at = css.index("}", open_at)
+    return dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+);", css[open_at + 1:close_at]))
+
+
+light = rule(":root")
+dark = dict(light)
+dark.update(rule('[data-theme="dark"]'))
+declared = {name[2:] for name in light}
+
+ALIAS = re.compile(r"^var\((--[a-z0-9-]+)\)$")
+HEX = re.compile(r"^#[0-9a-f]{6}$")
+
+
+def colour(theme, name):
+    """One token's value as a hex string, following `var(--other)`; None if it is not a colour."""
+    value = theme[name].strip()
+    alias = ALIAS.match(value)
+    if alias:
+        return colour(theme, alias.group(1))
+    return value if HEX.match(value) else None
 
 
 def names(const):
@@ -74,10 +103,44 @@ for name in sorted((opened | closed) - declared):
         f"    It was renamed or removed; follow it, so the list does not read as coverage."
     )
 
+# The values, for the names that carry a colour. A token whose value is a length or a font stack is
+# not one the contrast check can read a number from, and is not expected in the table.
+at = palette_rust.find("const BASE: &[(&str, &str, &str)] = &[")
+if at < 0:
+    sys.exit(f"✗ skin vocabulary: {palette_path} no longer declares BASE.")
+end = palette_rust.index("];", at)
+compiled = {
+    m.group(1): (m.group(2), m.group(3))
+    for m in re.finditer(r'\("([a-z0-9-]+)", "(#[0-9a-f]{6})", "(#[0-9a-f]{6})"\)', palette_rust[at:end])
+}
+in_css = {
+    name[2:]: (colour(light, name), colour(dark, name))
+    for name in light
+    if colour(light, name) is not None
+}
+
+for name in sorted(set(in_css) - set(compiled)):
+    failures.append(
+        f"--{name} is a colour in {tokens_path} and is not in {palette_path}'s BASE.\n"
+        f"    The contrast check reads that table for every name a skin leaves alone."
+    )
+for name in sorted(set(compiled) - set(in_css)):
+    failures.append(f"{name} is in {palette_path}'s BASE but is no longer a colour in {tokens_path}.")
+for name in sorted(set(compiled) & set(in_css)):
+    if compiled[name] != in_css[name]:
+        want, got = in_css[name], compiled[name]
+        failures.append(
+            f"{name} is {want[0]} / {want[1]} in {tokens_path} and {got[0]} / {got[1]} in "
+            f"{palette_path} (light / dark)."
+        )
+
 if failures:
     for line in failures:
         print(f"✗ skin vocabulary: {line}", file=sys.stderr)
     sys.exit(1)
 
-print(f"✓ skin vocabulary: all {len(declared)} tokens are settled ({len(opened)} open, {len(closed)} closed)")
+print(
+    f"✓ skin vocabulary: all {len(declared)} tokens are settled ({len(opened)} open, "
+    f"{len(closed)} closed), and {len(compiled)} colours match the stylesheet"
+)
 PY

@@ -143,6 +143,30 @@ const STOPPED: &str = "SCENARIO stopped";
 /// is here so that a pane which stopped in moments is not a pane that stopped in silence.
 const NO_SESSION: &str = "SCENARIO no session";
 
+/// The question a stand-in holding one draws, and the choices under it.
+///
+/// **It is a question and not a prompt, which is the whole of what a road stands this shape up for.**
+/// What a program draws while it waits for an answer is its own — a dialogue, a list, a box — and a
+/// newline arriving there picks whatever is first. So the stand-in draws something a reader would
+/// have to answer, and the road reads whether anything answered it for them.
+///
+/// The words are the harness's own, for the reason every quoted word here is: what a provider's own
+/// question says differs per product and per version, and a road that read one would be a road about
+/// that tool.
+const ASKING: &str = "SCENARIO which way out of here";
+const CHOICES: &str = "SCENARIO 1) the north channel   2) the south channel";
+
+/// The mark a stand-in holding a question prints for every line it is given — the whole of it, with
+/// nothing of what the line said.
+///
+/// **What is being read is that a line arrived at all, so the line's own words would only get in the
+/// way.** A rename that was never sent is sitting in the pane's input box, and it goes in on the next
+/// press a person makes; a stand-in that printed what it was given would put those words on the
+/// screen, where the loop handing them over reads its own text back and takes it for the paste having
+/// landed (`app/src-tauri/src/handover.rs`, `echoed`). The mark says the same thing without teaching
+/// the screen anything.
+const ARRIVED: &str = "SCENARIO a line arrived";
+
 /// What every model a stand-in answers with is called, before its number.
 ///
 /// The road's own word, for the reason a road never writes a real model name: the names on that row
@@ -287,6 +311,16 @@ enum After {
     /// the machine from inside an agent's pane, which is the one pane a plain shell cannot stand in
     /// for: a shell has no way back into it, so a record made at one names no session to return to.
     Runs,
+    /// Stay holding a question, show nothing of what is written in, and say only that a line arrived.
+    ///
+    /// It is the pane a rename is the dangerous thing to carry into: a program drawing a dialogue
+    /// swallows what is pasted at it and draws not one character differently, so a newline sent on
+    /// the strength of the screen having moved answers the dialogue instead. Three things make that
+    /// pane on a machine with no such program installed — the terminal's own echo turned off, so
+    /// nothing written in comes back; a bracketed paste asked for, which is the one of them a real
+    /// program says for itself and no shell does; and a mark printed for each line given, so a line
+    /// arriving is readable where its words must not be.
+    Asks,
 }
 
 impl After {
@@ -301,6 +335,8 @@ impl After {
             After::Ends => "",
             After::Reads => " and staying open to read what is typed at it",
             After::Runs => " and staying open to run what is typed at it",
+            After::Asks =>
+                " and staying open on a question of their own, showing nothing of what is written into them",
         }
     }
 }
@@ -346,24 +382,44 @@ fn program(
         "echo 'this is the verification harness standing in for {command}'\n"
     ));
     body.push_str(&format!("for arg in \"$@\"; do printf '{ARG} %s\\n' \"$arg\"; done\n"));
+    if after == After::Asks {
+        // Last of what is printed, so the question is what the pane is left holding — and after the
+        // echo goes off, so that nothing written in from here on comes back by the terminal's own
+        // hand. The paste is asked for in the same breath: a pane that has not asked is one nothing
+        // is pasted into at all, and a road standing this shape up to read a paste would be reading
+        // one that never happened.
+        body.push_str("stty -echo 2>/dev/null\n");
+        body.push_str("printf '\\033[?2004h'\n");
+        body.push_str(&format!("echo '{ASKING}'\n"));
+        body.push_str(&format!("echo '{CHOICES}'\n"));
+    }
     if after.stays() {
         // And what it says on the way out, where a road stops it (`STOPPED`). The trap is set before
         // the loop that reads: an interrupt arriving while a line is being waited for ends the wait,
         // and the trap is what runs next.
         body.push_str(&format!("trap \"printf '{STOPPED}\\n'; exit 130\" INT\n"));
-        // The envelope comes off with `tr` and `sed` rather than a shell replacement, because what is
-        // being cut is an escape byte: `tr -d` takes the escape itself and the two `sed` clauses take
-        // what is left of the pair of markers.
-        body.push_str(&format!(
-            "while IFS= read -r line; do\n               said=$(printf '%s' \"$line\" | tr -d '\\033' | sed -e 's/\\[200~//g' -e 's/\\[201~//g')\n               printf '{SAID} [%s]\\n' \"$said\"\n{carried}done\n",
-            // And carried out, where the road asked for the shape that runs what it is given. It is
-            // after the printing, so the line is on the screen whether or not the machine has
-            // anything to run it with — the reading that says it arrived is the same one either way.
-            carried = match after {
-                After::Runs => "               eval \"$said\"\n",
-                _ => "",
-            },
-        ));
+        match after {
+            // A question is answered by a line arriving, and by nothing the line says — so the mark
+            // goes out on its own. What it buys is the screen staying clear of the words that were
+            // written in, which is the state the hand-over loop is being read in.
+            After::Asks => body.push_str(&format!(
+                "while IFS= read -r line; do printf '{ARRIVED}\\n'; done\n"
+            )),
+            // The envelope comes off with `tr` and `sed` rather than a shell replacement, because
+            // what is being cut is an escape byte: `tr -d` takes the escape itself and the two `sed`
+            // clauses take what is left of the pair of markers.
+            _ => body.push_str(&format!(
+                "while IFS= read -r line; do\n               said=$(printf '%s' \"$line\" | tr -d '\\033' | sed -e 's/\\[200~//g' -e 's/\\[201~//g')\n               printf '{SAID} [%s]\\n' \"$said\"\n{carried}done\n",
+                // And carried out, where the road asked for the shape that runs what it is given. It
+                // is after the printing, so the line is on the screen whether or not the machine has
+                // anything to run it with — the reading that says it arrived is the same one either
+                // way.
+                carried = match after {
+                    After::Runs => "               eval \"$said\"\n",
+                    _ => "",
+                },
+            )),
+        }
     }
     // Last, and written even for the plain ending: a script that fell off its end would leave
     // whatever the line before it did, which is the shell's answer rather than the road's.
@@ -615,11 +671,13 @@ impl Driver<'_> {
                     None | Some("ends") => After::Ends,
                     Some("reads") => After::Reads,
                     Some("runs") => After::Runs,
+                    Some("asks") => After::Asks,
                     Some(other) => {
                         return Err(format!(
                             "`can-start` does not know what `{other}` means for what a stand-in does \
                              once it has printed — it `ends` (the default), `reads` what is typed at \
-                             it, or `runs` it"
+                             it, `runs` it, or `asks` a question and shows nothing of what is written \
+                             in answer to it"
                         ))
                     }
                 };
@@ -866,6 +924,33 @@ mod tests {
 
         assert!(printed.contains(&format!("{SAID} [echo SCENARIO carried out]")), "{printed}");
         assert!(printed.contains("SCENARIO carried out"), "and it was run: {printed}");
+    }
+
+    /// A stand-in holding a question asks it, asks for a paste, and says only that a line arrived.
+    ///
+    /// **The words of the line are what must not come back.** The name a rename could not submit is
+    /// sitting in the pane's input box and goes in on the next press a person makes; a stand-in that
+    /// printed it would put the hand-over loop's own text on the screen, where the loop reads it back
+    /// and takes it for the paste having landed (`app/src-tauri/src/handover.rs`, `echoed`).
+    ///
+    /// The declaration is read for as well, because it is the one of the shape's three parts that a
+    /// road cannot see the absence of: a pane that has not asked for a bracketed paste is one nothing
+    /// is pasted into at all, and the road would read a paste that never happened as a newline that
+    /// was withheld.
+    #[test]
+    fn a_stand_in_holding_a_question_says_a_line_arrived_and_never_what_it_said() {
+        let session = crate::scratch::session("can-start-asks-test", false).expect("a session");
+        stand_up(&session.tools, 2, 0, 0, 0, After::Asks, true)
+            .expect("a machine whose stand-ins hold a question");
+
+        let typed = "\u{1b}[200~/rename SCENARIO the north channel\u{1b}[201~\n";
+        let printed = said_to(&session.tools.join("claude"), typed);
+
+        assert!(printed.contains(ASKING), "the question is up: {printed}");
+        assert!(printed.contains(CHOICES), "with the choices under it: {printed}");
+        assert!(printed.contains("\u{1b}[?2004h"), "and a paste asked for: {printed}");
+        assert!(printed.contains(ARRIVED), "a line arrived: {printed}");
+        assert!(!printed.contains("/rename"), "and none of what it said: {printed}");
     }
 
     /// A stand-in that reads prints the line and stops there. The two shapes part on this and on

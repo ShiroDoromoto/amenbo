@@ -22,7 +22,7 @@ use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags}
 
 pub(crate) fn viewer(store: &mut Store, flags: &Flags, sub: ViewerCmd) -> Result<i32, CliError> {
     match sub {
-        ViewerCmd::Setup { account } => setup(store, flags, account.as_deref()),
+        ViewerCmd::Setup { account, name } => setup(store, flags, account.as_deref(), name.as_deref()),
         ViewerCmd::App { terminal } => app(flags, terminal),
         ViewerCmd::Qr { terminal } => qr(store, flags, terminal),
         ViewerCmd::Phones => phones(store, flags),
@@ -33,9 +33,14 @@ pub(crate) fn viewer(store: &mut Store, flags: &Flags, sub: ViewerCmd) -> Result
 }
 
 /// Stand the server up, with the token read from wherever the person is.
-fn setup(store: &mut Store, flags: &Flags, account: Option<&str>) -> Result<i32, CliError> {
+fn setup(
+    store: &mut Store,
+    flags: &Flags,
+    account: Option<&str>,
+    name: Option<&str>,
+) -> Result<i32, CliError> {
     let token = the_api_token(flags)?;
-    let stood = viewer::setup(store, &token, account).map_err(CliError::from)?;
+    let stood = viewer::setup(store, &token, account, name).map_err(CliError::from)?;
     let kept = matches!(stood.keys, viewer::Keys::Kept);
     let line = format!(
         "The Viewer's server is up at {} (account {}, database {}). {}",

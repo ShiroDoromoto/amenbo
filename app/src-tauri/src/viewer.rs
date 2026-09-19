@@ -75,6 +75,11 @@ pub fn viewer_set_carrying(carrying: bool) -> Result<(), CmdError> {
 /// `account` picks between accounts where the token can reach more than one. Absent, core picks the only
 /// one there is and refuses where that is not a question it can answer for them.
 ///
+/// **Which server of that account is meant is not asked here yet.** Naming one is how a second server is
+/// stood up, and how a store says that a server already standing under the usual name is its own
+/// (`AMB-D-930`) — this screen has no box for it, so a reader who meets that refusal is pointed at the
+/// flag the CLI beside the app carries. The box is `AMB-T-5136`.
+///
 /// Off the main thread: it talks to Cloudflare, uploads the Worker and waits for the name to answer.
 #[tauri::command]
 pub async fn viewer_setup(
@@ -83,7 +88,7 @@ pub async fn viewer_setup(
 ) -> Result<ViewerStoodDto, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<ViewerStoodDto, CmdError> {
         let mut store = open_store()?;
-        let stood = viewer::setup(&mut store, &api_token, account.as_deref())?;
+        let stood = viewer::setup(&mut store, &api_token, account.as_deref(), None)?;
         Ok(ViewerStoodDto {
             url: stood.url,
             account: stood.account,

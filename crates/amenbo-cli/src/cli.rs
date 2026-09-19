@@ -588,6 +588,10 @@ pub enum ViewerCmd {
         /// which account to build in, where the token reaches more than one
         #[arg(long)]
         account: Option<String>,
+        /// what to call the server, for a second one in the same account — or to say that one already
+        /// standing under the usual name is this store's
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Draw a new read code, for the phone's camera.

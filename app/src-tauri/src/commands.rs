@@ -916,6 +916,15 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                         key: "font_file".into(),
                         detail: Some(why.en()),
                     },
+                    Warning::Scale { theme, key, wrote, used } => SkinWarningDto {
+                        kind: "scale".into(),
+                        theme: Some(theme.as_str().to_string()),
+                        key: key.clone(),
+                        detail: Some(match used {
+                            Some(used) => format!("'{wrote}' — moved by {used}"),
+                            None => format!("'{wrote}' is not a number"),
+                        }),
+                    },
                     Warning::Frame { theme, key, wrote, used } => SkinWarningDto {
                         kind: "frame".into(),
                         theme: Some(theme.as_str().to_string()),

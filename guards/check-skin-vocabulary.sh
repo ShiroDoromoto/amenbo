@@ -88,16 +88,31 @@ def names(const):
 
 opened, closed = names("OPEN"), names("CLOSED")
 
+# The third answer: a token nobody writes directly, moved by a family's multiplier. The names of
+# the multipliers are not tokens and must not be looked for among them.
+at = rust.find("pub const SCALES: &[(&str, &[&str])] = &[")
+if at < 0:
+    sys.exit(f"✗ skin vocabulary: {vocabulary_path} no longer declares SCALES.")
+end = rust.index("\n];", at)
+scale_names = {m.group(1) for m in re.finditer(r'\("([a-z0-9-]+-scale)"', rust[at:end])}
+scaled = {m.group(1) for m in re.finditer(r'"([a-z0-9-]+)"', rust[at:end])} - scale_names
+
 failures = []
-for name in sorted(opened & closed):
-    failures.append(f"{name} is on both OPEN and CLOSED — a token is one or the other")
-for name in sorted(declared - opened - closed):
+for name in sorted((opened & closed) | (opened & scaled) | (closed & scaled)):
+    failures.append(f"{name} is on two lists — a token is settled one way")
+for name in sorted(scale_names & declared):
     failures.append(
-        f"--{name} is declared in {tokens_path} and on neither list.\n"
-        f"    Say whether a skin may move it: OPEN if it is a matter of taste, CLOSED if the value "
-        f"says something (which service, whose mark, a width a person drags, a floor)."
+        f"--{name} is a multiplier's name and also a token in {tokens_path}.\n"
+        f"    A multiplier is what a skin writes; a token is what it moves. One name cannot be both."
     )
-for name in sorted((opened | closed) - declared):
+for name in sorted(declared - opened - closed - scaled):
+    failures.append(
+        f"--{name} is declared in {tokens_path} and on no list.\n"
+        f"    Say how a skin reaches it: OPEN to be written directly, SCALES to be moved by a "
+        f"family's multiplier, CLOSED if the value says something (which service, whose mark, a "
+        f"width a person drags, a floor)."
+    )
+for name in sorted((opened | closed | scaled) - declared):
     failures.append(
         f"{name} is on a list in {vocabulary_path} but is not declared in {tokens_path}.\n"
         f"    It was renamed or removed; follow it, so the list does not read as coverage."
@@ -134,6 +149,27 @@ for name in sorted(set(compiled) & set(in_css)):
             f"{palette_path} (light / dark)."
         )
 
+# The sizes a multiplier multiplies, the way the colours are held.
+at = rust.find("const SIZED: &[(&str, &str, &str)] = &[")
+if at < 0:
+    sys.exit(f"✗ skin vocabulary: {vocabulary_path} no longer declares SIZED.")
+end = rust.index("\n];", at)
+sizes = {
+    m.group(1): (m.group(2), m.group(3))
+    for m in re.finditer(r'\("([a-z0-9-]+)", "([^"]+)", "([^"]+)"\)', rust[at:end])
+}
+for name in sorted(scaled):
+    want = (light[f"--{name}"].strip(), dark[f"--{name}"].strip()) if f"--{name}" in light else None
+    if name not in sizes:
+        failures.append(f"{name} is moved by a multiplier and is not in {vocabulary_path}'s SIZED.")
+    elif want is not None and sizes[name] != want:
+        failures.append(
+            f"{name} is {want[0]} / {want[1]} in {tokens_path} and {sizes[name][0]} / "
+            f"{sizes[name][1]} in SIZED (light / dark)."
+        )
+for name in sorted(set(sizes) - scaled):
+    failures.append(f"{name} is in SIZED and is not moved by any multiplier.")
+
 if failures:
     for line in failures:
         print(f"✗ skin vocabulary: {line}", file=sys.stderr)
@@ -141,6 +177,7 @@ if failures:
 
 print(
     f"✓ skin vocabulary: all {len(declared)} tokens are settled ({len(opened)} open, "
-    f"{len(closed)} closed), and {len(compiled)} colours match the stylesheet"
+    f"{len(scaled)} scaled by {len(scale_names)} multipliers, {len(closed)} closed), "
+    f"and {len(compiled)} colours match the stylesheet"
 )
 PY

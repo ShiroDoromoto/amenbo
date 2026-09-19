@@ -360,6 +360,8 @@ export const zhHant: Translation = {
     "settings.skinContrastClear": "{n} 組全部達到下限。",
     "settings.skinContrastShort": "{m} 組裡有 {n} 組沒到下限。仍然可以裝進來。",
     "settings.skinFontMissing": "這個字體沒有這些字: {langs}。那裡用機器自帶的字形顯示。",
+    "settings.skinFont": "字體: {family}（{license}）",
+    "settings.skinFontLicence": "授權條款全文",
     "settings.developer": "開發者",
     "settings.perfLog": "效能記錄（埋點）",
     "settings.perfLogNote": "為讀寫層計時，超出預算時輸出 WARN（核心寫入輪替檔案，前端寫入主控台）。改動即時生效。",

@@ -360,6 +360,8 @@ export const tr: Translation = {
     "settings.skinContrastClear": "{n} eşleşmenin hepsi eşiğini geçiyor.",
     "settings.skinContrastShort": "{m} eşleşmenin {n} tanesi eşiğin altında. Yine de içeri alabilirsiniz.",
     "settings.skinFontMissing": "Bu yazı tipinde şunların harfleri yok: {langs}. Orada makinenin kendi yazı tipi çıkar.",
+    "settings.skinFont": "Yazı tipi: {family} ({license})",
+    "settings.skinFontLicence": "Lisansın tamamı",
     "settings.developer": "Geliştirici",
     "settings.perfLog": "Başarım günlüğü (ölçüm)",
     "settings.perfLogNote": "Okuma/yazma katmanlarını süreler ve bütçe aşımında WARN basar (çekirdek dönen bir dosyaya, ön yüz konsola). Anında geçerli olur.",

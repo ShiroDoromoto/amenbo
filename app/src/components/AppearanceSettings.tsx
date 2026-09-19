@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { SkinRowDto } from "../bindings/bindings";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, skinTables, useSkin, watchSkinChanged } from "../core/skin";
+import { fitOnto, listSkins, skinFontLicence, skinTables, useSkin, watchSkinChanged } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -31,6 +31,9 @@ export function AppearanceSettings() {
   // The name being tried on, and the values it puts on the frame. `null` is nothing being tried.
   const [fitting, setFitting] = useState<{ name: string | null; title: string } | null>(null);
   const frame = useRef<HTMLDivElement>(null);
+  // The licence of the shown skin's font, once the reader has asked to see it. A document rather
+  // than a line, so it is fetched on asking and not on every listing.
+  const [licence, setLicence] = useState<string | null>(null);
 
   // A window with no host to ask — a browser `npm run dev`, a test — holds no skins and wears none,
   // which is the screen the built-in colours are already on. Every road out of here says so the same
@@ -55,6 +58,10 @@ export function AppearanceSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The skin the select is showing: the one being tried on while a fitting is up, and the one that
+  // is on otherwise. What is said under the select is about that one.
+  const shownName = fitting ? fitting.name : on;
+  const shown = rows.find((r) => r.name === shownName);
   const pinned = pinnedSide(rows.find((r) => r.name === on));
   useEffect(() => {
     // A pinned side is not a preference the reader typed, so it is applied rather than stored: what
@@ -65,6 +72,7 @@ export function AppearanceSettings() {
 
   const tryOn = (name: string | null, title: string) => {
     setFitting({ name, title });
+    setLicence(null);
     if (name === null) {
       fitOnto(frame.current, null);
       return;
@@ -115,6 +123,27 @@ export function AppearanceSettings() {
             ))}
           </select>
           <div className="meta">{t("settings.skinHow")}</div>
+          {/* Where the shown skin carries a face, where that face came from. OFL asks that the
+              notice and the licence travel with the font and that a reader can see them, and the
+              seeing is the screen's half — the travelling is the file's. */}
+          {shown?.fontFamily && (
+            <div className="meta">
+              {tf("settings.skinFont", {
+                family: shown.fontFamily,
+                license: shown.fontLicense || "—",
+              })}{" "}
+              <button
+                className="btn"
+                onClick={() => {
+                  if (licence !== null) return setLicence(null);
+                  void skinFontLicence(shown.name).then((full) => setLicence(full ?? "")).catch(() => {});
+                }}
+              >
+                {t("settings.skinFontLicence")}
+              </button>
+              {licence !== null && <pre className="skinlicence">{licence}</pre>}
+            </div>
+          )}
         </span>
       </div>
 

@@ -2345,7 +2345,13 @@ themes: Array<string>, license: string | null, homepage: string | null,
 /**
  * Why this file could not be read, where it could not. `null` on every skin that reads.
  */
-error: string | null, };
+error: string | null, 
+/**
+ * The face it carries and the licence that face is under, where it carries one the check
+ * took. The licence in full is not here — it is a document, and it is fetched when it is
+ * opened rather than on every listing.
+ */
+fontFamily: string | null, fontLicense: string | null, };
 
 /**
  * The skin this device has on, as the window wears it: the two sides' tables of token name to

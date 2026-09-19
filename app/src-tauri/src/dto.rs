@@ -787,6 +787,11 @@ pub struct SkinRowDto {
     pub(crate) homepage: Option<String>,
     /// Why this file could not be read, where it could not. `null` on every skin that reads.
     pub(crate) error: Option<String>,
+    /// The face it carries and the licence that face is under, where it carries one the check
+    /// took. The licence in full is not here — it is a document, and it is fetched when it is
+    /// opened rather than on every listing.
+    pub(crate) font_family: Option<String>,
+    pub(crate) font_license: Option<String>,
 }
 
 /// What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —

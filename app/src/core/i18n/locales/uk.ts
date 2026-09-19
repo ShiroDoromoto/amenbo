@@ -369,6 +369,8 @@ export const uk: Translation = {
     "settings.skinContrastClear": "Усі пари ({n}) проходять свій поріг.",
     "settings.skinContrastShort": "Нижче порога: {n} з {m}. Узяти все одно можна.",
     "settings.skinFontMissing": "У цьому шрифті немає знаків для: {langs}. Там читається шрифт самої машини.",
+    "settings.skinFont": "Шрифт: {family} ({license})",
+    "settings.skinFontLicence": "Ліцензія цілком",
     "settings.developer": "Для розробників",
     "settings.perfLog": "Журнал швидкодії (вимірювання)",
     "settings.perfLogNote": "Заміряє час шарів читання/запису й пише WARN, коли бюджет перевищено (ядро — у файл із ротацією, фронт — у консоль). Діє одразу.",

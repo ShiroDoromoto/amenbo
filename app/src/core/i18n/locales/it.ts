@@ -367,6 +367,8 @@ export const it: Translation = {
     "settings.skinContrastClear": "Tutte le {n} coppie superano la soglia.",
     "settings.skinContrastShort": "{n} coppie su {m} sono sotto la soglia. Puoi portarlo dentro lo stesso.",
     "settings.skinFontMissing": "Questo carattere non ha lettere per: {langs}. Lì si legge con quello della macchina.",
+    "settings.skinFont": "Carattere: {family} ({license})",
+    "settings.skinFontLicence": "Licenza per intero",
     "settings.developer": "Sviluppo",
     "settings.perfLog": "Registro delle prestazioni (strumentazione)",
     "settings.perfLogNote": "Cronometra gli strati di lettura e scrittura e segnala con WARN gli sforamenti di budget (il nucleo su un file a rotazione, il front sulla console). Vale subito.",

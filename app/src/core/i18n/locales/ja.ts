@@ -364,6 +364,8 @@ export const ja: Translation = {
     "settings.skinContrastClear": "{n} 組すべてが下限を満たしています。",
     "settings.skinContrastShort": "{m} 組のうち {n} 組が下限を割っています。このまま取り込むこともできます。",
     "settings.skinFontMissing": "この書体は次の字を持っていません: {langs}。そこは端末の字形で出ます。",
+    "settings.skinFont": "書体: {family}（{license}）",
+    "settings.skinFontLicence": "ライセンス全文",
     "settings.developer": "開発者",
     "settings.perfLog": "perf ログ（計装）",
     "settings.perfLogNote": "読み取り/書き込み層の所要時間を計測し、予算超過を WARN で出します（core はローリングファイル、front はコンソール）。稼働中に切り替わります。",

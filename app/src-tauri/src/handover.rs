@@ -32,7 +32,10 @@
 //!
 //! **The words are the test wherever there are words to test.** Nothing here looks for "trust" or
 //! any other of a program's own sentences: those differ per product and per version. What is looked
-//! for is the text this loop itself pasted.
+//! for is the text this loop itself pasted — and it is looked for only once this loop has pasted
+//! something. The same run of characters on a screen nothing has been written into is somebody
+//! else's: a name typed by the rename before this one is still drawn where the provider echoed it,
+//! and two names that begin alike share the fourteen characters that are searched for.
 //!
 //! **But a pane does not always show it, so the opening instruction has a second test: the pane
 //! answered.** OpenCode 1.18.23 folds a bracketed paste into a `[Pasted ~1 lines]` chip and never
@@ -390,8 +393,8 @@ pub fn hand_over(
     // which names a screen that is already gone by the next look on anything that moves — and what
     // this has to answer is "has it had one", not "was it this one".
     let mut words_only = false;
-    // How many copies have gone in, which is what the allowance for another one is measured against
-    // (`Terms::more_copies`).
+    // How many copies have gone in. It is what the allowance for another one is measured against
+    // (`Terms::more_copies`), and what says the words on the screen could be this loop's at all.
     let mut copies = 0usize;
 
     for pass in 0..tries {
@@ -402,7 +405,13 @@ pub fn hand_over(
             return Handover::Overtaken;
         }
         let Some(pane) = look() else { return Handover::Gone };
-        if echoed(&pane.drawn, head) {
+        // **Only after something has gone in.** What this looks for is the text this loop pasted, and
+        // before it has pasted anything the same run of characters on the screen is somebody else's:
+        // the name a rename typed a moment ago is still drawn where the provider echoed it, and two
+        // names that begin alike share a head (`HEAD` is eight characters of `/rename ` and six of the
+        // name). Read before the paste, that reads as "the words came back" and sends a newline into a
+        // pane nothing was written into — which is the newline this whole module exists to withhold.
+        if copies > 0 && echoed(&pane.drawn, head) {
             return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
         }
         let now = moved(&pane.tail);
@@ -700,6 +709,29 @@ mod tests {
             1,
             "and the name went in once — the screen it moved to is not a pane owed another copy"
         );
+    }
+
+    /// A name whose head the screen already carries is still pasted in, and is what is submitted.
+    ///
+    /// **The words on a screen are only this loop's once this loop has put some there.** The head a
+    /// screen is searched for is fourteen characters — eight of `/rename ` and six of the name — so
+    /// two names that begin alike share one, and a provider that echoed the first still has it drawn.
+    /// Read before anything has gone in, that is a newline sent into a pane nothing was written into:
+    /// zero pastes, one submit, and on a pane holding a question it is the question answered
+    /// (`AMB-T-5074`).
+    #[test]
+    fn a_name_the_screen_already_begins_with_is_pasted_rather_than_taken_as_arrived() {
+        // What a provider draws after the rename before this one: the line it was given, echoed.
+        let agent = Agent::new(Takes::Echoes, [&b"> /rename SCENARIO harbour lights\n"[..]]);
+
+        assert_eq!(
+            walk_on(&agent, "/rename SCENARIO harbour moorings", 60, Terms::Rename),
+            Handover::Sent,
+        );
+        assert_eq!(agent.pastes(), 1, "the name went in rather than being read off somebody else's");
+        let writes = agent.writes();
+        let submit = writes.iter().position(|w| w == SUBMIT).expect("it was submitted");
+        assert_eq!(submit, writes.len() - 1, "and the newline came after it, never instead of it");
     }
 
     /// And once that dialogue is gone, the name goes in again and lands.

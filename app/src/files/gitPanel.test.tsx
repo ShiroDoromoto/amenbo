@@ -1350,6 +1350,29 @@ describe("the rail's git half, and what holds still in it", () => {
     expect(container.querySelector(".gitpanel__top .gitpanel__net")).not.toBeNull();
   });
 
+  /// How many rows a list has, and which one each drawn row is. The document holds only the rows in
+  /// view, so a reader being read to would otherwise be told the list is as long as the screen.
+  ///
+  /// The window itself cannot be read here: this browser answers nought for how tall a box is, and
+  /// nought is what makes the list draw every row (`AMB-D-920`). What is pinned is that the count is
+  /// the list's own and the place is the row's own.
+  it("says how long the list is, and where each row stands in it", async () => {
+    hoisted.git[ROOT] = says({
+      rows: [
+        row({ path: ["a.rs"], worktree: "M" }),
+        row({ path: ["b.rs"], worktree: "M" }),
+        row({ path: ["c.rs"], worktree: "M" }),
+      ],
+    });
+    await draw();
+
+    const list = sectionOf(t("git.changes"))!.querySelector(".gitpanel__list")!;
+    expect(list.getAttribute("aria-rowcount")).toBe("3");
+    expect([...list.querySelectorAll(".gitpanel__row")]
+      .map((one) => one.getAttribute("aria-rowindex")))
+      .toEqual(["1", "2", "3"]);
+  });
+
   /// At the foot and not at the head: the lists are read before the message is written, which is
   /// the order the half is worked in.
   it("puts the commit box under the lists", async () => {

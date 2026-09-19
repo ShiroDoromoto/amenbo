@@ -462,6 +462,20 @@ impl Paths {
     pub fn delivery_log_file(&self) -> PathBuf {
         self.base_dir.join(crate::delivery_log::FILE_NAME)
     }
+
+    /// Where skins are kept, `<base>/skins`. Beside the store rather than inside it, because a skin
+    /// is a file a person was handed and may hand on — it is opened, copied and deleted as a file,
+    /// and the one that is on is named from [`Config::skin`].
+    pub fn skins_dir(&self) -> PathBuf {
+        self.base_dir.join("skins")
+    }
+
+    /// One skin's file, `<base>/skins/<name>.yaml`. The caller passes a name
+    /// [`crate::skin::usable_name`] has accepted; a name that is not one is not a file under this
+    /// directory, and nothing here would make it one.
+    pub fn skin_file(&self, name: &str) -> PathBuf {
+        self.skins_dir().join(format!("{name}.yaml"))
+    }
 }
 
 /// Logging level for the perf instrumentation. One of three values, persisted as `perf_log` in
@@ -609,6 +623,19 @@ pub struct Config {
     /// Optional avatar image for the AI facet. Same contract as [`Config::human_avatar`].
     #[serde(default)]
     pub ai_avatar: Option<String>,
+    /// **The skin that is on**, by name — the stem of a file under [`Paths::skins_dir`]. Unset means
+    /// the colours this build ships with, which is also what `config set skin ""` goes back to.
+    ///
+    /// A device-level setting; **never synced**. What it names is a file on this machine, and the
+    /// same name on a second machine is either a different file or no file at all. It is not in
+    /// `localStorage` beside the light/dark choice for the other half of that: the CLI has to be
+    /// able to read and move it, or a window that will not open cannot be talked out of its skin.
+    ///
+    /// A name whose file has since gone is left as it is rather than cleared. Clearing it would
+    /// silently drop the answer the moment a skin is moved aside, and the reader who puts the file
+    /// back expects to find their skin still on.
+    #[serde(default)]
+    pub skin: Option<String>,
     /// The BLAKE3 hash of the original image [`Config::human_avatar`] was baked from, kept in the blob
     /// store (`<store>/blobs/<hash>`) so a different size can be baked later without asking the human to
     /// choose the file again (`AMB-D-839`). `None` where there is no avatar, and also where one was
@@ -911,6 +938,7 @@ impl Default for Config {
             ai_name: None,
             human_avatar: None,
             ai_avatar: None,
+            skin: None,
             human_avatar_source: None,
             ai_avatar_source: None,
             hook_consent: None,
@@ -1357,6 +1385,23 @@ impl Config {
                 let trimmed = value.trim();
                 self.ai_name = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
             }
+            // The skin that is on. An empty string takes it off, back to the colours this build
+            // ships with. The name is held to the same rule the skin's own `name` is, because it is
+            // the stem of the file this reads from — a name that is not one would be a path.
+            "skin" => {
+                let trimmed = value.trim();
+                self.skin = if trimmed.is_empty() {
+                    None
+                } else if crate::skin::usable_name(trimmed) {
+                    Some(trimmed.to_string())
+                } else {
+                    return Err(crate::error::Error::invalid(format!(
+                        "skin must be lowercase letters, digits, '-' and '_', opening on a letter or \
+                         a digit, and at most {} characters; '{trimmed}' is not",
+                        crate::skin::NAME_MAX
+                    )));
+                };
+            }
             // Facet avatars. An empty string clears the avatar, restoring the identicon. A non-empty
             // value is validated for data-URL shape and size. This face takes a display version and
             // nothing else, so it registers one with no original (`AMB-D-839`) — and dropping the old
@@ -1530,6 +1575,58 @@ mod tests {
         assert_eq!(c.attachment_limits.image_max, 2048);
     }
 
+    /// The skin that is on is a name, and the name is the stem of a file — so what it may be is what
+    /// a filename may be, and the same rule turns away the value that would reach outside the
+    /// directory skins are kept in.
+    #[test]
+    fn the_skin_is_set_by_name_cleared_by_an_empty_string_and_held_to_a_filename() {
+        let mut c = Config::default();
+        assert!(c.skin.is_none(), "this build's own colours, until something says otherwise");
+
+        c.set("skin", "  washi  ").unwrap();
+        assert_eq!(c.skin.as_deref(), Some("washi"), "stored trimmed");
+
+        c.set("skin", "").unwrap();
+        assert!(c.skin.is_none(), "an empty string takes it off");
+
+        c.set("skin", "washi").unwrap();
+        for bad in ["../evil", "was/hi", "Washi"] {
+            let e = c.set("skin", bad).unwrap_err();
+            assert_eq!(e.code(), "invalid_value", "{bad}");
+            assert!(e.to_string().contains(bad), "says which value: {e}");
+        }
+        assert_eq!(c.skin.as_deref(), Some("washi"), "a refused value leaves the old one on");
+    }
+
+    /// Skins are kept beside the store, one file each, under the name the skin calls itself.
+    #[test]
+    fn a_skin_is_kept_under_its_own_name_beside_the_store() {
+        let paths = Paths::at(PathBuf::from("/base"));
+        assert_eq!(paths.skins_dir(), PathBuf::from("/base/skins"));
+        assert_eq!(paths.skin_file("washi"), PathBuf::from("/base/skins/washi.yaml"));
+    }
+
+    /// What is installed under a name is read back, so the two versions can be put side by side when
+    /// a second file arrives calling itself the same thing.
+    #[test]
+    fn the_skin_installed_under_a_name_is_read_back_and_an_unusable_name_reaches_no_file() {
+        let dir = amenbo_scratch::scratch("skins");
+        let paths = Paths::at(dir.clone());
+        std::fs::create_dir_all(paths.skins_dir()).unwrap();
+        std::fs::write(
+            paths.skin_file("washi"),
+            "name: washi\ntitle: t\nversion: 1.2.0\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n",
+        )
+        .unwrap();
+
+        let found = crate::skin::Skin::installed(&paths, "washi").unwrap().expect("it is there");
+        assert_eq!(found.version.as_deref(), Some("1.2.0"));
+        assert!(crate::skin::Skin::installed(&paths, "retro").unwrap().is_none(), "nothing under it");
+        assert!(
+            crate::skin::Skin::installed(&paths, "../../anything").unwrap().is_none(),
+            "a name that is not one is not asked of the filesystem"
+        );
+    }
 
     /// `config set human_name/ai_name` stores a trimmed name and an empty value clears it back
     /// to the language-linked default; `*_display_name()` falls back to the default when unset.

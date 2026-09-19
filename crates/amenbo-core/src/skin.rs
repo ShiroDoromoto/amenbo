@@ -159,6 +159,40 @@ pub const CLOSED: &[&str] = &[
     "c-brand-mark", "k-mail", "k-slack", "rightpane-w", "sidebar-w", "tap-min", "topbar-h"
 ];
 
+/// The most a skin's name may be. It is an identifier rather than a title — the word on screen is
+/// `title`, which is the author's own and in their own script — and it is also the stem of the file
+/// the skin is kept under, so what it may hold is what a filename may hold on every platform amenbo
+/// runs on. Lowercase ASCII, digits, `-` and `_`, opening on a letter or a digit.
+pub const NAME_MAX: usize = 64;
+
+/// May this name be a skin's? Asked in two places for one reason: the name is what the skin is kept
+/// under (`<base>/skins/<name>.yaml`), so a name that is not a filename is a path somewhere else.
+pub fn usable_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= NAME_MAX
+        && name.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+}
+
+impl Skin {
+    /// The skin kept under this name, if one is. Reading it is what lets the two versions be put
+    /// side by side when a second file arrives calling itself the same thing.
+    ///
+    /// A name that is not usable holds nothing, rather than reaching for a file: the answer to
+    /// "what is installed as `../../etc/passwd`" is nothing, and it is not a question to ask the
+    /// filesystem.
+    pub fn installed(paths: &crate::config::Paths, name: &str) -> Result<Option<Skin>, Error> {
+        if !usable_name(name) {
+            return Ok(None);
+        }
+        match std::fs::read_to_string(paths.skin_file(name)) {
+            Ok(yaml) => Skin::read(&yaml).map(Some),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(Error::from(e)),
+        }
+    }
+}
+
 /// What the check made of one skin: the skin as it may be applied, and what was set aside on the
 /// way. Warnings do not stop it — a skin written for a later amenbo is worn as far as it goes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,6 +232,8 @@ pub enum Refusal {
     /// Set a side it did not declare. The author says which sides they made, and a table they did
     /// not claim is one they did not say they had looked at.
     SideNotDeclared(Side),
+    /// Named itself something that cannot be a filename, and so cannot be kept.
+    UnusableName(String),
 }
 
 /// One of the two sides a skin may hold.
@@ -233,6 +269,9 @@ impl Skin {
     /// skin nobody wrote. A name the author did not set is not a rule at all; it keeps the base value,
     /// which is what lets a skin be ten lines long.
     pub fn check(self) -> Result<Taken, Refusal> {
+        if !usable_name(&self.name) {
+            return Err(Refusal::UnusableName(self.name.clone()));
+        }
         if self.skin_v > SKIN_V {
             return Err(Refusal::SkinVAhead { declared: self.skin_v, understood: SKIN_V });
         }
@@ -502,6 +541,21 @@ dark:
             .check()
             .unwrap_err();
         assert_eq!(e, Refusal::UnknownSide("sepia".into()));
+    }
+
+    #[test]
+    fn a_name_that_cannot_be_a_filename_turns_the_whole_skin_away() {
+        for bad in ["../evil", "was/hi", "Washi", "-washi", "", &"w".repeat(NAME_MAX + 1)] {
+            assert!(!usable_name(bad), "{bad:?} is not a name a skin may be kept under");
+        }
+        for good in ["washi", "high-contrast", "retro_game", "8bit"] {
+            assert!(usable_name(good), "{good:?} is");
+        }
+        let e = Skin::read("name: ../evil\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n")
+            .unwrap()
+            .check()
+            .unwrap_err();
+        assert_eq!(e, Refusal::UnusableName("../evil".into()));
     }
 
     #[test]

@@ -747,7 +747,8 @@ wrote. The files land in the run's own throwaway space and go with it.
 
 
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
-a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
+a file there (what an attachment ingests, what the lint is pointed at), `write-many` puts `count` of
+them there at once, `copy-fixture` puts one
 there from `fixtures/`, `write-picture` draws one of a named size in `megabytes`, and `git-init`
 makes the folder a git repository, which is the only way the
 hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
@@ -757,6 +758,14 @@ folder a project is **bound** to, and a repository anywhere else leaves every ro
 reaches: until something is committed git names the whole folder and never the paths inside it, so a
 folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
 for — does not exist on the near side of a commit.
+**`write-many` is for the readings that only appear in quantity.** A list drawn a window at a time
+draws every row it has while the rows are few, so a road standing three of them up is green on a
+build whose window never worked — and no road can say `write-file` three thousand times. `path`
+carries `{n}` where each file's number goes, and the number is written to the width of `count`
+(`0001` of three thousand): git names paths in the order their bytes sort, so without the padding a
+road that walked to the end of a list would be naming a row from the middle. `content` is what every
+one of them holds, and left out each holds a line carrying its own number.
+
 `git-branch` says which branch the folder is standing on when the road opens, cutting it where
 there is none by that name and stepping onto it where there is: a premise declares where the reader
 finds the folder, not the order its branches were made in. `uses-lfs` wires the repository for Git

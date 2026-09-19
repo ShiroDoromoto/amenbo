@@ -10,6 +10,19 @@ use amenbo_static_host::{Reply, StaticHost};
 
 use crate::{opt_bool, req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
+/// The most files one `write-many` will lay down.
+///
+/// A premise is stood up before every run of the road it is on, so what it costs is paid on each of
+/// them. Thirty thousand untracked files is what the panel was measured at and is more than any road
+/// has needed; past that the writing is the run rather than the setting up for it.
+const MANY_MOST: i64 = 50_000;
+
+/// The mark each of those files carries, where the road did not say what they hold.
+///
+/// A word of the harness's own, the way every quoted word in these roads is — and with the file's own
+/// number after it, so one of them read on screen says which one it is.
+const MANY_LINE: &str = "SCENARIO row";
+
 impl Driver<'_> {
     pub(crate) fn repo_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
@@ -32,6 +45,55 @@ impl Driver<'_> {
                 }
                 std::fs::write(&full, content).map_err(|e| format!("could not write {path}: {e}"))?;
                 Ok(Outcome::action(format!("wrote {} ({} bytes)", full.display(), content.len())))
+            }
+            // The same folder, filled. `path` carries `{n}` where the number goes, and the number is
+            // written to the width of `count` so that the order git names them in is the order they
+            // were made: paths sort by their bytes, and `10` sorts before `2` unless both are padded.
+            // A road that means the last row is naming a row, and this is what keeps it the last one.
+            "write-many" => {
+                let path = req_str(with, "path")?;
+                let count = req_i64(with, "count")?;
+                if !(1..=MANY_MOST).contains(&count) {
+                    return Err(format!(
+                        "`write-many` writes 1 to {MANY_MOST} files and was asked for {count} — a premise \
+                         is stood up before every run of the road it is on, and one that took minutes \
+                         would be paid for on every one of them"
+                    ));
+                }
+                if path.matches("{n}").count() != 1 {
+                    return Err(format!(
+                        "`write-many` writes `{{n}}` where each file's number goes, once — `path: {path}` \
+                         has it {} times. Without it every file would be written over the last",
+                        path.matches("{n}").count()
+                    ));
+                }
+                let wide = count.to_string().len();
+                let content = with.get("content").and_then(serde_yaml::Value::as_str);
+                for one in 1..=count {
+                    let at = many_name(path, one, wide);
+                    let full = match with.get("dir") {
+                        Some(_) => self.folder(with)?.join(self.inside(&at)?),
+                        None => self.in_session(&at)?,
+                    };
+                    if let Some(dir) = full.parent() {
+                        std::fs::create_dir_all(dir)
+                            .map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                    }
+                    let body = match content {
+                        Some(words) => words.to_owned(),
+                        // One line carrying its own number, so a road that opens one of these has
+                        // something in it to read and no two of them are the same file twice.
+                        None => format!("{MANY_LINE} {one:0wide$}\n"),
+                    };
+
+                    std::fs::write(&full, body)
+                        .map_err(|e| format!("could not write {at}: {e}"))?;
+                }
+                Ok(Outcome::action(format!(
+                    "wrote {count} files, {} through {}",
+                    many_name(path, 1, wide),
+                    many_name(path, count, wide),
+                )))
             }
             // The same, for what a scenario cannot hold itself. A file under `fixtures/` is where the
             // reference form lives: this tree's prose rule keeps a bare ref out of every `.yaml`, and
@@ -945,9 +1007,42 @@ fn worktree_of(root: &Path, id: i64) -> Result<std::path::PathBuf, String> {
     Ok(parent.join(format!("{name}-worktrees")).join(id.to_string()))
 }
 
+/// The name one of [`write-many`]'s files gets: `path` with `{n}` standing where the number goes,
+/// written to `wide` digits.
+///
+/// **The padding is what makes "the last row" nameable.** git names paths in the order their bytes
+/// sort, so `row-10` comes before `row-2` unless both are written to the same width — and a road
+/// that walks to the end of a list and reads the row it landed on would be reading a row from the
+/// middle.
+fn many_name(path: &str, one: i64, wide: usize) -> String {
+    path.replace("{n}", &format!("{one:0wide$}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The numbers are written to one width, so the order git names them in is the order they were
+    /// made — which is the whole of what lets a road say which row is the last one.
+    #[test]
+    fn the_last_of_the_files_written_is_the_last_one_git_will_name() {
+        let wide = 3000_i64.to_string().len();
+        let mut names: Vec<String> =
+            (1..=3000).map(|one| many_name("beds/row-{n}.md", one, wide)).collect();
+        assert_eq!(names.first().map(String::as_str), Some("beds/row-0001.md"));
+        assert_eq!(names.last().map(String::as_str), Some("beds/row-3000.md"));
+
+        let made = names.clone();
+        names.sort();
+        assert_eq!(names, made, "the order their bytes sort in is the order they were written");
+
+        // And what the padding is against: the same names unpadded put the tenth before the second.
+        let bare: Vec<String> =
+            (1..=3000).map(|one| many_name("beds/row-{n}.md", one, 1)).collect();
+        let mut sorted = bare.clone();
+        sorted.sort();
+        assert_ne!(sorted, bare, "unpadded, the order git names them in is not the order made");
+    }
 
     /// The one question `git-branch` asks before it decides which road to take. A premise names the
     /// branch it wants the folder standing on and never says whether that branch is there yet, so a

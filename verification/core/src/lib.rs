@@ -974,6 +974,25 @@ const REGISTRY: &[OpSpec] = &[
     // contents, so a world where a bound folder already carries a provider's settings is only
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
+    // The same, `count` times over — a folder holding more files than a road could write down one at
+    // a time.
+    //
+    // **It exists because some readings only appear in quantity.** A list drawn a window at a time
+    // draws every row it has while the rows are few, so a road standing up three of them is green on
+    // a build whose window never worked at all. What that guard is worth is read on a list long
+    // enough that the window has to be right, and a road cannot say `write-file` three thousand
+    // times.
+    //
+    // `path` is the name each file gets, with `{n}` standing where its number goes — so the road
+    // says which folder they land in and what they are called, and the op says only how many. The
+    // number is written to the width of `count` (`0001` of three thousand), because git names paths
+    // in the order their bytes sort and an unpadded `10` sorts before `2`: a road that means the last
+    // row would otherwise be naming a row in the middle.
+    //
+    // `content` is what every one of them holds, and left out each holds a line carrying its own
+    // number — so a road that opens one has something in it to read, and no two of them are the
+    // same file twice.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-many", required: &["path", "count"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
     // And bytes too big to keep on a shelf. A road about what a provider does with a **large**
     // picture needs one of a named size, and the smallest that walks such a road is over four
@@ -3947,6 +3966,7 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // recorded nowhere, so a bound folder that already carries a provider's settings — the state every
     // road about wiring an AI starts from — is a world no amount of store seeding reaches.
     (Domain::Repo, "write-file"),
+    (Domain::Repo, "write-many"),
     // And the same for bytes a scenario cannot hold: an image is not text, so the file a road has an
     // operator choose in a picker comes off the fixtures shelf rather than out of the YAML. A screen
     // road cannot make a file at all — every move it has is a move on a record — so a road that needs

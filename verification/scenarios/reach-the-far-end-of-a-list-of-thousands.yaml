@@ -1,0 +1,163 @@
+# A list of thousands is walked to its end, and the last row of it is staged.
+#
+# **Every reading on a short list is green on a build with no window at all.** The lists in git's half
+# draw the rows that are in view and no others, and a road that stands three rows up cannot tell that
+# from a build drawing all three: the whole of the window is inside the first screenful. That is not a
+# guess — a build whose window never worked, because the box it measures itself against could not be
+# read, went green through every unit test the front end has and through every road here. What it
+# costs is felt at thousands, and nothing under test stood up thousands.
+#
+# So this road does. The reader is taken to a list too long to see the end of, sent to that end with
+# one press, and has the last row of it staged — which is the one thing the window can take away:
+# **a row that is not in the document cannot be focused and cannot be pressed.**
+#
+# ── What the three readings are ──────────────────────────────────────────────────────────────────
+# The number over the list, before anything is pressed: it is read off the heading rather than counted
+# off the rows, so it says how many git named and not how many are drawn. Then the row the keyboard
+# lands on after the press, which is read by what the space bar does to it — a row the keyboard never
+# reached is a row the box cannot be pressed on. Then the two numbers afterwards, which say the row
+# left one list and stands in the other.
+#
+# ── Why the press and not the pointer ────────────────────────────────────────────────────────────
+# A pointer reaches the last row by scrolling, and scrolling is what the window is built around: the
+# rows come in as they come into view. The key is the other half — it asks for a row by name while
+# that row is nowhere in the document, so the list has to put it there and stand the keyboard on it
+# before anything can happen. That half has its own code, copied from the tree when the window was
+# written, and a road that only scrolled would never touch it.
+#
+# ── Why three thousand ───────────────────────────────────────────────────────────────────────────
+# Far more rows than any screen draws, and few enough that the files are written in a moment. The
+# number is the premise's and is written down in one place, so the readings quote it.
+#
+# ── What the count is of ─────────────────────────────────────────────────────────────────────────
+# Three thousand and three. **The three a binding leaves are on the list too**: linking a folder to a
+# project puts `.amenbo`, `AGENTS.md` and `CLAUDE.md` in it, git has nothing recorded from any of them
+# either, and they sort above the folder the rest are in. The last row is still the last file written.
+id: reach-the-far-end-of-a-list-of-thousands
+title: The end of a list of thousands is one press away, and the row found there can be staged
+description: >
+  Bind a folder holding three thousand files git has never seen. The git half names every one of them
+  and says so over the list. Stand on a row, press the key that goes to the end of a list, and the
+  last row — one no screen was drawing a moment ago — is where the keyboard is standing: press the
+  space bar and it is staged, leaving the list it was on and standing in the other. What is under test
+  is a list drawn a window at a time being a list a reader can still reach the end of.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Nursery
+      dir: nursery-beds
+    as: nursery
+
+  # The three thousand, named to one width so that the order git puts them in is the order they were
+  # written — and so the last row is one the road can spell.
+  - type: action
+    domain: repo
+    op: write-many
+    with:
+      dir: nursery-beds
+      path: beds/row-{n}.md
+      count: 3000
+
+  # Made a repository last and nothing recorded into it, so every file on the list is one git has
+  # never seen.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: nursery-beds
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Nursery
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: show-half
+    with:
+      half: git
+
+  # Every file git named, counted where the whole of the list is said. The rows drawn are a screenful;
+  # this is the other number, and the two part company only on a list this long.
+  - type: assert
+    domain: files
+    op: counted
+    with:
+      section: changes
+      count: 3003
+
+  # The first of the three thousand, which is where the keyboard is put. It is on the screen already —
+  # the list opens at its head — so this press needs nothing of the window.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: row-0001.md
+      section: changes
+
+  # And the far end, in one press. The row it walks to is three thousand rows down and is in no part
+  # of the document: what has to happen before the keyboard can stand on it is the list scrolling to
+  # it and drawing it.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: end
+
+  # The reading. The box is pressed on the row the keyboard is standing on and nowhere else, so a
+  # build that left the keyboard where it was would stage the first row instead — and the two readings
+  # under this one name the last.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: " "
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: row-3000.md
+      section: staged
+
+  # And the first row is where it was. It is what a build that never moved the keyboard would have
+  # staged, so this is the half that says which row the press reached.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: row-0001.md
+      section: changes
+
+  # The two numbers, which say the same thing about the whole of both lists: one row crossed, and one
+  # only.
+  - type: assert
+    domain: files
+    op: counted
+    with:
+      section: staged
+      count: 1
+
+  - type: assert
+    domain: files
+    op: counted
+    with:
+      section: changes
+      count: 3002

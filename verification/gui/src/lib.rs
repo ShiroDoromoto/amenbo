@@ -3338,6 +3338,15 @@ impl Instructor {
                 // that one is the file on the screen and leaves what is picked out alone, and this
                 // one is what the reader picked. The question is left standing for `answer`, the
                 // way the other bin leaves it.
+                // The far end of a list, reached by the key rather than by the scrollbar. **It is the
+                // press a windowed list is hardest on**: the row it walks to is not in the document
+                // at all on a list of any length, so the half that puts it there and stands the
+                // keyboard on it has to run before anything can be focused
+                // (`app/src/files/GitPanel.tsx`, the effect on `named`). A build that skipped it
+                // leaves a reader who pressed End with the keyboard where it was, on a list they
+                // cannot reach the end of by hand.
+                "end" => "With the keyboard standing on a row of one of the lists in the half of the panel that is git's — the click that picked one out leaves it there — press the key this machine goes to the end of a list with (End, or fn and the right arrow together). The list scrolls to its foot and the keyboard is standing on the very last row of it, which is now the row picked out."
+                    .to_string(),
                 // The box pressed from the keyboard, in the half that is git's. It is the row's own
                 // box and not the list's, so what it takes is the set where the row is in one — the
                 // same press the pointer makes, reached without leaving the keyboard. The tree has

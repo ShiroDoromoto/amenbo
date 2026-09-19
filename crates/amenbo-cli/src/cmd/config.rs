@@ -44,6 +44,7 @@ pub(crate) fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -
             "date_locale": store.config.date_locale,
             "human_name": store.config.human_name,
             "ai_name": store.config.ai_name,
+            "skin": store.config.skin,
             "human_display_name": store.config.human_display_name(),
             "ai_display_name": store.config.ai_display_name(),
             "ai_allow_project_ops": store.config.ai_allow_project_ops,
@@ -78,6 +79,10 @@ pub(crate) fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -
         }));
         human(flags, format!("your name (human_name): {}", named_or_default(store.config.human_name.as_deref(), &store.config.human_display_name())));
         human(flags, format!("the AI's name (ai_name): {}", named_or_default(store.config.ai_name.as_deref(), &store.config.ai_display_name())));
+        human(flags, format!("skin (skin): {}", match store.config.skin.as_deref() {
+            Some(name) => format!("{name} (from {})", store.paths.skin_file(name).display()),
+            None => "not set (the colours this build ships with)".to_string(),
+        }));
         human(flags, format!("AI may archive and delete projects (ai_allow_project_ops): {}", if store.config.ai_allow_project_ops { "on" } else { "off (the AI is refused; the reversible project operations are not gated)" }));
         human(flags, format!("startup integrity check (startup_integrity_check): {} (read-only doctor at open; warnings only)", if store.config.startup_integrity_check { "on" } else { "off" }));
         human(flags, format!("update check (update_check): {} (asks Amenbo's update endpoint whether a newer release is out; infra-side only, no user data; timeout + silent-fail + cached; AMENBO_UPDATE_CHECK=0 overrides)", if store.config.update_check { "on" } else { "off" }));

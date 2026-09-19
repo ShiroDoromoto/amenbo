@@ -33,6 +33,10 @@
 .facet__base svg { display: block; width: 100%; height: 100%; }
 /* Registered avatar image fills and crops to the circular base (object-fit: cover). */
 .facet__img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* The glyph drawn where no image was registered. Its hue comes in on the element, one per name; how
+   strong and how light that hue is drawn are tokens, so a very dark or a very pale ground can move
+   them without moving which colour belongs to whom (`AMB-D-928`). */
+.identicon rect { fill: hsl(var(--identicon-h) var(--identicon-s) var(--identicon-l)); }
 .facet__name { font-size: var(--fs-md); }
 
 

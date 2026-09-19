@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 // Deterministic, server-less identicon: a 5×5 left-right-symmetric glyph whose
 // pattern and hue derive purely from a seed. Same seed → same image on every device,
 // so each facet gets a stable, unique avatar with no upload and no network — matching
@@ -16,7 +18,6 @@ function hash32(seed: string): number {
 
 export function Identicon({ seed, size = 18 }: { seed: string; size?: number }) {
   const h = hash32(seed || "?");
-  const fg = `hsl(${h % 360} 58% 52%)`;
   const grid = 5;
   const cell = size / grid;
   const rects = [];
@@ -28,13 +29,22 @@ export function Identicon({ seed, size = 18 }: { seed: string; size?: number }) 
       const xs = col === 2 ? [2] : [col, grid - 1 - col];
       for (const x of xs) {
         rects.push(
-          <rect key={`${x}-${row}`} x={x * cell} y={row * cell} width={cell} height={cell} fill={fg} />,
+          <rect key={`${x}-${row}`} x={x * cell} y={row * cell} width={cell} height={cell} />,
         );
       }
     }
   }
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} aria-hidden="true">
+    <svg
+      className="identicon"
+      // The hue rides in as a property because it is this glyph's alone; how strong and how light it
+      // is drawn comes off the tokens beside it, which a skin may move (`.identicon` in components.css).
+      style={{ "--identicon-h": String(h % 360) } as CSSProperties}
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+      height={size}
+      aria-hidden="true"
+    >
       {rects}
     </svg>
   );

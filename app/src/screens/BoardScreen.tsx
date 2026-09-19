@@ -279,7 +279,7 @@ export function BoardScreen({
         className={`decisionsbtn ${tab === "decisions" ? "decisionsbtn--active" : ""}`}
         onClick={() => setTab("decisions")}
       >
-        <Icon name="scales" /> {t("nav.decisions")}
+        <Icon name="gavel" /> {t("nav.decisions")}
       </button>
       <div className="topbar__spacer" />
       {/* The one control the filters have while they are closed, so it says how many axes are narrowing:

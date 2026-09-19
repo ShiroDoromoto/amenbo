@@ -57,7 +57,7 @@ export type IconName =
   | "tag"
   | "paperclip"
   | "checkSquare"
-  | "scales"
+  | "gavel"
   | "folder"
   | "trash"
   | "keyboard"
@@ -226,13 +226,20 @@ const ART: Record<IconName, ReactNode> = {
       <path d="M7.8 12.2 10.9 15.3 16.4 9.2" />
     </>
   ),
-  // A pair of scales — the hit is on a decision. The same mark the decisions screen uses.
-  scales: (
+  // A gavel — the hit is on a decision. The same mark the decisions screen uses. A decision is what
+  // has been settled, and a gavel is what settles it; a pair of scales drew the weighing up, which is
+  // the part that is over by the time there is a record to mark.
+  //
+  // Head, two bands, handle, block. The head is tilted and the block is one short line on the head's
+  // side, which is what keeps the shape readable at 16px — a full block under it closes the gap the
+  // handle crosses and the whole thing reads as a blot.
+  gavel: (
     <>
-      <path d="M12 3.4v17.4M7.4 20.8h9.2" />
-      <path d="M3.2 7.4H5c2 0 5-1 7-2 2 1 5 2 7 2h1.8" />
-      <path d="M2.2 16.2 5 8.4l2.8 7.8a4.6 4.6 0 0 1-5.6 0z" />
-      <path d="M16.2 16.2 19 8.4l2.8 7.8a4.6 4.6 0 0 1-5.6 0z" />
+      <path d="M13.7 2.4 L20 8.7 A1.4 1.4 0 0 1 20 10.8 L17.4 13.3 A1.4 1.4 0 0 1 15.4 13.3 L9.1 7 A1.4 1.4 0 0 1 9.1 5 L11.6 2.4 A1.4 1.4 0 0 1 13.7 2.4z" />
+      <path d="M14.3 3 9.7 7.6" />
+      <path d="M19.4 8.1 14.8 12.7" />
+      <path d="M12.2 10.2 4 18.4" />
+      <path d="M11.4 20.6h9.2" />
     </>
   ),
   // A pushpin — the words are in the record's title.

@@ -36,9 +36,12 @@ pub mod send;
 
 use cloudflare::Sky;
 
-/// The name the Worker and its database carry in the user's account. It is the same one the Worker's own
-/// config names it by, so a user who later reaches for wrangler in that directory is pointed at the thing
-/// this put there rather than at a second copy of it.
+/// The name the Worker and its database carry in the user's account, where nothing else says which one to
+/// use. It is the same one the Worker's own config names it by, so a user who later reaches for wrangler
+/// in that directory is pointed at the thing this put there rather than at a second copy of it.
+///
+/// **It is a default and not the only name** (`AMB-D-930`). One account holds as many of these as
+/// somebody names, and a store that stood one up under a name of its own goes back to that one.
 pub const SERVER_NAME: &str = "amenbo-viewer";
 
 /// The bindings the uploaded Worker is given: the database it reads and writes, and the token it compares
@@ -147,15 +150,36 @@ impl Default for Reach {
 ///
 /// `api_token` is the token the user pasted. It is used here and nowhere else, and nothing writes it
 /// down. `account` says which account to build in, and is only needed when the token reaches more than
-/// one.
-pub fn setup(store: &mut Store, api_token: &str, account: Option<&str>) -> Result<Stood> {
-    setup_reaching(store, api_token, account, &Reach::default())
+/// one. `name` says which server of that account is meant, and is only needed for a second one — or to
+/// say that a server already standing under the default name is this store's after all (`AMB-D-930`).
+pub fn setup(
+    store: &mut Store,
+    api_token: &str,
+    account: Option<&str>,
+    name: Option<&str>,
+) -> Result<Stood> {
+    setup_reaching(store, api_token, account, name, &Reach::default())
+}
+
+/// The name a server already stood up carries, read back out of the address the store keeps.
+///
+/// **So a second press goes back to the same server.** The name is not written down beside the address,
+/// it is the front of it — and without this a store that stood one up under a name of its own would have
+/// the default stood up beside it the next time somebody pressed setup.
+///
+/// Only a workers.dev address is read this way. The other shape an address takes here is a road a test
+/// stands up, which carries no Worker's name at all.
+fn named_by(url: &str) -> Option<String> {
+    let host = url.strip_prefix("https://")?.split('/').next()?;
+    let name = host.strip_suffix(".workers.dev")?.split('.').next()?;
+    (!name.is_empty()).then(|| name.to_string())
 }
 
 fn setup_reaching(
     store: &mut Store,
     api_token: &str,
     account: Option<&str>,
+    name: Option<&str>,
     reach: &Reach,
 ) -> Result<Stood> {
     let sky = Sky::reaching(api_token, &reach.api);
@@ -163,20 +187,41 @@ fn setup_reaching(
     let where_ = sky.the_account(account)?;
     tracing::info!(account = %where_, "building the Viewer's server in this account");
 
-    let (database, fresh) = sky.the_database(&where_, SERVER_NAME)?;
-    let applied = migrate::lay_the_schema_down(&sky, &where_, &database, fresh)?;
-    tracing::info!(database = %database, fresh, applied = ?applied, "the database is up to date");
-
     // What is already in the store is kept. A key that opens the records on the server is the only copy
     // of it there is, so drawing a new one over it is what makes every row already up there unreadable.
     let kept_token = store.secret_value(None, SecretArea::Viewer, None, AUTH_TOKEN)?;
     let kept_key = store.secret_value(None, SecretArea::Viewer, None, ENCRYPTION_KEY)?;
+    let kept_url = store.secret_value(None, SecretArea::Viewer, None, WORKER_URL)?;
+
+    // Which server is meant: the one asked for, then the one this store is already pointed at, then the
+    // default. The third of those is the only one nobody has named, which is what the refusal below is
+    // about (`AMB-D-930`).
+    let chosen = name.map(str::to_string).or_else(|| kept_url.as_deref().and_then(named_by));
+    let script = chosen.as_deref().unwrap_or(SERVER_NAME);
+
+    let (database, fresh) = sky.the_database(&where_, script)?;
+    // **Nobody named it, something of that name is already standing, and this store holds nothing that
+    // opens it.** Going on would draw a write token over the one the owner holds, and the owner — another
+    // store on this machine, or on somebody else's — stops being able to write to its own server without
+    // being told anything (`AMB-T-5080` is that happening). The database carries the Worker's name and is
+    // made with it, so asking for it is asking whether the server is there.
+    if chosen.is_none() && !fresh && kept_token.is_none() {
+        return Err(Error::invalid(format!(
+            "a server called {script} already stands in this account, and this store holds no key that \
+             opens it — standing it up again would draw a new write token and shut out whatever does. \
+             Say `--name <another>` to stand a second one up, or `--name {script}` to say you mean this one"
+        )));
+    }
+
+    let applied = migrate::lay_the_schema_down(&sky, &where_, &database, fresh)?;
+    tracing::info!(database = %database, fresh, applied = ?applied, "the database is up to date");
+
     let keys = if kept_token.is_some() && kept_key.is_some() { Keys::Kept } else { Keys::Generated };
     let write_token = kept_token.clone().unwrap_or_else(drawn);
     let key = kept_key.clone().unwrap_or_else(drawn);
 
-    sky.deploy(&where_, SERVER_NAME, WORKER_SCRIPT, &database, &write_token)?;
-    tracing::info!(script = SERVER_NAME, "the Worker is deployed");
+    sky.deploy(&where_, script, WORKER_SCRIPT, &database, &write_token)?;
+    tracing::info!(script, "the Worker is deployed");
 
     let Some(subdomain) = sky.the_subdomain(&where_)? else {
         return Err(Error::invalid(format!(
@@ -184,10 +229,10 @@ fn setup_reaching(
              — pick one at https://dash.cloudflare.com/{where_}/workers/subdomain, then press setup again"
         )));
     };
-    sky.answer_on_the_subdomain(&where_, SERVER_NAME)?;
+    sky.answer_on_the_subdomain(&where_, script)?;
     let endpoint = match &reach.worker {
         Some(base) => format!("{}/worker", base.trim_end_matches('/')),
-        None => format!("https://{SERVER_NAME}.{subdomain}.workers.dev"),
+        None => format!("https://{script}.{subdomain}.workers.dev"),
     };
 
     // The endpoint is written last on purpose. Half a route is not a route — a send reads the URL and the
@@ -433,7 +478,7 @@ mod tests {
         let host = cloudflare_standing_in();
         let mut store = store_at("stands-up");
 
-        let stood = setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host))
+        let stood = setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host))
             .expect("the stand-in answers the whole of setup");
 
         assert_eq!(stood.account, "acc1");
@@ -456,7 +501,7 @@ mod tests {
     fn the_upload_binds_the_database_and_seals_the_token_in() {
         let host = cloudflare_standing_in();
         let mut store = store_at("upload");
-        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
         let upload = host
             .heard()
@@ -489,13 +534,102 @@ mod tests {
         store.set_secret(None, SecretArea::Viewer, None, AUTH_TOKEN, Some("the-token")).unwrap();
         store.set_secret(None, SecretArea::Viewer, None, ENCRYPTION_KEY, Some("the-key")).unwrap();
 
-        let stood = setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        let stood = setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
         assert_eq!(stood.keys, Keys::Kept);
         assert_eq!(
             store.secret_value(None, SecretArea::Viewer, None, ENCRYPTION_KEY).unwrap().as_deref(),
             Some("the-key")
         );
+    }
+
+    // ── which server of the account is meant ──────────────────────────────────────────────────────
+
+    /// A stand-in where a server of the usual name is already standing: its database answers to that
+    /// name, which is what says the Worker beside it is there too.
+    fn already_standing() -> StaticHost {
+        let host = cloudflare_standing_in();
+        host.set_reply(
+            "/client/v4/accounts/acc1/d1/database?name=amenbo-viewer",
+            said(serde_json::json!([{ "uuid": "db1", "name": "amenbo-viewer" }])),
+        );
+        host
+    }
+
+    /// The name is the front of the address, so a store that stood a server up under one of its own is
+    /// read back as meaning that one. Nothing else is: a road a test stands up carries no Worker's name.
+    #[test]
+    fn the_name_is_read_back_out_of_the_address() {
+        assert_eq!(
+            named_by("https://amenbo-viewer-demo.alice.workers.dev").as_deref(),
+            Some("amenbo-viewer-demo")
+        );
+        assert_eq!(named_by("http://127.0.0.1:8787/worker"), None);
+        assert_eq!(named_by("https://example.com/worker"), None);
+    }
+
+    /// Nobody named the server, one of that name is already standing, and this store holds no key that
+    /// opens it. Going on would draw a write token over the one its owner holds and shut them out of
+    /// their own server without a word (`AMB-D-930`, and `AMB-T-5080` is that happening).
+    #[test]
+    fn a_server_this_store_cannot_open_is_not_stood_up_over() {
+        let host = already_standing();
+        let mut store = store_at("stands-already");
+
+        let refusal = setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host))
+            .expect_err("a server nobody named and this store cannot open is not one to replace");
+
+        let said = refusal.message_en();
+        assert!(said.contains("amenbo-viewer"), "it says which server it means: {said}");
+        assert!(said.contains("--name"), "and both ways past it: {said}");
+        assert!(
+            !host.heard().iter().any(|heard| heard.method == "PUT"),
+            "and nothing was uploaded before it turned back"
+        );
+        assert!(
+            store.secret_value(None, SecretArea::Viewer, None, AUTH_TOKEN).unwrap().is_none(),
+            "nor was a token drawn for a server this store was refused"
+        );
+    }
+
+    /// Naming it is the way past, both ways: another name stands a second server up beside the first.
+    #[test]
+    fn a_named_server_is_stood_up_beside_the_one_already_there() {
+        let host = already_standing();
+        for path in [
+            "/client/v4/accounts/acc1/d1/database?name=amenbo-viewer-demo",
+            "/client/v4/accounts/acc1/workers/scripts/amenbo-viewer-demo",
+            "/client/v4/accounts/acc1/workers/scripts/amenbo-viewer-demo/subdomain",
+        ] {
+            host.set_reply(path, said(serde_json::json!([])));
+        }
+        let mut store = store_at("named-second");
+
+        setup_reaching(&mut store, "a-pasted-token", None, Some("amenbo-viewer-demo"), &reaching(&host))
+            .expect("a named server is stood up");
+
+        assert!(
+            host.heard().iter().any(|heard| {
+                heard.method == "PUT"
+                    && heard.target == "/client/v4/accounts/acc1/workers/scripts/amenbo-viewer-demo"
+            }),
+            "and it is uploaded under the name it was given"
+        );
+    }
+
+    /// And a store that holds the key is the owner, whatever is standing there: pressing setup again is
+    /// the ordinary repair, and it keeps what it finds.
+    #[test]
+    fn a_store_that_holds_the_key_is_not_turned_away_from_its_own_server() {
+        let host = already_standing();
+        let mut store = store_at("owner-again");
+        store.set_secret(None, SecretArea::Viewer, None, AUTH_TOKEN, Some("the-token")).unwrap();
+        store.set_secret(None, SecretArea::Viewer, None, ENCRYPTION_KEY, Some("the-key")).unwrap();
+
+        let stood = setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host))
+            .expect("the owner stands its own server up again");
+
+        assert_eq!(stood.keys, Keys::Kept);
     }
 
     /// An account with no workers.dev name is the one refusal the user has to answer themselves, and it
@@ -509,7 +643,7 @@ mod tests {
         );
         let mut store = store_at("no-subdomain");
 
-        let refusal = setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host))
+        let refusal = setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host))
             .expect_err("a name nobody has chosen is not one to guess at");
 
         let said = refusal.message_en();
@@ -535,13 +669,13 @@ mod tests {
         );
         let mut store = store_at("two-accounts");
 
-        let refusal = setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host))
+        let refusal = setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host))
             .expect_err("two accounts is not a coin to toss");
         let said = refusal.message_en();
         assert!(said.contains("acc1") && said.contains("acc2"), "{said}");
 
         // Named, it builds there and asks nothing.
-        let stood = setup_reaching(&mut store, "a-pasted-token", Some("acc1"), &reaching(&host));
+        let stood = setup_reaching(&mut store, "a-pasted-token", Some("acc1"), None, &reaching(&host));
         assert_eq!(stood.expect("the named account is built in").account, "acc1");
     }
 
@@ -564,7 +698,7 @@ mod tests {
     fn a_database_made_now_is_given_every_migration_and_a_ledger_that_says_so() {
         let host = cloudflare_standing_in();
         let mut store = store_at("fresh-database");
-        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
         let run = the_schema_run(&host);
         assert!(run.starts_with("CREATE TABLE IF NOT EXISTS d1_migrations"), "{run}");
@@ -591,7 +725,10 @@ mod tests {
             said(serde_json::json!([{ "success": true, "results": [{ "name": "records" }] }])),
         );
         let mut store = store_at("pre-ledger");
-        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        // Named, because a database of that name already standing is otherwise a server this store is
+        // turned away from (`AMB-D-930`) — and what is under test here is the ledger, not the name.
+        let named = Some(SERVER_NAME);
+        setup_reaching(&mut store, "a-pasted-token", None, named, &reaching(&host)).expect("setup");
 
         let run = the_schema_run(&host);
         assert!(
@@ -630,7 +767,9 @@ mod tests {
             ],
         );
         let mut store = store_at("has-a-ledger");
-        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        // Named, for the reason the test above names it.
+        let named = Some(SERVER_NAME);
+        setup_reaching(&mut store, "a-pasted-token", None, named, &reaching(&host)).expect("setup");
 
         let run = the_schema_run(&host);
         for (name, _) in &migrate::MIGRATIONS[..4] {
@@ -664,7 +803,7 @@ mod tests {
             }])
             .unwrap();
 
-        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
         assert_eq!(store.viewer_carried().unwrap(), crate::viewer::carried::Carried::default());
         assert_eq!(store.viewer_waiting().unwrap(), 0, "what was read out under the old cursor goes too");
@@ -676,7 +815,7 @@ mod tests {
     fn the_api_token_is_not_left_behind() {
         let host = cloudflare_standing_in();
         let mut store = store_at("token-not-kept");
-        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
         for field in [WORKER_URL, AUTH_TOKEN, ENCRYPTION_KEY] {
             let kept = store.secret_value(None, SecretArea::Viewer, None, field).unwrap();

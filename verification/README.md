@@ -1529,7 +1529,12 @@ pane and prints back every line it is given, which a road that moves a running p
 control on a frame whose program has gone. `runs` carries the line out as well, and what it buys is an
 agent's pane a road can type a command into — the only other pane a road can say anything in is a
 plain shell, and a shell is the one pane with no way back into it, so a record made at one names no
-session anybody could return to.
+session anybody could return to. `asks` stays holding a question of its own and shows nothing of what
+is written into it, which is the pane a name is the dangerous thing to carry into: a program drawing a
+dialogue swallows what is pasted at it, so a newline sent on the strength of the screen having moved
+picks the first choice. It is three things at once — the terminal's echo off, a bracketed paste asked
+for (nothing is pasted into a pane that has not asked), and a mark for every line it is given, the
+mark alone and never the line.
 
 **`comes-back` is whether one honours a way back it is handed**, and it is true unless a road says
 otherwise. A stand-in issues no sessions, so every handle it ever sees is one it did not make: going
@@ -1561,9 +1566,12 @@ leaving the very same status.
 
 **`then` is what a stand-in does once it has printed.** `ends` is the default: the output standing on
 the screen and nothing running in it. `reads` keeps it open and prints back every line it is given,
-inside brackets so a road reads the whole line and never a piece of one. **A road that reads anything
-drawn under a running pane asks for it** — the row under a pane is drawn only while there is a program
-in that pane, and a frame whose program has gone offers to open another one instead. A road that
+inside brackets so a road reads the whole line and never a piece of one. `asks` keeps it open on a
+question and says only that a line arrived — the words of the line are the one thing it must not put
+on the screen, since the sentence a hand-over is carrying would be read back off there as the paste
+having landed. **A road that reads anything drawn under a running pane asks for it** — the row under a
+pane is drawn only while there is a program in that pane, and a frame whose program has gone offers to
+open another one instead. A road that
 **moves a running pane** needs it twice over: what says the move arrived is the program that was given
 it.
 

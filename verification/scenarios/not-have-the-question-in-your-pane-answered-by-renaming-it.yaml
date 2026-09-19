@@ -1,0 +1,173 @@
+# The name a pane is given is carried to the program running in it, and a program holding a question
+# is not answered by the carrying.
+#
+# **A rename goes into a pane somebody has been working in, which is the whole of why it is dangerous.**
+# The opening instruction is carried into a pane that has just started, where a screen that moves is a
+# program still drawing itself. This one is carried an hour later, where a screen that moves is an
+# agent answering — and where what it may be holding is a question of its own. Claude Code answers a
+# paste its dialogue swallowed with twenty bytes of keyboard protocol and draws not one character
+# differently, so a newline sent because the screen moved is a newline picking the first choice. One
+# store's own records carried two dozen dialogues answered that way, some of them on choices that run
+# something, and nothing under test had a road on it.
+#
+# So the name submits on the words coming back and on nothing else, and a pane that showed nothing
+# keeps the name in its input box where the person can send it themselves
+# (`app/src-tauri/src/handover.rs`, `Terms::Rename`).
+#
+# ── Why the machine is stood up this way ─────────────────────────────────────────────────────────
+# The pane has to be a provider's and not a command of the road's own: a name is carried only to a
+# program that has a rename command to type, and a registered line has none
+# (`amenbo_core::harness::Rename`). So the machine is stood up with agents (`can-start`), and the
+# stand-ins hold a question (`then: asks`).
+#
+# Three things make that question a pane a paste is swallowed by, on a machine where no such program
+# need be installed. The terminal's own echo is off, which is what makes the pane silent about what
+# was written into it — the state a program drawing its own interface is in. A bracketed paste is
+# asked for, which is the one of the three a real program says for itself and no shell does: nothing
+# is pasted into a pane that has not asked, so without it the road would be reading a paste that never
+# happened rather than a newline that was withheld. And every line the program is
+# given is answered with a mark — the mark alone, never the line — which is what turns the absence
+# into something readable.
+#
+# ── Why the mark carries none of the line ────────────────────────────────────────────────────────
+# The name that was not sent is sitting in the pane's input box, and it goes in on the next press the
+# person makes. A stand-in that printed what it was given would put the rename's own words on the
+# screen, where the loop carrying them reads them back and takes them for the paste having landed.
+# The road would then be watching a screen it had taught the answer to.
+#
+# ── Why the road goes on to send something ───────────────────────────────────────────────────────
+# A pane with nothing running in it says nothing back either, so the reading that nothing was answered
+# would be green on a build whose program never started. What makes it a guard is the press after it:
+# the person writes a line in the box under the pane and sends it, and the same mark comes up. The
+# pane was reading the whole time, and a press of the reader's own is what reached it.
+#
+# The box under the pane rather than the pane itself, because the echo is off: a line typed at the
+# terminal would be a line the operator cannot see, and every step here is read off a shot.
+#
+# ── Why the name is given by hand ────────────────────────────────────────────────────────────────
+# Two hands name a frame — the session's own `talk name` and the person's word on the row — and both
+# come through the one door that types the provider's rename command into the pane
+# (`app/src/talk/frames.ts`, `crate::pty::pty_rename`). The person's is the one walked here, because
+# the other is said *inside* the pane: an operator typing it would be typing into a pane with its echo
+# off, seeing nothing, and the stand-in would have to run what it is given — which puts those words on
+# the screen, where the loop carrying the name reads them back as its own paste having landed. The
+# agent's hand on that door is `call-a-pane-by-a-name-of-your-own`'s.
+#
+# ── What this road stops before ──────────────────────────────────────────────────────────────────
+# A second name, given while the first is still being carried, is not walked here. The thread that
+# carries one takes them in turn (`app/src-tauri/src/pty.rs`, `rename_pane`), so a second name inside
+# the first one's ten minutes is queued rather than judged — a road that said it walked the second
+# paste would be reading a queue.
+id: not-have-the-question-in-your-pane-answered-by-renaming-it
+title: A pane holding a question is named, and the name is not sent into the question
+description: >
+  Stand a machine up with agents that open on a question of their own and show nothing of what is
+  written into them. Open a pane on one, and name the pane from the row above it — which is carried to
+  the program as its own rename command, pasted in and submitted only once the pane draws it back.
+  The pane draws nothing back, so nothing is submitted and the question stands unanswered. Then write
+  a line in the box under the pane and send it: the program says a line arrived, which is the pane
+  reading all along and the reader's own press being what reaches it.
+
+given:
+  # One folder, so the pane settles where it works without being asked.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Harbour
+      dir: harbour
+    as: harbour
+
+  # Two, because that is the fewest a machine can be stood up with, and the road opens on the first
+  # of them by name. `asks` is the shape the head of this file describes.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      then: asks
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Harbour
+
+  # One pane, so every step below means the one box on the page and none of them has to say so.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  # Named rather than taken by position, because what the road needs of it is the one thing a position
+  # cannot promise: a provider with a rename command of its own, which is what a name is carried by.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Claude Code
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # The question is up and the program is waiting on it, which is what makes the pane one worth
+  # carrying a name into at all. Without this the road could pass on a build that never started.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO which way out of here
+
+  # The name, given on the row above the pane. What the reader did is name a frame; what Amenbo does
+  # behind it is type the provider's own rename command into the pane, which is the half this road is
+  # about (`crate::pty::pty_rename`).
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the north channel
+
+  # The goal. The pane showed nothing of what was pasted into it, so nothing submitted it — and the
+  # question is standing where it was, with neither choice taken.
+  - type: assert
+    domain: terminal
+    op: answered
+    with:
+      given-back: SCENARIO a line arrived
+      present: false
+
+  # ── And the pane was reading the whole time ──────────────────────────────────────────────────
+  # The box under the pane, which is where a line is written that the reader can see.
+  - type: action
+    domain: terminal
+    op: open-box
+
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO the north channel it is
+
+  - type: action
+    domain: terminal
+    op: send-written
+    with:
+      by: key
+
+  # The same mark, from the same program, on a press of the reader's own. It is what makes the reading
+  # above a withholding rather than a pane that was never there.
+  - type: assert
+    domain: terminal
+    op: answered
+    with:
+      given-back: SCENARIO a line arrived
+      present: true

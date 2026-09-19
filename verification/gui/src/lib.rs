@@ -4813,6 +4813,26 @@ impl Instructor {
                     req(with, "given-back")?
                 ),
             },
+            // A question the pane is holding, and whether anything answered it for the reader. The
+            // absent half is the one a build gets wrong quietly: a dialogue swallows what is pasted
+            // at it and draws not one character differently, so a newline sent on the strength of
+            // the screen having moved picks the first choice — and the reader finds out from what
+            // it ran.
+            //
+            // The waits are short and are said out loud. What would answer the question answers it
+            // on the look after the paste lands, which is within seconds of the pane standing still;
+            // the ten minutes Amenbo goes on trying for afterwards is the name being given up on, and
+            // nothing that happens in them is what this reads.
+            (Domain::Terminal, "answered") => match present(with) {
+                true => format!(
+                    "In the pane the agent is running in, confirm a line saying \"{}\" has come up — the program says that, and only that, for every line it is given. What went in is what you just sent, with whatever was sitting in the box ahead of it: the pane is reading, and a press of the reader's own is what reaches it.",
+                    req(with, "given-back")?
+                ),
+                false => format!(
+                    "In the pane the agent is running in, wait a few seconds and then confirm no line saying \"{}\" is anywhere on it. The program shows nothing of what is written into it and says that one thing for every line it is given, so such a line would be a newline Amenbo sent into a pane holding a question — the question answered for the reader. Nothing is typed during the wait, and the question standing there with the two choices under it untouched is the pass.",
+                    req(with, "given-back")?
+                ),
+            },
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //

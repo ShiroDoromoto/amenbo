@@ -2866,6 +2866,28 @@ const REGISTRY: &[OpSpec] = &[
     // given, so the marked line appearing at all is a newline that went in blind. Where such a build
     // would have answered the first thing the program asked, this reading is the whole of the guard.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
+    // Whether a question the pane is holding was answered for the reader — a newline into a program
+    // that is waiting on one, which picks whatever the program has first.
+    //
+    // **It is the other half of the withholding `handed-over` reads, on the other sentence.** The
+    // opening instruction is carried into a pane that has just started; the pane's name is carried
+    // into one somebody has been working in for an hour, where what a screen's movement means is the
+    // opposite — an agent answering, not a program still drawing itself. So the rename submits on
+    // the words coming back and on nothing else, and a pane that swallowed the paste is left holding
+    // it (`app/src-tauri/src/handover.rs`, `Terms::Rename`). Before it did, one store's own records
+    // carried two dozen dialogues answered that way, some of them on choices that run something.
+    //
+    // `given-back` is the mark the program prints for each line it is given, and the mark is the
+    // whole of what it prints: a stand-in that printed the line as well would put the rename's own
+    // words on the screen, where the loop carrying them reads them back and takes them for the paste
+    // having landed. It is the road's word rather than the screen's, for the reason every quoted
+    // word here is.
+    //
+    // **Both halves are read on one road or neither is a reading.** A pane with nothing running in
+    // it says nothing back either, so the absent half alone would be green on a build where the
+    // program never started — what makes it a guard is the present half after it, where a person
+    // sends something of their own and the same mark comes up.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "answered", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty

@@ -39,7 +39,7 @@
    written in the tokens like everything else, which is what makes the values put on it show. */
 .skinfit {
   display: flex; flex-direction: column; gap: var(--s-2);
-  padding: var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  padding: var(--s-3); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   background: var(--c-surface); color: var(--c-text);
   max-width: var(--measure-form);
 }
@@ -73,7 +73,7 @@
    it is given a box with its own scroll rather than pushing the settings apart. */
 .skinlicence {
   max-height: 14em; overflow: auto; margin-top: var(--s-2); padding: var(--s-2);
-  border: 1px solid var(--c-rule); border-radius: var(--r-sm); background: var(--c-sunken);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm); background: var(--c-sunken);
   font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap;
 }
 /* The other way in: writing one out to start from. Beside the well rather than inside it — one is
@@ -83,7 +83,7 @@
 .skinread {
   display: flex; flex-direction: column; gap: var(--s-2);
   margin-top: var(--s-2); padding: var(--s-3);
-  border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken);
   max-width: var(--measure-form);
 }
 .skinread__name { display: flex; align-items: center; gap: var(--s-2); font-weight: var(--fw-medium); }
@@ -125,7 +125,7 @@
    cannot say that on a row that already wears the same ground. */
 .path {
   flex: 1; min-width: 0; padding: calc(var(--s-2) - 1px); border-radius: var(--r-sm);
-  background: var(--c-sunken); border: 1px solid var(--c-rule); font-size: var(--fs-md);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); font-size: var(--fs-md);
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 /* What went wrong, said where it went wrong (`components/ErrorNote.tsx`). One row, mark then words:
@@ -176,7 +176,7 @@
    character at a time. The label that names the chips beside it is a name, so it holds its line too. */
 .board__toolbar {
   display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; row-gap: var(--s-2);
-  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken);
+  padding: var(--s-2) var(--s-4); border-bottom: var(--border-w) var(--border-style) var(--c-rule); background: var(--c-sunken);
 }
 .board__toolbar > .faint { white-space: nowrap; }
 .board__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-right: var(--s-2); }
@@ -186,9 +186,9 @@
 /* A vertical separator plus a standalone button, setting the view switcher apart from
    decisions (a different kind of entity). */
 .board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-rule); }
-.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
+.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
-.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
+.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: var(--border-w) var(--border-style) var(--c-rule); flex-wrap: wrap; }
 /* The box that narrows a list, wherever a screen puts one. A control takes the page's font from the
    base rule, and a toolbar reads a step below the page — so the step is said here, once, rather than
    at each of the five tags that mount one. How wide it stands is the screen's own business and stays
@@ -202,17 +202,17 @@
    **The height is said** rather than left to the padding and the line inside it: those came to within
    a third of a pixel of the smallest a finger may be asked for, and which side of it they landed on
    moved with the rounding of the line (`--tap-min`). */
-.filterchip { display: inline-flex; align-items: center; min-height: var(--tap-min); font-size: var(--fs-xs); border: 1px solid var(--c-edge); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
+.filterchip { display: inline-flex; align-items: center; min-height: var(--tap-min); font-size: var(--fs-xs); border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
 .filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
 /* The filters, opened under the bar. One axis per line: a row of values is as wide as it needs to be,
    and axes read down the panel rather than running into one another. */
-.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken); }
+.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: var(--border-w) var(--border-style) var(--c-rule); background: var(--c-sunken); }
 .filterpanel__axis { display: flex; align-items: baseline; gap: var(--s-2); }
 .filterpanel__label { font-size: var(--fs-xs); flex: none; min-width: 6em; }
 .filterpanel__values { display: flex; align-items: center; gap: var(--s-1); flex-wrap: wrap; }
 /* The toggle that opens them, carrying how many axes narrow while they are closed. Built like the
    decisions button beside it — both are standing controls in the toolbar. */
-.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
+.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .filtertoggle--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 .filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .filtertoggle--active .filtertoggle__count { background: var(--c-surface); }
@@ -231,7 +231,7 @@
      22px written out here, which is under it. */
   margin-left: auto; width: var(--tap-min); height: var(--tap-min); flex: none;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .column__addbtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
@@ -280,7 +280,7 @@ body.is-dragging { user-select: none; }
 /* ---------- card ---------- */
 .card {
   text-align: left; width: 100%;
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); padding: var(--s-2); box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: var(--s-2);
   /* Render windowing: a card off screen skips layout and paint while keeping its DOM and
@@ -363,11 +363,11 @@ body.is-dragging { user-select: none; }
 }
 .markdown code {
   font-family: var(--font-mono); font-size: 0.92em;
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-sm); padding: 0 0.3em;
 }
 .markdown pre {
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); padding: var(--s-2); overflow-x: auto;
 }
 .markdown pre code { background: none; border: none; padding: 0; }
@@ -376,7 +376,7 @@ body.is-dragging { user-select: none; }
   margin: var(--s-2) 0; padding-left: var(--s-2);
   border-left: 3px solid var(--c-rule); color: var(--c-text-muted);
 }
-.markdown hr { border: none; border-top: 1px solid var(--c-rule); margin: var(--s-3) 0; }
+.markdown hr { border: none; border-top: var(--border-w) var(--border-style) var(--c-rule); margin: var(--s-3) 0; }
 /* An image's alt text, drawn in place of the picture (see Markdown.tsx): no image is ever emitted, so
    this is what a README's badge row and any inline figure come out as. inline-block keeps a link's
    underline off it, and the tokens make it read as a quiet label rather than as prose. */
@@ -394,10 +394,10 @@ body.is-dragging { user-select: none; }
 .markdown__tablewrap { overflow-x: auto; margin: var(--s-2) 0; }
 .markdown table { border-collapse: collapse; font-size: var(--fs-md); }
 .markdown th, .markdown td {
-  border: 1px solid var(--c-rule); padding: var(--s-1) var(--s-2); text-align: left;
+  border: var(--border-w) var(--border-style) var(--c-rule); padding: var(--s-1) var(--s-2); text-align: left;
 }
 .markdown th {
-  background: var(--c-sunken); border-bottom: 1px solid var(--c-rule);
+  background: var(--c-sunken); border-bottom: var(--border-w) var(--border-style) var(--c-rule);
   font-weight: var(--fw-bold);
 }
 .markdown a { color: var(--c-accent); }
@@ -444,7 +444,7 @@ body.is-dragging { user-select: none; }
 .chip {
   display: inline-flex; align-items: center; gap: var(--s-1);
   font-size: var(--fs-xs); padding: 0 calc(var(--s-2) - 1px); border-radius: var(--r-sm);
-  background: var(--c-sunken); border: 1px solid var(--c-rule);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule);
   color: var(--c-text-muted); white-space: nowrap;
 }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
@@ -503,7 +503,7 @@ body.is-dragging { user-select: none; }
 .chip--blockglyph { flex: none; cursor: default; margin-right: 2px; }
 /* ---------- detail pane ---------- */
 .detail { display: flex; flex-direction: column; }
-.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--c-rule); }
+.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-2) var(--s-3); border-bottom: var(--border-w) var(--border-style) var(--c-rule); }
 .detail__tab { border: none; background: none; padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .detail__tab--active { background: var(--c-sunken); color: var(--c-text); font-weight: var(--fw-medium); }
 .detail__body { padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-3); }
@@ -536,7 +536,7 @@ body.is-dragging { user-select: none; }
 .attach__compactadd { font-size: var(--fs-xs); }
 .attach__drophint { font-size: var(--fs-md); padding: var(--s-2); text-align: center; }
 .attach__list { display: flex; flex-direction: column; gap: var(--s-2); }
-.attach__item { border: 1px solid var(--c-rule); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__item { border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm); padding: var(--s-2); }
 .attach__head { display: flex; align-items: center; gap: var(--s-2); }
 .attach__name { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .attach__meta { font-size: var(--fs-xs); flex: none; }
@@ -552,7 +552,7 @@ body.is-dragging { user-select: none; }
 .attach__pre { white-space: pre-wrap; word-break: break-word; background: var(--c-sunken); padding: var(--s-2); border-radius: var(--r-sm); }
 .attach__csvwrap { max-height: 320px; overflow: auto; margin-top: var(--s-2); }
 .attach__csv { border-collapse: collapse; font-size: var(--fs-xs); }
-.attach__csv th, .attach__csv td { border: 1px solid var(--c-rule); padding: 2px 6px; text-align: left; white-space: nowrap; }
+.attach__csv th, .attach__csv td { border: var(--border-w) var(--border-style) var(--c-rule); padding: 2px 6px; text-align: left; white-space: nowrap; }
 .attach__csv th { background: var(--c-sunken); position: sticky; top: 0; }
 .attach__missing, .attach__unsupported, .attach__loading { margin-top: var(--s-2); font-size: var(--fs-md); }
 .attach__url { margin-top: var(--s-1); font-size: var(--fs-md); word-break: break-all; }
@@ -573,7 +573,7 @@ body.is-dragging { user-select: none; }
    select**: a select is drawn by the platform and answers to `height` alone, which is said on the
    element (`../styles/global.css`). */
 .btn {
-  border: 1px solid var(--c-edge); background: var(--c-surface);
+  border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-2); font-size: var(--fs-md);
   min-height: var(--tap-min);
 }
@@ -595,7 +595,7 @@ body.is-dragging { user-select: none; }
 .apick__menu {
   position: absolute; top: calc(100% + 2px); left: 0; z-index: 20; margin: 0; padding: var(--s-1);
   list-style: none; min-width: 100%; background: var(--c-surface);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 }
 .apick__opt {
@@ -624,7 +624,7 @@ body.is-dragging { user-select: none; }
    only within itself, which is what windowing rests on. */
 .feed--virtual { flex: 1; min-height: 0; overflow-y: auto; }
 .feed__daygroup { padding: var(--s-2) var(--s-4) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted); }
-.feed__item { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); align-items: flex-start; }
+.feed__item { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: var(--border-w) var(--border-style) var(--c-rule); align-items: flex-start; }
 .feed__item:hover { background: var(--c-hover); }
 .feed__body { flex: 1; min-width: 0; }
 .feed__line { font-size: var(--fs-md); line-height: 1.6; }
@@ -686,7 +686,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .row {
   display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
-  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule);
+  padding: var(--s-2) var(--s-4); border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
 .row:hover { background: var(--c-hover); }
 .row--selected { background: var(--c-accent-weak); }
@@ -716,7 +716,7 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- settings ---------- */
 .settings { padding: var(--s-4); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-4); }
-.settings__section { background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); padding: var(--s-3); }
+.settings__section { background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); padding: var(--s-3); }
 .settings__h { font-weight: var(--fw-bold); margin-bottom: var(--s-2); }
 .settings__body { display: flex; flex-direction: column; gap: var(--s-2); }
 /* A section body holding a form rather than rows of fact: its own reading width, and the room between
@@ -739,9 +739,9 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- the device's notification shelf (`screens/NotifyTargetsSetting`) ---------- */
 /* Rows of connection, read down the left edge. A shelf and not a table: every row carries the same
    four things, and the only column that has to line up is the kind. */
-.shelf { display: flex; flex-direction: column; border: 1px solid var(--c-rule); border-radius: var(--r-sm); overflow: hidden; }
+.shelf { display: flex; flex-direction: column; border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm); overflow: hidden; }
 .shelf__row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); background: var(--c-surface); }
-.shelf__row + .shelf__row { border-top: 1px solid var(--c-rule); }
+.shelf__row + .shelf__row { border-top: var(--border-w) var(--border-style) var(--c-rule); }
 .shelf__row:hover { background: var(--c-hover); }
 .shelf__kind { width: 96px; flex: none; }
 .shelf__grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -812,7 +812,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- the first loop (ask an AI, see it land on the board) ---------- */
 .firstloop {
   display: flex; flex-direction: column; gap: var(--s-3);
-  padding: var(--s-3); border: 1px solid var(--c-rule); border-radius: var(--r-md);
+  padding: var(--s-3); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
   background: var(--c-surface);
 }
 .firstloop__head { display: flex; flex-direction: column; gap: 2px; }
@@ -860,7 +860,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .standingrow {
   display: flex; flex-direction: column; gap: var(--s-2);
   padding: var(--s-3);
-  border: 1px solid var(--c-rule); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 /* The folders whose AI is not started on amenbo, on the project's own screen: the board's surface
@@ -915,7 +915,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .mcp__app {
   display: flex; flex-direction: column; gap: var(--s-1);
   padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
-  border: 1px solid var(--c-rule); background: var(--c-surface);
+  border: var(--border-w) var(--border-style) var(--c-rule); background: var(--c-surface);
 }
 /* The folded row, and the whole of what opens it. It reads as the row itself rather than as a control
    on it: no border, no fill, and the chevron alone off to the right saying there is more under it. */
@@ -960,7 +960,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .boardwarn {
   display: flex; flex-direction: column; gap: var(--s-2);
   margin: var(--s-3) var(--s-4) 0; padding: var(--s-3);
-  border: 1px solid var(--c-rule); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 .boardwarn__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
@@ -1012,7 +1012,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The search screen's input, styled as the palette's was. */
 .palette__input {
   width: 100%; max-width: none;
-  border: none; border-bottom: 1px solid var(--c-edge); border-radius: 0;
+  border: none; border-bottom: var(--border-w) var(--border-style) var(--c-edge); border-radius: 0;
   padding: var(--s-3); font-size: var(--fs-xl); background: none;
 }
 
@@ -1033,7 +1033,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* Over another modal rather than beside it: the rejection asks its question from the status control
    of a task the reader may have opened from one. */
 .modal__overlay--raised { z-index: 60; }
-.modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.modal__card { width: min(440px, 100%); background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 /* Wide enough for the migration report, whose paths and version pairs read badly wrapped. */
 .modal__card--wide { width: min(680px, 100%); max-height: 84vh; overflow-y: auto; }
 .modal__hero { text-align: center; margin-bottom: var(--s-4); }
@@ -1045,12 +1045,12 @@ button.feed__target:hover { color: var(--c-accent); }
    than a share of the hook consent's: the two happen to look alike, and a modal borrowing another
    feature's class names cannot be restyled without touching that feature. The backdrop is the one
    exception — it is `.modal__overlay` for all of them, which is what `outsideClose` reads. */
-.rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
 .rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
 .rejectask__input { width: 100%; margin-bottom: var(--s-2); }
 
-.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .hookconsent__why { margin-bottom: var(--s-2); }
 .hookconsent__where { font-size: var(--fs-xs); color: var(--c-text-muted); word-break: break-all; margin-bottom: var(--s-3); }
@@ -1064,7 +1064,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
 /* An offer, not a gate: the same modal shape as the consent question, one size down, and its decline is
    the plain button rather than a muted one — nothing here is being asked permission for. */
-.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
 .nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .nudge__why { margin-bottom: var(--s-3); }
 .nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
@@ -1076,23 +1076,23 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); }
 .dimmgr__empty { margin: 0; }
 .dimmgr__list { display: flex; flex-direction: column; gap: var(--s-2); overflow-y: auto; }
-.dimmgr__dim { border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken); padding: var(--s-2) var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
+.dimmgr__dim { border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken); padding: var(--s-2) var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
 /* The head carries the name and every flag the axis holds, so it wraps: the fourth toggle
    (required) is what took it past one line at this width, and without wrapping the delete
    button is the item that gets squeezed until its label breaks a character at a time. */
 .dimmgr__dimhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
-.dimmgr__name { flex: 1; min-width: 12ch; font-weight: var(--fw-bold); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
-.dimmgr__notes { width: 100%; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-md); }
+.dimmgr__name { flex: 1; min-width: 12ch; font-weight: var(--fw-bold); background: transparent; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
+.dimmgr__notes { width: 100%; background: transparent; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-md); }
 /* The readable key beside a name (`AMB-D-735`). It is machine-facing text — lower-case ASCII, no spaces —
    so it is set in the mono face and kept quiet next to the name it belongs to. */
-.dimmgr__slug { width: 14ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
-.dimmgr__valslug { width: 12ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.dimmgr__slug { width: 14ch; background: transparent; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.dimmgr__valslug { width: 12ch; background: transparent; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover, .dimmgr__slug:hover, .dimmgr__valslug:hover { border-color: var(--c-edge); }
 .dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus, .dimmgr__slug:focus, .dimmgr__valslug:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__values { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-left: var(--s-2); }
 .dimmgr__vlabel { font-size: var(--fs-xs); margin-right: var(--s-1); }
-.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-rule); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
-.dimmgr__valname { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-md); width: 8ch; }
+.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: var(--border-w) var(--border-style) var(--c-rule); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
+.dimmgr__valname { background: transparent; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-md); width: 8ch; }
 /* Only ordered values go into a single vertical column. A cloud of chips wraps in two
    dimensions, so the up/down controls stop matching what is visually above and below, and
    the names truncate at 8ch beyond reading. One column shows the ordering as it is and
@@ -1115,7 +1115,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__val--closed { opacity: 0.6; }
 .dimmgr__val--closed .dimmgr__valname { text-decoration: line-through; text-decoration-color: var(--c-text-muted); }
 .dimmgr__period { display: inline-flex; align-items: center; gap: 2px; margin: 0 2px; font-size: var(--fs-xs); }
-.dimmgr__date { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-size: var(--fs-xs); }
+.dimmgr__date { background: transparent; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-size: var(--fs-xs); }
 .dimmgr__date:hover { border-color: var(--c-edge); }
 .dimmgr__date:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__open { background: transparent; border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
@@ -1124,7 +1124,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The removal that has to say where the tasks go first. It stands in the delete button's place inside
    the value's pill, so the row keeps its width and the question is asked where the press landed. */
 .dimmgr__reassign { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); }
-.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
+.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
 .dimmgr__adddim { align-self: flex-start; }
 .dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
 .dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }
@@ -1138,12 +1138,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .cal__month { font-size: var(--fs-xl); font-weight: var(--fw-bold); min-width: 9ch; }
 .cal__nav {
   width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm); background: var(--c-surface);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm); background: var(--c-surface);
   color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .cal__nav:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .cal__todaybtn {
-  margin-left: var(--s-2); font-size: var(--fs-xs); border: 1px solid var(--c-edge);
+  margin-left: var(--s-2); font-size: var(--fs-xs); border: var(--border-w) var(--border-style) var(--c-edge);
   background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); cursor: pointer;
 }
 .cal__todaybtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
@@ -1152,7 +1152,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
 .cal__cell {
   min-height: 92px; display: flex; flex-direction: column; gap: 2px;
-  border: 1px solid var(--c-rule); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
 }
 .cal__cell--out { background: var(--c-sunken); }
 .cal__cell--out .cal__date { color: var(--c-text-muted); }
@@ -1180,7 +1180,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- timeline (gantt) view ---------- */
 .tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
 .tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-2); }
-.tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
+.tl__axis { padding-bottom: var(--s-2); border-bottom: var(--border-w) var(--border-style) var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
 /* Three labels on one line, laid out as tracks so they can never paint over each other: the two
    date tracks carry the today marker's share of the axis (set inline), and the marker itself takes
    the width it needs between them. Near an edge the date track there shrinks away and the marker
@@ -1190,7 +1190,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl__ruler-date--end { text-align: right; }
 .tl__ruler-today { color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
 .tl__rows { display: flex; flex-direction: column; }
-.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-rule); padding: var(--s-2) 0; cursor: pointer; }
+.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: var(--border-w) var(--border-style) var(--c-rule); padding: var(--s-2) 0; cursor: pointer; }
 .tl__row:hover { background: var(--c-hover); }
 .tl__row--selected { background: var(--c-accent-weak); }
 .tl__label { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
@@ -1206,10 +1206,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl__rel { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: right; white-space: nowrap; }
 
 /* The restart gate for a store that has been overtaken (RestartGate). */
-.restart__error { margin-bottom: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-stop); border-radius: var(--r-md); color: var(--c-stop); font-size: var(--fs-xs); }
+.restart__error { margin-bottom: var(--s-2); padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-stop); border-radius: var(--r-md); color: var(--c-stop); font-size: var(--fs-xs); }
 .restart__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* The way out when restarting is not the answer: secondary to the button, but always present. */
-.restart__stuck { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--c-rule); font-size: var(--fs-xs); }
+.restart__stuck { margin-top: var(--s-3); padding-top: var(--s-2); border-top: var(--border-w) var(--border-style) var(--c-rule); font-size: var(--fs-xs); }
 .restart__stuck h3 { margin: 0 0 var(--s-2); font-size: var(--fs-md); }
 .restart__stuck p { margin: 0 0 var(--s-2); }
 .restart__detail { margin: 0 0 var(--s-2); padding: var(--s-2); border-radius: var(--r-md); background: var(--c-sunken); font-family: var(--font-mono); font-size: var(--fs-xs); overflow-x: auto; }
@@ -1227,7 +1227,7 @@ button.feed__target:hover { color: var(--c-accent); }
   position: fixed; z-index: 20;
   display: flex; flex-direction: column;
   padding: var(--s-1) 0;
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: var(--shadow-md);
   /* What the caps in `Menu.tsx` do when a list is longer than the window it is drawn in. Without
      it the box would be cut at the cap and the items past it unreachable, which is the same dead
@@ -1248,4 +1248,4 @@ button.feed__target:hover { color: var(--c-accent); }
 .menu__item--off:hover { background: none; }
 /* The item that is not the kind of the ones above it, held off from them. The gap is the whole of
    the separation: a rule would draw a heading over a group of one. */
-.menu__item--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-rule); padding-top: var(--s-2); }
+.menu__item--apart { margin-top: var(--s-1); border-top: var(--border-w) var(--border-style) var(--c-rule); padding-top: var(--s-2); }

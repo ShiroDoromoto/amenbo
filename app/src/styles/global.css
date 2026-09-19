@@ -28,7 +28,7 @@ input, select, textarea {
   font: inherit;
   color: var(--c-text);
   background: var(--c-sunken);
-  border: 1px solid var(--c-edge);
+  border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
   max-width: var(--measure-form);
@@ -147,12 +147,12 @@ input[type="color"] {
 .termface__bar {
   display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-3) var(--s-5);
-  background: var(--c-surface); border-bottom: 1px solid var(--c-rule);
+  background: var(--c-surface); border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
 .termface__action {
   position: relative;
   display: inline-flex; align-items: center; gap: var(--s-1);
-  background: var(--c-sunken); border: 1px solid var(--c-edge);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
@@ -183,7 +183,7 @@ input[type="color"] {
   /* **Drawn and invisible.** What says where the focus is is the frame around the whole pane
      (`.slot__frame`), so this one has no colour to add — but it keeps its room: this is the element
      xterm.js measures, and 2px off its height is a row the program inside is no longer told it has. */
-  border: 1px solid transparent;
+  border: var(--border-w) var(--border-style) transparent;
   border-radius: var(--r-md);
   background: var(--c-pane-bg);
   color-scheme: dark;
@@ -204,7 +204,7 @@ input[type="color"] {
   display: flex; margin-left: var(--s-2);
   padding: 2px;
   background: var(--c-sunken);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
 }
 .termface__count {
   background: transparent; border: 0;
@@ -225,11 +225,11 @@ input[type="color"] {
 
 .termface__pages {
   display: flex; gap: var(--s-1);
-  padding-left: var(--s-3); border-left: 1px solid var(--c-rule);
+  padding-left: var(--s-3); border-left: var(--border-w) var(--border-style) var(--c-rule);
 }
 .termface__page {
   min-width: 29px; height: 25px;
-  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .termface__page--on {
@@ -334,7 +334,7 @@ input[type="color"] {
   min-width: 0; min-height: 0; overflow: hidden;
   display: flex; flex-direction: column; justify-content: center; gap: 2px;
   padding: var(--s-2);
-  border: 1px solid var(--c-rule); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
   background: var(--c-sunken); cursor: grab; touch-action: none;
 }
 .paneorder__card--held {
@@ -376,7 +376,7 @@ input[type="color"] {
   /* Held at a width the unfocused pane gives no colour to, for the reason the terminal's is: the
      frame is what the pane's height is shared out from, and a border that appeared on focus would
      move every row in it. A face split four ways would otherwise be four grey rectangles. */
-  border: 1px solid transparent;
+  border: var(--border-w) var(--border-style) transparent;
   border-radius: var(--r-md);
   background: var(--c-pane-frame);
 }
@@ -422,7 +422,7 @@ input[type="color"] {
   display: none;
   position: absolute; left: 0; right: 0; top: 100%; z-index: 1;
   padding: var(--s-2);
-  border: 1px solid var(--c-rule); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
   background: var(--c-surface);
   box-shadow: var(--shadow-md);
   color: var(--c-text-muted);
@@ -465,7 +465,7 @@ input[type="color"] {
      against it would move the terminal down every time somebody named a pane. */
   margin-bottom: var(--s-2);
   padding: 0 var(--s-1); border-radius: var(--r-sm);
-  border: 1px solid var(--c-accent); background: var(--c-surface);
+  border: var(--border-w) var(--border-style) var(--c-accent); background: var(--c-surface);
   color: var(--c-text); font-size: var(--fs-md);
 }
 /* The box is drawn only while it holds the keyboard — it goes as soon as it is left — so the accent
@@ -516,7 +516,7 @@ input[type="color"] {
      press at the end of the row leaves its grey for teal (`.compose__send:disabled`), and so does the
      one that folds the box away (`.panerow__fold--holding`). The room is kept rather than the colour,
      so that the box is measured the same whether or not anything is written. */
-  border: 1px solid transparent; border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-md);
 }
 /* One line high until something is written, and never taller than what is written needs. The height
    is set from here in pixels (`../shell/TerminalPane`), which is why nothing sets it below: it is
@@ -659,7 +659,7 @@ input[type="color"] {
   max-height: 22rem; overflow-y: auto;
   margin-bottom: var(--s-1);
   padding: var(--s-3);
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   background: var(--c-surface); box-shadow: var(--shadow-md);
 }
 
@@ -693,7 +693,7 @@ input[type="color"] {
 .slot__open {
   flex: 0 0 auto;
   padding: var(--s-2) var(--s-5);
-  border: 1px solid var(--c-accent); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-accent); border-radius: var(--r-md);
   background: var(--c-accent); color: var(--c-on-accent);
   font-size: var(--fs-md); font-weight: 600;
 }
@@ -759,7 +759,7 @@ input[type="color"] {
 .slot__start {
   display: block;
   padding: var(--s-1) var(--s-3);
-  border: 1px solid var(--c-edge); border-radius: 999px;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: 999px;
   background: var(--c-surface); color: var(--c-text-muted);
   font-size: var(--fs-md); line-height: 1.6; text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -842,7 +842,7 @@ input[type="color"] {
 .slot__field > span { color: var(--c-text-muted); font-size: var(--fs-xs); }
 .slot__field > input {
   padding: var(--s-1) var(--s-2);
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   background: var(--c-surface); color: var(--c-text);
   font-size: var(--fs-md);
 }
@@ -860,7 +860,7 @@ input[type="color"] {
    not what the frame is for, and two filled buttons in one frame read as two ways in. */
 .slot__save {
   padding: var(--s-1) var(--s-3);
-  border: 1px solid var(--c-accent); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-accent); border-radius: var(--r-md);
   background: transparent; color: var(--c-accent-text);
   font-size: var(--fs-xs); font-weight: 600;
 }
@@ -889,7 +889,7 @@ input[type="color"] {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   background: var(--c-surface);
-  border-right: 1px solid var(--c-rule);
+  border-right: var(--border-w) var(--border-style) var(--c-rule);
 }
 .ptabs__list {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
@@ -903,7 +903,7 @@ input[type="color"] {
   position: relative; flex: 0 0 auto;
   display: flex; align-items: center; gap: var(--s-2);
   padding: var(--s-1); border-radius: var(--r-md);
-  background: transparent; border: 1px solid transparent;
+  background: transparent; border: var(--border-w) var(--border-style) transparent;
   color: var(--c-text); font-size: var(--fs-md); text-align: left;
 }
 .ptabs__tab:hover { background: var(--c-surface); }
@@ -964,7 +964,7 @@ input[type="color"] {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
-  background: var(--c-sunken); border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 .ptabs__fold:hover { background: var(--c-hover); color: var(--c-text); }
@@ -985,7 +985,7 @@ input[type="color"] {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   background: var(--c-surface);
-  border-right: 1px solid var(--c-rule);
+  border-right: var(--border-w) var(--border-style) var(--c-rule);
 }
 /* Whose folders these are, and which of them the window is on. It is a name and not the caption of a
    list, so it is drawn as one — the face's own text at the face's own size, where the headings it
@@ -1008,7 +1008,7 @@ input[type="color"] {
   width: 100%; min-width: 0;
   display: flex; align-items: center; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
-  background: var(--c-sunken); border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   color: var(--c-text); font: inherit; font-size: var(--fs-md); text-align: left;
   cursor: pointer;
 }
@@ -1036,7 +1036,7 @@ input[type="color"] {
 .rail__tabs {
   display: flex;
   background: var(--c-sunken);
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   padding: 2px;
 }
 /* Half the row each, so the pair is one control divided rather than two words of different lengths
@@ -1101,7 +1101,7 @@ input[type="color"] {
 .gitpanel__merging {
   display: flex; flex-direction: column; gap: var(--s-2);
   padding: var(--s-2); min-width: 0;
-  border: 1px solid var(--c-stop); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-stop); border-radius: var(--r-sm);
 }
 .gitpanel__mergingsays {
   display: flex; align-items: center; gap: var(--s-2);
@@ -1165,7 +1165,7 @@ input[type="color"] {
    rows. It is the whole section, because anywhere inside it is the same answer — an empty list
    included (`app/src/files/GitPanel.tsx`). */
 .gitpanel__section--over {
-  outline: 1px solid var(--c-accent);
+  outline: var(--border-w) var(--border-style) var(--c-accent);
   outline-offset: 2px;
   border-radius: var(--r-sm);
 }
@@ -1181,7 +1181,7 @@ input[type="color"] {
 .gitpanel__headrow {
   display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
   padding: var(--s-2) 0 0;
-  border-top: 1px solid var(--c-rule);
+  border-top: var(--border-w) var(--border-style) var(--c-rule);
 }
 .gitpanel__list { list-style: none; margin: 0; padding: 0; }
 /* One path git named. The mark is set in the same monospaced pair on every row, so the letters make
@@ -1217,7 +1217,7 @@ input[type="color"] {
 /* Drawn inside the row rather than outside it: at the height these rows are, a ring held off the
    edge all but touches the names above and below. */
 .gitpanel__row:focus, .gitpanel__row:focus-visible {
-  outline: 1px solid var(--c-accent); outline-offset: -1px;
+  outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px;
 }
 .gitpanel__row:focus:not(.gitpanel__row--picked) { background: var(--c-sunken); }
 .gitpanel__mark {
@@ -1328,7 +1328,7 @@ input[type="color"] {
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) var(--s-2);
-  background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text); font: inherit; font-size: var(--fs-md);
   cursor: pointer;
 }
@@ -1349,7 +1349,7 @@ input[type="color"] {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: var(--s-1); min-width: 0;
   padding: var(--s-2) var(--s-3);
-  background: none; border: 0; border-bottom: 1px solid var(--c-rule);
+  background: none; border: 0; border-bottom: var(--border-w) var(--border-style) var(--c-rule);
   color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); text-align: left;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   cursor: pointer;
@@ -1428,7 +1428,7 @@ input[type="color"] {
   flex: 0 0 auto;
   display: flex; align-items: baseline; gap: var(--s-2); min-width: 0;
   padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--c-rule);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
 .githist__onlyname {
   flex: 1; min-width: 0;
@@ -1460,7 +1460,7 @@ input[type="color"] {
   min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
-  border-left: 1px solid var(--c-rule);
+  border-left: var(--border-w) var(--border-style) var(--c-rule);
   background: var(--c-surface);
   font-size: var(--fs-md);
 }
@@ -1563,7 +1563,7 @@ input[type="color"] {
    these rows are, it all but touches the names above and below. */
 .files__item:focus-visible > .files__file, .files__item:focus > .files__file,
 .files__item:focus-visible > .files__dir, .files__item:focus > .files__dir {
-  outline: 1px solid var(--c-accent); outline-offset: -1px;
+  outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px;
 }
 .files__item:focus-visible > .files__file:not(.files__file--chosen, .files__file--picked),
 .files__item:focus > .files__file:not(.files__file--chosen, .files__file--picked),
@@ -1594,7 +1594,7 @@ input[type="color"] {
    staircase. What the highlight has to say is which folder is about to receive the files, and the
    row carrying that folder's name is where that is read. */
 .files__into, .files__row--into {
-  outline: 1px solid var(--c-accent);
+  outline: var(--border-w) var(--border-style) var(--c-accent);
   outline-offset: 2px;
   border-radius: var(--r-sm);
 }
@@ -1606,7 +1606,7 @@ input[type="color"] {
   color: var(--c-text); font: inherit;
 }
 .files__namebox:focus-visible, .files__namebox:focus {
-  outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
+  outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
 }
 /* The box the open/shut mark is drawn in, at the head of every row of the tree — a folder's holds
    the chevron and a file's is empty. It is a fixed width on both so that the names line up: a file
@@ -1706,7 +1706,7 @@ input[type="color"] {
 .files__newline {
   align-self: start; max-width: 100%;
   color: var(--c-text); font-size: var(--fs-xs);
-  background: none; border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  background: none; border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
 }
 /* The file having moved under a reader who has typed in it, and the two answers to it. Drawn as a
    sentence with its own next steps under it, the same shape the refused picture takes — it is news
@@ -1726,7 +1726,7 @@ input[type="color"] {
   width: min(1100px, 100%); max-height: 86vh;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-5);
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
 .filediff__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); overflow-wrap: anywhere; }
@@ -1744,7 +1744,7 @@ input[type="color"] {
 .filediff__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .filediff__action {
   padding: var(--s-2) var(--s-4);
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   background: var(--c-surface); color: var(--c-text); cursor: pointer;
 }
 /* The answer this screen is most often opened to give: the reader looked at what differs and their
@@ -1779,15 +1779,15 @@ input[type="color"] {
 .cmfind__field {
   flex: 1 1 auto; min-width: 4ch;
   padding: 2px var(--s-1);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-sunken); color: var(--c-text);
   font: inherit;
 }
-.cmfind__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
+.cmfind__field:focus { outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px; }
 .cmfind__step, .cmfind__switch, .cmfind__close, .cmfind__more {
   flex: 0 0 auto;
   min-width: 20px; padding: 2px var(--s-1);
-  border: 1px solid transparent; border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
   background: transparent; color: var(--c-text-muted);
   font: inherit; line-height: 1; cursor: pointer;
 }
@@ -1799,7 +1799,7 @@ input[type="color"] {
 .cmfind__does {
   flex: 0 0 auto;
   padding: 2px var(--s-2);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-surface); color: var(--c-text);
   font: inherit; line-height: 1.4; white-space: nowrap; cursor: pointer;
 }
@@ -1816,7 +1816,7 @@ input[type="color"] {
 .files__pdf { display: flex; flex-direction: column; gap: var(--s-3); }
 /* A page is white in both themes, because a page is white: what is drawn into it is the paper the
    document was written on, and the room kept for one is that same paper before it arrives. */
-.files__pdfpage { width: 100%; background: #fff; border: 1px solid var(--c-edge); }
+.files__pdfpage { width: 100%; background: #fff; border: var(--border-w) var(--border-style) var(--c-edge); }
 .files__pdfpaper { display: block; width: 100%; height: auto; }
 /* The way out of a picture the panel would not draw: a word under the refusal, not a control in a
    row, because it is the sentence's own next step. */
@@ -1853,14 +1853,14 @@ input[type="color"] {
 .trashask {
   width: min(420px, 100%);
   padding: var(--s-5);
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
 .trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
 .trashask__undoable { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-4); }
 .trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); margin-bottom: var(--s-4); cursor: pointer; }
 .trashask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.trashask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+.trashask__action { padding: var(--s-2) var(--s-4); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
 /* The answer the question was opened to get. It is drawn as the answer rather than argued against,
    because the bin is where it sends the row and undo brings it back. */
 .trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
@@ -1870,7 +1870,7 @@ input[type="color"] {
 .gitask {
   width: min(520px, 100%);
   padding: var(--s-5);
-  background: var(--c-surface); border: 1px solid var(--c-rule);
+  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
 .gitask__doing { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
@@ -1882,13 +1882,13 @@ input[type="color"] {
 }
 .gitask__said {
   width: 100%; box-sizing: border-box; margin-bottom: var(--s-4);
-  padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-3); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   background: var(--c-bg); color: var(--c-text); font-size: var(--fs-md);
 }
 .gitask__save { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); cursor: pointer; }
 .gitask__where { font-size: var(--fs-xs); color: var(--c-text-muted); margin: var(--s-1) 0 var(--s-4); }
 .gitask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.gitask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+.gitask__action { padding: var(--s-2) var(--s-4); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
 .gitask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 
 /* ---------- the two halves of the panel ---------- */
@@ -1899,15 +1899,15 @@ input[type="color"] {
 .treefind__field {
   flex: 1 1 auto; min-width: 4ch;
   padding: 2px var(--s-1);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-sunken); color: var(--c-text);
   font: inherit; font-size: var(--fs-xs);
 }
-.treefind__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
+.treefind__field:focus { outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px; }
 .treefind__close {
   flex: 0 0 auto;
   min-width: 20px; padding: 2px var(--s-1);
-  border: 1px solid transparent; border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
   background: transparent; color: var(--c-text-muted);
   font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
 }
@@ -1920,17 +1920,17 @@ input[type="color"] {
 .search__field {
   flex: 1 1 auto; min-width: 4ch;
   padding: 2px var(--s-1);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-sunken); color: var(--c-text);
   font: inherit; font-size: var(--fs-xs);
 }
-.search__field:focus { outline: 1px solid var(--c-accent); outline-offset: -1px; }
+.search__field:focus { outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px; }
 /* The same three marks the editor's own panel draws, so the two read as the same pair of switches
    rather than as two screens that happen to both search (`../files/editorFind`). */
 .search__switch {
   flex: 0 0 auto;
   min-width: 20px; padding: 2px var(--s-1);
-  border: 1px solid transparent; border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
   background: transparent; color: var(--c-text-muted);
   font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
 }
@@ -1953,7 +1953,7 @@ input[type="color"] {
 .search__does {
   flex: 0 0 auto;
   padding: 2px var(--s-2);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-surface); color: var(--c-text);
   font: inherit; font-size: var(--fs-xs); line-height: 1.4; white-space: nowrap; cursor: pointer;
 }
@@ -2026,7 +2026,7 @@ input[type="color"] {
 .files__tab {
   flex: 0 0 auto; display: inline-flex; align-items: center;
   padding: 0 1px;
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 /* The one being read, lifted out of the row the way the pane counts are: one of a fixed few is on,
@@ -2095,7 +2095,7 @@ input[type="color"] {
 .memo__field {
   flex: 1; min-height: 0; width: 100%; resize: none;
   padding: var(--s-2);
-  background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1.6;
 }
 
@@ -2169,7 +2169,7 @@ input[type="color"] {
   display: flex; align-items: flex-start; gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
   background: var(--banner-ground); color: var(--banner-ink);
-  border-bottom: 1px solid var(--c-rule);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
   font-size: var(--fs-md);
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
@@ -2222,7 +2222,7 @@ input[type="color"] {
   margin: var(--s-1) 0;
   padding: var(--s-1) var(--s-2);
   background: var(--banner-tint); color: var(--banner-ink);
-  border: 1px solid var(--banner-edge); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--banner-edge); border-radius: var(--r-sm);
   font-size: var(--fs-xs);
 }
 .agenthook__request {
@@ -2239,7 +2239,7 @@ input[type="color"] {
   display: flex; align-items: center; gap: var(--s-3);
   padding: 0 var(--s-3);
   background: var(--c-surface);
-  border-bottom: 1px solid var(--c-rule);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
 /* The brand mark tightens its gap a little so it reads as a pair with the workspace name.
    It is drawn in `currentColor`, so the colour it takes is the one set here — black on the light
@@ -2302,7 +2302,7 @@ input[type="color"] {
 .topbar__faces {
   display: inline-flex;
   background: var(--c-sunken);
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   padding: 2px;
 }
 .topbar__face {
@@ -2314,7 +2314,7 @@ input[type="color"] {
 .topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--c-sunken); border: 1px solid var(--c-edge);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
@@ -2324,7 +2324,7 @@ input[type="color"] {
 .topbar__nav { display: inline-flex; gap: var(--s-1); }
 .topbar__navbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
+  min-width: 24px; background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-xl); line-height: 1; cursor: pointer;
 }
@@ -2346,7 +2346,7 @@ input[type="color"] {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
   background: var(--c-surface);
-  border-right: 1px solid var(--c-rule);
+  border-right: var(--border-w) var(--border-style) var(--c-rule);
 }
 .sidebar__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--s-2); }
 /* The way between the two widths, at the foot of the column (`AMB-D-848`). Drawn as a faint mark on
@@ -2356,7 +2356,7 @@ input[type="color"] {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
-  background: var(--c-sunken); border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 .sidebar__fold:hover { background: var(--c-hover); color: var(--c-text); }
@@ -2465,7 +2465,7 @@ body.dragging-row { user-select: none; }
 .rightpane-wrap { grid-area: pane; position: relative; display: flex; min-height: 0; min-width: 0; }
 .rightpane {
   flex: 1; min-width: 0;
-  background: var(--c-surface); border-left: 1px solid var(--c-rule);
+  background: var(--c-surface); border-left: var(--border-w) var(--border-style) var(--c-rule);
   overflow-y: auto; display: flex; flex-direction: column;
 }
 /* The resize handle on the left edge: a thin hit area straddling the border, showing its
@@ -2512,7 +2512,7 @@ body.dragging-row { user-select: none; }
   align-items: flex-start;
   gap: var(--s-2);
   padding: var(--s-4);
-  border: 1px solid var(--c-rule);
+  border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md);
   background: var(--c-surface);
 }
@@ -2530,7 +2530,7 @@ body.dragging-row { user-select: none; }
 
 .agent__choice {
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--c-edge);
+  border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-sm);
   background: var(--c-surface);
   color: var(--c-text);
@@ -2581,7 +2581,7 @@ body.dragging-row { user-select: none; }
   justify-content: flex-end;
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--c-rule);
+  border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md);
   background: var(--c-surface);
 }

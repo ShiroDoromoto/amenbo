@@ -196,7 +196,7 @@ struct Wire {
 /// token added there and named in neither list turns that guard red, which is what makes the choice
 /// between the two lists one somebody makes rather than one that happens.
 pub const OPEN: &[&str] = &[
-    "c-accent", "c-accent-faint", "c-accent-text", "c-accent-weak", "c-ai", "c-bg", "c-blocked",
+    "border-style", "border-w", "c-accent", "c-accent-faint", "c-accent-text", "c-accent-weak", "c-ai", "c-bg", "c-blocked",
     "c-code-attribute", "c-code-comment", "c-code-constant", "c-code-function", "c-code-heading",
     "c-code-invalid", "c-code-keyword", "c-code-number", "c-code-operator", "c-code-string", "c-code-tag",
     "c-code-type", "c-code-variable", "c-dec-decided", "c-dec-draft", "c-dec-rejected", "c-done",

@@ -140,11 +140,11 @@
   --c-on-stop: #ffffff;
   --c-on-done: #ffffff;
 
-  /* status */
-  --c-todo: var(--c-plain);
-  --c-progress: var(--c-accent);
+  /* status — one colour, for the one status that is said in colour. A task's status is read off
+     the word in its select (`StatusSelect`), not off a tint, so todo, in progress and blocked have
+     nothing to colour; `done` does, because a done task is marked as done wherever it is listed
+     (`.donetext`, the timeline's closed bar) without the word being there to read. */
   --c-done: #217a48;
-  --c-blocked: var(--c-heed);
 
   /* decision status — the three steps a decision reaches, each standing on the family that already
      says that step: a writing still open is a heed, one that was settled went through, and one that

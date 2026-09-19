@@ -16,7 +16,6 @@ light:
   c-accent-weak: "#c7e5e5"
   c-ai: "#5b1f9e"
   c-bg: "#ffffff"
-  c-blocked: "#7a4200"
   c-code-attribute: "#003bb3"
   c-code-comment: "#4d4d4d"
   c-code-constant: "#7a4200"
@@ -57,7 +56,6 @@ light:
   c-pri-high: "#a30000"
   c-pri-low: "#444444"
   c-pri-med: "#7a4200"
-  c-progress: "#00595a"
   c-rule: "#4d4d4d"
   c-stop: "#a30000"
   c-sunken: "#f0f0f0"
@@ -65,7 +63,6 @@ light:
   c-text: "#000000"
   c-text-faint: "#5e5e5e"
   c-text-muted: "#444444"
-  c-todo: "#444444"
 
 dark:
   c-accent: "#45e0dd"
@@ -74,7 +71,6 @@ dark:
   c-accent-weak: "#003b3a"
   c-ai: "#cfa0ff"
   c-bg: "#000000"
-  c-blocked: "#ffb24d"
   c-code-attribute: "#8fb4ff"
   c-code-comment: "#b0b0b0"
   c-code-constant: "#ffb24d"
@@ -115,7 +111,6 @@ dark:
   c-pri-high: "#ff8a7e"
   c-pri-low: "#c4c4c4"
   c-pri-med: "#ffb24d"
-  c-progress: "#45e0dd"
   c-rule: "#a6a6a6"
   c-stop: "#ff8a7e"
   c-sunken: "#141414"
@@ -123,5 +118,4 @@ dark:
   c-text: "#ffffff"
   c-text-faint: "#9a9a9a"
   c-text-muted: "#c4c4c4"
-  c-todo: "#c4c4c4"
 

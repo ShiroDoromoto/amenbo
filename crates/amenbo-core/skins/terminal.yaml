@@ -16,7 +16,6 @@ light:
   c-accent-weak: "#cbe5e4"
   c-ai: "#6b34a8"
   c-bg: "#fbfbf9"
-  c-blocked: "#8a5000"
   c-code-attribute: "#1f51b5"
   c-code-comment: "#63686c"
   c-code-constant: "#8a5000"
@@ -57,7 +56,6 @@ light:
   c-pri-high: "#a81f17"
   c-pri-low: "#5a5f63"
   c-pri-med: "#8a5000"
-  c-progress: "#00686b"
   c-rule: "#d4d8d2"
   c-stop: "#a81f17"
   c-sunken: "#f0f0ec"
@@ -65,7 +63,6 @@ light:
   c-text: "#202224"
   c-text-faint: "#8a8f93"
   c-text-muted: "#5a5f63"
-  c-todo: "#5a5f63"
   font: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK JP", monospace'
   font-mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK JP", monospace'
   fw-normal: "400"
@@ -83,7 +80,6 @@ dark:
   c-accent-weak: "#153434"
   c-ai: "#b98ae0"
   c-bg: "#101214"
-  c-blocked: "#d6a24a"
   c-code-attribute: "#7aa6ee"
   c-code-comment: "#848b92"
   c-code-constant: "#d6a24a"
@@ -124,7 +120,6 @@ dark:
   c-pri-high: "#e0776a"
   c-pri-low: "#9aa1a8"
   c-pri-med: "#d6a24a"
-  c-progress: "#3ec8c4"
   c-rule: "#2b3034"
   c-stop: "#e0776a"
   c-sunken: "#0b0d0f"
@@ -132,7 +127,6 @@ dark:
   c-text: "#d6dae0"
   c-text-faint: "#6d747b"
   c-text-muted: "#9aa1a8"
-  c-todo: "#9aa1a8"
   font: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK JP", monospace'
   font-mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK JP", monospace'
   fw-normal: "400"

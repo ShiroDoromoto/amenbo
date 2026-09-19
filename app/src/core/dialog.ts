@@ -31,6 +31,20 @@ export async function pickFolders(): Promise<string[]> {
   return await picked(true);
 }
 
+/**
+ * Open the machine's own save panel and return the path chosen, under a suggested name. `null`
+ * where the reader cancelled, and outside Tauri, where there is no panel to open.
+ *
+ * A path, the way the two pickers above answer — what is written there is the host's to write, and
+ * this side never holds the bytes.
+ */
+export async function pickSaveAs(suggested: string): Promise<string | null> {
+  if (!inTauri()) return null;
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const chosen = await save({ defaultPath: suggested });
+  return typeof chosen === "string" ? chosen : null;
+}
+
 /** The one call both doors are: what the picker answered, as a list either way. */
 async function picked(directory: boolean): Promise<string[]> {
   if (!inTauri()) return [];

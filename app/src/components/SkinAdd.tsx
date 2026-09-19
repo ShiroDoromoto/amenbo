@@ -11,10 +11,10 @@ import { useEffect, useRef, useState } from "react";
 
 import type { SkinJudgementDto } from "../bindings/bindings";
 import { ErrorNote } from "./ErrorNote";
-import { pickFiles } from "../core/dialog";
+import { pickFiles, pickSaveAs } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { errText, t, tf } from "../core/i18n";
-import { addSkinFile, readSkinFile } from "../core/skin";
+import { addSkinFile, readSkinFile, writeSkinTemplate } from "../core/skin";
 
 /** What a warning's kind is said as. The key names it; the row carries the name it is about. */
 const WHY: Record<string, string> = {
@@ -73,6 +73,15 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
       .catch((e) => setError(errText(e)));
   };
 
+  // Writing one out to start from. The whole file is the host's to build and to write; this side
+  // only says where, so nothing of it passes through the page.
+  const writeOut = () => {
+    setError(null);
+    void pickSaveAs("my-skin.yaml")
+      .then((at) => (at ? writeSkinTemplate(at) : undefined))
+      .catch((e) => setError(errText(e)));
+  };
+
   return (
     <div className="settings__row">
       <span className="settings__k">{t("settings.skinAdd")}</span>
@@ -82,6 +91,12 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
             {t("settings.skinAddPick")}
           </button>
           <span className="meta">{t("settings.skinAddDrop")}</span>
+        </div>
+        {/* The other way in is to write one. A reader with no file to be handed starts from the
+            screen they have: every colour, with a line saying what each is for. */}
+        <div className="skinwrite">
+          <button className="btn" onClick={writeOut}>{t("settings.skinWriteOut")}</button>
+          <span className="meta">{t("settings.skinWriteOutNote")}</span>
         </div>
 
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}

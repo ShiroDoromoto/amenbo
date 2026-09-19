@@ -31,7 +31,7 @@ pub(crate) fn skin(store: &mut Store, flags: &Flags, sub: SkinCmd) -> Result<i32
         SkinCmd::Use { name } => wear(store, flags, &name),
         SkinCmd::Rm { name } => remove(store, flags, &name),
         SkinCmd::Validate { path } => validate(flags, &path),
-        SkinCmd::Template => template(flags),
+        SkinCmd::Template => template(store, flags),
     }
 }
 
@@ -186,12 +186,25 @@ fn validate(flags: &Flags, path: &Path) -> Result<i32, CliError> {
     Ok(0)
 }
 
-/// Write out what this build sets, as a skin. Every colour, on both sides, so an author starts from
-/// the thing they are looking at rather than from an empty file. The other names a skin may set
-/// (the type scale, the spacing, the font stacks) take no colour and are left for the author to add;
-/// `skin validate` says whether a name is one this build has.
-fn template(flags: &Flags) -> Result<i32, CliError> {
-    let yaml = skin_contrast::template("my-skin");
+/// Write out a whole skin to start from: every colour a skin may set, on both sides, each with a
+/// line saying what it is for. Taken from the skin that is on where there is one, and filled in
+/// from this build for everything that skin left alone — so what comes out is a complete file
+/// whichever it was taken from. The name is not the one it was taken from: a file calling itself
+/// what is already held would replace it on the way back in.
+///
+/// The other names a skin may set (the type scale, the spacing, the font stacks) take no colour and
+/// are left for the author to add; `skin validate` says whether a name is one this build has.
+fn template(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    // Taken from the skin that is on, where one is: an author who is editing what they are looking
+    // at starts from those values, and one who is starting out gets this build's.
+    let on = match &store.config.skin {
+        Some(name) => Skin::installed(&store.paths, name)
+            .map_err(CliError::from)?
+            .and_then(|s| s.check().ok())
+            .map(|t| t.skin),
+        None => None,
+    };
+    let yaml = skin_contrast::template(&skin_contrast::template_name(on.as_ref()), on.as_ref());
     if flags.json {
         print_json(&json!({ "ok": true, "action": "skin.template", "yaml": yaml }));
         return Ok(0);

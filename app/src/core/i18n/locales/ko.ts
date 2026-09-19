@@ -345,6 +345,8 @@ export const ko: Translation = {
     "settings.skinAdd": "스킨 추가",
     "settings.skinAddPick": "파일 고르기…",
     "settings.skinAddDrop": "또는 .yaml 을 여기에 놓기",
+    "settings.skinWriteOut": "하나 써 내보내기",
+    "settings.skinWriteOutNote": "색 전부에, 무엇에 쓰는지 한 줄씩. 입고 있는 스킨이 있으면 그 값으로.",
     "settings.skinAddTake": "받아들이기",
     "settings.skinOnlySide": "{side} 전용",
     "settings.skinReplace": "같은 이름의 스킨이 이미 있습니다. 지금 있는 것은 {held}, 들어오는 것은 {coming} 입니다.",

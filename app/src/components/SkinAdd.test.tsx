@@ -17,9 +17,16 @@ const hoisted = vi.hoisted(() => ({
   readFails: null as string | null,
   /** Every `skin_add` asked for: the path, and whether it was told to replace. */
   added: [] as { path: string; replace: boolean }[],
+  /** Where the save panel said to write a template, or null for a reader who cancelled. */
+  saveAs: null as string | null,
+  /** Every path a template was written to. */
+  written: [] as string[],
 }));
 
-vi.mock("../core/dialog", () => ({ pickFiles: () => Promise.resolve(hoisted.picked) }));
+vi.mock("../core/dialog", () => ({
+  pickFiles: () => Promise.resolve(hoisted.picked),
+  pickSaveAs: () => Promise.resolve(hoisted.saveAs),
+}));
 vi.mock("../core/hostDrop", () => ({ watchHostDrop: () => Promise.resolve(() => {}) }));
 vi.mock("../core/ipc", () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => {
@@ -27,6 +34,10 @@ vi.mock("../core/ipc", () => ({
       return hoisted.readFails
         ? Promise.reject(new Error(hoisted.readFails))
         : Promise.resolve(hoisted.read);
+    }
+    if (cmd === "skin_template_to") {
+      hoisted.written.push(args?.path as string);
+      return Promise.resolve(undefined);
     }
     if (cmd === "skin_add") {
       hoisted.added.push({ path: args?.path as string, replace: args?.replace as boolean });
@@ -75,6 +86,8 @@ beforeEach(() => {
   hoisted.read = judgement();
   hoisted.readFails = null;
   hoisted.added = [];
+  hoisted.saveAs = null;
+  hoisted.written = [];
   added = 0;
 });
 
@@ -133,6 +146,25 @@ describe("reading a skin file over", () => {
     await act(async () => host.querySelector<HTMLButtonElement>(".skinfit__answer .btn")!.click());
     await act(async () => {});
     expect(hoisted.added).toEqual([{ path: "/tmp/washi.yaml", replace: true }]);
+  });
+
+  it("writes one out where the reader says to, and nowhere when they cancel", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<SkinAdd onAdded={() => {}} />);
+    });
+
+    // Cancelled: nothing is written, rather than something written somewhere chosen for them.
+    await act(async () => host.querySelector<HTMLButtonElement>(".skinwrite .btn")!.click());
+    await act(async () => {});
+    expect(hoisted.written).toEqual([]);
+
+    hoisted.saveAs = "/tmp/mine.yaml";
+    await act(async () => host.querySelector<HTMLButtonElement>(".skinwrite .btn")!.click());
+    await act(async () => {});
+    expect(hoisted.written).toEqual(["/tmp/mine.yaml"]);
   });
 
   it("a file the check turns away is a sentence and nothing to decide", async () => {

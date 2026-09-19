@@ -355,6 +355,8 @@ export const pl: Translation = {
     "settings.skinAdd": "Dodaj skórkę",
     "settings.skinAddPick": "Wybierz plik…",
     "settings.skinAddDrop": "albo upuść tu plik .yaml",
+    "settings.skinWriteOut": "Zapisz jedną",
+    "settings.skinWriteOutNote": "Wszystkie kolory, każdy z linijką o tym, do czego służy. Wzięte ze skórki, która jest na sobie.",
     "settings.skinAddTake": "Wczytaj",
     "settings.skinOnlySide": "tylko {side}",
     "settings.skinReplace": "Skórka o tej nazwie już jest: na miejscu {held}, wchodzi {coming}.",

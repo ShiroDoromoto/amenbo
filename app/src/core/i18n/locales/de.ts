@@ -348,6 +348,8 @@ export const de: Translation = {
     "settings.skinAdd": "Skin hinzufügen",
     "settings.skinAddPick": "Datei wählen…",
     "settings.skinAddDrop": "oder eine .yaml hierher ziehen",
+    "settings.skinWriteOut": "Eine herausschreiben",
+    "settings.skinWriteOutNote": "Alle Farben, jede mit einer Zeile dazu, wofür sie da ist. Vom Skin, der gerade an ist.",
     "settings.skinAddTake": "Übernehmen",
     "settings.skinOnlySide": "nur {side}",
     "settings.skinReplace": "Unter diesem Namen liegt schon ein Skin: vorhanden ist {held}, hinzu kommt {coming}.",

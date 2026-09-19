@@ -117,28 +117,122 @@ const BASE: &[(&str, &str, &str)] = &[
     ("k-slack", "#611f69", "#611f69"),
 ];
 
-/// This build's own colours, written out as a skin document under `name`. Both sides, every colour,
-/// with the aliases already followed — an author starts from the screen they are looking at and
-/// edits the values, rather than from an empty file and a list of names to look up.
+/// What each colour is for, in one line, written beside it in a template. An author edits a value
+/// they can place; a list of names is a list of guesses.
+///
+/// English, on both faces and in every language the application is read in. The file goes from
+/// person to person as an attachment, and a template written in the language of whoever generated
+/// it is a file its next reader cannot follow.
+const ABOUT: &[(&str, &str)] = &[
+    ("c-accent", "the way in: a link, the press that acts, the tab that is on"),
+    ("c-accent-faint", "the faintest wash of the accent, for a ground"),
+    ("c-accent-text", "the accent, dark enough to read as words"),
+    ("c-accent-weak", "a tint of the accent, for the row that is selected"),
+    ("c-ai", "the AI facet"),
+    ("c-bg", "the page"),
+    ("c-blocked", "a task held up"),
+    ("c-code-attribute", "an attribute, in a file being read"),
+    ("c-code-comment", "a comment, in a file being read"),
+    ("c-code-constant", "a constant, in a file being read"),
+    ("c-code-function", "a function's name, in a file being read"),
+    ("c-code-heading", "a heading, in a file being read"),
+    ("c-code-invalid", "something the grammar cannot place"),
+    ("c-code-keyword", "a keyword, in a file being read"),
+    ("c-code-number", "a number, in a file being read"),
+    ("c-code-operator", "an operator, in a file being read"),
+    ("c-code-string", "a string, in a file being read"),
+    ("c-code-tag", "a tag, in a file being read"),
+    ("c-code-type", "a type, in a file being read"),
+    ("c-code-variable", "a variable, in a file being read — most of a file is this"),
+    ("c-dec-decided", "a decision that was settled"),
+    ("c-dec-draft", "a decision still being written"),
+    ("c-dec-rejected", "a decision that was turned down"),
+    ("c-done", "something that went through"),
+    ("c-due-future", "a day still ahead"),
+    ("c-due-overdue", "a day that went past"),
+    ("c-due-today", "today"),
+    ("c-due-tomorrow", "tomorrow"),
+    ("c-edge", "the outline of a control: an input, a button, a checkbox"),
+    ("c-git-added", "a file git has not seen before, staged"),
+    ("c-git-modified", "a file git sees as changed"),
+    ("c-git-untracked", "a file git is not following"),
+    ("c-heed", "it moves — know this while it does"),
+    ("c-hover", "laid over a ground where the pointer rests"),
+    ("c-human", "the human facet"),
+    ("c-on-accent", "the words on the accent"),
+    ("c-on-done", "the words on a done fill"),
+    ("c-on-heed", "the words on a heed fill"),
+    ("c-on-stop", "the words on a stop fill"),
+    ("c-pane-bg", "inside a terminal pane"),
+    ("c-pane-cursor", "the cursor in a terminal pane"),
+    ("c-pane-frame", "the ground a pane's frame stands on"),
+    ("c-pane-text", "the text in a terminal pane"),
+    ("c-plain", "nothing is asked"),
+    ("c-pri-high", "high priority"),
+    ("c-pri-low", "low priority"),
+    ("c-pri-med", "medium priority"),
+    ("c-progress", "a task in progress"),
+    ("c-rule", "a separator: a row's underline, a card's edge"),
+    ("c-stop", "nothing moves until a hand is put to it"),
+    ("c-sunken", "a well: a code block, a field set into the page"),
+    ("c-surface", "a card, standing on the page"),
+    ("c-text", "what is read"),
+    ("c-text-faint", "not for words: a separator mark, the pale side of an icon"),
+    ("c-text-muted", "read when looked for: a date, a count, a note"),
+    ("c-todo", "a task not started"),
+];
+
+/// A skin document, written out full: every colour a skin may set, on both sides, with a line
+/// saying what each one is for. An author starts from the screen in front of them and edits values,
+/// rather than from an empty file and a vocabulary to look up.
+///
+/// `from` is the skin the values are taken from — the one that is on — or `None` for this build's
+/// own. Either way **every** name is written, so a file that set ten colours comes back out with
+/// all of them: what the author was handed is filled in from the base, and nothing they might want
+/// to change is missing from the page.
+///
+/// **It is not a copy.** The name it gives itself is not the name it was taken from, because a file
+/// that calls itself what is already held replaces that one on the way back in.
 ///
 /// Two kinds of name are left out. The ones a skin may set that carry no colour (the type scale, the
 /// spacing, the font stacks) have nothing this table could write beside them, and are the author's
 /// to add — the check says whether a name is one. The ones a skin may not set are not written at
 /// all: a template that offered them would be teaching the author a line the check then drops.
-pub fn template(name: &str) -> String {
+pub fn template(name: &str, from: Option<&Skin>) -> String {
     let mut out = String::new();
     out.push_str(&format!("name: {name}\n"));
     out.push_str(&format!("title: {name}\n"));
     out.push_str("skin_v: 1\n");
     out.push_str("themes: [light, dark]\n");
-    for (side, pick) in [(Side::Light, 1usize), (Side::Dark, 2usize)] {
+    for side in [Side::Light, Side::Dark] {
         out.push_str(&format!("{side}:\n"));
         for entry in BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()) {
-            let value = if pick == 1 { entry.1 } else { entry.2 };
-            out.push_str(&format!("  {}: \"{}\"\n", entry.0, value));
+            let base = match side {
+                Side::Light => entry.1,
+                Side::Dark => entry.2,
+            };
+            let value = from
+                .and_then(|s| s.side(side).values.get(entry.0))
+                .map(String::as_str)
+                .unwrap_or(base);
+            let about = ABOUT
+                .binary_search_by_key(&entry.0, |(n, _)| n)
+                .map(|at| ABOUT[at].1)
+                .unwrap_or("");
+            out.push_str(&format!("  {}: \"{}\"  # {}\n", entry.0, value, about));
         }
     }
     out
+}
+
+/// The name a template gives itself, from the name of whatever it was taken from. Not that name:
+/// a file calling itself what is already held replaces it on the way back in, which is not what
+/// somebody writing their own from an existing one is asking for.
+pub fn template_name(from: Option<&Skin>) -> String {
+    match from {
+        Some(s) => format!("{}-copy", s.name),
+        None => "my-skin".to_string(),
+    }
 }
 
 /// One pairing, measured.
@@ -369,8 +463,45 @@ mod tests {
     }
 
     #[test]
+    fn every_colour_the_template_writes_says_what_it_is_for() {
+        let mut sorted = ABOUT.to_vec();
+        sorted.sort_unstable_by_key(|(n, _)| *n);
+        assert_eq!(ABOUT, sorted, "ABOUT is in order");
+        for (name, _, _) in BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()) {
+            assert!(
+                ABOUT.binary_search_by_key(name, |(n, _)| n).is_ok(),
+                "{name} is written into a template with nothing said about it"
+            );
+        }
+        for (name, _) in ABOUT {
+            assert!(BASE.binary_search_by_key(name, |(n, _, _)| n).is_ok(), "{name} is no longer a colour");
+        }
+    }
+
+    #[test]
+    fn a_template_taken_from_a_skin_keeps_its_values_and_fills_in_the_rest() {
+        let washi = Skin::read(
+            "name: washi\ntitle: t\nskin_v: 1\nthemes: [light, dark]\nlight:\n  c-bg: \"#faf7f0\"\ndark:\n  c-bg: \"#1a1713\"\n",
+        )
+        .unwrap()
+        .check()
+        .unwrap()
+        .skin;
+
+        assert_eq!(template_name(Some(&washi)), "washi-copy", "not the name it was taken from");
+        let yaml = template(&template_name(Some(&washi)), Some(&washi));
+        let out = Skin::read(&yaml).unwrap().check().unwrap().skin;
+        assert_eq!(out.name, "washi-copy");
+        assert_eq!(out.light.values["c-bg"], "#faf7f0", "what the author set");
+        assert_eq!(out.light.values["c-text"], base("c-text", Side::Light), "and the rest, filled in");
+        let open_colours =
+            BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()).count();
+        assert_eq!(out.light.values.len(), open_colours, "every colour, not the ten it set");
+    }
+
+    #[test]
     fn the_template_is_a_skin_that_reads_back_clear() {
-        let yaml = template("my-skin");
+        let yaml = template("my-skin", None);
         let taken = Skin::read(&yaml).unwrap().check().expect("the template is a skin");
         assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
         let open_colours =
@@ -378,6 +509,7 @@ mod tests {
         assert_eq!(taken.skin.light.values.len(), open_colours, "every colour a skin may set");
         assert_eq!(taken.skin.dark.values.len(), open_colours);
         assert!(!yaml.contains("k-slack"), "and none it may not");
+        assert!(yaml.contains("# what is read"), "each one says what it is for");
         // The values are this build's, so what the template measures is what the screen measures.
         let from_template = measure(&taken.skin);
         assert!(from_template.unread.is_empty());

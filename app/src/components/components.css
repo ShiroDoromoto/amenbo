@@ -69,6 +69,9 @@
   max-width: var(--measure-form);
 }
 .skinwell--over { border-color: var(--c-accent); background: var(--c-accent-faint); }
+/* The other way in: writing one out to start from. Beside the well rather than inside it — one is
+   a place a file lands, the other a press that makes one. */
+.skinwrite { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
 /* What reading the handed-over file gave, before anything is written. */
 .skinread {
   display: flex; flex-direction: column; gap: var(--s-2);

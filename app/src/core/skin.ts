@@ -78,6 +78,11 @@ export function addSkinFile(path: string, replace: boolean): Promise<string> {
   return invoke<string>("skin_add", { path, replace });
 }
 
+/** Write a whole skin out to `path`, to start from — this build's, or the one that is on. */
+export function writeSkinTemplate(path: string): Promise<void> {
+  return invoke<void>("skin_template_to", { path });
+}
+
 /** One held skin's tables, for trying it on. */
 export function skinTables(name: string): Promise<SkinTablesDto | null> {
   return invoke<SkinTablesDto | null>("skin_tables", { name });

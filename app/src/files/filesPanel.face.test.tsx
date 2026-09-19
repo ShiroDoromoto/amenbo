@@ -636,14 +636,15 @@ describe("the file face", () => {
   });
 
   it("colours what is inside a folder git named as a whole", async () => {
-    hoisted.entries[""] = [{ name: "fresh", isDir: true, ignored: false }];
-    hoisted.entries["fresh"] = [{ name: "one.md", isDir: false, ignored: false }];
-    // What git does with an untracked folder: it names the folder and stops. A tree that matched
-    // paths exactly would leave every file in a brand-new folder colourless.
-    hoisted.git[ROOT] = [{ path: ["fresh"], index: "?", worktree: "?", isDir: true }];
+    hoisted.entries[""] = [{ name: "nested", isDir: true, ignored: false }];
+    hoisted.entries["nested"] = [{ name: "one.md", isDir: false, ignored: false }];
+    // The one folder git still answers for as a whole under `-uall`: a repository of its own
+    // sitting inside this one (`AMB-D-919`). It names nothing in there, so a tree that matched
+    // paths exactly would leave the whole of it colourless.
+    hoisted.git[ROOT] = [{ path: ["nested"], index: "?", worktree: "?", isDir: true }];
     await drawOpen();
-    expect(container.querySelector(".files__dir--git-untracked")?.textContent).toContain("fresh");
-    await click(button("fresh"));
+    expect(container.querySelector(".files__dir--git-untracked")?.textContent).toContain("nested");
+    await click(button("nested"));
     await settle();
     expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");
   });
@@ -665,10 +666,11 @@ describe("the file face", () => {
     expect(container.querySelector(".files__file--git-modified")?.textContent).toContain("main.rs");
   });
 
-  it("colours a whole repository nothing is tracked in yet", async () => {
+  it("colours what is under the bound folder named as itself", async () => {
     hoisted.entries[""] = [{ name: "one.md", isDir: false, ignored: false }];
-    // Zero segments is the bound folder itself, which is what git names when nothing under it is
-    // tracked. Dropped, a new repository would have no colour anywhere.
+    // Zero segments is the bound folder itself. Nothing git is asked now comes back in that shape
+    // (`AMB-D-919`), and the walk up reads it all the same: what it reads is the format, and not
+    // one call's options.
     hoisted.git[ROOT] = [{ path: [], index: "?", worktree: "?", isDir: true }];
     await drawOpen();
     expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");

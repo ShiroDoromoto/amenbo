@@ -6,11 +6,11 @@
 # opening every folder in turn.
 #
 # ── Why the repository has to be committed first ─────────────────────────────────────────────────
-# A repository that has only been made is one where nothing is tracked, and git answers about such a
-# folder by naming the top of it and stopping. Every row underneath then inherits that one answer,
-# which is a different rule and one another road already reads
-# (`see-what-changed-in-the-folder-without-touching-it`). What this road is about only exists on the
-# other side of a commit: a folder git is quiet about, holding a file git has something to say about.
+# A repository that has only been made is one where nothing is tracked, so git has something to say
+# about every file in it and the folded row is already wearing a colour before this road writes
+# anything. The colour that arrives would then be unreadable as an arrival. What this road is about
+# only exists on the other side of a commit: a folder git is quiet about, holding a file git has
+# something to say about.
 #
 # ── Why the reading is taken twice ───────────────────────────────────────────────────────────────
 # Folded, the row answers for what is under it. Open, it stops — the rows inside say it themselves,
@@ -62,9 +62,9 @@ given:
       path: orchard/pruning.md
       content: SCENARIO cut back the old wood before the sap rises
 
-  # And recorded, which is what leaves git with nothing to say about `orchard` itself. Without it git
-  # names the whole folder as new and the row this road reads answers for itself rather than for what
-  # is under it.
+  # And recorded, which is what leaves git with nothing to say about anything under `orchard`. Without
+  # it `pruning.md` is untracked too, and the folded row is coloured for it before this road writes
+  # the file whose colour it reads.
   - type: action
     domain: repo
     op: git-commit

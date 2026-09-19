@@ -463,14 +463,14 @@ describe("the rail's git half", () => {
     expect(name.querySelector(".gitpanel__ext")?.textContent).toBe("e.tar.gz");
   });
 
-  /// A folder git named as a whole rather than naming what is inside it, which is what it does with
-  /// an untracked one. The slash is how git writes that.
+  /// A folder git named as a whole rather than naming what is inside it — under `-uall`, a
+  /// repository of its own sitting inside this one (`AMB-D-919`). The slash is how git writes that.
   it("draws a folder git answered for as a whole as the folder it is", async () => {
     hoisted.git[ROOT] = says({
-      rows: [row({ path: ["newdir"], index: "?", worktree: "?", isDir: true })],
+      rows: [row({ path: ["nested"], index: "?", worktree: "?", isDir: true })],
     });
     await draw();
-    expect(listed(t("git.changes"))).toEqual(["newdir/"]);
+    expect(listed(t("git.changes"))).toEqual(["nested/"]);
   });
 
   /// Both lists are drawn either way: which of the two a path is in is the answer, and a list that

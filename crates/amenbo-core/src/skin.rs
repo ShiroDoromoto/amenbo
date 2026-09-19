@@ -134,6 +134,86 @@ impl ThemeTable {
     }
 }
 
+/// Put one family's multiplier to work: every token it moves, written out at this build's value
+/// times the number, into the table the skin is applied from.
+///
+/// A number outside what was measured is brought back inside it and reported, the way a frame's
+/// width is — refusing would leave the author with a screen that did not change and no reason
+/// given. A value that is not a number at all is dropped: there is nothing to bring inside.
+fn scale(
+    side: Side,
+    key: &str,
+    wrote: &str,
+    moves: &[&str],
+    into: &mut BTreeMap<String, String>,
+    warnings: &mut Vec<Warning>,
+) {
+    let Some(asked) = wrote.trim().parse::<f32>().ok().filter(|n| n.is_finite() && *n > 0.0) else {
+        warnings.push(Warning::Scale {
+            theme: side,
+            key: key.to_string(),
+            wrote: wrote.to_string(),
+            used: None,
+        });
+        return;
+    };
+    let used = if key == SCALE_UNBOUNDED { asked } else { asked.clamp(SCALE_MIN, SCALE_MAX) };
+    if used != asked {
+        warnings.push(Warning::Scale {
+            theme: side,
+            key: key.to_string(),
+            wrote: wrote.to_string(),
+            used: Some(format!("{used}")),
+        });
+    }
+    for name in moves {
+        let Some(at) = SIZED.binary_search_by_key(name, |(n, _, _)| n).ok() else {
+            continue;
+        };
+        let base = match side {
+            Side::Light => SIZED[at].1,
+            Side::Dark => SIZED[at].2,
+        };
+        into.insert((*name).to_string(), lengths_times(base, used));
+    }
+}
+
+/// One token's value with every length in it multiplied. A radius is one length; a shadow is three
+/// and a colour, and the colour is left exactly as it was.
+///
+/// No rounding. A ladder rounded to whole pixels collapses a step at the small end, and a webview
+/// draws a fraction of a pixel perfectly well.
+fn lengths_times(value: &str, by: f32) -> String {
+    let mut out = String::with_capacity(value.len() + 8);
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let start = i;
+        while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+            i += 1;
+        }
+        if i > start && value[i..].starts_with("px") {
+            if let Ok(n) = value[start..i].parse::<f32>() {
+                let scaled = n * by;
+                // Trailing zeros make `12px` read as `12.00px`, which is the same length written
+                // as if somebody had thought about it.
+                let text = format!("{scaled:.2}");
+                out.push_str(text.trim_end_matches('0').trim_end_matches('.'));
+                out.push_str("px");
+                i += 2;
+                continue;
+            }
+        }
+        if i > start {
+            out.push_str(&value[start..i]);
+            continue;
+        }
+        out.push(value[i..].chars().next().unwrap_or(' '));
+        i += value[i..].chars().next().map_or(1, char::len_utf8);
+    }
+    out
+}
+
 /// Hold one side's frame values to what this build can draw, and say what was changed.
 ///
 /// Two names and three rules. A style outside the three is dropped. A width that is not a length,
@@ -262,18 +342,74 @@ struct Wire {
 /// token added there and named in neither list turns that guard red, which is what makes the choice
 /// between the two lists one somebody makes rather than one that happens.
 pub const OPEN: &[&str] = &[
-    "border-style", "border-w", "c-accent", "c-accent-faint", "c-accent-text", "c-accent-weak", "c-ai", "c-bg", "c-blocked",
-    "c-code-attribute", "c-code-comment", "c-code-constant", "c-code-function", "c-code-heading",
-    "c-code-invalid", "c-code-keyword", "c-code-number", "c-code-operator", "c-code-string", "c-code-tag",
-    "c-code-type", "c-code-variable", "c-dec-decided", "c-dec-draft", "c-dec-rejected", "c-done",
-    "c-due-future", "c-due-overdue", "c-due-today", "c-due-tomorrow", "c-edge", "c-git-added",
-    "c-git-modified", "c-git-untracked", "c-heed", "c-hover", "c-human", "c-on-accent", "c-on-done",
-    "c-on-heed", "c-on-stop", "c-pane-bg", "c-pane-cursor", "c-pane-frame", "c-pane-text", "c-plain",
-    "c-pri-high", "c-pri-low", "c-pri-med", "c-progress", "c-rule", "c-stop", "c-sunken", "c-surface",
-    "c-text", "c-text-faint", "c-text-muted", "c-todo", "font", "font-mono", "fs-body", "fs-md", "fs-xl",
-    "fs-xs", "fw-bold", "fw-medium", "fw-normal", "icon-lg", "icon-md", "icon-sm", "identicon-l",
-    "identicon-s", "lh", "measure-form", "measure-prose", "r-lg", "r-md", "r-sm", "s-1", "s-2", "s-3",
-    "s-4", "s-5", "s-6", "shadow-md", "shadow-sm"
+    "border-style", "border-w", "c-accent", "c-accent-faint", "c-accent-text", "c-accent-weak", "c-ai",
+    "c-bg", "c-blocked", "c-code-attribute", "c-code-comment", "c-code-constant", "c-code-function",
+    "c-code-heading", "c-code-invalid", "c-code-keyword", "c-code-number", "c-code-operator",
+    "c-code-string", "c-code-tag", "c-code-type", "c-code-variable", "c-dec-decided", "c-dec-draft",
+    "c-dec-rejected", "c-done", "c-due-future", "c-due-overdue", "c-due-today", "c-due-tomorrow", "c-edge",
+    "c-git-added", "c-git-modified", "c-git-untracked", "c-heed", "c-hover", "c-human", "c-on-accent",
+    "c-on-done", "c-on-heed", "c-on-stop", "c-pane-bg", "c-pane-cursor", "c-pane-frame", "c-pane-text",
+    "c-plain", "c-pri-high", "c-pri-low", "c-pri-med", "c-progress", "c-rule", "c-stop", "c-sunken",
+    "c-surface", "c-text", "c-text-faint", "c-text-muted", "c-todo", "font", "font-mono", "fw-bold",
+    "fw-medium", "fw-normal", "icon-lg", "icon-md", "icon-sm", "identicon-l", "identicon-s", "lh",
+    "measure-form", "measure-prose"
+];
+
+/// The families a skin moves by a multiplier rather than by writing values, and the tokens each
+/// one moves.
+///
+/// **The ladders are already designed** (`AMB-D-842`): four steps of text, six of spacing, three
+/// of radius, each step chosen against the others. Letting an author write the steps out one by
+/// one is letting them write a set that is no longer a ladder. A multiplier moves the whole family
+/// and keeps every relation in it.
+///
+/// It is also the only way these can be held at all. A colour can be measured — a length cannot:
+/// there is no reading of `2px` that says it is too small, only a screen that turns out unusable.
+/// So what is bounded is the multiplier, against what was measured to still work.
+pub const SCALES: &[(&str, &[&str])] = &[
+    ("fs-scale", &["fs-body", "fs-md", "fs-xl", "fs-xs"]),
+    ("r-scale", &["r-lg", "r-md", "r-sm"]),
+    ("s-scale", &["s-1", "s-2", "s-3", "s-4", "s-5", "s-6"]),
+    ("shadow-scale", &["shadow-md", "shadow-sm"]),
+];
+
+/// The multipliers a skin may ask for, on the three families that decide whether a screen holds
+/// together.
+///
+/// Measured (`AMB-T-5109`). The top is the topbar: its height is a token a skin may not move, and
+/// at 1.35 the switch inside it is cut off top and bottom. The bottom is the tab strip, whose
+/// short side goes under the 24 pixels a finger needs (WCAG 2.2 SC 2.5.8).
+///
+/// **One range for the three, not one each.** They act at the same time, and a set of separate
+/// ceilings is a set somebody reaches all of at once.
+pub const SCALE_MIN: f32 = 0.85;
+pub const SCALE_MAX: f32 = 1.30;
+
+/// The family whose multiplier is not bounded. Nothing broke at three times the default: a shadow
+/// that is too large is ugly rather than unusable, and there is nothing under it to cut off.
+pub const SCALE_UNBOUNDED: &str = "shadow-scale";
+
+/// What this build sets each scaled token to, per side. A multiplier needs something to multiply,
+/// and a compiled binary cannot read the stylesheet.
+///
+/// Held against `app/src/styles/tokens.css` by `guards/check-skin-vocabulary.sh`, the way the
+/// colours are.
+const SIZED: &[(&str, &str, &str)] = &[
+    ("fs-body", "16px", "16px"),
+    ("fs-md", "14px", "14px"),
+    ("fs-xl", "20px", "20px"),
+    ("fs-xs", "12px", "12px"),
+    ("r-lg", "12px", "12px"),
+    ("r-md", "8px", "8px"),
+    ("r-sm", "5px", "5px"),
+    ("s-1", "4px", "4px"),
+    ("s-2", "8px", "8px"),
+    ("s-3", "12px", "12px"),
+    ("s-4", "16px", "16px"),
+    ("s-5", "24px", "24px"),
+    ("s-6", "32px", "32px"),
+    ("shadow-md", "0 4px 12px rgba(35, 33, 28, 0.1)", "0 4px 12px rgba(0, 0, 0, 0.5)"),
+    ("shadow-sm", "0 1px 2px rgba(35, 33, 28, 0.06), 0 1px 1px rgba(35, 33, 28, 0.04)", "0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3)"),
 ];
 
 /// The names a skin may not set, though the tokens exist. Each of them says something rather than
@@ -441,6 +577,11 @@ pub enum Warning {
     ClosedToken { theme: Side, key: String },
     /// A value that did not arrive as text: a length where a colour belongs, a list, a nested map.
     NotText { theme: Side, key: String },
+    /// A family's multiplier that was not taken as written. `used` is the number put to work
+    /// instead, written out, or `None` where the value was not a number and the family did not
+    /// move. Written rather than held as one, so a warning stays a thing two of them can be
+    /// compared for being the same.
+    Scale { theme: Side, key: String, wrote: String, used: Option<String> },
     /// A frame value that was not taken as written. `used` is what was put there instead, or
     /// `None` where the name was dropped and this build's own value stands.
     Frame { theme: Side, key: &'static str, wrote: String, used: Option<String> },
@@ -599,7 +740,9 @@ impl Skin {
             }
             let mut kept = std::collections::BTreeMap::new();
             for (key, value) in std::mem::take(&mut table.values) {
-                if OPEN.binary_search(&key.as_str()).is_ok() {
+                if let Some((_, moves)) = SCALES.iter().find(|(name, _)| *name == key) {
+                    scale(side, &key, &value, moves, &mut kept, &mut warnings);
+                } else if OPEN.binary_search(&key.as_str()).is_ok() {
                     kept.insert(key, value);
                 } else if CLOSED.binary_search(&key.as_str()).is_ok() {
                     warnings.push(Warning::ClosedToken { theme: side, key });
@@ -724,13 +867,16 @@ dark:
 
     #[test]
     fn a_skin_that_sets_what_it_may_is_taken_whole() {
-        let skin = Skin::read(&doc("skin_v: 1\nthemes: [light]\n", "light:\n  c-bg: \"#fff\"\n  s-3: 10px\n"))
-            .unwrap()
-            .check()
-            .unwrap();
+        let skin = Skin::read(&doc(
+            "skin_v: 1\nthemes: [light]\n",
+            "light:\n  c-bg: \"#fff\"\n  border-w: \"2px\"\n",
+        ))
+        .unwrap()
+        .check()
+        .unwrap();
         assert!(skin.warnings.is_empty(), "{:?}", skin.warnings);
         assert_eq!(skin.skin.light.values["c-bg"], "#fff");
-        assert_eq!(skin.skin.light.values["s-3"], "10px");
+        assert_eq!(skin.skin.light.values["border-w"], "2px");
     }
 
     #[test]
@@ -850,6 +996,89 @@ dark:
             .unwrap()
             .check()
             .unwrap()
+    }
+
+    #[test]
+    fn the_three_lists_do_not_overlap_and_every_size_a_multiplier_moves_has_one() {
+        let mut sorted = SIZED.to_vec();
+        sorted.sort_unstable_by_key(|(n, _, _)| *n);
+        assert_eq!(SIZED, sorted, "SIZED is in order");
+        for (scale, moves) in SCALES {
+            assert!(!OPEN.contains(scale), "{scale} is a multiplier, not a token");
+            for name in *moves {
+                assert!(!OPEN.contains(name), "{name} is moved by {scale}, not written directly");
+                assert!(!CLOSED.contains(name), "{name} is on two lists");
+                assert!(SIZED.binary_search_by_key(name, |(n, _, _)| n).is_ok(), "{name} has no size");
+            }
+        }
+    }
+
+    #[test]
+    fn a_multiplier_moves_a_whole_family_and_keeps_the_ladder() {
+        let taken = framed("  fs-scale: \"1.25\"\n");
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+        let v = &taken.skin.light.values;
+        assert_eq!(v["fs-xs"], "15px", "12 × 1.25");
+        assert_eq!(v["fs-md"], "17.5px");
+        assert_eq!(v["fs-body"], "20px");
+        assert_eq!(v["fs-xl"], "25px");
+        // The steps are still four steps, in the order they were designed in.
+        assert!(v["fs-xs"] < v["fs-md"] && v["fs-body"] < v["fs-xl"]);
+        // And the multiplier itself is not left in the table as if it were a token.
+        assert!(!v.contains_key("fs-scale"));
+    }
+
+    #[test]
+    fn a_multiplier_past_what_was_measured_is_brought_back_inside_it() {
+        let taken = framed("  s-scale: \"2\"\n");
+        assert_eq!(taken.skin.light.values["s-1"], "5.2px", "4 × 1.3");
+        assert_eq!(
+            taken.warnings,
+            [Warning::Scale {
+                theme: Side::Light,
+                key: "s-scale".into(),
+                wrote: "2".into(),
+                used: Some(format!("{SCALE_MAX}")),
+            }]
+        );
+        assert_eq!(framed("  s-scale: \"0.1\"\n").skin.light.values["s-4"], "13.6px", "16 × 0.85");
+    }
+
+    #[test]
+    fn the_one_family_with_nothing_under_it_to_cut_off_is_not_bounded() {
+        // A shadow three times over is ugly rather than unusable, so the number stands.
+        let taken = framed("  shadow-scale: \"3\"\n");
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+        assert!(taken.skin.light.values["shadow-md"].starts_with("0 12px 36px"), "every length, and
+            the colour left alone: {}", taken.skin.light.values["shadow-md"]);
+        assert!(taken.skin.light.values["shadow-md"].contains("rgba(35, 33, 28, 0.1)"));
+    }
+
+    #[test]
+    fn a_multiplier_that_is_not_a_number_moves_nothing() {
+        let taken = framed("  r-scale: \"big\"\n");
+        assert!(!taken.skin.light.values.contains_key("r-md"));
+        assert_eq!(
+            taken.warnings,
+            [Warning::Scale {
+                theme: Side::Light,
+                key: "r-scale".into(),
+                wrote: "big".into(),
+                used: None,
+            }]
+        );
+    }
+
+    #[test]
+    fn a_size_written_out_by_name_is_not_a_name_this_build_has() {
+        // The ladders move together or not at all: writing one step is writing a set that is no
+        // longer a ladder, so the name is not one a skin may set.
+        let taken = framed("  fs-md: \"40px\"\n");
+        assert!(!taken.skin.light.values.contains_key("fs-md"));
+        assert_eq!(
+            taken.warnings,
+            [Warning::UnknownToken { theme: Side::Light, key: "fs-md".into() }]
+        );
     }
 
     #[test]

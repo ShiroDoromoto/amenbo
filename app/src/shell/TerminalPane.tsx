@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import type { CSSProperties } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import {
   boxHeight,
@@ -95,12 +96,16 @@ async function handOver(session: string, paths: string[]) {
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
-  frame, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
+  frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
   inserted = [], composeOpen,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
+  /** Where on the page's grid this pane sits. It is worked out afresh from the order and this pane's
+   *  size, and never held against the pane itself (`AMB-D-939`). Left out where this is drawn
+   *  outside a page, which is a pane with no place to be given. */
+  at?: CSSProperties;
   /** The hue the lamp above this pane is drawn in. It follows the slot rather than the frame, so it
    *  comes from the page that laid this one out (`../talk/moving`). */
   hue: number;
@@ -671,6 +676,7 @@ export function TerminalPane({
   return (
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}`}
+      style={at}
       data-hand={frame}
       onMouseDown={pressedOn}
     >

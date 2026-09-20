@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import type {
   AgentModelDto, AgentModelKeptDto, AgentModelListDto, WakeDto,
 } from "../bindings/bindings";
@@ -89,10 +90,14 @@ type Draft = { id: string | null; name: string; line: string };
 
 
 export function EmptySlot({
+  at,
   folders,
   project,
   onOpen,
 }: {
+  /** Where on the page's grid this sits — exactly where the pane it offers would land, at the size
+   *  it would be (`../talk/layout`). Left out where this is drawn outside a page. */
+  at?: CSSProperties;
   /** The folders the project being shown is bound to — what the agents are traced across
    *  (`crate::wake`). */
   folders: readonly string[];
@@ -434,7 +439,7 @@ export function EmptySlot({
   );
 
   return (
-    <div className="slot slot--empty">
+    <div className="slot slot--empty" style={at}>
       {/* Still asking. The row's place is held and nothing in it can be pressed: what is not known
           yet is which of these can be started, and a row drawn before the answer would have to say
           something about that (`AMB-D-792`). */}

@@ -1,18 +1,31 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  ACROSS, acrossIn, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, DEFAULT_ORIENT,
-  EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, movedWithin, openedFrame, openedIn,
-  ORIENTS, orientable, pageCount, pageOfFrame, pageShape, paneIn, panesOf, reordered, restored,
-  roomOnPage, setCount, setOrient, slotsOf, writing, folding, type Layout,
+  ACROSS, addPane, BOXES, closedFrame, closedIn, DEFAULT_SIZE, DOWN, EMPTY_LAYOUT, focusOn, goPage,
+  goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, openedFrame, openedIn, pageCount,
+  pageOfFrame, paneIn, panesOf, placing, reordered, resized, restored, roomOnPage, SIZES, sizing,
+  slotsOf, writing, folding, type Layout, type Size,
 } from "./layout";
 
-/** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one.
- *  The count is pressed for rather than written in: a split is an answer given on a project, and one
- *  put straight into the shape would be a project drawn at a count nobody answered with. */
-function withPanes(n: number, count: Layout["count"] = 2, project = 1): Layout {
-  let layout: Layout = setCount({ ...EMPTY_LAYOUT, project }, count);
-  for (let i = 0; i < n; i++) layout = openedFrame(layout, project, `/work/${project}`).layout;
+/** The ids of the panes drawn on one page, in the order they were laid down. */
+const idsOn = (layout: Layout, page: number) => slotsOf(layout, page).map((one) => one.frame.id);
+
+/** The size of one pane, by id. */
+const sizeOf = (layout: Layout, id: string) => layout.frames.find((one) => one.id === id)?.size;
+
+/**
+ * A layout with `n` panes opened in one project, all of them at `size`.
+ *
+ * The size is pressed for rather than written in: a pane is measured against the one the page is
+ * already showing, so sizing the first is what sizes every one after it — which is the same thing a
+ * person does, and not a frame put into the shape at a size nobody asked for.
+ */
+function withPanes(n: number, size: Size = "half", project = 1): Layout {
+  let layout: Layout = { ...EMPTY_LAYOUT, project };
+  for (let i = 0; i < n; i++) {
+    const made = openedFrame(layout, project, `/work/${project}`);
+    layout = i === 0 ? resized(made.layout, made.frame.id, size) : made.layout;
+  }
   return layout;
 }
 
@@ -42,8 +55,8 @@ describe("a place is made by opening one", () => {
   });
 
   it("draws one slot per pane and no empty ones beside them", () => {
-    const two = withPanes(2, 4);
-    expect(slotsOf(two, 1).map((one) => one.id)).toEqual(["1", "2"]);
+    const two = withPanes(2, "quarter");
+    expect(idsOn(two, 1)).toEqual(["1", "2"]);
   });
 
   it("goes to the pane it just opened, on the page it landed on", () => {
@@ -60,11 +73,30 @@ describe("a place is made by opening one", () => {
     expect(made.frame.id).toBe("a-pane-that-was");
     expect(made.layout.focus).toBe("a-pane-that-was");
   });
+
+  it("opens the first pane of a project at the whole page, and the rest at the page's own size", () => {
+    // Nothing to be measured against means nothing to be smaller than: one pane on its own fills the
+    // page (`AMB-D-939`). After that a pane is the size of the pane the page is showing.
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/1");
+    expect(one.frame.size).toBe("whole");
+    const small = resized(one.layout, "1", "sixth");
+    expect(openedFrame(small, 1, "/work/1").frame.size).toBe("sixth");
+  });
+
+  it("puts it at the end of the page the reader is on, not at the end of the whole list", () => {
+    // Three panes at a sixth each, with the reader back on page one: the new pane goes in behind the
+    // last pane of *that* page, which is where the empty frame was drawn.
+    const three = goPage(resized(withPanes(3, "sixth"), "3", "whole"), 1);
+    expect(idsOn(three, 1)).toEqual(["1", "2"]);
+    const made = openedFrame(three, 1, "/work/1");
+    expect(panesOf(made.layout, 1).map((one) => one.id)).toEqual(["1", "2", "4", "3"]);
+    expect(idsOn(made.layout, 1)).toEqual(["1", "2", "4"]);
+  });
 });
 
 describe("a page with room says so, and a full one says nothing", () => {
   it("has room on the page the panes stop on, and none on the ones they fill", () => {
-    const three = withPanes(3, 2);
+    const three = withPanes(3, "half");
     expect(roomOnPage(three, 1), "a full page had room in it").toBe(false);
     expect(roomOnPage(three, 2)).toBe(true);
   });
@@ -73,22 +105,42 @@ describe("a page with room says so, and a full one says nothing", () => {
     expect(roomOnPage({ ...EMPTY_LAYOUT, project: 1 }, 1)).toBe(true);
   });
 
-  it("has none anywhere when every page is filled to the count", () => {
-    const four = withPanes(4, 2);
+  it("has none anywhere when every page is filled", () => {
+    const four = withPanes(4, "half");
     expect([1, 2].map((page) => roomOnPage(four, page))).toEqual([false, false]);
+  });
+
+  it("has none where the hole left on the page is smaller than the pane that would go in it", () => {
+    // Half the page and a quarter of it leave a quarter standing empty. Asked for another half —
+    // which is what the pane being worked in is — the page has nowhere to put one, and a hole the
+    // next pane does not fit is not room.
+    const two = resized(withPanes(2, "half"), "2", "quarter");
+    expect(roomOnPage(focusOn(two, "2"), 1), "a quarter did not fit a quarter").toBe(true);
+    expect(roomOnPage(focusOn(two, "1"), 1), "a half fitted a quarter").toBe(false);
+  });
+
+  it("draws the empty frame where the pane it offers will be", () => {
+    // The same search a real pane goes through, so nothing on the page moves for it and the pane
+    // lands exactly where the question stood.
+    const two = withPanes(2, "quarter");
+    const spare = landingOn(two, 1);
+    expect(spare).toEqual({ across: 0, down: 1, size: "quarter" });
+    const made = openedFrame(two, 1, "/work/1");
+    const laid = placing(panesOf(made.layout, 1)).find((one) => one.frame.id === made.frame.id);
+    expect(laid).toMatchObject({ page: 1, across: 0, down: 1 });
   });
 });
 
 describe("asking for another pane", () => {
   it("goes to the page that has room, and makes no new one", () => {
-    const three = goPage(withPanes(3, 2), 1);
+    const three = goPage(withPanes(3, "half"), 1);
     const asked = addPane(three);
     expect(asked.page).toBe(2);
     expect(pageCount(asked)).toBe(2);
   });
 
   it("brings a page into being where every page is full", () => {
-    const two = withPanes(2, 2);
+    const two = withPanes(2, "half");
     expect(pageCount(two)).toBe(1);
     const asked = addPane(two);
     expect(asked.page).toBe(2);
@@ -98,41 +150,44 @@ describe("asking for another pane", () => {
   });
 
   it("takes that page away again as soon as the reader is somewhere else", () => {
-    const asked = addPane(withPanes(2, 2));
+    const asked = addPane(withPanes(2, "half"));
     const back = goPage(asked, 1);
     expect(back.page).toBe(1);
     expect(pageCount(back), "an empty page outlived the asking").toBe(1);
   });
 
   it("makes it a page like any other once a pane is opened on it", () => {
-    const asked = addPane(withPanes(2, 2));
+    const asked = addPane(withPanes(2, "half"));
     const made = openedFrame(asked, 1, "/work/1");
     expect(made.layout.adding).toBe(false);
     expect(pageCount(made.layout)).toBe(2);
-    expect(slotsOf(made.layout, 2).map((one) => one.id)).toEqual(["3"]);
+    expect(idsOn(made.layout, 2)).toEqual(["3"]);
+    // The page it was brought into being from is what sized it: a page with no panes on it is not a
+    // reason to go back to the whole page.
+    expect(made.frame.size).toBe("half");
   });
 
-  it("does not survive a change of split, which is measured on the other count", () => {
-    const asked = addPane(withPanes(2, 2));
-    expect(pageCount(setCount(asked, 4))).toBe(1);
+  it("does not survive a resize, which measures the pages afresh", () => {
+    const asked = addPane(withPanes(2, "half"));
+    expect(pageCount(resized(asked, "1", "quarter"))).toBe(1);
   });
 
   it("is no part of the arrangement that is kept", () => {
-    expect(JSON.stringify(laidOut(addPane(withPanes(2, 2))))).not.toContain("adding");
+    expect(JSON.stringify(laidOut(addPane(withPanes(2, "half"))))).not.toContain("adding");
   });
 });
 
 describe("a pane belongs to a project", () => {
   it("shows one project's panes and not another's", () => {
-    let layout = withPanes(2, 2, 1);
+    let layout = withPanes(2, "half", 1);
     layout = openedFrame(layout, 2, "/work/2").layout;
     expect(layout.project).toBe(2);
-    expect(slotsOf(layout, 1).map((one) => one.id)).toEqual(["3"]);
+    expect(idsOn(layout, 1)).toEqual(["3"]);
     expect(panesOf(layout, 1).map((one) => one.id)).toEqual(["1", "2"]);
   });
 
   it("lands on a project's first pane when it is picked", () => {
-    let layout = withPanes(2, 2, 1);
+    let layout = withPanes(2, "half", 1);
     layout = openedFrame(layout, 2, "/work/2").layout;
     const back = goProject(layout, 1);
     expect(back.page).toBe(1);
@@ -140,7 +195,7 @@ describe("a pane belongs to a project", () => {
   });
 
   it("takes the screen to another project when a pane there is reached for", () => {
-    let layout = withPanes(1, 2, 1);
+    let layout = withPanes(1, "half", 1);
     layout = openedFrame(layout, 2, "/work/2").layout;
     const back = focusOn(layout, "1");
     expect(back.project).toBe(1);
@@ -148,10 +203,19 @@ describe("a pane belongs to a project", () => {
   });
 
   it("counts a project's pages from its own panes", () => {
-    let layout = withPanes(4, 2, 1);
+    let layout = withPanes(4, "half", 1);
     layout = openedFrame(layout, 2, "/work/2").layout;
     expect(pageCount(layout)).toBe(1);
     expect(pageCount(goProject(layout, 1))).toBe(2);
+  });
+
+  it("opens a pane on a project the face is not showing at that project's own last size", () => {
+    // There is no page to measure it on, so it follows the project's list rather than the screen.
+    let layout = withPanes(1, "eighth", 1);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    const back = openedFrame(goProject(layout, 3), 1, "/work/1");
+    expect(back.frame.size).toBe("eighth");
+    expect(panesOf(back.layout, 1).map((one) => one.id)).toEqual(["1", "3"]);
   });
 });
 
@@ -177,12 +241,13 @@ describe("a frame is a place, not a process", () => {
 
 describe("closing a pane takes the place away", () => {
   it("is gone for good, and what is left closes up", () => {
-    const three = withPanes(3, 2);
+    const three = withPanes(3, "half");
     const left = closedFrame(three, "1");
     expect(left.frames.map((one) => one.id)).toEqual(["2", "3"]);
-    // Two panes at two a page is one page: the last page lost its slot rather than keeping a hole.
+    // Two halves fill one page: the pane that was on the second page came up into the room the
+    // closed one gave back, rather than the page keeping a hole.
     expect(pageCount(left)).toBe(1);
-    expect(slotsOf(left, 1).map((one) => one.id)).toEqual(["2", "3"]);
+    expect(idsOn(left, 1)).toEqual(["2", "3"]);
   });
 
   it("does not hand the closed pane's id out again", () => {
@@ -196,12 +261,12 @@ describe("closing a pane takes the place away", () => {
   });
 
   it("leaves the reader on whatever moved into its place", () => {
-    const three = focusOn(withPanes(3, 2), "2");
+    const three = focusOn(withPanes(3, "half"), "2");
     expect(closedFrame(three, "2").focus).toBe("3");
   });
 
   it("leaves them on the pane before it where nothing moved up", () => {
-    const three = focusOn(withPanes(3, 2), "3");
+    const three = focusOn(withPanes(3, "half"), "3");
     const left = closedFrame(three, "3");
     expect(left.focus).toBe("2");
     // Page 2 has gone with the pane that was the only thing on it.
@@ -216,12 +281,12 @@ describe("closing a pane takes the place away", () => {
   });
 
   it("does not move the reader when the pane they are on is not the one that went", () => {
-    const three = focusOn(withPanes(3, 2), "1");
+    const three = focusOn(withPanes(3, "half"), "1");
     expect(closedFrame(three, "3").focus).toBe("1");
   });
 
   it("is nothing at all for an id no frame has", () => {
-    const three = withPanes(3, 2);
+    const three = withPanes(3, "half");
     expect(closedFrame(three, "9")).toBe(three);
   });
 });
@@ -237,6 +302,7 @@ describe("where a pane works", () => {
       {
         id: "1",
         project: 1,
+        size: "whole",
         session: null,
         folder: null,
         agent: null,
@@ -253,116 +319,119 @@ describe("where a pane works", () => {
   });
 });
 
-describe("the count is the most a page draws", () => {
-  it("carries the pane being worked in across a change of count", () => {
-    const four = focusOn(withPanes(4), "4");
-    expect(four.page).toBe(2);
-    const one = setCount(four, 1);
-    expect(pageOfFrame(one, "4")).toBe(4);
-    expect(one.page).toBe(4);
+describe("a pane is laid down at its size, and the pages fall out of the order", () => {
+  it("offers six sizes, none of which asks for a third row, and opens a pane at the whole page", () => {
+    expect(SIZES).toEqual(["whole", "half", "half-down", "quarter", "sixth", "eighth"]);
+    expect(DEFAULT_SIZE).toBe("whole");
+    for (const size of SIZES) {
+      const box = BOXES[size];
+      // Every size divides the page exactly, which is what lets one grid draw all six.
+      expect((ACROSS * DOWN) % (box.across * box.down)).toBe(0);
+      expect(box.down).toBeLessThanOrEqual(DOWN);
+      expect(box.across).toBeLessThanOrEqual(ACROSS);
+    }
+  });
+
+  it("makes half the page two different rectangles, and they do not share a page", () => {
+    // Side by side is six cells across both rows; laid down the page it is the whole width and one
+    // row. Two of either fills a page — and one of each does not fit together, however the areas
+    // add up (`AMB-D-939`).
+    expect(BOXES.half).toEqual({ across: 6, down: 2 });
+    expect(BOXES["half-down"]).toEqual({ across: 12, down: 1 });
+    const mixed = resized(withPanes(2, "half"), "2", "half-down");
+    expect(idsOn(mixed, 1)).toEqual(["1"]);
+    expect(idsOn(mixed, 2)).toEqual(["2"]);
+  });
+
+  it("puts the boxes on the grid as the stylesheet counts its lines", () => {
+    expect(gridAt("quarter", 6, 1)).toEqual({ gridColumn: "7 / span 6", gridRow: "2 / span 1" });
+    expect(gridAt("whole", 0, 0)).toEqual({ gridColumn: "1 / span 12", gridRow: "1 / span 2" });
+  });
+
+  it("is one pane's answer and not the project's — the panes beside it do not move", () => {
+    // How much room a piece of work wants is a fact about that piece of work, and a single answer
+    // held for the project made every pane on it change together.
+    const three = resized(withPanes(3, "quarter"), "2", "eighth");
+    expect([1, 2, 3].map((id) => sizeOf(three, String(id))))
+      .toEqual(["quarter", "eighth", "quarter"]);
+  });
+
+  it("leaves the hole where the fitting ran out, rather than filling it from further down the list", () => {
+    // Half the page, a quarter, and half again: the second half does not fit the quarter that is
+    // left, so it starts the next page and a quarter of the first stays empty (`AMB-D-939`). The
+    // pane must not come back up to fill it — the pages are read as the order the panes are in.
+    let layout = resized(withPanes(1), "1", "half");
+    layout = resized(openedFrame(layout, 1, "/work/1").layout, "2", "quarter");
+    layout = resized(openedFrame(layout, 1, "/work/1").layout, "3", "half");
+    const laid = placing(panesOf(layout, 1));
+    expect(laid.map((one) => [one.frame.id, one.page, one.across, one.down])).toEqual([
+      ["1", 1, 0, 0],
+      ["2", 1, 6, 0],
+      // The quarter under the quarter stays empty.
+      ["3", 2, 0, 0],
+    ]);
+  });
+
+  it("sends the panes that no longer fit to the next page, and brings them back when it shrinks", () => {
+    const four = withPanes(4, "quarter");
+    expect(pageCount(four)).toBe(1);
+    const wide = resized(four, "1", "half");
+    expect(idsOn(wide, 1)).toEqual(["1", "2", "3"]);
+    expect(idsOn(wide, 2)).toEqual(["4"]);
+    expect(idsOn(resized(wide, "1", "quarter"), 1)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("carries the reader to the page the pane they resized is on now", () => {
+    const four = focusOn(withPanes(4, "quarter"), "4");
+    expect(four.page).toBe(1);
+    const wide = resized(four, "4", "whole");
+    expect(pageOfFrame(wide, "4")).toBe(2);
+    expect(wide.page).toBe(2);
   });
 
   it("does not renumber the panes — the list is what it was", () => {
     const four = withPanes(4);
-    expect(setCount(four, 4).frames.map((one) => one.id)).toEqual(four.frames.map((one) => one.id));
+    expect(resized(four, "1", "quarter").frames.map((one) => one.id))
+      .toEqual(four.frames.map((one) => one.id));
   });
 
-  it("lands on a page that exists when nothing is focused", () => {
-    const wide = goPage({ ...withPanes(8, 2), focus: null }, 4);
-    expect(wide.page).toBe(4);
-    const wider = setCount(wide, 4);
-    expect(wider.page).toBeLessThanOrEqual(pageCount(wider));
+  it("lands on a page that exists when the one the reader was on has gone", () => {
+    const two = withPanes(2, "half");
+    const wide = resized(two, "1", "whole");
+    expect(pageCount(wide)).toBe(2);
+    const on = goPage({ ...wide, focus: null }, 2);
+    const back = resized(on, "1", "half");
+    expect(pageCount(back)).toBe(1);
+    expect(back.page).toBeLessThanOrEqual(pageCount(back));
+  });
+
+  it("is nothing at all for a size the pane is already at, or an id no frame has", () => {
+    const two = withPanes(2, "half");
+    expect(resized(two, "1", "half")).toBe(two);
+    expect(resized(two, "9", "whole")).toBe(two);
   });
 
   it("refuses a page this project has not got", () => {
     expect(goPage(withPanes(2), 3).page).toBe(1);
   });
 
-  it("offers five counts and draws a project nobody has answered for at one", () => {
-    // The split is an answer given on a project, so a project that has never been answered for is
-    // drawn at the one pane that is certainly wanted — the wide splits are pressed for
-    // (`./layout`).
-    expect(COUNTS).toEqual([1, 2, 4, 6, 8]);
-    expect(DEFAULT_COUNT).toBe(1);
-    // Every count says how many go across, and no count ever asks for a third row — whichever way
-    // the one count that can be asked is laid.
-    for (const one of COUNTS) {
-      expect(ACROSS[one]).toBeGreaterThan(0);
-      for (const orient of ORIENTS) {
-        expect(acrossIn(one, orient)).toBeGreaterThan(0);
-        expect(one / acrossIn(one, orient)).toBeLessThanOrEqual(2);
-      }
-    }
-  });
-
-  it("asks about two panes and about no other count", () => {
-    // Four and above have spent their rows already, and one has nothing to arrange: two is the count
-    // where spending width first stops paying (`./layout`).
-    expect(COUNTS.filter(orientable)).toEqual([2]);
-    expect(DEFAULT_ORIENT).toBe("across");
-    // Down is the one that turns the count around; across is what every count does.
-    expect(acrossIn(2, "across")).toBe(2);
-    expect(acrossIn(2, "down")).toBe(1);
-    expect(acrossIn(4, "down")).toBe(ACROSS[4]);
-  });
-
-  it("names a grid by the answer only where there is one to give", () => {
-    // The class is what a page is laid out by, so a count that cannot be asked is named by its number
-    // alone — a second name for the same grid would be a second grid to keep in step.
-    expect(pageShape(2, "across")).toBe("2");
-    expect(pageShape(2, "down")).toBe("2-down");
-    expect(pageShape(4, "down")).toBe("4");
-  });
-
-  it("lays the two panes the other way without moving any of them", () => {
-    // The count is how many a page holds, so the pages are the same pages and the reader is in the
-    // pane they were in: what changed is where the two are drawn.
-    const two = focusOn(withPanes(3, 2), "3");
-    const down = setOrient(two, "down");
-    expect(down.orient).toBe("down");
-    expect(down.page).toBe(two.page);
-    expect(down.focus).toBe("3");
-    expect(slotsOf(down, 2).map((one) => one.id)).toEqual(slotsOf(two, 2).map((one) => one.id));
-  });
-
-  it("keeps the orientation across a count that cannot be asked about it", () => {
-    // A person who went to four and asked for two again means the two they set up, not the default
-    // back — so the answer stands at every count and is drawn on at one.
-    const down = setOrient(withPanes(2), "down");
-    expect(setCount(setCount(down, 4), 2).orient).toBe("down");
-  });
-
-  it("draws the count that was pressed for, however few panes are open", () => {
-    // Three panes on a count of eight is one page with room on it, not a page that shrank to three:
-    // the shape is the press, and the gaps past the empty frame stay blank.
-    const wide = withPanes(3, 8);
+  it("draws the page at the size that was pressed for, however few panes are open", () => {
+    // Three eighths on a page is one page with room on it, not a page that grew to hold three: the
+    // size is the press, and the cells past the empty frame stay blank.
+    const wide = withPanes(3, "eighth");
     expect(pageCount(wide)).toBe(1);
     expect(slotsOf(wide, 1)).toHaveLength(3);
     expect(roomOnPage(wide, 1)).toBe(true);
   });
 
-  it("keeps an orientation it has never heard of out of a kept arrangement", () => {
-    // The same as an unknown count: what comes back has to be something the stylesheet has a grid
-    // for, and there are two.
-    const kept = { ...laidOut(withPanes(2)), orient: "sideways" as Layout["orient"] };
-    expect(restored(kept, null).orient).toBe(DEFAULT_ORIENT);
-    // What was asked for comes back, and what was never asked stays out of the row.
-    expect(laidOut(setOrient(withPanes(2), "down")).orient).toBe("down");
-    expect(laidOut(withPanes(2))).not.toHaveProperty("orient");
-    expect(restored(laidOut(setOrient(withPanes(2), "down")), null).orient).toBe("down");
-  });
-
-  it("keeps a count it has never heard of out of a kept arrangement", () => {
-    // A build that offered some other count wrote one, and this one has to land on something it can
-    // draw rather than on a grid with no rule for it. The row is dropped rather than rounded: what
-    // that project was left at is a thing this build does not know.
-    const kept = laidOut(withPanes(2));
-    expect(restored({ ...kept, count: 5, splits: { 1: { count: 5 } } }, null).count).toBe(DEFAULT_COUNT);
-    expect(restored({ ...kept, count: 8, splits: { 1: { count: 8 } } }, null).count).toBe(8);
-    // And an arrangement written before the answers were kept by project is read off the pair
-    // beside them, which is all it has.
-    expect(restored({ count: 5, project: 1, frames: [] }, null).count).toBe(DEFAULT_COUNT);
-    expect(restored({ count: 8, project: 1, frames: [] }, null).count).toBe(8);
+  it("is about the pane being worked in, and about the last pane of the page where it is not", () => {
+    const three = withPanes(3, "half");
+    // The reader is on page two, in the pane they just opened.
+    expect(sizing(three)?.id).toBe("3");
+    // Back on page one with the focus left behind: the page's own last pane is what is being sized.
+    expect(sizing(goPage(three, 1))?.id).toBe("2");
+    // And a page with no panes on it has nothing to be about.
+    expect(sizing(addPane(withPanes(2, "half")))).toBeNull();
   });
 });
 
@@ -373,7 +442,7 @@ describe("an arrangement kept between runs", () => {
     layout = openedIn(layout, "2", "session-b", "/work/1", null);
 
     const kept = laidOut(layout);
-    expect(kept.count).toBe(layout.count);
+    expect(kept.count).toBe(2);
     expect(kept.frames).toEqual([
       // What was started in each, which is the half of a row a folder cannot carry: the second is at
       // a plain prompt, and a prompt has nothing to name. And which way the box under each was left,
@@ -411,7 +480,7 @@ describe("an arrangement kept between runs", () => {
       count: 4,
       frames: [{ id: "1", project: 7, folder: "/work/repo" }, { id: "2", project: 8 }],
     }, null);
-    expect(back.count).toBe(4);
+    expect(back.frames.map((one) => one.size)).toEqual(["quarter", "quarter"]);
     expect(back.frames.map((one) => one.session)).toEqual([null, null]);
     expect(back.frames.map((one) => one.folder)).toEqual(["/work/repo", null]);
     // The face has to be showing something, and the first pane is where a fresh one starts too.
@@ -487,11 +556,10 @@ describe("an arrangement kept between runs", () => {
     expect(openedFrame(back, 1, "/w").frame.id).not.toBe(made);
   });
 
-  it("brings the split back with no frames to draw it with", () => {
-    // A device where nothing was ever opened: what came back is the split the person chose, and it
-    // is the empty face, laid out the way they laid it out.
+  it("comes back as the empty face where nothing was ever opened", () => {
+    // A size is a fact about a pane, so a device with no panes has nothing to bring back but the
+    // project it was left on.
     const back = restored({ count: 4, project: 3, frames: [] }, 3);
-    expect(back.count).toBe(4);
     expect(back.frames).toHaveLength(0);
     expect(back.project).toBe(3);
     expect(back.focus).toBeNull();
@@ -499,64 +567,61 @@ describe("an arrangement kept between runs", () => {
   });
 });
 
-describe("the split each project was left at", () => {
-  it("draws a project at its own answer, and brings each back on the way between them", () => {
-    // How many panes a person wants is a fact about the work, not about the face: one project has an
-    // agent and its shell in it, the next is one they read in. A face with a single count made every
-    // move between the two rewrite whichever they came from.
-    let layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, 4);
-    layout = setCount(goProject(layout, 2), 2);
-
-    expect(goProject(layout, 1).count).toBe(4);
-    expect(goProject(goProject(layout, 1), 2).count).toBe(2);
-  });
-
-  it("draws a project nobody has answered for at one, whatever the last one was set to", () => {
-    const wide = setCount({ ...EMPTY_LAYOUT, project: 1 }, 8);
-    expect(goProject(wide, 2).count).toBe(DEFAULT_COUNT);
-    // And going back is the answer again, rather than the shape the unanswered project was drawn at.
-    expect(goProject(goProject(wide, 2), 1).count).toBe(8);
-  });
-
-  it("moves the split with a pane reached for in another project, as a tab does", () => {
-    // The rail's rows reach panes that are not on the screen, so reaching one is as much a move
-    // between projects as pressing the tab is — and a split that followed only the tab would draw
-    // one project at two counts depending on how the reader got to it.
-    let layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, 4);
-    layout = openedFrame(layout, 1, "/work/1").layout;
-    layout = setCount(openedFrame(layout, 2, "/work/2").layout, 2);
-
-    expect(focusOn(layout, "1").count).toBe(4);
-  });
-
-  it("keeps the answers between runs, and writes none for a project nobody answered for", () => {
-    let layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, 4);
-    layout = setOrient(setCount(goProject(layout, 2), 2), "down");
-    // Walked through and left alone: an answer is what a person gave, and a row here would be one
-    // put in their mouth.
+// The store still speaks in splits, and moves to sizes in `AMB-T-5212`. Until then the crossing to
+// the host — and to the window the workspace is split out into — goes through them, so what each
+// size answers to has to hold in both directions.
+describe("the split a size is handed over as", () => {
+  it("writes each project's split from the size of its first pane", () => {
+    let layout = resized(withPanes(1, "quarter", 1), "1", "quarter");
+    layout = resized(openedFrame(goProject(layout, 2), 2, "/work/2").layout, "2", "half-down");
+    // Walked through and left alone: a project with no panes has nobody to have answered for it.
     layout = goProject(layout, 3);
 
-    const kept = laidOut(layout);
-    expect(kept.splits).toEqual({ 1: { count: 4 }, 2: { count: 2, orient: "down" } });
-
-    const back = restored(kept, null);
-    expect(back.count).toBe(DEFAULT_COUNT);
-    expect(goProject(back, 1).count).toBe(4);
-    expect(goProject(back, 2)).toMatchObject({ count: 2, orient: "down" });
+    expect(laidOut(layout).splits).toEqual({ 1: { count: 4 }, 2: { count: 2, orient: "down" } });
   });
 
-  it("leaves the row out of an arrangement nobody has answered anything on", () => {
+  it("brings every pane of a project back at the size that split answers to", () => {
+    const kept = laidOut(resized(withPanes(2, "sixth"), "1", "sixth"));
+    expect(kept.splits).toEqual({ 1: { count: 6 } });
+    expect(restored(kept, null).frames.map((one) => one.size)).toEqual(["sixth", "sixth"]);
+  });
+
+  it("tells the two halves apart, which is the one thing a bare count cannot", () => {
+    const down = laidOut(resized(withPanes(2, "half"), "1", "half-down"));
+    expect(down.splits).toEqual({ 1: { count: 2, orient: "down" } });
+    expect(restored(down, null).frames[0]!.size).toBe("half-down");
+    // Across is what a page does when nothing says otherwise, so it is left out of the row.
+    const across = laidOut(withPanes(2, "half"));
+    expect(across.splits).toEqual({ 1: { count: 2 } });
+    expect(restored(across, null).frames[0]!.size).toBe("half");
+  });
+
+  it("collapses a page of mixed sizes, which is what the shape has no room to say", () => {
+    // The one thing that does not survive the crossing. It is written down here so the day the store
+    // moves to sizes is the day this case changes.
+    const mixed = resized(withPanes(3, "quarter"), "2", "eighth");
+    expect(restored(laidOut(mixed), null).frames.map((one) => one.size))
+      .toEqual(["quarter", "quarter", "quarter"]);
+  });
+
+  it("keeps a split it has never heard of out of what comes back", () => {
+    // A build that offered some other split wrote one, and this one has to land on something it can
+    // draw rather than on a rectangle it has no name for. The row is dropped rather than rounded:
+    // what that project was left at is a thing this build does not know.
+    const kept = laidOut(withPanes(2));
+    expect(restored({ ...kept, count: 5, splits: { 1: { count: 5 } } }, null).frames[0]!.size)
+      .toBe(DEFAULT_SIZE);
+    expect(restored({ ...kept, count: 8, splits: { 1: { count: 8 } } }, null).frames[0]!.size)
+      .toBe("eighth");
+    // And an arrangement written before the answers were kept by project is read off the pair
+    // beside them, which is all it has.
+    expect(restored({ count: 8, frames: [{ id: "1", project: 1 }] }, 1).frames[0]!.size)
+      .toBe("eighth");
+  });
+
+  it("leaves the row out of an arrangement with no panes to have sized", () => {
     expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("splits");
-    expect(laidOut(openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/1").layout))
-      .not.toHaveProperty("splits");
-  });
-
-  it("has nothing to keep an answer against where the face is on no project", () => {
-    // The count still moves — the face draws what it was asked for — but there is nothing here to
-    // hold the answer, so nothing is written down.
-    const wide = setCount(EMPTY_LAYOUT, 4);
-    expect(wide.count).toBe(4);
-    expect(wide.splits).toEqual({});
+    expect(laidOut({ ...EMPTY_LAYOUT, project: 1 })).not.toHaveProperty("splits");
   });
 });
 
@@ -591,13 +656,13 @@ describe("putting the panes in order", () => {
     expect(movedWithin(panes, "1", "3", "after").map((one) => one.id)).toEqual(["2", "3", "1", "4"]);
   });
 
-  it("crosses a page the same way it crosses a pane — the pages are the list cut at the count", () => {
-    // Four panes at two a page: the last pane of page two onto the first of page one is one move,
+  it("crosses a page the same way it crosses a pane — the pages are the order laid down", () => {
+    // Four halves, two to a page: the last pane of page two onto the first of page one is one move,
     // and there is no second operation for the page it left.
-    const four = withPanes(4, 2);
+    const four = withPanes(4, "half");
     const moved = reordered(four, movedWithin(panesOf(four, 1), "4", "1", "before"));
-    expect(slotsOf(moved, 1).map((one) => one.id)).toEqual(["4", "1"]);
-    expect(slotsOf(moved, 2).map((one) => one.id)).toEqual(["2", "3"]);
+    expect(idsOn(moved, 1)).toEqual(["4", "1"]);
+    expect(idsOn(moved, 2)).toEqual(["2", "3"]);
   });
 
   it("is the list unchanged where a pane was dropped on itself", () => {
@@ -619,15 +684,25 @@ describe("putting the panes in order", () => {
     mixed = goProject(mixed, 1);
     const moved = reordered(mixed, movedWithin(panesOf(mixed, 1), "3", "1", "before"));
     expect(idsOf(moved)).toEqual(["3", "1"]);
-    // The other project's pane is still the one in the middle of the whole list.
-    expect(moved.frames.map((one) => one.id)).toEqual(["3", "2", "1"]);
+    // The other project's pane is still where it was in the one list every project shares.
+    expect(moved.frames.map((one) => one.id)).toEqual(["3", "1", "2"]);
     expect(idsOf(moved, 2)).toEqual(["2"]);
+  });
+
+  it("carries each pane's size with it, so the pages are laid out afresh", () => {
+    // A pane's size is the pane's, so moving one moves its rectangle — and the page it lands on is
+    // laid out from the order it is now in.
+    const three = resized(withPanes(3, "quarter"), "1", "whole");
+    expect(idsOn(three, 1)).toEqual(["1"]);
+    const moved = reordered(three, movedWithin(panesOf(three, 1), "1", "3", "after"));
+    expect(idsOn(moved, 1)).toEqual(["2", "3"]);
+    expect(idsOn(moved, 2)).toEqual(["1"]);
   });
 
   it("leaves the page and the pane being worked in where they are", () => {
     // The pane being worked in is on page one and is carried to page two. It is still the pane the
     // person is in, and the face is still on the page they were reading (`AMB-D-853`).
-    const four = goPage(focusOn(withPanes(4, 2), "1"), 1);
+    const four = goPage(focusOn(withPanes(4, "half"), "1"), 1);
     const moved = reordered(four, movedWithin(panesOf(four, 1), "1", "4", "after"));
     expect(moved.focus).toBe("1");
     expect(moved.page).toBe(1);
@@ -669,9 +744,9 @@ describe("what is written in the box under a pane", () => {
     expect(away.frames.find((one) => one.id === frame)?.written).toBe("run the tests");
   });
 
-  it("stays through a change of how many panes are on the screen", () => {
+  it("stays through a change of how much of the page the pane takes", () => {
     const { layout, frame } = half();
-    expect(setCount(layout, 4).frames.find((one) => one.id === frame)?.written)
+    expect(resized(layout, frame, "quarter").frames.find((one) => one.id === frame)?.written)
       .toBe("run the tests");
   });
 
@@ -700,8 +775,8 @@ describe("what is written in the box under a pane", () => {
 });
 
 // The box is opened by a press on one pane's band, and what that press answers is that pane
-// (`AMB-D-890`). A pane is taken down and drawn again all through a run — a page turned, a count
-// changed, the terminal put in a window of its own — and a reader who opened the box did not ask for
+// (`AMB-D-890`). A pane is taken down and drawn again all through a run — a page turned, a pane
+// resized, the terminal put in a window of its own — and a reader who opened the box did not ask for
 // it to shut at any of those; nor did the readers of every other pane on the screen.
 describe("whether the box under a pane is open", () => {
   /** Two panes in one project, with the box opened under the first. */
@@ -727,7 +802,7 @@ describe("whether the box under a pane is open", () => {
 
   it("stays through the moves that take a pane down and draw it again", () => {
     const { layout, frame } = opened();
-    const away = setCount(goPage(goPage(layout, 2), 1), 4);
+    const away = resized(goPage(goPage(layout, 2), 1), frame, "quarter");
     expect(away.frames.find((one) => one.id === frame)?.composeOpen).toBe(true);
   });
 

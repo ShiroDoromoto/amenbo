@@ -81,6 +81,7 @@ vi.mock("../core/ipc", async (importOriginal) => {
   };
 });
 
+import { SIZES } from "../talk/layout";
 import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -147,12 +148,11 @@ describe("the window the terminal is split out into", () => {
     // The folders of the project are beside the panes, and the panes are the page's own two.
     expect(container.querySelector(".rail")).not.toBeNull();
     expect(drawnPanes()).toHaveLength(2);
-    // The split is choosable, and the pages of this project are reachable: without either, the panes
-    // beyond the one on screen are panes the reader cannot get to. Two of them, because the split is
-    // two panes here and two is the one count that is also asked which way it sits
-    // (`../talk/layout`).
-    expect(q(".workspace__counts")).toHaveLength(2);
-    expect(q(".workspace__count--glyph")).toHaveLength(2);
+    // The size of the pane being worked in is choosable, and the pages of this project are
+    // reachable: without either, the panes beyond the one on screen are panes the reader cannot get
+    // to (`../talk/layout`).
+    expect(q(".workspace__counts")).toHaveLength(1);
+    expect(q(".workspace__count--glyph")).toHaveLength(SIZES.length);
     expect(q(".workspace__page")).toHaveLength(2);
   });
 

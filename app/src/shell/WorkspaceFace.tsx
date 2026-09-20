@@ -13,10 +13,10 @@ import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folding, goPage, goProject,
-  laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageShape,
-  paneIn, panesOf, reordered, restored, roomOnPage, setCount, setOrient, slotsOf, writing,
-  type Count, type Layout,
+  addPane, closedFrame, closedIn, EMPTY_LAYOUT, focusOn, folding, goPage, goProject, gridAt,
+  landingOn, laidOut, movedTo, openedFrame, openedIn, pageCount, paneIn, panesOf, reordered,
+  resized, restored, SIZES, sizing, slotsOf, writing,
+  type Layout, type Size,
 } from "../talk/layout";
 import {
   clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
@@ -34,20 +34,37 @@ import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
 import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
-import { Icon } from "../components/Icon";
+import { Icon, type IconName } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
 import { invoke } from "../core/ipc";
 import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
-import { errText, t, tf, tn } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
  *  ordinary mark of the pane being worked in. */
 const LANDED_MS = 900;
+
+/**
+ * The mark and the words for each size a pane can be (`../talk/layout`).
+ *
+ * The mark is the page cut into panes of that size (`../components/Icon`), because what the press
+ * picks is a shape and a row of six shapes is read at a glance where six phrases are not. The words
+ * are what a reader who has only the label is given, so nothing about the row is in the drawing
+ * alone.
+ */
+const SIZE_MARKS: Readonly<Record<Size, { mark: IconName; says: string }>> = {
+  whole: { mark: "paneWhole", says: "face.paneWhole" },
+  half: { mark: "paneAcross", says: "face.paneAcross" },
+  "half-down": { mark: "paneDown", says: "face.paneDown" },
+  quarter: { mark: "paneQuarter", says: "face.paneQuarter" },
+  sixth: { mark: "paneSixth", says: "face.paneSixth" },
+  eighth: { mark: "paneEighth", says: "face.paneEighth" },
+};
 
 /**
  * What one project's reading column is holding: the files open in it, in the order they were opened,
@@ -492,7 +509,9 @@ export function WorkspaceFace({
     void keepLayout(JSON.parse(shape) as ReturnType<typeof laidOut>).catch(() => {});
   }, [settled, shape]);
 
-  // How wide the face actually is, which is half of whether the columns beside the panes are columns.
+  // How wide the face actually is, which is what the columns beside the panes are held down to as a
+  // window narrows (`../talk/columns`). Nothing is measured against the panes themselves: how much
+  // room a pane is left is the reader's own answer about its size (`AMB-D-816`).
   useEffect(() => {
     const root = rootRef.current;
     if (!root || typeof ResizeObserver === "undefined") return;
@@ -1022,13 +1041,19 @@ export function WorkspaceFace({
   const page = layout.page;
   const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
+  // The pane the size control is about, and the one a new pane is measured against
+  // (`../talk/layout`).
+  const sized = sizing(layout);
   // The panes of this project as one list, which is what the reorder is about — the pages are that
-  // list cut at the count, so the modal is handed the list and not the page (`../talk/layout`).
+  // list laid down in order, so the modal is handed the list and not the page (`../talk/layout`).
   const panes = panesOf(layout, layout.project);
   // The one empty frame this page draws, where it has a gap to draw it in (`../talk/layout`). The
   // question about where a pane works stands in its place while it is up, because that is where the
   // answer appears: a question drawn anywhere else is one the reader has to go and find.
-  const room = roomOnPage(layout, page);
+  // Where a pane opened on this page would land, and at what size — null where it does not fit. It
+  // is where the empty frame is drawn, and the page saying whether it has room at all
+  // (`../talk/layout`).
+  const spare = landingOn(layout, page);
 
   /**
    * Open a file in the reading column, or bring it up where it is already open.
@@ -1227,9 +1252,9 @@ export function WorkspaceFace({
         <button className="workspace__action" onClick={() => onWindow()}>
           <Icon name="newWindow" /> {t(ownWindow ? "face.merge" : "face.splitOut")}
         </button>
-        {/* The folder panel's way in, and its way out. It is here whether the panel is a column or a
-            drawer: a column nobody can close goes on taking width from the panes on a small screen,
-            and one closed with no way back is worse than one that never closed. **It is not the way
+        {/* The folder panel's way in, and its way out. Both are on this row: a column nobody can
+            close goes on taking width from the panes on a small screen, and one closed with no way
+            back is worse than one that never closed. **It is not the way
             to fold the project tabs** — those are at the edge and carry their own control, and one
             press doing both would take away the pair a reader is most likely to want: the tabs
             compact with the folders open (`AMB-D-838`). */}
@@ -1244,55 +1269,39 @@ export function WorkspaceFace({
         >
           <Icon name="menu" />
         </button>
-        {/* How many panes the page shows. Three steps, always all three shown: which one is on is
-            what a person is choosing between, and a control that only says the next step makes them
-            press it to find out. It is the most a page draws and not a number of boxes to fill —
-            what is open is what is on the screen (`../talk/layout`).
-            **It says what the number counts**, because the row of pages beside it is digits too: two
-            rows of bare digits is a reader pressing one to find out which is which. */}
-        <div className="workspace__counts" role="radiogroup" aria-label={t("face.paneCount")}>
-          {COUNTS.map((count) => (
-            <button
-              key={count}
-              className={`workspace__count${layout.count === count ? " workspace__count--on" : ""}`}
-              // One of three, and exactly one: a toggle each would say three independent things can
-              // be on, which is not what the control does.
-              role="radio"
-              aria-checked={layout.count === count}
-              // The question about where a pane works goes with it, the same way it goes when a page
-              // or a pane is reached for: asking for a different split is a person doing something
-              // else, and a question left up would be drawn on whatever page the split lands on.
-              onClick={() => {
-                setAsking(null);
-                setLayout((was) => setCount(was, count as Count));
-              }}
-            >
-              {tn("face.panes", count)}
-            </button>
-          ))}
-        </div>
-        {/* Which way the two of them sit, and only where there are two: at every other count the rows
-            are already spent, so there is nothing to choose between (`../talk/layout`). It is drawn
-            as the two grids rather than named, because what the press picks is a shape — and it sits
-            beside the count for the same reason, being the rest of the same answer. */}
-        {orientable(layout.count) && (
-          <div className="workspace__counts" role="radiogroup" aria-label={t("face.paneOrient")}>
-            {ORIENTS.map((orient) => (
+        {/* How much of the page one pane takes. Six steps, always all six shown: which one is on is
+            what a person is choosing between, and a control that only said the next step would make
+            them press it to find out.
+
+            **It is about one pane — the one the new pane would be measured against** (`sizing` in
+            `../talk/layout`), which is the pane being worked in wherever that is on this page. So it
+            is drawn only where the page has a pane to be about, and the row goes away on a page that
+            has none. The panes behind it in the order move when it changes size, because they are a
+            list laid down in order and nothing holds a place (`AMB-D-939`). */}
+        {sized !== null && (
+          <div className="workspace__counts" role="radiogroup" aria-label={t("face.paneSize")}>
+            {SIZES.map((size) => (
               <button
-                key={orient}
+                key={size}
                 className={`workspace__count workspace__count--glyph${
-                  layout.orient === orient ? " workspace__count--on" : ""}`}
+                  sized.size === size ? " workspace__count--on" : ""}`}
+                // One of six, and exactly one: a toggle each would say six independent things can be
+                // on, which is not what the control does.
                 role="radio"
-                aria-checked={layout.orient === orient}
-                // The icon is the whole of what is drawn, so the words that say which shape it is go
+                aria-checked={sized.size === size}
+                // The mark is the whole of what is drawn, so the words that say which shape it is go
                 // where a reader can reach them rather than being left off.
-                aria-label={t(orient === "across" ? "face.paneAcross" : "face.paneDown")}
-                title={t(orient === "across" ? "face.paneAcross" : "face.paneDown")}
-                // A page asked for is the count's question, not this one: the grid changes under the
-                // same panes on the same pages, so nothing a reader was pressing towards goes away.
-                onClick={() => setLayout((was) => setOrient(was, orient))}
+                aria-label={t(SIZE_MARKS[size].says)}
+                title={t(SIZE_MARKS[size].says)}
+                // The question about where a pane works goes with it, the same way it goes when a
+                // page or a pane is reached for: resizing is a person doing something else, and a
+                // question left up would be drawn on whatever page the resize lands on.
+                onClick={() => {
+                  setAsking(null);
+                  setLayout((was) => resized(was, sized.id, size));
+                }}
               >
-                <Icon name={orient === "across" ? "paneAcross" : "paneDown"} />
+                <Icon name={SIZE_MARKS[size].mark} />
               </button>
             ))}
           </div>
@@ -1391,12 +1400,12 @@ export function WorkspaceFace({
             />
           </div>
         )}
-        {/* The page is the split that was asked for, whether or not there are panes to fill it: the
-            count is the most a page draws, and a grid that shrank to what is open would make the
-            split a thing a reader cannot see the effect of (`../talk/layout`). */}
+        {/* The page is one grid whatever is on it — twelve cells across and two down — and each pane
+            is placed on it by the rectangle its size comes to (`../talk/layout`). What is left over
+            stays blank: a hole is where the next pane did not fit, and a grid that closed up around
+            it would move the panes a reader is watching. */}
         <div
-          className={`workspace__page-grid workspace__page-grid--${pageShape(layout.count, layout.orient)}${
-            room ? "" : " workspace__page-grid--add"}`}
+          className={`workspace__page-grid${spare === null ? " workspace__page-grid--add" : ""}`}
         >
           {/* Nothing until the arrangement has been read back, and nothing while the face has been
               told there are projects but not yet which one it is on. **A machine with no project at
@@ -1406,10 +1415,13 @@ export function WorkspaceFace({
             ? null
             : (
               <>
-                {slots.map((frame, slot) => (
+                {slots.map(({ frame, across, down }, slot) => (
                   <TerminalPane
                     key={frame.id}
                     frame={frame.id}
+                    // Where this pane sits on the page's grid, worked out from the order rather than
+                    // held against the pane (`../talk/layout`).
+                    at={gridAt(frame.size, across, down)}
                     // The lamp above the pane is told apart by where the pane sits, not by which
                     // pane it is (`../talk/moving`).
                     hue={hueOf(slot)}
@@ -1460,6 +1472,7 @@ export function WorkspaceFace({
                 ))}
                 {asking !== null && (
                   <FolderChoice
+                    at={spare === null ? undefined : gridAt(spare.size, spare.across, spare.down)}
                     folders={bound.live}
                     onPick={(folder) => openPane(layout.project!, folder, asking.agent)}
                     // With no project the folder raises one; with a project it is bound to that one.
@@ -1471,10 +1484,12 @@ export function WorkspaceFace({
                     note={asking.note}
                   />
                 )}
-                {/* One empty frame, at the first gap on the page, and none at all on a full one: it
-                    is this page saying it has room (`./EmptySlot`). */}
-                {asking === null && room && (
+                {/* One empty frame, exactly where the next pane would land and at the size it would
+                    be, and none at all on a page the next pane does not fit: it is this page saying
+                    it has room (`./EmptySlot`, `../talk/layout`). */}
+                {asking === null && spare !== null && (
                   <EmptySlot
+                    at={gridAt(spare.size, spare.across, spare.down)}
                     folders={boundPaths}
                     project={layout.project}
                     onOpen={(agent) => askToOpen(layout.project, agent)}
@@ -1485,7 +1500,7 @@ export function WorkspaceFace({
                     is the only way in a full page has, and it is on the face the page filled up on:
                     it goes to where the room is, bringing a page into being where every one of them
                     is full (`../talk/layout`). */}
-                {asking === null && !room && (
+                {asking === null && spare === null && (
                   <button
                     className="workspace__addstrip"
                     title={t("face.openHere")}
@@ -1566,7 +1581,6 @@ export function WorkspaceFace({
           out of leaves nothing behind. */}
       {ordering && (
         <PaneOrder
-          layout={layout}
           panes={panes}
           names={names}
           rows={rows.current}

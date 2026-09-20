@@ -281,22 +281,22 @@ input[type="color"] {
 .workspace__grip--side { left: -4px; }
 .workspace__grip:hover { background: var(--c-edge); }
 
-/* The page: the slots of it, laid out one across, two across, two down, or two rows of two, three or
-   four. The grid is written per count rather than flowing, because a slot is a fixed place — panes
-   that reflowed as one closed would move the pane a reader was watching, and a count that laid itself
-   out from however many are open would answer a press with the shape it already had.
+/* The page: twelve cells across and two down, with every pane placed on it by the rectangle its size
+   comes to (`app/src/talk/layout.ts`). Twelve is the smallest number every size divides — an eighth
+   is three cells, a sixth four, a quarter six — so one grid draws all six of them and the shape a
+   page ends up in is worked out from the order rather than named here.
 
    **Never a third row.** A terminal runs out of columns before it runs out of lines, so what a wider
-   screen buys is spent going across (`app/src/talk/layout.ts`, where the same numbers decide how much
-   width the columns beside the panes are measured against).
+   screen buys is spent going across (the same file, where the same numbers decide how much width the
+   columns beside the panes are measured against).
 
-   **Two is the one count with two grids**, because it is the one where spending width first stops
-   paying: half a window is under the eighty columns a TUI wants, and two down keeps them whole at the
-   cost of the lines. Which of the two a page gets is a person's answer and not a measurement
-   (`Orient` in the same file). */
+   **Where each pane sits is written on the element, not in here.** A pane's cell falls out of laying
+   the panes down in order, so there is no rule that could name it: what this holds is the grid the
+   places are counted in (`AMB-D-939`). */
 .workspace__page-grid {
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
+  grid-template: 1fr 1fr / repeat(12, 1fr);
   padding: var(--s-3);
 }
 /* A full page has no gap to draw an empty frame in, so the way in goes beside the panes instead —
@@ -313,12 +313,6 @@ input[type="color"] {
 .workspace__addstrip:hover {
   border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text);
 }
-.workspace__page-grid--1 { grid-template: 1fr / 1fr; }
-.workspace__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
-.workspace__page-grid--2-down { grid-template: 1fr 1fr / 1fr; }
-.workspace__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
-.workspace__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
-.workspace__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
 
 /* Putting the panes in order (`../shell/PaneOrder`). The pages are drawn one under another at the
    same grid the face lays them out at, so what is being arranged has the shape of what comes back.
@@ -335,12 +329,11 @@ input[type="color"] {
 }
 .paneorder__pagename { color: var(--c-text-muted); font-size: var(--fs-xs); }
 /* The face's own grid, given a height here: on the face a page takes what is left of the window, and
-   in here every page has to sit under the one above it. Two rows get twice the room of one, so a
-   card is the same shape at either — and the room a card gets is what its most crowded reading needs,
-   a pane that is named, saying something, working in a folder, finished, and off another page. */
+   in here every page has to sit under the one above it. It is the height of two rows, which is what
+   every page has now that one grid draws them all — and the room a card gets is what its most
+   crowded reading needs, a pane that is named, saying something, working in a folder, finished, and
+   off another page. */
 .paneorder__grid { flex: none; padding: 0; margin-top: var(--s-1); height: 212px; }
-.workspace__page-grid--1.paneorder__grid,
-.workspace__page-grid--2.paneorder__grid { height: 106px; }
 /* A card, and the whole of where a drop lands: the halves of it decide before and after, so there is
    no empty box anywhere in here for one to be aimed at (`AMB-D-853`). `touch-action` is what keeps a
    drag from scrolling the pages out from under the hand holding one. */

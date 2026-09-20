@@ -8,16 +8,21 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EMPTY_LAYOUT, openedFrame, openedIn, panesOf, setCount, type Count, type Frame, type Layout } from "../talk/layout";
+import {
+  EMPTY_LAYOUT, openedFrame, openedIn, panesOf, resized, type Frame, type Layout, type Size,
+} from "../talk/layout";
 import type { Plate as Row } from "../talk/nameplate";
 import { PaneOrder } from "./PaneOrder";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** A face with `n` panes opened in one project, drawn at `count` a page. */
-function faceOf(n: number, count: Count = 2): Layout {
-  let layout: Layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, count);
-  for (let i = 0; i < n; i++) layout = openedFrame(layout, 1, `/work/${i + 1}`).layout;
+/** A face with `n` panes opened in one project, all of them at `size`. */
+function faceOf(n: number, size: Size = "half"): Layout {
+  let layout: Layout = { ...EMPTY_LAYOUT, project: 1 };
+  for (let i = 0; i < n; i++) {
+    const made = openedFrame(layout, 1, `/work/${i + 1}`);
+    layout = i === 0 ? resized(made.layout, made.frame.id, size) : made.layout;
+  }
   return layout;
 }
 
@@ -58,7 +63,6 @@ function draw(
 ) {
   act(() => {
     root.render(createElement(PaneOrder, {
-      layout,
       panes: panesOf(layout, layout.project),
       names,
       rows,
@@ -78,45 +82,49 @@ const ids = () => cards().map((one) => one.dataset.paneCard);
 const cardOf = (id: string) => host.querySelector<HTMLElement>(`[data-pane-card="${id}"]`)!;
 
 describe("the pages the modal draws", () => {
-  it("cuts the list at the count, the way the face does", () => {
-    draw(faceOf(3, 2));
+  it("cuts the list into the pages the sizes make, the way the face does", () => {
+    draw(faceOf(3));
     expect(host.querySelectorAll(".paneorder__page")).toHaveLength(2);
     expect(ids()).toEqual(["1", "2", "3"]);
   });
 
   it("draws no empty box where a page has room — the cards are the only places", () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     const pages = [...host.querySelectorAll(".paneorder__page")];
     expect(pages[1]!.querySelectorAll(".paneorder__card")).toHaveLength(1);
   });
 
-  it("lays a page out at the grid the face is drawn at", () => {
-    draw(faceOf(2, 2));
-    expect(host.querySelector(".paneorder__grid")!.className)
-      .toContain("workspace__page-grid--2");
+  it("lays a page out at the grid the face is drawn at, with each card on its own box", () => {
+    draw(faceOf(2));
+    const grid = host.querySelector<HTMLElement>(".paneorder__grid")!;
+    expect(grid.className).toContain("workspace__page-grid");
+    // Half the page side by side: six of the twelve cells each, both rows.
+    expect(cardOf("1").style.gridColumn).toBe("1 / span 6");
+    expect(cardOf("2").style.gridColumn).toBe("7 / span 6");
+    expect(cardOf("2").style.gridRow).toBe("1 / span 2");
   });
 
   it("calls a pane what it is called on the face — its name, else the folder it works in", () => {
-    draw(faceOf(2, 2), new Map([["1", "agent"]]));
+    draw(faceOf(2), new Map([["1", "agent"]]));
     expect([...host.querySelectorAll(".paneorder__name")].map((one) => one.textContent))
       .toEqual(["agent", "2"]);
   });
 
   it("says nothing about where a card came from until one has moved", () => {
-    draw(faceOf(4, 2));
+    draw(faceOf(4));
     expect(host.querySelectorAll(".paneorder__from")).toHaveLength(0);
   });
 });
 
 describe("what leaves the modal", () => {
   it("is the order the reader pressed for, and only then", () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     act(() => { host.querySelector<HTMLButtonElement>(".btn--primary")!.click(); });
     expect(taken.map((order) => order.map((one) => one.id))).toEqual([["1", "2", "3"]]);
   });
 
   it("is nothing at all from the button beside it", () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     const back = [...host.querySelectorAll<HTMLButtonElement>(".buttonrow .btn")]
       .find((one) => !one.classList.contains("btn--primary"))!;
     act(() => { back.click(); });
@@ -125,14 +133,14 @@ describe("what leaves the modal", () => {
   });
 
   it("is nothing at all from Escape", () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
     expect(taken).toEqual([]);
     expect(closed).toBe(1);
   });
 
   it("is nothing at all from the backdrop", () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     act(() => { host.querySelector<HTMLElement>(".modal__overlay")!.click(); });
     expect(taken).toEqual([]);
     expect(closed).toBe(1);
@@ -166,7 +174,7 @@ describe("carrying a card", () => {
   }
 
   it("puts it where the half of the card it was let go over says", async () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     laidOut();
     // The near half of the first card, which is the left half at a page drawn across.
     await carry("3", cardOf("1"), { x: 10, y: 25 });
@@ -177,7 +185,7 @@ describe("carrying a card", () => {
     // Three panes at two a page, and the last one carried to the front: it has come off page two,
     // and the one it pushed over the edge has come off page one. Both crossed a page, so both say
     // so — the card that was pushed is as far from where the reader left it as the carried one.
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     laidOut();
     await carry("3", cardOf("1"), { x: 10, y: 25 });
     expect(cardOf("3").querySelector(".paneorder__from")).not.toBeNull();
@@ -187,7 +195,7 @@ describe("carrying a card", () => {
   });
 
   it("writes nothing on its own — the order still waits for the button", async () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     laidOut();
     await carry("3", cardOf("1"), { x: 10, y: 25 });
     expect(taken).toEqual([]);
@@ -196,7 +204,7 @@ describe("carrying a card", () => {
   });
 
   it("moves nothing where the press never became a drag", async () => {
-    draw(faceOf(3, 2));
+    draw(faceOf(3));
     laidOut();
     // Two pixels from where it went down, which is inside the slop every gesture here shares.
     await carry("3", cardOf("1"), { x: 502, y: 25 });
@@ -208,7 +216,7 @@ describe("what a card says about its pane", () => {
   it("carries the row the pane's own label is drawn from, rather than working one out", () => {
     // The name and the lamp's face are the pane's own answers (`../talk/plate`), so a card and the
     // row above that pane can never come to disagree.
-    draw(faceOf(2, 2), new Map(), new Map([
+    draw(faceOf(2), new Map(), new Map([
       reads("1", { name: "builder", dot: { hue: 199, face: "lit" } }),
     ]));
     expect(cardOf("1").querySelector(".paneorder__name")!.textContent).toBe("builder");
@@ -219,7 +227,7 @@ describe("what a card says about its pane", () => {
     // Only the page on the screen has panes mounted on it, and what a card carries is what that
     // pane's own row was measuring. A pane on another page is measured by nothing, so its lamp is
     // out rather than something worked out on its behalf.
-    let layout = faceOf(2, 2);
+    let layout = faceOf(2);
     layout = openedIn(layout, "2", "s-2", "/work/2", null);
     draw(layout);
     expect(cardOf("2").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
@@ -227,7 +235,7 @@ describe("what a card says about its pane", () => {
 
   it("says a pane has ended, which its screen cannot", () => {
     // What a finished shell leaves behind looks exactly like one waiting to be typed at.
-    let layout = faceOf(2, 2);
+    let layout = faceOf(2);
     layout = openedIn(layout, "1", "s-1", "/work/1", null);
     draw(layout);
     expect(cardOf("1").querySelector(".paneorder__ended")).toBeNull();
@@ -235,7 +243,7 @@ describe("what a card says about its pane", () => {
   });
 
   it("carries the folder the pane works in, beside the name that may be nothing else", () => {
-    draw(faceOf(1, 2));
+    draw(faceOf(1));
     expect(cardOf("1").querySelector(".paneorder__folder")!.textContent).toBe("/work/1");
   });
 });

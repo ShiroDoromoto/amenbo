@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import { acrossIn, movedWithin, pageShape, type Frame, type Layout } from "../talk/layout";
+import {
+  ACROSS, BOXES, gridAt, movedWithin, placing, type Frame,
+} from "../talk/layout";
 import { frameLabel, type FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import { faceOf, type Face, type Plate as Row } from "../talk/nameplate";
@@ -17,8 +19,8 @@ import { t, tf } from "../core/i18n";
  * cross, Escape and the backdrop all leave the arrangement exactly as it was, however much has been
  * dragged about in here.
  *
- * **It draws the pages, because the list is what is being reordered and the pages are that list cut
- * at the count** (`../talk/layout`). A pane carried onto another page is the same move as one carried
+ * **It draws the pages, because the list is what is being reordered and the pages are that list laid
+ * down in order** (`../talk/layout`). A pane carried onto another page is the same move as one carried
  * across a page, so nothing here is a page-to-page operation — and a card that has ended up somewhere
  * other than where it began says which page it came from, which is the one thing the grid cannot show
  * on its own.
@@ -31,8 +33,7 @@ import { t, tf } from "../core/i18n";
  * moved is exactly what the lamp and the one thing said tell them apart by. It is the row itself,
  * read off the pane rather than worked out again, so a pane is never described two ways at once.
  */
-export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
-  layout: Layout;
+export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
   /** The panes of the project on the screen, in the order they stand in now. */
   panes: readonly Frame[];
   names: FrameNames;
@@ -67,10 +68,7 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
   // read once: the answer is about where the reader left things, and one recomputed as they drag
   // would go on agreeing with wherever the card is now and never say anything.
   const [from] = useState(() =>
-    new Map(panes.map((one, at) => [one.id, Math.floor(at / layout.count) + 1] as const)));
-  // Which way the cards run, and therefore which midline puts one before another: the grid at this
-  // count and orientation, taken from the same arithmetic that lays out the face (`../talk/layout`).
-  const axis = acrossIn(layout.count, layout.orient) === 1 ? "down" : "across";
+    new Map(placing(panes).map((one) => [one.frame.id, one.page] as const)));
 
   // The press in flight. A ref because a move fires far more often than the screen redraws and none
   // of what it carries is drawn — what is drawn is the order and the card being held.
@@ -113,6 +111,12 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
     const card = elementUnder(latest.current, "data-pane-card");
     const target = card?.dataset.paneCard;
     if (card == null || target == null || target === on.id) return;
+    // Which midline of this card puts one before another. It is read off the card being dropped on
+    // rather than off the page, because the cards are no longer one shape: a card that takes the
+    // whole width has the card before it above rather than beside it, and every other card has its
+    // neighbours to the left and right (`../talk/layout`).
+    const size = order.find((one) => one.id === target)?.size;
+    const axis = size !== undefined && BOXES[size].across === ACROSS ? "down" : "across";
     const side = sideOfBox(latest.current, card.getBoundingClientRect(), axis);
     setOrder((was) => movedWithin(was, on.id, target, side));
   };
@@ -157,8 +161,11 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
     document.addEventListener("pointercancel", up);
   };
 
-  const pages: Frame[][] = [];
-  for (let at = 0; at < order.length; at += layout.count) pages.push(order.slice(at, at + layout.count));
+  // The order laid down the way the face lays it down, cut into the pages it makes
+  // (`../talk/layout`).
+  const laid = placing(order);
+  const pages = [...new Set(laid.map((one) => one.page))].map((page) =>
+    laid.filter((one) => one.page === page));
 
   return (
     <div className="modal__overlay" onClick={onClose}>
@@ -174,11 +181,8 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
           {pages.map((slots, at) => (
             <section className="paneorder__page" key={at}>
               <div className="paneorder__pagename">{tf("face.page", { n: at + 1 })}</div>
-              <div
-                className={`workspace__page-grid workspace__page-grid--${
-                  pageShape(layout.count, layout.orient)} paneorder__grid`}
-              >
-                {slots.map((frame, slot) => {
+              <div className="workspace__page-grid paneorder__grid">
+                {slots.map(({ frame, across, down }, slot) => {
                   const row = plates.get(frame.id);
                   const name = row?.name ?? t("face.orderNoName");
                   const was = from.get(frame.id);
@@ -186,6 +190,7 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
                     <div
                       key={frame.id}
                       className={`paneorder__card${held === frame.id ? " paneorder__card--held" : ""}`}
+                      style={gridAt(frame.size, across, down)}
                       data-pane-card={frame.id}
                       onPointerDown={(e) => onCardDown(e, frame.id)}
                     >

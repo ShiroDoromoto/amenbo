@@ -51,6 +51,7 @@ vi.mock("../core/boundFolders", () => ({
 // here the answer is always yes, so what this file sees is what the face does with it.
 vi.mock("../core/dialog", () => ({ confirmDialog: async () => true }));
 
+import { SIZES, type Size } from "../talk/layout";
 import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,10 +76,11 @@ const openPaneIn = async (host: HTMLElement) => {
   await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
 const openPane = () => openPaneIn(container);
-/** Press for a split. A project nobody has answered for is drawn at one pane (`../talk/layout`), so
- *  a road about pages, gaps and the strip beside them says how many it wants first. */
-const atCount = async (count: 1 | 2 | 4 | 6 | 8) => {
-  await click(q(".workspace__count")[[1, 2, 4, 6, 8].indexOf(count)]!);
+/** Press for a size on the pane the page is showing. The first pane of a project opens at the whole
+ *  page (`../talk/layout`), so a road about pages, gaps and the strip beside them sizes it first —
+ *  and the row is drawn only where the page has a pane to be about. */
+const atSize = async (size: Size) => {
+  await click(q(".workspace__count")[SIZES.indexOf(size)]!);
 };
 /** Put the face up. It is not in `beforeEach` because what the project is bound to is set per test,
  *  and the face reads it as it comes up. */
@@ -166,9 +168,13 @@ describe("a pane works in a folder of its project", () => {
     hoisted.folders = [{ path: "/repo", exists: true }, { path: "/site", exists: true }];
     await mount();
     await openPane();
-    // Asking for a different split, like going to a pane or a project, is a person doing something
-    // else: the question goes with it.
-    await atCount(2);
+    await click(q(".slot--asking .agent__choice")[0]!);
+    await atSize("half");
+    // The question about the second pane, walked away from: resizing a pane, like going to a pane or
+    // a project, is a person doing something else, and the question goes with it.
+    await click(q(".slot--empty .slot__open")[0]!);
+    expect(q(".slot--asking")).toHaveLength(1);
+    await atSize("quarter");
     expect(q(".slot--asking")).toHaveLength(0);
     expect(q(".slot--empty"), "a place was left where nothing was opened").toHaveLength(1);
   });
@@ -177,10 +183,10 @@ describe("a pane works in a folder of its project", () => {
 describe("turning a page", () => {
   it("takes the panes down and picks the same terminals up again — never starts a second", async () => {
     await mount();
-    await atCount(2);
     await openPane();
+    await atSize("half");
     await openPane();
-    await openPane();               // a third pane, which is page 2 at two a page
+    await openPane();               // a third pane, which is page 2 at half the page each
     const started = mounts().slice(0, 2).map((one) => one.session);
     expect(q(".workspace__page")).toHaveLength(2);
 
@@ -198,9 +204,9 @@ describe("turning a page", () => {
 describe("the empty frame", () => {
   it("is one on a page with room, and none on a full one", async () => {
     await mount();
-    await atCount(2);
     await openPane();
-    // One pane at two a page: the page has a gap, and one frame says so.
+    await atSize("half");
+    // One pane at half the page: the other half is a gap, and one frame says so.
     expect(q(".slot--empty")).toHaveLength(1);
 
     await openPane();
@@ -209,9 +215,9 @@ describe("the empty frame", () => {
 
   it("is on the page the strip goes to, which it brings into being when every page is full", async () => {
     await mount();
-    await atCount(2);
     await openPane();
-    await openPane();                              // page 1 full at two a page
+    await atSize("half");
+    await openPane();                              // page 1 full at half the page each
     await click(q(".workspace__addstrip")[0]!);
 
     expect(q(".workspace__page")).toHaveLength(2);
@@ -224,10 +230,10 @@ describe("the empty frame", () => {
 describe("taking a pane away", () => {
   it("takes the place off the face and closes the page up", async () => {
     await mount();
-    await atCount(2);
     await openPane();
+    await atSize("half");
     await openPane();
-    await openPane();                              // three panes, so two pages at two a page
+    await openPane();                              // three panes at a half each, so two pages
     expect(q(".workspace__page")).toHaveLength(2);
 
     await act(async () => { q(".slot__end")[0]!.click(); });
@@ -239,16 +245,16 @@ describe("taking a pane away", () => {
   });
 });
 
-describe("how many panes", () => {
-  it("carries the pane being worked in over to the page it is on at the new count", async () => {
+describe("how much of the page a pane takes", () => {
+  it("carries the pane being resized over to the page it is on now", async () => {
     await mount();
-    await atCount(2);
     await openPane();
-    await openPane();                              // two panes, both on page 1 at two a page
-    await atCount(1);
+    await atSize("half");
+    await openPane();                              // two panes, both on page 1 at a half each
+    await atSize("whole");
 
-    // At one a page the second pane is page 2, and that is where the screen is: a person who asks for
-    // one pane means the one they were looking at.
+    // The pane being worked in took the whole page, so it is page 2 — and that is where the screen
+    // is, because the press was about that pane.
     expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
     expect(q(".slot")).toHaveLength(1);
     expect(mounts(), "the pane carried across was restarted rather than kept").toHaveLength(2);
@@ -256,13 +262,13 @@ describe("how many panes", () => {
 
   it("puts the way in beside the panes once the page is full, and nowhere else", async () => {
     await mount();
-    await atCount(2);
     await openPane();
+    await atSize("half");
     // A page with a gap draws the empty frame, and that frame is the way in. A second one beside it
     // would be the same offer twice.
     expect(q(".workspace__addstrip")).toHaveLength(0);
 
-    await openPane();                              // two a page, so the page is now full
+    await openPane();                              // two halves, so the page is now full
     expect(q(".slot--empty")).toHaveLength(0);
     expect(q(".workspace__addstrip")).toHaveLength(1);
 
@@ -273,37 +279,44 @@ describe("how many panes", () => {
     expect(q(".slot--empty")).toHaveLength(1);
   });
 
-  it("splits the page by what was asked for, not by what is open", async () => {
+  it("draws the pane at the size that was asked for, and leaves the rest of the page blank", async () => {
     await mount();
     await openPane();
-    await click(q(".workspace__count")[2]!);         // four a page, with one pane open
+    await atSize("quarter");                       // a quarter of the page, with one pane open
 
-    // The grid is the split. A page that shrank to fit what is open would make the control look as
+    // The box is the size. A pane that grew to fill what is open would make the control look as
     // though it had done nothing.
-    expect(q(".workspace__page-grid--4")).toHaveLength(1);
+    const slot = q(".slot:not(.slot--empty)")[0]!;
+    expect(slot.style.gridColumn).toBe("1 / span 6");
+    expect(slot.style.gridRow).toBe("1 / span 1");
+    expect(q(".slot--empty")).toHaveLength(1);
   });
 
-  it("asks which way two panes sit, and asks it of no other count", async () => {
+  it("offers half the page both ways round, and offers nothing where the page has no pane", async () => {
+    await mount();
+    // Nothing is open, so there is no pane for the row to be about.
+    expect(q(".workspace__count")).toHaveLength(0);
+
+    await openPane();
+    expect(q(".workspace__count")).toHaveLength(SIZES.length);
+
+    await atSize("half");
+    expect(q(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 6");
+    expect(q(".slot:not(.slot--empty)")[0]!.style.gridRow).toBe("1 / span 2");
+
+    await atSize("half-down");
+    expect(q(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 12");
+    expect(q(".slot:not(.slot--empty)")[0]!.style.gridRow).toBe("1 / span 1");
+  });
+
+  it("is the pane being worked in that it is about, and each pane keeps its own answer", async () => {
     await mount();
     await openPane();
-    // One is where a project nobody has answered for comes up, and one has nothing to arrange — the
-    // question appears with the count it is about.
-    expect(q(".workspace__count--glyph")).toHaveLength(0);
+    await atSize("quarter");
+    await openPane();                              // the second pane is a quarter too
+    await atSize("sixth");                         // and only it is resized
 
-    await atCount(2);
-    expect(q(".workspace__page-grid--2")).toHaveLength(1);
-    expect(q(".workspace__count--glyph")).toHaveLength(2);
-
-    await click(q(".workspace__count--glyph")[1]!);  // one above the other
-    expect(q(".workspace__page-grid--2-down")).toHaveLength(1);
-
-    // Four has spent its rows already, so there is nothing left to choose between and nothing drawn.
-    await click(q(".workspace__count")[2]!);
-    expect(q(".workspace__count--glyph")).toHaveLength(0);
-    expect(q(".workspace__page-grid--4")).toHaveLength(1);
-
-    // The answer stood while it could not be asked: two is the two they set up.
-    await click(q(".workspace__count")[1]!);
-    expect(q(".workspace__page-grid--2-down")).toHaveLength(1);
+    const boxes = q(".slot:not(.slot--empty)").map((one) => one.style.gridColumn);
+    expect(boxes).toEqual(["1 / span 6", "7 / span 4"]);
   });
 });

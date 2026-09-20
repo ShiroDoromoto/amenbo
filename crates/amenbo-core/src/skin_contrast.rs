@@ -371,11 +371,18 @@ fn write_headers(out: &mut String, from: Option<&Skin>) {
 /// **The face itself does not come along.** What is written here is a document, and the file it
 /// names sits beside that document in the skin's zip (`AMB-D-936`); an author starting from this
 /// puts the woff2 next to it under the name written here.
+///
+/// **The note above it says where the family has to be named.** Carrying a face and setting a
+/// screen in it are two things the document does, and a shape to copy that only showed the first
+/// is a shape whose font does nothing.
 fn write_font(out: &mut String, from: Option<&Skin>) {
     let Some(font) = from.and_then(|s| s.font.as_ref()) else {
         out.push_str("\n# One face, carried in the skin so it travels with the colours: the woff2\n");
         out.push_str("# sits beside this document, up to 2MB, and the licence in full goes here — a\n");
         out.push_str("# skin carrying a font and no licence text is turned away.\n");
+        out.push_str("# The face is registered under `family`. What sets a screen in it is a stack\n");
+        out.push_str("# naming it, at the head of `font`, of `font-mono`, or of both — a face no\n");
+        out.push_str("# stack names is carried and never drawn.\n");
         out.push_str("# font_file:\n");
         out.push_str("#   family: \"My Face\"\n");
         out.push_str("#   format: woff2\n");
@@ -385,7 +392,9 @@ fn write_font(out: &mut String, from: Option<&Skin>) {
         out.push_str("#     the licence, in full\n");
         return;
     };
-    out.push_str("\nfont_file:\n");
+    out.push_str("\n# The face is registered under `family`. What sets a screen in it is a stack\n");
+    out.push_str("# naming it, at the head of `font`, of `font-mono`, or of both.\n");
+    out.push_str("font_file:\n");
     out.push_str(&format!("  family: {}\n", quoted(&font.family)));
     out.push_str(&format!("  format: {}\n", quoted(&font.format)));
     out.push_str(&format!("  file: {}\n", quoted(&font.file)));
@@ -832,7 +841,8 @@ mod tests {
              titles:\n  ja: \"わたしの\"\n\
              font_file:\n  family: Pixel\n  format: woff2\n  file: pixel.woff2\n  license: OFL 1.1\n\
              \x20 license_text: |\n    OFL, in full\n      an indented clause\n\
-             light:\n  c-bg: \"#faf7f0\"\ndark:\n  c-bg: \"#1a1713\"\n";
+             light:\n  c-bg: \"#faf7f0\"\n  font: '\"Pixel\", sans-serif'\n\
+             dark:\n  c-bg: \"#1a1713\"\n  font: '\"Pixel\", sans-serif'\n";
         let zip = crate::skin::packed(&[
             ("pixel.woff2", &bytes),
             (crate::skin::PACK_DOCUMENT, document.as_bytes()),

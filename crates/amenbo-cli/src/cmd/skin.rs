@@ -409,6 +409,7 @@ fn warnings_json(taken: &Taken) -> Vec<serde_json::Value> {
                 "kind": "unsafe_value", "theme": theme.as_str(), "key": key, "why": why.en(),
             }),
             Warning::FontDropped(why) => json!({ "kind": "font_dropped", "why": why.en() }),
+            Warning::FontNotNamed { family } => json!({ "kind": "font_not_named", "family": family }),
             Warning::Frame { theme, key, wrote, used } => json!({
                 "kind": "frame", "theme": theme.as_str(), "key": key,
                 "wrote": wrote, "used": used,
@@ -463,6 +464,9 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
             Warning::NotText { theme, key } => format!("  · {theme}.{key}: the value is not text — dropped"),
             Warning::UnsafeValue { theme, key, why } => format!("  · {theme}.{key}: the value {} — dropped", why.en()),
             Warning::FontDropped(why) => format!("  · the embedded font: {} — dropped", why.en()),
+            Warning::FontNotNamed { family } => format!(
+                "  · the embedded font: neither font nor font-mono names '{family}', so nothing is set in it"
+            ),
             Warning::Frame { theme, key, wrote, used } => match used {
                 Some(used) => format!("  · {theme}.{key}: '{wrote}' — drawn at {used}"),
                 None => format!("  · {theme}.{key}: '{wrote}' is not one this build draws — dropped"),

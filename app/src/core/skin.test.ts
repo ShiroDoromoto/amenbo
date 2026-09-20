@@ -157,6 +157,7 @@ describe("applySkin", () => {
 // move one side alone and this breaks.
 import skinTs from "./skin.ts?raw";
 import skinRs from "../../../crates/amenbo-core/src/skin.rs?raw";
+import iconTsx from "../components/Icon.tsx?raw";
 
 /** What a `\x` in a character literal stands for. The three this rule spells are all that is here. */
 function unescape(after: string): string {
@@ -207,6 +208,25 @@ describe("the shape a value may have", () => {
     expect(skinRs).toContain('value.contains("/*") || value.contains("*/")');
     expect(asked).toContain('"url"');
     expect(asked).toContain("starts_with('(')");
+  });
+});
+
+// The icons a skin may replace, held to the icons there are.
+//
+// `ICONS` in `crates/amenbo-core/src/skin.rs` is what the check searches to say whether a name the
+// author wrote is one this build draws, and it is compiled into a binary that cannot read
+// `Icon.tsx` at run time. An icon added here and not there is one a skin is told it may not
+// replace — which is not what happened, and nothing else would show it.
+describe("the icons a skin may replace", () => {
+  it("are the ones this build draws, and no others", () => {
+    const names = only(iconTsx, /export type IconName =\n([\s\S]*?);\n/, "`IconName` in Icon.tsx");
+    const inTsx = [...names.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]);
+    expect(inTsx.length).toBeGreaterThan(0);
+
+    const list = only(skinRs, /pub const ICONS: &\[&str\] = &\[([\s\S]*?)\];/, "`ICONS` in skin.rs");
+    const inRs = [...list.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]);
+
+    expect([...inRs].sort()).toEqual([...inTsx].sort());
   });
 });
 

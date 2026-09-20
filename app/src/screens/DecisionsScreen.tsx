@@ -213,7 +213,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
       <div style={{ padding: 12, overflowY: "auto" }}>
         {composing && <DecisionCompose projectId={projectId} onDone={() => setComposing(false)} />}
         {shown.length === 0 && !composing && (
-          <div style={{ color: "var(--c-muted)", padding: 16 }}>{t("dec.empty")}</div>
+          <div style={{ color: "var(--c-text-muted)", padding: 16 }}>{t("dec.empty")}</div>
         )}
         {pager.pageItems.map((d) => (
           <DecisionCard
@@ -267,7 +267,7 @@ function DecisionCard({ d, selected, onSelect }: {
         cursor: onSelect ? "pointer" : undefined,
       }}
     >
-      {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
+      {d.ref && <span style={{ color: "var(--c-text-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</span>
       <span className={`chip chip--status ${decisionStatusChip(d.status, d.draft)}`}>{statusWord(d.status, d.draft)}</span>
       {/* The edge, said in the row: which decision overturned this one. It sits beside the status rather
@@ -279,7 +279,7 @@ function DecisionCard({ d, selected, onSelect }: {
         </span>
       )}
       <span style={{ flex: 1 }} />
-      {date && <span style={{ color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
+      {date && <span style={{ color: "var(--c-text-muted)", whiteSpace: "nowrap" }}>{date}</span>}
     </div>
   );
 }

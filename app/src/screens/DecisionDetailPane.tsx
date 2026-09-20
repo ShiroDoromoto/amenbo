@@ -164,7 +164,7 @@ export function DecisionDetailPane({
   return (
     <div className="detail__body">
       <div className="detail__title">
-        {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
+        {d.ref && <span style={{ color: "var(--c-text-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
         {editing ? (
           <input
             {...asTyped}
@@ -231,7 +231,7 @@ export function DecisionDetailPane({
         <div style={{ marginTop: 8 }}>
           {t("dec.linkedTasks")}:{" "}
           {d.linkedTasks.map((lt, i) => (
-            <span key={lt.id} style={isClosed(lt.status) ? { color: "var(--c-muted)" } : undefined}>
+            <span key={lt.id} style={isClosed(lt.status) ? { color: "var(--c-text-muted)" } : undefined}>
               {i > 0 && ", "}
               <button
                 className="feed__target"
@@ -525,7 +525,7 @@ function DecisionEdges({ d, onOpenDecision }: {
       {rows.map((r) => (
         <div
           key={`${r.labelKey}-${r.target.id}`}
-          style={{ marginTop: 4, color: "var(--c-muted)" }}
+          style={{ marginTop: 4, color: "var(--c-text-muted)" }}
         >
           {t(r.labelKey)}:{" "}
           <button
@@ -627,7 +627,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
           {candidates.map((c) => (
             <li key={c.id} role="option" aria-selected={false}>
               <button type="button" className="apick__opt" onClick={() => void link(c)}>
-                <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{c.ref}</span>
+                <span style={{ color: "var(--c-text-muted)", fontVariantNumeric: "tabular-nums" }}>{c.ref}</span>
                 <span>{c.title}</span>
               </button>
             </li>

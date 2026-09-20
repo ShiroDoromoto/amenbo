@@ -1,7 +1,8 @@
 import { type Layout, panesOf } from "../talk/layout";
-import { inkOn, initialOf } from "./projectMark";
+import { inkOn, initialOf, MARK_PX } from "./projectMark";
 import type { Project } from "../mock/types";
 import { Icon } from "../components/Icon";
+import { useShrunkImage } from "../core/shrinkImage";
 import { t, tf, tn } from "../core/i18n";
 
 /**
@@ -91,13 +92,7 @@ export function ProjectTabs({
               title={project.name}
               onClick={() => onProject(project.id)}
             >
-              <span
-                className="ptabs__mark"
-                style={icon === null ? { background: project.color, ...(ink === null ? {} : { color: ink }) } : undefined}
-                aria-hidden="true"
-              >
-                {icon === null ? initialOf(project.name) : <img className="ptabs__icon" src={icon} alt="" />}
-              </span>
+              <TabMark name={project.name} color={project.color} ink={ink} icon={icon} />
               {!compact && <span className="ptabs__name">{project.name}</span>}
               {panes > 0 && <span className="ptabs__count">{panes}</span>}
             </button>
@@ -113,5 +108,33 @@ export function ProjectTabs({
         <Icon name={compact ? "foldRight" : "foldLeft"} />
       </button>
     </nav>
+  );
+}
+
+/**
+ * A project's mark on its tab: the image it was registered with, or the colour a person gave it with
+ * the first character of its name written on it.
+ *
+ * It is a component of its own rather than part of the tab because a registered image is baked down
+ * to this screen's pixels (`../core/shrinkImage`), and that is a hook — one per tab, which a loop
+ * inside the list could not hold.
+ */
+function TabMark({ name, color, ink, icon }: {
+  name: string;
+  color: string;
+  /** The ink for the letter, or `null` where the colour could not be read. */
+  ink: string | null;
+  /** The registered image, or `null` where the project has none. */
+  icon: string | null;
+}) {
+  const src = useShrunkImage(icon, MARK_PX);
+  return (
+    <span
+      className="ptabs__mark"
+      style={src === null ? { background: color, ...(ink === null ? {} : { color: ink }) } : undefined}
+      aria-hidden="true"
+    >
+      {src === null ? initialOf(name) : <img className="ptabs__icon" src={src} alt="" />}
+    </span>
   );
 }

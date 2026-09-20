@@ -2773,6 +2773,32 @@ impl Instructor {
             // who was not told may read a page they did not ask for as the app having lost their
             // place, and go looking for a pane that is exactly where it should be. The screen stays
             // with the pane being worked in, which is the last one opened or typed at.
+            // How much of the page one pane takes. The control is a row of six drawn shapes — each
+            // the page cut into panes of that size — so the step says the shape it presses rather
+            // than naming it, the way `hide-side`'s controls are said by what they do.
+            //
+            // **Which pane it is about is said, because the control does not say it.** It is about
+            // the pane being worked in, and that is the last one opened or typed at — an operator
+            // who read it as "all of them" would take a page that kept its other panes for a press
+            // that never landed.
+            //
+            // Where the *screen* ends up is said too, and it is a different kind of thing: the panes
+            // behind this one are laid down again, so one of them may go onto the next page, and an
+            // operator who was not told would go looking for a pane that is exactly where it should
+            // be.
+            (Domain::Workspace, "set-pane-size") => format!(
+                "At the top of the workspace, in the row of six drawn shapes, press {}. Each of the six is a page cut into panes of one size, and the one in force is the one that is not dimmed. It is about the pane you are working in — the last one you opened or typed at — and that pane alone: it comes out taking {}. The panes after it in the order are laid down again, so one of them may end up on the next page.",
+                size(with)?.glyph(),
+                size(with)?.phrase()
+            ),
+            // And the size read back off the pane. What it is about is the room the pane ends up with
+            // rather than the shape for its own sake, so the reading is said as a share of the page
+            // between the columns — which is what an operator can hold a pane against without
+            // measuring anything.
+            (Domain::Workspace, "pane-size") => format!(
+                "On the workspace, look at the pane you are working in — the one with the mark round it. Confirm it takes {}.",
+                size(with)?.phrase()
+            ),
             (Domain::Workspace, "set-panes") => format!(
                 "At the top of the workspace, in the row of pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
                 count(with, "count")?
@@ -5966,6 +5992,66 @@ impl Orient {
             Orient::Across => "down the middle",
             Orient::Down => "across the middle",
         }
+    }
+}
+
+/// How much of a page one pane takes (`app/src/talk/layout.ts`).
+///
+/// They are named by the share of the page they come to and not by a heading, for the reason
+/// [`Orient`] is: the control that picks between them is drawn rather than written, so there is no
+/// word on the screen for an operator to read any of them off.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PaneSize {
+    Whole,
+    Half,
+    HalfDown,
+    Quarter,
+    Sixth,
+    Eighth,
+}
+
+impl PaneSize {
+    /// The share in words, written to fit after "it takes". The width and the height are both said
+    /// wherever they differ: half the page comes two ways round, and an operator told only "half"
+    /// would have no way to tell the press that was made from the one that was not.
+    fn phrase(self) -> &'static str {
+        match self {
+            PaneSize::Whole => "the whole of the page between the columns",
+            PaneSize::Half => "half the page — half the width, and the whole height",
+            PaneSize::HalfDown => "half the page — the whole width, and half the height",
+            PaneSize::Quarter => "a quarter of the page — half the width, and half the height",
+            PaneSize::Sixth => "a sixth of the page — a third of the width, and half the height",
+            PaneSize::Eighth => "an eighth of the page — a quarter of the width, and half the height",
+        }
+    }
+
+    /// And what the control that picks it is drawn as, which is the page cut into panes of that size
+    /// (`app/src/components/Icon`). An operator told only what the press means would be looking for a
+    /// word, and the six carry none.
+    fn glyph(self) -> &'static str {
+        match self {
+            PaneSize::Whole => "the plain box, undivided — the first of the six",
+            PaneSize::Half => "the box divided down the middle — the second of the six",
+            PaneSize::HalfDown => "the box divided across the middle — the third of the six",
+            PaneSize::Quarter => "the box divided into four — the fourth of the six",
+            PaneSize::Sixth => "the box divided into six — the fifth of the six",
+            PaneSize::Eighth => "the box divided into eight — the last of the six",
+        }
+    }
+}
+
+fn size(with: &Args) -> Result<PaneSize, String> {
+    match with.get("size").and_then(|v| v.as_str()) {
+        Some("whole") => Ok(PaneSize::Whole),
+        Some("half") => Ok(PaneSize::Half),
+        Some("half-down") => Ok(PaneSize::HalfDown),
+        Some("quarter") => Ok(PaneSize::Quarter),
+        Some("sixth") => Ok(PaneSize::Sixth),
+        Some("eighth") => Ok(PaneSize::Eighth),
+        Some(other) => Err(format!(
+            "`size` does not know `{other}` — it is whole, half, half-down, quarter, sixth or eighth"
+        )),
+        None => Err("arg `size` must say how much of the page the pane takes".to_string()),
     }
 }
 

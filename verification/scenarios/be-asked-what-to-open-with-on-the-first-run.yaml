@@ -71,14 +71,6 @@ steps_gui:
     with:
       project: Lighthouse
 
-  # A page with room for two, set while nothing is open. It is what leaves an empty frame standing
-  # beside the pane at the end, which is the frame the second reading is taken on.
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 2
-
   # Where the road starts from: nothing open, so the page draws its one way in and nothing else.
   - type: assert
     domain: workspace
@@ -107,6 +99,16 @@ steps_gui:
     with:
       text: SCENARIO the first press was told what to open with
 
+  # Room for the frame the second reading is taken on. A pane on its own takes the whole page, so it
+  # is cut to half of it — which is what leaves an empty frame standing beside it. It is pressed
+  # after the pane is open because the control is about a pane: with nothing standing there is
+  # nothing for it to be about, and the row is not drawn at all (`app/src/talk/layout.ts`).
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
+
   # It opened. The press that would not answer a moment ago answered once it had been told.
   - type: assert
     domain: workspace
@@ -114,7 +116,7 @@ steps_gui:
     with:
       shows: SCENARIO the first press was told what to open with
 
-  # The page had room for two, so one pane leaves one empty frame beside it.
+  # The pane takes half the page, so one pane leaves one empty frame beside it.
   - type: assert
     domain: workspace
     op: frames

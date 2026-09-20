@@ -56,12 +56,6 @@ steps_gui:
     with:
       project: Boathouse
 
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 2
-
   # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
   # agent's own, and this line has to sit where it was put.
   - type: action
@@ -79,6 +73,15 @@ steps_gui:
     op: type-line
     with:
       text: SCENARIO the pane that goes
+
+  # Room for the second beside it. A pane with nothing to be measured against takes the whole page,
+  # and the control is about a pane — so it is pressed once one is standing rather than before
+  # (`app/src/talk/layout.ts`).
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
 
   - type: action
     domain: workspace

@@ -5,13 +5,13 @@
 # this road defends is the rank under the project's own pin — what *this person* last opened with,
 # kept against them and not against the project they happened to be in (`crate::wake`).
 #
-# ── Why the page is set to one ───────────────────────────────────────────────────────────────────
-# So that the frame read at the end is a frame **drawn again**, not the one left standing. A page of
-# one is full the moment a pane opens on it, so the empty frame goes; removing the pane makes the
-# page draw a new one, which asks the store afresh what to open with. Read on a frame that never
-# left the screen, this road would pass on a build that keeps nothing at all — the frame would still
-# be showing the press the hand made on it a minute earlier, which proves only that a button stays
-# pressed.
+# ── Why one pane fills the page ──────────────────────────────────────────────────────────────────
+# So that the frame read at the end is a frame **drawn again**, not the one left standing. A pane
+# with nothing to be measured against takes the whole page (`app/src/talk/layout.ts`), so the page is
+# full the moment it opens and the empty frame goes; removing the pane makes the page draw a new one,
+# which asks the store afresh what to open with. Read on a frame that never left the screen, this
+# road would pass on a build that keeps nothing at all — the frame would still be showing the press
+# the hand made on it a minute earlier, which proves only that a button stays pressed.
 #
 # ── Why the plain shell is what is chosen ────────────────────────────────────────────────────────
 # It is the one thing on that row every machine has. Which agents are on it is a probe of the run
@@ -63,14 +63,6 @@ steps_gui:
     op: go-project
     with:
       project: Lighthouse
-
-  # A page that one pane fills. Set while nothing is open, so what follows is a page filling rather
-  # than a page cut down to what is already on it.
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 1
 
   # Where the road starts from, said rather than assumed: nothing is open, so the page draws its one
   # way in and nothing else.

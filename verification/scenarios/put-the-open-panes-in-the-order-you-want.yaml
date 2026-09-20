@@ -1,19 +1,26 @@
 # The panes were opened in the order the work arrived in, and the reader wants them in another one.
 #
-# ── Why the order is changed off the face ────────────────────────────────────────────────────────
-# A pane is a terminal somebody is reading and typing into, so a drag across the face itself would
-# move what is under their eyes and their paste while a program is running in it. The order is
-# changed in a panel of cards instead, and the panes go on standing where they are until the press
-# that takes it. That is the whole of what this road defends, and it is why the two
-# halves below are walked rather than one: a build that reordered on the drag and one that reordered
-# on the press look identical from the far side of the press.
+# ── Why this order is changed off the face ───────────────────────────────────────────────────────
+# Carrying a pane past the one beside it is made on the page itself, and that gesture
+# reaches exactly as far as the page the reader is looking at. A pane on another page is not on the
+# screen to be carried onto, so the panel is what the crossing is made in — it draws every page of
+# the list at once, which is the one thing the face cannot do.
 #
-# ── Why two panes and one to a page ──────────────────────────────────────────────────────────────
-# Two is the fewest that has an order at all — with one there is nothing to put anywhere, and the way
-# in is not even drawn. One pane to a page is what makes the order readable: the row above a pane
-# says which pane it is, and a page holding two would have this road reading two rows and saying
-# which was which by where it sat on the screen. At one to a page the panes are on pages of their
-# own, so the order is read by turning to a page and reading the one row on it.
+# **Nothing leaves the panel except by the press.** The cards move under the hand and the panes go on
+# standing where they are until the button is taken, which is the whole of what this road defends —
+# and it is why the two halves below are walked rather than one: a build that wrote as it was dragged
+# and one that wrote on the press look identical from the far side of the press.
+#
+# ── Why two panes, each filling its page ─────────────────────────────────────────────────────────
+# Two is the fewest that has an order at all — with one there is nothing to put anywhere. Nothing
+# asks for a page each: a pane with nothing to be measured against takes the whole page
+# (`app/src/talk/layout.ts`), so two panes are two pages by construction — which is also what draws
+# the way in at all, the panel being offered only where there is a page to cross to.
+#
+# A page each is what makes the order readable besides: the row above a pane says which pane it is,
+# and a page holding two would have this road reading two rows and saying which was which by where it
+# sat on the screen. On a page each, the order is read by turning to a page and reading the one row
+# on it.
 #
 # The panes are named because nothing else tells them apart: both are opened in the same folder, so
 # both rows would otherwise carry that folder's name and the reader of this road would be looking at
@@ -32,9 +39,9 @@
 id: put-the-open-panes-in-the-order-you-want
 title: The open panes are put in the order the reader asked for, and in no other
 description: >
-  Open two panes, one to a page, and give each a name of its own. Open the panel that puts them in
-  order, carry the second card in front of the first, and leave without taking it — the pages are as
-  they were. Do it again and press for it, and the order has changed: the second pane is on the first
+  Open two panes, each filling its own page, and give each a name of its own. Open the panel that
+  carries a pane onto another page, put the second card in front of the first, and leave without
+  taking it — the pages are as they were. Do it again and press for it, and the order has changed: the second pane is on the first
   page and the first is on the second, while the page being read and the pane being worked in stay
   where they were.
 

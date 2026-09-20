@@ -1029,10 +1029,24 @@ and says the column is not it.
 
 `frames` counts what is standing on the page, and it is a `Review` for the reason `dot` below is —
 a box carries no words of the road's, and an empty one would carry the interface's. What it defends
-is that the pane count is the most a page draws rather than slots waiting to be filled:
-`find-one-way-in-rather-than-a-page-of-empty-boxes` sets the count to four with nothing open and
-reads the page still empty, then grows it one frame per pane opened. A face that filled its ceiling
-with boxes would be asking the same question four times over, and nothing else here would say so.
+is that the page draws a box per pane rather than slots waiting to be filled:
+`find-one-way-in-rather-than-a-page-of-empty-boxes` makes room for four with nothing open and reads
+the page still empty, then grows it one frame per pane opened. A face that filled the room with boxes
+would be asking the same question four times over, and nothing else here would say so.
+
+`set-pane-size` and `pane-size` are how much of a page **one** pane takes — `whole`, `half`,
+`half-down`, `quarter`, `sixth` or `eighth`. They say no pane, because the control does
+not: it is a row of six drawn shapes at the top of the face, and the pane it is about is the one
+being worked in. The press and the reading are two ops for the reason every pair here is two — a
+build that lit the control without laying the page out again under it would draw exactly the screen
+the reader pressed away from, and only a reading taken off the pane can tell that from a press that
+landed. A road walks two sizes and never the asked-for one alone: a face stuck at whichever size a
+road happened to ask for last would come out green from end to end.
+
+`set-panes`, `set-orient` and `panes-sit` are the pair's retired predecessors, and they are kept only
+while the roads that still speak them are moved. What a count was is gone from the build: a pane
+carries how much of a page it takes, and the page is what falls out of laying the panes down in
+order.
 
 `opens-with` reads the other thing an empty frame carries: the row above its press, which is what a
 pane opened there would start with. It names `shell` and nothing else — which agents are on that row

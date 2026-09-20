@@ -2981,9 +2981,32 @@ const REGISTRY: &[OpSpec] = &[
     // the count: room the page has not got must not be offered, and "at most one" cannot tell a full
     // page from a page still offering.
     OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
+    // How much of a page one pane takes: `whole`, `half`, `half-down`, `quarter`, `sixth` or
+    // `eighth`, and no other word. It is not a change of look. The panes are one list
+    // laid down in order and the pages fall out of that, so a pane that grew takes room the ones
+    // behind it were in and pushes the overflow onto the next page — which is why a road walks it at
+    // all: what has to survive the re-laying is the terminals running inside them.
+    //
+    // **It says no pane**, because the control does not: it is a row of six drawn shapes at the top
+    // of the face, and the pane it is about is the one being worked in on the page being read. A road
+    // that wanted another pane sized presses that pane first, which is a move of its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-pane-size", required: &["size"], refs: &[], strings: &["size"], binds: false },
+    // And the size read back off the pane itself — how much of the page between the columns it is
+    // actually taking. It is the whole of what the press above is for: a build that lit the control
+    // without laying the page out again under it would draw exactly the screen the reader pressed
+    // away from.
+    //
+    // A road walks two sizes and never the asked-for one alone. A page read only after the press has
+    // nothing to say about what it was before, so a face stuck at one size — the one a road happened
+    // to ask for last — would come out green from end to end.
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "pane-size", required: &["size"], refs: &[], strings: &["size"], binds: false },
     // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which
     // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
+    //
+    // **Retired, and kept while the roads that still speak it are moved.** What a count was is gone
+    // from the build: a pane carries how much of a page it takes, and the page is what falls out of
+    // laying them down (`set-pane-size`).
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
     // Which way the two panes of a two-pane page sit: `across` side by side, `down` one above the
     // other. It is asked at two and at no other count — everywhere else the rows are already spent

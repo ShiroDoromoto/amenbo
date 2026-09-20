@@ -47,7 +47,8 @@
 # steps stood up again to read one more line.
 #
 # ── Why one pane ────────────────────────────────────────────────────────────────────────────────
-# The page is asked for one, so the frame the press puts back is the only box on it and every step
+# Nothing asks for it. A pane with nothing to be measured against takes the whole page
+# (`app/src/talk/layout.ts`), so the frame the press puts back is the only box on it and every step
 # after the press means that one. Which pane a press landed in is a question the road beside this one
 # answers, and answering it twice would buy nothing here.
 id: be-told-the-conversation-a-record-was-made-in-is-gone
@@ -95,12 +96,6 @@ steps_gui:
     op: go-project
     with:
       project: Workshop
-
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 1
 
   # Named rather than taken by position, because what this road needs of it is the one thing a
   # position cannot promise: a provider whose way back is a handle on its line, which is what the

@@ -88,14 +88,14 @@ steps_gui:
     with:
       text: SCENARIO nothing more is coming
 
-  # Room on the page for a second pane beside the first. At the one pane a project nobody has
-  # answered for is drawn at, the pane opened next would be on a page of its own and the first would
-  # go off the screen with the reader.
+  # Room on the page for a second pane beside the first. At the whole page a pane with nothing to be
+  # measured against takes, the pane opened next would be on a page of its own and the first would go
+  # off the screen with the reader.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
+      size: half
 
   # The second pane, which is here to take the working place away rather than to be used. It is opened
   # from the empty frame beside the first, in the project's folder, and becomes the pane being worked

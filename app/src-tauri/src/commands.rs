@@ -946,6 +946,12 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                             None => format!("'{wrote}' is not one this build draws"),
                         }),
                     },
+                    Warning::Choice { theme, key, wrote } => SkinWarningDto {
+                        kind: "choice".into(),
+                        theme: Some(theme.as_str().to_string()),
+                        key: (*key).to_string(),
+                        detail: Some(format!("'{wrote}' is not one this build draws")),
+                    },
                 }
             })
             .collect(),

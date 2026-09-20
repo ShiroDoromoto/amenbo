@@ -814,7 +814,8 @@ pub struct SkinWarningDto {
     /// `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself),
     /// `notText` (a value that did not arrive as text), `unsafeValue` (one that is text and is not
     /// a shape a value may have), `scale` (a multiplier not taken as written), `frame` (a frame
-    /// value not taken as written), or `font` (the one embedded font).
+    /// value not taken as written), `choice` (a word outside the list this build draws), or
+    /// `font` (the one embedded font).
     pub(crate) kind: String,
     pub(crate) theme: Option<String>,
     pub(crate) key: String,

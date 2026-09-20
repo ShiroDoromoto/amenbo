@@ -277,6 +277,24 @@ fn frame(side: Side, table: &mut ThemeTable, warnings: &mut Vec<Warning>) {
     }
 }
 
+/// Hold the smoothing to the ways this build has a drawing for, and say what was dropped.
+///
+/// Unlike the frame pair there is nothing to put back inside — the value is a word, not a number,
+/// so a word that is not one of the three is dropped and this build's own `antialiased` stands.
+///
+/// `subpixel-antialiased` is not among them. macOS stopped drawing subpixel antialiasing at all,
+/// and Windows does not read this property (`AMB-T-5168`), so it is a word that would draw the
+/// same as `auto` everywhere it was written — which is the kind of value that teaches an author
+/// something untrue about what they are holding.
+fn smoothing(side: Side, table: &mut ThemeTable, warnings: &mut Vec<Warning>) {
+    let Some(wrote) = table.values.get("font-smooth") else { return };
+    if SMOOTHINGS.contains(&wrote.trim()) {
+        return;
+    }
+    let wrote = table.values.remove("font-smooth").unwrap_or_default();
+    warnings.push(Warning::Choice { theme: side, key: "font-smooth", wrote });
+}
+
 /// A CSS length in pixels, or `None` where it is not one this build can read. Everything has to say
 /// `px` — it is the only unit these two are written in, and a bare `0` never reaches here anyway:
 /// YAML reads it as a number, which the check has already dropped as a value that is not text.
@@ -355,8 +373,9 @@ pub const OPEN: &[&str] = &[
     "c-git-added", "c-git-modified", "c-git-untracked", "c-heed", "c-hover", "c-human", "c-on-accent",
     "c-on-done", "c-on-heed", "c-on-stop", "c-pane-bg", "c-pane-cursor", "c-pane-frame", "c-pane-text",
     "c-plain", "c-pri-high", "c-pri-low", "c-pri-med", "c-rule", "c-stop", "c-sunken",
-    "c-surface", "c-text", "c-text-faint", "c-text-muted", "font", "font-mono", "fw-bold",
-    "fw-medium", "fw-normal", "icon-lg", "icon-md", "icon-sm", "identicon-l", "identicon-s", "lh",
+    "c-surface", "c-text", "c-text-faint", "c-text-muted", "font", "font-mono", "font-smooth",
+    "fw-bold", "fw-medium", "fw-normal", "icon-lg", "icon-md", "icon-sm", "identicon-l",
+    "identicon-s", "lh",
     "measure-form", "measure-prose"
 ];
 
@@ -456,6 +475,11 @@ pub const BORDER_W_MAX_PX: f32 = 4.0;
 /// harder to read and build nothing that `solid` and `double` do not, and in this application a
 /// dashed rule is already saying something of its own (`AMB-D-928`).
 pub const BORDER_STYLES: &[&str] = &["double", "none", "solid"];
+
+/// The ways the glyphs may be drawn. `none` is the one a face drawn on a grid wants; `auto` hands
+/// the choice back to the machine, which is not the same as this build's own `antialiased` on
+/// every engine.
+pub const SMOOTHINGS: &[&str] = &["antialiased", "auto", "none"];
 
 /// The width a `double` frame is drawn at, whatever the author wrote.
 ///
@@ -722,6 +746,9 @@ pub enum Warning {
     /// A frame value that was not taken as written. `used` is what was put there instead, or
     /// `None` where the name was dropped and this build's own value stands.
     Frame { theme: Side, key: &'static str, wrote: String, used: Option<String> },
+    /// A value outside the short list of words this build has a drawing for. Dropped, so the name
+    /// keeps this build's own value; there is nothing to put back inside, the way a number has.
+    Choice { theme: Side, key: &'static str, wrote: String },
     /// The embedded font was set aside. The colours are taken either way — a look built on a face
     /// nobody can read still has its palette, and refusing the file over it would throw that away.
     FontDropped(FontProblem),
@@ -896,6 +923,7 @@ impl Skin {
             }
             table.values = kept;
             frame(side, table, &mut warnings);
+            smoothing(side, table, &mut warnings);
         }
 
         Ok(Taken { skin, font: font_bytes, warnings })
@@ -1341,6 +1369,33 @@ dark:
                     key: "border-style",
                     wrote: style.into(),
                     used: None
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn a_way_of_drawing_the_glyphs_this_build_offers_is_taken_as_written() {
+        for word in SMOOTHINGS {
+            let taken = framed(&format!("  font-smooth: \"{word}\"\n"));
+            assert!(taken.warnings.is_empty(), "{word}: {:?}", taken.warnings);
+            assert_eq!(taken.skin.light.values["font-smooth"], *word);
+        }
+    }
+
+    #[test]
+    fn a_way_of_drawing_the_glyphs_this_build_does_not_offer_is_dropped() {
+        // `subpixel-antialiased` is the one an author is likeliest to reach for, and the one that
+        // would draw as `auto` on every engine measured.
+        for word in ["subpixel-antialiased", "grayscale", "off"] {
+            let taken = framed(&format!("  font-smooth: \"{word}\"\n"));
+            assert!(!taken.skin.light.values.contains_key("font-smooth"), "{word}");
+            assert_eq!(
+                taken.warnings,
+                [Warning::Choice {
+                    theme: Side::Light,
+                    key: "font-smooth",
+                    wrote: word.into()
                 }]
             );
         }

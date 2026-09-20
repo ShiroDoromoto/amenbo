@@ -6,7 +6,7 @@ body {
   line-height: var(--lh);
   color: var(--c-text);
   background: var(--c-bg);
-  -webkit-font-smoothing: antialiased;
+  -webkit-font-smoothing: var(--font-smooth);
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 

@@ -69,6 +69,7 @@ dark:
   fw-medium: "400"
   fw-bold: "400"
   lh: "1.6"
+  shadow-scale: "0"
   border-w: "3px"
   border-style: "double"
 

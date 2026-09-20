@@ -1,5 +1,5 @@
-# Terminal — one monospace stack for everything, corners as square as the check allows, and
-# not one byte of font carried: the faces are the ones the device already has.
+# Terminal — one monospace stack for everything, square corners, no shadows, and not one byte of
+# font carried: the faces are the ones the device already has.
 
 name: terminal
 title: "Terminal"
@@ -71,7 +71,8 @@ light:
   lh: "1.45"
   border-w: "1px"
   border-style: "solid"
-  r-scale: "0.85"
+  r-scale: "0"
+  shadow-scale: "0"
 
 dark:
   c-accent: "#3ec8c4"
@@ -135,5 +136,6 @@ dark:
   lh: "1.45"
   border-w: "1px"
   border-style: "solid"
-  r-scale: "0.85"
+  r-scale: "0"
+  shadow-scale: "0"
 

@@ -38,6 +38,7 @@ import { AppearanceSettings } from "./AppearanceSettings";
 const row = (name: string, themes: string[]) => ({
   name,
   title: name,
+  titles: {},
   author: null,
   version: null,
   themes,
@@ -90,6 +91,7 @@ describe("trying a skin on", () => {
     hoisted.tables.washi = {
       name: "washi",
       title: "和紙",
+      titles: {},
       light: { "c-bg": "#faf7f0" },
       dark: { "c-bg": "#1a1713" },
       font: null,
@@ -112,6 +114,7 @@ describe("trying a skin on", () => {
     hoisted.tables.washi = {
       name: "washi",
       title: "washi",
+      titles: {},
       light: { "c-bg": "#faf7f0" },
       dark: {},
       font: null,

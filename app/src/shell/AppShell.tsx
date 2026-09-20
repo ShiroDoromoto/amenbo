@@ -260,7 +260,7 @@ export function AppShell() {
   // (`./TerminalFace`).
   const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; nth: number } | null>(null);
   /**
-   * "Start in the terminal" — the one move the first loop offers (`../components/FirstLoop`).
+   * "Start in the workspace" — the one move the first loop offers (`../components/FirstLoop`).
    *
    * With the terminal split out into a window of its own, this window has no face to hand the folder
    * to — so the pair goes out to the host, which raises that window and hands it on

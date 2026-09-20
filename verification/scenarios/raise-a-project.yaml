@@ -41,7 +41,7 @@ id: raise-a-project
 title: A reader who raises a project is left on a screen that leads with the first loop, and the request it hands over names the file the AI is told to read
 description: >
   Take the way in that raises a project, give it a name and a folder, and read what the screen it
-  ends on offers. The loop leads it — start in the terminal, and watch the tasks arrive — with the
+  ends on offers. The loop leads it — start in the workspace, and watch the tasks arrive — with the
   road out to the reader's own terminal folded beside that press; opened, the request it hands over
   names AGENTS.md, which is what sends the reader's AI to learn Amenbo before it writes anything. The
   moves that were there before the loop sit underneath it, and the way on to the board is last.

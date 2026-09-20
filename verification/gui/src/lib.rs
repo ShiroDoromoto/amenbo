@@ -4120,7 +4120,7 @@ impl Instructor {
                 req(with, "absent")?
             ),
             (Domain::Folder, "first-loop") => format!(
-                "Confirm the first loop is offered here: one move starts a terminal already inside the linked folder, and under it the loop says the tasks will appear on the board. Then open the way out to your own terminal, folded beside that move, and confirm the request it hands over names \"{}\".",
+                "Confirm the first loop is offered here: one move opens the workspace already inside the linked folder, and under it the loop says the tasks will appear on the board. Then open the way out to your own terminal, folded beside that move, and confirm the request it hands over names \"{}\".",
                 req(with, "hands_over")?
             ),
             (Domain::Folder, "first-loop-order") => format!(

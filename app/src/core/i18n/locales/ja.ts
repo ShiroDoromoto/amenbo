@@ -34,7 +34,7 @@ export const ja: Translation = {
     "newproj.openProject": "プロジェクトを開く",
     "firstloop.title": "最初の1周",
     "firstloop.intro": "AI に頼んで、最初のタスクを登録します。",
-    "firstloop.start": "ターミナルで始める",
+    "firstloop.start": "ワークスペースで始める",
     "firstloop.startHint": "紐付けたフォルダで開きます。",
     "firstloop.outside": "外の端末で始める",
     "firstloop.outsideHint": "使う AI は選びません。起動して、この文をそのまま貼ってください。",
@@ -44,7 +44,7 @@ export const ja: Translation = {
     "firstloop.appearHint": "AI が書き込むと、開いているボードにそのまま現れます。",
     "firstloop.prompt": "このフォルダは Amenbo で管理します。{cmd} agent --json を実行して、それに従ってタスク管理しながら進めてください。",
     "noFolder.title": "このプロジェクトにはフォルダが紐付いていません",
-    "noFolder.hint": "紐付けたフォルダで起動した AI が、このプロジェクトを操作できます。開くターミナルも、依頼文を貼る先も、そのフォルダで決まります。",
+    "noFolder.hint": "紐付けたフォルダで起動した AI が、このプロジェクトを操作できます。開くワークスペースも、依頼文を貼る先も、そのフォルダで決まります。",
     "noFolder.btn": "フォルダを紐付ける",
     "projset.title": "プロジェクト設定", "projset.back": "ボードへ戻る",
     "projset.general": "基本", "projset.nameLabel": "名前", "projset.notesLabel": "メモ",
@@ -583,12 +583,12 @@ export const ja: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "face.switch": "タスク／ターミナル",
+    "face.switch": "タスク／ワークスペース",
     "face.tasks": "タスク",
-    "face.terminal": "ターミナル",
+    "face.terminal": "ワークスペース",
     "face.splitOut": "別ウィンドウで開く",
     "face.merge": "1つのウィンドウに戻す",
-    "face.opening": "ターミナルを別ウィンドウで開いています…",
+    "face.opening": "ワークスペースを別ウィンドウで開いています…",
     "face.drop": "このペインを消す",
     "face.dropConfirm": "このペインを消しますか？中の端末は終わり、ここで話していたことへ戻る道も場所と一緒に無くなります。",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",
@@ -956,7 +956,7 @@ export const ja: Translation = {
     "onboard.s1title": "プロジェクトにフォルダを紐付ける",
     "onboard.s1a": "そのフォルダに ", "onboard.s1b": "（ローカルの紐付け）と ", "onboard.s1c": " を置きます。そこで起動した AI が、このプロジェクトを操作できます。",
     "onboard.s2title": "AI に頼む",
-    "onboard.s2body": "作成の完了画面と、まだ何も無いボードが、そのフォルダでターミナルを開きます。外の端末を使うなら、同じ依頼文が1押しで出るので、それを貼ってください。",
+    "onboard.s2body": "作成の完了画面と、まだ何も無いボードが、そのフォルダでワークスペースを開きます。外の端末を使うなら、同じ依頼文が1押しで出るので、それを貼ってください。",
     "onboard.s3title": "あとは置くだけ",
     "onboard.s3body": "タスクを AI 宛に置けば、AI が着手して自律で進めます。動きはアクティビティに流れます。",
     // list empty states
@@ -1058,7 +1058,7 @@ export const ja: Translation = {
     wake_not_kept: "選んだ内容を保存できませんでした。",
     wake_not_registered: "登録するコマンドには、名前と起動行の両方が要ります。",
     window_failed: "そのウィンドウを開けませんでした: {reason}",
-    talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこのウィンドウに戻しました。",
+    talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ワークスペースをこのウィンドウに戻しました。",
     clip_refused: "クリップボードに載せられませんでした: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant

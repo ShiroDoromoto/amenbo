@@ -336,7 +336,7 @@ pub fn raise_window(win: &WebviewWindow) {
 fn blank() -> CmdError {
     CmdError::coded(
         "talk_blank",
-        "That window opened but never drew anything, so the terminal was put back in this one."
+        "That window opened but never drew anything, so the workspace was put back in this one."
             .to_string(),
         serde_json::json!({}),
     )

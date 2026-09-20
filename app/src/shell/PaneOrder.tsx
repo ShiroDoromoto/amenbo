@@ -1,23 +1,23 @@
 import { useEffect, useState, useRef } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import {
-  ACROSS, BOXES, gridAt, movedWithin, placing, type Frame,
-} from "../talk/layout";
+import { gridAt, movedWithin, placing, type Frame } from "../talk/layout";
 import { frameLabel, type FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import { faceOf, type Face, type Plate as Row } from "../talk/nameplate";
 import { hueOf } from "../talk/moving";
-import { sideOfBox } from "./rowDrag";
+import { sideOnPane } from "./paneDrag";
 import { t, tf } from "../core/i18n";
 
 /**
  * Where the panes of one project are put in order (`AMB-D-853`).
  *
- * **The panes do not move on the page they are drawn on.** A pane is a terminal somebody is reading,
- * so a drag over the face itself would move what is under their eyes and their paste while a program
- * is running in it. The order is changed here instead, and only what is pressed for is kept: the
- * cross, Escape and the backdrop all leave the arrangement exactly as it was, however much has been
- * dragged about in here.
+ * **The page itself is where a pane is carried past the one beside it** (`./paneDrag`, `AMB-D-939`),
+ * so what is left to this is the move the page cannot show: a pane carried onto a page that is not
+ * on the screen. Every page of the list is drawn in here, which is the one thing the face cannot do.
+ *
+ * **Nothing leaves here except by the button.** The cross, Escape and the backdrop all leave the
+ * arrangement exactly as it was, however much has been dragged about in here — this is a proposal
+ * about an arrangement, and the face's own drag is the one that settles as it goes.
  *
  * **It draws the pages, because the list is what is being reordered and the pages are that list laid
  * down in order** (`../talk/layout`). A pane carried onto another page is the same move as one carried
@@ -112,12 +112,10 @@ export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
     const target = card?.dataset.paneCard;
     if (card == null || target == null || target === on.id) return;
     // Which midline of this card puts one before another. It is read off the card being dropped on
-    // rather than off the page, because the cards are no longer one shape: a card that takes the
-    // whole width has the card before it above rather than beside it, and every other card has its
-    // neighbours to the left and right (`../talk/layout`).
+    // rather than off the page, because the cards are no longer one shape (`./paneDrag`).
     const size = order.find((one) => one.id === target)?.size;
-    const axis = size !== undefined && BOXES[size].across === ACROSS ? "down" : "across";
-    const side = sideOfBox(latest.current, card.getBoundingClientRect(), axis);
+    if (size === undefined) return;
+    const side = sideOnPane(latest.current, card.getBoundingClientRect(), size);
     setOrder((was) => movedWithin(was, on.id, target, side));
   };
 

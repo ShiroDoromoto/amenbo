@@ -320,3 +320,110 @@ describe("how much of the page a pane takes", () => {
     expect(boxes).toEqual(["1 / span 6", "7 / span 4"]);
   });
 });
+
+// The two gestures the page itself carries (`AMB-D-939`): a pane taken by its row and carried past
+// another, and a pane's corner pulled to a size. The arithmetic behind both is `./paneDrag`'s and is
+// tested there; what is pinned here is that the face is wired to it — that a drag on the row writes
+// an order and a drag on the corner writes a size, neither of which the arithmetic can say.
+//
+// jsdom has no layout, so the page and the panes answer for their own rectangles and the document
+// for what is under a point. It is the same trade `./paneOrder.test` makes.
+describe("moving and sizing a pane where it is drawn", () => {
+  /** The page as 1200 across and 400 down at the origin, so one cell is 100 wide and one row 200. */
+  function pageIs1200By400() {
+    q(".workspace__page-grid")[0]!.getBoundingClientRect = () => ({
+      top: 0, left: 0, width: 1200, height: 400, right: 1200, bottom: 400,
+      x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+  }
+
+  /** Press on this, move to that point, and let go — with the document answering for what is under
+   *  it. `holding` is run with the hand still down, which is the only moment what a drag draws is on
+   *  the screen. The wait before it is for the one hit test a frame the move asks for. */
+  async function carry(
+    on: HTMLElement,
+    to: { x: number; y: number },
+    over: HTMLElement | null = null,
+    holding: () => void = () => {},
+  ) {
+    document.elementFromPoint = () => over;
+    await act(async () => {
+      on.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 0, clientY: 0 }));
+      document.dispatchEvent(new MouseEvent("pointermove", { clientX: to.x, clientY: to.y }));
+      await new Promise((done) => setTimeout(done, 20));
+    });
+    holding();
+    await act(async () => {
+      document.dispatchEvent(new MouseEvent("pointerup", { clientX: to.x, clientY: to.y }));
+    });
+  }
+
+  const panes = () => q(".slot:not(.slot--empty)");
+
+  it("leaves a pane at the size its corner was let go over", async () => {
+    await mount();
+    await openPane();                              // one pane, at the whole page
+    pageIs1200By400();
+
+    // Pulled in to six cells across and one row down, which is a quarter of the page.
+    await carry(q(".slot__corner")[0]!, { x: 600, y: 200 }, null, () => {
+      // While the hand is down the pane is untouched and the size is an outline over the page: it
+      // holds a terminal, and one resized on every report of the pointer would be told a new width
+      // dozens of times for one gesture.
+      expect(panes()[0]!.style.gridColumn).toBe("1 / span 12");
+      const outline = q(".workspace__stretch")[0]!;
+      expect(outline.style.gridColumn).toBe("1 / span 6");
+      expect(outline.style.gridRow).toBe("1 / span 1");
+    });
+    expect(q(".workspace__stretch")).toHaveLength(0);
+    expect(panes()[0]!.style.gridColumn).toBe("1 / span 6");
+    expect(panes()[0]!.style.gridRow).toBe("1 / span 1");
+  });
+
+  it("leaves the size alone where the press never became a drag", async () => {
+    await mount();
+    await openPane();
+    pageIs1200By400();
+
+    // Down and up in the same place: a press on the corner is not a gesture that settled anywhere.
+    await carry(q(".slot__corner")[0]!, { x: 0, y: 0 });
+    expect(panes()[0]!.style.gridColumn).toBe("1 / span 12");
+  });
+
+  it("puts a pane carried onto another where the half it was let go over says", async () => {
+    await mount();
+    await openPane();
+    await atSize("quarter");
+    await openPane();                              // two quarters, side by side
+    const [first, second] = panes();
+    const was = panes().map((one) => one.dataset.hand);
+
+    // The far half of the second pane, which is the right half at two panes drawn across.
+    second!.getBoundingClientRect = () => ({
+      top: 0, left: 600, width: 600, height: 200, right: 1200, bottom: 200,
+      x: 600, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+    await carry(first!.querySelector<HTMLElement>(".slot__bar")!, { x: 900, y: 100 }, second!, () => {
+      // Nothing has moved yet: what says where the drop would land is a mark on the pane it would go
+      // in beside, on the far side of it and along the axis these two are neighbours on.
+      expect(panes().map((one) => one.dataset.hand)).toEqual(was);
+      const mark = second!.querySelector<HTMLElement>(".slot__goes")!;
+      expect(mark.dataset.side).toBe("after");
+      expect(mark.dataset.axis).toBe("across");
+      expect(first!.className).toContain("slot--held");
+    });
+
+    expect(q(".slot__goes")).toHaveLength(0);
+    expect(panes().map((one) => one.dataset.hand)).toEqual([was[1], was[0]]);
+  });
+
+  it("gives no handle to a project with one pane, which is already in order", async () => {
+    await mount();
+    await openPane();
+    expect(q(".slot__bar--grab")).toHaveLength(0);
+
+    await atSize("quarter");
+    await openPane();
+    expect(q(".slot__bar--grab")).toHaveLength(2);
+  });
+});

@@ -670,6 +670,52 @@ input[type="color"] {
   background: var(--c-surface-pic) var(--c-surface); box-shadow: var(--shadow-md);
 }
 
+/* The row is what a pane is carried by (`../shell/TerminalPane`). It is the row and not the pane
+   because the pane is a terminal: a drag anywhere in it is a person selecting the text they are
+   reading, and the two gestures cannot share one surface (`AMB-D-939`). */
+.slot__bar--grab { cursor: grab; touch-action: none; }
+body.dragging-row .slot__bar--grab { cursor: grabbing; }
+/* The pane in hand, held back while it is out of its place. It is drawn on the frame rather than on
+   the slot so the terminal's own ground goes with it, and nothing here takes room: the box xterm
+   measures is what the program inside is told its width from (`.slot--landed`). */
+.slot--held .slot__frame { opacity: 0.55; }
+/* Where the pane in hand would go — down the edge it would go in at, along whichever axis this pane
+   has its neighbours on (`../shell/paneDrag`). It lies over the pane and answers to no pointer, for
+   the reason the hand-over surface does. */
+.slot__goes {
+  position: absolute; z-index: 3; pointer-events: none;
+  border-radius: var(--r-sm);
+  background: var(--c-accent);
+}
+.slot__goes[data-axis="across"] { top: 0; bottom: 0; width: 3px; }
+.slot__goes[data-axis="across"][data-side="before"] { left: calc(var(--s-1) * -1); }
+.slot__goes[data-axis="across"][data-side="after"] { right: calc(var(--s-1) * -1); }
+.slot__goes[data-axis="down"] { left: 0; right: 0; height: 3px; }
+.slot__goes[data-axis="down"][data-side="before"] { top: calc(var(--s-1) * -1); }
+.slot__goes[data-axis="down"][data-side="after"] { bottom: calc(var(--s-1) * -1); }
+/* The corner a size is pulled by. It sits in the pane's own bottom-right and is the size a pointer
+   can find without hunting; what it is pulled to is one of the six sizes and never a shape of its
+   own (`../shell/paneDrag`). */
+.slot__corner {
+  position: absolute; right: 0; bottom: 0; z-index: 3;
+  width: 14px; height: 14px;
+  cursor: nwse-resize; touch-action: none;
+  border-right: 2px solid transparent; border-bottom: 2px solid transparent;
+  border-bottom-right-radius: var(--r-md);
+}
+.slot:hover .slot__corner, .slot--focused .slot__corner {
+  border-right-color: var(--c-edge); border-bottom-color: var(--c-edge);
+}
+.slot__corner:hover { border-right-color: var(--c-accent); border-bottom-color: var(--c-accent); }
+/* The size a corner being pulled would be let go at, as an outline on the page's own grid. It is
+   placed by the same rectangle a pane is (`app/src/talk/layout.ts`), so what it shows is the room
+   the pane would take rather than how far the pointer has come. */
+.workspace__stretch {
+  z-index: 4; pointer-events: none;
+  border: 2px dashed var(--c-accent); border-radius: var(--r-md);
+  background: var(--c-accent-weak);
+}
+
 .slot--focused .slot__frame { border-color: var(--c-accent); }
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they

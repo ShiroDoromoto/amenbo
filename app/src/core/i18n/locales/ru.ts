@@ -476,7 +476,7 @@ export const ru: Translation = {
     "settings.doctor": "Проверить и починить",
     "settings.doctorNote": "Проверяет данные внутри (висящие ссылки и подобное) и связанные папки этого устройства (.amenbo / руководство для ИИ). Сама проверка ничего не пишет. Те же проверки и те же исправления, что и у `amenbo doctor` в командной строке.",
     "settings.doctorChecking": "Проверка…",
-    "settings.doctorRecheck": "Проверить ещё раз",
+    "settings.doctorRecheck": "Проверить",
     "settings.doctorClean": "Проблем не найдено.",
     "settings.doctorFound": "ошибок: {errors} / предупреждений: {warnings}",
     "settings.doctorFix": "Убрать файлы без ссылок и оставшиеся привязки",

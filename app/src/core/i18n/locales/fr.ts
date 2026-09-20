@@ -473,7 +473,7 @@ export const fr: Translation = {
     "settings.doctor": "Vérifier et réparer les problèmes",
     "settings.doctorNote": "Vérifie l'intérieur des données (références orphelines et compagnie) et les dossiers liés de cet appareil (.amenbo / guide de l'IA). La vérification elle-même n'écrit rien. Mêmes vérifications et mêmes réparations que `amenbo doctor` en ligne de commande.",
     "settings.doctorChecking": "Vérification…",
-    "settings.doctorRecheck": "Vérifier à nouveau",
+    "settings.doctorRecheck": "Vérifier",
     "settings.doctorClean": "Aucun problème trouvé.",
     "settings.doctorFound": "{errors} erreur(s) / {warnings} avertissement(s)",
     "settings.doctorFix": "Balayer les fichiers sans référence et les liaisons restantes",

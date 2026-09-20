@@ -498,9 +498,11 @@ nothing references any more). Turn it off
 with `amenbo config set startup_integrity_check false`. The app warns on launch too, and
 adds the bound folders whose `.amenbo` pointer is gone or still in a legacy format — an AI
 started there would not reach the project, and nothing else would have told you. The full
-face is under *Settings → Integrity*: it lists everything `amenbo doctor` finds — the store
-and this machine's bound folders — and runs the same repairs, so the CLI is never required
-to fix what the app shows you.
+face is under *Settings → Integrity*: press the check there and it lists everything `amenbo
+doctor` finds — the store and this machine's bound folders — and runs the same repairs, so the
+CLI is never required to fix what the app shows you. It checks when you press and not when you
+open the screen: the folder half of it starts git three times per bound folder, and everything
+that needs a hand has already been said on a banner.
 
 </details>
 

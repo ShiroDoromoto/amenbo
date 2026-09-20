@@ -474,7 +474,7 @@ export const ptBR: Translation = {
     "settings.doctor": "Verificar e reparar problemas",
     "settings.doctorNote": "Verifica o interior dos dados (referências órfãs e afins) e as pastas vinculadas deste dispositivo (.amenbo / guia da IA). A verificação em si não escreve nada. As mesmas verificações e os mesmos reparos do `amenbo doctor` na linha de comando.",
     "settings.doctorChecking": "Verificando…",
-    "settings.doctorRecheck": "Verificar de novo",
+    "settings.doctorRecheck": "Verificar",
     "settings.doctorClean": "Nenhum problema encontrado.",
     "settings.doctorFound": "{errors} erro(s) / {warnings} aviso(s)",
     "settings.doctorFix": "Varrer arquivos sem referência e vínculos sobrando",

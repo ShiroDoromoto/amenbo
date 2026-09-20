@@ -474,7 +474,7 @@ export const it: Translation = {
     "settings.doctor": "Controlla e ripara i problemi",
     "settings.doctorNote": "Controlla l'interno dei dati (riferimenti orfani e simili) e le cartelle collegate di questo dispositivo (.amenbo / guida per l'IA). Il controllo in sé non scrive nulla. Gli stessi controlli e le stesse riparazioni di `amenbo doctor` da riga di comando.",
     "settings.doctorChecking": "Controllo in corso…",
-    "settings.doctorRecheck": "Controlla di nuovo",
+    "settings.doctorRecheck": "Controlla",
     "settings.doctorClean": "Nessun problema trovato.",
     "settings.doctorFound": "{errors} errore/i / {warnings} avviso/i",
     "settings.doctorFix": "Ripulisci i file senza riferimenti e i collegamenti rimasti",

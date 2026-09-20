@@ -465,7 +465,7 @@ export const tr: Translation = {
     "settings.doctor": "Sorunları denetle ve onar",
     "settings.doctorNote": "Verinin içini (öksüz göndermeler ve benzerleri) ve bu cihazın bağlı klasörlerini (.amenbo / yapay zekâ kılavuzu) denetler. Denetimin kendisi hiçbir şey yazmaz. Komut satırındaki `amenbo doctor` ile aynı denetimler ve aynı onarımlar.",
     "settings.doctorChecking": "Denetleniyor…",
-    "settings.doctorRecheck": "Yeniden denetle",
+    "settings.doctorRecheck": "Denetle",
     "settings.doctorClean": "Sorun bulunamadı.",
     "settings.doctorFound": "{errors} hata / {warnings} uyarı",
     "settings.doctorFix": "Göndermesiz dosyaları ve artık klasör bağlarını süpür",

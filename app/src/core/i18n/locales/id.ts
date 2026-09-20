@@ -467,7 +467,7 @@ export const id: Translation = {
     "settings.doctor": "Periksa dan perbaiki masalah",
     "settings.doctorNote": "Memeriksa bagian dalam data (rujukan yatim dan sejenisnya) dan folder yang tertaut di perangkat ini (.amenbo / panduan AI). Pemeriksaannya sendiri tidak menulis apa pun. Pemeriksaan dan perbaikan yang sama dengan `amenbo doctor` di baris perintah.",
     "settings.doctorChecking": "Memeriksa…",
-    "settings.doctorRecheck": "Periksa lagi",
+    "settings.doctorRecheck": "Periksa",
     "settings.doctorClean": "Tidak ada masalah.",
     "settings.doctorFound": "{errors} galat / {warnings} peringatan",
     "settings.doctorFix": "Sapu berkas tanpa rujukan dan tautan folder yang tersisa",

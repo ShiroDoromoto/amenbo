@@ -474,7 +474,7 @@ export const es: Translation = {
     "settings.doctor": "Comprobar y reparar problemas",
     "settings.doctorNote": "Comprueba el interior de los datos (referencias huérfanas y demás) y las carpetas vinculadas de este dispositivo (.amenbo / guía para la IA). La comprobación en sí no escribe nada. Las mismas comprobaciones y las mismas reparaciones que `amenbo doctor` en la línea de comandos.",
     "settings.doctorChecking": "Comprobando…",
-    "settings.doctorRecheck": "Volver a comprobar",
+    "settings.doctorRecheck": "Comprobar",
     "settings.doctorClean": "No se encontraron problemas.",
     "settings.doctorFound": "{errors} error(es) / {warnings} aviso(s)",
     "settings.doctorFix": "Barrer archivos sin referencias y vínculos sobrantes",

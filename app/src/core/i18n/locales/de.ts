@@ -468,7 +468,7 @@ export const de: Translation = {
     "settings.doctor": "Probleme prüfen und beheben",
     "settings.doctorNote": "Prüft das Innere der Daten (verwaiste Verweise und Ähnliches) und die verknüpften Ordner dieses Geräts (.amenbo / KI-Leitfaden). Die Prüfung selbst schreibt nichts. Dieselben Prüfungen und dieselben Reparaturen wie `amenbo doctor` auf der Kommandozeile.",
     "settings.doctorChecking": "Wird geprüft…",
-    "settings.doctorRecheck": "Erneut prüfen",
+    "settings.doctorRecheck": "Prüfen",
     "settings.doctorClean": "Keine Probleme gefunden.",
     "settings.doctorFound": "{errors} Fehler / {warnings} Warnung(en)",
     "settings.doctorFix": "Unreferenzierte Dateien und übrig gebliebene Verknüpfungen aufräumen",

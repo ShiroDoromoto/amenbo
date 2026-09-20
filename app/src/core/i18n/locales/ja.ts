@@ -469,7 +469,7 @@ export const ja: Translation = {
     "settings.doctor": "問題の確認と修復",
     "settings.doctorNote": "ストアの中（孤児参照など）と、この端末の紐付けフォルダ（.amenbo / AI 手引き）を検査します。検査そのものは何も書き換えません。CLI の `amenbo doctor` と同じ検査・同じ修復です。",
     "settings.doctorChecking": "検査中…",
-    "settings.doctorRecheck": "再検査",
+    "settings.doctorRecheck": "検査する",
     "settings.doctorClean": "問題はありません。",
     "settings.doctorFound": "{errors} エラー / {warnings} 警告",
     "settings.doctorFix": "未参照ファイルと残骸の紐付けを掃除",

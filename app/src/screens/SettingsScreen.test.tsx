@@ -14,6 +14,8 @@ import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
 const hoisted = vi.hoisted(() => ({
   /** What `fetchDoctorReport` answers: consumed from the front on each check; the last one then repeats. */
   reports: [] as DoctorReportDto[],
+  /** How many times `fetchDoctorReport` was asked. Opening the screen must ask none (`AMB-D-938`). */
+  checks: 0,
   /** What the confirm dialog answers. */
   confirmAnswer: true,
   /** How many times a confirm dialog was raised. */
@@ -50,8 +52,10 @@ vi.mock("../core/dialog", () => ({
 vi.mock("../core/mutations", () => {
   const noop = () => Promise.resolve();
   return {
-    fetchDoctorReport: () =>
-      Promise.resolve(hoisted.reports.length > 1 ? hoisted.reports.shift()! : hoisted.reports[0]),
+    fetchDoctorReport: () => {
+      hoisted.checks += 1;
+      return Promise.resolve(hoisted.reports.length > 1 ? hoisted.reports.shift()! : hoisted.reports[0]);
+    },
     runDoctorFix: () => {
       hoisted.fixes += 1;
       return Promise.resolve({ sweptAttachments: 0, reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 1 });
@@ -109,11 +113,17 @@ function report(over: Partial<DoctorReportDto> = {}): DoctorReportDto {
   return { ok: true, errors: 0, warnings: 0, issues: [], ...over };
 }
 
-/** Draw the screen and wait for doctor's first check to finish. */
+/** Draw the screen. Nothing is checked by doing so (`AMB-D-938`). */
 async function render() {
   await act(async () => {
     root.render(createElement(SettingsScreen));
   });
+}
+
+/** Draw the screen and press the one button that checks, which is the only thing that runs doctor. */
+async function renderAndCheck() {
+  await render();
+  await act(async () => buttonByLabel(t("settings.doctorRecheck"))!.click());
 }
 
 /** The "repair" button, found by its i18n label. */
@@ -156,6 +166,7 @@ function buttonByLabel(label: string): HTMLButtonElement | null {
 
 beforeEach(() => {
   hoisted.reports = [report()];
+  hoisted.checks = 0;
   hoisted.confirmAnswer = true;
   hoisted.confirms = 0;
   hoisted.fixes = 0;
@@ -180,9 +191,30 @@ afterEach(() => {
 });
 
 describe("Settings > Integrity (doctor surface)", () => {
-  it("shows each issue core raised as a sentence composed in the UI language, together with how to fix it", async () => {
+  // What opening this screen cost was 2.3 seconds, 97% of it git started three times per bound
+  // folder, for a count of warnings that carry no button (`AMB-D-938`).
+  it("checks nothing until the button is pressed, and says nothing in the meantime", async () => {
     hoisted.reports = [report({ warnings: 1, issues: [issue()] })];
     await render();
+    expect(hoisted.checks).toBe(0);
+    expect(container.textContent).not.toContain(t("settings.doctorClean"));
+    expect(container.textContent).not.toContain(doctorText(issue()).message);
+
+    await act(async () => buttonByLabel(t("settings.doctorRecheck"))!.click());
+    expect(hoisted.checks).toBe(1);
+    expect(container.textContent).toContain(doctorText(issue()).message);
+  });
+
+  // The sweep does not repair what the list shows, so it does not wait for a list either.
+  it("sweeps without a check having run first", async () => {
+    await render();
+    await act(async () => fixButton().click());
+    expect(hoisted.fixes).toBe(1);
+  });
+
+  it("shows each issue core raised as a sentence composed in the UI language, together with how to fix it", async () => {
+    hoisted.reports = [report({ warnings: 1, issues: [issue()] })];
+    await renderAndCheck();
     const { message, fixHint } = doctorText(issue());
     expect(container.textContent).toContain(message);
     expect(container.textContent).toContain("/w/ghost"); // name what is broken
@@ -195,7 +227,7 @@ describe("Settings > Integrity (doctor surface)", () => {
       report({ warnings: 1, issues: [issue()] }),
       report(), // the re-check after the repair comes back clean
     ];
-    await render();
+    await renderAndCheck();
     await act(async () => fixButton().click());
     expect(hoisted.confirms).toBe(0);
     expect(hoisted.fixes).toBe(1);
@@ -213,7 +245,7 @@ describe("Settings > Integrity (doctor surface)", () => {
         params: { at: `AMB-T-${i}`, refs: "AMB-T-9999" },
       }));
     hoisted.reports = [report({ warnings: 30, issues: many })];
-    await render();
+    await renderAndCheck();
 
     const drawn = many.filter((i) => container.textContent!.includes(doctorText(i).message)).length;
     expect(drawn).toBe(10);
@@ -231,13 +263,13 @@ describe("Settings > Integrity (doctor surface)", () => {
       warnings: 1,
       issues: [issue({ kind: "dead_ref", params: { at: "AMB-T-1", refs: "AMB-T-9999" } })],
     })];
-    await render();
+    await renderAndCheck();
     expect(container.textContent).toContain(t("settings.doctorNoneRepairable"));
   });
 
   it("stays quiet about that when a row does carry a repair", async () => {
     hoisted.reports = [report({ warnings: 1, issues: [issue({ kind: "stale_managed_block" })] })];
-    await render();
+    await renderAndCheck();
     expect(container.textContent).not.toContain(t("settings.doctorNoneRepairable"));
   });
 });
@@ -264,7 +296,7 @@ describe("Settings > Integrity (per-row repair; buttons appear only on rows whos
 
   it("rebinds a folder whose marker is gone to the recorded project via that row's button", async () => {
     hoisted.reports = [report({ warnings: 1, issues: [missingPointer()] }), report()];
-    await render();
+    await renderAndCheck();
     await act(async () => buttonByLabel(t("settings.doctorRebind"))!.click());
     expect(hoisted.binds).toEqual([{ project: 3, dir: "/w/proj" }]);
     // Whether it is fixed is what the re-check says — no bare success message left standing on its own.
@@ -273,14 +305,14 @@ describe("Settings > Integrity (per-row repair; buttons appear only on rows whos
 
   it("resyncs stale AI guidance for that one folder only, via that row's button", async () => {
     hoisted.reports = [report({ warnings: 1, issues: [staleBlock()] }), report()];
-    await render();
+    await renderAndCheck();
     await act(async () => buttonByLabel(t("managedBlock.resync"))!.click());
     expect(hoisted.resyncs).toEqual(["/w/proj"]); // this one folder, not every folder
   });
 
   it("an issue with no determinable binding target gets no button (never silently pick another project)", async () => {
     hoisted.reports = [report({ warnings: 1, issues: [ambiguous()] })];
-    await render();
+    await renderAndCheck();
     expect(buttonByLabel(t("settings.doctorRebind"))).toBeNull();
     expect(container.textContent).toContain(doctorText(ambiguous()).fixHint); // the human decides, so the prose stays
     expect(hoisted.binds).toEqual([]);

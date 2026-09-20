@@ -467,7 +467,7 @@ export const vi: Translation = {
     "settings.doctor": "Kiểm tra và sửa lỗi",
     "settings.doctorNote": "Kiểm tra bên trong kho dữ liệu (tham chiếu mồ côi và tương tự) và các thư mục đã gắn trên thiết bị này (.amenbo / hướng dẫn cho AI). Bản thân việc kiểm tra không ghi gì. Cùng phép kiểm tra và cùng cách sửa như `amenbo doctor` trên dòng lệnh.",
     "settings.doctorChecking": "Đang kiểm tra…",
-    "settings.doctorRecheck": "Kiểm tra lại",
+    "settings.doctorRecheck": "Kiểm tra",
     "settings.doctorClean": "Không thấy vấn đề nào.",
     "settings.doctorFound": "{errors} lỗi / {warnings} cảnh báo",
     "settings.doctorFix": "Quét bỏ tệp không còn được tham chiếu và mối gắn còn sót",

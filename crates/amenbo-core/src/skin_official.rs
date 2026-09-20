@@ -28,19 +28,36 @@ pub struct Official {
     /// The whole document, byte for byte as it is in the tree — the same shape a skin arrives in
     /// from anybody else, so that reading one of these teaches the format.
     pub yaml: &'static str,
+    /// The files the document names, by the name it names them under. A device's own skin carries
+    /// its materials in the zip it arrived in (`AMB-D-936`); these arrive in the binary, so what
+    /// stands behind a filename here is this list.
+    pub materials: &'static [(&'static str, &'static [u8])],
 }
 
 /// Every skin this build ships, in the order they are listed.
 pub const OFFICIAL: &[Official] = &[
-    Official { name: "high-contrast", yaml: include_str!("../skins/high-contrast.yaml") },
-    Official { name: "washi", yaml: include_str!("../skins/washi.yaml") },
-    Official { name: "terminal", yaml: include_str!("../skins/terminal.yaml") },
-    Official { name: "retro", yaml: include_str!("../skins/retro.yaml") },
+    Official {
+        name: "high-contrast",
+        yaml: include_str!("../skins/high-contrast.yaml"),
+        materials: &[],
+    },
+    Official { name: "washi", yaml: include_str!("../skins/washi.yaml"), materials: &[] },
+    Official { name: "terminal", yaml: include_str!("../skins/terminal.yaml"), materials: &[] },
+    Official {
+        name: "retro",
+        yaml: include_str!("../skins/retro.yaml"),
+        materials: &[("DotGothic16.woff2", include_bytes!("../skins/retro/DotGothic16.woff2"))],
+    },
 ];
+
+/// The skin this build ships under `name`, if it ships one.
+pub fn find(name: &str) -> Option<&'static Official> {
+    OFFICIAL.iter().find(|o| o.name == name)
+}
 
 /// The document this build ships under `name`, if it ships one.
 pub fn yaml(name: &str) -> Option<&'static str> {
-    OFFICIAL.iter().find(|o| o.name == name).map(|o| o.yaml)
+    find(name).map(|o| o.yaml)
 }
 
 /// Is this a name this build ships? Asked where a device file would otherwise be written or
@@ -64,7 +81,13 @@ pub fn not_on_the_device(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skin::Skin;
+    use crate::skin::{Materials, Skin};
+
+    /// One shipped skin, read and checked against the files it ships with.
+    fn taken(name: &str) -> crate::skin::Taken {
+        let o = find(name).expect("this build ships it");
+        Skin::read(o.yaml).unwrap().check(&Materials::Shipped(o.materials)).unwrap()
+    }
 
     /// Every shipped skin is a skin: it reads, the check takes all of it, and nothing in it is a
     /// name or a value this build sets aside. A warning on one of these is a file that got past
@@ -75,7 +98,9 @@ mod tests {
             let skin = Skin::read(o.yaml).unwrap_or_else(|e| panic!("{}: {e}", o.name));
             assert_eq!(skin.name, o.name, "the document's name is the name it is held under");
             assert!(skin.unknown_keys.is_empty(), "{}: {:?}", o.name, skin.unknown_keys);
-            let taken = skin.check().unwrap_or_else(|r| panic!("{}: {r:?}", o.name));
+            let taken = skin
+                .check(&Materials::Shipped(o.materials))
+                .unwrap_or_else(|r| panic!("{}: {r:?}", o.name));
             assert!(taken.warnings.is_empty(), "{}: {:?}", o.name, taken.warnings);
         }
     }
@@ -84,7 +109,7 @@ mod tests {
     #[test]
     fn every_shipped_skin_clears_its_floors() {
         for o in OFFICIAL {
-            let taken = Skin::read(o.yaml).unwrap().check().unwrap();
+            let taken = taken(o.name);
             let report = crate::skin_contrast::measure(&taken.skin);
             assert!(report.short.is_empty(), "{}: {:?}", o.name, report.short);
             assert!(report.unread.is_empty(), "{}: {:?}", o.name, report.unread);
@@ -97,7 +122,7 @@ mod tests {
     /// promise is the whole of what that skin is for.
     #[test]
     fn high_contrast_clears_aaa() {
-        let taken = Skin::read(yaml("high-contrast").unwrap()).unwrap().check().unwrap();
+        let taken = taken("high-contrast");
         let report = crate::skin_contrast::measure_at(&taken.skin, 7.0, 4.5);
         assert!(report.short.is_empty(), "{:?}", report.short);
         assert_eq!(report.measured, 70, "both sides, every pairing");
@@ -109,7 +134,7 @@ mod tests {
     #[test]
     fn the_set_covers_each_kind() {
         let kind = |name: &str| {
-            let taken = Skin::read(yaml(name).unwrap()).unwrap().check().unwrap();
+            let taken = taken(name);
             let names: Vec<&str> = taken
                 .skin
                 .light
@@ -130,14 +155,16 @@ mod tests {
         );
     }
 
-    /// The font travels with the skin, decoded and all — a reader who is handed `retro` is handed
-    /// the face, not a name to go and find.
+    /// The font travels with the skin — a reader who is handed `retro` is handed the face, not a
+    /// name to go and find. The document names a file, and the bytes behind that name ship beside
+    /// it in the binary.
     #[test]
     fn retro_carries_its_face() {
-        let taken = Skin::read(yaml("retro").unwrap()).unwrap().check().unwrap();
-        let file = taken.skin.font.expect("retro carries a font");
-        assert_eq!(file.family, "DotGothic16");
-        assert!(file.license_text.contains("SIL OPEN FONT LICENSE"), "the terms travel with it");
+        let taken = taken("retro");
+        let font = taken.skin.font.expect("retro carries a font");
+        assert_eq!(font.family, "DotGothic16");
+        assert_eq!(font.file, "DotGothic16.woff2", "and names the file it ships in");
+        assert!(font.license_text.contains("SIL OPEN FONT LICENSE"), "the terms travel with it");
         let bytes = taken.font.expect("the check took the bytes");
         assert_eq!(&bytes[..4], b"wOF2");
         assert!(bytes.len() < crate::skin::FONT_MAX_BYTES, "{} bytes", bytes.len());

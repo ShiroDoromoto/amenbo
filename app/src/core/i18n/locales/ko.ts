@@ -464,7 +464,7 @@ export const ko: Translation = {
     "settings.doctor": "문제 점검 및 복구",
     "settings.doctorNote": "데이터 안쪽(끊어진 참조 같은 것)과 이 기기에 연결된 폴더(.amenbo / AI 안내서)를 점검합니다. 점검 자체는 아무것도 쓰지 않습니다. 명령줄 `amenbo doctor`와 같은 점검, 같은 복구입니다.",
     "settings.doctorChecking": "점검 중…",
-    "settings.doctorRecheck": "다시 점검",
+    "settings.doctorRecheck": "점검",
     "settings.doctorClean": "문제를 찾지 못했습니다.",
     "settings.doctorFound": "오류 {errors}건 / 경고 {warnings}건",
     "settings.doctorFix": "참조되지 않는 파일과 남은 연결 정리",

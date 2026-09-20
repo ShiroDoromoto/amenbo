@@ -2798,6 +2798,50 @@ impl Instructor {
             (Domain::Workspace, "reorder-panes") =>
                 "At the top of the workspace, just before the row of page digits, press the small control drawn as two boxes with arrows between them. A panel opens over the face, drawing every pane of this project as a card, laid out page by page in the shape the pages themselves are drawn in. Nothing on the face behind it moves."
                     .to_string(),
+            // Carrying one pane past another, on the page itself. It is a press and a move rather
+            // than the machine's own drag, so the step says to hold it down while moving — a press
+            // that travels no distance is a press and reorders nothing.
+            //
+            // **Where it is held is said first and plainest.** The row above a pane is the handle and
+            // the pane below it is a running terminal, so an operator who began the drag on the
+            // terminal would be selecting text and would read a page that did not reorder as a build
+            // that had lost the gesture.
+            //
+            // **What does not happen while the pointer moves is said as plainly as what does.** The
+            // panel of cards reorders under the hand; this does not, and an operator expecting it to
+            // would let go early on a page that was about to do exactly what they asked.
+            (Domain::Workspace, "drag-pane") => {
+                let side = match req(with, "side")? {
+                    "before" => "the half of it nearest the front of the order — the left half of a pane that has its neighbours beside it, the top half of one taking the whole width — so that the carried pane takes that one's place and pushes it along",
+                    "after" => "the half of it furthest from the front of the order — the right half of a pane that has its neighbours beside it, the bottom half of one taking the whole width — so that the carried pane lands just past it",
+                    other => {
+                        return Err(format!(
+                            "action `drag-pane` does not know the side `{other}` — it is before or after"
+                        ))
+                    }
+                };
+                format!(
+                    "On the page, press and hold the row above the pane showing \"{}\" — the strip over the terminal, not the terminal under it and none of the controls on that strip — and without letting go move the pointer onto the pane showing \"{}\", over {}. Nothing on the page moves while you hold it: what appears is a mark down the half you are over, saying where the pane would land. Let go there, and the panes are laid out again in the new order.",
+                    req(with, "pane")?,
+                    req(with, "onto")?,
+                    side
+                )
+            }
+            // The corner pulled to a size. The same two things have to be on it: where the grip is,
+            // since the rest of the pane belongs to what is running in it, and that the pane does not
+            // change under the hand — an operator who let go the moment the pointer reached the width
+            // they wanted would be letting go at whatever the outline had snapped to, which is the
+            // one thing this step names.
+            (Domain::Workspace, "stretch-pane") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane on the page".to_string(),
+                };
+                format!(
+                    "On the page, press and hold the small grip at the bottom right corner of {pane}, and without letting go pull it until the outline drawn over the page is {}. The pane itself does not change while you pull: what moves is that outline, and it does not follow the pointer smoothly — it snaps to one of the six sizes, so pull until the one you want is drawn rather than to a width. Let go there, and the pane comes out at it.",
+                    size(with)?.phrase()
+                )
+            }
             // Carrying one card onto another. It is a press and a move rather than the machine's own
             // drag, so the step says to hold the card down while moving it — a press that travels no
             // distance is a press and reorders nothing.
@@ -4801,6 +4845,26 @@ impl Instructor {
             // `down` is pressed so that a pane keeps the whole of it, and a grid that shuffled the
             // panes about without handing them that width would have honoured the press and missed
             // what it was for.
+            // Which pane is where on the page. The places are said in reading order and named by the
+            // words on the pane, because that is the pair an operator can hold against each other
+            // without being told anything about how the page is cut.
+            (Domain::Workspace, "pane-at") => {
+                let place = match req(with, "place")? {
+                    "first" => "the first place — the leftmost of the top row",
+                    "second" => "the second place, counting the top row from the left and then the row under it",
+                    "third" => "the third place, counting the top row from the left and then the row under it",
+                    "fourth" => "the fourth place, counting the top row from the left and then the row under it",
+                    other => {
+                        return Err(format!(
+                            "assert `pane-at` does not know the place `{other}` — it is first, second, third or fourth"
+                        ))
+                    }
+                };
+                format!(
+                    "On the page, look at {place}. Confirm the pane standing there is the one showing \"{}\".",
+                    req(with, "shows")?
+                )
+            }
             // And the size read back off the pane. What it is about is the room the pane ends up with
             // rather than the shape for its own sake, so the reading is said as a share of the page
             // between the columns — which is what an operator can hold a pane against without

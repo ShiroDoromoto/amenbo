@@ -1,0 +1,167 @@
+# The reader took hold of a pane and carried it past the one next to it, on the page itself.
+#
+# Where a pane sits is its place in one list, and the list is the reader's to change
+# (`app/src/talk/layout.ts`). Within a page the change is made where the panes are: the row above a
+# pane is a handle, and the pane goes where it is let go.
+#
+# ── Why the handle is the row and not the pane ───────────────────────────────────────────────────
+# The pane is a running terminal. A drag that began anywhere on it would be a person selecting the
+# output they are reading, and the two gestures would fight over every press. So the handle is the
+# strip over the terminal, and the road says so in the step rather than leaving an operator to find
+# it: one who pressed on the terminal would read a page that did not reorder as a build that had lost
+# the gesture entirely.
+#
+# ── Why nothing moves until it is let go ─────────────────────────────────────────────────────────
+# Because what is being carried is a terminal somebody is reading and typing into. A page that
+# reordered under the hand would move what is under their eyes, and their paste with it, while a
+# program is running in it. What appears instead is a mark down the half of the pane the pointer is
+# over, saying where this one would land — and the panes stand still until the hand opens. The panel
+# of cards does the opposite, and does it for the opposite reason: nothing in there is a terminal, so
+# the arrangement can move under the pointer and be thrown away whole.
+#
+# ── Why the order is read by place and not by counting ───────────────────────────────────────────
+# Two panes swapped on one page leave everything else exactly as it was: the same two standing, the
+# same room left over, the same one page. Nothing but where they are says the carry landed, so a road
+# that walked the gesture and counted boxes afterwards would be green on a build that dropped it. The
+# reading is the place, and both places are read — before the carry and after it — because a page read
+# only afterwards has nothing to say about what it was before.
+#
+# ── Why each pane is spoken to ───────────────────────────────────────────────────────────────────
+# Both panes are opened in one folder, so the row above each carries the same word until somebody puts
+# their own on it. The lines the road types are what tell them apart, and they are what the carry
+# names and what the places are read by — one set of words for the whole road.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the panes run is the reader's own shell. Choosing the folder is what raises the project they
+# belong to, so the road makes what it needs by walking in.
+id: carry-a-pane-past-the-one-beside-it
+title: A pane is taken by the row above it and carried past the one beside it, and nothing moves until it is let go
+description: >
+  Open the workspace, choose the folder it runs in, and stand two half-page panes on it with a line of
+  its own on each. The first is in the first place and the second is beside it. Take the second by the
+  row above it, carry it onto the near half of the first and let go: they have traded places, the
+  lines are still on them, and both are still the terminals they were.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The way in, and what binds the folder to the project the face is on. Both panes work in that
+  # folder, which is why neither press asks anything.
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a line typed at one is something to answer rather than something left sitting
+  # where it was put — and being left where it was put is how this road tells the two panes apart.
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane opened first
+
+  # Half the page, which is what makes room for the second beside it. A pane with nothing to be
+  # measured against takes the whole of it, and a full page has nowhere to open anything.
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane opened second
+
+  # The page is full, which is the same thing as saying both are standing.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # And the order they are in, read before the carry so the carry has something to have changed.
+  - type: assert
+    domain: workspace
+    op: pane-at
+    with:
+      place: first
+      shows: SCENARIO the pane opened first
+
+  - type: assert
+    domain: workspace
+    op: pane-at
+    with:
+      place: second
+      shows: SCENARIO the pane opened second
+
+  # The carry itself. The second is taken by the row above it and let go over the near half of the
+  # first, which is where a pane goes in front of another rather than behind it.
+  - type: action
+    domain: workspace
+    op: drag-pane
+    with:
+      pane: SCENARIO the pane opened second
+      onto: SCENARIO the pane opened first
+      side: before
+
+  # They have traded places, which is the whole of what the gesture is for.
+  - type: assert
+    domain: workspace
+    op: pane-at
+    with:
+      place: first
+      shows: SCENARIO the pane opened second
+
+  - type: assert
+    domain: workspace
+    op: pane-at
+    with:
+      place: second
+      shows: SCENARIO the pane opened first
+
+  # Two panes still, and the page still full: a carry moves the list and opens and closes nothing.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # And the one that was carried is still listening. Words on a pane outlive the process that wrote
+  # them, so the line above says the box came through the re-laying and nothing more; only something
+  # typed after it says the terminal on the other end did too.
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO still taking what is typed
+      shows: SCENARIO the pane opened second
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO still taking what is typed

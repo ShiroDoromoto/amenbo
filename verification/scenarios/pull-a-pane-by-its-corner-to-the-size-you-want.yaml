@@ -1,0 +1,149 @@
+# The reader took the corner of a pane and pulled it until it was the size they wanted.
+#
+# The row of six shapes at the top of the face is one way to a size and this is the other, and they
+# are not the same act. The row is a size chosen from a list; the corner is a size arrived at by
+# looking — what a pane needs is how many columns the thing running in it wants, and that is a
+# judgement made against the screen rather than against a name.
+#
+# ── Why the corner and nowhere else ──────────────────────────────────────────────────────────────
+# The rest of a pane is a running terminal. A pull that began anywhere on it would be a person
+# selecting the output they are reading, so the grip is the bottom right corner and the step says so:
+# an operator who pressed on the terminal would read a pane that did not change as a build that had
+# lost the gesture entirely.
+#
+# ── Why it snaps, and why the step says the size rather than a distance ──────────────────────────
+# There are six sizes and no width between them. A pull that landed anywhere would give a page that
+# cannot be laid out and a pane nobody could get back to a shape they recognise, so what the pull
+# does is pick the nearest of the six — and the outline drawn while the hand is down is which one it
+# has picked. That is what an operator is told to stop at. Told a distance, they would be pulling
+# against a ruler that does not exist.
+#
+# ── Why nothing changes until it is let go ───────────────────────────────────────────────────────
+# Because the pane is a terminal and its width is how many columns the program inside it is drawing
+# to. A pane that resized as the hand moved would have the thing inside it redrawing at every step of
+# the pull, which is the reader's own work flickering under their hand. So the outline moves and the
+# pane does not, and the road says that in the step rather than leaving it to be found.
+#
+# ── Why two pulls, and why they go different ways ────────────────────────────────────────────────
+# One pull proves a size was reached and says nothing about how. The two here are reached differently:
+# a quarter is narrower *and* shorter than the whole page, and half of it laid down the page is the
+# whole width and half the height — so the second is only arrived at by pulling back out across while
+# staying short. A build that read the pull on one axis alone would take the first and miss the
+# second.
+#
+# ── Why a line is typed, and a second one after ──────────────────────────────────────────────────
+# The page is laid out again under the pane at every let-go, and a pane is drawn rather than held.
+# What has to survive is the terminal inside it. The first line says the box came through; only
+# something typed after the last pull says the thing on the other end of it did.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
+# belongs to, so the road makes what it needs by walking in.
+id: pull-a-pane-by-its-corner-to-the-size-you-want
+title: A pane is pulled by its bottom right corner to a size, snapping to one of the six, and the terminal in it comes through
+description: >
+  Open the workspace, choose the folder it runs in, and get a pane down to a plain shell with a line
+  on it. It takes the whole page. Pull its bottom right corner in until the outline is a quarter and
+  let go: the pane comes out at a quarter and three quarters of the page are free. Pull the corner
+  back out across until the outline is the whole width and half the height, and let go: it comes out
+  at that, with the line still on it and a second line typed at it taken.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The way in, and what binds the folder to the project the face is on.
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a line typed at one is something to answer rather than something left sitting
+  # where it was put — and being left where it was put is what the readings below rest on.
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane that was pulled
+
+  # Where the pull starts from: a pane with nothing to be measured against takes the whole page, and a
+  # full page offers nothing beside it.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  # In and up, to a quarter. Both ways at once, which is what a quarter is.
+  - type: action
+    domain: workspace
+    op: stretch-pane
+    with:
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: quarter
+
+  # And three quarters of the page came free, with the way in standing where the next pane would land.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # Back out across, and no further down: the whole width and half the height. It is the size the
+  # first pull cannot have reached by accident — a build reading the pull on the across alone would
+  # have stopped at half the page side by side.
+  - type: action
+    domain: workspace
+    op: stretch-pane
+    with:
+      size: half-down
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half-down
+
+  # The pane is the same pane. The page was laid out again under it twice, and a build that put the
+  # page up afresh rather than re-laying it would have a fresh terminal here — drawn exactly like this
+  # one, with nothing on it.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane that was pulled
+
+  # And it is still listening.
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO still taking what is typed
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO still taking what is typed

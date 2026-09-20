@@ -1,0 +1,184 @@
+# A pane was made bigger than the room left for it, so it started the next page — and the room it
+# could not take is still there, empty, where it was.
+#
+# The panes of a project are one list and the pages are what falls out of laying them down in order
+# (`app/src/talk/layout.ts`). Every pane goes in the first place it fits, and the search never goes
+# back: a pane that fits nowhere on the page starts the next one, and the room it stepped over stays
+# room. That is the whole of this road. **A hole is not something a reader makes** — it is what is
+# left when the next pane in the list is too big for it, and a build that closed it up would be
+# putting the panes on the screen in an order that is not the order they are in.
+#
+# ── Why three panes, at two sizes ────────────────────────────────────────────────────────────────
+# Two would show a pane moving to the next page and nothing about the room behind it: with one pane
+# left on the first, whatever is free there is simply the rest of the page. Three is the fewest that
+# has a hole in the middle of a page — two panes keeping their places, and between the second of them
+# and the edge a quarter that the third could not take.
+#
+# The sizes are half the page and a quarter of it because that pair leaves the hole this road is about
+# and no smaller one: a quarter is free after the first two are laid down, the third wants half, and
+# half does not go into a quarter. Any size that fitted would close the hole and prove nothing.
+#
+# ── Why the first pane is spoken to ──────────────────────────────────────────────────────────────
+# Because the last reading is about it. The page the hole is on is read again at the end, after the
+# screen has been somewhere else, and what says that page came back rather than being drawn afresh is
+# the reader's own line still standing on the pane that never moved. A count of boxes would pass on a
+# page rebuilt from nothing.
+#
+# Only the first is spoken to. The other two are here to be laid down, and being laid down needs no
+# name — a step that typed into one would have to say which of three running panes it meant.
+#
+# ── Why the screen is followed rather than held ──────────────────────────────────────────────────
+# A pane that no longer fits is laid down on the next page and the reader is taken there, because the
+# press was about that pane and the page it is on now is the page to be looking at. So the road reads
+# the new page where it lands, and turns back for the reading it came for. Holding the screen still
+# would be the road asking for something the face does not offer.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the panes run is the reader's own shell. Choosing the folder is what raises the project they
+# belong to, so the road makes what it needs by walking in.
+id: leave-the-room-a-pane-that-does-not-fit-cannot-take
+title: A pane made too big for the room left starts the next page, and the room it could not take stays empty behind it
+description: >
+  Open the workspace, choose the folder it runs in, and get a pane down to a plain shell with a line
+  on it. Cut it to half the page and open a second beside it, then cut that one to a quarter — a
+  quarter of the page comes free and the way in stands in it. Open a third there, and give it half
+  the page instead: half does not go into a quarter, so it starts a page of its own and the screen
+  follows it. Turn back to the first page: the two panes that never moved are where they were, the
+  line is still on the first of them, and the quarter the third could not take is still empty.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The way in, and what binds the folder to the project the face is on. Every pane below works in
+  # that folder, which is why none of the presses asks anything.
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a line typed at one is something to answer rather than something left sitting
+  # where it was put — and being left where it was put is what the last reading on this road needs.
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane that never moved
+
+  # Half the page, which is what makes room for the second. A pane with nothing to be measured against
+  # takes the whole of it, and a full page has nowhere to open anything.
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
+
+  # The second, at the frame that appeared beside it. A pane opened on a page is measured against the
+  # one already showing, so it comes up at half the page too and the page is full.
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # A quarter for the one just opened, which is what frees the quarter this road is about. The pane
+  # beside it does not move: the search that lays the panes down goes forward only, so what is before
+  # this one in the list keeps the place it has.
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: quarter
+
+  # Two panes, and a quarter of the page free with the way in standing in it — which is where the
+  # third is about to be opened.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 1
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  # Three panes and the page full. The one just opened is measured against the one showing, so it came
+  # up at a quarter and fitted exactly where the way in had been.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 3
+      empty: 0
+
+  # And now it is asked for half the page, which is the press this road is named after. Half does not
+  # go into the quarter it is standing in, and the search does not go back to look for somewhere
+  # earlier — so it starts the next page, and the screen follows it there.
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half
+
+  # On a page of its own, with the rest of that page free beside it.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # Back to the page the other two never left. This is the reading the road came for.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 1
+
+  # Two panes and the quarter the third could not take, still empty. A build that closed the hole up
+  # would have three panes here and the order on the screen would not be the order they are in.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 1
+
+  # And the page came back rather than being drawn afresh: the reader's own line is still on the pane
+  # that never moved.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane that never moved

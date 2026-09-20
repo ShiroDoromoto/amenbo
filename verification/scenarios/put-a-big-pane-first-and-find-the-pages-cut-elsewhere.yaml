@@ -1,0 +1,194 @@
+# A pane was carried to the front of the list, and the pages came out cut somewhere else.
+#
+# Where a page ends is not a thing anybody sets. The panes are one list, each goes in the first place
+# it fits, and a page ends where the next one does not (`app/src/talk/layout.ts`). So the order and
+# the sizes together decide the pages, and moving one pane can put every page boundary somewhere new
+# without a single pane having been resized. **That is the half of the order a reader cannot see
+# coming**, and it is what this road is about.
+#
+# ── Why it is not the reordering road ────────────────────────────────────────────────────────────
+# `put-the-open-panes-in-the-order-you-want` walks the panel itself: that nothing moves until the
+# press, that leaving throws the whole proposal away, that the order taken is the order asked for. Its
+# panes are all one size, so its pages are cut in the same places before and after — which is what
+# lets it read the order by turning to a page and reading the one row on it.
+#
+# This road is the other thing the same press does. The sizes are uneven, so the three panes make one
+# shape before the move and another after it: two on the first page and one on the second, then one on
+# the first and two on the second. Nothing was resized, and every page boundary moved.
+#
+# ── Why the big one is the one carried ───────────────────────────────────────────────────────────
+# Because a pane only re-cuts the pages behind it. Carried to the front, the one that fills a page on
+# its own pushes everything past it onto the next page; carried to the back it would change nothing at
+# all, the two quarters before it keeping the places they already have. So the road moves the pane the
+# move is dangerous for, and it moves it as far as it can go.
+#
+# ── Why each pane is named ───────────────────────────────────────────────────────────────────────
+# The cards in the panel are the panes, and what a card says is what the pane is called. Three panes
+# opened in one folder carry that folder's name on all three rows, so a step naming one of them would
+# be naming a word the screen shows three times. The names are the road's own, which is how the carry
+# below says which card and which one it is going in front of.
+#
+# ── What the last reading is for ─────────────────────────────────────────────────────────────────
+# That the panes came through the re-cut as panes. The pages are laid out again under them, and a
+# build that put them up afresh rather than laying them down again would have three drawn boxes here
+# with nothing on them — which is what the line on the carried pane rules out.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the panes run is the reader's own shell. Choosing the folder is what raises the project they
+# belong to, so the road makes what it needs by walking in.
+id: put-a-big-pane-first-and-find-the-pages-cut-elsewhere
+title: Carrying a pane to the front of the list cuts the pages somewhere else, with no pane resized
+description: >
+  Open the workspace, choose the folder it runs in, and stand three panes on it — two at a quarter of
+  a page and one, opened last and named, at the whole of one. They make two pages: the two quarters on
+  the first, the big one alone on the second. Open the panel that carries a pane onto another page,
+  put the big one in front of the first quarter and take the order. The pages are cut elsewhere now —
+  the big one alone on the first page and both quarters on the second — with nothing resized and the
+  line still on the pane that was carried.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The way in, and what binds the folder to the project the face is on. Every pane below works in
+  # that folder, which is why none of the presses asks anything.
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  # The first quarter, named so the carry below can say what it is going in front of.
+  - type: action
+    domain: workspace
+    op: name-pane
+    with:
+      name: SCENARIO the first quarter
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: quarter
+
+  # The second quarter, at the frame beside it. A pane opened on a page is measured against the one
+  # already showing, so it comes up at a quarter too.
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: name-pane
+    with:
+      name: SCENARIO the second quarter
+
+  # And the third, which is the one the road carries. It comes up at a quarter like the others and is
+  # then given the whole page, which is what sends it onto a page of its own.
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane that was carried
+
+  - type: action
+    domain: workspace
+    op: name-pane
+    with:
+      name: SCENARIO the big one
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: whole
+
+  # The shape before the move: the big one alone on the page the screen followed it to.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  # And the two quarters together on the page before it, with a quarter of room over.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 1
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 1
+
+  # The panel, which is where a pane is carried onto a page that is not on the screen. It is offered
+  # because there is a second page to reach.
+  - type: action
+    domain: workspace
+    op: reorder-panes
+
+  - type: action
+    domain: workspace
+    op: carry-pane
+    with:
+      pane: SCENARIO the big one
+      onto: SCENARIO the first quarter
+      side: before
+
+  - type: action
+    domain: workspace
+    op: keep-order
+
+  # And the pages are cut elsewhere. The big one is first in the list now, so it takes the first page
+  # on its own and both quarters are laid down on the next — every boundary somewhere new, and not one
+  # pane resized.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  # The pane that was carried is the pane that came through: its line is still on it, so the pages
+  # were laid out again under the panes rather than put up afresh.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane that was carried
+
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 2
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 1

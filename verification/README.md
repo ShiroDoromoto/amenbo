@@ -991,6 +991,17 @@ under the panes, and one put up afresh rather than re-laid would come back drawn
 it. It takes two presses because a size is one pane's answer: the first leaves the two in shapes that
 cannot share a page, so the road walks to the page the other was laid down on and presses there.
 
+What the sizes make possible is a shape of page nothing could take before, and three roads walk it.
+`leave-the-room-a-pane-that-does-not-fit-cannot-take` is the hole: a pane made too big for the room
+left starts the next page, and the quarter it stepped over stays where it is. A build that closed
+that up would be putting the panes on the screen in an order that is not the order they are in.
+`send-the-panes-behind-one-to-the-next-page-and-bring-them-back` walks the same rule both ways round,
+which is the only way to catch a build that lays the pages out again when a pane grows and not when
+it shrinks — that one draws two panes stranded on a page that should have emptied, and nothing on the
+screen says so. `put-a-big-pane-first-and-find-the-pages-cut-elsewhere` is the half of the reorder the
+panel's own road does not read: with uneven sizes, carrying one pane to the front puts every page
+boundary somewhere new and resizes nothing.
+
 What none of those moves reaches is the end of the run itself. What crosses it is what the reader
 *set* — how much of a page each pane takes, the project they were looking at — and the places they
 *opened*, each with the folder it works in and the name they gave it. What does not is the process in

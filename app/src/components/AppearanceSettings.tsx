@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { SkinRowDto } from "../bindings/bindings";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, skinFontLicence, skinTables, useSkin, watchSkinChanged } from "../core/skin";
+import { fitOnto, listSkins, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -62,10 +62,12 @@ export function AppearanceSettings() {
   // is on otherwise. What is said under the select is about that one.
   const shownName = fitting ? fitting.name : on;
   const shown = rows.find((r) => r.name === shownName);
+  // The skin that is on: the one the theme row names, and the one it reads the declared side off.
+  const onRow = rows.find((r) => r.name === on);
   // What the select says about the theme while a one-sided skin is on. Applying it is not this
   // screen's — `applySkin` holds the appearance to that side wherever a skin is worn, which is
   // every window and every startup, not only here.
-  const pinned = pinnedSide(rows.find((r) => r.name === on));
+  const pinned = pinnedSide(onRow);
 
   const tryOn = (name: string | null, title: string) => {
     setFitting({ name, title });
@@ -109,13 +111,13 @@ export function AppearanceSettings() {
             onChange={(e) => {
               const name = e.target.value;
               const row = rows.find((r) => r.name === name);
-              tryOn(name === "" ? null : name, row?.title ?? t("settings.skinNone"));
+              tryOn(name === "" ? null : name, row ? skinTitle(row) : t("settings.skinNone"));
             }}
           >
             <option value="">{t("settings.skinNone")}</option>
             {rows.map((r) => (
               <option key={r.name} value={r.name} disabled={r.error !== null}>
-                {r.error === null ? r.title : `${r.name} — ${t("settings.skinUnreadable")}`}
+                {r.error === null ? skinTitle(r) : `${r.name} — ${t("settings.skinUnreadable")}`}
               </option>
             ))}
           </select>
@@ -194,7 +196,7 @@ export function AppearanceSettings() {
           {pinned && (
             <div className="meta">
               {tf("settings.skinThemePinned", {
-                title: rows.find((r) => r.name === on)?.title ?? (on ?? ""),
+                title: onRow ? skinTitle(onRow) : (on ?? ""),
                 side: pinned === "dark" ? t("settings.themeDark") : t("settings.themeLight"),
               })}{" "}
               {/* Drawn in colours of its own rather than in tokens: this is the way out of a skin

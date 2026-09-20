@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./ipc", () => ({ invoke: () => Promise.reject(new Error("no host")) }));
 
 import type { SkinTablesDto } from "../bindings/bindings";
-import { applySkin } from "./skin";
+import { applySkin, skinTitle } from "./skin";
 import { setThemePref } from "./theme";
 
 /** A skin as the window receives it, with only the parts a test is about spelled out. */
@@ -207,5 +207,23 @@ describe("the shape a value may have", () => {
     expect(skinRs).toContain('value.contains("/*") || value.contains("*/")');
     expect(asked).toContain('"url"');
     expect(asked).toContain("starts_with('(')");
+  });
+});
+
+describe("skinTitle", () => {
+  const retro = { title: "Retro", titles: { ja: "レトロゲーム", fr: "Rétro" } };
+
+  it("gives the name the author wrote for this reader's language", () => {
+    expect(skinTitle(retro, "ja")).toBe("レトロゲーム");
+    expect(skinTitle(retro, "fr")).toBe("Rétro");
+  });
+
+  it("gives the author's one name where they wrote none for this language", () => {
+    expect(skinTitle(retro, "de")).toBe("Retro");
+    expect(skinTitle({ title: "Washi", titles: {} }, "ja")).toBe("Washi");
+  });
+
+  it("reads a name written empty as a name not written", () => {
+    expect(skinTitle({ title: "Washi", titles: { ja: "   " } }, "ja")).toBe("Washi");
   });
 });

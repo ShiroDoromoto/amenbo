@@ -15,7 +15,7 @@ import { pickFiles, pickSaveAs } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { errText, t, tf } from "../core/i18n";
 import { langEndonym, type Lang } from "../core/i18n/lang";
-import { addSkinFile, readSkinFile, scriptsMissingFrom, writeSkinTemplate } from "../core/skin";
+import { addSkinFile, readSkinFile, scriptsMissingFrom, skinTitle, writeSkinTemplate } from "../core/skin";
 
 /** What a warning's kind is said as. The key names it; the row carries the name it is about. */
 const WHY: Record<string, string> = {
@@ -117,7 +117,7 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
         {read && (
           <div className="skinread">
             <div className="skinread__name">
-              {read.title}
+              {skinTitle(read)}
               {read.version && <span className="meta"> {read.version}</span>}
               {read.author && <span className="meta"> · {read.author}</span>}
               {read.themes.length === 1 && (

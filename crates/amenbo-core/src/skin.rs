@@ -148,7 +148,10 @@ fn scale(
     into: &mut BTreeMap<String, String>,
     warnings: &mut Vec<Warning>,
 ) {
-    let Some(asked) = wrote.trim().parse::<f32>().ok().filter(|n| n.is_finite() && *n > 0.0) else {
+    // Only text that is no number at all is dropped. A number outside what the family allows —
+    // below its floor, above its ceiling, or negative — is brought inside and reported with both
+    // values, because the author wrote something this build understood and is owed the answer.
+    let Some(asked) = wrote.trim().parse::<f32>().ok().filter(|n| n.is_finite()) else {
         warnings.push(Warning::Scale {
             theme: side,
             key: key.to_string(),
@@ -157,7 +160,9 @@ fn scale(
         });
         return;
     };
-    let used = if key == SCALE_UNBOUNDED { asked } else { asked.clamp(SCALE_MIN, SCALE_MAX) };
+    let floor = if SCALE_TO_ZERO.contains(&key) { 0.0 } else { SCALE_MIN };
+    let ceiling = if key == SCALE_UNBOUNDED { f32::INFINITY } else { SCALE_MAX };
+    let used = asked.clamp(floor, ceiling);
     if used != asked {
         warnings.push(Warning::Scale {
             theme: side,
@@ -380,13 +385,27 @@ pub const SCALES: &[(&str, &[&str])] = &[
 /// at 1.35 the switch inside it is cut off top and bottom. The bottom is the tab strip, whose
 /// short side goes under the 24 pixels a finger needs (WCAG 2.2 SC 2.5.8).
 ///
-/// **One range for the three, not one each.** They act at the same time, and a set of separate
+/// **One ceiling for the three, not one each.** They act at the same time, and a set of separate
 /// ceilings is a set somebody reaches all of at once.
+///
+/// The floor is not shared, because the measurement behind it is not about all three. What 0.85
+/// holds off is a tab strip too short for a finger and a switch too small to read — the spacing
+/// and the type. See [`SCALE_TO_ZERO`] for the two it does not apply to.
 pub const SCALE_MIN: f32 = 0.85;
 pub const SCALE_MAX: f32 = 1.30;
 
-/// The family whose multiplier is not bounded. Nothing broke at three times the default: a shadow
-/// that is too large is ugly rather than unusable, and there is nothing under it to cut off.
+/// The multipliers with nothing under them, which may therefore be taken all the way to zero.
+///
+/// **A floor answers "how small before this stops working", and for these two there is no such
+/// size.** A square corner is a look, not a fault, and a screen with no shadows is a flat screen
+/// rather than an unusable one — neither carries a word, a target or a control the way the type
+/// and the spacing do. A floor of 0.85 on them was one measurement applied where it was not taken:
+/// it left `r-scale: "0"` short of square and refused `shadow-scale: "0"` outright, which is the
+/// one thing an author reaching for either of them is trying to write.
+pub const SCALE_TO_ZERO: &[&str] = &["r-scale", "shadow-scale"];
+
+/// The family whose multiplier has no ceiling either. Nothing broke at three times the default: a
+/// shadow that is too large is ugly rather than unusable, and there is nothing under it to cut off.
 pub const SCALE_UNBOUNDED: &str = "shadow-scale";
 
 /// What this build sets each scaled token to, per side. A multiplier needs something to multiply,
@@ -1227,6 +1246,42 @@ dark:
             }]
         );
         assert_eq!(framed("  s-scale: \"0.1\"\n").skin.light.values["s-4"], "13.6px", "16 × 0.85");
+    }
+
+    /// The two families with no size that stops them working. A square corner is a look and a flat
+    /// screen is a screen, so both go all the way down — and zero is the number an author reaching
+    /// for either of them writes.
+    #[test]
+    fn the_two_with_nothing_under_them_go_all_the_way_to_zero() {
+        let taken = framed("  r-scale: \"0\"\n  shadow-scale: \"0\"\n");
+        assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
+        assert_eq!(taken.skin.light.values["r-sm"], "0px");
+        assert_eq!(taken.skin.light.values["r-lg"], "0px");
+        assert!(
+            taken.skin.light.values["shadow-md"].starts_with("0 0px 0px"),
+            "every length at nothing, the colour left alone: {}",
+            taken.skin.light.values["shadow-md"]
+        );
+        // And the floor the other two keep is still under them.
+        assert_eq!(framed("  s-scale: \"0\"\n").skin.light.values["s-4"], "13.6px", "16 × 0.85");
+    }
+
+    /// A number this build understood and could not use is said with both values. Only text that is
+    /// no number at all is dropped — a negative is a number, and telling an author it was not would
+    /// send them looking for a typo that is not there.
+    #[test]
+    fn a_negative_multiplier_is_brought_up_to_the_floor_and_said() {
+        let taken = framed("  r-scale: \"-2\"\n");
+        assert_eq!(taken.skin.light.values["r-md"], "0px");
+        assert_eq!(
+            taken.warnings,
+            [Warning::Scale {
+                theme: Side::Light,
+                key: "r-scale".into(),
+                wrote: "-2".into(),
+                used: Some("0".into()),
+            }]
+        );
     }
 
     #[test]

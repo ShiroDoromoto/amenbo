@@ -1,0 +1,43 @@
+# A skin as one arrives from somebody else: a whole document, both sides, nothing this build has to
+# guess at. It is a fixture rather than lines in a scenario because what the road proves is a file
+# on a disk being read, and a file the road described would be a file the road already trusts.
+#
+# The colours are a dusk: a blue-grey paper and ink on the light side, the same family turned down
+# on the dark. Every pairing clears AA, so the judgement the screen draws is a clean one — a road
+# about taking a skin in should not also be a road about what a warning looks like.
+name: dusk
+title: "Dusk"
+skin_v: 1
+author: "the verification harness"
+version: "1"
+themes: [light, dark]
+
+light:
+  c-accent: "#2f5d7c"
+  c-accent-faint: "#e6edf3"
+  c-accent-text: "#244a63"
+  c-accent-weak: "#cddce7"
+  c-bg: "#eef1f5"
+  c-surface: "#ffffff"
+  c-sunken: "#f2f5f8"
+  c-hover: "#dde3ea"
+  c-text: "#1b2430"
+  c-text-muted: "#515c6b"
+  c-text-faint: "#8892a0"
+  c-edge: "#9aa5b4"
+  c-rule: "#c4cdd8"
+
+dark:
+  c-accent: "#7fb2d6"
+  c-accent-faint: "#141c25"
+  c-accent-text: "#a3cbe6"
+  c-accent-weak: "#1e2a36"
+  c-bg: "#141a21"
+  c-surface: "#1b232c"
+  c-sunken: "#10161c"
+  c-hover: "#242f3a"
+  c-text: "#dde5ee"
+  c-text-muted: "#9aa6b4"
+  c-text-faint: "#6d7887"
+  c-edge: "#46525f"
+  c-rule: "#2b343e"

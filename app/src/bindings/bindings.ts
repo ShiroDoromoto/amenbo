@@ -2304,6 +2304,26 @@ text?: string,
 made?: SessionMadeDto, };
 
 /**
+ * One picture a skin lays behind one of its surfaces, on the way to the window: the file it is in
+ * and the two words that say how it is laid. The url is not here — where a custom protocol lives
+ * differs by platform, and building one is the window's (`app/src/core/customScheme.ts`).
+ */
+export type SkinBackgroundDto = { 
+/**
+ * The file inside the skin's zip, by the name it has in there. What the window puts on the
+ * address it builds for [`crate::skinproto`].
+ */
+file: string, 
+/**
+ * `cover`, `contain` or `tile`, as the check left it.
+ */
+fit: string, 
+/**
+ * Where in its place the picture sits — one of the nine spots, as the check left it.
+ */
+at: string, };
+
+/**
  * The one font a skin carries, on the way to the window. The bytes ride as base64 with the
  * wrapping already taken out — the window decodes once and hands the buffer to `FontFace`, which
  * is measurably quicker than a `data:` URI and touches no CSP directive.
@@ -2479,7 +2499,20 @@ icons: { [key in string]: string },
 /**
  * The font it carries, where it carries one the check took.
  */
-font: SkinFontDto | null, };
+font: SkinFontDto | null, 
+/**
+ * The pictures it lays, by the place each one goes (`c-bg`, `c-surface`, `c-sunken`,
+ * `c-pane-bg`). Empty on a skin that carries none, which is every skin that is not packed.
+ */
+backgrounds: { [key in string]: SkinBackgroundDto }, 
+/**
+ * What the skin's file was when these tables were read off it, for the window to put on the
+ * addresses it builds. A skin taken in again under the same name keeps the name and the
+ * filenames inside it, so without this the webview would draw the pictures it already has.
+ * `built-in` on the ones that ship inside the build, whose materials cannot change under a
+ * running window.
+ */
+stamp: string, };
 
 /**
  * One thing the check set aside while reading a file the reader is about to take in. `theme` is

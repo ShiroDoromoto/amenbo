@@ -750,6 +750,22 @@ pub struct SkinFontDto {
     pub(crate) data: String,
 }
 
+/// One picture a skin lays behind one of its surfaces, on the way to the window: the file it is in
+/// and the two words that say how it is laid. The url is not here — where a custom protocol lives
+/// differs by platform, and building one is the window's (`app/src/core/customScheme.ts`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinBackgroundDto {
+    /// The file inside the skin's zip, by the name it has in there. What the window puts on the
+    /// address it builds for [`crate::skinproto`].
+    pub(crate) file: String,
+    /// `cover`, `contain` or `tile`, as the check left it.
+    pub(crate) fit: String,
+    /// Where in its place the picture sits — one of the nine spots, as the check left it.
+    pub(crate) at: String,
+}
+
 /// The skin this device has on, as the window wears it: the two sides' tables of token name to
 /// value, with the leading `--` left off the way the file writes them. `null` from the command
 /// rather than an empty pair when nothing is on — "no skin" and "a skin that sets nothing" are not
@@ -782,6 +798,15 @@ pub struct SkinTablesDto {
     pub(crate) icons: std::collections::BTreeMap<String, String>,
     /// The font it carries, where it carries one the check took.
     pub(crate) font: Option<SkinFontDto>,
+    /// The pictures it lays, by the place each one goes (`c-bg`, `c-surface`, `c-sunken`,
+    /// `c-pane-bg`). Empty on a skin that carries none, which is every skin that is not packed.
+    pub(crate) backgrounds: std::collections::BTreeMap<String, SkinBackgroundDto>,
+    /// What the skin's file was when these tables were read off it, for the window to put on the
+    /// addresses it builds. A skin taken in again under the same name keeps the name and the
+    /// filenames inside it, so without this the webview would draw the pictures it already has.
+    /// `built-in` on the ones that ship inside the build, whose materials cannot change under a
+    /// running window.
+    pub(crate) stamp: String,
 }
 
 /// One skin this device holds, as the settings screen lists it. The fields are the header's, and

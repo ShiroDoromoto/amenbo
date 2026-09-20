@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkinRowDto } from "../bindings/bindings";
 import { pickSaveAs } from "../core/dialog";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged, writeSkinOut } from "../core/skin";
+import { fitOnto, listSkins, pictureSlots, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged, writeSkinOut } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -88,7 +88,8 @@ export function AppearanceSettings() {
       .then((tables) => {
         // The frame shows the side the screen is on, which is the side the reader judges it by.
         const side = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-        fitOnto(frame.current, tables ? tables[side] : null);
+        // The pictures are not a side's — the frame is a card, so the one it wears is the card's.
+        fitOnto(frame.current, tables ? tables[side] : null, pictureSlots(tables));
       })
       .catch(() => fitOnto(frame.current, null));
   };

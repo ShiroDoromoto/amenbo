@@ -1219,6 +1219,11 @@ jobs:
           chmod +x guards/check-skin-vocabulary.sh
           guards/check-skin-vocabulary.sh
 
+      - name: Assert every rule painting a skin's place reads that place's picture slot
+        run: |
+          chmod +x guards/check-skin-backgrounds.sh
+          guards/check-skin-backgrounds.sh
+
       - name: Assert every var(--name) the front end reads is declared somewhere
         run: |
           chmod +x guards/check-css-vars.sh

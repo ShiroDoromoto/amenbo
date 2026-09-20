@@ -26,6 +26,7 @@
 //
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
+import { schemeBase } from "./customScheme";
 import { currentLang, type Lang } from "./i18n";
 import { invoke } from "./ipc";
 import { pinTheme } from "./theme";
@@ -86,6 +87,82 @@ const DRAWING = /^data:image\/(png|webp|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/;
 /** Is this a value a skin may set a token to? */
 function usable(value: string): boolean {
   return VALUE.test(value) && !NOT_IN_A_VALUE.test(value);
+}
+
+/** The protocol a skin's own pictures come out of (`app/src-tauri/src/skinproto.rs`). */
+const PICTURE_SCHEME = "amenboskin";
+
+/**
+ * The places a skin may lay a picture behind, each named by the colour token drawn there. The slot
+ * a picture is put in is that name with `-pic` after it, declared empty in `global.css` and read by
+ * every rule that paints one of the four.
+ *
+ * The list is core's (`BACKGROUNDS` in `crates/amenbo-core/src/skin.rs`), read again here. A place
+ * this build has no slot for would otherwise be written as a custom property nothing reads, which
+ * is a picture that quietly does not draw.
+ */
+const PLACES = ["c-bg", "c-pane-bg", "c-sunken", "c-surface"];
+
+/**
+ * How a picture may be laid, and where it may sit — core's two vocabularies (`FITS`, `SPOTS`),
+ * read again here for the reason the token names are. What the author wrote has already been held
+ * to them; a word that is not one of these is a build that has moved on without this file, and the
+ * answer to it is the same as core's, which is the default.
+ */
+const FITS = ["contain", "cover", "tile"];
+const FIT_DEFAULT = "cover";
+const SPOTS = [
+  "bottom", "bottom-left", "bottom-right", "center", "left", "right", "top", "top-left",
+  "top-right",
+];
+const SPOT_DEFAULT = "center";
+
+/**
+ * The address one of a skin's pictures is served at. The author wrote a filename; everything around
+ * it is built here, which is the whole reason `url()` is kept out of the values they can write.
+ *
+ * `v` is not read by the door. It carries what the skin's file was when these tables were read, so
+ * that a skin taken in again under the same name — same skin name, same filenames inside it — is
+ * fetched again rather than drawn out of what the webview already holds.
+ */
+function pictureUrl(skin: string, file: string, stamp: string): string {
+  const at = `${schemeBase(PICTURE_SCHEME)}/${encodeURIComponent(skin)}/${encodeURIComponent(file)}`;
+  return `${at}?v=${encodeURIComponent(stamp)}`;
+}
+
+/**
+ * What goes in one place's slot: the picture, where it sits, and how it covers the place. A
+ * `background` shorthand's layer, so that the rule reading it keeps its own colour behind — the
+ * picture is laid over the ground rather than in place of it, and a picture with transparency in it
+ * is read against the colour the author chose.
+ *
+ * `tile` is the one of the three that repeats, and the only one with no size: a size and a repeat
+ * together are two answers to how big the picture is.
+ */
+function pictureLayer(url: string, fit: string, at: string): string {
+  const laid = FITS.includes(fit) ? fit : FIT_DEFAULT;
+  const spot = (SPOTS.includes(at) ? at : SPOT_DEFAULT).replace("-", " ");
+  return laid === "tile"
+    ? `url("${url}") ${spot} repeat`
+    : `url("${url}") ${spot} / ${laid} no-repeat`;
+}
+
+/**
+ * The slots this skin fills, by the name of the place each one is for. Empty on a skin that lays
+ * no picture, which is every skin that came without materials.
+ */
+export function pictureSlots(tables: SkinTablesDto | null): Record<string, string> {
+  const slots: Record<string, string> = {};
+  if (!tables) return slots;
+  for (const [place, laid] of Object.entries(tables.backgrounds)) {
+    if (!PLACES.includes(place) || !laid.file) continue;
+    slots[`${place}-pic`] = pictureLayer(
+      pictureUrl(tables.name, laid.file, tables.stamp),
+      laid.fit,
+      laid.at,
+    );
+  }
+  return slots;
 }
 
 /**
@@ -186,7 +263,11 @@ export async function useSkin(name: string | null): Promise<void> {
  * Inline rather than a rule, because a rule would need a selector for one element that has no name
  * of its own; the properties inherit from here down, which is the whole of what is wanted.
  */
-export function fitOnto(el: HTMLElement | null, values: Record<string, string> | null): void {
+export function fitOnto(
+  el: HTMLElement | null,
+  values: Record<string, string> | null,
+  pictures: Record<string, string> | null = null,
+): void {
   if (!el) return;
   for (const name of [...el.style].filter((p) => p.startsWith("--"))) {
     el.style.removeProperty(name);
@@ -195,6 +276,11 @@ export function fitOnto(el: HTMLElement | null, values: Record<string, string> |
   for (const [name, value] of Object.entries(values)) {
     if (!NAME.test(name) || !usable(value)) continue;
     el.style.setProperty(`--${name}`, value);
+  }
+  // The pictures go on beside them, and past `usable` rather than through it: a layer holds the
+  // `url()` that rule keeps out, and it was built here rather than written by the author.
+  for (const [slot, layer] of Object.entries(pictures ?? {})) {
+    el.style.setProperty(`--${slot}`, layer);
   }
 }
 
@@ -361,7 +447,25 @@ export function applySkin(tables: SkinTablesDto | null): void {
       rule.style.setProperty(`--${name}`, value);
     }
   }
+  layPictures(s, tables);
   layDrawings(s, tables.icons);
+}
+
+/**
+ * Lay the skin's pictures behind the places they name — one rule for the lot of them, after the
+ * two sides and matching both, because a picture is the header's rather than a side's: a skin
+ * that draws paper draws paper on both sides of it (`AMB-D-936`).
+ *
+ * What goes in is a slot each rather than a value the author wrote — the layer was built here,
+ * around a filename, so `usable` has nothing to say about it and the `url()` it holds is one no
+ * document could have spelled.
+ */
+function layPictures(s: CSSStyleSheet, tables: SkinTablesDto): void {
+  const slots = pictureSlots(tables);
+  if (Object.keys(slots).length === 0) return;
+  const at = s.insertRule("[data-theme] {}", s.cssRules.length);
+  const rule = s.cssRules[at] as CSSStyleRule;
+  for (const [slot, layer] of Object.entries(slots)) rule.style.setProperty(`--${slot}`, layer);
 }
 
 /**

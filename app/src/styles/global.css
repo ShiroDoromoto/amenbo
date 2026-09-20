@@ -1415,7 +1415,7 @@ input[type="color"] {
   margin: 0; padding: var(--s-1) var(--s-3);
   background: var(--c-sunken);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--fs-sm); font-weight: 600;
+  font-size: var(--fs-md); font-weight: 600;
 }
 /* Inside the face, a patch is as tall as it is: the scroll is the face's, and one patch of its own
    would put a second bar inside the first. */
@@ -1529,8 +1529,8 @@ input[type="color"] {
 /* A row is one line and never wraps: the name is what is read, and a path that folded would push
    the next row off the panel. Centred rather than on the baseline, because the first thing on the
    line is a fixed box and not a letter — an empty one has no baseline to sit a name against.
-   **22px, and set as a height rather than won with padding.** The line box is `--fs-sm` × `--lh`
-   = 19.5px, and the 2.5px left over does not divide into two whole pixels; a height lands on the
+   **22px, and set as a height rather than won with padding.** The line box is `--fs-md` × `--lh`
+   = 21px, and the 1px left over does not divide into two whole pixels; a height lands on the
    figure itself and leaves the centring to say where the text goes. 22px is also what the mark at
    the head of the row asks for — `--icon-sm` is 16px, which sits with 3px above and below. */
 .files__file, .files__dir {
@@ -2004,7 +2004,7 @@ input[type="color"] {
 /* The two rows at the head of the column stand the same height, whichever half is up. Left to their
    own contents one is two icons tall and the other a line of names, so a reader crossing between the
    draft page and a file saw everything under them move by the difference. The height is a tab's own
-   — a name at `--fs-sm` over 1.6 lines, with its 2px above and below and the tab's edge around that
+   — a name at `--fs-md` over 1.6 lines, with its 2px above and below and the tab's edge around that
    — rounded up (`AMB-T-4271`). */
 .files__top, .files__tabs { min-height: 27px; }
 /* The files the column is holding. The row scrolls sideways and never wraps: a second line of tabs

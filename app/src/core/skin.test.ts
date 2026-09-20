@@ -17,9 +17,13 @@ const wearing = (over: Partial<SkinTablesDto>): SkinTablesDto => ({
   titles: {},
   light: {},
   dark: {},
+  icons: {},
   font: null,
   ...over,
 });
+
+/** One drawing, as the host hands it over: a `data:` URI carrying an empty SVG. */
+const A_DRAWING = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg"/>')}`;
 
 const sheetText = () => {
   const el = document.getElementById("amenbo-skin") as HTMLStyleElement | null;
@@ -208,6 +212,45 @@ describe("the shape a value may have", () => {
     expect(skinRs).toContain('value.contains("/*") || value.contains("*/")');
     expect(asked).toContain('"url"');
     expect(asked).toContain("starts_with('(')");
+  });
+});
+
+describe("the drawings a skin hands over", () => {
+  beforeEach(() => {
+    document.head.innerHTML = "";
+  });
+
+  it("lays one as a mask painted in currentColor, over the icon it stands in for", () => {
+    applySkin(wearing({ icons: { gear: A_DRAWING } }));
+    const rules = sheetText();
+    const rule = rules[rules.length - 1] ?? "";
+    expect(rule).toContain('.icon[data-icon="gear"]');
+    expect(rule).toContain("mask-image: url(");
+    expect(rule).toContain("background-color: currentcolor");
+    // The geometry underneath draws nothing, so what is seen is the mask alone.
+    expect(rule).toContain("fill: none");
+    expect(rule).toContain("stroke: none");
+  });
+
+  it("writes one rule per icon, and none for a skin that replaced none", () => {
+    applySkin(wearing({ icons: { gear: A_DRAWING, gavel: A_DRAWING } }));
+    expect(sheetText().filter((r) => r.includes("data-icon"))).toHaveLength(2);
+
+    applySkin(wearing({ icons: {} }));
+    expect(sheetText().filter((r) => r.includes("data-icon"))).toHaveLength(0);
+  });
+
+  it("leaves out a drawing that is not one, and a name that is not one", () => {
+    applySkin(wearing({
+      icons: {
+        // Neither a form a mask can be read off nor base64, an address of somebody else's, and a
+        // name carrying what would end the selector it is written into.
+        gear: "data:image/jpeg;base64,/9j/",
+        gavel: "https://example.com/gavel.svg",
+        'a"]{x:y}[b': A_DRAWING,
+      },
+    }));
+    expect(sheetText().filter((r) => r.includes("data-icon"))).toHaveLength(0);
   });
 });
 

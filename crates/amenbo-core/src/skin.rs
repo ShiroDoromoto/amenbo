@@ -1138,7 +1138,15 @@ pub fn material(pack: &[u8], name: &str) -> Result<Vec<u8>, Error> {
 /// Where the two parts of "is this a background" are put together: the document says which file,
 /// and the file says what it is.
 pub fn picture(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
-    let bytes = material(pack, name)?;
+    drawn(name, material(pack, name)?)
+}
+
+/// What these bytes are as a picture, or the sentence saying they are none.
+///
+/// Held apart from the two that ask it, because they come at the question from the two shapes a
+/// skin's materials are held in — a zip ([`picture`]) and whatever [`Materials`] has ([`icon`]) —
+/// and the answer is the bytes' own either way.
+fn drawn(name: &str, bytes: Vec<u8>) -> Result<(Picture, Vec<u8>), Error> {
     match Picture::of(&bytes) {
         Some(picture) => Ok((picture, bytes)),
         None => Err(Error::invalid(format!(
@@ -1147,14 +1155,20 @@ pub fn picture(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
     }
 }
 
-/// One of a packed skin's icons, read as a drawing — the bytes and what they turned out to be.
+/// One of a skin's icons, read as a drawing — the bytes and what they turned out to be.
 ///
 /// Where the two parts of "is this an icon" are put together, the way [`picture`] does it for a
 /// background. **A jpeg is not one of them.** An icon is laid as a mask and what is read off it is
 /// the alpha; a jpeg carries none, so one put here would draw as a filled square where the drawing
 /// was.
-pub fn icon(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
-    let (drawing, bytes) = picture(pack, name)?;
+///
+/// Takes [`Materials`] rather than a zip: a skin that ships inside the build carries its files
+/// beside its document rather than in an archive, and an icon of one is still an icon.
+pub fn icon(materials: &Materials<'_>, name: &str) -> Result<(Picture, Vec<u8>), Error> {
+    let bytes = materials
+        .read(name)
+        .ok_or_else(|| Error::invalid(format!("this skin holds no '{name}'")))?;
+    let (drawing, bytes) = drawn(name, bytes)?;
     if drawing == Picture::Jpeg {
         return Err(Error::invalid(format!(
             "'{name}' is a jpeg, which carries no transparency — png, webp and svg are the \
@@ -2949,10 +2963,20 @@ dark:
             ("gear.svg", b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
             ("gear.jpg", jpeg),
         ]);
-        assert_eq!(icon(&zip, "gear.svg").unwrap().0, Picture::Svg);
+        let held = Materials::of(&zip);
+        assert_eq!(icon(&held, "gear.svg").unwrap().0, Picture::Svg);
         assert_eq!(picture(&zip, "gear.jpg").unwrap().0, Picture::Jpeg, "it is a picture");
-        let why = icon(&zip, "gear.jpg").unwrap_err().to_string();
+        let why = icon(&held, "gear.jpg").unwrap_err().to_string();
         assert!(why.contains("gear.jpg"), "{why}");
+    }
+
+    #[test]
+    fn an_icon_of_a_skin_that_ships_inside_the_build_is_read_the_same_way() {
+        // A shipped skin has no zip: its files sit in the binary beside its document. The window
+        // asks for its drawings in the one place a name goes, so that shape has to answer too.
+        let held = Materials::Shipped(&[("gear.png", A_PNG)]);
+        assert_eq!(icon(&held, "gear.png").unwrap().0, Picture::Png);
+        assert!(icon(&held, "gavel.png").is_err());
     }
 
     #[test]

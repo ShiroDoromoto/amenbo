@@ -33,6 +33,7 @@ vi.mock("../core/ipc", () => ({
   },
 }));
 
+import { applySnapshot, getSnapshot } from "../core/snapshot";
 import { AppearanceSettings } from "./AppearanceSettings";
 
 const row = (name: string, themes: string[]) => ({
@@ -182,5 +183,40 @@ describe("a skin made for one side only", () => {
     await draw();
     expect(selects()[1]!.disabled).toBe(false);
     expect(host.querySelector(".skinesc")).toBe(null);
+  });
+});
+
+describe("the name a skin goes by", () => {
+  // The reader's language is the whole question here, so it is set rather than left to whatever the
+  // snapshot came up as.
+  const wasLanguage = getSnapshot().language;
+  beforeEach(() => applySnapshot({ ...getSnapshot(), language: "ja" }));
+  afterEach(() => applySnapshot({ ...getSnapshot(), language: wasLanguage }));
+
+  const retro = { ...row("retro", ["light", "dark"]), title: "Retro", titles: { ja: "レトロゲーム" } };
+
+  it("is the one written for the reader's language, in the list and on the frame", async () => {
+    hoisted.list = { on: null, skins: [retro] };
+    hoisted.tables.retro = { name: "retro", title: "Retro", titles: { ja: "レトロゲーム" }, light: {}, dark: {}, font: null };
+    await draw();
+
+    const option = host.querySelector<HTMLOptionElement>('option[value="retro"]');
+    expect(option?.textContent).toBe("レトロゲーム");
+
+    await pick(selects()[0]!, "retro");
+    expect(host.querySelector(".skinfit__title")?.textContent).toBe("レトロゲーム");
+  });
+
+  it("is the one the author wrote where they wrote none for this language", async () => {
+    hoisted.list = { on: null, skins: [{ ...row("washi", ["light", "dark"]), title: "Washi" }] };
+    await draw();
+    expect(host.querySelector<HTMLOptionElement>('option[value="washi"]')?.textContent).toBe("Washi");
+  });
+
+  it("names the skin the same way where a one-sided one pins the theme", async () => {
+    hoisted.list = { on: "retro", skins: [{ ...retro, themes: ["dark"] }] };
+    await draw();
+    expect(host.textContent).toContain("レトロゲーム");
+    expect(host.textContent, "and not the author's one name beside it").not.toContain("Retro");
   });
 });

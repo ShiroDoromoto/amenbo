@@ -25,6 +25,7 @@
 //
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
+import { currentLang, type Lang } from "./i18n";
 import { invoke } from "./ipc";
 import { pinTheme } from "./theme";
 import type { SkinFontDto, SkinJudgementDto, SkinListDto, SkinTablesDto } from "../bindings/bindings";
@@ -62,6 +63,26 @@ const NOT_IN_A_VALUE = /\/\*|\*\/|url\s*\(/i;
 /** Is this a value a skin may set a token to? */
 function usable(value: string): boolean {
   return VALUE.test(value) && !NOT_IN_A_VALUE.test(value);
+}
+
+/**
+ * What to call a skin on this screen, in the language the reader is reading it in.
+ *
+ * An author may write a name per language (`titles:`), and where they wrote none for this reader
+ * the one name they did write (`title`) stands. That is the author's own word for their work
+ * rather than a language fallen back to, so nothing is said on screen about the choice
+ * (`AMB-D-935`, and the same silence as `AMB-D-623`).
+ *
+ * The reader's own code is looked up rather than the map walked: the codes are the author's, as
+ * written, so one this build has never heard of is in there too and matches nothing.
+ */
+export function skinTitle(
+  skin: { title: string; titles: Record<string, string> },
+  lang: Lang = currentLang(),
+): string {
+  // A name written empty is a name the author did not write. Their one name draws instead of a
+  // blank where a skin's name goes.
+  return skin.titles[lang]?.trim() || skin.title;
 }
 
 /** What this device holds, and which of them is on. */

@@ -55,6 +55,7 @@ vi.mock("../core/ipc", () => ({
   },
 }));
 
+import { applySnapshot, getSnapshot } from "../core/snapshot";
 import { SkinAdd } from "./SkinAdd";
 
 const judgement = (over: Partial<SkinJudgementDto> = {}): SkinJudgementDto => ({
@@ -200,5 +201,24 @@ describe("reading a skin file over", () => {
     expect(host.textContent).toContain("skin_v 9");
     expect(host.querySelector(".skinread"), "nothing to look over").toBe(null);
     expect(host.querySelector(".skinfit__answer"), "and nothing to press").toBe(null);
+  });
+});
+
+describe("the name the panel calls a file by", () => {
+  // Before it is taken in, and to the same reader as everywhere else.
+  const wasLanguage = getSnapshot().language;
+  beforeEach(() => applySnapshot({ ...getSnapshot(), language: "ja" }));
+  afterEach(() => applySnapshot({ ...getSnapshot(), language: wasLanguage }));
+
+  it("is the one written for the reader's language", async () => {
+    hoisted.read = judgement({ title: "Retro", titles: { ja: "レトロゲーム" } });
+    await drawAndPick();
+    expect(host.querySelector(".skinread__name")?.textContent).toContain("レトロゲーム");
+  });
+
+  it("is the author's one name where they wrote none for this language", async () => {
+    hoisted.read = judgement({ title: "Retro", titles: { fr: "Rétro" } });
+    await drawAndPick();
+    expect(host.querySelector(".skinread__name")?.textContent).toContain("Retro");
   });
 });

@@ -1008,7 +1008,7 @@ pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     Ok(name)
 }
 
-/// Write a whole skin out to `path`, to start from: every colour a skin may set, on both sides,
+/// Write a whole skin out to `path`, to start from: every name a skin may set, on both sides,
 /// each with a line saying what it is for. Taken from the skin that is on where there is one — an
 /// author editing what they are looking at starts from those values — and filled in from this
 /// build for every name that skin left alone, so what lands is a complete file either way.

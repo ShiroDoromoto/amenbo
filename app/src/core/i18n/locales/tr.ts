@@ -347,7 +347,7 @@ export const tr: Translation = {
     "settings.skinAddPick": "Dosya seç…",
     "settings.skinAddDrop": "ya da buraya bir .yaml bırak",
     "settings.skinWriteOut": "Bir tane yaz",
-    "settings.skinWriteOutNote": "Bütün renkler, her birinin ne işe yaradığını söyleyen bir satırla. Üstteki kaplamadan alınır.",
+    "settings.skinWriteOutNote": "Bir kaplamanın belirleyebildiği her şey, her birinin ne işe yaradığını söyleyen bir satırla. Üstteki kaplamadan alınır.",
     "settings.skinAddTake": "İçeri al",
     "settings.skinOnlySide": "yalnızca {side}",
     "settings.skinReplace": "Bu adla bir kaplama zaten var: duran {held}, gelen {coming}.",

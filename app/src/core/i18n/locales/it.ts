@@ -354,7 +354,7 @@ export const it: Translation = {
     "settings.skinAddPick": "Scegli un file…",
     "settings.skinAddDrop": "oppure trascina qui un .yaml",
     "settings.skinWriteOut": "Scrivine uno",
-    "settings.skinWriteOutNote": "Tutti i colori, ognuno con una riga che dice a cosa serve. Presi dallo skin addosso.",
+    "settings.skinWriteOutNote": "Tutto ciò che uno skin può impostare, ognuno con una riga che dice a cosa serve. Preso dallo skin addosso.",
     "settings.skinAddTake": "Portalo dentro",
     "settings.skinOnlySide": "solo {side}",
     "settings.skinReplace": "Uno skin con questo nome c’è già: presente {held}, in arrivo {coming}.",

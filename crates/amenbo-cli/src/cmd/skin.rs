@@ -6,7 +6,7 @@
 //!
 //! `validate` is the author's face of the same check the import runs, so the reason a file will be
 //! turned away is learned before it is handed to anybody. `template` writes out what this build
-//! sets, which is a skin already — an author starts by editing the colours they can see.
+//! sets, which is a skin already — an author starts by editing what they can see.
 
 use std::path::Path;
 
@@ -211,14 +211,14 @@ fn validate(flags: &Flags, path: &Path) -> Result<i32, CliError> {
     Ok(0)
 }
 
-/// Write out a whole skin to start from: every colour a skin may set, on both sides, each with a
-/// line saying what it is for. Taken from the skin that is on where there is one, and filled in
-/// from this build for everything that skin left alone — so what comes out is a complete file
-/// whichever it was taken from. The name is not the one it was taken from: a file calling itself
-/// what is already held would replace it on the way back in.
+/// Write out a whole skin to start from: every name a skin may set, on both sides, each with a line
+/// saying what it is for. Taken from the skin that is on where there is one, and filled in from this
+/// build for everything that skin left alone — so what comes out is a complete file whichever it was
+/// taken from. The name is not the one it was taken from: a file calling itself what is already held
+/// would replace it on the way back in.
 ///
-/// The other names a skin may set (the type scale, the spacing, the font stacks) take no colour and
-/// are left for the author to add; `skin validate` says whether a name is one this build has.
+/// What only the author can fill in — their name, their licence, a name per language, a font carried
+/// in the file — is written as a commented shape to copy rather than as an empty value.
 fn template(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     // Taken from the skin that is on, where one is: an author who is editing what they are looking
     // at starts from those values, and one who is starting out gets this build's.

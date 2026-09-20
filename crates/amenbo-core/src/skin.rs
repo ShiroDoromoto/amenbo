@@ -99,6 +99,15 @@ pub struct ThemeTable {
     /// Kept so the check can name each one while dropping it, rather than the whole table failing on
     /// one mistyped line.
     pub not_text: Vec<String>,
+    /// The multipliers the author asked for, as the check settled them — the number it used, which
+    /// is what they wrote unless it was brought inside the range.
+    ///
+    /// Held beside `values` rather than in it. A multiplier is not a token: what goes into the
+    /// `:root` the window builds is the sizes it moved, and a declaration nobody reads would sit
+    /// there for as long as the skin is on. But applying it is also the end of it — the number is
+    /// nowhere in the sizes it produced — and a template written from an applied skin would hand
+    /// the author back a ladder they did not write.
+    pub scales: BTreeMap<String, String>,
 }
 
 /// Keep the entries of a header map that arrived as text, by name.
@@ -147,7 +156,7 @@ impl ThemeTable {
                 None => not_text.push(key),
             }
         }
-        ThemeTable { values, not_text }
+        ThemeTable { values, not_text, scales: BTreeMap::new() }
     }
 }
 
@@ -163,6 +172,7 @@ fn scale(
     wrote: &str,
     moves: &[&str],
     into: &mut BTreeMap<String, String>,
+    asked_for: &mut BTreeMap<String, String>,
     warnings: &mut Vec<Warning>,
 ) {
     // Only text that is no number at all is dropped. A number outside what the family allows —
@@ -180,6 +190,7 @@ fn scale(
     let floor = if SCALE_TO_ZERO.contains(&key) { 0.0 } else { SCALE_MIN };
     let ceiling = if key == SCALE_UNBOUNDED { f32::INFINITY } else { SCALE_MAX };
     let used = asked.clamp(floor, ceiling);
+    asked_for.insert(key.to_string(), format!("{used}"));
     if used != asked {
         warnings.push(Warning::Scale {
             theme: side,
@@ -922,9 +933,10 @@ impl Skin {
                 warnings.push(Warning::NotText { theme: side, key });
             }
             let mut kept = std::collections::BTreeMap::new();
+            let mut asked_for = std::collections::BTreeMap::new();
             for (key, value) in std::mem::take(&mut table.values) {
                 if let Some((_, moves)) = SCALES.iter().find(|(name, _)| *name == key) {
-                    scale(side, &key, &value, moves, &mut kept, &mut warnings);
+                    scale(side, &key, &value, moves, &mut kept, &mut asked_for, &mut warnings);
                 } else if OPEN.binary_search(&key.as_str()).is_ok() {
                     // The name is a skin's to move; whether the value is one it may be moved to is
                     // the next question, and the last place it can be answered out loud.
@@ -941,6 +953,7 @@ impl Skin {
                 }
             }
             table.values = kept;
+            table.scales = asked_for;
             frame(side, table, &mut warnings);
             smoothing(side, table, &mut warnings);
         }

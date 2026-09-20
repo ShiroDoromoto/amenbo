@@ -1,0 +1,183 @@
+# A pane was given the whole page, and the two behind it went to the next one. It was given a quarter
+# again, and they came back.
+#
+# The pages are the panes laid down in order, worked out afresh every time the face is drawn
+# (`app/src/talk/layout.ts`). Nothing is held anywhere: a pane that grew takes room the ones behind it
+# were in and the overflow starts the next page, and a pane that shrank hands that room back and they
+# come up into it. **Both directions are one rule**, and that is exactly why both are walked.
+#
+# ── Why the way back is the half worth walking ───────────────────────────────────────────────────
+# A build that lays the pages out again only when a pane grows is a build that passes the first half
+# of this road and leaves the reader with two panes stranded on a page that should have emptied. It
+# draws without complaint: a page holding two panes is an ordinary screen, and nothing on it says the
+# ones on it should be somewhere else. There is no reading that catches it except going back the way
+# you came, which is what the second half of this road is.
+#
+# ── Why three panes, all of one size ─────────────────────────────────────────────────────────────
+# Three quarters of a page is the smallest arrangement where growing the first one pushes *more than
+# one* pane over — and more than one is what says the whole of what is behind was laid down again,
+# rather than a single pane being nudged along. They are all one size so that nothing in the reading
+# turns on which of them is which: what is counted is how many are on each page, and three quarters
+# leave a quarter of room over, which is read too.
+#
+# ── Why the first is the one that is pressed ─────────────────────────────────────────────────────
+# Because everything behind it is what the press has to move. Pressing the last would push nothing:
+# the panes before a pane keep the places they have, the search that lays them down going forward
+# only. So the road presses the one with the most behind it, and reads both pages either side of it.
+#
+# ── Why the first pane is spoken to ──────────────────────────────────────────────────────────────
+# The pane the road presses is the pane it comes back to, and the screen visits another page in
+# between. The reader's own line is what says the pane that came back is the pane that went — a count
+# of boxes would pass on a page rebuilt from nothing, and so would a build that started a fresh
+# terminal in a fresh frame at every laying.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the panes run is the reader's own shell. Choosing the folder is what raises the project they
+# belong to, so the road makes what it needs by walking in.
+id: send-the-panes-behind-one-to-the-next-page-and-bring-them-back
+title: A pane given the whole page sends the ones behind it to the next, and giving it a quarter again brings them up
+description: >
+  Open the workspace, choose the folder it runs in, and stand three quarter-page panes on it with a
+  line on the first. Give the first the whole page: it fills that page on its own and the two behind
+  it are laid down on the next, which the screen follows. Turn to that page and find them both there.
+  Come back and give the first a quarter again: the two come up into the room it handed back, all
+  three are on one page, and the line is still on the one that was pressed.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The way in, and what binds the folder to the project the face is on. Every pane below works in
+  # that folder, which is why none of the presses asks anything.
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a line typed at one is something to answer rather than something left sitting
+  # where it was put — and being left where it was put is what the last reading on this road needs.
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane that was pressed
+
+  # A quarter, which is what the other two are opened at: a pane opened on a page is measured against
+  # the one already showing, so one press here sizes all three.
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: quarter
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  # Three quarters of the page taken and one left over, with the way in standing in it. This is the
+  # picture both readings below are taken against.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 3
+      empty: 1
+
+  # The pane the press is about, which is the first of the three — the one with the other two behind
+  # it. A size is one pane's answer, so the control has to be pointed at the pane it is meant for.
+  - type: action
+    domain: workspace
+    op: press-pane
+    with:
+      shows: SCENARIO the pane that was pressed
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: whole
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  # It fills the page on its own now, and there is no room beside it for anything. The two that were
+  # behind it are not here.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  # And they are on the next page, both of them, still at the quarter they were opened at. More than
+  # one is what says the whole of what was behind was laid down again rather than one pane nudged
+  # along.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 2
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 1
+
+  # Back to the pane that was pressed, and a quarter again — which is the half of this road no other
+  # reading reaches. A build that laid the pages out only when a pane grew would leave those two
+  # stranded here, on a page that draws perfectly well and should have emptied.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 1
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: quarter
+
+  # All three on one page again, with the quarter of room over that they started with.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 3
+      empty: 1
+
+  # And the pane that was pressed is the pane that came back: its line is still on it, through a page
+  # it left and a page it came home to.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane that was pressed

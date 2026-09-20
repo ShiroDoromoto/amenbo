@@ -3,6 +3,26 @@
 
 name: high-contrast
 title: "High Contrast"
+titles:
+  en: "High Contrast"
+  ja: "高コントラスト"
+  zh-Hans: "高对比度"
+  zh-Hant: "高對比"
+  ko: "고대비"
+  es: "Alto contraste"
+  pt-BR: "Alto contraste"
+  fr: "Contraste élevé"
+  de: "Hoher Kontrast"
+  it: "Alto contrasto"
+  ru: "Высокая контрастность"
+  hi: "उच्च कंट्रास्ट"
+  id: "Kontras Tinggi"
+  vi: "Tương phản cao"
+  th: "คอนทราสต์สูง"
+  tr: "Yüksek Kontrast"
+  pl: "Wysoki kontrast"
+  nl: "Hoog contrast"
+  uk: "Висока контрастність"
 skin_v: 1
 author: "Amenbo"
 version: "1"

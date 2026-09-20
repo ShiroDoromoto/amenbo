@@ -104,7 +104,7 @@ fn add(store: &mut Store, flags: &Flags, path: &Path, yes: bool) -> Result<i32, 
         });
     }
 
-    if let Some(there) = Skin::installed(&store.paths, &name).map_err(CliError::from)? {
+    if let Some((there, _)) = Skin::installed(&store.paths, &name).map_err(CliError::from)? {
         if !yes && !flags.yes {
             let mine = version_of(&taken.skin);
             let theirs = version_of(&there);
@@ -226,7 +226,7 @@ fn template(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     let on = match &store.config.skin {
         Some(name) => Skin::installed(&store.paths, name)
             .map_err(CliError::from)?
-            .and_then(|s| s.check().ok())
+            .and_then(|(s, materials)| s.check(&materials).ok())
             .map(|t| t.skin),
         None => None,
     };
@@ -253,7 +253,9 @@ fn judge(path: &Path) -> Result<(Packing, Vec<u8>, Taken, Report), CliError> {
     amenbo_core::skin::weigh(&bytes).map_err(CliError::from)?;
     let (packing, yaml) = amenbo_core::skin::document(&bytes).map_err(CliError::from)?;
     let read = Skin::read(&yaml).map_err(CliError::from)?;
-    let taken = read.check().map_err(|r| refused(path, r))?;
+    let taken = read
+        .check(&amenbo_core::skin::Materials::of(packing, &bytes))
+        .map_err(|r| refused(path, r))?;
     let report = skin_contrast::measure(&taken.skin);
     Ok((packing, bytes, taken, report))
 }

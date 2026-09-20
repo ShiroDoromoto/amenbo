@@ -958,6 +958,24 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                         key: (*key).to_string(),
                         detail: Some(format!("'{wrote}' is not one this build draws")),
                     },
+                    Warning::UnknownBackground { place } => SkinWarningDto {
+                        kind: "unknown".into(),
+                        theme: None,
+                        key: format!("backgrounds.{place}"),
+                        detail: Some("this Amenbo lays no background there".into()),
+                    },
+                    Warning::BackgroundDropped { place, why } => SkinWarningDto {
+                        kind: "background".into(),
+                        theme: None,
+                        key: format!("backgrounds.{place}"),
+                        detail: Some(format!("it {}", why.en())),
+                    },
+                    Warning::BackgroundChoice { place, key, wrote } => SkinWarningDto {
+                        kind: "choice".into(),
+                        theme: None,
+                        key: format!("backgrounds.{place}.{key}"),
+                        detail: Some(format!("'{wrote}' is not one this build draws")),
+                    },
                 }
             })
             .collect(),

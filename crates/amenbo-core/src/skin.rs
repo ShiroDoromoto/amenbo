@@ -66,6 +66,13 @@ pub struct Skin {
     /// One, and no weights. Bold is synthesised. A second would raise the question of whether the
     /// size limit is per font or for the pair, and there is nothing a second buys that answers it.
     pub font: Option<FontFile>,
+    /// The pictures a skin lays behind its surfaces, by the place each one goes (`AMB-D-936`).
+    /// Held as the document writes them — the check is what rules on the place, the words and the
+    /// name, for the reason the tables are held as written.
+    ///
+    /// One picture per place and none per side. What a background is for is the material a skin is
+    /// made of, and a skin that draws paper draws paper on both sides of it.
+    pub backgrounds: BTreeMap<String, Background>,
     /// The header keys this build does not know, in order. A skin written for a later amenbo is read
     /// as far as it goes, so these are carried out to be warned about rather than to refuse on.
     pub unknown_keys: Vec<String>,
@@ -93,6 +100,26 @@ pub struct FontFile {
     /// here is not clean base64 and is not decoded until the check strips them.
     #[serde(default)]
     pub data: String,
+}
+
+/// One picture a skin lays behind one of its surfaces, as it comes off the document.
+///
+/// The author writes a filename and, if they want them, two words. **They do not write `url()`** —
+/// the place the picture is served from is amenbo's own, and a document that could spell an address
+/// could spell one that is not on this machine.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct Background {
+    /// The file inside the skin's zip, by the name it has in there.
+    #[serde(default)]
+    pub file: String,
+    /// How the picture is laid over its place — one of [`FITS`]. [`FIT_DEFAULT`] where the author
+    /// wrote none.
+    #[serde(default)]
+    pub fit: String,
+    /// Where in its place the picture sits — one of [`SPOTS`]. [`SPOT_DEFAULT`] where the author
+    /// wrote none.
+    #[serde(default)]
+    pub at: String,
 }
 
 /// The values one side of a skin sets. Token names come without the leading `--`: what the document
@@ -126,6 +153,19 @@ fn text_only(raw: BTreeMap<String, Value>) -> BTreeMap<String, String> {
     raw.into_iter().filter_map(|(key, value)| Some((key, value.as_str()?.to_string()))).collect()
 }
 
+/// Keep the backgrounds that arrived as a map of words, by the place each is named for.
+///
+/// An entry written as something else — a bare filename where a map belongs, a `file:` that is a
+/// number — comes out as a background with nothing in it, which the check then drops by name. Read
+/// as far as it goes rather than failing the document, the way a table's odd line is.
+fn laid_out(raw: BTreeMap<String, Value>) -> BTreeMap<String, Background> {
+    raw.into_iter()
+        .map(|(place, value)| {
+            (place, serde_norway::from_value::<Background>(value).unwrap_or_default())
+        })
+        .collect()
+}
+
 impl Skin {
     /// Read one skin document. The header's four naming keys are required; everything else is
     /// optional, because a skin that sets ten colours and leaves the rest is the ordinary case.
@@ -144,6 +184,7 @@ impl Skin {
             light: ThemeTable::split(w.light.unwrap_or_default()),
             dark: ThemeTable::split(w.dark.unwrap_or_default()),
             font: w.font_file,
+            backgrounds: laid_out(w.backgrounds.unwrap_or_default()),
             unknown_keys: w.rest.into_keys().collect(),
         })
     }
@@ -329,6 +370,32 @@ fn smoothing(side: Side, table: &mut ThemeTable, warnings: &mut Vec<Warning>) {
     warnings.push(Warning::Choice { theme: side, key: "font-smooth", wrote });
 }
 
+/// One of a background's two words, held to the short list this build has a drawing for. What the
+/// author wrote where they wrote nothing, and where they wrote a word that is not one of them, is
+/// the same: the way this build lays a picture. The difference is that the second is reported.
+fn one_of(
+    place: &str,
+    key: &'static str,
+    wrote: &str,
+    words: &[&str],
+    stands: &str,
+    warnings: &mut Vec<Warning>,
+) -> String {
+    let said = wrote.trim();
+    if said.is_empty() {
+        return stands.to_string();
+    }
+    if words.contains(&said) {
+        return said.to_string();
+    }
+    warnings.push(Warning::BackgroundChoice {
+        place: place.to_string(),
+        key,
+        wrote: said.to_string(),
+    });
+    stands.to_string()
+}
+
 /// A CSS length in pixels, or `None` where it is not one this build can read. Everything has to say
 /// `px` — it is the only unit these two are written in, and a bare `0` never reaches here anyway:
 /// YAML reads it as a number, which the check has already dropped as a value that is not text.
@@ -390,6 +457,8 @@ struct Wire {
     dark: Option<BTreeMap<String, Value>>,
     #[serde(default)]
     font_file: Option<FontFile>,
+    #[serde(default)]
+    backgrounds: Option<BTreeMap<String, Value>>,
     #[serde(flatten)]
     rest: BTreeMap<String, Value>,
 }
@@ -569,6 +638,47 @@ pub const PACK_MAX_BYTES: u64 = 32 * 1024 * 1024;
 /// What a zip opens with. Read so that "packed" is what the bytes say rather than what the name
 /// they arrived under claims.
 const ZIP_MAGIC: &[u8; 2] = b"PK";
+
+/// The places a skin may lay a picture behind, each named by the colour token drawn there
+/// (`AMB-D-936`). Four, and they are the four surfaces the application is built out of: the window
+/// behind everything, the cards on it, the wells sunk into those, and the terminal's own field.
+///
+/// **A place rather than a selector.** What an author reaches is the surface, not the element —
+/// which is the same line the tokens are drawn on, and the reason a skin cannot be written to hide
+/// a control.
+pub const BACKGROUNDS: &[&str] = &["c-bg", "c-pane-bg", "c-sunken", "c-surface"];
+
+/// The ways a picture may be laid over its place. `cover` fills it and crops, `contain` fits the
+/// whole picture in, `tile` repeats it from [`SPOT_DEFAULT`] outward.
+///
+/// Words rather than the CSS the window writes: what these turn into is amenbo's own, and a
+/// document that could write `background-size` could write the rest of the declaration too.
+pub const FITS: &[&str] = &["contain", "cover", "tile"];
+
+/// How a picture is laid where the author said nothing. `cover` is the one that leaves no gap
+/// whatever shape the window is dragged to, which is the answer somebody who did not think about
+/// it wants.
+pub const FIT_DEFAULT: &str = "cover";
+
+/// Where in its place a picture sits. The nine a background has anywhere else, written as one word
+/// each so that a value is a value rather than a pair to be parsed.
+pub const SPOTS: &[&str] = &[
+    "bottom", "bottom-left", "bottom-right", "center", "left", "right", "top", "top-left",
+    "top-right",
+];
+
+/// Where a picture sits where the author said nothing.
+pub const SPOT_DEFAULT: &str = "center";
+
+/// The most a material's name may be. Long enough for a folder and a filename inside the zip, and
+/// short of a name carrying something other than a name.
+pub const FILE_NAME_MAX: usize = 255;
+
+/// What a material's name may not hold. It is written into the address the window fetches the file
+/// by and into the `url()` that lays it, so out go the quote marks, the two characters a URL is cut
+/// at, and everything [`NOT_IN_A_VALUE`] keeps out of a declaration.
+pub const NOT_IN_A_FILE: &[char] =
+    &['"', '\'', '#', '?', ';', '{', '}', '<', '>', '\\', '\n', '\r'];
 
 /// The most a token's value may be. Counted the way the applying side counts it — `VALUE` in
 /// `app/src/core/skin.ts` is a JavaScript regular expression, so its `{1,512}` counts UTF-16 code
@@ -824,16 +934,150 @@ fn too_heavy(what: &str, weighs: u64, ceiling: u64) -> Error {
 ///
 /// Refused rather than skipped: a file carrying such a name is not a skin with one odd entry in it.
 fn held_in_the_pack(name: &str) -> Result<(), Error> {
-    let outside = name.starts_with('/')
-        || name.starts_with('\\')
-        || name.split(['/', '\\']).any(|part| part == "..")
-        || std::path::Path::new(name).is_absolute();
-    if outside {
+    if !inside_the_pack(name) {
         return Err(Error::invalid(format!(
             "'{name}' in this zip points outside it; a skin's files sit inside the skin"
         )));
     }
     Ok(())
+}
+
+/// Does this name stay inside the skin? Reaching up out of the archive, or starting from the root,
+/// is the one way a zip writes outside the directory it was unpacked into.
+fn inside_the_pack(name: &str) -> bool {
+    !name.starts_with('/')
+        && !name.starts_with('\\')
+        && !name.split(['/', '\\']).any(|part| part == "..")
+        && !std::path::Path::new(name).is_absolute()
+}
+
+/// May a material be named this? Asked of what the document points at, rather than of what the zip
+/// holds: a name is followed to a file, put into an address and written into a declaration, and
+/// each of those is a place a name that is not one goes somewhere of its own.
+pub fn usable_file(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= FILE_NAME_MAX
+        && inside_the_pack(name)
+        && !name.chars().any(|c| c.is_control() || NOT_IN_A_FILE.contains(&c))
+}
+
+/// A picture a skin carries, by what its bytes open with.
+///
+/// Four, and each is drawn by every engine amenbo runs on. **GIF is not among them.** What it adds
+/// over the other four is animation, with nothing in the document that could stop it — a moving
+/// picture behind the text is not a look somebody chose once, it is one they cannot put down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Picture {
+    Png,
+    Jpeg,
+    Webp,
+    /// Drawn through `<img>` and `mask-image` rather than put into the document, which is what
+    /// keeps a drawing a drawing (`AMB-D-936`).
+    Svg,
+}
+
+/// How far into a file the opening of an SVG is looked for. An XML declaration and a doctype can
+/// stand in front of the element, and neither is long.
+const SVG_HEAD: usize = 4 * 1024;
+
+impl Picture {
+    /// What these bytes are, or `None` where they are not a picture this build draws.
+    ///
+    /// **The bytes rather than the extension** — the name is the author's word about the file and
+    /// this is the file's own.
+    pub fn of(bytes: &[u8]) -> Option<Picture> {
+        if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Some(Picture::Png);
+        }
+        if bytes.starts_with(b"\xff\xd8\xff") {
+            return Some(Picture::Jpeg);
+        }
+        // `RIFF` opens a container that holds more than pictures, so the form inside it is what
+        // says this one is a picture.
+        if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WEBP" {
+            return Some(Picture::Webp);
+        }
+        opens_an_svg(bytes).then_some(Picture::Svg)
+    }
+
+    /// What the file is served as. The door that hands a material to the window is told the type
+    /// rather than left to work it out from the name.
+    pub fn mime(self) -> &'static str {
+        match self {
+            Picture::Png => "image/png",
+            Picture::Jpeg => "image/jpeg",
+            Picture::Webp => "image/webp",
+            Picture::Svg => "image/svg+xml",
+        }
+    }
+}
+
+/// Does this file open an SVG? There is no magic number to read — an SVG is text — so what is read
+/// is the opening: a byte-order mark and whitespace out of the way, whatever declaration, doctype
+/// or comment stands in front of the picture, and then the first element, which has to be the
+/// `svg` one.
+///
+/// **The first element rather than the first mention of it.** A page with an `<svg>` somewhere
+/// inside it is a page, and answering "svg" for one would hand the window a document to draw.
+fn opens_an_svg(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(SVG_HEAD)];
+    let text = String::from_utf8_lossy(head);
+    let mut rest = text.trim_start_matches('\u{feff}').trim_start();
+    loop {
+        let cut = if let Some(after) = rest.strip_prefix("<!--") {
+            after.find("-->").map(|at| &after[at + 3..])
+        } else if rest.starts_with("<?") || rest.starts_with("<!") {
+            rest.find('>').map(|at| &rest[at + 1..])
+        } else {
+            break;
+        };
+        // Nothing closes it inside what was read, so there is no first element to look at.
+        let Some(after) = cut else { return false };
+        rest = after.trim_start();
+    }
+    let Some(after) = rest.strip_prefix("<svg") else { return false };
+    after.is_empty() || after.starts_with(|c: char| c.is_whitespace() || c == '>' || c == '/')
+}
+
+/// One of a packed skin's materials, by the name the document gave it.
+///
+/// Unpacked here and not kept: a skin is read at startup in every window, so what is held is the
+/// file it arrived in, and a material is taken out of it at the moment something draws with it.
+/// Capped the way the way in was — what the index claims about an entry is not what decides.
+pub fn material(pack: &[u8], name: &str) -> Result<Vec<u8>, Error> {
+    if !usable_file(name) {
+        return Err(Error::invalid("that is not a name a file in a skin can have"));
+    }
+    if Packing::of(pack) == Packing::Bare {
+        return Err(Error::invalid("this skin is one document, and carries no files"));
+    }
+    use std::io::Read as _;
+    let mut zip = open_pack(pack)?;
+    let mut found =
+        zip.by_name(name).map_err(|_| Error::invalid(format!("this zip holds no '{name}'")))?;
+    let mut bytes = Vec::new();
+    (&mut found)
+        .take(PACK_FILE_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| Error::invalid(format!("'{name}' in this zip will not unpack")))?;
+    if bytes.len() as u64 > PACK_FILE_MAX_BYTES {
+        return Err(too_heavy(name, bytes.len() as u64, PACK_FILE_MAX_BYTES));
+    }
+    Ok(bytes)
+}
+
+/// One of a packed skin's materials, read as a picture — the bytes and what they turned out to be.
+///
+/// Where the two parts of "is this a background" are put together: the document says which file,
+/// and the file says what it is.
+pub fn picture(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
+    let bytes = material(pack, name)?;
+    match Picture::of(&bytes) {
+        Some(picture) => Ok((picture, bytes)),
+        None => Err(Error::invalid(format!(
+            "'{name}' is not a picture this build draws — png, jpeg, webp and svg are"
+        ))),
+    }
 }
 
 /// The skin a file in the skins directory is, by its name, with where its shape sits in
@@ -1033,6 +1277,41 @@ pub enum Warning {
     /// The embedded font was set aside. The colours are taken either way — a look built on a face
     /// nobody can read still has its palette, and refusing the file over it would throw that away.
     FontDropped(FontProblem),
+    /// A background named for a place this build does not lay one behind.
+    UnknownBackground { place: String },
+    /// A background that is not laid. The place keeps its colour, which is what is under every
+    /// background anyway.
+    BackgroundDropped { place: String, why: BackgroundProblem },
+    /// A background's word that is not one this build has a drawing for. Dropped, so the picture is
+    /// laid the way this build lays one; there is nothing to bring inside, the way a number has.
+    BackgroundChoice { place: String, key: &'static str, wrote: String },
+}
+
+/// Why a background is not laid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackgroundProblem {
+    /// No file named, so there is no picture to lay.
+    NoFile,
+    /// A name that is not one a file in a skin can have — reaching out of the zip, or carrying
+    /// what an address and a declaration are cut at.
+    UnusableFile,
+}
+
+impl BackgroundProblem {
+    /// Why the background was set aside, as a phrase that follows the place it was named for.
+    /// English on both faces, the way a refusal is.
+    ///
+    /// **The name itself is not in it**, for the reason a value is not in [`ValueProblem::en`]: it
+    /// is the one string in the file written to get somewhere else, and the terminal is a place
+    /// where a string can do more than be read.
+    pub fn en(&self) -> String {
+        match self {
+            BackgroundProblem::NoFile => "names no file".to_string(),
+            BackgroundProblem::UnusableFile => {
+                "names a file a skin cannot hold".to_string()
+            }
+        }
+    }
 }
 
 /// Why an embedded font was set aside.
@@ -1208,6 +1487,33 @@ impl Skin {
             frame(side, table, &mut warnings);
             smoothing(side, table, &mut warnings);
         }
+
+        // The backgrounds, which are the header's rather than a side's. Whether the file named is
+        // in the zip is not asked here — this runs on a document, and the file it came in is not
+        // always beside it; `picture` is where a name meets its bytes.
+        let mut laid = BTreeMap::new();
+        for (place, wrote) in std::mem::take(&mut skin.backgrounds) {
+            if BACKGROUNDS.binary_search(&place.as_str()).is_err() {
+                warnings.push(Warning::UnknownBackground { place });
+                continue;
+            }
+            let file = wrote.file.trim().to_string();
+            let why = if file.is_empty() {
+                Some(BackgroundProblem::NoFile)
+            } else if !usable_file(&file) {
+                Some(BackgroundProblem::UnusableFile)
+            } else {
+                None
+            };
+            if let Some(why) = why {
+                warnings.push(Warning::BackgroundDropped { place, why });
+                continue;
+            }
+            let fit = one_of(&place, "fit", &wrote.fit, FITS, FIT_DEFAULT, &mut warnings);
+            let at = one_of(&place, "at", &wrote.at, SPOTS, SPOT_DEFAULT, &mut warnings);
+            laid.insert(place, Background { file, fit, at });
+        }
+        skin.backgrounds = laid;
 
         Ok(Taken { skin, font: font_bytes, warnings })
     }
@@ -2046,6 +2352,158 @@ dark:
         );
         assert!(Skin::uninstall(&paths, "kozo").unwrap());
         assert!(!at.exists());
+    }
+
+    // ---- the pictures a skin lays behind its surfaces (`AMB-D-936`) ----
+
+    /// A document laying the backgrounds written under it, over a skin that reads.
+    fn laying(backgrounds: &str) -> Skin {
+        Skin::read(&format!(
+            "name: kozo\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#ffffff\"\nbackgrounds:\n{backgrounds}"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_background_is_read_with_the_two_words_beside_its_file() {
+        let taken = laying("  c-bg:\n    file: paper.png\n    fit: tile\n    at: top-left\n")
+            .check()
+            .unwrap();
+        let laid = &taken.skin.backgrounds["c-bg"];
+        assert_eq!(laid.file, "paper.png");
+        assert_eq!(laid.fit, "tile");
+        assert_eq!(laid.at, "top-left");
+        assert!(taken.warnings.is_empty());
+    }
+
+    #[test]
+    fn a_background_written_as_a_file_alone_is_laid_the_way_this_build_lays_one() {
+        // The ordinary case: somebody who has not thought about how it sits should not have to.
+        let taken = laying("  c-surface:\n    file: art/grain.webp\n").check().unwrap();
+        let laid = &taken.skin.backgrounds["c-surface"];
+        assert_eq!(laid.file, "art/grain.webp");
+        assert_eq!(laid.fit, FIT_DEFAULT);
+        assert_eq!(laid.at, SPOT_DEFAULT);
+        assert!(taken.warnings.is_empty());
+    }
+
+    #[test]
+    fn a_background_named_for_a_place_this_build_has_none_is_carried_out_by_name() {
+        let taken = laying("  c-text:\n    file: paper.png\n").check().unwrap();
+        assert!(taken.skin.backgrounds.is_empty());
+        assert_eq!(
+            taken.warnings,
+            [Warning::UnknownBackground { place: "c-text".into() }]
+        );
+    }
+
+    #[test]
+    fn a_background_with_no_file_behind_it_is_dropped_by_the_place_it_was_named_for() {
+        // Written as a map with nothing in it, and written as something that is not a map at all
+        // — both come to the same thing: there is no picture to lay.
+        for wrote in ["  c-sunken:\n    fit: cover\n", "  c-sunken: paper.png\n"] {
+            let taken = laying(wrote).check().unwrap();
+            assert!(taken.skin.backgrounds.is_empty(), "{wrote}");
+            assert_eq!(
+                taken.warnings,
+                [Warning::BackgroundDropped {
+                    place: "c-sunken".into(),
+                    why: BackgroundProblem::NoFile,
+                }],
+                "{wrote}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_that_reaches_out_of_the_skin_is_not_a_background() {
+        for name in ["../../wallpaper.png", "/etc/passwd", "a;b{.png", "paper.png?x=1"] {
+            let taken = laying(&format!("  c-bg:\n    file: '{name}'\n")).check().unwrap();
+            assert!(taken.skin.backgrounds.is_empty(), "{name}");
+            assert_eq!(
+                taken.warnings,
+                [Warning::BackgroundDropped {
+                    place: "c-bg".into(),
+                    why: BackgroundProblem::UnusableFile,
+                }],
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_word_this_build_has_no_drawing_for_is_reported_and_the_picture_is_still_laid() {
+        let taken = laying("  c-bg:\n    file: paper.png\n    fit: stretch\n    at: middle\n")
+            .check()
+            .unwrap();
+        let laid = &taken.skin.backgrounds["c-bg"];
+        assert_eq!(laid.fit, FIT_DEFAULT, "the picture is laid the way this build lays one");
+        assert_eq!(laid.at, SPOT_DEFAULT);
+        assert_eq!(
+            taken.warnings,
+            [
+                Warning::BackgroundChoice {
+                    place: "c-bg".into(),
+                    key: "fit",
+                    wrote: "stretch".into()
+                },
+                Warning::BackgroundChoice {
+                    place: "c-bg".into(),
+                    key: "at",
+                    wrote: "middle".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn every_place_this_build_lays_a_background_behind_is_a_name_a_skin_may_set() {
+        // The place is the token drawn there, so a name that is not in the open vocabulary would
+        // be a background behind a colour nobody can write.
+        for place in BACKGROUNDS {
+            assert!(OPEN.binary_search(place).is_ok(), "{place}");
+        }
+    }
+
+    const A_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
+
+    #[test]
+    fn a_material_comes_out_of_the_zip_by_the_name_the_document_gave_it() {
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("art/paper.png", A_PNG)]);
+        assert_eq!(material(&zip, "art/paper.png").unwrap(), A_PNG);
+        assert_eq!(picture(&zip, "art/paper.png").unwrap().0, Picture::Png);
+
+        let why = material(&zip, "art/none.png").unwrap_err().to_string();
+        assert!(why.contains("art/none.png"), "{why}");
+        // A name the check would never have kept never reaches the archive.
+        assert!(material(&zip, "../escaped.png").is_err());
+        // And a skin that is one document carries no files at all.
+        assert!(material(ONE_SKIN.as_bytes(), "art/paper.png").is_err());
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_picture_this_build_draws_is_said_so_by_its_bytes() {
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("paper.png", b"not a png")]);
+        let why = picture(&zip, "paper.png").unwrap_err().to_string();
+        assert!(why.contains("paper.png"), "{why}");
+    }
+
+    #[test]
+    fn what_a_picture_is_comes_off_its_bytes_rather_than_off_its_name() {
+        assert_eq!(Picture::of(A_PNG), Some(Picture::Png));
+        assert_eq!(Picture::of(b"\xff\xd8\xff\xe0\x00\x10JFIF"), Some(Picture::Jpeg));
+        assert_eq!(Picture::of(b"RIFF\x24\x00\x00\x00WEBPVP8 "), Some(Picture::Webp));
+        assert_eq!(Picture::of(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"), Some(Picture::Svg));
+        assert_eq!(
+            Picture::of(b"\xef\xbb\xbf<?xml version=\"1.0\"?>\n<svg/>"),
+            Some(Picture::Svg),
+            "a mark and a declaration in front of it are not the picture"
+        );
+        // `RIFF` opens more than pictures, and a page that mentions one is not one.
+        assert_eq!(Picture::of(b"RIFF\x24\x00\x00\x00WAVEfmt "), None);
+        assert_eq!(Picture::of(b"<html><body>an <svg> is written here</body></html>"), None);
+        assert_eq!(Picture::of(b"GIF89a"), None, "a picture that moves is not one to sit behind text");
+        assert_eq!(Picture::of(b""), None);
     }
 
     #[test]

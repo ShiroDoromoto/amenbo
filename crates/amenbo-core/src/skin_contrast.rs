@@ -64,17 +64,17 @@ const BASE: &[(&str, &str, &str)] = &[
     ("c-bg", "#f7f6f3", "#1b1a17"),
     ("c-brand-mark", "#000000", "#ffffff"),
     ("c-code-attribute", "#2f6aa8", "#7fb0e8"),
-    ("c-code-comment", "#7a7263", "#8d8578"),
+    ("c-code-comment", "#746b59", "#928a7e"),
     ("c-code-constant", "#a35a24", "#e0a04a"),
     ("c-code-function", "#2f6aa8", "#7fb0e8"),
     ("c-code-heading", "#2f6aa8", "#7fb0e8"),
-    ("c-code-invalid", "#c0392b", "#e06155"),
+    ("c-code-invalid", "#c0392b", "#e37166"),
     ("c-code-keyword", "#9a4f8c", "#cf8fc4"),
     ("c-code-number", "#a35a24", "#e0a04a"),
     ("c-code-operator", "#6f6a5e", "#a8a399"),
-    ("c-code-string", "#3d7a4a", "#86c98f"),
+    ("c-code-string", "#3c7849", "#86c98f"),
     ("c-code-tag", "#9a4f8c", "#cf8fc4"),
-    ("c-code-type", "#0e7c7b", "#2ba6a4"),
+    ("c-code-type", "#0d7777", "#2ba6a4"),
     ("c-code-variable", "#23211c", "#ece9e1"),
     ("c-dec-decided", "#217a48", "#46c97e"),
     ("c-dec-draft", "#995d18", "#e0a04a"),
@@ -398,22 +398,15 @@ mod tests {
     }
 
     #[test]
-    fn nothing_but_a_files_own_colours_falls_short_in_this_builds_palette() {
+    fn nothing_in_this_builds_palette_falls_short() {
         // Not a test of the skin path: it is this build's palette, measured through the pairings
-        // declared above. Every one of them is a number that can be read, and every pairing outside
-        // the thirteen a file's text is drawn in clears its floor.
-        //
-        // Those thirteen sit between 4.14 and 4.50 against the sunken ground and the dark surface —
-        // short of AA by a hair, and short of it before this file existed: the guard over the
-        // palette measures the reading inks and leaves a file's own colours out. Moving four values
-        // is a change to what the screen looks like, so it is one of its own, and the line here is
-        // held at everything else.
+        // declared above. Every one of them is a number that can be read, and every one clears its
+        // floor — a file's own thirteen colours included, since `guards/check-token-contrast.sh`
+        // now measures them over the same two grounds.
         let report = measure(&skin("[light, dark]", "light:\n  c-bg: \"#f7f6f3\"\ndark:\n  c-bg: \"#1b1a17\"\n"));
         assert_eq!(report.measured, 2 * (PAIRINGS.len() + CODE_INKS.len() * CODE_GROUNDS.len()));
         assert!(report.unread.is_empty(), "{:?}", report.unread);
-        let outside: Vec<_> =
-            report.short.iter().filter(|r| !r.ink.starts_with("c-code-")).collect();
-        assert!(outside.is_empty(), "{outside:?}");
+        assert!(report.is_clear(), "{:?}", report.short);
     }
 
     #[test]
@@ -517,7 +510,7 @@ mod tests {
         // The values are this build's, so what the template measures is what the screen measures.
         let from_template = measure(&taken.skin);
         assert!(from_template.unread.is_empty());
-        assert!(from_template.short.iter().all(|r| r.ink.starts_with("c-code-")));
+        assert!(from_template.is_clear(), "{:?}", from_template.short);
     }
 
     #[test]

@@ -361,6 +361,7 @@ export const de: Translation = {
     "settings.skinWarnClosed": "das darf ein Skin nicht ändern",
     "settings.skinWarnNotText": "der Wert ist kein Text",
     "settings.skinUnmeasured": "dieser Build kann daraus keine Zahl lesen",
+    "settings.skinCovered": "darüber liegt ein Bild, also wurde nichts darauf gemessen",
     "settings.skinContrastClear": "Alle {n} Paarungen bleiben über ihrer Schwelle.",
     "settings.skinContrastShort": "{n} von {m} Paarungen liegen unter ihrer Schwelle. Übernehmen ist trotzdem möglich.",
     "settings.skinFontMissing": "Diese Schrift hat keine Zeichen für: {langs}. Dort zeichnet die Schrift des Geräts.",

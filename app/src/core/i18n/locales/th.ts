@@ -361,6 +361,7 @@ export const th: Translation = {
     "settings.skinWarnClosed": "อันนี้ไม่ใช่สิ่งที่สกินจะเปลี่ยนได้",
     "settings.skinWarnNotText": "ค่าไม่ใช่ข้อความ",
     "settings.skinUnmeasured": "รุ่นนี้อ่านค่าเป็นตัวเลขไม่ได้",
+    "settings.skinCovered": "มีภาพวางทับอยู่ จึงไม่ได้วัดสิ่งที่อยู่บนนั้น",
     "settings.skinContrastClear": "ทั้ง {n} คู่ผ่านเกณฑ์",
     "settings.skinContrastShort": "{n} จาก {m} คู่ต่ำกว่าเกณฑ์ จะรับเข้ามาก็ยังได้",
     "settings.skinFontMissing": "ฟอนต์นี้ไม่มีตัวอักษรสำหรับ: {langs} ตรงนั้นจะขึ้นด้วยฟอนต์ของเครื่องเอง",

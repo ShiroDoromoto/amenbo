@@ -366,6 +366,7 @@ export const fr: Translation = {
     "settings.skinWarnClosed": "un skin n’a pas à y toucher",
     "settings.skinWarnNotText": "la valeur n’est pas du texte",
     "settings.skinUnmeasured": "cette version ne peut pas en tirer un nombre",
+    "settings.skinCovered": "une image est posée dessus, donc rien n'y a été mesuré",
     "settings.skinContrastClear": "Les {n} paires passent leur seuil.",
     "settings.skinContrastShort": "{n} paires sur {m} sont sous leur seuil. Vous pouvez tout de même l’intégrer.",
     "settings.skinFontMissing": "Cette police n’a pas de lettres pour : {langs}. Là, c’est celle de la machine qui s’affiche.",

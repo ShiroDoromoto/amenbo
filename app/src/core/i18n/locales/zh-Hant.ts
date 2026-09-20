@@ -359,6 +359,7 @@ export const zhHant: Translation = {
     "settings.skinWarnClosed": "這個不是主題能動的",
     "settings.skinWarnNotText": "值不是文字",
     "settings.skinUnmeasured": "這個建置讀不出數值",
+    "settings.skinCovered": "上面鋪了圖片，所以這上面沒有測量",
     "settings.skinContrastClear": "{n} 組全部達到下限。",
     "settings.skinContrastShort": "{m} 組裡有 {n} 組沒到下限。仍然可以裝進來。",
     "settings.skinFontMissing": "這個字體沒有這些字: {langs}。那裡用機器自帶的字形顯示。",

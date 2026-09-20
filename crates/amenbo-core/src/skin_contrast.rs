@@ -426,13 +426,21 @@ pub struct Unread {
 }
 
 /// What the measuring found. Silence is the good answer: a report with nothing in it is a skin every
-/// pairing of which clears its floor.
+/// pairing of which clears its floor, on a screen where every ground is a colour.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Report {
     /// The pairings under their floor, worst first.
     pub short: Vec<Reading>,
     /// The colours this build could not read a number from.
     pub unread: Vec<Unread>,
+    /// The grounds a picture is laid over, in the order the pairings walk them. Nothing over one of
+    /// these was measured: what a ratio would be saying is that a colour is under the text, and
+    /// what is under it is a picture (`AMB-D-936`).
+    ///
+    /// Named by the ground rather than by the pairing. A picture behind `c-surface` takes fifteen
+    /// pairings out at once, and fifteen rows saying the same sentence is not fifteen things a
+    /// reader wants to know.
+    pub covered: Vec<&'static str>,
     /// How many pairings were measured, so "nothing fell" can be told from "nothing ran".
     pub measured: usize,
 }
@@ -469,6 +477,15 @@ pub fn measure_at(skin: &Skin, text: f64, aside: f64) -> Report {
                 .flat_map(|ink| CODE_GROUNDS.iter().map(move |ground| (*ink, *ground, TEXT))),
         );
         for (ink, ground, written) in pairs {
+            // A picture over the ground, and the two colours no longer say whether the text can be
+            // read. Set aside rather than measured against the colour underneath: a number that
+            // cleared its floor would be read as a verdict on a screen nobody has measured.
+            if skin.backgrounds.contains_key(ground) {
+                if !report.covered.contains(&ground) {
+                    report.covered.push(ground);
+                }
+                continue;
+            }
             let floor = if written == TEXT { text } else { aside };
             let (Some(a), Some(b)) = (
                 colour(skin, side, ink, &mut report),
@@ -599,6 +616,55 @@ mod tests {
         assert_eq!(fell[0].ground, "c-accent");
         assert_eq!(fell[0].floor, TEXT);
         assert!(fell[0].ratio < 1.3, "white on that yellow reads 1.1-ish: {}", fell[0].ratio);
+    }
+
+    #[test]
+    fn a_ground_with_a_picture_over_it_is_set_aside_rather_than_measured() {
+        // The text over it may be perfectly readable or not readable at all, and the two colours
+        // no longer say which. Read through the check, since the backgrounds it drops are not laid.
+        let taken = skin(
+            "[light]",
+            "light:\n  c-bg: \"#fff\"\nbackgrounds:\n  c-surface:\n    file: paper.png\n",
+        )
+        .check(&crate::skin::Materials::None)
+        .unwrap();
+        let report = measure(&taken.skin);
+        assert_eq!(report.covered, ["c-surface"]);
+        assert!(
+            !report.short.iter().any(|r| r.ground == "c-surface"),
+            "{:?}",
+            report.short
+        );
+        // Every pairing on that ground, once: the three that name it and the thirteen inks a file
+        // is read in.
+        let over_it = PAIRINGS.iter().filter(|(_, g, _)| *g == "c-surface").count() + CODE_INKS.len();
+        let all = PAIRINGS.len() + CODE_INKS.len() * CODE_GROUNDS.len();
+        assert_eq!(report.measured, all - over_it);
+    }
+
+    #[test]
+    fn the_grounds_a_picture_is_not_over_are_measured_as_they_were() {
+        let taken = skin(
+            "[light]",
+            "light:\n  c-text: \"#f8f7f4\"\nbackgrounds:\n  c-bg:\n    file: paper.png\n",
+        )
+        .check(&crate::skin::Materials::None)
+        .unwrap();
+        let report = measure(&taken.skin);
+        assert_eq!(report.covered, ["c-bg"]);
+        // Near-white text still falls on the two grounds no picture is over.
+        let fell: Vec<_> = report.short.iter().filter(|r| r.ink == "c-text").collect();
+        assert_eq!(fell.len(), 2, "{:?}", report.short);
+        assert!(fell.iter().all(|r| r.ground != "c-bg"));
+    }
+
+    #[test]
+    fn a_skin_that_lays_no_picture_is_measured_exactly_as_before() {
+        let taken =
+            skin("[light]", "light:\n  c-bg: \"#fff\"\n").check(&crate::skin::Materials::None).unwrap();
+        let report = measure(&taken.skin);
+        assert!(report.covered.is_empty());
+        assert_eq!(report.measured, PAIRINGS.len() + CODE_INKS.len() * CODE_GROUNDS.len());
     }
 
     #[test]

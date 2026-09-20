@@ -994,6 +994,7 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
             })
             .collect(),
         unread: report.unread.iter().map(|u| format!("{}.{}", u.side, u.name)).collect(),
+        covered: report.covered.iter().map(|g| (*g).to_string()).collect(),
         measured: report.measured as u32,
         font: font_of(&taken),
     })

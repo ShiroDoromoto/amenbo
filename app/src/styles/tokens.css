@@ -176,13 +176,13 @@
      Python. A kind with no entry here is drawn in `--c-text`, which is what most of a file is.
      Held to the warm-gray ground the rest of the application is on, and to a contrast a body of
      text can be read at — comment included, which is the one that is usually dimmed past it. */
-  --c-code-comment: #7a7263;
+  --c-code-comment: #746b59;
   --c-code-keyword: #9a4f8c;
-  --c-code-string: #3d7a4a;
+  --c-code-string: #3c7849;
   --c-code-number: #a35a24;
   --c-code-constant: #a35a24;
   --c-code-function: #2f6aa8;
-  --c-code-type: #0e7c7b;
+  --c-code-type: #0d7777;
   --c-code-variable: #23211c;
   --c-code-tag: #9a4f8c;
   --c-code-attribute: #2f6aa8;
@@ -324,7 +324,7 @@
 
   /* The same thirteen, lifted onto the dark ground. `variable` follows the body text, as it does
      on the light side — most of a file is variables, and colouring them would colour everything. */
-  --c-code-comment: #8d8578;
+  --c-code-comment: #928a7e;
   --c-code-keyword: #cf8fc4;
   --c-code-string: #86c98f;
   --c-code-number: #e0a04a;
@@ -336,7 +336,7 @@
   --c-code-attribute: #7fb0e8;
   --c-code-operator: #a8a399;
   --c-code-heading: #7fb0e8;
-  --c-code-invalid: #e06155;
+  --c-code-invalid: #e37166;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);

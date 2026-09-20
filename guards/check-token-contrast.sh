@@ -12,10 +12,16 @@
 # here instead: read `app/src/styles/tokens.css`, compute every pairing a token is used in, and fail
 # on the first one that falls under its floor.
 #
-# Three pairings, because those are the three a token is read in:
+# Four pairings, because those are the four a token is read in:
 #   - a reading ink over each of the four grounds  (4.5:1)
 #   - a fill and the ink that fill carries          (4.5:1)
 #   - a control's outline over each ground          (3.0:1)
+#   - a colour a file's own text is drawn in, over the two grounds a file is read on  (4.5:1)
+#
+# A file's text is held apart from the reading inks because it lands on two grounds rather than all
+# four: the pane it is written in, and the row under the cursor. Holding it to the page or to a
+# hover would be a floor over a pairing nobody sees. The same two lists are compiled into
+# `crates/amenbo-core/src/skin_contrast.rs`, which measures a skin through them.
 #
 # `--c-text-faint` is deliberately absent from the inks: it is not reading ink — it draws separators
 # and the pale side of an icon, neither of which is read.
@@ -58,6 +64,13 @@ GROUNDS = ["--c-bg", "--c-surface", "--c-sunken", "--c-hover", "--c-pane-frame"]
 # A fill and the ink it carries; the pair is read together and travels together.
 FILLS = [("--c-accent", "--c-on-accent"), ("--c-heed", "--c-on-heed"), ("--c-stop", "--c-on-stop"),
          ("--c-done", "--c-on-done")]
+# The colours a file's own text is drawn in, and the two grounds a file is read on.
+CODE_INKS = [
+    "--c-code-attribute", "--c-code-comment", "--c-code-constant", "--c-code-function",
+    "--c-code-heading", "--c-code-invalid", "--c-code-keyword", "--c-code-number",
+    "--c-code-operator", "--c-code-string", "--c-code-tag", "--c-code-type", "--c-code-variable",
+]
+CODE_GROUNDS = ["--c-surface", "--c-sunken"]
 # The outline of a control, which has to be found before the control can be used.
 OUTLINE = "--c-edge"
 
@@ -122,6 +135,12 @@ checked = 0
 for theme_name, theme in (("light", light), ("dark", dark)):
     for ink in INKS:
         for ground in GROUNDS:
+            ratio = contrast(colour(theme, ink), colour(theme, ground))
+            checked += 1
+            if ratio < TEXT_FLOOR:
+                failures.append(f"{theme_name}: {ink} on {ground} is {ratio:.2f}, under {TEXT_FLOOR}")
+    for ink in CODE_INKS:
+        for ground in CODE_GROUNDS:
             ratio = contrast(colour(theme, ink), colour(theme, ground))
             checked += 1
             if ratio < TEXT_FLOOR:

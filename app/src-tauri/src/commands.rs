@@ -757,8 +757,8 @@ pub fn skin_in_use() -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
     let config = amenbo_core::config::Config::load(&paths.config_file);
     let name = config.skin?;
-    let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    Some(worn(skin.check().ok()?))
+    let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    Some(worn(skin.check(&materials).ok()?))
 }
 
 /// One checked skin, as the window wears it. The font's bytes go back to base64 on the way out —
@@ -827,7 +827,8 @@ pub fn skin_list() -> SkinListDto {
 #[tauri::command]
 pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
-    Some(worn(amenbo_core::skin::Skin::installed(&paths, &name).ok()??.check().ok()?))
+    let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    Some(worn(skin.check(&materials).ok()?))
 }
 
 /// The licence of the font a held skin carries, in full.
@@ -838,7 +839,7 @@ pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
 #[tauri::command]
 pub fn skin_font_licence(name: String) -> Option<String> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
-    let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    let (skin, _) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
     skin.font.map(|f| f.license_text)
 }
 
@@ -874,7 +875,9 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
     let bytes = std::fs::read(&path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
     let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let read = amenbo_core::skin::Skin::read(&yaml).map_err(CmdError::from)?;
-    let taken = read.check().map_err(|r| CmdError::from(refusal_sentence(&r)))?;
+    let taken = read
+        .check(&amenbo_core::skin::Materials::of(&bytes))
+        .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     // Turned away here rather than shown as a judgement: a file calling itself one of the names
     // this build ships cannot be taken in under any answer the reader could give, so there is
     // nothing on the panel for them to decide.
@@ -891,7 +894,7 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
         version: taken.skin.version.clone(),
         themes: taken.skin.themes.clone(),
         held: there.is_some(),
-        held_version: there.and_then(|s| s.version),
+        held_version: there.and_then(|(s, _)| s.version),
         warnings: taken
             .warnings
             .iter()
@@ -1016,7 +1019,7 @@ pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let taken = amenbo_core::skin::Skin::read(&yaml)
         .map_err(CmdError::from)?
-        .check()
+        .check(&amenbo_core::skin::Materials::of(&bytes))
         .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     let name = taken.skin.name;
     if !replace
@@ -1042,7 +1045,7 @@ pub fn skin_template_to(path: String) -> Result<(), CmdError> {
     let on = match amenbo_core::config::Config::load(&paths.config_file).skin {
         Some(name) => amenbo_core::skin::Skin::installed(&paths, &name)
             .map_err(CmdError::from)?
-            .and_then(|s| s.check().ok())
+            .and_then(|(s, materials)| s.check(&materials).ok())
             .map(|t| t.skin),
         None => None,
     };

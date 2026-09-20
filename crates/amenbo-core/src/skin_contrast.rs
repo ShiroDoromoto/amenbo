@@ -253,7 +253,7 @@ const ABOUT: &[(&str, &str)] = &[
 /// weights and widths, and the four multipliers at whatever was asked for, `1` where nothing was.
 /// What is written as a
 /// comment is what only the author can fill in: their name, their licence, a name per language, a
-/// font carried in the file. A commented line is a shape to copy; a value is a value, and a template
+/// font carried in the skin. A commented line is a shape to copy; a value is a value, and a template
 /// that put the author's own licence inside a comment would be handing back something they could not
 /// paste out again.
 ///
@@ -364,38 +364,34 @@ fn write_headers(out: &mut String, from: Option<&Skin>) {
     }
 }
 
-/// The one font a skin may carry. Written out where the skin being taken from has one — bytes and
-/// all, since a family named with nothing behind it is a face the next reader does not have — and as
-/// a commented shape where it does not.
+/// The one font a skin may carry. Written out where the skin being taken from has one — the family,
+/// the licence and the file it is in — and as a commented shape where it does not.
+///
+/// **The face itself does not come along.** What is written here is a document, and the file it
+/// names sits beside that document in the skin's zip (`AMB-D-936`); an author starting from this
+/// puts the woff2 next to it under the name written here.
 fn write_font(out: &mut String, from: Option<&Skin>) {
     let Some(font) = from.and_then(|s| s.font.as_ref()) else {
-        out.push_str("\n# One face, carried in the file so it travels with the colours. woff2, up to\n");
-        out.push_str("# 2MB decoded, and the licence in full: a skin carrying a font and no licence\n");
-        out.push_str("# text is turned away.\n");
+        out.push_str("\n# One face, carried in the skin so it travels with the colours: the woff2\n");
+        out.push_str("# sits beside this document, up to 2MB, and the licence in full goes here — a\n");
+        out.push_str("# skin carrying a font and no licence text is turned away.\n");
         out.push_str("# font_file:\n");
         out.push_str("#   family: \"My Face\"\n");
         out.push_str("#   format: woff2\n");
+        out.push_str("#   file: \"my-face.woff2\"\n");
         out.push_str("#   license: \"SIL Open Font License 1.1\"\n");
         out.push_str("#   license_text: |\n");
         out.push_str("#     the licence, in full\n");
-        out.push_str("#   data: |\n");
-        out.push_str("#     <the woff2 file, base64>\n");
         return;
     };
     out.push_str("\nfont_file:\n");
     out.push_str(&format!("  family: {}\n", quoted(&font.family)));
     out.push_str(&format!("  format: {}\n", quoted(&font.format)));
+    out.push_str(&format!("  file: {}\n", quoted(&font.file)));
     out.push_str(&format!("  license: {}\n", quoted(&font.license)));
     out.push_str("  license_text: |2\n");
     for line in font.license_text.lines() {
         out.push_str(&format!("    {line}\n"));
-    }
-    out.push_str("  data: |\n");
-    let packed: String = font.data.chars().filter(|c| !c.is_whitespace()).collect();
-    for chunk in packed.as_bytes().chunks(76) {
-        out.push_str("    ");
-        out.push_str(std::str::from_utf8(chunk).unwrap_or(""));
-        out.push('\n');
     }
 }
 
@@ -556,6 +552,7 @@ fn contrast(a: [f64; 3], b: [f64; 3]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skin::Materials;
 
     /// A skin that sets the given lines on the given sides.
     fn skin(themes: &str, body: &str) -> Skin {
@@ -700,13 +697,13 @@ mod tests {
             "name: washi\ntitle: t\nskin_v: 1\nthemes: [light, dark]\nlight:\n  c-bg: \"#faf7f0\"\ndark:\n  c-bg: \"#1a1713\"\n",
         )
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap()
         .skin;
 
         assert_eq!(template_name(Some(&washi)), "washi-copy", "not the name it was taken from");
         let yaml = template(&template_name(Some(&washi)), Some(&washi));
-        let out = Skin::read(&yaml).unwrap().check().unwrap().skin;
+        let out = Skin::read(&yaml).unwrap().check(&Materials::None).unwrap().skin;
         assert_eq!(out.name, "washi-copy");
         assert_eq!(out.light.values["c-bg"], "#faf7f0", "what the author set");
         assert_eq!(out.light.values["c-text"], base("c-text", Side::Light), "and the rest, filled in");
@@ -715,24 +712,24 @@ mod tests {
 
     #[test]
     fn a_template_taken_from_a_skin_carries_what_only_its_author_could_write() {
-        use base64::Engine as _;
         let bytes = [b"wOF2".as_slice(), &[7u8; 200]].concat();
-        let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let mine = Skin::read(&format!(
-            "name: mine\ntitle: Mine\nskin_v: 1\nthemes: [light, dark]\n\
+        let document = "name: mine\ntitle: Mine\nskin_v: 1\nthemes: [light, dark]\n\
              author: Alice\nversion: \"2.1\"\nlicense: CC BY 4.0\nhomepage: https://example.org/mine\n\
              titles:\n  ja: \"わたしの\"\n\
-             font_file:\n  family: Pixel\n  format: woff2\n  license: OFL 1.1\n\
-             \x20 license_text: |\n    OFL, in full\n      an indented clause\n  data: |\n    {data}\n\
-             light:\n  c-bg: \"#faf7f0\"\ndark:\n  c-bg: \"#1a1713\"\n"
-        ))
-        .unwrap()
-        .check()
-        .unwrap()
-        .skin;
+             font_file:\n  family: Pixel\n  format: woff2\n  file: pixel.woff2\n  license: OFL 1.1\n\
+             \x20 license_text: |\n    OFL, in full\n      an indented clause\n\
+             light:\n  c-bg: \"#faf7f0\"\ndark:\n  c-bg: \"#1a1713\"\n";
+        let zip = crate::skin::packed(&[
+            ("pixel.woff2", &bytes),
+            (crate::skin::PACK_DOCUMENT, document.as_bytes()),
+        ]);
+        let carries = Materials::Pack(std::borrow::Cow::Owned(zip));
+        let mine = Skin::read(document).unwrap().check(&carries).unwrap().skin;
 
         let yaml = template("mine-copy", Some(&mine));
-        let out = Skin::read(&yaml).unwrap().check().expect("still a skin");
+        // Checked against the same skin's materials: what the template writes is the document, and
+        // the file it names is the one still sitting in the zip the author wrote it in.
+        let out = Skin::read(&yaml).unwrap().check(&carries).expect("still a skin");
         assert_eq!(out.skin.author.as_deref(), Some("Alice"), "the author's own, not the shape");
         assert_eq!(out.skin.version.as_deref(), Some("2.1"));
         assert_eq!(out.skin.license.as_deref(), Some("CC BY 4.0"));
@@ -740,8 +737,9 @@ mod tests {
         assert_eq!(out.skin.titles.get("ja").map(String::as_str), Some("わたしの"));
         let font = out.skin.font.as_ref().expect("the face travels with the file");
         assert_eq!(font.family, "Pixel");
+        assert_eq!(font.file, "pixel.woff2", "the file it is in, by name");
         assert!(font.license_text.contains("an indented clause"), "the licence, as written");
-        assert_eq!(out.font.as_deref(), Some(bytes.as_slice()), "and the bytes it named");
+        assert_eq!(out.font.as_deref(), Some(bytes.as_slice()), "and the bytes behind that name");
         assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     }
 
@@ -753,12 +751,12 @@ mod tests {
              dark:\n  fs-scale: \"1.2\"\n",
         )
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap()
         .skin;
 
         let yaml = template("wide-copy", Some(&wide));
-        let out = Skin::read(&yaml).unwrap().check().unwrap().skin;
+        let out = Skin::read(&yaml).unwrap().check(&Materials::None).unwrap().skin;
         assert_eq!(out.light.scales["fs-scale"], "1.2", "the ladder the author wrote");
         assert_eq!(out.dark.scales["fs-scale"], "1.2", "on the side they wrote it");
         assert_eq!(out.light.scales["shadow-scale"], "0", "and the one they took away");
@@ -771,7 +769,7 @@ mod tests {
     #[test]
     fn the_template_is_a_skin_that_reads_back_clear() {
         let yaml = template("my-skin", None);
-        let taken = Skin::read(&yaml).unwrap().check().expect("the template is a skin");
+        let taken = Skin::read(&yaml).unwrap().check(&Materials::None).expect("the template is a skin");
         assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
         assert_eq!(taken.skin.light.values.len(), settled(), "every name a skin may set");
         assert_eq!(taken.skin.dark.values.len(), settled());

@@ -1630,7 +1630,7 @@ mod tests {
         )
         .unwrap();
 
-        let found = crate::skin::Skin::installed(&paths, "kozo").unwrap().expect("it is there");
+        let (found, _) = crate::skin::Skin::installed(&paths, "kozo").unwrap().expect("it is there");
         assert_eq!(found.version.as_deref(), Some("1.2.0"));
         assert!(crate::skin::Skin::installed(&paths, "mitsumata").unwrap().is_none(), "nothing under it");
         assert!(

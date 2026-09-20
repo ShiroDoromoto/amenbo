@@ -109,6 +109,9 @@ mod quit;
 /// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
 #[cfg(desktop)]
 mod single_instance;
+/// The door a skin's own pictures come out of: a background lives inside the zip the skin is kept
+/// as, so it is served rather than pointed at (`AMB-D-936`).
+mod skinproto;
 /// Which agent a folder's pane is opened with: the folder's trace times what this machine can
 /// start (`AMB-T-3591`).
 mod wake;
@@ -150,6 +153,12 @@ const BLOB_SCHEME: &str = "amenboblob";
 /// addressed by path, so `<scheme>://localhost/<session>/<path>` is the whole of what may be named: the
 /// session says which folder, and [`fileproto`] refuses everything that is not inside it.
 const FILE_SCHEME: &str = "amenbofile";
+
+/// Name of the custom protocol that hands out a picture the skin on this device carries.
+/// `<scheme>://localhost/<skin>/<file>` names a skin and a file inside the zip it is kept as, and
+/// [`skinproto`] serves only the ones that skin's document lays as a background — the author writes
+/// a filename, never an address (`AMB-D-936`).
+const SKIN_SCHEME: &str = "amenboskin";
 
 /// Emitted to the webview when the user picks "check for updates" from the app menu
 /// (`menu::CHECK_UPDATES_ID`). The front end runs a fresh check and shows the update banner, or an
@@ -334,6 +343,10 @@ pub fn run() {
       // Same reason as above, and one more: the fence reads the store and resolves the path on the real
       // filesystem, which on a cold cache is the slowest part of answering.
       std::thread::spawn(move || responder.respond(fileproto::serve(&request)));
+    })
+    .register_asynchronous_uri_scheme_protocol(SKIN_SCHEME, |_ctx, request, responder| {
+      // Same reason again: answering reads the skin's file off the disk and opens the zip in it.
+      std::thread::spawn(move || responder.respond(skinproto::serve(&request)));
     })
     .setup(|app| {
       let config = amenbo_core::config::Paths::resolve()

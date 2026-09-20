@@ -9,7 +9,7 @@
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: var(--c-bg);
+  background: var(--c-bg-pic) var(--c-bg);
 }
 
 /* The standing band about this process holding an administrator's token (see ../talk/elevation.tsx).

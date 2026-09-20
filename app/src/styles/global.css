@@ -1,11 +1,25 @@
 * { box-sizing: border-box; }
+/* The four places a skin may lay a picture behind (`AMB-D-936`), as an empty slot each. What fills
+   one is `applySkin` (`app/src/core/skin.ts`), out of the filename and the two words the author
+   wrote under `backgrounds:`; every rule that paints one of the four reads the slot in front of the
+   colour, so the picture goes over the ground and `none` leaves the ground as it was.
+
+   Not in `tokens.css`, because these are not names a skin sets. An author writes a filename; the
+   layer built around it — the url, the size, the repeat — is amenbo's, which is what keeps `url()`
+   out of every value a skin can write. */
+:root {
+  --c-bg-pic: none;
+  --c-surface-pic: none;
+  --c-sunken-pic: none;
+  --c-pane-bg-pic: none;
+}
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: var(--font);
   font-size: var(--fs-md);
   line-height: var(--lh);
   color: var(--c-text);
-  background: var(--c-bg);
+  background: var(--c-bg-pic) var(--c-bg);
   -webkit-font-smoothing: var(--font-smooth);
 }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -27,7 +41,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 input, select, textarea {
   font: inherit;
   color: var(--c-text);
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
@@ -147,12 +161,12 @@ input[type="color"] {
 .workspace__bar {
   display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-3) var(--s-5);
-  background: var(--c-surface); border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface); border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
 .workspace__action {
   position: relative;
   display: inline-flex; align-items: center; gap: var(--s-1);
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
@@ -185,7 +199,7 @@ input[type="color"] {
      xterm.js measures, and 2px off its height is a row the program inside is no longer told it has. */
   border: var(--border-w) var(--border-style) transparent;
   border-radius: var(--r-md);
-  background: var(--c-pane-bg);
+  background: var(--c-pane-bg-pic) var(--c-pane-bg);
   color-scheme: dark;
   overflow: hidden;
   /* Only the ring below moves, and it fades rather than appears: what it is saying is "here", which a
@@ -203,7 +217,7 @@ input[type="color"] {
 .workspace__counts {
   display: flex; margin-left: var(--s-2);
   padding: 2px;
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
 }
 .workspace__count {
@@ -219,7 +233,7 @@ input[type="color"] {
 /* The one in force is the one lifted out of the well: a raised face on a sunken ground says which of
    a fixed few is on without a second colour, and the group says the three are one choice. */
 .workspace__count--on {
-  background: var(--c-surface); color: var(--c-text); font-weight: 600;
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
 
@@ -229,7 +243,7 @@ input[type="color"] {
 }
 .workspace__page {
   min-width: 29px; height: 25px;
-  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .workspace__page--on {
@@ -335,7 +349,7 @@ input[type="color"] {
   display: flex; flex-direction: column; justify-content: center; gap: 2px;
   padding: var(--s-2);
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
-  background: var(--c-sunken); cursor: grab; touch-action: none;
+  background: var(--c-sunken-pic) var(--c-sunken); cursor: grab; touch-action: none;
 }
 .paneorder__card--held {
   border-color: var(--c-accent); background: var(--c-accent-weak); cursor: grabbing;
@@ -423,7 +437,7 @@ input[type="color"] {
   position: absolute; left: 0; right: 0; top: 100%; z-index: 1;
   padding: var(--s-2);
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   box-shadow: var(--shadow-md);
   color: var(--c-text-muted);
   font-size: var(--fs-md);
@@ -465,7 +479,7 @@ input[type="color"] {
      against it would move the terminal down every time somebody named a pane. */
   margin-bottom: var(--s-2);
   padding: 0 var(--s-1); border-radius: var(--r-sm);
-  border: var(--border-w) var(--border-style) var(--c-accent); background: var(--c-surface);
+  border: var(--border-w) var(--border-style) var(--c-accent); background: var(--c-surface-pic) var(--c-surface);
   color: var(--c-text); font-size: var(--fs-md);
 }
 /* The box is drawn only while it holds the keyboard — it goes as soon as it is left — so the accent
@@ -660,7 +674,7 @@ input[type="color"] {
   margin-bottom: var(--s-1);
   padding: var(--s-3);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
-  background: var(--c-surface); box-shadow: var(--shadow-md);
+  background: var(--c-surface-pic) var(--c-surface); box-shadow: var(--shadow-md);
 }
 
 .slot--focused .slot__frame { border-color: var(--c-accent); }
@@ -760,7 +774,7 @@ input[type="color"] {
   display: block;
   padding: var(--s-1) var(--s-3);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: 999px;
-  background: var(--c-surface); color: var(--c-text-muted);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text-muted);
   font-size: var(--fs-md); line-height: 1.6; text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -784,7 +798,7 @@ input[type="color"] {
 .slot__starts--waiting { grid-template-columns: repeat(2, minmax(9.5rem, 1fr)); }
 .slot__start--waiting {
   min-height: 2.2rem;
-  border-style: dashed; background: var(--c-sunken);
+  border-style: dashed; background: var(--c-sunken-pic) var(--c-sunken);
 }
 /* What the frame has to say about the row rather than on it: that the machine is still being asked,
    or that it could not be. Quiet like the question above it, and never in place of a pill — the row
@@ -843,7 +857,7 @@ input[type="color"] {
 .slot__field > input {
   padding: var(--s-1) var(--s-2);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
-  background: var(--c-surface); color: var(--c-text);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
   font-size: var(--fs-md);
 }
 .slot__field > input:focus-visible { border-color: var(--c-accent); outline: none; }
@@ -888,7 +902,7 @@ input[type="color"] {
 .ptabs {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   border-right: var(--border-w) var(--border-style) var(--c-rule);
 }
 .ptabs__list {
@@ -906,9 +920,9 @@ input[type="color"] {
   background: transparent; border: var(--border-w) var(--border-style) transparent;
   color: var(--c-text); font-size: var(--fs-md); text-align: left;
 }
-.ptabs__tab:hover { background: var(--c-surface); }
+.ptabs__tab:hover { background: var(--c-surface-pic) var(--c-surface); }
 .ptabs__tab--on {
-  background: var(--c-surface); border-color: var(--c-edge);
+  background: var(--c-surface-pic) var(--c-surface); border-color: var(--c-edge);
   font-weight: 600; box-shadow: var(--shadow-sm);
 }
 /* The project's colour with the first character of its name on it, or the image it was given instead
@@ -922,7 +936,7 @@ input[type="color"] {
   flex: 0 0 auto;
   width: 24px; height: 24px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center;
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   font-size: var(--fs-md); font-weight: 700; line-height: 1;
   text-transform: uppercase;
   overflow: hidden;
@@ -939,7 +953,7 @@ input[type="color"] {
    pane count is only saying what is there. */
 .ptabs__count {
   margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-muted);
-  background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 /* Compact: the count goes to the corner of the tab, over the mark rather than beside it, because
    there is no beside left. Smaller and ringed in the column's own ground, the same way the sidebar
@@ -964,7 +978,7 @@ input[type="color"] {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 .ptabs__fold:hover { background: var(--c-hover); color: var(--c-text); }
@@ -984,7 +998,7 @@ input[type="color"] {
 .rail {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   border-right: var(--border-w) var(--border-style) var(--c-rule);
 }
 /* Whose folders these are, and which of them the window is on. It is a name and not the caption of a
@@ -1008,7 +1022,7 @@ input[type="color"] {
   width: 100%; min-width: 0;
   display: flex; align-items: center; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   color: var(--c-text); font: inherit; font-size: var(--fs-md); text-align: left;
   cursor: pointer;
 }
@@ -1035,7 +1049,7 @@ input[type="color"] {
    read as two things to press. */
 .rail__tabs {
   display: flex;
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   padding: 2px;
 }
@@ -1052,7 +1066,7 @@ input[type="color"] {
 }
 .rail__tab:hover { color: var(--c-text); }
 .rail__tab--on {
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   color: var(--c-text); font-weight: var(--fw-bold);
 }
 
@@ -1213,13 +1227,13 @@ input[type="color"] {
    and the tab stop and the pointer — which are only where their hand is at this instant — take a
    shade of the ground and give way to it. */
 .gitpanel__row--picked { background: var(--c-accent-faint); }
-.gitpanel__row:hover:not(.gitpanel__row--picked) { background: var(--c-sunken); }
+.gitpanel__row:hover:not(.gitpanel__row--picked) { background: var(--c-sunken-pic) var(--c-sunken); }
 /* Drawn inside the row rather than outside it: at the height these rows are, a ring held off the
    edge all but touches the names above and below. */
 .gitpanel__row:focus, .gitpanel__row:focus-visible {
   outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px;
 }
-.gitpanel__row:focus:not(.gitpanel__row--picked) { background: var(--c-sunken); }
+.gitpanel__row:focus:not(.gitpanel__row--picked) { background: var(--c-sunken-pic) var(--c-sunken); }
 .gitpanel__mark {
   flex: 0 0 auto;
   font-family: var(--font-mono); font-size: var(--fs-xs);
@@ -1328,7 +1342,7 @@ input[type="color"] {
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) var(--s-2);
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text); font: inherit; font-size: var(--fs-md);
   cursor: pointer;
 }
@@ -1376,7 +1390,7 @@ input[type="color"] {
 .githist__sha { font-family: var(--font-mono); }
 .githist__merge {
   padding: 0 var(--s-1);
-  background: var(--c-sunken); border-radius: var(--r-sm);
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-sm);
 }
 .githist__added { color: var(--c-git-added); font-family: var(--font-mono); }
 .githist__removed { color: var(--c-git-modified); font-family: var(--font-mono); }
@@ -1395,7 +1409,7 @@ input[type="color"] {
   font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5;
 }
 .patch__line { display: block; padding: 0 var(--s-3); white-space: pre; }
-.patch__line--hunk { color: var(--c-text-muted); background: var(--c-sunken); }
+.patch__line--hunk { color: var(--c-text-muted); background: var(--c-sunken-pic) var(--c-sunken); }
 .patch__line--added { color: var(--c-git-added); }
 .patch__line--removed { color: var(--c-git-modified); }
 
@@ -1413,7 +1427,7 @@ input[type="color"] {
 .gitdiff__name {
   position: sticky; top: 0; z-index: 1;
   margin: 0; padding: var(--s-1) var(--s-3);
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--fs-md); font-weight: 600;
 }
@@ -1461,7 +1475,7 @@ input[type="color"] {
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
   border-left: var(--border-w) var(--border-style) var(--c-rule);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   font-size: var(--fs-md);
 }
 .files--empty { color: var(--c-text-muted); }
@@ -1496,7 +1510,7 @@ input[type="color"] {
 .files__ghost {
   position: fixed; top: 0; left: 0; z-index: 1000; margin: 0;
   pointer-events: none; opacity: 0.9; cursor: grabbing;
-  background: var(--c-surface); border-radius: var(--r-sm);
+  background: var(--c-surface-pic) var(--c-surface); border-radius: var(--r-sm);
   box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
 }
 /* One line for each folder a row stands inside, drawn in the space the indent left in front of it:
@@ -1569,7 +1583,7 @@ input[type="color"] {
 .files__item:focus > .files__file:not(.files__file--chosen, .files__file--picked),
 .files__item:focus-visible > .files__dir:not(.files__dir--chosen, .files__dir--picked),
 .files__item:focus > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
 }
 /* The row under the pointer. One row is inside no other — they are all lines of one list — so the
    pointer is in exactly the row it is pointing at.
@@ -1579,7 +1593,7 @@ input[type="color"] {
 .files__item:hover > .files__dir { color: var(--c-accent); }
 .files__item:hover > .files__file:not(.files__file--chosen, .files__file--picked),
 .files__item:hover > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
 }
 /* A name the repository's ignore rules cover. It is on the list because what git does not record is
    still something somebody wrote, and it is faint because that is the whole of what the mark says
@@ -1726,7 +1740,7 @@ input[type="color"] {
   width: min(1100px, 100%); max-height: 86vh;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-5);
-  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
 .filediff__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); overflow-wrap: anywhere; }
@@ -1745,7 +1759,7 @@ input[type="color"] {
 .filediff__action {
   padding: var(--s-2) var(--s-4);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
-  background: var(--c-surface); color: var(--c-text); cursor: pointer;
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); cursor: pointer;
 }
 /* The answer this screen is most often opened to give: the reader looked at what differs and their
    own text is the one they want. Drawn as the answer rather than as one of three equal presses. */
@@ -1780,7 +1794,7 @@ input[type="color"] {
   flex: 1 1 auto; min-width: 4ch;
   padding: 2px var(--s-1);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-  background: var(--c-sunken); color: var(--c-text);
+  background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
   font: inherit;
 }
 .cmfind__field:focus { outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px; }
@@ -1792,7 +1806,7 @@ input[type="color"] {
   font: inherit; line-height: 1; cursor: pointer;
 }
 .cmfind__step:hover, .cmfind__switch:hover, .cmfind__close:hover, .cmfind__more:hover {
-  color: var(--c-text); background: var(--c-sunken);
+  color: var(--c-text); background: var(--c-sunken-pic) var(--c-sunken);
 }
 /* What a replacement is made with. Words rather than marks, because there are two of them and the
    row under has the room the row above does not. */
@@ -1800,10 +1814,10 @@ input[type="color"] {
   flex: 0 0 auto;
   padding: 2px var(--s-2);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-  background: var(--c-surface); color: var(--c-text);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
   font: inherit; line-height: 1.4; white-space: nowrap; cursor: pointer;
 }
-.cmfind__does:hover { background: var(--c-sunken); }
+.cmfind__does:hover { background: var(--c-sunken-pic) var(--c-sunken); }
 /* A switch that is on says so by being filled, not by a colour alone: three marks two characters
    long are too small to read a shade off. */
 .cmfind__switch[aria-pressed="true"] {
@@ -1853,14 +1867,14 @@ input[type="color"] {
 .trashask {
   width: min(420px, 100%);
   padding: var(--s-5);
-  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
 .trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
 .trashask__undoable { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-4); }
 .trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); margin-bottom: var(--s-4); cursor: pointer; }
 .trashask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.trashask__action { padding: var(--s-2) var(--s-4); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+.trashask__action { padding: var(--s-2) var(--s-4); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md); background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); cursor: pointer; }
 /* The answer the question was opened to get. It is drawn as the answer rather than argued against,
    because the bin is where it sends the row and undo brings it back. */
 .trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
@@ -1870,7 +1884,7 @@ input[type="color"] {
 .gitask {
   width: min(520px, 100%);
   padding: var(--s-5);
-  background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
 .gitask__doing { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
@@ -1883,12 +1897,12 @@ input[type="color"] {
 .gitask__said {
   width: 100%; box-sizing: border-box; margin-bottom: var(--s-4);
   padding: var(--s-2) var(--s-3); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
-  background: var(--c-bg); color: var(--c-text); font-size: var(--fs-md);
+  background: var(--c-bg-pic) var(--c-bg); color: var(--c-text); font-size: var(--fs-md);
 }
 .gitask__save { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); cursor: pointer; }
 .gitask__where { font-size: var(--fs-xs); color: var(--c-text-muted); margin: var(--s-1) 0 var(--s-4); }
 .gitask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.gitask__action { padding: var(--s-2) var(--s-4); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+.gitask__action { padding: var(--s-2) var(--s-4); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md); background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); cursor: pointer; }
 .gitask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 
 /* ---------- the two halves of the panel ---------- */
@@ -1900,7 +1914,7 @@ input[type="color"] {
   flex: 1 1 auto; min-width: 4ch;
   padding: 2px var(--s-1);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-  background: var(--c-sunken); color: var(--c-text);
+  background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
   font: inherit; font-size: var(--fs-xs);
 }
 .treefind__field:focus { outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px; }
@@ -1911,7 +1925,7 @@ input[type="color"] {
   background: transparent; color: var(--c-text-muted);
   font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
 }
-.treefind__close:hover { color: var(--c-text); background: var(--c-sunken); }
+.treefind__close:hover { color: var(--c-text); background: var(--c-sunken-pic) var(--c-sunken); }
 
 /* Looking through the whole folder (`../files/SearchPanel`). It is a face of the reading column, so
    it scrolls in the column and stands under the same row of tabs the files do. */
@@ -1921,7 +1935,7 @@ input[type="color"] {
   flex: 1 1 auto; min-width: 4ch;
   padding: 2px var(--s-1);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-  background: var(--c-sunken); color: var(--c-text);
+  background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
   font: inherit; font-size: var(--fs-xs);
 }
 .search__field:focus { outline: var(--border-w) var(--border-style) var(--c-accent); outline-offset: -1px; }
@@ -1934,7 +1948,7 @@ input[type="color"] {
   background: transparent; color: var(--c-text-muted);
   font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
 }
-.search__switch:hover { color: var(--c-text); background: var(--c-sunken); }
+.search__switch:hover { color: var(--c-text); background: var(--c-sunken-pic) var(--c-sunken); }
 .search__switch[aria-pressed="true"] {
   background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text);
 }
@@ -1954,10 +1968,10 @@ input[type="color"] {
   flex: 0 0 auto;
   padding: 2px var(--s-2);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-  background: var(--c-surface); color: var(--c-text);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
   font: inherit; font-size: var(--fs-xs); line-height: 1.4; white-space: nowrap; cursor: pointer;
 }
-.search__does:hover:not(:disabled) { background: var(--c-sunken); }
+.search__does:hover:not(:disabled) { background: var(--c-sunken-pic) var(--c-sunken); }
 .search__does:disabled { opacity: 0.5; cursor: default; }
 /* The way out of one row of the list, or of a whole file's worth of it. Quiet, and drawn only while
    there is a replacement to leave it out of. */
@@ -1972,7 +1986,7 @@ input[type="color"] {
   background: transparent; color: var(--c-text-faint);
   font: inherit; font-size: var(--fs-xs); line-height: 1; cursor: pointer;
 }
-.search__drop:hover { color: var(--c-text); background: var(--c-sunken); }
+.search__drop:hover { color: var(--c-text); background: var(--c-sunken-pic) var(--c-sunken); }
 .search__files { margin: 0; padding: 0; list-style: none; min-height: 0; }
 .search__file { margin-bottom: var(--s-2); }
 /* The path is the head of the group, cut at the end it can afford to lose: what tells two files of
@@ -1992,7 +2006,7 @@ input[type="color"] {
   font-family: var(--font-mono); font-size: var(--fs-xs);
   text-align: left; cursor: pointer;
 }
-.search__hit:hover { background: var(--c-sunken); }
+.search__hit:hover { background: var(--c-sunken-pic) var(--c-sunken); }
 .search__lineno { flex: 0 0 auto; min-width: 4ch; text-align: right; color: var(--c-text-faint); }
 .search__text { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .search__mark { background: var(--c-accent-weak); color: inherit; }
@@ -2032,7 +2046,7 @@ input[type="color"] {
 /* The one being read, lifted out of the row the way the pane counts are: one of a fixed few is on,
    and a colour alone reads as a row of links. */
 .files__tab--on {
-  background: var(--c-sunken); border-color: var(--c-edge);
+  background: var(--c-sunken-pic) var(--c-sunken); border-color: var(--c-edge);
   color: var(--c-text); font-weight: 600;
 }
 .files__tabname {
@@ -2095,7 +2109,7 @@ input[type="color"] {
 .memo__field {
   flex: 1; min-height: 0; width: 100%; resize: none;
   padding: var(--s-2);
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1.6;
 }
 
@@ -2238,7 +2252,7 @@ input[type="color"] {
 .topbar {
   display: flex; align-items: center; gap: var(--s-3);
   padding: 0 var(--s-3);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
 /* The brand mark tightens its gap a little so it reads as a pair with the workspace name.
@@ -2301,7 +2315,7 @@ input[type="color"] {
    arranged. */
 .topbar__faces {
   display: inline-flex;
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   padding: 2px;
 }
@@ -2311,10 +2325,10 @@ input[type="color"] {
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
 .topbar__face:hover { color: var(--c-text); }
-.topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
+.topbar__face--on { background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
@@ -2324,7 +2338,7 @@ input[type="color"] {
 .topbar__nav { display: inline-flex; gap: var(--s-1); }
 .topbar__navbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
+  min-width: 24px; background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-xl); line-height: 1; cursor: pointer;
 }
@@ -2345,7 +2359,7 @@ input[type="color"] {
 .sidebar {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   border-right: var(--border-w) var(--border-style) var(--c-rule);
 }
 .sidebar__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--s-2); }
@@ -2356,7 +2370,7 @@ input[type="color"] {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
-  background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 .sidebar__fold:hover { background: var(--c-hover); color: var(--c-text); }
@@ -2401,7 +2415,7 @@ input[type="color"] {
   flex: none;
   width: 24px; height: 24px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center;
-  background: var(--c-sunken);
+  background: var(--c-sunken-pic) var(--c-sunken);
   font-size: var(--fs-md); font-weight: 700; line-height: 1;
   text-transform: uppercase;
   overflow: hidden;
@@ -2422,9 +2436,9 @@ body.dragging-row { user-select: none; }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
   margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-muted);
-  background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
-.navitem--active .navitem__count { background: var(--c-surface); }
+.navitem--active .navitem__count { background: var(--c-surface-pic) var(--c-surface); }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
 .navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent); font-weight: var(--fw-medium); }
 .navitem--active .navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent); }
@@ -2465,7 +2479,7 @@ body.dragging-row { user-select: none; }
 .rightpane-wrap { grid-area: pane; position: relative; display: flex; min-height: 0; min-width: 0; }
 .rightpane {
   flex: 1; min-width: 0;
-  background: var(--c-surface); border-left: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface); border-left: var(--border-w) var(--border-style) var(--c-rule);
   overflow-y: auto; display: flex; flex-direction: column;
 }
 /* The resize handle on the left edge: a thin hit area straddling the border, showing its
@@ -2514,7 +2528,7 @@ body.dragging-row { user-select: none; }
   padding: var(--s-4);
   border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
 }
 
 .agent__askTitle { font-size: var(--fs-md); font-weight: 600; }
@@ -2532,7 +2546,7 @@ body.dragging-row { user-select: none; }
   padding: var(--s-2) var(--s-3);
   border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-sm);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
   color: var(--c-text);
   cursor: pointer;
   font: inherit;
@@ -2583,7 +2597,7 @@ body.dragging-row { user-select: none; }
   padding: var(--s-2) var(--s-3);
   border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
 }
 
 .agent__pick { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-md); }

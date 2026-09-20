@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./ipc", () => ({ invoke: () => Promise.reject(new Error("no host")) }));
 
 import type { SkinTablesDto } from "../bindings/bindings";
-import { applySkin, skinTitle } from "./skin";
+import { applySkin, pictureSlots, skinTitle } from "./skin";
 import { setThemePref } from "./theme";
 
 /** A skin as the window receives it, with only the parts a test is about spelled out. */
@@ -18,6 +18,8 @@ const wearing = (over: Partial<SkinTablesDto>): SkinTablesDto => ({
   light: {},
   dark: {},
   font: null,
+  backgrounds: {},
+  stamp: "s1",
   ...over,
 });
 
@@ -170,6 +172,126 @@ function only(src: string, re: RegExp, what: string): string {
   if (!m) throw new Error(`${what} is no longer spelled the way this test reads it`);
   return m[1];
 }
+
+// The pictures a skin lays, on the way from a filename to a `background` layer.
+//
+// What the author wrote is a filename and two words. Everything else about the address — the
+// scheme, the skin's name in front of it, the stamp behind it — is built here, and that is what
+// keeps `url()` out of every value they can write (`AMB-D-936`).
+describe("the pictures a skin lays", () => {
+  beforeEach(() => {
+    document.head.innerHTML = "";
+  });
+
+  const laid = () => {
+    const rules = sheetText();
+    return rules[rules.length - 1];
+  };
+
+  it("goes on one rule of its own, matching both sides", () => {
+    applySkin(wearing({
+      name: "washi",
+      light: { "c-bg": "#fff" },
+      dark: { "c-bg": "#000" },
+      backgrounds: { "c-bg": { file: "paper.png", fit: "cover", at: "center" } },
+    }));
+    const rules = sheetText();
+    expect(rules).toHaveLength(3);
+    expect(rules[2]).toContain("[data-theme]");
+    expect(rules[2]).not.toContain('[data-theme="');
+    expect(rules[2]).toContain('--c-bg-pic: url("amenboskin://localhost/washi/paper.png?v=s1")');
+  });
+
+  it("says how big the picture is, except where it repeats", () => {
+    applySkin(wearing({
+      name: "washi",
+      backgrounds: {
+        "c-bg": { file: "a.png", fit: "contain", at: "top-left" },
+        "c-surface": { file: "b.png", fit: "tile", at: "top" },
+      },
+    }));
+    expect(laid()).toContain("--c-bg-pic: url(\"amenboskin://localhost/washi/a.png?v=s1\") top left / contain no-repeat");
+    expect(laid()).toContain("--c-surface-pic: url(\"amenboskin://localhost/washi/b.png?v=s1\") top repeat");
+  });
+
+  it("carries the stamp of the file, so the same names are fetched again", () => {
+    const slots = pictureSlots(wearing({
+      name: "washi",
+      stamp: "1700000000000-2048",
+      backgrounds: { "c-bg": { file: "paper.png", fit: "cover", at: "center" } },
+    }));
+    expect(slots["c-bg-pic"]).toContain("?v=1700000000000-2048");
+  });
+
+  it("writes a name and a filename as one segment each", () => {
+    const slots = pictureSlots(wearing({
+      name: "my skin",
+      backgrounds: { "c-bg": { file: "a b/c.png", fit: "cover", at: "center" } },
+    }));
+    expect(slots["c-bg-pic"]).toContain("/my%20skin/a%20b%2Fc.png?");
+  });
+
+  it("lays nothing in a place this build has no slot for", () => {
+    applySkin(wearing({
+      name: "washi",
+      light: { "c-bg": "#fff" },
+      backgrounds: { "c-text": { file: "a.png", fit: "cover", at: "center" } },
+    }));
+    expect(sheetText()).toHaveLength(2);
+  });
+
+  it("lays the way this build lays one where the word is not one of ours", () => {
+    const slots = pictureSlots(wearing({
+      name: "washi",
+      backgrounds: { "c-bg": { file: "a.png", fit: "stretch", at: "middle" } },
+    }));
+    expect(slots["c-bg-pic"]).toBe('url("amenboskin://localhost/washi/a.png?v=s1") center / cover no-repeat');
+  });
+
+  it("takes the pictures off with the skin", () => {
+    applySkin(wearing({
+      name: "washi",
+      backgrounds: { "c-bg": { file: "a.png", fit: "cover", at: "center" } },
+    }));
+    applySkin(null);
+    expect(sheetText()).toHaveLength(0);
+  });
+});
+
+// The three vocabularies a background is written in, held to core's.
+//
+// The check has already ruled on the place, the fit and the spot by the time the tables reach the
+// window — but what each word turns into is written here, and a word this file has no answer for is
+// laid the way this build lays one. A place added in core and not here is a picture that silently
+// does not draw.
+describe("the words a background is written in", () => {
+  const list = (src: string, re: RegExp, what: string) =>
+    [...only(src, re, what).matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]).sort();
+
+  it("name the same four places", () => {
+    expect(list(skinTs, /const PLACES = \[([\s\S]*?)\];/, "`PLACES` in skin.ts")).toEqual(
+      list(skinRs, /pub const BACKGROUNDS: &\[&str\] = &\[([\s\S]*?)\];/, "`BACKGROUNDS` in skin.rs"),
+    );
+  });
+
+  it("name the same ways of laying one, and the same default", () => {
+    expect(list(skinTs, /const FITS = \[([\s\S]*?)\];/, "`FITS` in skin.ts")).toEqual(
+      list(skinRs, /pub const FITS: &\[&str\] = &\[([\s\S]*?)\];/, "`FITS` in skin.rs"),
+    );
+    expect(only(skinTs, /const FIT_DEFAULT = "([a-z]+)";/, "`FIT_DEFAULT` in skin.ts")).toBe(
+      only(skinRs, /pub const FIT_DEFAULT: &str = "([a-z]+)";/, "`FIT_DEFAULT` in skin.rs"),
+    );
+  });
+
+  it("name the same nine spots, and the same default", () => {
+    expect(list(skinTs, /const SPOTS = \[([\s\S]*?)\];/, "`SPOTS` in skin.ts")).toEqual(
+      list(skinRs, /pub const SPOTS: &\[&str\] = &\[([\s\S]*?)\];/, "`SPOTS` in skin.rs"),
+    );
+    expect(only(skinTs, /const SPOT_DEFAULT = "([a-z]+)";/, "`SPOT_DEFAULT` in skin.ts")).toBe(
+      only(skinRs, /pub const SPOT_DEFAULT: &str = "([a-z]+)";/, "`SPOT_DEFAULT` in skin.rs"),
+    );
+  });
+});
 
 describe("the shape a value may have", () => {
   it("is the same set of characters on both sides", () => {

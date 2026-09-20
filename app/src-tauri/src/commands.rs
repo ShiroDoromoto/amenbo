@@ -758,14 +758,19 @@ pub fn skin_in_use() -> Option<SkinTablesDto> {
     let config = amenbo_core::config::Config::load(&paths.config_file);
     let name = config.skin?;
     let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    Some(worn(skin.check(&materials).ok()?))
+    Some(worn(&paths, skin.check(&materials).ok()?))
 }
 
 /// One checked skin, as the window wears it. The font's bytes go back to base64 on the way out —
 /// they came in as base64 with an author's line wrapping in them, and what leaves here is the same
 /// bytes with nothing for the window to clean.
-fn worn(taken: amenbo_core::skin::Taken) -> SkinTablesDto {
+///
+/// The pictures do not travel with it. They stay in the zip and are fetched one at a time through
+/// [`crate::skinproto`], so what goes out is the filename and the two words that say how each one
+/// is laid — plus the stamp that makes the address change when the file behind it does.
+fn worn(paths: &amenbo_core::config::Paths, taken: amenbo_core::skin::Taken) -> SkinTablesDto {
     let font = font_of(&taken);
+    let stamp = stamp_of(paths, &taken.skin.name);
     SkinTablesDto {
         name: taken.skin.name,
         title: taken.skin.title,
@@ -773,7 +778,41 @@ fn worn(taken: amenbo_core::skin::Taken) -> SkinTablesDto {
         light: taken.skin.light.values,
         dark: taken.skin.dark.values,
         font,
+        backgrounds: taken
+            .skin
+            .backgrounds
+            .into_iter()
+            .map(|(place, laid)| {
+                (place, SkinBackgroundDto { file: laid.file, fit: laid.fit, at: laid.at })
+            })
+            .collect(),
+        stamp,
     }
+}
+
+/// What the file a skin is kept in was when it was read — how it was last written and how much of
+/// it there is. Not a hash: the question is whether this is the same file as a moment ago, and two
+/// readings of one file nobody touched have to answer the same for a picture to be drawn out of
+/// what the webview already holds rather than fetched again.
+///
+/// `built-in` where the device keeps no file, which is the four that ship inside the build. Their
+/// materials are in the binary and cannot move under a running window.
+fn stamp_of(paths: &amenbo_core::config::Paths, name: &str) -> String {
+    let Some((_, at)) = amenbo_core::skin::kept_file(paths, name) else {
+        return "built-in".to_string();
+    };
+    let Ok(meta) = std::fs::metadata(&at) else {
+        // It was there a moment ago and is not now. Saying so is an address of its own, which is
+        // the honest answer: nothing the webview holds was fetched under it.
+        return "unread".to_string();
+    };
+    let written = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    format!("{written}-{}", meta.len())
 }
 
 /// What this device holds and what is on, for the settings screen's list.
@@ -828,7 +867,7 @@ pub fn skin_list() -> SkinListDto {
 pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
     let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    Some(worn(skin.check(&materials).ok()?))
+    Some(worn(&paths, skin.check(&materials).ok()?))
 }
 
 /// The licence of the font a held skin carries, in full.

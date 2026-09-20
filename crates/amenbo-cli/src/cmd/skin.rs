@@ -355,6 +355,7 @@ fn contrast_json(report: &Report) -> serde_json::Value {
         "unread": report.unread.iter().map(|u| json!({
             "theme": u.side.as_str(), "name": u.name, "value": u.value,
         })).collect::<Vec<_>>(),
+        "covered": report.covered,
     })
 }
 
@@ -393,6 +394,9 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
 }
 
 fn say_contrast(flags: &Flags, report: &Report) {
+    for ground in &report.covered {
+        human(flags, format!("  ? {ground}: a picture is laid over it, so nothing on it was measured"));
+    }
     for u in &report.unread {
         human(flags, format!("  ? {}.{}: '{}' is not a colour this Amenbo can measure", u.side, u.name, u.value));
     }

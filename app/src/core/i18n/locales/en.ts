@@ -384,6 +384,7 @@ const ui = {
   "settings.skinWarnClosed": "not a skin’s to move",
   "settings.skinWarnNotText": "the value is not text",
   "settings.skinUnmeasured": "this build cannot read a number from it",
+  "settings.skinCovered": "a picture is laid over it, so nothing on it was measured",
   "settings.skinContrastClear": "All {n} pairings clear their floor.",
   "settings.skinContrastShort": "{n} of {m} pairings are under their floor. You can take it in anyway.",
   "settings.skinFontMissing": "This font has no letters for: {langs}. Those read in the machine’s own face.",

@@ -359,6 +359,7 @@ export const nl: Translation = {
     "settings.skinWarnClosed": "hier gaat een skin niet over",
     "settings.skinWarnNotText": "de waarde is geen tekst",
     "settings.skinUnmeasured": "deze build leest er geen getal uit",
+    "settings.skinCovered": "er ligt een afbeelding overheen, dus daarop is niets gemeten",
     "settings.skinContrastClear": "Alle {n} paren halen hun ondergrens.",
     "settings.skinContrastShort": "{n} van de {m} paren zitten onder hun ondergrens. Binnenhalen kan toch.",
     "settings.skinFontMissing": "Dit lettertype heeft geen tekens voor: {langs}. Daar leest het lettertype van de machine.",

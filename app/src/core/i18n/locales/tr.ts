@@ -359,6 +359,7 @@ export const tr: Translation = {
     "settings.skinWarnClosed": "bunu bir kaplama oynatamaz",
     "settings.skinWarnNotText": "değer metin değil",
     "settings.skinUnmeasured": "bu yapı bundan sayı okuyamıyor",
+    "settings.skinCovered": "üstünde bir görsel var, bu yüzden üzerindekiler ölçülmedi",
     "settings.skinContrastClear": "{n} eşleşmenin hepsi eşiğini geçiyor.",
     "settings.skinContrastShort": "{m} eşleşmenin {n} tanesi eşiğin altında. Yine de içeri alabilirsiniz.",
     "settings.skinFontMissing": "Bu yazı tipinde şunların harfleri yok: {langs}. Orada makinenin kendi yazı tipi çıkar.",

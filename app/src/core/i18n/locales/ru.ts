@@ -368,6 +368,7 @@ export const ru: Translation = {
     "settings.skinWarnClosed": "это не скину менять",
     "settings.skinWarnNotText": "значение не текст",
     "settings.skinUnmeasured": "эта сборка не читает отсюда число",
+    "settings.skinCovered": "поверх лежит изображение, поэтому на нём ничего не измерялось",
     "settings.skinContrastClear": "Все пары ({n}) проходят свой порог.",
     "settings.skinContrastShort": "Ниже порога: {n} из {m}. Взять всё равно можно.",
     "settings.skinFontMissing": "В этом шрифте нет знаков для: {langs}. Там читается шрифт самой машины.",

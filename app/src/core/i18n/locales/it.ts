@@ -366,6 +366,7 @@ export const it: Translation = {
     "settings.skinWarnClosed": "non è cosa che uno skin possa muovere",
     "settings.skinWarnNotText": "il valore non è testo",
     "settings.skinUnmeasured": "questa build non riesce a leggerne un numero",
+    "settings.skinCovered": "sopra c'è un'immagine, quindi non è stato misurato nulla",
     "settings.skinContrastClear": "Tutte le {n} coppie superano la soglia.",
     "settings.skinContrastShort": "{n} coppie su {m} sono sotto la soglia. Puoi portarlo dentro lo stesso.",
     "settings.skinFontMissing": "Questo carattere non ha lettere per: {langs}. Lì si legge con quello della macchina.",

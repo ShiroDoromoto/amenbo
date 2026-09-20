@@ -2357,7 +2357,13 @@ measured: number,
  * The font it carries, where the check took one. Here as well as in the tables because the
  * screen asks what the face has glyphs for before the file is taken in, not after.
  */
-font: SkinFontDto | null, };
+font: SkinFontDto | null, 
+/**
+ * Every file the skin carries beside its document, in the order its zip holds them. What the
+ * file holds rather than what the document names, so a reader is shown the whole of what
+ * would land on their machine.
+ */
+carries: Array<SkinMaterialDto>, };
 
 /**
  * What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —
@@ -2365,6 +2371,31 @@ font: SkinFontDto | null, };
  * showing nothing selected.
  */
 export type SkinListDto = { on: string | null, skins: Array<SkinRowDto>, };
+
+/**
+ * One file a skin carries, for the panel that lists what is in it before it is taken in.
+ */
+export type SkinMaterialDto = { 
+/**
+ * The name it has in the zip, which is the name the document points at it by.
+ */
+file: string, 
+/**
+ * What it weighs unpacked.
+ */
+bytes: number, 
+/**
+ * What the bytes turned out to be — `png`, `jpeg`, `webp`, `svg`, `woff2` — or `null` where
+ * they are neither a picture nor a face. A form is not translated: it reads the same in every
+ * language, the way a token name and a ratio do.
+ */
+kind: string | null, 
+/**
+ * Where the document points at this file, as the panel writes a key — `font_file`, or
+ * `backgrounds.<place>`. `null` where nothing in the document names it, which is a file that
+ * rides along and is drawn with nowhere.
+ */
+namedAt: string | null, };
 
 /**
  * One pairing that came out under its floor, with the numbers. The names are token names and the

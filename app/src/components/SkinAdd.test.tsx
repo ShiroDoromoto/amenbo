@@ -73,6 +73,7 @@ const judgement = (over: Partial<SkinJudgementDto> = {}): SkinJudgementDto => ({
   covered: [],
   measured: 35,
   font: null,
+  carries: [],
   ...over,
 });
 
@@ -148,6 +149,28 @@ describe("reading a skin file over", () => {
     expect(said).toContain("woff2 is the one taken");
     expect(said).toContain("light.c-bg");
     expect(said).toContain("which no value may");
+  });
+
+  it("lists what is in the file, with what each is and what names it", async () => {
+    hoisted.read = judgement({
+      carries: [
+        { file: "paper.png", bytes: 20480, kind: "png", namedAt: "backgrounds.c-bg" },
+        { file: "silkscreen.woff2", bytes: 489000, kind: "woff2", namedAt: "font_file" },
+        // In the zip and pointed at by nothing. Shown, because what would land on the machine is
+        // the whole file rather than the part the document uses.
+        { file: "readme.txt", bytes: 300, kind: null, namedAt: null },
+      ],
+    });
+    await drawAndPick();
+    const said = host.textContent ?? "";
+    expect(said).toContain("paper.png");
+    expect(said).toContain("backgrounds.c-bg");
+    expect(said).toContain("silkscreen.woff2");
+    expect(said).toContain("font_file");
+    expect(said).toContain("20 KB");
+    expect(said).toContain("readme.txt");
+    expect(said).toContain("nothing in the skin names it");
+    expect(said).toContain("not a kind this build draws");
   });
 
   it("names each ground a picture is over, so the count is not read as the whole screen", async () => {

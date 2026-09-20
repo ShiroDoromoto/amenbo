@@ -882,6 +882,30 @@ pub struct SkinJudgementDto {
     /// The font it carries, where the check took one. Here as well as in the tables because the
     /// screen asks what the face has glyphs for before the file is taken in, not after.
     pub(crate) font: Option<SkinFontDto>,
+    /// Every file the skin carries beside its document, in the order its zip holds them. What the
+    /// file holds rather than what the document names, so a reader is shown the whole of what
+    /// would land on their machine.
+    pub(crate) carries: Vec<SkinMaterialDto>,
+}
+
+/// One file a skin carries, for the panel that lists what is in it before it is taken in.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SkinMaterialDto {
+    /// The name it has in the zip, which is the name the document points at it by.
+    pub(crate) file: String,
+    /// What it weighs unpacked.
+    #[ts(type = "number")]
+    pub(crate) bytes: u64,
+    /// What the bytes turned out to be — `png`, `jpeg`, `webp`, `svg`, `woff2` — or `null` where
+    /// they are neither a picture nor a face. A form is not translated: it reads the same in every
+    /// language, the way a token name and a ratio do.
+    pub(crate) kind: Option<String>,
+    /// Where the document points at this file, as the panel writes a key — `font_file`, or
+    /// `backgrounds.<place>`. `null` where nothing in the document names it, which is a file that
+    /// rides along and is drawn with nowhere.
+    pub(crate) named_at: Option<String>,
 }
 
 /// One row of the change feed. **Which row of which table changed, and how** — that is all; no

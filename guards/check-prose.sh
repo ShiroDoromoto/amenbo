@@ -34,7 +34,7 @@
 # what a capture says is the producer's to write, and a rule about how we write
 # has no claim on it.
 #
-# Four things are left out, each for a reason that cannot rot into a list:
+# Five things are left out, each for a reason that cannot rot into a list:
 #   - esorp.yaml, the declaration itself. Its rules have to spell the words they
 #     forbid, so it fails every one it defines — no-history's pattern alone trips
 #     no-history, english-only and internal-ref. check-doc-refs.sh carves itself
@@ -53,6 +53,12 @@
 #     in source. Only the values go: esorp.yaml's `hash` family reads the `#`
 #     comments of a .yaml on the comment face, which is the half of these files a
 #     rule about how we write has a claim on.
+#   - crates/amenbo-core/skins, where a shipped skin's `titles:` is a dictionary.
+#     Those four are the worked example of what a skin may do, and one of the
+#     things it may do is name itself in the reader's language — so the names in
+#     them are the same half of a bilingual product the source's own
+#     per-language dictionaries are. Only the values go, as with scenarios: the
+#     `#` comments above them are read on the comment face.
 #
 # The whole tree is judged, not the changed part: these files are clean, so a
 # violation anywhere is the commit's to answer for. The comment guard reads its
@@ -87,6 +93,7 @@ if [ ${#FILES[@]} -eq 0 ]; then
   while IFS= read -r -d '' f; do
     case "$f" in
       esorp.yaml|*-lock.json|*.lock|devtool/fixtures/*|verification/scenarios/*) continue ;;
+      crates/amenbo-core/skins/*) continue ;;
     esac
     FILES+=("$f")
   done < <(git ls-files -z '*.md' '*.toml' '*.yml' '*.yaml' '*.json' '*.mod')

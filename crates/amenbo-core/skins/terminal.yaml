@@ -3,6 +3,26 @@
 
 name: terminal
 title: "Terminal"
+titles:
+  en: "Terminal"
+  ja: "ターミナル"
+  zh-Hans: "终端"
+  zh-Hant: "終端機"
+  ko: "터미널"
+  es: "Terminal"
+  pt-BR: "Terminal"
+  fr: "Terminal"
+  de: "Terminal"
+  it: "Terminale"
+  ru: "Терминал"
+  hi: "टर्मिनल"
+  id: "Terminal"
+  vi: "Terminal"
+  th: "เทอร์มินัล"
+  tr: "Terminal"
+  pl: "Terminal"
+  nl: "Terminal"
+  uk: "Термінал"
 skin_v: 1
 author: "Amenbo"
 version: "1"

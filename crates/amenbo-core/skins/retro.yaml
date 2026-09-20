@@ -3,6 +3,26 @@
 
 name: retro
 title: "Retro"
+titles:
+  en: "Retro"
+  ja: "レトロゲーム"
+  zh-Hans: "复古游戏"
+  zh-Hant: "復古遊戲"
+  ko: "레트로 게임"
+  es: "Retro"
+  pt-BR: "Retrô"
+  fr: "Rétro"
+  de: "Retro"
+  it: "Retro"
+  ru: "Ретро"
+  hi: "रेट्रो"
+  id: "Retro"
+  vi: "Retro"
+  th: "เรโทร"
+  tr: "Retro"
+  pl: "Retro"
+  nl: "Retro"
+  uk: "Ретро"
 skin_v: 1
 author: "Amenbo"
 version: "1"

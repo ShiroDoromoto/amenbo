@@ -3,6 +3,28 @@
 
 name: washi
 title: "Washi"
+# The name is the paper, so it travels as the word rather than as a translation of it. Japanese
+# is the one language that writes the word it already has.
+titles:
+  en: "Washi"
+  ja: "和紙"
+  zh-Hans: "Washi"
+  zh-Hant: "Washi"
+  ko: "Washi"
+  es: "Washi"
+  pt-BR: "Washi"
+  fr: "Washi"
+  de: "Washi"
+  it: "Washi"
+  ru: "Washi"
+  hi: "Washi"
+  id: "Washi"
+  vi: "Washi"
+  th: "Washi"
+  tr: "Washi"
+  pl: "Washi"
+  nl: "Washi"
+  uk: "Washi"
 skin_v: 1
 author: "Amenbo"
 version: "1"

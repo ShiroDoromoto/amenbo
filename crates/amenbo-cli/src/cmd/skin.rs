@@ -333,6 +333,15 @@ fn warnings_json(taken: &Taken) -> Vec<serde_json::Value> {
                 "kind": "scale", "theme": theme.as_str(), "key": key,
                 "wrote": wrote, "used": used,
             }),
+            Warning::UnknownBackground { place } => json!({
+                "kind": "unknown_background", "place": place,
+            }),
+            Warning::BackgroundDropped { place, why } => json!({
+                "kind": "background_dropped", "place": place, "why": why.en(),
+            }),
+            Warning::BackgroundChoice { place, key, wrote } => json!({
+                "kind": "background_choice", "place": place, "key": key, "wrote": wrote,
+            }),
         })
         .collect()
 }
@@ -371,6 +380,15 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
                 Some(used) => format!("  · {theme}.{key}: '{wrote}' — moved by {used}"),
                 None => format!("  · {theme}.{key}: '{wrote}' is not a number — nothing moved"),
             },
+            Warning::UnknownBackground { place } => {
+                format!("  · the background for {place}: this Amenbo lays none there — dropped")
+            }
+            Warning::BackgroundDropped { place, why } => {
+                format!("  · the background for {place}: it {} — dropped", why.en())
+            }
+            Warning::BackgroundChoice { place, key, wrote } => format!(
+                "  · the background for {place}, {key}: '{wrote}' is not one this build draws — dropped"
+            ),
         };
         human(flags, line);
     }

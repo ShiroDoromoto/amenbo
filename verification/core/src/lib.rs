@@ -736,6 +736,11 @@ const REGISTRY: &[OpSpec] = &[
     // and cannot be one, so `skin-use` with it is how a road takes off whatever is on.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-use", required: &["name"], refs: &[], strings: &["name"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-rm", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Handing a held skin back out — the file it arrived in, byte for byte, materials and all. It
+    // names a path where `skin-template` does not, because what comes out is wanted twice: once as
+    // bytes an assert looks into, and once as a file a later step takes in again. It is bound as
+    // well, so the first of those needs no second spelling of the path.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-write-out", required: &["name", "path"], refs: &[], strings: &["name", "path"], binds: true },
     // The one of those settings a road walks rather than declares: the language the interface is
     // read in. It is written as a move and not as a premise because what turns on it is what the
     // screen does **when it changes** — a listing drawn in one language and redrawn in another is
@@ -1706,6 +1711,16 @@ const REGISTRY: &[OpSpec] = &[
     // ships with the build stands in the same listing as what was taken in, so a row named by its
     // place in it moves the day a fifth one ships.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "skin-list", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
+    // What a skin's own materials come to on screen, once it is on: `background` for the pictures
+    // behind the surfaces, `icons` for a drawing standing in place of one this build ships (`name`
+    // says which), `font` for the face the text is set in. A skin that carries none of them is a
+    // skin of colours, and this is the step that separates the two.
+    //
+    // A screen road alone, and a `Review` it could be nothing else than: a picture, a drawing and a
+    // letterform are each a picture, and a reading answers which words are on a shot. The terminal
+    // has no face for it — the check says what a file carries, and whether it reached the screen is
+    // a different question, which is the one worth a step.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "skin-material", required: &["material"], refs: &[], strings: &["material", "name"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "identity", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "update", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     // Which of the two a facet's slot holds: the image registered for it, or the pattern Amenbo draws

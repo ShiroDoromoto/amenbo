@@ -1783,6 +1783,16 @@ impl Instructor {
                 "With the judgement of \"{}\" on the screen, press what takes it in.",
                 req(with, "path")?
             ),
+            // Handing a held skin back out. The file is named here where the starting point's is
+            // not: what comes out is taken in again further down the road, so the operator and the
+            // step after them have to mean the same file. Where it is lying is still not said —
+            // these lines are rendered from the YAML alone, and the run says that path on its way
+            // in.
+            (Domain::Store, "skin-write-out") => format!(
+                "In the appearance part of Amenbo's own settings, with the skin called \"{}\" the one that is on, press what hands it over, and save it into the folder the run laid down as \"{}\".",
+                req(with, "name")?,
+                req(with, "path")?
+            ),
             // Putting one on, or taking off whatever is on. The word `none` is not a skin's name and
             // cannot be one, so the two are told apart by it rather than by a second op.
             (Domain::Store, "skin-use") => match req(with, "name")? {
@@ -3716,6 +3726,29 @@ impl Instructor {
 
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
         Ok(match (domain, op) {
+            // What a skin's materials come to on screen. Each of the three is a picture, so each is
+            // an eye's — and each is written as a comparison with what this build draws rather than
+            // as a description of the material, since the line is rendered from the YAML alone and
+            // the YAML does not hold the file.
+            (Domain::Store, "skin-material") => match (req(with, "material")?, present(with)) {
+                ("background", true) => "Confirm the window behind everything, and the cards standing on it, are drawn over a picture of the skin's own rather than over flat colour.".to_string(),
+                ("background", false) => "Confirm the window behind everything, and the cards standing on it, are drawn in flat colour, with no picture standing behind them.".to_string(),
+                ("icons", there) => {
+                    let mark = match with.get("name").and_then(|v| v.as_str()) {
+                        Some(name) => format!("the mark Amenbo draws as \"{name}\""),
+                        None => "the marks Amenbo draws".to_string(),
+                    };
+                    match there {
+                        true => format!("Confirm {mark} is the skin's own drawing rather than the one this build ships."),
+                        false => format!("Confirm {mark} is the one this build ships, with no drawing of a skin's standing in its place."),
+                    }
+                }
+                ("font", true) => "Confirm the text on screen is set in the face the skin carries rather than in the one this build draws with.".to_string(),
+                ("font", false) => "Confirm the text on screen is set in the face this build draws with, and in no face a skin brought.".to_string(),
+                (other, _) => return Err(format!(
+                    "`skin-material` looks at `background`, `icons` or `font`; `{other}` is none of the three a skin carries"
+                )),
+            },
             // What a facet's slot draws. Both sides are a picture and neither is an absence: with an
             // image registered the slot holds it, and with none it holds the pattern Amenbo draws from
             // the face's own name. So the line names what an eye should find rather than asking for one

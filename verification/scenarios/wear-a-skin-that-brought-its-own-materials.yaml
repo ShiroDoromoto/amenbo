@@ -1,0 +1,233 @@
+# A skin is a look, and a look is not only colours. The file somebody hands over carries the
+# pictures its surfaces are drawn over, the drawings that stand in for the marks this build ships,
+# and the face its text is set in — all of it inside the one zip, beside the document that names
+# them. None of that is reachable from a build-time test: the reader and the check have their own,
+# and what none of them walks is a file arriving from outside and a screen coming up in somebody
+# else's paper.
+#
+# The road is the one a person actually walks with such a file, and it goes out and comes back.
+# Taking it in and putting it on is the first half; handing it back out and taking *that* in is the
+# second, and the second is the half that could rot quietly. What the device keeps is the author's
+# own file, so writing one out is a copy — but a build that rebuilt the document from what it
+# parsed would hand back a skin with no pictures, no drawings and no face, and every colour still
+# right. Nothing on the first half would notice.
+#
+# So the file that comes out is read for the names that have to be inside it, and then taken in as
+# a skin in its own right, from a device that no longer holds the original. A copy that reads as a
+# skin, under the same name, drawing the same screen, is the whole claim.
+#
+# The screen's road stops short of that second taking in, and not by omission: a name the device
+# already holds is answered with a question about replacing it, which is a road about being asked
+# rather than about what came out. Taking a skin off the device has no screen at all. What the
+# screen alone can say is the half no terminal can — that the materials reached the picture a
+# person looks at — so that is what it says, three times, and then says they are gone.
+#
+# The materials are a fixture, for the reason the document-only skin is one: a zip is not a thing a
+# road can write out in prose, and a picture the road described would be a picture the road already
+# trusts. It carries a wash behind the window, a weave behind the cards, one drawing, and a face —
+# one of each kind a skin may carry, so a kind that stopped arriving has a step standing on it. It
+# lands in the folder the run makes for itself, and the run says that path before the first step is
+# handed over.
+id: wear-a-skin-that-brought-its-own-materials
+title: A skin carrying pictures, a drawing and a face is taken in, worn, handed back out as the file it arrived in, and taken in again from that copy
+description: >
+  Take in a skin that brought its own materials, put it on, and see them on the screen. Hand it
+  back out, and confirm the file that came out is the one that went in — the pictures and the face
+  still inside it. Then take the skin off the device and take the copy in instead, so the skin that
+  is worn at the end came out of what was handed back.
+given:
+  # The zip somebody handed over, materials and all. A screen road cannot make a file, so the one
+  # this road is about is laid down before it starts.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/a-skin-with-its-materials.zip
+      path: a-skin-with-its-materials.zip
+
+steps_cli:
+  # Read over first, without taking it in: the materials are read here too, so a file whose picture
+  # is no picture is turned away before anything is kept.
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: atelier
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: atelier
+
+  # Handed back out. What lands is meant to be the file that arrived, so the two names read for
+  # below are the ones no rebuilt document could carry.
+  - type: action
+    domain: store
+    op: skin-write-out
+    with:
+      name: atelier
+      path: handed-back.zip
+    as: handed-back
+
+  # The face, by the name it has inside the zip. A skin packed again out of what was parsed would
+  # be a document and nothing else, and this is the name that would be missing from it.
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: handed-back
+      contains: "DotGothic16.woff2"
+
+  # And a picture, so the reading is not answered by the one material that travels as text.
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: handed-back
+      contains: "wash.png"
+
+  # Off, and off the device — in that order, because removing the file under a skin that is on is a
+  # different road. What is left after this is the copy and nothing else.
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: none
+
+  - type: action
+    domain: store
+    op: skin-rm
+    with:
+      name: atelier
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  # The copy, taken in as a skin of its own. It names itself the same thing the original did,
+  # because it is the same document — which is how the step below can ask for it by that name.
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: handed-back.zip
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: atelier
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: atelier
+
+steps_gui:
+  - type: action
+    domain: store
+    op: open-settings
+
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: atelier
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: atelier
+
+  # The three kinds of material, one step each. Split rather than joined, because a build can lose
+  # one of them and keep the other two, and a step covering all three would go red without saying
+  # which.
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: background
+
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: icons
+      name: gear
+
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: font
+
+  # Handed back out from the window as well: the press exists on this face, and a build where it
+  # writes nothing is a build where the way out of a skin is a terminal.
+  - type: action
+    domain: store
+    op: skin-write-out
+    with:
+      name: atelier
+      path: handed-back.zip
+
+  # And off, so the screen goes back to what the build ships with. It is the way out of a skin that
+  # made the screen unreadable, so it is walked from a state where one is actually on.
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: none
+
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: background
+      present: false
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null

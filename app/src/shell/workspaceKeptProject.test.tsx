@@ -68,7 +68,7 @@ vi.mock("../core/ipc", async (importOriginal) => {
   };
 });
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -82,7 +82,7 @@ const shownProject = () =>
 /** Put the face up, told a project or told none, and let the arrangement come back. */
 async function mount(projectId: number | null) {
   await act(async () => {
-    root.render(createElement(TerminalFace, {
+    root.render(createElement(WorkspaceFace, {
       onWindow: () => {}, note: null, projectId,
     }));
     await new Promise((r) => setTimeout(r, 0));

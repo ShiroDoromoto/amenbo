@@ -590,7 +590,7 @@ export const it: Translation = {
 
     "face.switch": "Che cosa mostra questa finestra",
     "face.tasks": "Attività",
-    "face.terminal": "Spazio di lavoro",
+    "face.workspace": "Spazio di lavoro",
     "face.splitOut": "Apri in una finestra separata",
     "face.merge": "Torna a una sola finestra",
     "face.opening": "Apertura dello spazio di lavoro in una finestra propria…",

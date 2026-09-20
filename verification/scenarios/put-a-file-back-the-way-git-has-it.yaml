@@ -129,19 +129,19 @@ steps_gui:
 
   # Back to the panel, since moving that row is done in the settings and leaves the reader there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -283,10 +283,10 @@ steps_gui:
       about: restore
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
     domain: files
@@ -331,10 +331,10 @@ steps_gui:
       about: restore
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
     domain: files

@@ -1,7 +1,7 @@
 /* The talk window's own page — the window the terminal is split out into (`AMB-D-753`).
 
-   There is very little of it, and that is the point: what the window holds is the terminal face
-   whole, and the face brings its own rules with it (`.termface`, styles/global.css). What is left
+   There is very little of it, and that is the point: what the window holds is the workspace
+   whole, and the face brings its own rules with it (`.workspace`, styles/global.css). What is left
    here is the page around it — the room it fills, and the one band this window can raise about the
    process it runs in. */
 .talk {
@@ -45,4 +45,4 @@
 
 /* The face takes what the band leaves. `min-height` is written because a flex item's floor is its
    content, and a terminal's content is as tall as its scrollback. */
-.talk > .termface { flex: 1 1 auto; min-height: 0; }
+.talk > .workspace { flex: 1 1 auto; min-height: 0; }

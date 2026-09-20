@@ -581,7 +581,7 @@ export const th: Translation = {
 
     "face.switch": "หน้าต่างนี้กำลังแสดงอะไร",
     "face.tasks": "งาน",
-    "face.terminal": "พื้นที่ทำงาน",
+    "face.workspace": "พื้นที่ทำงาน",
     "face.splitOut": "เปิดในหน้าต่างแยก",
     "face.merge": "กลับไปเป็นหน้าต่างเดียว",
     "face.opening": "กำลังเปิดพื้นที่ทำงานในหน้าต่างของมันเอง…",

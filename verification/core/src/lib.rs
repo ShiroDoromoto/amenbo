@@ -330,7 +330,7 @@ pub enum Domain {
     /// what comes of it leaves through the outbox — while the screen's half decides nothing but
     /// whether that wake is registered at all.
     Tick,
-    /// The terminal face: the pane an agent is run in, and whether it is a face of the app's one
+    /// The workspace: the pane an agent is run in, and whether it is a face of the app's one
     /// window or a window of its own. A domain of its own because none of it is a record — a session
     /// is a process, and which window is drawing it is this machine's arrangement of one screen. The
     /// screen's alone, bar one premise: a terminal is what a reader is already typing in, so the
@@ -338,7 +338,7 @@ pub enum Domain {
     /// the machine underneath — which agents a pane could be opened with (`can-start`) — because that
     /// is settled before the app comes up and is no more a screen than a project already on the board
     /// is.
-    Terminal,
+    Workspace,
     /// The file face: the folder a project is bound to, read from inside Amenbo — what has changed
     /// in it lately, and the tree folded down it. A domain of its own rather than part of
     /// `Terminal`, because none of it is about the pane it is drawn beside: both of its sections
@@ -676,7 +676,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "open-face", required: &[], refs: &[], strings: &[], binds: false },
     // Pressing the row that names the pane a record was made in, which is the whole of what that row is
     // for: the name is what is left to read where the pane is gone, and the press is the way back while
-    // it is still there. Where it lands is the terminal face, at that pane — read by the
+    // it is still there. Where it lands is the workspace, at that pane — read by the
     // step after it, since what a press did is not something the press can say of itself.
     //
     // A screen road alone. The row is drawn on a record's own page and a terminal has no page to draw
@@ -1811,14 +1811,14 @@ const REGISTRY: &[OpSpec] = &[
     // reorders without a single assert going red.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop-order", required: &["order"], refs: &[], strings: &["order"], binds: false },
     // The press itself — the one move the loop offers, taken rather than read. It goes to the
-    // terminal face with a pane already open in the linked folder, which is the whole of what the
+    // workspace with a pane already open in the linked folder, which is the whole of what the
     // loop promises and the one part of it no reading of the card reaches.
     //
     // It carries nothing. Which folder the pane works in and which project it belongs to are both
     // the card's own to know — the card is a project's, and the folder is the one it names above the
     // press — so a step that named either would be handing the screen an answer it is under test for
     // having. What the pane landed under is read afterwards, off the face itself, by the roads that
-    // read any other pane (`terminal go-project`, `terminal pane`).
+    // read any other pane (`workspace go-project`, `workspace pane`).
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "start-terminal", required: &[], refs: &[], strings: &[], binds: false },
     // The ways in a reader is offered before there is a folder to work in: raise a project, or open
     // one this device already holds. Both are the interface's own to carry out, and what says so is
@@ -1952,7 +1952,7 @@ const REGISTRY: &[OpSpec] = &[
     // running) or `yesterday` (pressed a day ago, the quiet spent); the band returns after one day,
     // so anything further back is the same world as `yesterday`.
     OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "deferred", required: &["when"], refs: &[], strings: &["when"], binds: false },
-    // ── the terminal face ─────────────────────────────────────────────────────────────────────────
+    // ── the workspace ─────────────────────────────────────────────────────────────────────────
     // Amenbo is one window with two faces and, for whoever wants them side by side, two windows.
     // Every op below is the screen's, bar the one premise that opens the block: what they are about
     // is where a running terminal is drawn, and a terminal is the one surface a reader is already
@@ -1963,7 +1963,7 @@ const REGISTRY: &[OpSpec] = &[
     // running the pane's own login shell over the operator's `PATH`. So a road that means to read the
     // row of them has to be told what is on the machine before the app comes up, and this is the step
     // that says so. It stands programs up in a directory the app is launched with in front of its
-    // `PATH` (`amenbo_verify_cli::domain::terminal`), which is a premise like any other — the world
+    // `PATH` (`amenbo_verify_cli::domain::workspace`), which is a premise like any other — the world
     // standing before the road is walked — and is the screen's own moves' opposite.
     //
     // `count` is a **floor and never a ceiling**: nothing the harness hands the app can take an
@@ -1977,7 +1977,7 @@ const REGISTRY: &[OpSpec] = &[
     // needs an answer to. Left off it is none, which is what a stand-in that says what it is and
     // stops answers, and the row then draws the shape a provider with no list door gives. Asked for,
     // each stand-in answers in its own provider's shape, the names being the harness's own
-    // (`amenbo_verify_cli::domain::terminal`): a road never writes a real model name, because the
+    // (`amenbo_verify_cli::domain::workspace`): a road never writes a real model name, because the
     // names on that row belong to the tools and to the account a run is signed in to.
     //
     // `then` is what a stand-in does once it has printed: `ends` — the default, and the pane every
@@ -2000,21 +2000,21 @@ const REGISTRY: &[OpSpec] = &[
     // more (`app/src/talk/terminal.ts`, `whyItStopped`).
     //
     // One that stays also **says so when it is stopped**, in a word of its own printed as it goes
-    // (`amenbo_verify_cli::domain::terminal`). It is what lets a road read a press that ends a
+    // (`amenbo_verify_cli::domain::workspace`). It is what lets a road read a press that ends a
     // program: a program that died quietly leaves a mark and a fresh prompt, which are the two a
     // shell was already drawing and nothing a shot can tell from the ones before the press.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &["then"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "can-start", required: &["count"], refs: &[], strings: &["then"], binds: false },
     // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
     // way between the two, and a road that could not name which it pressed could not say which face
     // the assert after it read.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-face", required: &["face"], refs: &[], strings: &["face"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "show-face", required: &["face"], refs: &[], strings: &["face"], binds: false },
     // The way in. A face with no folder yet has one control on it, and pressing it is the whole of the
     // first run: the folder chosen is the one the AI is shown, it becomes a project's, and the pane
     // opens in it. It is an action rather than a premise because it is the road every other terminal
     // step stands on — a pane exists because somebody chose where it runs. `dir` is a name and not a
     // path, the way `folder bind`'s is: which folder the run works in is the run's to decide, and what
     // a road writes down is what to call the one it picked.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // Getting the pane to a plain shell — a terminal with no agent started in it. A folder with an
     // agent on it opens on one, which is what a reader wants and what a road cannot speak in: what an
     // agent does with a line typed at it is the agent's own, so a gate resting on one carrying out a
@@ -2022,7 +2022,7 @@ const REGISTRY: &[OpSpec] = &[
     // takes this step first, and what it says afterwards is said to a shell. One op rather than
     // three, because the shell is reachable from every shape the face can come up in — which is the
     // whole of what lets these roads be walked on any machine.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-shell", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-shell", required: &[], refs: &[], strings: &[], binds: false },
     // A command of the reader's own, written down on the frame. The catalog is a
     // shortcut and not a census, so what a pane can be opened with is not only what Amenbo lists —
     // and this is the road that says so.
@@ -2038,12 +2038,12 @@ const REGISTRY: &[OpSpec] = &[
     // the whole line reaches the shell as it stands: a line of one bare word would read alike whether
     // Amenbo handed it over or rebuilt it from the first word, which is the fault this exists to
     // catch.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "register-start", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "register-start", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
     // Opening a pane on one of those. It names the row by the `name` it was registered under and
     // never by a line, because a name is what the row is drawn by and the line is what it runs — the
     // two are separate on purpose, and a road that pressed by the line would be reading the one place
     // the screen does not put it.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-registered", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-registered", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // Choosing an agent on the row without opening anything, which is what puts the model row under
     // it: a model is asked of one agent, so nothing is asked until one is on.
     //
@@ -2071,7 +2071,7 @@ const REGISTRY: &[OpSpec] = &[
     // chosen it. `agent` is the name drawn on the row, which is the provider's own and the same word
     // in every language. Naming both it and `at` is refused: they are two ways of saying which one,
     // and a step that said both would leave which of them won to the driver.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-start", required: &[], refs: &[], strings: &["at", "agent"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "pick-start", required: &[], refs: &[], strings: &["at", "agent"], binds: false },
     // Naming the model that agent starts on. `name` is a name of the road's own, and `none` is the
     // choice that takes one back off — the agent starting on whatever its own settings say, which is
     // where everybody begins and is a choice rather than the absence of one.
@@ -2092,7 +2092,7 @@ const REGISTRY: &[OpSpec] = &[
     // afterwards. Each is refused where the row drew another shape — a road that meant to read a list
     // and found a box has learnt the answer never came, and a step that quietly typed the name
     // instead would pass on it.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-model", required: &["name"], refs: &[], strings: &["name", "how", "find"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "pick-model", required: &["name"], refs: &[], strings: &["name", "how", "find"], binds: false },
     // The press itself, on what the frame has been set to. It is the two rows' one outcome: an agent
     // is on, a model is named under it, and this is the press that opens a pane on both — which is
     // where a model choice stops being a line drawn on a frame and becomes an argument a program was
@@ -2102,7 +2102,7 @@ const REGISTRY: &[OpSpec] = &[
     // (`open-shell`, `open-registered`), and that is exactly what this one must not do: what is under
     // test is that what the frame said it would run is what ran, so the steps that chose it are the
     // ones before, and this one only presses.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-start", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-start", required: &[], refs: &[], strings: &[], binds: false },
     // ── Moving a pane that is already running ────────────────────────────────────────────────────
     // The other half of the model question, and a different question. Above it a model goes on a
     // launch line and is settled before the program starts; here the program has been running for an
@@ -2116,7 +2116,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // **It is not the empty frame, and it is the one place that is not.** A frame put back by the row
     // naming the session a record was made in comes back with no terminal and nothing chosen
-    // (`app/src/shell/TerminalFace.tsx`): the record holds the pane and the way back
+    // (`app/src/shell/WorkspaceFace.tsx`): the record holds the pane and the way back
     // into it, and never the folder or the provider, so what stands there is a frame with one control
     // on it rather than the row `open-start` presses under. Every other way a frame comes to be opens
     // itself — a pane pressed for on the empty frame, and a place that came back holding a way into
@@ -2125,7 +2125,7 @@ const REGISTRY: &[OpSpec] = &[
     // **Nothing is chosen here**, which is why it takes nothing: what opens is the folder the project
     // is bound to and what this machine last opened a pane with. A road that wanted to say either
     // would be saying it of a frame that was never asked.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-again", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-again", required: &[], refs: &[], strings: &[], binds: false },
     // Pressing what opens the next pane, on the row a frame draws once the program in it has gone.
     //
     // **It is a third place and neither of the other two.** The empty frame's press is `open-start`,
@@ -2137,8 +2137,8 @@ const REGISTRY: &[OpSpec] = &[
     // holding, which is the provider the one before it was on: a road walks this to say that the pane
     // is the reader's to go on working in, and a road that named something else would be walking the
     // list rather than the press.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-next", required: &[], refs: &[], strings: &[], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-models", required: &[], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-next", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-models", required: &[], refs: &[], strings: &["shows"], binds: false },
     // What the row says a press would do, read before anything is pressed. `command` is the
     // provider's own — `/model` on five of the six — and `keeps` is the file this machine writes the
     // change into, or `none` for a provider that changes only the session in front of the reader.
@@ -2149,12 +2149,12 @@ const REGISTRY: &[OpSpec] = &[
     // — which Amenbo refuses at the front, writing no provider's settings at all. A build that
     // stopped saying it would still switch
     // models correctly, and nothing else on the screen would look wrong.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "switch-says", required: &["command"], refs: &[], strings: &["command", "keeps", "shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "switch-says", required: &["command"], refs: &[], strings: &["command", "keeps", "shows"], binds: false },
     // Pressing one of them. The shapes are `pick-model`'s and mean the same three things — a name on
     // the row (`press`), a box to write one in (`write`), and a long row reached through a box that
     // narrows it (`narrow`) — because the row under a pane is drawn from the same answer the row
     // under an agent is.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "switch-model", required: &["name"], refs: &[], strings: &["name", "how", "find", "shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "switch-model", required: &["name"], refs: &[], strings: &["name", "how", "find", "shows"], binds: false },
     // What the row says once the press has been made. `model` is a name where the provider's own
     // command settles it in one line, and `waiting` where it opens a picker instead and the choosing
     // is the person's — which is a thing to say and never a model to claim has moved.
@@ -2167,7 +2167,7 @@ const REGISTRY: &[OpSpec] = &[
     // the six say in words that the model changed and three change a value on a status line and say
     // nothing, so a build that read either would be parsing a provider's screen — the one thing a
     // pane exists not to do.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "answers-on", required: &["model"], refs: &[], strings: &["model", "shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "answers-on", required: &["model"], refs: &[], strings: &["model", "shows"], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to
@@ -2178,7 +2178,7 @@ const REGISTRY: &[OpSpec] = &[
     // earlier. A pane just opened needs none — it is the only one on the page with nothing on it, and
     // the step before this one made it — but a road that comes *back* to a pane it left does, because
     // by then every box on the page has a terminal in it and "the pane" names three of them.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
     // A word written into that same line **through the machine's own input method**, and left with
     // the conversion still open: the characters stand under the mark an emulator draws an unsettled
     // word with, and nothing has accepted them yet.
@@ -2197,7 +2197,7 @@ const REGISTRY: &[OpSpec] = &[
     // what became of it.
     //
     // `shows` is which pane, named the way `type-line` names one. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "write-a-word", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "write-a-word", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
     // The press that gives that word to the program: return, made at the terminal's own line with the
     // word still standing on it.
     //
@@ -2222,7 +2222,7 @@ const REGISTRY: &[OpSpec] = &[
     // answers the next return as part of it rather than as a send.
     //
     // `onto` is which pane, named the way `write-a-word` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "send-a-word", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "send-a-word", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A file dragged in from outside and let go over a pane. It is the file face's `drop-in` aimed at
     // the other half of the screen, and it answers a different question: there the reader chose a
     // folder for it to land in, and here nothing lands anywhere — the file stays where it is and the
@@ -2241,7 +2241,7 @@ const REGISTRY: &[OpSpec] = &[
     // `onto` is which pane, once saying so is the point: a drop lands where the pointer is, and on a
     // page with two panes that is a thing to prove rather than a thing to assume. Left out, it is
     // the page's one pane, which is what every road walked before there was a second one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings", "onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings", "onto"], binds: false },
     // What is on the machine's clipboard put into a pane's input line. It is the drop above made
     // with the keys instead of the hand, and it answers the half the drop cannot: a drop carries
     // files the operator picked up on their own machine, and a paste carries whatever the last copy
@@ -2252,7 +2252,7 @@ const REGISTRY: &[OpSpec] = &[
     // still to send.
     //
     // `onto` is which pane, named the way `drop-in` names one. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "paste", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A **picture** on the clipboard put into a pane, which is not the paste above with different
     // contents: the press differs by machine. macOS and Windows carry the image on the paste event
     // itself, so the ordinary paste key is the whole of it; WebKitGTK carries nothing there, so Linux
@@ -2266,7 +2266,7 @@ const REGISTRY: &[OpSpec] = &[
     // sent, for the reason `paste` above sends nothing.
     //
     // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-image", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "paste-image", required: &[], refs: &[], strings: &["onto"], binds: false },
     // **Several lines** put on the clipboard outside Amenbo and pasted into a pane in one press. It is
     // not `paste` with a longer value in it: what a pane owes a paste of one line is that it lands,
     // and what it owes a paste of several is that they land **together, and unsent**.
@@ -2287,7 +2287,7 @@ const REGISTRY: &[OpSpec] = &[
     // words came from.
     //
     // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-lines", required: &["above", "below"], refs: &[], strings: &["above", "below", "onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "paste-lines", required: &["above", "below"], refs: &[], strings: &["above", "below", "onto"], binds: false },
     // A run of what the pane printed, taken by hand: pressed at the start of one row, let go at the
     // end of another. It is the only way characters are picked out of a terminal — there is no
     // command behind a selection and no control on the screen for it — so a road that means to read
@@ -2300,7 +2300,7 @@ const REGISTRY: &[OpSpec] = &[
     // names it in both.
     //
     // `onto` is which pane, named the way `paste` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "select-in-pane", required: &["from", "to"], refs: &[], strings: &["from", "to", "onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "select-in-pane", required: &["from", "to"], refs: &[], strings: &["from", "to", "onto"], binds: false },
     // The press that loads that selection, and it is not the machine copying what is drawn. The pane
     // takes the press in front of the terminal underneath it and puts a **tidied** string on the
     // clipboard: the space at the end of each row gone, the indentation the whole selection shares
@@ -2314,7 +2314,7 @@ const REGISTRY: &[OpSpec] = &[
     // this press does not touch.
     //
     // `onto` is which pane, named the way `paste` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "copy-selection", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "copy-selection", required: &[], refs: &[], strings: &["onto"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //
@@ -2333,7 +2333,7 @@ const REGISTRY: &[OpSpec] = &[
     // `on` is which pane's line is being read, named by the words a road typed into it. Left out, it
     // is the page's one pane — a road with two says which, the same way it says which one to type
     // into.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
     // The box standing open under a pane, which is what every step below needs and no pane owes. A
     // pane is opened by somebody who is about to work the program in it, so it comes up with the box
     // folded away and its presses going to the terminal; a person who means to write asks for the
@@ -2360,7 +2360,7 @@ const REGISTRY: &[OpSpec] = &[
     // `onto` is which pane, named the way `write-to-pane` names one. Left out, it is the pane the
     // step before opened — which is where a road asks for this, a fresh pane being where the box is
     // most often not there.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-box", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-box", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A line written into the box standing under the pane, and left there. It is **not** `type-line`
     // with the box named: that one types at the terminal, where every character reaches the program
     // as it is pressed, and this is Amenbo's own box drawn under it — what is written there belongs
@@ -2374,7 +2374,7 @@ const REGISTRY: &[OpSpec] = &[
     // lines run together the day that answer changes.
     //
     // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "write-to-pane", required: &["text"], refs: &[], strings: &["text", "onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "write-to-pane", required: &["text"], refs: &[], strings: &["text", "onto"], binds: false },
     // What is standing in that box, **unsent**. It is `in-the-box` one row further down: that one
     // reads the terminal's own input line, where a paste and a handed-over path land, and this reads
     // the box the app draws under it.
@@ -2387,7 +2387,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `on` is which pane's box is being read, named the way `in-the-box`'s is. Left out, it is the
     // page's one pane.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "still-to-send", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "still-to-send", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
     // Which box the keyboard is standing in, read off the caret the box carries. That caret is the
     // keyboard and not a guess at it: a box takes the caret as it takes the keyboard and loses it
     // with it, and nothing is drawn beside the box to say the same thing twice
@@ -2403,7 +2403,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `on` is which pane's box, named the way `still-to-send`'s is; `present: false` is the other
     // half — a box the keyboard has left, which carries no caret.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "keys-in-the-box", required: &[], refs: &[], strings: &["on"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "keys-in-the-box", required: &[], refs: &[], strings: &["on"], binds: false },
     // A **picture** on the clipboard put into that box. It is not `paste-image` with the box named:
     // that one lands in the terminal's own input line, and the two are reached by different presses
     // on Linux. A pane holds out for `Ctrl+Shift+V` there because `Ctrl+V` is `^V` to the program in
@@ -2423,7 +2423,7 @@ const REGISTRY: &[OpSpec] = &[
     // Nothing is sent, for the reason `paste-image` sends nothing.
     //
     // `onto` is which pane's box, named the way `write-to-pane` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-image-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "paste-image-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
     // **Words** on the clipboard put into that same box, which is where a copy made in the pane above
     // is read back. It arrives bare: nothing quotes it, because what was copied is what the person
     // selected rather than a path being handed over, and the two are told apart by which door they
@@ -2438,7 +2438,7 @@ const REGISTRY: &[OpSpec] = &[
     // is another road's question.
     //
     // `onto` is which pane's box, named the way `write-to-pane` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "paste-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
     // What that paste put there, read for its **shape** rather than for its words: where each line
     // begins, and where it ends. It is `still-to-send` one question further in — that one asks
     // whether the words arrived, this one whether what arrived is what a person would have typed.
@@ -2457,7 +2457,7 @@ const REGISTRY: &[OpSpec] = &[
     // above still draws the rows as they were printed for the eye to compare against.
     //
     // `on` is which pane's box, named the way `still-to-send`'s is.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tidied-in-box", required: &["above", "below"], refs: &[], strings: &["above", "below", "on"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "tidied-in-box", required: &["above", "below"], refs: &[], strings: &["above", "below", "on"], binds: false },
     // Sending what is written there, which is the press the whole box exists for.
     //
     // `by` is which of the two presses makes it go — `key` in the box, or `button` beside it —
@@ -2476,7 +2476,7 @@ const REGISTRY: &[OpSpec] = &[
     // what a paste made by hand is allowed on the same terms.
     //
     // `onto` is which pane, named the way `write-to-pane` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "send-written", required: &[], refs: &[], strings: &["by", "onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "send-written", required: &[], refs: &[], strings: &["by", "onto"], binds: false },
     // A press made in that box **while nothing is written in it**, which the box hands straight on to
     // the program instead of answering itself.
     //
@@ -2502,7 +2502,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // The one press a box hands on with something written in it is `press-out` below, which is the
     // hole deliberately left in this rule rather than an exception to it.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-through", required: &["key"], refs: &[], strings: &["key", "onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "press-through", required: &["key"], refs: &[], strings: &["key", "onto"], binds: false },
     // The one press a box with something **written** in it hands on: the up arrow, made on the first
     // line. It moves the keyboard to the terminal and goes there itself, so a menu the program put up
     // is walked by the one press rather than by a press to leave and a press to move.
@@ -2522,7 +2522,7 @@ const REGISTRY: &[OpSpec] = &[
     // to put the caret.
     //
     // `onto` is which pane, named the way `press-through` names one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-out", required: &[], refs: &[], strings: &["onto"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "press-out", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output
@@ -2533,7 +2533,7 @@ const REGISTRY: &[OpSpec] = &[
     // `target` is there because a road cannot spell a number the run will mint. Where a command needs
     // a record's own ref, it carries `<ref>` and names the record beside it — the operator puts the
     // ref in, reading it off the same pane a step above had it on.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "run", required: &["command"], refs: &["target"], strings: &["command"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "run", required: &["command"], refs: &["target"], strings: &["command"], binds: false },
     // Pressing a ref where a program drew it in the pane. The record is named rather than spelled out,
     // for the reason every `target` is: what is on the screen is the run's own numbering.
     //
@@ -2544,7 +2544,7 @@ const REGISTRY: &[OpSpec] = &[
     // pressed refs sitting whole on one row would leave that joining unwalked, and nothing else
     // reaches it — a pane is narrow, a ref near the end of a line is ordinary, and the miss it would
     // hide looks exactly like characters that were never a link.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-ref", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "press-ref", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // Pressing an address where a program drew it in the pane. `url` is spelled out rather than named,
     // which is what parts it from `press-ref` above: a record's ref is the run's own numbering and an
     // address is the road's own words.
@@ -2555,7 +2555,7 @@ const REGISTRY: &[OpSpec] = &[
     // the two ways a pane finds an address at all — one read back off the drawn screen, one carried
     // beside the characters — and neither reaches the other's half, the same way `press-ref`'s pair
     // does not.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-url", required: &["url"], refs: &[], strings: &["url", "shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "press-url", required: &["url"], refs: &[], strings: &["url", "shows"], binds: false },
     // What that press is for, and the one thing on this road that is not on Amenbo's screen: the
     // machine's own browser, standing at the address. It is a `Review` further out than the rest, for
     // the reason `repo mcp-in-app` is — every reading behind an OCR verdict is taken off a shot of the
@@ -2565,7 +2565,7 @@ const REGISTRY: &[OpSpec] = &[
     // What is read there is the address and not the page. A machine with no network still shows where
     // it was sent, and a step that waited for a page to arrive would be a step about somebody else's
     // uptime.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opened-in-browser", required: &["url"], refs: &[], strings: &["url"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "opened-in-browser", required: &["url"], refs: &[], strings: &["url"], binds: false },
     // Something set running in the pane and left running, which is the one thing this face has no
     // other way to reach. The line `type-line` types is a command no shell knows, on purpose, so what
     // it puts on the screen arrives once and is over — and a pane that printed once has already gone
@@ -2582,7 +2582,7 @@ const REGISTRY: &[OpSpec] = &[
     // — ending it, typing at it — so a road that cut the output short by hand would be pressing on the
     // very pane it is about, and what it read afterwards would be a lamp gone out because the road put
     // it out. Left alone, the same pane crosses from lit to out untouched.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-printing", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "keep-printing", required: &["text"], refs: &[], strings: &["text"], binds: false },
     // A pane made to print more than it keeps, from a job left running behind the prompt.
     //
     // What a pane hands on when it is drawn again is the tail of what its terminal wrote, and that
@@ -2601,17 +2601,17 @@ const REGISTRY: &[OpSpec] = &[
     // `text` is the line printed when it is over, which is how the road waits: what the steps after
     // this read is a pane that has stopped, and the amount is more than a person would sit through
     // guessing at.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "print-past-what-is-kept", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "print-past-what-is-kept", required: &["text"], refs: &[], strings: &["text"], binds: false },
     // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
     // one with a direction, because they are pressed in different windows: the way out is on the
     // face, and the way back is in the window it made.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "split-out", required: &[], refs: &[], strings: &[], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "fold-back", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "split-out", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "fold-back", required: &[], refs: &[], strings: &[], binds: false },
     // What the pane is showing. `shows` is words a road put there itself with `type-line`, so the
     // reading finds them on the pane drawing that session and nowhere else — which is the whole of
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // What the band under a pane says the session in it has filed — the running tally, which is a
     // different question from the row on a record and is answered in a different place. The row says
     // where one record came from and is read afterwards, off the record; this says how much this
@@ -2624,15 +2624,15 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A screen road alone. The tally is drawn under a pane and lives as long as the window does; a
     // terminal keeps none, and what a reader asks there is `task list`.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "made", required: &["tasks", "decisions"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "made", required: &["tasks", "decisions"], refs: &[], strings: &["shows"], binds: false },
     // The count pressed, which is what puts the records themselves on the screen: the band carries a
     // number because that is what a reader watching a session wants, and the refs behind it are for
     // the reader who wants one of them open.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-made", required: &[], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-made", required: &[], refs: &[], strings: &["shows"], binds: false },
     // And one of those refs pressed. The record is named rather than spelled out, for the reason every
     // `target` is — the run mints the number — and what it opens is the screen a ref drawn in the pane
     // opens, which is what the step after it reads.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-made", required: &["target"], refs: &["target"], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "press-made", required: &["target"], refs: &["target"], strings: &["shows"], binds: false },
     // Which pane of the page is the one being worked in, named the way every other pane step names
     // one. Two things are read at once because they are one fact to a reader: the frame drawn picked
     // out from the others, and the keyboard being in that pane rather than in the one they came from.
@@ -2640,7 +2640,7 @@ const REGISTRY: &[OpSpec] = &[
     // The second half is read off the cursor and not by typing. A path handed to a pane is standing
     // in its input line unsent, so a character typed to find out where the keyboard is would be a
     // character added to the path — the road would be editing the very thing the step before it read.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "worked-in", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "worked-in", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // What the pane says once the program in it has stopped — and, for the few endings Amenbo had a
     // hand in, which of the reader's own files the ending is about.
     //
@@ -2661,11 +2661,11 @@ const REGISTRY: &[OpSpec] = &[
     // there (`app/src-tauri/src/pty.rs`). `no-way-back` is that reading, and it is the
     // sentence's own rather than a word a road wrote, so what is confirmed is the line saying it.
     // Asked for, it is the whole of the reading and `names` is what is *also* true of the line.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "ended", required: &["names"], refs: &[], strings: &["names", "shows", "why"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "ended", required: &["names"], refs: &[], strings: &["names", "shows", "why"], binds: false },
     // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "end-pane", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "end-pane", required: &[], refs: &[], strings: &[], binds: false },
     // Getting rid of the place itself, which is the other control and the other outcome: the terminal
     // in it ends, the frame goes, the page closes up behind it, and the next run does not bring it
     // back. **It is the one move on this face nothing undoes**, which is why it asks before it is
@@ -2680,7 +2680,7 @@ const REGISTRY: &[OpSpec] = &[
     // road to choose between and no task for it to name. What tied a pane to a task was a key the
     // world could rewrite behind the pane, and a question naming what was about to be lost named as
     // often work somebody had already finished elsewhere.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "remove-pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
     // `text` is what was said in it. **The layer has one word left and it is `name`**;
@@ -2693,7 +2693,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `shows` is which pane it is said in, named the way `press-pane` and `paste` name one: by the
     // words a road typed into it earlier. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text", "shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text", "shows"], binds: false },
     // A name the person gives a pane, typed on that same row. It and the session's own `talk name` are
     // the only two things that name a frame, and this is the one that wins: the last word on a frame
     // is the person's, so a name typed here stands over whatever the session called itself
@@ -2710,13 +2710,13 @@ const REGISTRY: &[OpSpec] = &[
     // There is no way to spell an empty name, and that is the door being closed rather than an
     // omission: an empty box takes nothing, so a road that asked for one would be asking for a step
     // that does nothing and reads as though it had.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "name-pane", required: &["name"], refs: &[], strings: &["name", "shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "name-pane", required: &["name"], refs: &[], strings: &["name", "shows"], binds: false },
     // And what the pane's label carries afterwards. This is the whole of what the surface layer is
     // for: a word said in a terminal that nothing outside it can find out, arriving where a person
     // reads it. The words are the agent's own, so a reading finds them on the label and nowhere in
     // the interface around it. It reads a name a person typed (`name-pane`) the same way and for the
     // same reason — those words are the operator's own too, and are drawn on the row and nowhere else.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // The row's own answer to being unreadable: a pointer held on it drops a panel under it carrying
     // the whole of what the row holds, wrapped, with nothing cut out (`app/src/talk/nameplate.ts`).
     //
@@ -2727,11 +2727,11 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A screen road alone, both of them. What the row cuts and what a hover gives back are things a
     // box on a screen does; the binary is handed none of it.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "hold-label", required: &[], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "hold-label", required: &[], refs: &[], strings: &["shows"], binds: false },
     // And what that panel carries. It is read off the shot rather than off the tree, the way almost
     // everything is: the panel is drawn for an eye and marked as the row said twice, so the tree does
     // not carry it at all.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label-in-full", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "label-in-full", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Which project's panes the face is drawing. The tabs down the edge of the face are not a
     // grouping laid over a list of panes: a pane belongs to a project and can work in no folder
     // outside it, so pressing a project is the division itself being moved. What is beside the panes
@@ -2743,7 +2743,7 @@ const REGISTRY: &[OpSpec] = &[
     // opens on is the run's business — whatever the ledger had selected, or the first project where
     // it had none — so a road that named a project without pressing for it would be reading a screen
     // it had not put itself on.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "go-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // What one of those tabs is drawn with. A project wears the image it was registered for, or —
     // registered with none, which is nearly every project — its colour with the first letter of its
     // name on it. `present` says which of the two, the way `project icon` does on the settings:
@@ -2758,7 +2758,7 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone, for `project icon`'s reason — `project update` is the terminal's whole
     // door onto these fields and there is nowhere on it to hand over an image — and one more: a
     // terminal has no face to draw tabs down.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tab-icon", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "tab-icon", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Opening a pane. A pane belongs to a project and works in a folder that project is bound to, so
     // where it is bound to one nothing is asked at all. `from` is which of the two controls is
     // pressed, and they are not the same place: `face` is the empty frame on a page with room in it,
@@ -2769,7 +2769,7 @@ const REGISTRY: &[OpSpec] = &[
     // opens nothing: what comes up where the pane would have been is the question of which of them it
     // works in, and `pick-folder` answers it. A road that walked that path without saying so would
     // tell an operator nothing was asked while the question stood on the screen in front of them.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-pane", required: &["from"], refs: &[], strings: &["from"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-pane", required: &["from"], refs: &[], strings: &["from"], binds: false },
     // Which of this project's folders the pane about to be opened works in. It is only ever reached
     // from an `open-pane` that said `asks: true`: bound to one folder the face does not ask, and
     // bound to none it has no list to offer — that press goes to a picker, which is `open-folder`.
@@ -2780,7 +2780,7 @@ const REGISTRY: &[OpSpec] = &[
     // writes down is what to call the one it means. What the question *offers* is the whole of the
     // goal — this project's folders, and no way to anywhere outside them — so the list is part of
     // what the step puts in front of the operator rather than something read in a step of its own.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "pick-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // Walking away from that question without answering it. A frame is made when the question is
     // answered and not when it is asked, so this is the one move that reaches the state after a
     // question nobody answered: what a face draws when somebody changed their mind. It is an op of
@@ -2790,7 +2790,7 @@ const REGISTRY: &[OpSpec] = &[
     // *How* it is left is the driver's to say and not the road's. The question comes down on a press
     // anywhere else on the face, and which of those places is nearest is the run machine's business;
     // a road that named one would be walking that control's own road instead of this one.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "leave-question", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "leave-question", required: &[], refs: &[], strings: &[], binds: false },
     // Whether that question is standing, read by a folder it offers. `dir` is the road's own name for
     // one of the project's folders, the way `open-folder`'s is — so what a reading finds is a word the
     // road put in the world itself, and not one of the interface's, which is what lets both halves be
@@ -2799,7 +2799,7 @@ const REGISTRY: &[OpSpec] = &[
     // The absent half is what the walking-away is proved by, and it says more than "the question is
     // gone": the question *is* the box, drawn where a pane would be, so a screen with neither on it is
     // a question that left nothing behind.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "asking-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "asking-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // The way in saying it cannot take the folder that was picked, read by the store that folder
     // belongs to. Where a terminal meets a claimed folder as a refusal on the command it typed, the
     // face has no command to be turned away from — so what stands in for it is the way in answering
@@ -2810,7 +2810,7 @@ const REGISTRY: &[OpSpec] = &[
     // language the machine is set to — and it is the one word a reader turned away can act on. A face
     // that went quiet instead, or answered without saying whose folder this is, is the same verdict:
     // a reader left holding a folder nothing of theirs reaches.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "turned-away", required: &["store"], refs: &[], strings: &["store"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "turned-away", required: &["store"], refs: &[], strings: &["store"], binds: false },
     // What the empty frame will open a pane with, read on the row above the press that opens one.
     // The row is every agent this machine can start with the plain shell beside them, and exactly one
     // of them is on. A road reads it to say that a choice made once is still the answer afterwards,
@@ -2836,7 +2836,7 @@ const REGISTRY: &[OpSpec] = &[
     // is no row. So a road that asks for it stands the machine up first (`can-start`), and reads this
     // before anything on the frame has been pressed — a choice made anywhere in the run ends the
     // state for good, this person's answer being kept and outliving the press that made it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
     // The line the frame writes out under the model row: what the press would run, before it is
     // pressed.
     //
@@ -2851,7 +2851,7 @@ const REGISTRY: &[OpSpec] = &[
     // sees the line before they press it. A build that drew the choice on the row and left the line
     // alone would keep that promise falsely — the row would say one thing and the pane would open on
     // another, and nothing on the screen would look wrong.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "starts-on", required: &["model"], refs: &[], strings: &["model"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "starts-on", required: &["model"], refs: &[], strings: &["model"], binds: false },
     // The first thing on the model row, which is the agent starting on whatever its own settings
     // already say — and what that comes to, where the agent said so.
     //
@@ -2867,7 +2867,7 @@ const REGISTRY: &[OpSpec] = &[
     // that named a model it was never told of and a build that named the wrong one are the same
     // fault from either end, and a road with only the naming half would pass on a build that put a
     // name on every provider on the row.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "stands-for", required: &["model"], refs: &[], strings: &["model"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "stands-for", required: &["model"], refs: &[], strings: &["model"], binds: false },
     // A registered command as the frame draws it: the `name` on the row, and the `line` written out
     // beside it.
     //
@@ -2876,7 +2876,7 @@ const REGISTRY: &[OpSpec] = &[
     // makes is that a reader can see what a press would start before they press it. A frame that drew
     // the name alone would keep that promise for nobody, and one that drew a line it had tidied up
     // would keep it falsely.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "registered", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "registered", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
     // The opening instruction, arrived in a pane Amenbo did not compose the launch line of, and sent
     // rather than left waiting.
     //
@@ -2905,7 +2905,7 @@ const REGISTRY: &[OpSpec] = &[
     // it registers a command that swallows what it is shown but still hands back any line it is
     // given, so the marked line appearing at all is a newline that went in blind. Where such a build
     // would have answered the first thing the program asked, this reading is the whole of the guard.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
     // Whether a question the pane is holding was answered for the reader — a newline into a program
     // that is waiting on one, which picks whatever the program has first.
     //
@@ -2927,7 +2927,7 @@ const REGISTRY: &[OpSpec] = &[
     // it says nothing back either, so the absent half alone would be green on a build where the
     // program never started — what makes it a guard is the present half after it, where a person
     // sends something of their own and the same mark comes up.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "answered", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "answered", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty
@@ -2939,11 +2939,11 @@ const REGISTRY: &[OpSpec] = &[
     // is all a road needs while the page has room. It is worth saying exactly where the panes fill
     // the count: room the page has not got must not be offered, and "at most one" cannot tell a full
     // page from a page still offering.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
     // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which
     // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
     // Which way the two panes of a two-pane page sit: `across` side by side, `down` one above the
     // other. It is asked at two and at no other count — everywhere else the rows are already spent
     // and there is nothing left to arrange (`app/src/talk/layout.ts`) — so a road walks it with two
@@ -2954,28 +2954,28 @@ const REGISTRY: &[OpSpec] = &[
     // thing worth defending. A new count re-pages every frame this device has; a new orientation
     // moves no pane anywhere and turns no page. A road that said both in one step would be asking for
     // a re-cut it did not want, and could not tell which of the two had done what came out.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-orient", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-orient", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
     // The panes put in an order the person asked for. It is four ops and not one,
     // because what is being defended is that they are four separate moments: the modal is opened,
     // cards are carried about inside it, and then the arrangement is either taken or thrown away. A
     // road that said all of it in one step could not tell a build that reordered on the drag from one
     // that reordered on the press — and the whole promise here is that a pane a person is reading
     // does not move until they say so.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "reorder-panes", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "reorder-panes", required: &[], refs: &[], strings: &[], binds: false },
     // One card carried onto another. Both are named by what their pane is called, because that is
     // what the operator can see: the cards are the panes, and a road that said "the second one" would
     // be naming a position that the previous step of the same road has just changed.
     //
     // `side` is which half of the card it was let go over — `before` or `after` — since that is the
     // whole of what decides where it lands. There is no empty box to aim at anywhere in the modal.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "carry-pane", required: &["pane", "onto", "side"], refs: &[], strings: &["pane", "onto", "side"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "carry-pane", required: &["pane", "onto", "side"], refs: &[], strings: &["pane", "onto", "side"], binds: false },
     // The press that makes the order the real one. Nothing about the arrangement moves before it.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-order", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "keep-order", required: &[], refs: &[], strings: &[], binds: false },
     // And leaving without it. `how` is which way out was taken — `button`, `escape` or `backdrop` —
     // because the three arrive by different roads inside the app and a road that walked one proves a
     // third of the gate. What every one of them owes is the same: the panes are where they were,
     // however much was dragged about in there.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-order", required: &["how"], refs: &[], strings: &["how"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drop-order", required: &["how"], refs: &[], strings: &["how"], binds: false },
     // And the shape the page came out in, read off the panes themselves. It is the whole of what the
     // press is for: `down` is asked for so that each pane keeps the window's whole width, and a build
     // that lit the control without re-laying the grid under it would draw exactly the screen the
@@ -2984,11 +2984,11 @@ const REGISTRY: &[OpSpec] = &[
     // Both shapes are walked, never the asked-for one alone. A page read only after the press has
     // nothing to say about what it was before, so a face stuck in one arrangement — the one a road
     // happened to ask for last — would come out green from end to end.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "panes-sit", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "panes-sit", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
     // Which page is being shown, counted from 1. Paging is one of the two ways to a pane that is not
     // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
     // a page is drawn rather than held, and the panes it took away are still running behind it.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-page", required: &["page"], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "go-page", required: &["page"], refs: &[], strings: &[], binds: false },
     // The columns beside the panes, put away and brought back. `side` says which of the two: the rail
     // that lists the panes, and the file face on the other edge.
     //
@@ -3002,8 +3002,8 @@ const REGISTRY: &[OpSpec] = &[
     // They are two ops rather than one carrying a direction, for the reason `split-out` and
     // `fold-back` are two: the press that puts a column away and the press that brings it back are
     // in different places, and a road that named the wrong one would be pressing something else.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "hide-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "hide-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "show-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
     // A column's edge, dragged. `toward` is which way — `wider` takes room from the panes,
     // `narrower` gives it back — and both halves are walked, because a width that only ever grows is
     // half a control and the half a reader is left with is the one that took their pane's room.
@@ -3028,7 +3028,7 @@ const REGISTRY: &[OpSpec] = &[
     // reaches it the way a button is reached — the screen tool drags between two points, and working
     // those out of the screen is an operator's. So the instruction says where to put the pointer and
     // what to watch follow it, and the shot after it is what an eye closes.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
     // A press on a pane, meaning nothing but the press — a person going to that pane and to no other.
     //
     // **Three roads read it, and the first two read the same fact.** It is what puts the reading
@@ -3048,17 +3048,17 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `shows` is which pane, named the way `type-line` and `paste` name one: by the words a road
     // typed into it earlier. Left out, it is the page's one pane.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-pane", required: &[], refs: &[], strings: &["shows"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "press-pane", required: &[], refs: &[], strings: &["shows"], binds: false },
     // Whether a column is beside the panes at all. `present: false` is the half the folding is proved
     // by, and it is the half worth having: a column that went away is what gives the panes the width,
     // and a face that drew it anyway would look exactly like one that had honoured the press until
     // somebody measured. It is not required, the way it is on no assert this face has: absence is
     // said out loud and presence is what a step means when it says nothing.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "side", required: &["side"], refs: &[], strings: &["side"], binds: false },
     // And how wide it is, after a drag. `wider` says which way it should have gone, against where it
     // stood on the shot before — the two pictures side by side are the reading, which is why this one
     // is left to an eye rather than to a search for words.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-width", required: &["side", "wider"], refs: &[], strings: &["side"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "side-width", required: &["side", "wider"], refs: &[], strings: &["side"], binds: false },
     // And how wide it stands, on one picture. The neighbour above answers against the shot before it,
     // which is an answer a road loses the moment the whole face changes underneath: crossing to
     // another project redraws every column on it, and "wider than it was" is then about two faces
@@ -3071,7 +3071,7 @@ const REGISTRY: &[OpSpec] = &[
     // at a picture and a person at the screen has no ruler. Which is also why `broad` is reached by
     // `drag-side toward: broad` and not by the finger's width the other direction moves: a difference
     // an eye is to swear to has to be a difference an eye can see.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-span", required: &["side", "span"], refs: &[], strings: &["side", "span"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "side-span", required: &["side", "span"], refs: &[], strings: &["side", "span"], binds: false },
     // And how much of the panes is left beside the reading column at its wide width, which is the one
     // question the neighbour above cannot answer for that width. `span` divides the width between the
     // column and the panes, and the wide width the column ships with takes about half of it — so a
@@ -3089,7 +3089,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `side` is here for the shape of the family and is `files`: the rail has one width and is never
     // drawn over anything, so there is nothing for this reading to be about on that side.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-cover", required: &["side", "cover"], refs: &[], strings: &["side", "cover"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "side-cover", required: &["side", "cover"], refs: &[], strings: &["side", "cover"], binds: false },
     // Which face the lamp on a pane's label is showing. It is the one reading that says a pane is
     // *alive* rather than drawn: a terminal that ended leaves its last output where it was, so words
     // on a pane outlive the process that wrote them and a road reading only those cannot tell a
@@ -3101,7 +3101,7 @@ const REGISTRY: &[OpSpec] = &[
     // **Neither face moves**, so both are a picture and both can be shot. What the lamp follows is
     // the stream and nothing is read into it: a pane printing nothing may be building, thinking or
     // waiting on a person, and no face here tells those apart.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
     // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
@@ -3578,7 +3578,7 @@ const REGISTRY: &[OpSpec] = &[
     // `files reading`.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste-into-editor", required: &[], refs: &[], strings: &[], binds: false },
     // The same box filled from a **picture** on the clipboard rather than from words, which is a
-    // second op for the reason `terminal paste-image` is one beside `terminal paste`: what the
+    // second op for the reason `workspace paste-image` is one beside `workspace paste`: what the
     // clipboard is holding decides what lands. Words land as themselves; a picture is written down
     // first and what lands is where it went, so a road that could not tell the two apart would go
     // green on the words while nothing was ever written.
@@ -3811,7 +3811,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // It is its own op and not a fourth `door` for the reason the three above are one: those three
     // end off Amenbo's window and stop at the hand-over, and this one ends **on** it, in the pane,
-    // where a shot can settle what happened. `terminal in-the-box` is what reads it.
+    // where a shot can settle what happened. `workspace in-the-box` is what reads it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-to-pane", required: &[], refs: &[], strings: &[], binds: false },
     // The item that puts the row on the machine's own clipboard — the file itself and its plain path
     // together. It takes no args for the reason the one above it does: what is copied is the row the
@@ -4063,7 +4063,7 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // launched with — so the answer is fixed before there is a screen to press anything on. What it
     // arranges is the machine and never the app: programs in a directory of the run's own, handed to
     // the launch and to nothing else.
-    (Domain::Terminal, "can-start"),
+    (Domain::Workspace, "can-start"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).

@@ -153,10 +153,10 @@ export function FileMenu({
   onTrash: () => void;
   /**
    * Hand the file to the pane the reader is working in, as the whole path it is at
-   * (`../shell/TerminalFace`).
+   * (`../shell/WorkspaceFace`).
    *
    * **Absent where there is no pane to hand it to**, and then the item is not drawn: the panel is
-   * open beside a terminal face with nothing running in it as readily as beside one with four, and
+   * open beside a workspace with nothing running in it as readily as beside one with four, and
    * an item that answers nothing is worse than an item that is not there.
    */
   onHandOver?: (wholes: string[]) => void;
@@ -232,7 +232,7 @@ export function FileMenu({
           {/* The one door that goes the other way: everything beside it hands the row out to the
               machine, and this puts the path it is at in front of what is running in the pane —
               which is the reverse of a path drawn in a pane opening the file here
-              (`../shell/TerminalFace`). It stands under the copy because the two are about the same
+              (`../shell/WorkspaceFace`). It stands under the copy because the two are about the same
               path, and under rather than over it because this one is gone wherever there is no pane
               to hand anything to — the copy above would otherwise move up the menu depending on
               what else is open. Of the doors here it is the one whose answer stays inside the app,
@@ -240,7 +240,7 @@ export function FileMenu({
               no more to name than a file does (`AMB-D-820`).
 
               Several rows go over together, quoted one by one with a space between them — the same
-              line a drop of several files puts in a pane (`../shell/TerminalFace`, `AMB-D-801`).
+              line a drop of several files puts in a pane (`../shell/WorkspaceFace`, `AMB-D-801`).
               What they are called then says no kind: the rows a reader gathered can be a folder and
               four files, and the panel is not told which of them are which (`Tree`). */}
           {onHandOver !== undefined && (

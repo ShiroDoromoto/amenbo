@@ -114,10 +114,10 @@ export function TopBar({
 /**
  * The two faces of the window, and which one is up (`AMB-D-753`).
  *
- * It stays here once the terminal has been split out into a window of its own, where pressing
- * "terminal" raises that window instead of changing this one — so the control says the same thing
- * in both shapes, and there is one place to look for the terminal however the app is arranged.
- * Which is why the terminal segment is not marked as the current one there: the face this window is
+ * It stays here once the workspace has been split out into a window of its own, where pressing
+ * "workspace" raises that window instead of changing this one — so the control says the same thing
+ * in both shapes, and there is one place to look for the workspace however the app is arranged.
+ * Which is why the workspace segment is not marked as the current one there: the face this window is
  * showing is the ledger, and it does not stop being so because the other window came forward.
  */
 function FaceSwitch({ face, onSelect }: { face: Face; onSelect: (face: Face) => void }) {
@@ -132,12 +132,12 @@ function FaceSwitch({ face, onSelect }: { face: Face; onSelect: (face: Face) => 
         {t("face.tasks")}
       </button>
       <button
-        className={`topbar__face${face === "terminal" ? " topbar__face--on" : ""}`}
+        className={`topbar__face${face === "workspace" ? " topbar__face--on" : ""}`}
         role="tab"
-        aria-selected={face === "terminal"}
-        onClick={() => onSelect("terminal")}
+        aria-selected={face === "workspace"}
+        onClick={() => onSelect("workspace")}
       >
-        {t("face.terminal")}
+        {t("face.workspace")}
       </button>
     </div>
   );

@@ -61,7 +61,7 @@ given:
   # row is half of what is read here. It also keeps the panes standing up to the moment the run ends,
   # which is the screen this road means to come back to.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 4
@@ -70,15 +70,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # panes this road opens have to open in the folder it named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -87,24 +87,24 @@ steps_gui:
   # Named rather than taken by position, because this road is about one provider and not about
   # wherever it sits on the row: its launch line carries a model on the way back.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Gemini CLI
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-model
     with:
       name: scenario-model-02
       how: press
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO arg scenario-model-02
@@ -113,13 +113,13 @@ steps_gui:
   # Two to a page, which is what makes a second place to open in. One pane is already standing, so
   # there is exactly one way in on the page and the presses below are unambiguous.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Gemini CLI
@@ -128,18 +128,18 @@ steps_gui:
   # kept against the agent is this one, so a build that read the agent's answer on the way back would
   # bring both panes up on it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-model
     with:
       name: scenario-model-03
       how: press
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO arg scenario-model-03
@@ -153,13 +153,13 @@ steps_gui:
   # Where a fresh launch opens is not the road's to know, so it presses for the face and the project
   # it reads rather than reading whichever the app came up on.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -168,7 +168,7 @@ steps_gui:
   # offering a way in would be a page one of the panes did not come back to, and the readings below
   # would be about a box with nothing in it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 2
@@ -179,13 +179,13 @@ steps_gui:
   # agent was the other name, so a pane brought back on the agent's answer would be printing that one
   # instead and this line would find no pane at all.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO arg scenario-model-02
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO arg scenario-model-03
@@ -194,14 +194,14 @@ steps_gui:
   # fault it is watching for is the same one: a row that took its name from the agent would say the
   # second model under both panes.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       shows: SCENARIO arg scenario-model-02
       model: scenario-model-02
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       shows: SCENARIO arg scenario-model-03

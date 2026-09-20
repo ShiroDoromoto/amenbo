@@ -96,16 +96,16 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face came up on is the run's business, so the road puts itself on one before it
   # sets anything. This is the project the reader is working in, and the one the run has to come back
   # on.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
@@ -114,7 +114,7 @@ steps_gui:
   # here: it is not what a project nobody has answered for is drawn at, so a split that was forgotten
   # and a split that was kept draw different screens.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -122,7 +122,7 @@ steps_gui:
   # Nothing is open in this project, so the face has one empty frame on it. The folder is the
   # project's own and it is the only one, which is why this press is a press and nothing else.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -131,17 +131,17 @@ steps_gui:
   # its own to draw, and a line typed at one is something to answer rather than something left where
   # it was put.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal of the run before
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal of the run before
@@ -150,13 +150,13 @@ steps_gui:
   # back. It is given to the frame rather than to what is running in it, which is exactly why it can
   # outlive a run at all.
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the place of the run before
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the place of the run before
@@ -164,7 +164,7 @@ steps_gui:
   # The page as the reader leaves it: one pane, with the room the split left for a second one drawn
   # as the way in beside it. It is the picture the reading after the run is taken against.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
@@ -180,16 +180,16 @@ steps_gui:
   # Where a fresh launch opens is not the road's to know, so it presses for the face it reads rather
   # than reading whichever one the app came up on.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The place is standing, and the way in is beside it rather than in its stead. Two things are read
   # at once here: that the run brought the place back at all, and that the page is still cut at two —
   # at one, this same place would fill the page and no empty frame would be drawn anywhere.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
@@ -199,13 +199,13 @@ steps_gui:
   # runs in it is a press. The shell opens in the pane already standing, which is the one that came
   # back.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # And the row above it is the reader's own word from the run before. A face that stood a fresh box
   # up here would carry no name at all.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the place of the run before
@@ -215,13 +215,13 @@ steps_gui:
   # back on and which project it belongs to — and the other folder holds one too, so the wrong answer
   # is a wrong sentence rather than silence.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: cat where.txt
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO this terminal is at the waterside

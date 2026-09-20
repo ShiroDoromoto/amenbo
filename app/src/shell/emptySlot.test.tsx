@@ -181,7 +181,7 @@ afterEach(() => {
 });
 
 /** Draw it. Whether there is an empty frame on this page at all is the face's decision, not this
- *  component's (`./TerminalFace`). */
+ *  component's (`./WorkspaceFace`). */
 async function draw(folder: string | null): Promise<void> {
   await act(async () => {
     root.render(

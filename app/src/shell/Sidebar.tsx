@@ -325,7 +325,7 @@ export function Sidebar({
         )}
       </div>
       {/* The way between the two widths, at the foot of the column and outside what scrolls — the same
-          control the terminal face's tabs carry, in the same place and with the same words
+          control the workspace's tabs carry, in the same place and with the same words
           (`AMB-D-848`, `./ProjectTabs`). It is in the column rather than in the bar over the window
           because it is about this column alone: a control up there had to say which of the two faces
           it moved before a reader could use it, and it never did. */}
@@ -340,7 +340,7 @@ export function Sidebar({
  * A project's mark in the rail: the image it was given, or the colour a person gave it with the first
  * character of its name written on it (`./projectMark`).
  *
- * It is the terminal face's tab mark, at the same 24px (`AMB-D-848`). Before this the rail drew an
+ * It is the workspace's tab mark, at the same 24px (`AMB-D-848`). Before this the rail drew an
  * 8px square of colour and no letter, so the same project arrived one way on one face and another on
  * the other, and the image a person had registered was shown on neither.
  *

@@ -87,7 +87,7 @@ vi.mock("../core/ipc", async (importOriginal) => {
   };
 });
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -96,7 +96,7 @@ let root: Root;
 
 async function mount() {
   await act(async () => {
-    root.render(createElement(TerminalFace, {
+    root.render(createElement(WorkspaceFace, {
       onWindow: () => {}, note: null,
     }));
     await new Promise((r) => setTimeout(r, 0));
@@ -115,7 +115,7 @@ async function focusPane(frame: string) {
 /** Go to a page by its digit — the one control that moves what is drawn without moving which pane is
  *  being worked in, which is the whole of how the focused pane comes to be off the screen. */
 async function goPage(n: number) {
-  const digit = [...container.querySelectorAll<HTMLElement>(".termface__page")]
+  const digit = [...container.querySelectorAll<HTMLElement>(".workspace__page")]
     .find((one) => one.textContent?.startsWith(String(n)));
   await act(async () => {
     digit?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -123,7 +123,7 @@ async function goPage(n: number) {
   });
 }
 
-const shownPage = () => container.querySelector(".termface__page--on")?.textContent ?? null;
+const shownPage = () => container.querySelector(".workspace__page--on")?.textContent ?? null;
 /** Which pane is saying a path just landed in it, or none. */
 const landedPane = () =>
   container.querySelector(".slot--landed")?.getAttribute("data-hand") ?? null;

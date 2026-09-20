@@ -55,7 +55,7 @@ vi.mock("../core/mutations", async (original) => ({
     Promise.resolve((hoisted.bound.get(projectId) ?? []).map(folder)),
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,7 +64,7 @@ let root: Root;
 
 const draw = (openIn: { project: number; dir: string; nth: number } | null) =>
   act(async () => {
-    root.render(createElement(TerminalFace, {
+    root.render(createElement(WorkspaceFace, {
       onWindow: () => {}, note: null, openIn,
     }));
   });

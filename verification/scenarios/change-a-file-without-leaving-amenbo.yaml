@@ -36,7 +36,7 @@
 id: change-a-file-without-leaving-amenbo
 title: A file in the project's folder is changed and kept from the panel, and opening it again shows what is really in it
 description: >
-  Open the terminal face on a project whose folder holds a file of plain text, unfold that folder's
+  Open the workspace on a project whose folder holds a file of plain text, unfold that folder's
   section and open the file. Type a line onto the end of what is drawn and keep it. Then leave the
   file and open it again — which sends the app back to the disk — and read both the line that was
   typed and the line that was already there, because saving writes the whole file back and not only
@@ -69,13 +69,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

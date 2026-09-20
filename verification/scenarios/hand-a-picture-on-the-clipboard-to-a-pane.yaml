@@ -40,7 +40,7 @@
 id: hand-a-picture-on-the-clipboard-to-a-pane
 title: A picture on the clipboard reaches a pane as a path, written down on the way in
 description: >
-  Open the terminal face on a project's folder and get a shell running in a pane. With nothing on
+  Open the workspace on a project's folder and get a shell running in a pane. With nothing on
   the line yet, copy a picture outside Amenbo — the image itself, out of whatever shows pictures on
   this machine — and paste it into the pane. A quoted path appears there, naming a file the paste
   wrote, and the line is left standing for the person to send.
@@ -72,20 +72,20 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # A shell, because what this road is about is a pane's input line and an empty frame has none.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The line before anything is put on it. Both words the reading below rests on are absent here, so
   # finding them afterwards is the paste and nothing else.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: "pasted-"
@@ -98,20 +98,20 @@ steps_gui:
       path: scenario-icon.png
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste-image
 
   # What the paste wrote, named the way the build names one. A picture that arrived as words, or as
   # nothing at all, has no such name on the line.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: "pasted-"
 
   # And the shape it arrived in: the extension the type it was handed decides.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: ".png"
@@ -126,7 +126,7 @@ steps_gui:
   # answers for it either way. Written the other way round, `.png'` folds to `png` and goes green on
   # a line carrying no quote at all, which is what this step used to be.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: "'/"

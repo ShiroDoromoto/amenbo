@@ -39,7 +39,7 @@
 id: open-the-app-again-on-the-way-you-set-two-panes-to-sit
 title: A run of the app keeps the way a reader set two panes to sit, and the next run lays its panes out that way
 description: >
-  Open the terminal face, choose the folder it runs in, and get the pane down to a plain shell. Cut
+  Open the workspace, choose the folder it runs in, and get the pane down to a plain shell. Cut
   the page to two panes and ask for them to sit one above the other. End the run and open the app
   again on the same store: the place comes back with nothing running in it, so start a shell there
   and open the pane beside it. They are stacked, each taking the whole width between the columns —
@@ -48,15 +48,15 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, and what binds the folder to the project the face is on. Which project the run comes
   # back on is the split road's question; here there is one, so it is the one that answers.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -65,13 +65,13 @@ steps_gui:
   # starts a pane with is the operator's own business, and the screen the run is ended on should be a
   # screen the road knows.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # Two to a page, which is the count the question about sitting is asked at — a project nobody has
   # answered for is drawn at one, and one pane has nothing to arrange.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -79,7 +79,7 @@ steps_gui:
   # What the reader set, and the whole of what this road is about. The control is on the row whether
   # or not there are panes to lay out — it belongs to the page rather than to what is standing on it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-orient
     with:
       orient: down
@@ -94,21 +94,21 @@ steps_gui:
   # Where a fresh launch opens is not the road's to know, so it presses for the face it reads rather
   # than reading whichever one the app came up on.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Two panes, because an arrangement of two is what is being read. One of them is the place the run
   # brought back — standing with nothing in it, so a shell is started there — and the other is a
   # press on the way in beside it. The folder is the project's own and it is the only one, which is
   # why that press is a press and nothing else.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -117,7 +117,7 @@ steps_gui:
   # still offering a way in would be a page with one pane on it, and the reading below would be about
   # a box with nothing in it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 2
@@ -127,7 +127,7 @@ steps_gui:
   # side under eighty columns each — a screen that draws perfectly well and is not the one the reader
   # asked for.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: down

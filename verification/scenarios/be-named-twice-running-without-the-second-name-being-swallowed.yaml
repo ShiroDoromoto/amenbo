@@ -49,7 +49,7 @@ given:
   # Two, because that is the fewest a machine can be stood up with, and the road opens on the first of
   # them by name. `reads` is a program that stays and prints back every line it is given.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -57,20 +57,20 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Harbour
 
   # One pane, so every step below means the one box on the page and none of them has to say so.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
@@ -78,18 +78,18 @@ steps_gui:
   # Named rather than taken by position: what the road needs of it is a provider with a rename command
   # of its own, which is what a name is carried by and what a position cannot promise.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Claude Code
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # ── the first name ───────────────────────────────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO harbour lights
@@ -98,14 +98,14 @@ steps_gui:
   # not anything was submitted, and only the program handing the line back says it was. This is also
   # what leaves the first name's words standing on the screen for the second one to be read against.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO said [/rename SCENARIO harbour lights]
 
   # ── and the second, which begins as the first one did ────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO harbour moorings
@@ -114,7 +114,7 @@ steps_gui:
   # newline and nothing else, and what comes back is a line with nothing in it — the same mark, and
   # not this one. The words inside the brackets are what parts the two.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO said [/rename SCENARIO harbour moorings]

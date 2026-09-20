@@ -33,7 +33,7 @@ describe("the file face", () => {
   it("draws the draft page as a tab, beside the files, rather than as a switch of its own", async () => {
     await draw();
     // No second row of controls: the draft page is one of the tabs, which is what the files beside
-    // it are (`AMB-D-835`). The top row of the terminal face stays the way in while this column is
+    // it are (`AMB-D-835`). The top row of the workspace stays the way in while this column is
     // closed, and it is not drawn in here.
     expect(container.querySelector("[role=\"tablist\"]")).toBeNull();
     expect(container.querySelector(".files__tabname")?.textContent).toBe(t("files.memo"));
@@ -46,12 +46,12 @@ describe("the file face", () => {
     await drawOpen();
     await openFile(button("a.md"));
     await settle();
-    expect(container.querySelector(".termface__column--side textarea")).toBeNull();
+    expect(container.querySelector(".workspace__column--side textarea")).toBeNull();
 
     await click(container.querySelectorAll<HTMLElement>(".files__tabname")[0]);
     await settle();
     // The page is up, and the file is still held: what a tab does is choose between them.
-    expect(container.querySelector(".termface__column--side textarea")).not.toBeNull();
+    expect(container.querySelector(".workspace__column--side textarea")).not.toBeNull();
     expect([...container.querySelectorAll<HTMLElement>(".files__tabname")].map((one) =>
       one.textContent)).toEqual([t("files.memo"), "a.md"]);
     // One cross, and it is the file's: a project has its draft page whether or not anyone opened it.
@@ -264,7 +264,7 @@ describe("the file face", () => {
 
     await draw({ tab: "memo" });
     expect(container.querySelector("textarea"), "the draft page was not drawn").toBeTruthy();
-    expect(container.querySelector(".termface__column--side .files__none")).toBeFalsy();
+    expect(container.querySelector(".workspace__column--side .files__none")).toBeFalsy();
 
     // The tree is the half that has to be rooted somewhere, and it is the only one the missing
     // folder stops — it says so in the rail, where it is drawn (`AMB-D-835`).
@@ -402,7 +402,7 @@ describe("the file face", () => {
 
     // On the column the file is in: the layers this key takes off are the width and the column
     // holding it, and the tree in the rail is neither of them.
-    const column = () => container.querySelector(".termface__column--side .files")!;
+    const column = () => container.querySelector(".workspace__column--side .files")!;
     await press(column(), "Escape");
     await settle();
     // The column is narrow and it is not closed: one press, one layer. The file stays where it is —

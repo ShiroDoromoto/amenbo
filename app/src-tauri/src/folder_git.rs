@@ -1303,9 +1303,9 @@ mod tests {
 
     #[test]
     fn a_touched_file_carries_what_it_gained_and_lost() {
-        let read = files("18\t4\tapp/src/shell/TerminalFace.tsx\0");
+        let read = files("18\t4\tapp/src/shell/WorkspaceFace.tsx\0");
         assert_eq!(read.len(), 1);
-        assert_eq!(read[0].path, "app/src/shell/TerminalFace.tsx");
+        assert_eq!(read[0].path, "app/src/shell/WorkspaceFace.tsx");
         assert_eq!((read[0].added, read[0].removed), (Some(18), Some(4)));
         assert_eq!(read[0].from, None);
     }

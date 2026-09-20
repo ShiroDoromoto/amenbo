@@ -41,7 +41,7 @@
 id: see-a-pane-is-still-running-without-looking-into-it
 title: A pane nobody is working in says by the lamp on its label that something is still coming out of it, and stops saying it when the output does
 description: >
-  Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and set
+  Open the workspace, choose the folder it runs in, get the pane down to a plain shell and set
   something printing in it. Cut the page to two and open a second pane beside it, which takes the
   working place away from the first: the lamp on the first pane's label is lit, and it is the only thing on the screen saying that
   pane is alive rather than drawn. Wait for the line the printing ends with, and the same lamp has
@@ -49,15 +49,15 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, and what binds the folder to the project the face is on. The second pane below works
   # in it too, which is what lets that one be a single press with nothing asked.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -65,11 +65,11 @@ steps_gui:
   # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and this
   # road rests on a command carrying out exactly what it says.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane that keeps printing
@@ -77,13 +77,13 @@ steps_gui:
   # That the line landed where the road meant it to. Everything after this is about this pane, and it
   # is the last step that can say which pane that is by something the road put there itself.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane that keeps printing
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: keep-printing
     with:
       text: SCENARIO nothing more is coming
@@ -92,7 +92,7 @@ steps_gui:
   # answered for is drawn at, the pane opened next would be on a page of its own and the first would
   # go off the screen with the reader.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -101,7 +101,7 @@ steps_gui:
   # from the empty frame beside the first, in the project's folder, and becomes the pane being worked
   # in.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -109,7 +109,7 @@ steps_gui:
   # The mark, on the pane nobody is in. Nothing else on the screen separates a terminal that is
   # running from the picture one leaves behind.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: dot
     with:
       face: lit
@@ -117,7 +117,7 @@ steps_gui:
   # The line the printing ends with, which is where this road waits: what comes after it has to be
   # read on a pane that has actually stopped, and nothing but this says it has.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO nothing more is coming
@@ -125,7 +125,7 @@ steps_gui:
   # And the lamp has followed the stream down. The pane is the same pane, in the same place, with the
   # same words on it — the only thing that changed is that nothing is arriving any more.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: dot
     with:
       face: out

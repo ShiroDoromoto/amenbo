@@ -27,7 +27,7 @@ import type { FolderSectionRow } from "./sections";
  *
  * `root` is the path of the folder being drawn and `sections` the folders there are to choose from,
  * both handed down: the answer belongs to the face around this rail, since the tree below and the
- * git doors beside it are two readers of one choice (`../shell/TerminalFace`).
+ * git doors beside it are two readers of one choice (`../shell/WorkspaceFace`).
  */
 export function RootPick({ projectId, sections, root, onRoot }: {
   /** The project whose folders these are, for the git question the dots are read from. */

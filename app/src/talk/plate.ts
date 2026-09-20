@@ -1,6 +1,6 @@
 // Keeping a pane's label up to date, wherever the pane is drawn.
 //
-// A pane has two homes — the board's terminal face and the window it is split out into (`AMB-D-753`)
+// A pane has two homes — the board's workspace and the window it is split out into (`AMB-D-753`)
 // — and the same line belongs above it in both. What that line says is worked out in `./nameplate`;
 // this is everything around it: holding what the pane's terminal was started in, measuring what the
 // pane itself is doing, and putting the row up again whenever either changes.

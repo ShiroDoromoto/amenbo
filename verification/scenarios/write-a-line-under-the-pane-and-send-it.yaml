@@ -100,47 +100,47 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The frame and not the way in beside it: the project was bound where the world was stood up, so
   # the press opens a pane in that folder and asks nothing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # ── The box, asked for, and the keyboard that comes with it ───────────────────────────────────
   # Asked for before anything can be written in it: a pane that came up folded has nothing to write
   # in. Every step below this one is about that box.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   # Nothing has been clicked since, so where the caret stands here is what opening the box did. Read
   # before the line below is typed, which is the last moment nothing else has moved the keyboard.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
 
   # ── The empty box, which hands its presses on ─────────────────────────────────────────────────
   # Typed at the terminal itself rather than in the box, and that is the point of it: what the arrow
   # below asks for is the shell's own history, and only a line the shell was given is in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the seedling trays were counted on the first cold morning
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with:
       key: up
@@ -148,7 +148,7 @@ steps_gui:
   # The shell answered the press, which is the whole of what "handed on" means here. The line is back
   # where it was typed, waiting to be run again.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: SCENARIO the seedling trays were counted on the first cold morning
@@ -157,7 +157,7 @@ steps_gui:
   # build that handed the arrow on and kept the keyboard leaves the person walking a menu they have
   # no way to choose from, because the return that would choose is the box's.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
     with:
       present: false
@@ -165,20 +165,20 @@ steps_gui:
   # Abandoned rather than run, which walks the fifth press the box hands on and leaves the prompt
   # clean for what follows.
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with:
       key: ctrl-c
 
   # ── Written in the box, and nothing sent ──────────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO this line is written and has not been sent anywhere
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this line is written and has not been sent anywhere
@@ -187,7 +187,7 @@ steps_gui:
   # Return held with this machine's own modifier. Return alone writes a new line, which is what the
   # box was made to allow, so the send is the two together.
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-written
     with:
       by: key
@@ -195,7 +195,7 @@ steps_gui:
   # It reached the program: the shell was given the line, echoed it, and did not know the command.
   # What is read is the line itself, which is on the pane because the terminal put it there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO this line is written and has not been sent anywhere
@@ -204,19 +204,19 @@ steps_gui:
   # A second line, because the first is already on the screen: a press read against words that were
   # there before it would say nothing about the press.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO this second line went by the press beside the box
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-written
     with:
       by: button
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO this second line went by the press beside the box
@@ -226,27 +226,27 @@ steps_gui:
   # in it. One line and not two, because the road out is the up arrow on the *first* line — a caret
   # any lower and the press is the box's own.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO this third line is being left behind in the box
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-out
 
   # The press reached the program, which is what "the keyboard went with it" means here: the shell
   # walked its history back to the line it was last given, and that line is the one the box sent a
   # moment ago. Different words from the third line, so neither reading can be the other's.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: SCENARIO this second line went by the press beside the box
 
   # And nothing was paid for the way out. The third line is where it was written, still unsent.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this third line is being left behind in the box
@@ -258,7 +258,7 @@ steps_gui:
   # somebody reaching for "stop" has usually started writing the next thing already, and a box that
   # took the press by standing there would have taken away the only answer to what was just sent.
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with:
       key: ctrl-c
@@ -268,7 +268,7 @@ steps_gui:
   # for: the press cost the line nothing, so the way out of a mis-sent line is one a person can take
   # without losing the one they were writing.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this third line is being left behind in the box
@@ -277,13 +277,13 @@ steps_gui:
   # A second pane, opened where the first one was opened from. It is the one being worked in the
   # moment it comes up, which is what makes the press below a press that moves the work.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # This pane's box too, and before a word is typed at it: the readings at the end of the road are of
@@ -291,13 +291,13 @@ steps_gui:
   # in it, which the line below then takes away again — that order is the point, because what those
   # readings rest on is a box that is there and does not have the keyboard.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   # Typed at the terminal so this pane has words of its own to be named by. Both panes work in the
   # one folder, and there is nothing else here to tell them apart by.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the second pane was opened beside the first
@@ -306,7 +306,7 @@ steps_gui:
   # typed at the program. Read before the press, so what the press moves is a thing the road watched
   # standing somewhere else first.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
     with:
       on: SCENARIO the second pane was opened beside the first
@@ -314,7 +314,7 @@ steps_gui:
 
   # Back to the first pane, by a press and nothing more.
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-pane
     with:
       shows: SCENARIO this second line went by the press beside the box
@@ -322,7 +322,7 @@ steps_gui:
   # Where the press put the keyboard: in the box under the pane it moved the work to, so the next
   # thing this person types is written where they pressed.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
     with:
       on: SCENARIO this second line went by the press beside the box
@@ -331,7 +331,7 @@ steps_gui:
   # only half of what a person needs: a build that handed the keyboard to every box would pass the
   # reading above.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
     with:
       on: SCENARIO the second pane was opened beside the first
@@ -339,7 +339,7 @@ steps_gui:
 
   # And nothing was written or sent on the way: the third line stands in that box as it was left.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this third line is being left behind in the box

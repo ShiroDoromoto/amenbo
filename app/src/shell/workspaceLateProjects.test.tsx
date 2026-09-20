@@ -66,7 +66,7 @@ vi.mock("../core/ipc", async (importOriginal) => {
   };
 });
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -76,7 +76,7 @@ let root: Root;
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
 
 const face = () =>
-  createElement(TerminalFace, { onWindow: () => {}, note: null });
+  createElement(WorkspaceFace, { onWindow: () => {}, note: null });
 
 beforeEach(async () => {
   window.innerWidth = 1600;

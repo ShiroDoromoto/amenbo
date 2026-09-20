@@ -61,7 +61,7 @@ describe("the file face", () => {
       await settle();
       await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[0]);
       await settle();
-      expect(container.querySelector(".termface__column--side .files__none")?.textContent)
+      expect(container.querySelector(".workspace__column--side .files__none")?.textContent)
         .toBe(t("files.nothingOpen"));
     });
 

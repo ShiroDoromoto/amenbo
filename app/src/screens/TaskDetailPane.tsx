@@ -62,7 +62,7 @@ export function TaskDetailPane({
   onDirtyChange?: (dirty: boolean) => void;
   onSelectDecision?: (id: number) => void;
   /** Go to the pane this task was made in, opening it again where it is gone (`AMB-D-897`). Absent
-   *  outside the shell, where there is no terminal face to go to. */
+   *  outside the shell, where there is no workspace to go to. */
   onGoToPane?: (project: number, pane: string) => void;
   /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
   focusCommentAt?: number;

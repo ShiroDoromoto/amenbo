@@ -4,7 +4,7 @@
 // Moving to another project is not closing what was open on this one. Each project's tabs are held
 // under that project and the face draws the one it is on, so the next project comes up with nothing
 // open and the one left behind is found as it was left — the same tabs, and the same one on top
-// (`AMB-D-835`, `./TerminalFace`).
+// (`AMB-D-835`, `./WorkspaceFace`).
 //
 // It holds for the run and no further: nothing here is written down, and what a restart comes back
 // with is not answered by this.
@@ -71,7 +71,7 @@ vi.mock("../core/boundFolders", () => ({
   }),
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -83,7 +83,7 @@ const MAKEFILE: OpenFile = { root: "/repo", path: ["Makefile"] };
 
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
     await new Promise((r) => setTimeout(r, 0));
   });
 };

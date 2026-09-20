@@ -50,15 +50,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project's panes the face is drawing, pressed rather than assumed: the pane below has to be
   # the one standing in this project's folder.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
@@ -66,32 +66,32 @@ steps_gui:
   # The frame and not the way in beside it. The folder was bound where the world was stood up, so the
   # press opens a pane in it and asks nothing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # ── An address as plain characters, which is most of what a pane draws ─────────────────────────
   # Nothing here says where the characters point. What finds them is the reading of the drawn screen,
   # and nothing else can be.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: echo "SCENARIO the guide is at https://example.com/guide"
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-url
     with:
       url: https://example.com/guide
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: opened-in-browser
     with:
       url: https://example.com/guide
@@ -102,20 +102,20 @@ steps_gui:
   # link that led nowhere. The line is written out in full because the escape is the whole of what
   # this half is for, and an operator improvising it would be improvising the step.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: printf '\e]8;;https://example.org/other\e\\SCENARIO the other guide\e]8;;\e\\\n'
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-url
     with:
       url: https://example.org/other
       shows: SCENARIO the other guide
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: opened-in-browser
     with:
       url: https://example.org/other

@@ -585,7 +585,7 @@ export const ja: Translation = {
 
     "face.switch": "タスク／ワークスペース",
     "face.tasks": "タスク",
-    "face.terminal": "ワークスペース",
+    "face.workspace": "ワークスペース",
     "face.splitOut": "別ウィンドウで開く",
     "face.merge": "1つのウィンドウに戻す",
     "face.opening": "ワークスペースを別ウィンドウで開いています…",

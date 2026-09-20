@@ -744,7 +744,7 @@ impl Instructor {
     /// wording of the expectation that would be read against the right window. The instruction asks the
     /// attending AI for that shot instead, and an eye closes the step from it.
     ///
-    /// `terminal opened-in-browser` is a `Review` out at that same distance, and for the same reason:
+    /// `workspace opened-in-browser` is a `Review` out at that same distance, and for the same reason:
     /// what settles it is the machine's own browser, standing at an address, on a window nothing in this
     /// workspace shoots. Its instruction asks the attending AI for that shot too.
     ///
@@ -799,7 +799,7 @@ impl Instructor {
     /// can stand in are drawn as words of the interface, and which of them is standing is not
     /// something the presence of text can settle.
     ///
-    /// `terminal dot` is a `Review`, and one that is not about words at all. What it reads is a mark
+    /// `workspace dot` is a `Review`, and one that is not about words at all. What it reads is a mark
     /// with no text on it, and what tells its three faces apart is a glow, a colour and a blink. The
     /// blink is the one that settles it: at either end of its turn it rests where a still lamp holds,
     /// so a picture of the two can be the same picture. The eye that closes it is therefore watching
@@ -824,7 +824,7 @@ impl Instructor {
     /// the run shoots the window under test. The eye that closes it is the operator's at the moment
     /// they pressed the item, which is why each of the three lines asks them to say what they saw.
     ///
-    /// `terminal tidied-in-box` is a `Review`, and the fold is the whole of why. What it reads is
+    /// `workspace tidied-in-box` is a `Review`, and the fold is the whole of why. What it reads is
     /// where a line begins and where it ends — a box that kept the indentation it was copied with and
     /// one that dropped it hold the same letters in the same order, and the fold drops everything
     /// that is not a letter or a digit, so both come back as one reading. Its instruction therefore
@@ -832,7 +832,7 @@ impl Instructor {
     /// hold them against: those rows are still drawn as they were printed, the tidying being the
     /// clipboard's alone.
     ///
-    /// `terminal frames` is a `Review` for a reason close to the dot's: what it reads is a count of
+    /// `workspace frames` is a `Review` for a reason close to the dot's: what it reads is a count of
     /// boxes, and a box on this face is a box whether it holds a terminal or a question. Nothing on
     /// it is the road's own words — the panes have not been typed into yet, and the empty ones this
     /// step exists to rule out would carry the interface's — so there is nothing for a reading to
@@ -840,7 +840,7 @@ impl Instructor {
     /// a `Review` beside it, and the two are worth having side by side all the same: one says what
     /// is standing, and the other says how many.
     ///
-    /// `terminal asking-folder` is a `Review` on both of its states, and where it is read is why.
+    /// `workspace asking-folder` is a `Review` on both of its states, and where it is read is why.
     /// The question comes up only where a project binds more than one folder — and binding more
     /// than one is exactly what puts a heading naming each of them on the column of folders down
     /// the side. So the folder the step names is on the shot whether the question is standing or
@@ -849,7 +849,7 @@ impl Instructor {
     /// at all. The eye that closes both has the box to look at instead of the word. Splitting the
     /// face out into its own window changes none of it — the column is drawn there too.
     ///
-    /// `terminal side` and `terminal side-width` are `Review`s, and for the reason `frames` is: what
+    /// `workspace side` and `workspace side-width` are `Review`s, and for the reason `frames` is: what
     /// they read is a region of the screen rather than anything written in one. Every word a column
     /// carries is drawn elsewhere on the same face — a pane's name is on the row above the pane as
     /// well as on the list, and the file panel's two halves are named on the top row whether the
@@ -857,19 +857,19 @@ impl Instructor {
     /// nothing. `side-width` is further out still: what it asks is where an edge stands compared with
     /// the shot before it, which is two pictures rather than one.
     ///
-    /// `terminal side-span` is a `Review` beside them, and it is the one that comes back to a single
+    /// `workspace side-span` is a `Review` beside them, and it is the one that comes back to a single
     /// picture: what it asks is how the column and the panes divide the width between them, which is
     /// on the shot and on no other. It reads no words for the reason its neighbours read none, and
     /// its answers are coarse for the reason it has an eye at all — a person at the screen can say
     /// which of two regions is the wider, and cannot say by how many pixels.
     ///
-    /// `terminal side-cover` is a `Review` for the reason `side-span` is, and its answers are coarse
+    /// `workspace side-cover` is a `Review` for the reason `side-span` is, and its answers are coarse
     /// for a plainer reason still: what it asks is whether any of the panes is showing beside the
     /// column, which is a thing an eye either sees or does not. It is the reading the wide width is
     /// told apart by — its neighbour divides the width, and the wide width the column ships with
     /// divides it about the way a dragged one does on the window the application opens.
     ///
-    /// `terminal panes-sit` is a `Review` beside them, and for the same reason once more: what it
+    /// `workspace panes-sit` is a `Review` beside them, and for the same reason once more: what it
     /// reads is where two regions of the screen are in relation to one another, and the panes carry
     /// the road's own lines whichever way round they sit. A reading would find those words on the
     /// shot in both shapes and settle nothing, so the picture goes to an eye — which is all one is
@@ -905,7 +905,7 @@ impl Instructor {
     ///
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
-    /// was given nor the colour it falls back to puts one there. `terminal tab-icon` is the same
+    /// was given nor the colour it falls back to puts one there. `workspace tab-icon` is the same
     /// reading on the other surface that draws either, and a `Review` for the same reason — the one
     /// letter a tab falls back to is a letter of the project's name, which the tab beside it is
     /// spelling out in full.
@@ -1040,24 +1040,24 @@ impl Instructor {
             // drawing that session and on no other screen — which is what lets the absent half be
             // read as well: with the ledger up, the pane is hidden, and words that are hidden are
             // words that are not on the shot.
-            (Domain::Terminal, "pane")
-            | (Domain::Terminal, "label")
+            (Domain::Workspace, "pane")
+            | (Domain::Workspace, "label")
             // The whole of that row, in the panel it drops under itself. It is the row's own words
             // again, so a reading finds them there and nowhere in the interface around them.
-            | (Domain::Terminal, "label-in-full")
+            | (Domain::Workspace, "label-in-full")
             // What is standing in the input line is on the same screen as what a program printed:
             // one shot, one reading, and the sentence is where the difference between them lives.
-            | (Domain::Terminal, "in-the-box")
+            | (Domain::Workspace, "in-the-box")
             // And the box under it, which is on that same screen and that same shot. What parts the
             // two is the sentence the operator is given, for the reason the input line is parted
             // from the output above it.
-            | (Domain::Terminal, "still-to-send") => {
+            | (Domain::Workspace, "still-to-send") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // The store the way in named as the folder's owner, read where the reader it turned away
             // is standing. It is a store's name and not a word of the interface's, so a reading finds
             // it in the answer and nowhere else on this face, whatever language the screen is set to.
-            (Domain::Terminal, "turned-away") => {
+            (Domain::Workspace, "turned-away") => {
                 Some(Expectation { text: arg_str(with, "store")?.to_string(), present: true })
             }
             // A row on the file face, and the words an opened file draws. Both are read off the shot
@@ -1258,7 +1258,7 @@ impl Instructor {
             // which pane this is are on the terminals the window opens and nowhere else, so a form
             // filled in on the board and a line run in a pane leave two different records.
             //
-            // The pane is not cleared first, unlike `terminal run`'s. The words a road typed into it
+            // The pane is not cleared first, unlike `workspace run`'s. The words a road typed into it
             // are how every step below names it, and a create that wiped them would take the road's own
             // way of pointing at a pane off the screen.
             (Domain::Decision, "create-in-pane") => format!(
@@ -1416,7 +1416,7 @@ impl Instructor {
             // themselves would walk a road that passed whether or not the press did anything at all.
             //
             // **Where the terminal comes up is not the same in both shapes**, so neither is named:
-            // one window switches to the terminal face, and two brings the window the terminal was
+            // one window switches to the workspace, and two brings the window the terminal was
             // split out into forward (`app/src-tauri/src/windows.rs`). A line that named the face
             // alone would read as a failure on the road walked in two windows, where the press does
             // land and the board is not where it lands.
@@ -1968,14 +1968,14 @@ impl Instructor {
                     return Err(format!("action `set` does not know the position `{other}`"))
                 }
             },
-            // ── the terminal face ─────────────────────────────────────────────────────────────
+            // ── the workspace ─────────────────────────────────────────────────────────────
             // Which face the one window is showing. The segments are named by what each shows rather
             // than by the word drawn on them, since those words are the interface's own and the run's
             // language is whatever the machine is set to.
-            (Domain::Terminal, "show-face") => match req(with, "face")? {
+            (Domain::Workspace, "show-face") => match req(with, "face")? {
                 "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
                     .to_string(),
-                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane a terminal runs in."
+                "workspace" => "In the pair of segments at the top of the window, press the one that shows the workspace — the folders, the project tabs, the panes and the columns beside them."
                     .to_string(),
                 other => {
                     return Err(format!("action `show-face` does not know the face `{other}`"))
@@ -1986,8 +1986,8 @@ impl Instructor {
             // words are the interface's own and the run's language is whatever the machine is set to.
             // What is worth confirming while walking it is that nothing else is asked — no name, no
             // submit — since the whole of this road is one press and a folder.
-            (Domain::Terminal, "open-folder") => format!(
-                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and on a machine with no project it raises the one it belongs to. Either way the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none, or it says the folder belongs to another store — and nothing is named and nothing is submitted.",
+            (Domain::Workspace, "open-folder") => format!(
+                "On the workspace, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and on a machine with no project it raises the one it belongs to. Either way the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none, or it says the folder belongs to another store — and nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
             // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is
@@ -2014,22 +2014,22 @@ impl Instructor {
             // already has a name. Control-D is the end of input rather than a line, and a press held
             // with a modifier is not part of a line at all (`app/src/talk/frames.ts`), so the naming
             // is still the road's to make. It is the same reason `run` clears by pressing.
-            (Domain::Terminal, "open-shell") =>
+            (Domain::Workspace, "open-shell") =>
                 "Open a plain shell in the pane — the terminal with no agent started in it — and in the pane already standing on the page, never in a new one: a page with a pane on it draws an empty frame beside it carrying this same list, and opening a shell there would leave the road with two panes where it asked for one. Where that pane is already running an agent, end it first by holding control and pressing D, which is the end of input and not a line sent into the pane — do not type a command to end it, the words on a pane being how every step below says which pane it means and never this step's to add to. The row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Only where no pane is standing at all is the frame the way in: the same list is on the frame itself, above the press that opens it, so choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane, and the page carries no pane this step was not asked for."
                     .to_string(),
             // Writing a command of the reader's own down on the frame. Two fields and a
             // press, and the reading that matters is taken before the press: what is registered runs
             // in a terminal exactly as it stands, so the frame has to say so while there is still
             // something to change.
-            (Domain::Terminal, "register-start") => format!(
-                "On the terminal face, find the empty frame — the box on the page that is not a terminal — and under the row of things a pane can be opened with, press the control that registers a command of your own. Fill the two fields it opens: the name \"{}\", and the command line `{}` written exactly as it stands here, spaces and quotes and all. Before saving, confirm the frame shows that same line back as what will run in the terminal. Then save.",
+            (Domain::Workspace, "register-start") => format!(
+                "On the workspace, find the empty frame — the box on the page that is not a terminal — and under the row of things a pane can be opened with, press the control that registers a command of your own. Fill the two fields it opens: the name \"{}\", and the command line `{}` written exactly as it stands here, spaces and quotes and all. Before saving, confirm the frame shows that same line back as what will run in the terminal. Then save.",
                 req(with, "name")?,
                 req(with, "line")?,
             ),
             // Opening a pane on one. It is the same two moves the plain shell is opened by — choose,
             // then press — and it is written as its own step because what is being proved is that a
             // row nobody catalogued is pressable at all.
-            (Domain::Terminal, "open-registered") => format!(
+            (Domain::Workspace, "open-registered") => format!(
                 "On the empty frame, choose \"{}\" from the row of things a pane can be opened with — it stands among them after the ones Amenbo lists and before the plain shell — and press to open. A pane comes up and the command runs in it.",
                 req(with, "name")?
             ),
@@ -2043,7 +2043,7 @@ impl Instructor {
             // Named rather than counted along, which a road may do once it has stood the machine up:
             // the row then holds the catalog's own commands, so the name is one the operator will
             // find on it. Said as the row draws it, which is the provider's own name.
-            (Domain::Terminal, "pick-start") if arg_str(with, "agent").is_some() => {
+            (Domain::Workspace, "pick-start") if arg_str(with, "agent").is_some() => {
                 if with.contains_key("at") {
                     return Err(
                         "action `pick-start` was given both `agent` and `at` — they are two ways of saying which thing on the row, and a step that said both would leave the choosing to whoever read it"
@@ -2051,18 +2051,18 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose **{}** on that row by its name, and press nothing else. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run.",
+                    "On the workspace, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose **{}** on that row by its name, and press nothing else. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run.",
                     req(with, "agent")?
                 )
             }
-            (Domain::Terminal, "pick-start") => match arg_str(with, "at").unwrap_or("first") {
+            (Domain::Workspace, "pick-start") => match arg_str(with, "at").unwrap_or("first") {
                 "first" =>
-                    "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **first** thing on that row, and press nothing else: the row is drawn in Amenbo's own order — the agents it lists, then any command registered on this machine, then the plain shell — so the first of them is one of the agents whatever this machine has on it. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
+                    "On the workspace, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **first** thing on that row, and press nothing else: the row is drawn in Amenbo's own order — the agents it lists, then any command registered on this machine, then the plain shell — so the first of them is one of the agents whatever this machine has on it. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
                         .to_string(),
                 // The second of them, which a road asks for when the fault it is about lives on some
                 // providers and not on others. It is still a position and still not a name.
                 "second" =>
-                    "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **second** thing on that row, and press nothing else: the row is drawn in Amenbo's own order, so the second of them is the second of the agents Amenbo lists that this machine has. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
+                    "On the workspace, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **second** thing on that row, and press nothing else: the row is drawn in Amenbo's own order, so the second of them is the second of the agents Amenbo lists that this machine has. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
                         .to_string(),
                 other => {
                     return Err(format!(
@@ -2075,7 +2075,7 @@ impl Instructor {
             // them and the row is the one a provider with no list draws — a box to write a name in.
             // A row of names to press here is a machine answering for a tool the run did not put
             // there, and the step says so rather than leaving the operator to pick something.
-            (Domain::Terminal, "pick-model") => match req(with, "name")? {
+            (Domain::Workspace, "pick-model") => match req(with, "name")? {
                 "none" => "On the model row under the agent you chose, press the first thing on it — the one that says the agent starts on whatever its own settings already say. It is a choice like any other and not a way of not answering: what it does is take a model back off. Press nothing that opens the pane."
                     .to_string(),
                 // Which shape the row took, and every one of them says what it must not be looking
@@ -2104,26 +2104,26 @@ impl Instructor {
             // only that it came up: what is *in* it is the next step's, and that is the whole point
             // of parting them — the press is Amenbo acting on what it drew, and the reading is a
             // program saying what it was started with.
-            (Domain::Terminal, "open-next") =>
+            (Domain::Workspace, "open-next") =>
                 "On the pane whose program has stopped, find the row the frame draws under it — the list of what a pane can be started with, already set to what was running there, with the press beside it — and press that, leaving the list exactly as it came up. A terminal comes up in that same pane, on what the list was showing."
                     .to_string(),
-            (Domain::Terminal, "open-again") =>
-                "On the terminal face, find the frame standing with nothing running in it — the box the press put back, which carries one control in the middle of it and no row of things to open with above — and press that control. Choose nothing: there is nothing to choose, the frame having been given the pane and the way back into it and neither the folder nor the provider. A terminal comes up there, in the folder the project is bound to and on whatever this machine last opened a pane with."
+            (Domain::Workspace, "open-again") =>
+                "On the workspace, find the frame standing with nothing running in it — the box the press put back, which carries one control in the middle of it and no row of things to open with above — and press that control. Choose nothing: there is nothing to choose, the frame having been given the pane and the way back into it and neither the folder nor the provider. A terminal comes up there, in the folder the project is bound to and on whatever this machine last opened a pane with."
                     .to_string(),
-            (Domain::Terminal, "open-start") =>
+            (Domain::Workspace, "open-start") =>
                 "On the empty frame, press what opens a pane — the press under the rows, the one the frame has been saying would run that line. Choose nothing first: what is on the row of agents and what is named on the model row under it are what the steps before this one set, and pressing anything else now would open the pane on a different answer. A pane comes up in the frame's place, with the program running in it."
                     .to_string(),
             // ── Moving a pane that is already running ─────────────────────────────────────────────
             // Opening the candidates. The row is under the box a pane is written in — the last line
             // of the pane's own column — and it says the model the pane was last moved to, or simply
             // that there is a model to choose.
-            (Domain::Terminal, "open-models") => format!(
+            (Domain::Workspace, "open-models") => format!(
                 "Press the row under {pane} that names its model — the quiet line below the box a line is written in, at the very bottom of that pane's column. Candidates come up over the pane. Press none of them yet. A pane with no such row is a pane running something Amenbo cannot name — the plain shell, or a command registered on this machine — and this step has failed if the pane the road opened is one of those.",
                 pane = named_pane(with),
             ),
             // Pressing one. The three shapes are `pick-model`'s, and each says what it must not be
             // looking at for the same reason that one does.
-            (Domain::Terminal, "switch-model") => {
+            (Domain::Workspace, "switch-model") => {
                 let name = req(with, "name")?;
                 let pane = named_pane(with);
                 match arg_str(with, "how").unwrap_or("press") {
@@ -2158,7 +2158,7 @@ impl Instructor {
             // opened — the box on the page with a prompt and nothing else on it. That is said by what
             // is on it rather than by what it was opened for: on a page with a second pane already
             // carrying the road's lines, "the pane the folder was opened in" names the wrong box.
-            (Domain::Terminal, "type-line") => {
+            (Domain::Workspace, "type-line") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\" — the one the road typed that line into, and not any of the others"),
                     None => "the pane the steps before opened — the box on the page with a terminal in it, not the empty frame beside it".to_string(),
@@ -2171,7 +2171,7 @@ impl Instructor {
             // A word typed through the machine's input method and left unsettled. The operator is
             // told twice not to accept it, because accepting it is the one thing that would walk past
             // what the steps after this one are for: a word on the screen and in no field.
-            (Domain::Terminal, "write-a-word") => {
+            (Domain::Workspace, "write-a-word") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2189,7 +2189,7 @@ impl Instructor {
             // **The leaving is in this line rather than in one of its own.** A shot taken between the
             // two would be of the same screen either way, the mark being drawn over characters that
             // are kept and over characters that are gone alike.
-            (Domain::Terminal, "send-a-word") => {
+            (Domain::Workspace, "send-a-word") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2214,7 +2214,7 @@ impl Instructor {
             //
             // Where the box ends up is said as well, because the steps after it are read against it:
             // the box is there, and it has the keyboard.
-            (Domain::Terminal, "open-box") => {
+            (Domain::Workspace, "open-box") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane the step before opened".to_string(),
@@ -2230,7 +2230,7 @@ impl Instructor {
             // **It is emptied before anything is typed.** What a send leaves in the box is another
             // road's question, and a step that typed onto the end of what was there would send two
             // lines run together the day that answer changes.
-            (Domain::Terminal, "write-to-pane") => {
+            (Domain::Workspace, "write-to-pane") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2252,7 +2252,7 @@ impl Instructor {
             // instead, and the two lines are one screen and one shot: a reading of the path's absence
             // on the terminal's line would be red on the build that put it in the box. So the two
             // lines are parted by an eye, at the moment the path arrives and both are in front of it.
-            (Domain::Terminal, "paste-image-into-box") => {
+            (Domain::Workspace, "paste-image-into-box") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2264,7 +2264,7 @@ impl Instructor {
             // Words put into that box, which is where a copy made in the pane above is read back. The
             // box is emptied first, so what stands in it afterwards is the paste and nothing else —
             // and nothing is sent, the reading being of what a person has not handed over yet.
-            (Domain::Terminal, "paste-into-box") => {
+            (Domain::Workspace, "paste-into-box") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2277,7 +2277,7 @@ impl Instructor {
             // what they do is the same thing and where they are is not: one is made in the box and
             // the other beside it, and a road that only ever walked the first would leave a control
             // on the screen nobody had ever pressed.
-            (Domain::Terminal, "send-written") => {
+            (Domain::Workspace, "send-written") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2303,7 +2303,7 @@ impl Instructor {
             // so: walking a menu the program drew is no use to a person who then cannot choose from
             // it, and an operator left expecting the box to keep the keyboard would read the next
             // step against the wrong one.
-            (Domain::Terminal, "press-through") => {
+            (Domain::Workspace, "press-through") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2351,7 +2351,7 @@ impl Instructor {
             // box's own: the same key one line lower walks up through what is written and never
             // leaves. An empty box takes the same road, and is asked for by `press-through` instead —
             // there is nothing to put a caret on the first line of.
-            (Domain::Terminal, "press-out") => {
+            (Domain::Workspace, "press-out") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2364,7 +2364,7 @@ impl Instructor {
             // a drop reads the disk the operator is sitting at, and nothing the run laid down is
             // anywhere a hand can reach from there. What it lands as is not said here — where it goes
             // is Amenbo's own answer, and the step that reads the input line is where that is settled.
-            (Domain::Terminal, "drop-in") => {
+            (Domain::Workspace, "drop-in") => {
                 // Which pane it is let go over. A page with one has nothing to say here; a page with
                 // two is being told where the drop goes, because where it goes is what the steps
                 // after it read.
@@ -2388,7 +2388,7 @@ impl Instructor {
             // What the last copy left, put into a pane's line. The pane is named the way the drop
             // above names one, and the line ends where the drop's does: nothing is sent, because what
             // a hand-over owes is a line the person still has to send themselves.
-            (Domain::Terminal, "paste") => {
+            (Domain::Workspace, "paste") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2400,7 +2400,7 @@ impl Instructor {
             // The same line reached with a picture on the clipboard, which is a different press on one
             // of the three machines. Both are said, because the operator is on one machine and the
             // road is walked on all of them — and the reading afterwards is the same either way.
-            (Domain::Terminal, "paste-image") => {
+            (Domain::Workspace, "paste-image") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2415,7 +2415,7 @@ impl Instructor {
             // standing together, and none of them having gone — because the failure this step exists
             // for is the first one going while the last one stands, which looks like a paste that
             // worked to anybody reading only the box.
-            (Domain::Terminal, "paste-lines") => {
+            (Domain::Workspace, "paste-lines") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2430,7 +2430,7 @@ impl Instructor {
             // both said in full, because the whole of the question the press after it answers is what
             // lies outside the words: a drag that began at the first letter would have dropped the
             // indentation before Amenbo was ever asked to.
-            (Domain::Terminal, "select-in-pane") => {
+            (Domain::Workspace, "select-in-pane") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2444,7 +2444,7 @@ impl Instructor {
             // The press that loads it. What the operator is told to look at is the screen, which has
             // to be exactly as it was: the tidying is the clipboard's and a build that had tidied the
             // drawing would show it here and nowhere else.
-            (Domain::Terminal, "copy-selection") => {
+            (Domain::Workspace, "copy-selection") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2466,7 +2466,7 @@ impl Instructor {
             // Control-L clears the screen in every shell a pane comes up in, and is read as a
             // command to the shell rather than sent as a line, so the naming is still the road's to
             // make.
-            (Domain::Terminal, "run") => {
+            (Domain::Workspace, "run") => {
                 let standing_in = match with.contains_key("target") {
                     true => format!(
                         ", putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by, which the pane had on it a step ago — where the command says `<ref>`",
@@ -2483,7 +2483,7 @@ impl Instructor {
             // for a particular width: where the fold lands is the run machine's business — its font,
             // its screen, how wide the window will go — so what the road can ask for is the state,
             // and the operator is the one who can see when it has arrived.
-            (Domain::Terminal, "press-ref") => match flagged(with, "folded") {
+            (Domain::Workspace, "press-ref") => match flagged(with, "folded") {
                 false => format!(
                     "In the pane, press the ref of the task \"{}\" where the output drew it — the `AMB-T-…` characters themselves, which the pane offers as a link.",
                     self.target_label(with)
@@ -2501,16 +2501,16 @@ impl Instructor {
             // The band's count pressed, and one of the refs behind it. The count is named by what it
             // is rather than by the words on it: what it reads is the interface's own, in the run's
             // language, so an operator sent to press a phrase would be sent to press a translation.
-            (Domain::Terminal, "open-made") => format!(
+            (Domain::Workspace, "open-made") => format!(
                 "Under {}, on the band below the terminal, press what says how much this session has filed — the count of tasks and decisions, beside the controls for the box and the model. A list of what it filed opens at the press.",
                 named_pane(with)
             ),
-            (Domain::Terminal, "press-made") => format!(
+            (Domain::Workspace, "press-made") => format!(
                 "In the list the count opened, press the row for the {} \"{}\" — the rows carry refs rather than titles, so read the number off the record and press the row carrying it.",
                 self.target_noun(with),
                 self.target_label(with)
             ),
-            (Domain::Terminal, "press-url") => match arg_str(with, "shows") {
+            (Domain::Workspace, "press-url") => match arg_str(with, "shows") {
                 None => format!(
                     "In the pane, press the address {} where the output drew it — the characters themselves, which the pane offers as a link.",
                     req(with, "url")?
@@ -2531,7 +2531,7 @@ impl Instructor {
             // different words and the rest of the line is the same in both. What it ends with is the
             // road's own line: a step that waited for the interface to say it had finished would be
             // waiting on words drawn in whatever language the run's machine is set to.
-            (Domain::Terminal, "keep-printing") => {
+            (Domain::Workspace, "keep-printing") => {
                 let text = req(with, "text")?;
                 format!(
                     "In the pane that has a terminal running in it, run: ping -c {KEEP_PRINTING_SECONDS} 127.0.0.1; echo \"{text}\" — where that pane's shell is PowerShell, the count is written -n {KEEP_PRINTING_SECONDS} and the rest of the line is the same. A line arrives about once a second for the {KEEP_PRINTING_SECONDS} seconds that takes, which is a terminal putting something out with nobody typing at it. Leave the pane alone once it is going: what every step after this reads is a pane nobody is working in, and the step looking for \"{text}\" is the road waiting for the printing to stop."
@@ -2545,7 +2545,7 @@ impl Instructor {
             // hands the shell back its prompt, and a shell draws one by asking for its modes again —
             // which puts back the very bytes the printing is here to bury. Left running behind the
             // prompt already on the screen, nothing after it is the shell's.
-            (Domain::Terminal, "print-past-what-is-kept") => {
+            (Domain::Workspace, "print-past-what-is-kept") => {
                 let text = req(with, "text")?;
                 format!(
                     "In the pane that has a terminal running in it, run: ( yes 'SCENARIO filler line' | head -n {PAST_WHAT_IS_KEPT_LINES}; printf '{text}\\n' ) & — the `&` at the end is part of the line, and it is what leaves the printing to a job behind the prompt rather than running it at one. Lines pour past for a few seconds. Wait until \"{text}\" is on the screen and the pouring has stopped, and leave the pane alone: what it has written by then is more than a pane keeps, which is the whole of what this step is for."
@@ -2555,10 +2555,10 @@ impl Instructor {
             // words on them, and each said with where it is: the way out is on the face, the way back
             // is in the window it made, and a road that pressed the wrong one would be in the wrong
             // window for every step after it.
-            (Domain::Terminal, "split-out") =>
-                "On the terminal face, press the control that opens the terminal in a separate window. A second window appears, offset from this one."
+            (Domain::Workspace, "split-out") =>
+                "On the workspace, press the control that opens the terminal in a separate window. A second window appears, offset from this one."
                     .to_string(),
-            (Domain::Terminal, "fold-back") =>
+            (Domain::Workspace, "fold-back") =>
                 "Press the control that puts the terminal back into one window. This window closes and the terminal returns to the other one."
                     .to_string(),
             // The surface layer, said from inside the pane it is about. The command is written out in
@@ -2569,7 +2569,7 @@ impl Instructor {
             // The layer's one verb is the one accepted here. An unknown word is refused
             // loudly — a road that asked for one would hand the operator a line the CLI turns away,
             // and a step nobody can carry out is worse than one that was never written.
-            (Domain::Terminal, "say") => {
+            (Domain::Workspace, "say") => {
                 let text = req(with, "text")?;
                 let verb = req(with, "verb")?;
                 let (command, what) = match verb {
@@ -2592,7 +2592,7 @@ impl Instructor {
             // Told by a press, for the reason `open-shell` ends an agent by one: a typed `exit`
             // would be the first line into a pane that has no name, and would take the name for
             // good. Control-D says the same thing to a shell and says it off the line.
-            (Domain::Terminal, "end-pane") =>
+            (Domain::Workspace, "end-pane") =>
                 "In the pane that has a terminal running in it, hold control and press D — the end of input, which ends the program. Do not type a command to end it: the words on a pane are how every step says which pane it means, and adding to them is never this step's to do. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
                     .to_string(),
             // Naming the place, which is three presses and not one: the row's menu, the item in it,
@@ -2608,7 +2608,7 @@ impl Instructor {
             // What is in the box already is said too. It opens on the name as it stands, selected, so
             // typing replaces it — and an operator who cleared it first would be doing the one thing
             // that ends in no name at all.
-            (Domain::Terminal, "name-pane") => {
+            (Domain::Workspace, "name-pane") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2626,7 +2626,7 @@ impl Instructor {
             // **Nothing is pressed**, and it is said twice, because the row has presses on it — the
             // control that opens what else it can do, the one that ends the pane — and a press is
             // what a hand on a pointing device does without being asked.
-            (Domain::Terminal, "hold-label") => {
+            (Domain::Workspace, "hold-label") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -2647,7 +2647,7 @@ impl Instructor {
             // **One question, whatever the session was doing.** The three-way that named a pane's
             // reservations is gone: what tied a pane to a task was a key the world could rewrite
             // behind the pane, so the plain confirmation is the whole of what stands here.
-            (Domain::Terminal, "remove-pane") => format!(
+            (Domain::Workspace, "remove-pane") => format!(
                 "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
                 req(with, "shows")?
             ),
@@ -2668,7 +2668,7 @@ impl Instructor {
             // naming something the screen may not have on it. Which width the tabs were left at is
             // not a road's to choose, so the step asks for the one it can be walked on rather than
             // reading anything about it.
-            (Domain::Terminal, "go-project") => format!(
+            (Domain::Workspace, "go-project") => format!(
                 "In the column of tabs at the edge of the face, press the tab for the project \"{}\". Where the tabs are drawn as colours alone, bring their names back first with the control under them. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
                 req(with, "project")?
             ),
@@ -2692,10 +2692,10 @@ impl Instructor {
             // answers the press on the empty frame with the same question either way, and nothing
             // opens until it is answered. So what comes before is said per way in and the press on
             // the empty frame is said once.
-            (Domain::Terminal, "open-pane") => {
+            (Domain::Workspace, "open-pane") => {
                 let press = match req(with, "from")? {
-                    "face" => "On the terminal face, find the empty frame — the one box on the page that is not a terminal, at the first gap in it — and press what opens a terminal in it, leaving the row above that press as it came up.",
-                    "strip" => "On the terminal face, which is full, press the thin strip standing beside the panes at the edge of the page — the one control there that is not a pane. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it, brought into being where every one of them is full. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
+                    "face" => "On the workspace, find the empty frame — the one box on the page that is not a terminal, at the first gap in it — and press what opens a terminal in it, leaving the row above that press as it came up.",
+                    "strip" => "On the workspace, which is full, press the thin strip standing beside the panes at the edge of the page — the one control there that is not a pane. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it, brought into being where every one of them is full. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
                     other => {
                         return Err(format!(
                             "action `open-pane` does not know the way in `{other}` — it is face or strip"
@@ -2721,7 +2721,7 @@ impl Instructor {
             // to a project and the folders it can work in are that project's, which is the one thing
             // the rail promises. A question offering a way to anywhere else is this road's failure
             // even where the press that follows lands correctly.
-            (Domain::Terminal, "pick-folder") => format!(
+            (Domain::Workspace, "pick-folder") => format!(
                 "In the question standing where the pane will be, press the folder the road calls \"{}\" — the row whose path ends in that name. Confirm as you press that what it offers is this project's folders and nothing besides: no picker, and no way out to a folder the project is not bound to. The pane opens in the one pressed.",
                 req(with, "dir")?
             ),
@@ -2734,7 +2734,7 @@ impl Instructor {
             // somewhere else" on a screen holding one question would be hunting for somewhere to
             // press. Pressing the count that is on asks for the split the face is already at, so
             // nothing about the page moves with it.
-            (Domain::Terminal, "leave-question") =>
+            (Domain::Workspace, "leave-question") =>
                 "Without answering it, leave the question about which folder the pane works in: press somewhere else on the face — at the top, the pane count that is already in force is on every screen this question can come up on, and pressing the one already on leaves the page as it is. Answer nothing and press none of the folders it offers."
                     .to_string(),
             // How many panes a page draws. The control is named by what it holds rather than by
@@ -2747,8 +2747,8 @@ impl Instructor {
             // who was not told may read a page they did not ask for as the app having lost their
             // place, and go looking for a pane that is exactly where it should be. The screen stays
             // with the pane being worked in, which is the last one opened or typed at.
-            (Domain::Terminal, "set-panes") => format!(
-                "At the top of the terminal face, in the row of pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
+            (Domain::Workspace, "set-panes") => format!(
+                "At the top of the workspace, in the row of pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
                 count(with, "count")?
             ),
             // Which way the two of them sit. The control carries no words at all — it is drawn as the
@@ -2759,8 +2759,8 @@ impl Instructor {
             // the counts and is drawn at their size, and the count re-pages every frame on the
             // device — so an operator expecting the same of this one would read a page that stayed
             // where it was as a press that never landed.
-            (Domain::Terminal, "set-orient") => format!(
-                "At the top of the terminal face, just past the row of pane counts, press the small control drawn as a box divided {} — the page with its two panes {}. The pair carries no words: each is the shape itself, and the one in force is the one that is not dimmed. The page redraws in that shape under the panes already standing on it: nothing opens, nothing closes, and the page you are on stays the one you are on.",
+            (Domain::Workspace, "set-orient") => format!(
+                "At the top of the workspace, just past the row of pane counts, press the small control drawn as a box divided {} — the page with its two panes {}. The pair carries no words: each is the shape itself, and the one in force is the one that is not dimmed. The page redraws in that shape under the panes already standing on it: nothing opens, nothing closes, and the page you are on stays the one you are on.",
                 orient(with)?.glyph(),
                 orient(with)?.phrase()
             ),
@@ -2768,8 +2768,8 @@ impl Instructor {
             // the two boxes trading places — so the step says the shape and where it stands, the way
             // `set-orient`'s pair is said. It is drawn from two panes up, which is why the roads that
             // reach it open a second one first.
-            (Domain::Terminal, "reorder-panes") =>
-                "At the top of the terminal face, just before the row of page digits, press the small control drawn as two boxes with arrows between them. A panel opens over the face, drawing every pane of this project as a card, laid out page by page in the shape the pages themselves are drawn in. Nothing on the face behind it moves."
+            (Domain::Workspace, "reorder-panes") =>
+                "At the top of the workspace, just before the row of page digits, press the small control drawn as two boxes with arrows between them. A panel opens over the face, drawing every pane of this project as a card, laid out page by page in the shape the pages themselves are drawn in. Nothing on the face behind it moves."
                     .to_string(),
             // Carrying one card onto another. It is a press and a move rather than the machine's own
             // drag, so the step says to hold the card down while moving it — a press that travels no
@@ -2779,7 +2779,7 @@ impl Instructor {
             // how the cards are laid out — side by side on most pages, one above the other where the
             // page is drawn that way — so the step says the half by the order it puts the card in
             // rather than by left and right.
-            (Domain::Terminal, "carry-pane") => {
+            (Domain::Workspace, "carry-pane") => {
                 let side = match req(with, "side")? {
                     "before" => "the half of it nearest the front of the order — the left half where the cards sit side by side, the top half where they sit one above the other — so that the carried card takes that one's place and pushes it along",
                     "after" => "the half of it furthest from the front of the order — the right half where the cards sit side by side, the bottom half where they sit one above the other — so that the carried card lands just past it",
@@ -2798,13 +2798,13 @@ impl Instructor {
             }
             // The press that makes it the real order. It is named by what it says rather than by
             // where it sits, being one of two buttons on a panel with nothing else to press.
-            (Domain::Terminal, "keep-order") =>
+            (Domain::Workspace, "keep-order") =>
                 "In the panel of cards, press the button that takes the order you have made — the one drawn as the panel's own action, at the foot of it beside the way out. The panel closes and the panes are drawn in that order. The page you were on stays the page you are on, and the pane you were working in is still the one you are working in, wherever in the order it has ended up."
                     .to_string(),
             // And leaving without it. Three ways out, and each said by the gesture rather than by a
             // word on screen: the words are the interface's own and the run's language is whatever
             // the machine is set to.
-            (Domain::Terminal, "drop-order") => {
+            (Domain::Workspace, "drop-order") => {
                 let leave = match req(with, "how")? {
                     "button" => "press the other of the two buttons at the foot of the panel — the plain one beside the action",
                     "escape" => "press Escape",
@@ -2822,8 +2822,8 @@ impl Instructor {
             // Paging. The digits are the pages, so the step names the one it presses and says the
             // whole screen moves: a pane that was on the page being left is not on the screen after
             // this, which is the state half these roads are about.
-            (Domain::Terminal, "go-page") => format!(
-                "At the top of the terminal face, in the row of page digits, press {}. The whole screen moves to that page.",
+            (Domain::Workspace, "go-page") => format!(
+                "At the top of the workspace, in the row of page digits, press {}. The whole screen moves to that page.",
                 count(with, "page")?
             ),
             // Putting a column away, and asking for it again. Each is said with *where* its control
@@ -2835,25 +2835,25 @@ impl Instructor {
             // The controls are named by what they do rather than by what they read, for the reason
             // `show-face`'s are: the words are the interface's own and the run's language is
             // whatever the machine is set to.
-            (Domain::Terminal, "hide-side") => match side(with)? {
+            (Domain::Workspace, "hide-side") => match side(with)? {
                 Side::Tabs => return Err(TABS_NEVER_CLOSED.to_string()),
-                Side::Rail => "At the top of the terminal face, press the control that folds the folders away — the small one just after the way out to a separate window. The column goes, and the panes take the width it was using. The tabs of the projects stay where they are: they are at the edge of the face and have no way to close them.".to_string(),
+                Side::Rail => "At the top of the workspace, press the control that folds the folders away — the small one just after the way out to a separate window. The column goes, and the panes take the width it was using. The tabs of the projects stay where they are: they are at the edge of the face and have no way to close them.".to_string(),
                 Side::Files => "On the panel beside the panes — whichever of its two halves is up — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
             },
-            (Domain::Terminal, "show-side") => match side(with)? {
+            (Domain::Workspace, "show-side") => match side(with)? {
                 Side::Tabs => return Err(TABS_NEVER_CLOSED.to_string()),
-                Side::Rail => "At the top of the terminal face, press that same control again. The folders come back where they were.".to_string(),
+                Side::Rail => "At the top of the workspace, press that same control again. The folders come back where they were.".to_string(),
                 // One control, and it is a switch rather than a way in: the same press opens the
                 // panel and puts it away. So the step is written as the state to end in — a road
                 // that pressed regardless would close the panel on every run that came up with it
                 // standing, which is what a machine comes up with until somebody says otherwise.
-                Side::Files => "At the top of the terminal face, make sure the panel beside the panes is standing. What opens it is at the far end of the top row — the one control there for that panel, naming the page written on and the files together — so press it where the panel is away, and leave it where the panel is already up: that same press is what puts it away. It comes up on whichever of its two halves it was left on, and which half that is belongs to the panel's own row of tabs rather than to this press.".to_string(),
+                Side::Files => "At the top of the workspace, make sure the panel beside the panes is standing. What opens it is at the far end of the top row — the one control there for that panel, naming the page written on and the files together — so press it where the panel is away, and leave it where the panel is already up: that same press is what puts it away. It comes up on whichever of its two halves it was left on, and which half that is belongs to the panel's own row of tabs rather than to this press.".to_string(),
             },
             // The one gesture on these roads, and the one step aimed at something the screen does
             // not name: the edge is a line rather than a button, so nothing reaches it the way a
             // button is reached and what the operator is told is where the edge is. The screen tool
             // drags between two points, but working those points out of the screen is an operator's.
-            (Domain::Terminal, "drag-side") => {
+            (Domain::Workspace, "drag-side") => {
                 let which = side(with)?;
                 // Said by what it does to the column rather than by left and right: which way is
                 // wider depends on which edge of the face the column is on, and an operator handed a
@@ -2888,7 +2888,7 @@ impl Instructor {
             // the keyboard in it by being a press into a text box, which is the browser's doing and
             // not the face's, and the road reading where the keyboard went would go green on a build
             // that never moved it.
-            (Domain::Terminal, "press-pane") => {
+            (Domain::Workspace, "press-pane") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -3848,7 +3848,7 @@ impl Instructor {
                 if present(with) { "among" } else { "not among" }
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
-            // whatever row led here is carrying the title too — a hit, or the question the terminal face
+            // whatever row led here is carrying the title too — a hit, or the question the workspace
             // puts — so a line read on it would pass over a press that opened nothing, and over one that
             // opened the wrong record just as quietly.
             (Domain::Task, "opened") => match present(with) {
@@ -4422,7 +4422,7 @@ impl Instructor {
             // rather than a gap in it: what is on the row is what a reader is promised, and a step
             // that told the operator where to expect the words to have come from would have them mark
             // a working face red on the half it did not name.
-            (Domain::Terminal, "label") => match present(with) {
+            (Domain::Workspace, "label") => match present(with) {
                 true => format!(
                     "On the row above the pane running a terminal, confirm the label carries \"{}\" — words of that pane's own, not any of the interface's, read off the screen.",
                     req(with, "shows")?
@@ -4435,7 +4435,7 @@ impl Instructor {
             // And the same words in the panel the row drops under itself, which is where they are
             // whole. The row cuts what it cannot fit; the panel wraps instead, so what is looked for
             // here is the run of words rather than a line of them.
-            (Domain::Terminal, "label-in-full") => format!(
+            (Domain::Workspace, "label-in-full") => format!(
                 "In the panel standing under the row above the pane — the one the previous step brought up, and which is gone the moment the pointer leaves — confirm \"{}\" is written out whole, over as many lines as it takes and with nothing dropped out of the middle of it.",
                 req(with, "shows")?
             ),
@@ -4449,20 +4449,20 @@ impl Instructor {
             // drawing that project's panes, and going to it first would have the road reading the tab
             // it had just moved the whole face onto — which is a tab that says nothing about the rest
             // of them being drawn from the same picture.
-            (Domain::Terminal, "tab-icon") => match present(with) {
+            (Domain::Workspace, "tab-icon") => match present(with) {
                 true => format!(
-                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is drawn with the image registered for it.",
+                    "Down the edge of the workspace, confirm the tab the project \"{}\" carries is drawn with the image registered for it.",
                     req(with, "project")?
                 ),
                 false => format!(
-                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is drawn with no image: it holds the project's colour with the first letter of its name on it.",
+                    "Down the edge of the workspace, confirm the tab the project \"{}\" carries is drawn with no image: it holds the project's colour with the first letter of its name on it.",
                     req(with, "project")?
                 ),
             },
             // What is standing where a person types, with nothing run. Both halves are said: the words
             // being there, and the line not having gone — a build that sent the newline would draw
             // whatever the program did with it, and the input line would be empty again.
-            (Domain::Terminal, "in-the-box") => {
+            (Domain::Workspace, "in-the-box") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -4488,7 +4488,7 @@ impl Instructor {
             // this reading — clearing the pane is how the words in the box are made the only ones on
             // the shot — and a sentence claiming an untouched terminal would have such an operator
             // mark a working build red.
-            (Domain::Terminal, "still-to-send") => {
+            (Domain::Workspace, "still-to-send") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -4509,7 +4509,7 @@ impl Instructor {
             // reading could never answer, and the end of the line last, because seeing it means
             // putting a caret there. The pane above is named as what to compare against: the rows are
             // still drawn as they were printed, so the difference between the two is on one screen.
-            (Domain::Terminal, "tidied-in-box") => {
+            (Domain::Workspace, "tidied-in-box") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -4526,7 +4526,7 @@ impl Instructor {
             // (`app/src/shell/TerminalPane.tsx`). A caret is dark for half of every second, so both
             // halves ask for a second's watching rather than a glance — the absent half above all,
             // where a blink and nothing at all look the same.
-            (Domain::Terminal, "keys-in-the-box") => {
+            (Domain::Workspace, "keys-in-the-box") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),
                     None => "the pane that has a terminal running in it".to_string(),
@@ -4547,7 +4547,7 @@ impl Instructor {
             // beside them are the interface's own and are drawn in whatever language the run is in, so
             // what the operator is asked for is how many of each the row names. Both at zero is the
             // other reading entirely — a band with nothing on it, rather than a band saying none.
-            (Domain::Terminal, "made") => {
+            (Domain::Workspace, "made") => {
                 let tasks = count(with, "tasks")?;
                 let decisions = count(with, "decisions")?;
                 match (tasks, decisions) {
@@ -4563,7 +4563,7 @@ impl Instructor {
                     ),
                 }
             }
-            (Domain::Terminal, "worked-in") => format!(
+            (Domain::Workspace, "worked-in") => format!(
                 "Confirm the pane showing \"{}\" is the one being worked in: its frame is the one drawn picked out from the rest, and the block where you would type in it is filled in — the pane the keyboard is not in draws that block as an outline.",
                 req(with, "shows")?
             ),
@@ -4574,7 +4574,7 @@ impl Instructor {
             // way back a record held, and a program that ended in moments, says so in a line of the
             // app's own. It is asked for beside `names`, which stays true of the same
             // line — what is added is the sentence under it.
-            (Domain::Terminal, "ended") if arg_str(with, "why").is_some() => {
+            (Domain::Workspace, "ended") if arg_str(with, "why").is_some() => {
                 match arg_str(with, "why") {
                     Some("no-way-back") => format!(
                         "Read what {pane} says now that the program in it has stopped — the pane's own lines about the ending, above where the program was running and not part of what it printed. Confirm it says the program ended, and beside that, in words, that this conversation cannot be opened again. The program's own last line is its own and is not this reading.",
@@ -4586,7 +4586,7 @@ impl Instructor {
                     )),
                 }
             }
-            (Domain::Terminal, "ended") => match req(with, "names")? {
+            (Domain::Workspace, "ended") => match req(with, "names")? {
                 "none" => format!(
                     "Read what {pane} says now that the program in it has stopped — the pane's own line about the ending, above where the program was running and not part of what it printed. Confirm it says the program ended and nothing further: no file is named there and no reason is given. Whatever the program itself printed is its own and is not this reading.",
                     pane = named_pane(with),
@@ -4596,7 +4596,7 @@ impl Instructor {
                     pane = named_pane(with),
                 ),
             },
-            (Domain::Terminal, "pane") => match present(with) {
+            (Domain::Workspace, "pane") => match present(with) {
                 true => format!(
                     "Confirm the line \"{}\" is on the screen, on the pane that printed it — the same pane, drawn here. What is on a pane stays where it was printed, so a pane whose terminal has since ended still carries it.",
                     req(with, "shows")?
@@ -4609,7 +4609,7 @@ impl Instructor {
             // The lamp on a pane's label, on one of its two faces. Both hold still and
             // both are a picture: the lamp follows the stream and nothing is read into it, so neither
             // half is watched rather than shot.
-            (Domain::Terminal, "dot") => match face(with)? {
+            (Domain::Workspace, "dot") => match face(with)? {
                 Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. **Read it while something is still arriving.** The lamp follows the stream and nothing else, so a pane that has already stopped — its last line on the screen with nothing following it — is one this reading came too late for: a sunk lamp there is the lateness and not a fault. Set that pane printing again and read the lamp while it is."),
                 Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
             },
@@ -4619,7 +4619,7 @@ impl Instructor {
             // The absent half is the one the walking-away is proved by, and it is written to say what
             // a screen with nothing on it means here: the question is the box, so a face drawing
             // neither it nor a pane is a question that took its box with it.
-            (Domain::Terminal, "asking-folder") => match present(with) {
+            (Domain::Workspace, "asking-folder") => match present(with) {
                 true => format!(
                     "Confirm the question about which folder this pane works in is standing where the pane would be, and that \"{}\" is one of the folders it offers — on the question itself, not on the column of folders down the side, which names it whatever is standing.",
                     req(with, "dir")?
@@ -4634,8 +4634,8 @@ impl Instructor {
             // chosen a folder is looking at the thing they pressed, and an answer drawn anywhere else
             // is one they never meet. What is confirmed beside it is that no pane came up — the fault
             // this reading exists to catch is a face that moved on as if the folder had been taken.
-            (Domain::Terminal, "turned-away") => format!(
-                "On the terminal face, confirm no pane opened for the folder just chosen, and that the way in is answering under itself: it says the folder belongs to another store, and names \"{}\" as the store it belongs to.",
+            (Domain::Workspace, "turned-away") => format!(
+                "On the workspace, confirm no pane opened for the folder just chosen, and that the way in is answering under itself: it says the folder belongs to another store, and names \"{}\" as the store it belongs to.",
                 req(with, "store")?
             ),
             // The browser the press was for, which is the one window on this road that is not Amenbo's.
@@ -4645,7 +4645,7 @@ impl Instructor {
             // What is asked for is the address bar and not the page. A run machine need not be on the
             // network for the press to have worked, and the sentence says so, because an operator
             // looking at an error page has to know whether they are looking at a pass.
-            (Domain::Terminal, "opened-in-browser") => format!(
+            (Domain::Workspace, "opened-in-browser") => format!(
                 "Confirm this machine's own browser has come forward with {} in its address bar — that \
                  address and nothing added to the end of it. Whether the page arrives is not the step: a \
                  machine off the network still shows where it was sent. Shoot that browser's window \
@@ -4655,18 +4655,18 @@ impl Instructor {
             ),
             // Whether a column is beside the panes. The absent half says what the width went to, so an
             // operator reading it knows a screen that merely drew the column narrower would be a fail.
-            (Domain::Terminal, "side") => {
+            (Domain::Workspace, "side") => {
                 let which = side(with)?;
                 if let Side::Tabs = which {
                     return Err(TABS_NEVER_CLOSED.to_string());
                 }
                 match present(with) {
                     true => format!(
-                        "On the terminal face, confirm {} is beside the panes, taking width of its own.",
+                        "On the workspace, confirm {} is beside the panes, taking width of its own.",
                         which.phrase()
                     ),
                     false => format!(
-                        "On the terminal face, confirm {} is nowhere on the screen — not narrowed, not emptied, gone — and that the panes have spread into the width it was using.",
+                        "On the workspace, confirm {} is nowhere on the screen — not narrowed, not emptied, gone — and that the panes have spread into the width it was using.",
                         which.phrase()
                     ),
                 }
@@ -4678,7 +4678,7 @@ impl Instructor {
             // them, and the reading column at its wide width lies over them instead and takes none
             // — so what is the same in both, and all a person at the screen can be asked for, is
             // that the edge moved and the rest of the face did not.
-            (Domain::Terminal, "side-width") => {
+            (Domain::Workspace, "side-width") => {
                 let which = side(with)?;
                 let moved = match flag(with, "wider")? {
                     true => "wider than it was on the shot before this one",
@@ -4696,9 +4696,9 @@ impl Instructor {
             // because their width is whatever the column left them: the two answer for each other on
             // the one picture, and the operator is asked which of the two regions is the wider rather
             // than for a number nobody can read off a screen.
-            (Domain::Terminal, "side-span") => {
+            (Domain::Workspace, "side-span") => {
                 let which = side(with)?;
-                format!("On the terminal face, confirm {} is {}", which.phrase(), span(with, which)?)
+                format!("On the workspace, confirm {} is {}", which.phrase(), span(with, which)?)
             }
             // And the reading that stands where that one cannot: the wide width, which lies over
             // the panes instead of dividing the width with them. What is asked for is whether any of
@@ -4706,7 +4706,7 @@ impl Instructor {
             // width that does not move with the size of the window — the width it ships with leaves a
             // strip of the panes on the narrowest window the application opens, and one dragged to
             // the stop leaves none on the widest.
-            (Domain::Terminal, "side-cover") => match side(with)? {
+            (Domain::Workspace, "side-cover") => match side(with)? {
                 Side::Tabs => return Err(
                     "assert `side-cover` is the reading column's — the project tabs are never drawn over the panes, and have nothing for this reading to be about".to_string()
                 ),
@@ -4718,7 +4718,7 @@ impl Instructor {
                 // name it goes by here says "beside" — running the two together would have the
                 // sentence contradict itself in front of the person closing it.
                 Side::Files => format!(
-                    "On the terminal face, look at {}. Confirm it is {}",
+                    "On the workspace, look at {}. Confirm it is {}",
                     Side::Files.phrase(),
                     cover(with)?
                 ),
@@ -4728,9 +4728,9 @@ impl Instructor {
             // `down` is pressed so that a pane keeps the whole of it, and a grid that shuffled the
             // panes about without handing them that width would have honoured the press and missed
             // what it was for.
-            (Domain::Terminal, "panes-sit") => match orient(with)? {
-                Orient::Across => "On the terminal face, confirm the two panes are side by side — one to the left of the other, each taking about half the width between the columns, and neither of them above or below the other.".to_string(),
-                Orient::Down => "On the terminal face, confirm the two panes are one above the other — one stacked on the other, each taking the whole width between the columns rather than half of it, and neither of them beside the other.".to_string(),
+            (Domain::Workspace, "panes-sit") => match orient(with)? {
+                Orient::Across => "On the workspace, confirm the two panes are side by side — one to the left of the other, each taking about half the width between the columns, and neither of them above or below the other.".to_string(),
+                Orient::Down => "On the workspace, confirm the two panes are one above the other — one stacked on the other, each taking the whole width between the columns rather than half of it, and neither of them beside the other.".to_string(),
             },
             // What the empty frame is set to open with, read on the row above its press. The row is
             // every agent Amenbo knows how to start, and which of them this machine has is the
@@ -4742,8 +4742,8 @@ impl Instructor {
             // The button is read beside it. Nothing on the row being on is the one state that stops
             // the press, and it is what a build that forgot the choice would fall back to — so a step
             // that looked only at which name is lit could pass on a frame that opens nothing.
-            (Domain::Terminal, "opens-with") => match req(with, "start")? {
-                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. What else is on the row is nothing to this reading: a press saying how many agents this machine has not got is left folded, and on a machine that can start none the plain shell may be the only thing there is to choose."
+            (Domain::Workspace, "opens-with") => match req(with, "start")? {
+                "shell" => "On the workspace, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. What else is on the row is nothing to this reading: a press saying how many agents this machine has not got is left folded, and on a machine that can start none the plain shell may be the only thing there is to choose."
                     .to_string(),
                 // The first run, which is a state and not a program: nobody has said, so the frame
                 // says so instead of guessing. Both halves are read because either alone passes on
@@ -4754,7 +4754,7 @@ impl Instructor {
                 // The row has to be there to be read blank, and that is said out loud: this is the
                 // one reading here a machine cannot be relied on to be able to give, and the road
                 // that asks for it stood the machine up first (`can-start`).
-                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Leave folded any press saying how many agents this machine has not got — what is behind it cannot be chosen and is not part of this reading. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
+                "none" => "On the workspace, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Leave folded any press saying how many agents this machine has not got — what is behind it cannot be chosen and is not part of this reading. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
                     .to_string(),
                 other => return Err(format!(
                     "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
@@ -4763,7 +4763,7 @@ impl Instructor {
             // The line the frame writes out under the model row. It is read from the end: the word it
             // begins with is the agent's own program name, which this cannot name and does not need
             // to (`opens-with`), and what follows it is the whole of what a model choice does.
-            (Domain::Terminal, "starts-on") => match req(with, "model")? {
+            (Domain::Workspace, "starts-on") => match req(with, "model")? {
                 "none" => "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm nothing on that line names a model: the agent's own program name is there and nothing follows it. A flag with a name behind it here is a build holding a choice the reader has not made, or has taken back."
                     .to_string(),
                 model => format!(
@@ -4774,7 +4774,7 @@ impl Instructor {
             // on the row itself rather than off the line under it: what that choice puts on the line
             // is nothing, which is `starts-on`'s reading, and this is the other half — what the
             // agent will do with a line that names no model.
-            (Domain::Terminal, "stands-for") => match req(with, "model")? {
+            (Domain::Workspace, "stands-for") => match req(with, "model")? {
                 "none" => "On the empty frame, look at the model row under the agent you chose, at the first thing on it — the one that says the agent starts on whatever its own settings already say. Confirm it names no model: it says that and nothing more. This provider has never said which model it is on, and a name here would be Amenbo answering for it."
                     .to_string(),
                 model => format!(
@@ -4785,7 +4785,7 @@ impl Instructor {
             // The first half is the provider's own command and the second is what the press costs the
             // reader outside this session — which is the half a build could stop saying while still
             // switching models correctly, with nothing else on the screen looking wrong.
-            (Domain::Terminal, "switch-says") => {
+            (Domain::Workspace, "switch-says") => {
                 let keeps = match arg_str(with, "keeps") {
                     None | Some("none") => "Confirm it says nothing about a file of your own: this provider changes the session in front of you and nothing else, and a sentence naming a file here would be Amenbo promising a change it does not make.".to_string(),
                     Some(path) => format!("Confirm it also says the change reaches `{path}` — one of your own files, named before the press and not after it. This provider keeps the change past this session, so a press that said nothing about it would move your default without telling you."),
@@ -4800,7 +4800,7 @@ impl Instructor {
             // of the pane's screen: three of the six providers say in words that the model moved and
             // three say nothing at all, so a build reading either would be parsing a provider's own
             // screen.
-            (Domain::Terminal, "answers-on") => match req(with, "model")? {
+            (Domain::Workspace, "answers-on") => match req(with, "model")? {
                 // Nothing has moved it yet, so there is nothing for it to name. The row is still
                 // there — it is a pane running a provider Amenbo can name — and what it says is that
                 // there is a model to choose.
@@ -4825,7 +4825,7 @@ impl Instructor {
             // quotes, dropped the arguments, rebuilt it from the first word — would draw something a
             // reader would still call the right one, and it is the one thing this reading exists to
             // catch.
-            (Domain::Terminal, "registered") => format!(
+            (Domain::Workspace, "registered") => format!(
                 "On the empty frame, look under the row of things a pane can be opened with, at the list of the commands registered on this machine. Confirm one of them is called \"{}\" and that the line drawn beside it reads `{}` — the same characters in the same order, with nothing added, tidied or left out.",
                 req(with, "name")?,
                 req(with, "line")?,
@@ -4844,7 +4844,7 @@ impl Instructor {
             // screen that is still being tried. What it must not find is written as a line rather
             // than as a state, because the fault it catches leaves a mark and does not take one
             // away.
-            (Domain::Terminal, "handed-over") => match present(with) {
+            (Domain::Workspace, "handed-over") => match present(with) {
                 true => format!(
                     "In the pane the registered command is running in, wait a few seconds and then confirm Amenbo's opening sentence — the fixed English one, beginning \"Before you act on any request in this directory\" — is on a line the program gave back: the one marked \"{}\". Nothing is typed here; the sentence is put in and sent by Amenbo itself. The marked line is the reading — the pane shows the sentence as it goes in whether or not it was ever sent, and only the program giving it back says it was.",
                     req(with, "given-back")?
@@ -4864,7 +4864,7 @@ impl Instructor {
             // on the look after the paste lands, which is within seconds of the pane standing still;
             // the ten minutes Amenbo goes on trying for afterwards is the name being given up on, and
             // nothing that happens in them is what this reads.
-            (Domain::Terminal, "answered") => match present(with) {
+            (Domain::Workspace, "answered") => match present(with) {
                 true => format!(
                     "In the pane the agent is running in, confirm a line saying \"{}\" has come up — the program says that, and only that, for every line it is given. What went in is what you just sent, with whatever was sitting in the box ahead of it: the pane is reading, and a press of the reader's own is what reaches it.",
                     req(with, "given-back")?
@@ -4881,7 +4881,7 @@ impl Instructor {
             // may stand beside the panes and what may not: **one** empty frame where the page has
             // room, never a second, and nothing at all where the panes fill the count. An operator
             // who was told only to count the panes would pass on the screen this exists to catch.
-            (Domain::Terminal, "frames") => {
+            (Domain::Workspace, "frames") => {
                 // What may be standing beside the panes. Said exactly where the road says so, and as
                 // "at most one" where it does not: a page with room draws its one way in at the first
                 // gap, and a page whose panes fill the count has no room to offer and must draw none.
@@ -4910,14 +4910,14 @@ impl Instructor {
                     0 if with.get("empty").and_then(|v| v.as_u64()) == Some(0) => return Err(
                         "assert `frames` cannot ask for a page with no panes and no empty frame — a page with room always draws its one way in".to_string()
                     ),
-                    0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal anywhere on it. What is on it is one empty frame, or, while it is standing, the question about where a pane runs — one box and no more, with the rest of the page bare."
+                    0 => "On the workspace, confirm no pane is standing on the page at all — no terminal anywhere on it. What is on it is one empty frame, or, while it is standing, the question about where a pane runs — one box and no more, with the rest of the page bare."
                         .to_string(),
                     1 => format!(
-                        "On the terminal face, confirm exactly one pane is standing on the page. {}",
+                        "On the workspace, confirm exactly one pane is standing on the page. {}",
                         beside("it")?
                     ),
                     n => format!(
-                        "On the terminal face, count the panes standing on the page: confirm there are exactly {n}. {}",
+                        "On the workspace, count the panes standing on the page: confirm there are exactly {n}. {}",
                         beside("them")?
                     ),
                 }
@@ -6203,7 +6203,7 @@ pub fn step_reads_the_store(step: &Step) -> bool {
 ///
 /// - `files listed` — the tree of a bound folder stands in a rail a person drags, and a row in a
 ///   rail left narrow draws `grafting.md` as `grafting…`.
-/// - `terminal label` — the row above a pane is only as wide as the pane, so a second pane beside
+/// - `workspace label` — the row above a pane is only as wide as the pane, so a second pane beside
 ///   the first draws `SCENARIO named by hand` as `SCENARIO named by h.`.
 ///
 /// A reader returns what is drawn, so either step goes red against a build doing exactly what it
@@ -6218,7 +6218,7 @@ pub fn step_reads_the_store(step: &Step) -> bool {
 /// words a shot can be read for stays the shot's: a build asked what it drew is a build checked
 /// against itself, where a reading is the screen checked against the road.
 pub fn reads_the_tree(domain: Domain, op: &str) -> bool {
-    matches!((domain, op), (Domain::Files, "listed") | (Domain::Terminal, "label"))
+    matches!((domain, op), (Domain::Files, "listed") | (Domain::Workspace, "label"))
 }
 
 /// The CSS class the interface draws a section under, for a step that named one ([`section`]).
@@ -6612,7 +6612,7 @@ fn goes_out_the_door(step: &Step) -> bool {
 /// the window that is left is the app's one window and a road says that by saying nothing.
 fn closes_its_window(step: &Step) -> bool {
     match step {
-        Step::Action { domain: Domain::Terminal, op, .. } if op == "fold-back" => true,
+        Step::Action { domain: Domain::Workspace, op, .. } if op == "fold-back" => true,
         // The same window shut by its own corner rather than by the control that folds it back. What
         // is left standing is the board, which is the app's one window again — so the shot goes where
         // the fold's does, and for the same reason.
@@ -6655,7 +6655,7 @@ pub fn domain_str(d: Domain) -> &'static str {
         Domain::Repo => "repo",
         Domain::Mcp => "mcp",
         Domain::Tick => "tick",
-        Domain::Terminal => "terminal",
+        Domain::Workspace => "workspace",
         Domain::Files => "files",
         Domain::Notify => "notify",
         Domain::Viewer => "viewer",
@@ -6972,11 +6972,11 @@ steps_gui:
     domain: files
     op: hand-to-pane
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with: { shows: /work/notes.md }
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with: { shows: /work/notes.md }
 "#);
@@ -7009,14 +7009,14 @@ id: x
 title: y
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-a-word
     with: { text: しなりおのことば }
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-a-word
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-a-word
     with: { away: true }
 "#);
@@ -7049,11 +7049,11 @@ id: x
 title: y
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: drop-in
     with: { brings: seeds.csv }
   - type: action
-    domain: terminal
+    domain: workspace
     op: drop-in
     with: { brings: seeds.csv, beside: labels.txt }
 "#);
@@ -7490,7 +7490,7 @@ id: x
 title: y
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with: { shows: SCENARIO the pane }
 "#);
@@ -7592,11 +7592,11 @@ id: x
 title: y
 steps_gui:
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     with: { dir: orchard }
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     with: { dir: orchard, present: false }
 "#);
@@ -7728,7 +7728,7 @@ steps_gui:
     }
 
     /// The other surface that draws the same image: the tab a project carries down the edge of the
-    /// terminal face. Both lines name what an eye should find — the image, or the colour with the
+    /// workspace. Both lines name what an eye should find — the image, or the colour with the
     /// first letter of the name on it — and neither is settled by a reading, a tab holding a
     /// picture whichever of the two it is. Nothing presses the tab either: what the road is asking is
     /// that every tab is drawn from the one picture the face is handed, and going to the project
@@ -7746,11 +7746,11 @@ given:
     as: greenhouse
 steps_gui:
   - type: assert
-    domain: terminal
+    domain: workspace
     op: tab-icon
     with: { project: Greenhouse, present: true }
   - type: assert
-    domain: terminal
+    domain: workspace
     op: tab-icon
     with: { project: Greenhouse, present: false }
 "#;
@@ -9040,19 +9040,19 @@ id: x
 title: A page is re-cut, paged and opened on
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with: { count: 1 }
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     with: { page: 2 }
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with: { from: face }
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with: { from: strip }
 "#);
@@ -9097,19 +9097,19 @@ id: x
 title: Two panes are stacked and then put back
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-orient
     with: { orient: down }
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with: { orient: down }
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-orient
     with: { orient: across }
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with: { orient: across }
 "#);
@@ -9159,7 +9159,7 @@ steps_gui:
     #[test]
     fn a_press_that_meets_the_folder_question_does_not_promise_a_pane() {
         let open = |from: &str, asks: bool| Step::Action {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "open-pane".to_string(),
             with: [
                 ("from".to_string(), serde_yaml::Value::from(from)),
@@ -9188,7 +9188,7 @@ steps_gui:
     #[test]
     fn the_folder_a_pane_works_in_is_picked_out_of_this_projects_own() {
         let step = Step::Action {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "pick-folder".to_string(),
             with: [("dir".to_string(), serde_yaml::Value::from("greenhouse-benches"))]
                 .into_iter()
@@ -9208,7 +9208,7 @@ steps_gui:
     #[test]
     fn going_to_a_project_says_where_the_face_lands_rather_than_that_it_moved() {
         let step = Step::Action {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "go-project".to_string(),
             with: [("project".to_string(), serde_yaml::Value::from("Greenhouse"))]
                 .into_iter()
@@ -9234,7 +9234,7 @@ steps_gui:
     #[test]
     fn a_way_into_a_pane_the_face_does_not_offer_is_refused() {
         let step = Step::Action {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "open-pane".to_string(),
             with: [("from".to_string(), serde_yaml::Value::from("keyboard"))]
                 .into_iter()
@@ -9253,7 +9253,7 @@ steps_gui:
     #[test]
     fn the_empty_frame_is_read_for_what_it_will_open_with_and_for_a_live_press() {
         let step = Step::Assert {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "opens-with".to_string(),
             with: [("start".to_string(), serde_yaml::Value::from("shell"))]
                 .into_iter()
@@ -9280,7 +9280,7 @@ steps_gui:
     #[test]
     fn the_first_run_is_read_as_a_row_with_nothing_on_it_and_a_press_that_asks() {
         let step = Step::Assert {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "opens-with".to_string(),
             with: [("start".to_string(), serde_yaml::Value::from("none"))]
                 .into_iter()
@@ -9309,7 +9309,7 @@ steps_gui:
     #[test]
     fn a_start_the_row_cannot_be_named_by_is_refused() {
         let step = Step::Assert {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "opens-with".to_string(),
             with: [("start".to_string(), serde_yaml::Value::from("claude-code"))]
                 .into_iter()
@@ -9327,7 +9327,7 @@ steps_gui:
     #[test]
     fn a_pane_is_set_printing_with_a_line_that_says_when_it_stopped() {
         let step = Step::Action {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "keep-printing".to_string(),
             with: [("text".to_string(), serde_yaml::Value::from("SCENARIO that is all"))]
                 .into_iter()
@@ -9363,7 +9363,7 @@ steps_gui:
     #[test]
     fn the_lamp_is_read_by_its_face_and_neither_face_is_a_reading() {
         let dot = |face: &str| Step::Assert {
-            domain: Domain::Terminal,
+            domain: Domain::Workspace,
             op: "dot".to_string(),
             with: [("face".to_string(), serde_yaml::Value::from(face))].into_iter().collect(),
             window: None,
@@ -9400,10 +9400,10 @@ id: x
 title: y
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
   - type: action
-    domain: terminal
+    domain: workspace
     op: end-pane
 "#);
         let mut ins = Instructor::new();
@@ -9448,19 +9448,19 @@ steps_gui:
     with: { title: SEED }
     as: seed
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with: { command: amenbo task list --actor ai }
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-ref
     with: { target: seed }
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with: { command: 'echo "... <ref>"', target: seed }
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-ref
     with: { target: seed, folded: true }
 "#);
@@ -9624,11 +9624,11 @@ id: sample
 title: The terminal goes out into a window of its own and comes back
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "
 "#,
@@ -9683,7 +9683,7 @@ id: sample
 title: The way out names a pane that will not be in its conversation again
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with: { agent: Gemini CLI }
   - type: assert
@@ -9728,7 +9728,7 @@ id: sample
 title: A road that names the agent and counts along the row at once
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with: { agent: Gemini CLI, at: second }
 "#,
@@ -9792,11 +9792,11 @@ id: sample
 title: A press moves the keyboard to the box of the pane it moves the work to
 steps_gui:
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
     with: { on: SCENARIO the pane pressed }
   - type: assert
-    domain: terminal
+    domain: workspace
     op: keys-in-the-box
     with: { on: SCENARIO the pane left behind, present: false }
 "#,
@@ -9834,22 +9834,22 @@ id: sample
 title: A line written under a pane, sent and stopped
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-written
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with: { key: ctrl-c, holding: true }
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with: { key: escape }
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with: { key: up, holding: true }
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with: { key: up }
 "#,
@@ -10050,11 +10050,11 @@ id: sample
 title: The terminal goes out into a window of its own and comes back
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "
 "#,
@@ -10479,7 +10479,7 @@ steps_gui:
     domain: store
     op: run-again
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with: { count: 0, empty: 1 }
 "#);
@@ -10679,9 +10679,9 @@ id: sample-tree
 title: A name the rail draws cut, which the tree carries whole
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
-    with: { face: terminal }
+    with: { face: workspace }
   - type: assert
     domain: files
     op: listed
@@ -10695,9 +10695,9 @@ id: sample-elsewhere
 title: A name on the screen, and not on the list being asked about
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
-    with: { face: terminal }
+    with: { face: workspace }
   - type: assert
     domain: files
     op: listed
@@ -10789,9 +10789,9 @@ steps_gui:
     #[test]
     fn only_a_name_its_space_can_elide_is_read_off_the_tree() {
         assert!(reads_the_tree(Domain::Files, "listed"));
-        assert!(reads_the_tree(Domain::Terminal, "label"), "a row is as wide as the pane under it");
+        assert!(reads_the_tree(Domain::Workspace, "label"), "a row is as wide as the pane under it");
         assert!(!reads_the_tree(Domain::Files, "reading"), "what an open file draws is the shot's");
-        assert!(!reads_the_tree(Domain::Terminal, "pane"), "a session is drawn out in the pane body");
+        assert!(!reads_the_tree(Domain::Workspace, "pane"), "a session is drawn out in the pane body");
         assert!(!reads_the_tree(Domain::Task, "listed"), "a card is drawn with room for its title");
     }
 

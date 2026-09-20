@@ -3,7 +3,7 @@
 // **The panel is one thing beside as many panes as the page holds**, and until now nothing could be
 // taken from the one to the other by hand: a path reached a pane either by being dragged in from the
 // desktop, which lands wherever the pointer is (`../core/hostDrop`), or off the row's own menu, which
-// lands in the pane being worked in and nowhere else (`../shell/TerminalFace`). A row in sight and a
+// lands in the pane being worked in and nowhere else (`../shell/WorkspaceFace`). A row in sight and a
 // pane in sight, and no way to put one in the other.
 //
 // What is carried is paths and nothing else (`AMB-D-820`), so this is the gesture and not the

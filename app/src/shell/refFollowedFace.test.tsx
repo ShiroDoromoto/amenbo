@@ -4,7 +4,7 @@
 // The host settles the click and brings the window forward (`crate::windows::show_ref`); the move
 // left is this shell's. Split out, the pane is in the other window and this one is already on the
 // ledger — so the selection is the whole of it. In one window the two are faces of the same window,
-// and a selection made behind the terminal face is a press that opened nothing: the record is drawn
+// and a selection made behind the workspace is a press that opened nothing: the record is drawn
 // under a face nobody is looking at (`AMB-D-897`).
 //
 // It is not visible in code that looks right either way: the selection is made in both shapes, and
@@ -43,10 +43,10 @@ vi.mock("./TopBar", () => ({
     createElement("button", {
       className: "topbar-face",
       "data-face": face,
-      onClick: () => onSelectFace("terminal"),
+      onClick: () => onSelectFace("workspace"),
     }),
 }));
-vi.mock("./TerminalFace", () => ({ TerminalFace: () => createElement("div", { className: "termface" }) }));
+vi.mock("./WorkspaceFace", () => ({ WorkspaceFace: () => createElement("div", { className: "workspace" }) }));
 vi.mock("./Sidebar", () => ({ Sidebar: () => null }));
 // The bands the shell stacks above the faces. Each asks the host something of its own, and none of
 // them is what this test is about.
@@ -86,8 +86,8 @@ let root: Root;
 /** Which face the window is showing, as the bar reads it. */
 const facing = () => container.querySelector(".topbar-face")?.getAttribute("data-face") ?? null;
 
-/** Put the shell up and press through to the terminal face, the way a reader reaches it. */
-async function onTheTerminalFace() {
+/** Put the shell up and press through to the workspace, the way a reader reaches it. */
+async function onTheWorkspace() {
   await act(async () => {
     root.render(createElement(AppShell));
     await Promise.resolve();
@@ -95,7 +95,7 @@ async function onTheTerminalFace() {
   await act(async () => {
     container.querySelector<HTMLButtonElement>(".topbar-face")!.click();
   });
-  expect(facing()).toBe("terminal");
+  expect(facing()).toBe("workspace");
 }
 
 /** A ref followed out of a pane, as the host hands it over (`crate::windows::show_ref`). */
@@ -149,7 +149,7 @@ afterEach(async () => {
 
 describe("a ref followed out of a pane, with the terminal a face of this window", () => {
   it("puts the ledger up, so the task it opened is on the screen", async () => {
-    await onTheTerminalFace();
+    await onTheWorkspace();
     await follow({ kind: "task", id: 7 });
 
     expect(hoisted.selected).toContain("task-7");
@@ -157,7 +157,7 @@ describe("a ref followed out of a pane, with the terminal a face of this window"
   });
 
   it("does the same for a decision", async () => {
-    await onTheTerminalFace();
+    await onTheWorkspace();
     await follow({ kind: "decision", id: 3 });
 
     expect(hoisted.selected).toContain("decision-3");

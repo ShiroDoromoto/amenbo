@@ -94,7 +94,7 @@ vi.mock("../core/ipc", async (importOriginal) => {
   };
 });
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -103,7 +103,7 @@ let root: Root;
 
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
 /** The split the control says is on, as a number of panes to a page. */
-const splitOn = () => container.querySelector(".termface__count--on")?.textContent ?? null;
+const splitOn = () => container.querySelector(".workspace__count--on")?.textContent ?? null;
 
 /** Let the host answer, and let React settle around it. */
 async function answered() {
@@ -119,7 +119,7 @@ async function mount() {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
   });
 }
 

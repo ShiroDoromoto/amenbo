@@ -579,7 +579,7 @@ export const tr: Translation = {
 
     "face.switch": "Bu pencerenin gösterdiği",
     "face.tasks": "Görevler",
-    "face.terminal": "Çalışma alanı",
+    "face.workspace": "Çalışma alanı",
     "face.splitOut": "Ayrı pencerede aç",
     "face.merge": "Tek pencereye dön",
     "face.opening": "Çalışma alanı kendi penceresinde açılıyor…",

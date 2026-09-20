@@ -40,16 +40,16 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, and what binds the folder to the project the face is on. The pane after this one is
   # opened in the same folder with nothing asked, which is what leaves the two rows saying the same
   # thing until they are named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -57,11 +57,11 @@ steps_gui:
   # Down to a plain shell. What an agent draws on its own screen is the agent's, and the rows this
   # road reads have to be the road's own words.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the pane opened first
@@ -69,14 +69,14 @@ steps_gui:
   # The second pane. The page holds one and one is on it, so the way in is the strip beside it: the
   # screen goes to the page brought into being for the pane, and the pane opens there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: strip
       asks: false
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the pane opened second
@@ -84,18 +84,18 @@ steps_gui:
   # Where the two of them stand before anything is asked of the order: the second is on the page it
   # was opened onto, which is the page the screen is on.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the pane opened second
 
   # ── Carried about, and thrown away ──────────────────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: reorder-panes
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: carry-pane
     with:
       pane: SCENARIO the pane opened second
@@ -103,7 +103,7 @@ steps_gui:
       side: before
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: drop-order
     with:
       how: escape
@@ -111,24 +111,24 @@ steps_gui:
   # And nothing was written. The first page still holds the pane that was opened first, which is the
   # reading a panel that reordered as the card moved could not give.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     with:
       page: 1
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the pane opened first
 
   # ── Carried about, and taken ────────────────────────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: reorder-panes
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: carry-pane
     with:
       pane: SCENARIO the pane opened second
@@ -136,14 +136,14 @@ steps_gui:
       side: before
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: keep-order
 
   # The order changed under a screen that did not move. The reader is on the page they turned to, and
   # what is on it now is the pane they carried to the front — the panes are one list cut into pages,
   # so putting one at the front of the list is what puts it on the first page.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the pane opened second
@@ -151,13 +151,13 @@ steps_gui:
   # And the one it was carried past is on the page the other came off, still running: a reorder moves
   # the places panes are drawn in and ends nothing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     with:
       page: 2
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the pane opened first

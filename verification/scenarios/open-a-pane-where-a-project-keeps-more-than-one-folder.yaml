@@ -88,15 +88,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face came up on is the run's business, so the road puts itself on the one it
   # raised before pressing anything.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
@@ -105,7 +105,7 @@ steps_gui:
   # two panes side by side at the end: at one to a page the second would be on a page of its own and
   # the first would be nowhere on the screen.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -113,14 +113,14 @@ steps_gui:
   # The face's empty frame, and this time pressing it opens nothing: the project keeps two folders,
   # so what comes up where the pane would have been is the question of which of them.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
       asks: true
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-folder
     with:
       dir: greenhouse-beds
@@ -129,17 +129,17 @@ steps_gui:
   # its own to draw, and a command handed to one is something to answer rather than something carried
   # out.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: cat where.txt
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO this terminal is in the beds
@@ -147,38 +147,38 @@ steps_gui:
   # Ended, so that the pane opened next is the only one with a terminal in it. The frame stays where
   # it is, with what it printed still on it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: end-pane
 
   # The second, at the empty frame beside the first: the page holds two and one frame stands on it.
   # The same question comes up, which is what says the asking follows the project's folders rather
   # than the screen being empty.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
       asks: true
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-folder
     with:
       dir: potting-shed
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: cat where.txt
 
   # The other folder's words, which is the whole of what the second press decided.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO this terminal is in the potting shed
@@ -187,7 +187,7 @@ steps_gui:
   # the second press opened one of its own rather than taking the first one over, and neither press
   # stood in for the other.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO this terminal is in the beds

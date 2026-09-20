@@ -68,21 +68,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face opens on is the run's business, so the road presses for the one it means to
   # set the cut in rather than reading whichever was selected.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -90,27 +90,27 @@ steps_gui:
   # Down to a plain shell, which is what a pane is when nothing is being asked of it. Nothing is typed:
   # what this road is about is how the page is cut, not what is running in the cut.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The cut a project nobody has answered for is drawn at, which is what the press is about to move
   # away from. One pane fills it, so there is no way in beside it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
       empty: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   # And the press has landed: the same one pane, with room beside it now.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
@@ -118,32 +118,32 @@ steps_gui:
 
   # The other project, which was never pressed in.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The half a face keeping one answer for the whole of itself would fail, and the half a face that
   # swallowed the press on the tab would fail with it — the reason is at the top of this road.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
       empty: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
@@ -152,7 +152,7 @@ steps_gui:
   # nothing to press before reading — a face that kept the cut only while the project was shown would
   # pass every reading above and fail this one.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1

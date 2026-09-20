@@ -22,7 +22,7 @@ import { Icon } from "../components/Icon";
  * The fact underneath is real and worth showing; the place for it is the ledger, not this frame.
  *
  * **There is one of these on a page and only where the page has a gap** — that is the face's to decide,
- * and it decides it from the frames (`./TerminalFace`).
+ * and it decides it from the frames (`./WorkspaceFace`).
  *
  * **What a terminal is opened with is chosen here**, on the frame, and pressed once. The row above
  * the button is every agent Amenbo knows how to start plus the plain shell, with the answer the host

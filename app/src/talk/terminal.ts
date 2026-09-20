@@ -1,4 +1,4 @@
-// One pane of the terminal face: a real terminal, drawn by xterm.js over a PTY the host holds.
+// One pane of the workspace: a real terminal, drawn by xterm.js over a PTY the host holds.
 //
 // The pane is a drawing of a session, not the session. A terminal belongs to the process, so a pane
 // can be taken away and put up again — in the window the user split it out into, back in the board

@@ -154,7 +154,7 @@ const drop = async (paths: string[]) => {
 };
 
 /** The box the keyboard lands on, as the terminal in this pane draws one. */
-const typing = () => container.querySelector<HTMLTextAreaElement>(".termface__face textarea");
+const typing = () => container.querySelector<HTMLTextAreaElement>(".workspace__face textarea");
 
 /** The way into the row's menu, while the row carries one. */
 const more = () => container.querySelector<HTMLButtonElement>(".slot__more");

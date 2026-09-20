@@ -24,7 +24,7 @@
 id: narrow-a-long-row-of-models-to-the-one-you-want
 title: A model row longer than it draws says so, and the box above it reaches the rest
 description: >
-  Stand a machine up whose agents answer with twenty models each, and open the terminal face. Choose
+  Stand a machine up whose agents answer with twenty models each, and open the workspace. Choose
   the first agent: the model row under it draws as far as it goes and says how many more it is not
   drawing, with a box above it for narrowing. Type part of a name into that box — one that is not on
   the row as drawn — and the row comes down to it. Press it, and the line the frame writes out under
@@ -45,7 +45,7 @@ given:
   # Two agents, which is the floor, and twenty models each — more than the row draws, which is the
   # whole of what puts the box there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -53,27 +53,27 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
   # that read a screen it had not put itself on would be reading somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
 
   # The line before anybody has named a model, which is what the reading at the end is worth anything
   # against.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: none
@@ -82,7 +82,7 @@ steps_gui:
   # The seventeenth, which is past where the row stops: a name the row was already drawing would be
   # pressed just as well by a build whose box did nothing at all.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-model
     with:
       name: scenario-model-17
@@ -90,7 +90,7 @@ steps_gui:
       how: narrow
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: scenario-model-17

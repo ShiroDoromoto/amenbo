@@ -608,7 +608,7 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   // `{face}` is the name of the face the window was split out with, taken from the same key the
-  // rest of the UI calls that face by (`face.terminal`), so the window and the button that opened
+  // rest of the UI calls that face by (`face.workspace`), so the window and the button that opened
   // it never say two different words for one thing.
   "app.talkWindow": "Amenbo — {face}",
   // talk window: the folder a pane opens in (`AMB-T-3606`), what it opens with — an agent, or the
@@ -636,7 +636,7 @@ const ui = {
   // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
   "face.switch": "Tasks or workspace",
   "face.tasks": "Tasks",
-  "face.terminal": "Workspace",
+  "face.workspace": "Workspace",
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
   "face.opening": "Opening the workspace in a window of its own…",
@@ -690,13 +690,13 @@ const ui = {
   "face.tabPanes": "{name}, {panes}",
   "face.paneCount": "Panes on screen",
   // The orientation, named in words because the control itself is drawn
-  // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a
+  // (`app/src/shell/WorkspaceFace.tsx`): a shape with nothing said about it is a
   // press to find out, and a screen reader has only what is written here.
   "face.paneOrient": "How the two panes sit",
   "face.paneAcross": "Side by side",
   "face.paneDown": "One above the other",
   // The split, as words rather than a bare digit: the row of pages beside it is digits too, so the
-  // count says what it counts (`app/src/shell/TerminalFace.tsx`).
+  // count says what it counts (`app/src/shell/WorkspaceFace.tsx`).
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
   "face.pages": "Pages",
   "face.page": "Page {n}",

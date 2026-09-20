@@ -34,7 +34,7 @@
 id: copy-a-path-once-and-put-it-down-in-three-places
 title: One copy of a row goes into a text box bare, into a folder as the file, and into a pane quoted
 description: >
-  Open the terminal face on a project whose folder holds a file with a space in its name, with a
+  Open the workspace on a project whose folder holds a file with a space in its name, with a
   shell running in the pane. Copy that row's path from its menu, then put what the copy left down
   three times: in another file's editor, where it arrives as plain words; in a folder, where the file
   itself arrives; and in the pane, where it arrives quoted. Then copy a second row with the key the
@@ -79,18 +79,18 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # A shell, because one of the three places is a pane's input line and an empty frame has none.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -185,14 +185,14 @@ steps_gui:
 
   # ── into the pane, quoted ─────────────────────────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste
 
   # The closing quote is read along with the name, and it is the point of the step: the words on the
   # clipboard end at the name, so a quote after it can only have been put there on the way in. The
   # path in front of it is whatever folder this run made, which no road can spell.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: "a plain one.md'"
@@ -208,11 +208,11 @@ steps_gui:
       section: tree
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: "keep.md'"

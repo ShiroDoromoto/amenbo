@@ -40,15 +40,15 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # A pane exists because somebody chose where it runs, and the choosing is what raises the project
   # around it as well.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: lantern
@@ -56,26 +56,26 @@ steps_gui:
   # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and the two
   # commands below are the road's own words on the pane and the name the person is about to stand over.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The road's own words on the pane, which is how every step below says which pane it means.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the first line
 
   # The lower of the two hands. From here the row calls the pane this, until the person outranks it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: say
     with:
       verb: name
       text: SCENARIO named by the session
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO named by hand
@@ -83,7 +83,7 @@ steps_gui:
   # The person's word, on the row and nowhere in the interface around it. It stands over the name the
   # session gave the frame a moment ago, which is the whole of what the last word for good means here.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO named by hand
@@ -94,13 +94,13 @@ steps_gui:
   # of the panel rather than of a width: what is proved is that the panel comes up and says what the
   # row says, on a road where both are the same words.
   - type: action
-    domain: terminal
+    domain: workspace
     op: hold-label
     with:
       shows: SCENARIO the first line
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label-in-full
     with:
       shows: SCENARIO named by hand

@@ -84,13 +84,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -184,7 +184,7 @@ steps_gui:
       key: escape
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-width
     with:
       side: files

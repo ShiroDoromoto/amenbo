@@ -14,7 +14,7 @@
 # arrival says the store did.
 #
 # Then it crosses to the other face, where the same image is drawn a second time. The settings are
-# where a project is given one; the tabs down the edge of the terminal face are what it was given one
+# where a project is given one; the tabs down the edge of the workspace are what it was given one
 # for, and they are drawn from one picture handed to that face rather than from a read per project. So
 # an image the settings draw and the tabs do not is the shape this half catches, and it is caught in
 # both directions — the tab falls back to the colour and the letter once the image is taken away, the
@@ -31,7 +31,7 @@ description: >
   own — the project's colour with the first letter of its name on it — and give it one, choosing a file
   off the disk and saving the form. Then walk out to the board and back in, which is the only way to
   ask whether what is drawn came out of the store rather than out of the form, and cross to the
-  terminal face, where the project's tab is drawn with that same image. Take the image away again
+  workspace, where the project's tab is drawn with that same image. Take the image away again
   last, and the colour and the letter are what the square and the tab both hold once more.
 given:
   # The project the road works on. Raising one is a road of its own and this one opens on the settings,
@@ -104,19 +104,19 @@ steps_gui:
       target: greenhouse
       present: true
 
-  # And the other surface that draws it. The tabs down the edge of the terminal face are all drawn from
+  # And the other surface that draws it. The tabs down the edge of the workspace are all drawn from
   # the one picture that face is handed, so an image standing in the settings and nowhere here would be
   # an image the tabs never heard about. The tab is read where it stands: every project has one whether
   # or not the face is drawing that project's panes, and pressing this one first would have the road
   # reading the tab it had just moved the whole face onto.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: tab-icon
     with:
       project: Greenhouse
@@ -124,7 +124,7 @@ steps_gui:
 
   # Back to the ledger, which is where the settings are reached from.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -154,13 +154,13 @@ steps_gui:
   # the letter — and this reading is what says taking the image away reached the picture the tabs are
   # drawn from as well.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: tab-icon
     with:
       project: Greenhouse

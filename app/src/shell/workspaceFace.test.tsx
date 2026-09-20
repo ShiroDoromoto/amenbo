@@ -10,7 +10,7 @@ import { act, createElement, useState } from "react";
 import type { ComponentType } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 // React 18's act() requires this environment flag to be set.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,27 +48,27 @@ let root: Root;
 
 // The production wiring: the face is mounted from the moment it is first asked for, and the other
 // face being up is `hidden` on its container.
-function HiddenShell({ face }: { face: "tasks" | "terminal" }) {
+function HiddenShell({ face }: { face: "tasks" | "workspace" }) {
   return createElement(
     "div",
-    { hidden: face !== "terminal" },
-    createElement(TerminalFace, { onWindow: () => {}, note: null }),
+    { hidden: face !== "workspace" },
+    createElement(WorkspaceFace, { onWindow: () => {}, note: null }),
   );
 }
 
 // The control: the same face, rendered only while it is the one showing.
-function ConditionalShell({ face }: { face: "tasks" | "terminal" }) {
-  return face === "terminal"
-    ? createElement(TerminalFace, { onWindow: () => {}, note: null })
+function ConditionalShell({ face }: { face: "tasks" | "workspace" }) {
+  return face === "workspace"
+    ? createElement(WorkspaceFace, { onWindow: () => {}, note: null })
     : null;
 }
 
-function Switcher({ shell }: { shell: ComponentType<{ face: "tasks" | "terminal" }> }) {
-  const [face, setFace] = useState<"tasks" | "terminal">("terminal");
+function Switcher({ shell }: { shell: ComponentType<{ face: "tasks" | "workspace" }> }) {
+  const [face, setFace] = useState<"tasks" | "workspace">("workspace");
   return createElement(
     "div",
     null,
-    createElement("button", { onClick: () => setFace(face === "tasks" ? "terminal" : "tasks") }, "switch"),
+    createElement("button", { onClick: () => setFace(face === "tasks" ? "workspace" : "tasks") }, "switch"),
     createElement(shell, { face }),
   );
 }

@@ -1,5 +1,5 @@
 // The ground every road through the file face is walked on: the host stood in for, the two columns
-// put together the way the terminal face puts them, and the small words a test presses and reads
+// put together the way the workspace puts them, and the small words a test presses and reads
 // with. It is imported first by each of the `filesPanel.*.test.tsx` files, which is what puts the
 // stand-ins in place before the panel itself is loaded.
 import { act, createElement, Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -453,8 +453,8 @@ export type Props = Parameters<typeof FilesPanel>[0] & Parameters<typeof FolderT
 };
 
 /**
- * The two columns as the terminal face puts them together: the tree in the rail, and the file it
- * opens on the other side of the panes (`AMB-D-835`, `../shell/TerminalFace`).
+ * The two columns as the workspace puts them together: the tree in the rail, and the file it
+ * opens on the other side of the panes (`AMB-D-835`, `../shell/WorkspaceFace`).
  *
  * They are drawn together here because that is what a road through this face walks — a row is
  * pressed in one column and what it opens appears in the other — and the file being read is the one
@@ -463,16 +463,16 @@ export type Props = Parameters<typeof FilesPanel>[0] & Parameters<typeof FolderT
  */
 export function Columns({ show, ...props }: Partial<Props> & { projectId: number | null }) {
   // The files the column is holding and the one on top, wired the way the face wires them
-  // (`../shell/TerminalFace`).
+  // (`../shell/WorkspaceFace`).
   const [open, setOpen] = useState<OpenFile[]>([]);
   const [showing, setShowing] = useState<string | null>(null);
   // What each open file was left holding, which the face keeps for the same reason it keeps the
-  // list: the column draws one of them and the rest are off the screen (`../shell/TerminalFace`).
+  // list: the column draws one of them and the rest are off the screen (`../shell/WorkspaceFace`).
   const [typed, setTyped] = useState<Record<string, Typed>>({});
   const keepTyped = (at: OpenFile, one: Typed | null) => setTyped((was) => {
     const key = openKey(at);
     // A file the column is no longer holding holds nothing: a tab closed is answered after the file
-    // it was on has left the screen, and the face drops what arrives then (`../shell/TerminalFace`).
+    // it was on has left the screen, and the face drops what arrives then (`../shell/WorkspaceFace`).
     if (one !== null) return holding.current.has(key) ? { ...was, [key]: one } : was;
     if (!(key in was)) return was;
     const left = { ...was };
@@ -483,10 +483,10 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
   const [wide, setWide] = useState(false);
   // Which of the project's folders the window is on, held where the face holds it: the picker above
   // the tree and the tree itself are two readers of one choice (`AMB-D-905`,
-  // `../shell/TerminalFace`).
+  // `../shell/WorkspaceFace`).
   const [pickedRoot, setPickedRoot] = useState<string | null>(null);
   const folderRoots = useMemo(() => sectionsOf(hoisted.bound), [hoisted.bound]);
-  // Which face is up. The terminal face keeps it and the column reads it, so the harness holds it
+  // Which face is up. The workspace keeps it and the column reads it, so the harness holds it
   // too (`../talk/columns`).
   const [tab, setTab] = useState<SideTab>(props.tab ?? "files");
   const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
@@ -543,7 +543,7 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
         onCarry: props.onCarry,
       }),
     ),
-    createElement("div", { className: "termface__column--side" }, createElement(FilesPanel, {
+    createElement("div", { className: "workspace__column--side" }, createElement(FilesPanel, {
       projectId: props.projectId,
       tab,
       onTab: setTab,
@@ -559,7 +559,7 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
       wide,
       onWide: setWide,
       // The folder the window is on, and whether the history has been pressed for — both are the
-      // terminal face's answers, so the harness hands them the way it does (`../shell/TerminalFace`).
+      // workspace's answers, so the harness hands them the way it does (`../shell/WorkspaceFace`).
       gitRoot: props.gitRoot ?? null,
       gitPrefix: props.gitPrefix ?? "",
       history: props.history ?? false,
@@ -577,8 +577,8 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
 export async function draw(props: Partial<Props> = {}) {
   await act(async () => {
     const projectId = "projectId" in props ? (props.projectId ?? null) : 1;
-    // Which half is up, and the column's own way out, belong to the terminal face around it
-    // (`../shell/TerminalFace`). These tests are about what the two columns draw, so what the face
+    // Which half is up, and the column's own way out, belong to the workspace around it
+    // (`../shell/WorkspaceFace`). These tests are about what the two columns draw, so what the face
     // would answer is what they hand them.
     root.render(createElement(Columns, { ...props, projectId }));
   });

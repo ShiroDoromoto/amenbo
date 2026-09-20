@@ -41,7 +41,7 @@ export function MadeIn({
   project: number;
   /** Put the record's way back on that frame, host-side, before it is opened again. */
   openAgain: () => Promise<void>;
-  /** Go to the terminal face, at that pane. */
+  /** Go to the workspace, at that pane. */
   onGoToPane: (project: number, pane: string) => void;
 }) {
   // What the pane is called now, where it is still open. Asked once — a name changes while a pane is

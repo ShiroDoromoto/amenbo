@@ -78,25 +78,25 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # A shell, because what is under test is a plain terminal's own drawing: an agent would put its own
   # marks on the screen as well, and those are the rules this road leaves alone.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The box, which a pane comes up without: what the copy below is read back in is Amenbo's own box,
   # and there is nothing to paste into while the pane is folded.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: cat pruning.txt
@@ -105,7 +105,7 @@ steps_gui:
   # so a reading that finds them found what the file put there — and the steps below are about those
   # rows and not about whether the pane printed anything.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pears are pruned
@@ -114,24 +114,24 @@ steps_gui:
   # front of the spaces it begins with, to past the last character of the second. A selection that
   # began at the first letter would have dropped the indentation itself and left nothing to ask.
   - type: action
-    domain: terminal
+    domain: workspace
     op: select-in-pane
     with:
       from: SCENARIO the pears are pruned
       to: SCENARIO the crew comes at dawn
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: copy-selection
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste-into-box
 
   # And what came out the other side, read for where its lines begin and end while the rows they came
   # from are still drawn above.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: tidied-in-box
     with:
       above: SCENARIO the pears are pruned
@@ -140,7 +140,7 @@ steps_gui:
   # The pane cleared, which is what makes the reading below the box's own. The line run here is the
   # road's own words again, so what it puts on the screen cannot be mistaken for what was copied.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: echo SCENARIO the rows are off the pane now
@@ -149,7 +149,7 @@ steps_gui:
   # answer: a paste that put nothing there, or put it somewhere else, leaves this screen carrying the
   # line the shell just echoed and nothing more.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO the pears are pruned

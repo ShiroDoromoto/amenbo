@@ -594,7 +594,7 @@ export const pl: Translation = {
 
     "face.switch": "Co pokazuje to okno",
     "face.tasks": "Zadania",
-    "face.terminal": "Przestrzeń robocza",
+    "face.workspace": "Przestrzeń robocza",
     "face.splitOut": "Otwórz w osobnym oknie",
     "face.merge": "Wróć do jednego okna",
     "face.opening": "Otwieranie przestrzeni roboczej w osobnym oknie…",

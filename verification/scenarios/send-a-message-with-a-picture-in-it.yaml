@@ -97,27 +97,27 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The first thing on the row, which is the catalog's own order against what this machine really
   # has. No model is named under it: what the agent comes up on is the reader's own setting, and a
   # road naming one would be a road about somebody's account.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # The box, which a pane comes up without: a pane is opened by somebody about to work the program in
   # it, so the presses go there until the reader asks for somewhere else to put them. Everything
   # below this line is written in that box, and a pane that came up folded has nothing to write in.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   # ── The message, written and not yet sent ─────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ steps_gui:
   # sentence asks for is the road's whole reading — one word, spelled in two halves so that no part
   # of the message is the word that comes back.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: "SCENARIO the orchard rows after the rain. Answer with one word and nothing else: RAIN and FELL run together in capitals, with nothing between them."
@@ -138,27 +138,27 @@ steps_gui:
       path: orchard-in-the-rain.png
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste-image-into-box
 
   # Both halves are standing in Amenbo's box, unsent. Read before the press, because everything after
   # it is about a message that went — and a press that had nothing to send would leave the reading
   # below saying nothing at all.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO the orchard rows after the rain
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: ".png"
 
   # ── Sent ──────────────────────────────────────────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-written
     with:
       by: key
@@ -169,7 +169,7 @@ steps_gui:
   # read leaves its words standing in the input box with no answer under them, and this comes back
   # red on a screen where nothing else looks wrong.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: RAINFELL

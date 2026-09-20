@@ -35,7 +35,7 @@
 id: leave-the-question-about-where-a-pane-runs
 title: A question about where a pane should run, walked away from, leaves no box behind and no pane made
 description: >
-  Open the terminal face on a project bound to two folders and nothing open in it, and press its
+  Open the workspace on a project bound to two folders and nothing open in it, and press its
   empty frame: the question of which folder goes up where a pane would be, and no pane is made.
   Leave it without answering — the question is gone, and the empty frame is back in its place: the
   page has nothing standing on it. Press the empty frame again and the question comes up again, so
@@ -68,16 +68,16 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The project this road is about, pressed rather than assumed: which project the face comes up on is
   # the run's business, and a road that read a screen it had not put itself on would be reading
   # somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Sunroom
@@ -86,20 +86,20 @@ steps_gui:
   # empty frame and no other box. Everything below is about what that count does, so it is worth one
   # step that it begins where the road says it does.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
       asks: true
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     with:
       dir: orchard
@@ -107,26 +107,26 @@ steps_gui:
   # And the asking made nothing. The question stands where a pane would stand, which is exactly what
   # makes this worth counting: a box is on the screen, and it is not a frame.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: leave-question
 
   # The question is gone, and it took its box with it. These two steps are the road: the first says
   # the question is not standing, the second that nothing is standing in its place.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     with:
       dir: orchard
       present: false
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
@@ -134,14 +134,14 @@ steps_gui:
   # Asked again on the same press. Nothing was spent by walking away — the empty frame is back where
   # it was, and the question it raises is the same one.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
       asks: true
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     with:
       dir: orchard
@@ -149,13 +149,13 @@ steps_gui:
   # And answered this time, which is the other end of the same fact: the frame the walking-away did
   # not leave behind is the frame an answer makes.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-folder
     with:
       dir: orchard
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1

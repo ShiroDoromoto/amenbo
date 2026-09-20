@@ -65,7 +65,7 @@ given:
   # and end — the default — because a program that ended moments after it started is the whole of
   # what puts a pane on this road.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 3
@@ -73,21 +73,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
   # that read a screen it had not put itself on would be reading somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Foundry
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -96,13 +96,13 @@ steps_gui:
   # running when the way out is asked for, and it holds no conversation, so it puts no name into the
   # sentence of its own.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # Room for the pane beside it. A project nobody has answered for is drawn at one pane, and a page
   # with no room on it draws no frame for the steps below to set.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -110,7 +110,7 @@ steps_gui:
   # And beside it, the pane this road is about. The frame is set to the provider and nothing is
   # pressed yet — what the press will run is the line the frame writes out under the row.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: GitHub Copilot CLI
@@ -118,7 +118,7 @@ steps_gui:
   # The press. The program comes up on a handle Amenbo wrote down as it started, prints, and is gone
   # — so the handle names a session nothing ever made, and it is taken back.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: action

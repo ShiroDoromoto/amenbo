@@ -579,7 +579,7 @@ export const hi: Translation = {
 
     "face.switch": "यह विंडो क्या दिखाती है",
     "face.tasks": "कार्य",
-    "face.terminal": "वर्कस्पेस",
+    "face.workspace": "वर्कस्पेस",
     "face.splitOut": "अलग विंडो में खोलें",
     "face.merge": "एक ही विंडो में लौटें",
     "face.opening": "वर्कस्पेस को अलग विंडो में खोला जा रहा है…",

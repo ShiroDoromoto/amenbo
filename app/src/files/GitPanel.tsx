@@ -172,7 +172,7 @@ export function GitPanel({
   /** The front this folder sits at inside its repository, said as git answers it (`./FolderTree`
    *  hands up the same thing from the other half of the rail). */
   onPrefix?: (prefix: string) => void;
-  /** Hand a changed path to the pane the reader is working in (`../shell/TerminalFace`). */
+  /** Hand a changed path to the pane the reader is working in (`../shell/WorkspaceFace`). */
   onHandOver?: (wholes: string[]) => void;
   /**
    * Open one of this folder's files in the column across the panes, by the path this half spells.

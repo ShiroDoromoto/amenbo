@@ -70,20 +70,20 @@ given:
   # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
   # with none there is no row.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lockkeeper
@@ -91,14 +91,14 @@ steps_gui:
   # Shows nothing, hands back everything, numbers what it hands back, and prints once so there is a
   # pane worth pasting into at all. Each of the four does a job — see the head of the file.
   - type: action
-    domain: terminal
+    domain: workspace
     op: register-start
     with:
       name: Counted log
       line: stty -echo; printf 'SCENARIO the pane is ready\n\033[?2004h'; awk '{ print "SCENARIO back " NR "> " $0 }'
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-registered
     with:
       name: Counted log
@@ -106,7 +106,7 @@ steps_gui:
   # The program is up and has drawn, which is what makes the pane one Amenbo will write into. Without
   # this the road could pass on a build that never tried.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane is ready
@@ -115,7 +115,7 @@ steps_gui:
   # if there was something to rescue: a build that had sent the newline blind would have answered
   # whatever the pane was asking, and this road would be reading its own step rather than the app's.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: handed-over
     with:
       given-back: SCENARIO back 1>
@@ -124,7 +124,7 @@ steps_gui:
   # The press. The line is the reader's own and goes through untouched — what it is for is being on
   # the screen, and being the first thing that settles what the pane is called.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: my own first line
@@ -133,7 +133,7 @@ steps_gui:
   # the first is this pane's input buffer emptying, which the reader's return does on any build, and
   # only a newline Amenbo sent after theirs can put a second one there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: handed-over
     with:
       given-back: SCENARIO back 2>

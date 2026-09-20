@@ -26,7 +26,7 @@
 id: hand-a-file-to-the-machine
 title: A file read in Amenbo is handed out to the machine three ways, and Amenbo decides none of them
 description: >
-  Open the terminal face on a project whose folder holds a file, unfold the folder's section and
+  Open the workspace on a project whose folder holds a file, unfold the folder's section and
   right-click the file. Press each of the three items on the menu in turn: the file goes to the
   application this machine already opens that kind with, then to something that asks which
   application to use, then to the file manager. Each time, what is read is that the machine took it —
@@ -60,16 +60,16 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The panel beside the panes opens on the page a person writes on rather than on the folder: a
   # person goes to the files when they want them, and what an agent points at calls from the switch
   # itself. So the road asks for the half it is about before reading anything in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

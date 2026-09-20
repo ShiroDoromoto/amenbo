@@ -58,20 +58,20 @@ given:
   # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
   # with none there is no row.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -80,14 +80,14 @@ steps_gui:
   # it is handed under a word of this road's own. Every part is load-bearing and none is a flourish —
   # see the head of the file.
   - type: action
-    domain: terminal
+    domain: workspace
     op: register-start
     with:
       name: Lamp log
       line: printf 'SCENARIO the pane is ready\n\033[?2004h'; sed 's/^/SCENARIO back> /'
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-registered
     with:
       name: Lamp log
@@ -96,7 +96,7 @@ steps_gui:
   # hand-over waits for: a pane nothing has written to is never pasted into, so a road that found no
   # sentence without this step could not say which of the two halves had failed.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane is ready
@@ -104,7 +104,7 @@ steps_gui:
   # And the sentence came, and was sent. It is on the marked line because the program was given a
   # whole line to read, which is the one thing a paste left unsent could never produce.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: handed-over
     with:
       given-back: SCENARIO back>

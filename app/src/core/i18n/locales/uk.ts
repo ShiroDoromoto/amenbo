@@ -594,7 +594,7 @@ export const uk: Translation = {
 
     "face.switch": "Що показує це вікно",
     "face.tasks": "Завдання",
-    "face.terminal": "Робоча область",
+    "face.workspace": "Робоча область",
     "face.splitOut": "Відкрити в окремому вікні",
     "face.merge": "Повернути в одне вікно",
     "face.opening": "Відкриваємо робочу область в окремому вікні…",

@@ -34,7 +34,7 @@ id: learn-why-a-pane-stopped-when-the-file-it-names-is-not-yours
 title: A pane that stopped over a file names the reader's own, not the one made for the pane
 description: >
   Stand a machine up with the whole catalog of agents on it, each leaving with the status this
-  provider was measured leaving with when no authentication method is set. Open the terminal face,
+  provider was measured leaving with when no authentication method is set. Open the workspace,
   choose Gemini CLI and press open: the program comes up, prints, and stops. The pane says it ended —
   and names your own settings file, which is not the path the program printed on its way out. Take
   that pane away, choose Claude Code, and open a pane on that instead: it leaves with the same status
@@ -58,7 +58,7 @@ given:
   # holds no authentication method — the ending this road is about, and the one the pane has a word
   # for.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 6
@@ -66,15 +66,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # pane this road opens has to open in the folder this road named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -83,17 +83,17 @@ steps_gui:
   # Named rather than counted along, which the premise earns: what the pane says is settled by which
   # provider stopped, so a road that took a position would be reading whatever was there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Gemini CLI
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: ended
     with:
       names: ~/.gemini/settings.json
@@ -101,25 +101,25 @@ steps_gui:
   # ── And the same ending on another provider, which it has no word for ─────────────────────────
   # The pane goes, so the frame the next agent is chosen on is a frame and not a pane.
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: standing in for gemini
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Claude Code
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # The status is the one the road named, so it is the very same number the reading above was made
   # on. What is different is the provider, and a number means nothing without one.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: ended
     with:
       names: none

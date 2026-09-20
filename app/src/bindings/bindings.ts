@@ -1776,7 +1776,7 @@ projectsUsing: number, };
 
 /**
  * A folder to work in and the project it belongs to — the first loop's one press, on its way from
- * the ledger to the terminal face (`app/src/components/FirstLoop.tsx`).
+ * the ledger to the workspace (`app/src/components/FirstLoop.tsx`).
  *
  * It travels only when the two faces are in two windows: the press is made on the board and the
  * face is in the other window, so it goes out to the host and comes back as the `terminal-open-in`
@@ -1795,7 +1795,7 @@ project: number,
 /**
  * The folder to work in, or nothing where the ask names a pane and the record it came from
  * holds no folder. The face checks it against that project's bindings before a pane is made,
- * and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`); an ask
+ * and opens nothing where the pair does not hold (`app/src/shell/WorkspaceFace.tsx`); an ask
  * with no folder is answered on the face instead, by the question a pane is always made
  * through (`app/src/shell/FolderChoice.tsx`).
  */
@@ -2692,7 +2692,7 @@ splits?: Record<string, SplitDto>,
 /**
  * The project whose panes the face was showing. It is what the window the terminal is split out
  * into opens as, where the arrangement came with no panes to name one — which is every window
- * that comes up after a run (`app/src/shell/TerminalFace.tsx`); absent where nothing has told
+ * that comes up after a run (`app/src/shell/WorkspaceFace.tsx`); absent where nothing has told
  * the face of a project yet.
  */
 project?: number, 

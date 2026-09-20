@@ -111,7 +111,7 @@ given:
   # rather than printing and ending — the way out asks about what is still running, and a stand-in
   # that had already finished would leave nothing to be asked about.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -119,21 +119,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
   # that read a screen it had not put itself on would be reading somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Foundry
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -141,11 +141,11 @@ steps_gui:
   # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and the two
   # commands below are the whole of what puts a reservation on the ledger for the legs to read.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: amenbo task list --actor ai
@@ -153,7 +153,7 @@ steps_gui:
   # The move the readings below are about. It is made with the CLI from inside the pane because that
   # is where an agent makes one, and this road is about what the way out does to it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: amenbo task status <ref> in_progress --actor ai
@@ -187,7 +187,7 @@ steps_gui:
       answer: cancel
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -219,19 +219,19 @@ steps_gui:
       answer: leave
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Foundry
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -252,29 +252,29 @@ steps_gui:
   # doors arrive by different roads inside the app, so this is the half of the gate the menu cannot
   # prove.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: amenbo task list --actor ai
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     with:
       command: amenbo task status <ref> in_progress --actor ai
@@ -294,19 +294,19 @@ steps_gui:
       answer: leave
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Foundry
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -346,25 +346,25 @@ steps_gui:
   # commands in the catalog's own order, so the name below is on the row whatever the operator has
   # installed of their own.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Codex CLI
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: action

@@ -21,7 +21,7 @@
 // this goes away with a question still on it, rather than leaving the call standing until the
 // helper's own ten minutes run out.
 //
-// **It stands wherever the terminal face is** (`../shell/TerminalFace`), which is the board before
+// **It stands wherever the workspace is** (`../shell/WorkspaceFace`), which is the board before
 // the terminal is split out and the talk window after (`AMB-D-753`). The host tells every window;
 // only one of them has the face, so only one question is ever drawn.
 import { useCallback, useEffect, useRef, useState } from "react";

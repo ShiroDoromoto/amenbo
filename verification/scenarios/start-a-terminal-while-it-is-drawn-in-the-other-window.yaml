@@ -42,15 +42,15 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, and the session the split takes up. Choosing a folder is what raises the project it
   # belongs to, so this is also how the road makes the world it walks away from.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -58,23 +58,23 @@ steps_gui:
   # Down to a plain shell, for the reason every road that speaks in a pane does it: what an agent does
   # with a line typed at it is the agent's own, and this line has to sit where it was put.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal that moved out
 
   # Out into a window of its own. From here every step names the window it is in, there being two.
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -96,19 +96,19 @@ steps_gui:
     window: Amenbo
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
     window: "Amenbo — "
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     window: "Amenbo — "
     with:
       text: SCENARIO the terminal the loop opened
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -117,7 +117,7 @@ steps_gui:
   # The other half: the face went to the project the press was made in, so the pane that moved out is
   # not on this screen. A press that opened nothing would leave it standing here.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -125,6 +125,6 @@ steps_gui:
       present: false
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "

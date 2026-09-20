@@ -82,7 +82,7 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
 }
 
 /**
- * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
+ * The workspace, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
  *
  * **It is not an editor and it does not pick anybody's AI.** What it holds is where the work happens
  * and which project that is: projects, panes, pages, and the arrangement of them. Editing a file,
@@ -105,7 +105,7 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
  * It is put up once and then left alone. Switching back to the ledger hides it with CSS rather than
  * taking it down, which is the one thing this component exists to guarantee: unmounting would take
  * the emulator with it, and a terminal whose pane went away is an agent nobody can get back to. The
- * caller therefore keeps this rendered for as long as the window is the terminal's home, and hides
+ * caller therefore keeps this rendered for as long as the window is the workspace's home, and hides
  * it by hiding its own container.
  *
  * What it holds is the arrangement — which panes there are, whose project each is, which page is up,
@@ -113,11 +113,11 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
  * drawing of a session, and the places the drawings go are the face's. Turning a page takes panes down
  * and leaves the terminals in them running, which is the same thing splitting a window out does.
  *
- * When the window *stops* being the terminal's home — the user splits it out, or a language change
+ * When the window *stops* being the workspace's home — the user splits it out, or a language change
  * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and this
  * face takes them up again when it comes back (see the adoption below).
  *
- * **It is the same face in either window.** Splitting the terminal out puts this component up in a
+ * **It is the same face in either window.** Splitting the workspace out puts this component up in a
  * window of its own (`../talk.tsx`) rather than one pane of it: the rail, the pages, the split and
  * the files beside them all go, because a face that arrived on the second display with only a pane
  * left would be a person carrying one terminal out rather than moving where they work
@@ -150,7 +150,7 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
  *
  * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
  * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
- * the face **starts**: a person who came to the terminal from a project is looking at that project,
+ * the face **starts**: a person who came to the workspace from a project is looking at that project,
  * and after that the rail is what moves it.
  *
  * **Where the window names no project, the one the last run was left on answers** (`../talk/layout`).
@@ -158,7 +158,7 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
  * face that took that would put the reader on it rather than on the project they were working in
  * (`AMB-T-4517`).
  */
-export function TerminalFace({
+export function WorkspaceFace({
   onWindow,
   ownWindow,
   note,
@@ -166,13 +166,13 @@ export function TerminalFace({
   onOpenLedger,
   openIn,
 }: {
-  /** The one button that changes how many windows the app is: on the board it takes the terminal
+  /** The one button that changes how many windows the app is: on the board it takes the workspace
    *  into a window of its own, and in that window it folds the app back. It is handed nothing,
    *  because there is nothing about the arrangement the other side has to be told — what is kept
    *  is what the window that comes up reads (`../talk/layout`). */
   onWindow: () => void;
   /**
-   * Whether this face has a window to itself — the one the terminal was split out into, rather than
+   * Whether this face has a window to itself — the one the workspace was split out into, rather than
    * the board's (`AMB-D-753`).
    *
    * It says two things and no more. The button above reads "fold back" instead of "split out", and
@@ -183,12 +183,12 @@ export function TerminalFace({
   ownWindow?: boolean;
   note: string | null;
   /** The project the face opens on, where the window has one to say — a reader who went to a project
-   *  and came to the terminal from it. Nothing where there was no such move: the window the terminal
+   *  and came to the workspace from it. Nothing where there was no such move: the window the workspace
    *  was split out into has no ledger to have been on, and the board's launch lands on a project
    *  without anybody picking it. Then the arrangement answers. */
   projectId?: number | null;
   /** Go to the ledger, for a record clicked in a file or on an empty frame. Nothing in the window
-   *  the terminal was split out into: the ledger is the other window there, and raising it is the
+   *  the workspace was split out into: the ledger is the other window there, and raising it is the
    *  host's (`crate::windows::show_ref`, `../core/refNav`). */
   onOpenLedger?: () => void;
   /**
@@ -379,7 +379,7 @@ export function TerminalFace({
   const opensOn = projectId ?? projects[0]?.id ?? null;
   // Whether the window named that project, or whether it is the first one for want of an answer.
   // Read at the first render, for the reason `opensOn` is taken once: where the ledger has gone since
-  // is not where the reader came to the terminal from.
+  // is not where the reader came to the workspace from.
   const told = useRef(projectId ?? null);
   useEffect(() => {
     if (opensOn === null) return;
@@ -392,7 +392,7 @@ export function TerminalFace({
   // started them all would be starting work nobody asked for.
   //
   // **It comes with places on both sides of a run** (`AMB-D-869`): the arrangement is what the two
-  // windows share the face with, so the window this terminal is split out into gets the panes as they
+  // windows share the face with, so the window this workspace is split out into gets the panes as they
   // stand — and the first window of a run gets the rows the store kept, which are the same places
   // with nothing running in them.
   //
@@ -442,9 +442,9 @@ export function TerminalFace({
           // had one a moment ago (`AMB-T-4398`).
           let next = saved === null ? was : restored(saved, was.project, composeStartsOpen());
           // The project the reader was looking at, for the face that was not told one — the window
-          // the terminal was split out into, which has no ledger to have taken one from, and the
+          // the workspace was split out into, which has no ledger to have taken one from, and the
           // board on a launch, where the project it opens the ledger at is nobody's answer about the
-          // terminal (`AMB-T-4517`). It answers only where nothing came back to say it: an
+          // workspace (`AMB-T-4517`). It answers only where nothing came back to say it: an
           // arrangement with panes in it names the project of every one of them, and this is the run
           // that has none.
           if (told.current === null && next.frames.length === 0 && saved?.project != null) {
@@ -469,7 +469,7 @@ export function TerminalFace({
             next = openedIn(next, frame.id, session.session, session.folder, session.agent);
           }
           // And the pane that was being worked in when the arrangement was last written, which is
-          // the pane the person split the terminal out of (`../talk/layout`). It carries the page
+          // the pane the person split the workspace out of (`../talk/layout`). It carries the page
           // and the project with it, so the window comes up where they left rather than on the first
           // place of the first project. The board never reads it back: which pane is being worked in
           // *now* is its own state, and an older write must not move a reader's place.
@@ -487,7 +487,7 @@ export function TerminalFace({
   useEffect(() => {
     // Before the restore has been answered for, what is here is the face's own opening arrangement:
     // writing that would overwrite the one being read with a blank one — which, in the window the
-    // terminal was split out into, is the face it was split out of.
+    // workspace was split out into, is the face it was split out of.
     if (!settled || !inTauri()) return;
     void keepLayout(JSON.parse(shape) as ReturnType<typeof laidOut>).catch(() => {});
   }, [settled, shape]);
@@ -1205,7 +1205,7 @@ export function TerminalFace({
 
   return (
     <div
-      className="termface"
+      className="workspace"
       ref={rootRef}
       style={{
         "--tabs-w": `${tabsW}px`,
@@ -1217,13 +1217,13 @@ export function TerminalFace({
           (`../files/GitAsk`). It stands with the face rather than with the window, because the face
           is what runs git and it is in one window or the other (`AMB-D-753`). */}
       <GitAsk />
-      <div className="termface__bar">
+      <div className="workspace__bar">
         {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
-            the arrangement: what goes with the terminal is the face whole, and the face is drawn
+            the arrangement: what goes with the workspace is the face whole, and the face is drawn
             from what this device keeps (`../talk/layout`). The mark is the same either way, because
             what it draws is the arrangement the control is about and not the direction of this
             press — which is what the words beside it say. */}
-        <button className="termface__action" onClick={() => onWindow()}>
+        <button className="workspace__action" onClick={() => onWindow()}>
           <Icon name="newWindow" /> {t(ownWindow ? "face.merge" : "face.splitOut")}
         </button>
         {/* The folder panel's way in, and its way out. It is here whether the panel is a column or a
@@ -1233,7 +1233,7 @@ export function TerminalFace({
             press doing both would take away the pair a reader is most likely to want: the tabs
             compact with the folders open (`AMB-D-838`). */}
         <button
-          className={`termface__action${railShown ? " termface__action--on" : ""}`}
+          className={`workspace__action${railShown ? " workspace__action--on" : ""}`}
           onClick={() => wantRail(!railShown)}
           aria-expanded={railShown}
           // The panel is what it opens, and the folders are what it is called: what the column holds
@@ -1249,11 +1249,11 @@ export function TerminalFace({
             what is open is what is on the screen (`../talk/layout`).
             **It says what the number counts**, because the row of pages beside it is digits too: two
             rows of bare digits is a reader pressing one to find out which is which. */}
-        <div className="termface__counts" role="radiogroup" aria-label={t("face.paneCount")}>
+        <div className="workspace__counts" role="radiogroup" aria-label={t("face.paneCount")}>
           {COUNTS.map((count) => (
             <button
               key={count}
-              className={`termface__count${layout.count === count ? " termface__count--on" : ""}`}
+              className={`workspace__count${layout.count === count ? " workspace__count--on" : ""}`}
               // One of three, and exactly one: a toggle each would say three independent things can
               // be on, which is not what the control does.
               role="radio"
@@ -1275,12 +1275,12 @@ export function TerminalFace({
             as the two grids rather than named, because what the press picks is a shape — and it sits
             beside the count for the same reason, being the rest of the same answer. */}
         {orientable(layout.count) && (
-          <div className="termface__counts" role="radiogroup" aria-label={t("face.paneOrient")}>
+          <div className="workspace__counts" role="radiogroup" aria-label={t("face.paneOrient")}>
             {ORIENTS.map((orient) => (
               <button
                 key={orient}
-                className={`termface__count termface__count--glyph${
-                  layout.orient === orient ? " termface__count--on" : ""}`}
+                className={`workspace__count workspace__count--glyph${
+                  layout.orient === orient ? " workspace__count--on" : ""}`}
                 role="radio"
                 aria-checked={layout.orient === orient}
                 // The icon is the whole of what is drawn, so the words that say which shape it is go
@@ -1303,7 +1303,7 @@ export function TerminalFace({
             page are an order somebody can want changed. */}
         {panes.length > 1 && (
           <button
-            className="termface__action"
+            className="workspace__action"
             onClick={() => { setAsking(null); setOrdering(true); }}
             aria-label={t("face.order")}
             title={t("face.order")}
@@ -1315,11 +1315,11 @@ export function TerminalFace({
             page draws none of it**: a single page nobody can go anywhere from is a control that says
             only where the reader already is. */}
         {pages > 1 && (
-          <nav className="termface__pages" aria-label={t("face.pages")}>
+          <nav className="workspace__pages" aria-label={t("face.pages")}>
             {Array.from({ length: pages }, (_, i) => i + 1).map((one) => (
               <button
                 key={one}
-                className={`termface__page${page === one ? " termface__page--on" : ""}`}
+                className={`workspace__page${page === one ? " workspace__page--on" : ""}`}
                 // Going to a page, not turning something on: the one showing is the current page.
                 aria-current={page === one ? "page" : undefined}
                 title={tf("face.page", { n: one })}
@@ -1330,7 +1330,7 @@ export function TerminalFace({
             ))}
           </nav>
         )}
-        {note !== null && <span className="termface__note">{note}</span>}
+        {note !== null && <span className="workspace__note">{note}</span>}
         {/* The way to the reading column, at the far end because it is about the other side of the
             screen. It opens the column and closes it again, and what comes up is the face the
             reader left up.
@@ -1341,9 +1341,9 @@ export function TerminalFace({
             reader looking for the right one (`../files/FilesPanel`). What was here said
             "folder" in one language after the folder had moved to the rail, which is what a control
             drifts into when the thing it opens has changed under it. */}
-        <div className="termface__sides">
+        <div className="workspace__sides">
           <button
-            className={`termface__action${sideShown ? " termface__action--on" : ""}`}
+            className={`workspace__action${sideShown ? " workspace__action--on" : ""}`}
             onClick={() => wantSide(!sideShown)}
             aria-expanded={sideShown}
           >
@@ -1352,13 +1352,13 @@ export function TerminalFace({
           </button>
         </div>
       </div>
-      <div className="termface__body">
+      <div className="workspace__body">
         {/* The projects, at the edge of everything else because that is what they hold (`AMB-D-838`).
             It is drawn whatever the columns beside the panes are doing: it is the one column here
             that cannot be put away. Its edge is dragged like theirs while the names are drawn; folded,
             there is no edge to take hold of, because what is left is the mark and a mark is one size
             (`AMB-D-848`). */}
-        <div className="termface__column termface__column--tabs">
+        <div className="workspace__column workspace__column--tabs">
           <ProjectTabs
             layout={layout}
             projects={projects}
@@ -1368,7 +1368,7 @@ export function TerminalFace({
           />
           {!tabsCompact && (
             <div
-              className="termface__grip termface__grip--tabs"
+              className="workspace__grip workspace__grip--tabs"
               role="separator"
               aria-orientation="vertical"
               title={t("pane.resize")}
@@ -1379,10 +1379,10 @@ export function TerminalFace({
         {/* The rail, with the panes beside it. The edge between the column and them is where its
             width is dragged. */}
         {railShown && (
-          <div className="termface__column termface__column--rail">
+          <div className="workspace__column workspace__column--rail">
             {rail}
             <div
-              className="termface__grip termface__grip--rail"
+              className="workspace__grip workspace__grip--rail"
               role="separator"
               aria-orientation="vertical"
               title={t("pane.resize")}
@@ -1394,8 +1394,8 @@ export function TerminalFace({
             count is the most a page draws, and a grid that shrank to what is open would make the
             split a thing a reader cannot see the effect of (`../talk/layout`). */}
         <div
-          className={`termface__page-grid termface__page-grid--${pageShape(layout.count, layout.orient)}${
-            room ? "" : " termface__page-grid--add"}`}
+          className={`workspace__page-grid workspace__page-grid--${pageShape(layout.count, layout.orient)}${
+            room ? "" : " workspace__page-grid--add"}`}
         >
           {/* Nothing until the arrangement has been read back, and nothing while the face has been
               told there are projects but not yet which one it is on. **A machine with no project at
@@ -1486,7 +1486,7 @@ export function TerminalFace({
                     is full (`../talk/layout`). */}
                 {asking === null && !room && (
                   <button
-                    className="termface__addstrip"
+                    className="workspace__addstrip"
                     title={t("face.openHere")}
                     aria-label={t("face.openHere")}
                     onClick={askForRoom}
@@ -1502,12 +1502,12 @@ export function TerminalFace({
             of the reader (`../files/FilesPanel`). */}
         {sideShown && (
           <div
-            className={`termface__column termface__column--side${
-              wide ? " termface__column--wide" : ""}`}
+            className={`workspace__column workspace__column--side${
+              wide ? " workspace__column--wide" : ""}`}
             ref={sideRef}
           >
             <div
-              className="termface__grip termface__grip--side"
+              className="workspace__grip workspace__grip--side"
               role="separator"
               aria-orientation="vertical"
               title={t("pane.resize")}

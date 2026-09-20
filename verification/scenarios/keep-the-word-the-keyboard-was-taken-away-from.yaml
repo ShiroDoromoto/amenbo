@@ -74,41 +74,41 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The frame and not the way in beside it: the project was bound where the world was stood up, so
   # the press opens a pane in that folder and asks nothing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # ── The ordinary road: a word written through an input method ─────────────────────────────────
   # Left under its mark, which is where the op stops. Nothing is read here — see the head of this
   # file.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-a-word
     with:
       text: しなりおのさいしょのことば
 
   # Two presses: one accepts the word as it is written, one sends the line.
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-a-word
 
   # It reached the program. The word is on the pane because the shell was given it, echoed it, and
   # did not know the command — which is a thing only the program can have put there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: しなりおのさいしょのことば
@@ -117,7 +117,7 @@ steps_gui:
   # A second word, written the same way and left under its mark the same way. Different words from
   # the first, so the reading at the end cannot be the earlier line read twice.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-a-word
     with:
       text: しなりおのふたつめのことば
@@ -126,7 +126,7 @@ steps_gui:
   # settled the word told the emulator the conversion was over as well: left holding one, it answers
   # this return as part of the conversion and the line does not go at all.
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-a-word
     with:
       away: true
@@ -135,7 +135,7 @@ steps_gui:
   # and this reading finds nothing — the characters having been thrown away with the field, in front
   # of a person who could still see them.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: しなりおのふたつめのことば

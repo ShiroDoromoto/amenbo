@@ -43,7 +43,7 @@
 id: name-a-file-without-leaving-amenbo
 title: A folder, a file in it and a new name for it are all made from the panel — from the menu and from the keyboard — and a name the machine will not hold is refused where it was typed
 description: >
-  Open the terminal face on a project with a folder, unfold that folder's section, and make a folder
+  Open the workspace on a project with a folder, unfold that folder's section, and make a folder
   from the heading at the top of the tree and a file inside it from the folder's own row — typing each
   name into the box that takes a row's place. Write a new name over one file's from the menu, and over
   another's from the keyboard alone: a letter walks the tree to that row, F2 opens the box on it.
@@ -78,13 +78,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

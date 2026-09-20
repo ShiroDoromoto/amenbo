@@ -58,8 +58,8 @@ initSkin();
 /**
  * Name the window, so a list of windows tells this one from the board (`AMB-D-396`).
  *
- * The name is the face's, not the window's: what was split out is the terminal, whole, and the
- * button that splits it out says "terminal" too. A window with a name of its own would be a second
+ * The name is the face's, not the window's: what was split out is the workspace, whole, and the
+ * tab it was split out of says "workspace" too. A window with a name of its own would be a second
  * word for the one thing the reader is looking at — so the title is written from `face.terminal`,
  * the key every other place naming that face already reads.
  */

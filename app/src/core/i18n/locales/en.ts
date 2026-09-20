@@ -46,7 +46,7 @@ const ui = {
   "newproj.openProject": "Open the project",
   "firstloop.title": "Your first loop",
   "firstloop.intro": "Ask your AI to register the first tasks.",
-  "firstloop.start": "Start in the terminal",
+  "firstloop.start": "Start in the workspace",
   "firstloop.startHint": "It opens in the linked folder.",
   "firstloop.outside": "Start in your own terminal",
   "firstloop.outsideHint": "Any AI will do — launch yours and paste this text as it is.",
@@ -56,7 +56,7 @@ const ui = {
   "firstloop.appearHint": "The moment your AI writes to Amenbo, the board you are looking at shows it.",
   "firstloop.prompt": "This folder is managed with Amenbo. Run {cmd} agent --json and follow it, managing the work in Amenbo as you go.",
   "noFolder.title": "This project has no folder linked",
-  "noFolder.hint": "An AI launched in the linked folder can operate this project. The folder is what a terminal opens in, and where the request goes.",
+  "noFolder.hint": "An AI launched in the linked folder can operate this project. The folder is what the workspace opens in, and where the request goes.",
   "noFolder.btn": "Link a folder",
   "projset.title": "Project settings", "projset.back": "Back to board",
   "projset.general": "General", "projset.nameLabel": "Name", "projset.notesLabel": "Notes",
@@ -634,12 +634,12 @@ const ui = {
   // the agent's product nor anything its screen says: what a program calls its input box is the
   // program's business and changes under us (`AMB-D-805`).
   // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
-  "face.switch": "Tasks or terminal",
+  "face.switch": "Tasks or workspace",
   "face.tasks": "Tasks",
-  "face.terminal": "Terminal",
+  "face.terminal": "Workspace",
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
-  "face.opening": "Opening the terminal in a window of its own…",
+  "face.opening": "Opening the workspace in a window of its own…",
   // The one control a pane has: it takes the place away, and the terminal in it with it
   // (`app/src/shell/TerminalPane.tsx`). It asks first — nothing brings the frame back, and what a
   // program exits with is on the screen to be read (`AMB-T-3666`). **This is the heavier of the two
@@ -1188,7 +1188,7 @@ const ui = {
   "onboard.s1title": "Link a folder to the project",
   "onboard.s1a": "Places ", "onboard.s1b": " (the local binding) and ", "onboard.s1c": " in that folder. An AI started there can operate the project.",
   "onboard.s2title": "Ask your AI",
-  "onboard.s2body": "The last screen of creating a project, and a board with nothing on it yet, each offer to start a terminal in that folder. If you would rather use your own terminal, the same request text is one press away, ready to paste.",
+  "onboard.s2body": "The last screen of creating a project, and a board with nothing on it yet, each offer to open the workspace in that folder. If you would rather use your own terminal, the same request text is one press away, ready to paste.",
   "onboard.s3title": "Then just drop tasks",
   "onboard.s3body": "Assign a task to the AI and it starts and proceeds autonomously. Everything shows up in the activity feed.",
   // list empty states
@@ -1299,7 +1299,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_kept: "The choice could not be saved.",
   wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
-  talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  talk_blank: "That window opened but never drew anything, so the workspace was put back in this one.",
   clip_refused: "The files could not be put on the clipboard: {reason}",
   // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
   // the "not there" the other rules are refused with: the file is whole and the refusal is meant

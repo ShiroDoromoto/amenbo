@@ -448,8 +448,8 @@ func quarters(of image: CGImage) -> [(CGImage, Set<Edge>, CGRect)] {
 /// screen — Vision walks a column at a time, so a sidebar's items come back before anything in the
 /// pane beside them, and sorting the whole reading by height would shuffle two columns into each
 /// other. So a line is placed rather than the reading sorted: among the lines whose width overlaps
-/// this one — the column it stands in — the nearest one above it is found, and this line goes just
-/// after it.
+/// this one — the column it stands in — the nearest one above it is found, and this line goes after
+/// the whole of that row ([`theRowAround`]).
 ///
 /// **A line level with one already read goes at the end, which is where every quarter's line used to
 /// go.** That is the whole care this takes. A caller meets a word broken across two rows by reading
@@ -480,9 +480,35 @@ func whereItStands(_ line: Line, among lines: [Line]) -> Int {
             return lines.count
         }
     }
-    if let above { return above.index + 1 }
-    if let below { return below.index }
+    if let above { return theRowAround(above.index, in: lines, level: clear).upperBound }
+    if let below { return theRowAround(below.index, in: lines, level: clear).lowerBound }
     return lines.count
+}
+
+/// The stretch of the reading one row of the screen came back as: the line at `index`, and every
+/// line next to it in the reading standing at the same height.
+///
+/// **A row is not always one region.** The reader hands a pane's line back as its left half and its
+/// right when it finds two regions on it, and the two stand level with each other, one after the
+/// other in the reading. Everything above that row is above all of it and everything below is below
+/// all of it, so a line goes outside the whole stretch rather than between two pieces of one row.
+///
+/// Dropped inside a row, a line parts a word exactly as one dropped between two rows does
+/// ([`whereItStands`]): a pane wrapped `…% SCENARIO the pane nobody was lookin` / `g at`, the whole
+/// shot read that first row as two regions, and `g at` — read by a quarter, placed after the region
+/// it stood under — landed between them, leaving `lookin` and `g at` with a row of the screen
+/// between them (reported 2026-09-20 off
+/// `come-back-to-a-pane-that-named-itself-while-you-were-away`).
+///
+/// Only lines already next to each other in the reading are taken for one row. Two regions of one
+/// row come back that way, and stopping at the first line that is not keeps the stretch from
+/// swallowing something else on the screen that happens to stand at the same height.
+func theRowAround(_ index: Int, in lines: [Line], level clear: CGFloat) -> Range<Int> {
+    let height = lines[index].place.midY
+    var first = index, last = index
+    while first > 0, (lines[first - 1].place.midY - height).magnitude <= clear { first -= 1 }
+    while last + 1 < lines.count, (lines[last + 1].place.midY - height).magnitude <= clear { last += 1 }
+    return first..<(last + 1)
 }
 
 /// Read the text off a screenshot and print it as JSON: `text` is the reading folded, `raw` is what

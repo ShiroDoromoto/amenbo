@@ -247,7 +247,9 @@ dropped rather than read: the whole shot's own reading has that row entire. A li
 already carries is not written twice, so the `.txt` beside the shot stays close to what one pass
 would have said. A row only a quarter was read for goes **in the gap it fills**, not at the end: the
 match below reaches a word broken across two rows only while the two rows are still next to each
-other, and a row parked at the end of the reading is a word nothing can put back together. A quarter
+other, and a row parked at the end of the reading is a word nothing can put back together. The gap
+is between rows and never inside one — the whole shot reads a row as two regions side by side when
+it finds two on it, and a row let down between those two parts a word just as surely. A quarter
 that read a row already in hand a second way stands level with it rather than in a gap, and that one
 does go at the end — dropping it between a row and the row under it would part a wrap that could be
 read before.

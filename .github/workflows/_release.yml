@@ -457,7 +457,7 @@ jobs:
       # goreleaser, so nothing else needs installing.
       - name: Install wharfy
         run: |
-          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # build packages the prebuilt CLIs + installers into release assets; sign is a

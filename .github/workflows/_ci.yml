@@ -1094,10 +1094,14 @@ jobs:
       # this job reads.
       - uses: actions/checkout@v7
 
+      # Retried, because the fetch is not the subject. A release asset came back 500 once and
+      # took the comment guard red with it, which reads as a verdict on the tree and is not one.
+      # `--retry-all-errors` is there because plain `--retry` does not cover every way a 5xx
+      # arrives, and the digest below is what says the bytes are right however many tries it took.
       - name: Install esorp
         run: |
           url="https://github.com/ShiroDoromoto/esorp/releases/download/v${ESORP_VERSION}/esorp_${ESORP_VERSION}_linux_amd64.tar.gz"
-          curl -fsSL "$url" -o esorp.tar.gz
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 "$url" -o esorp.tar.gz
           echo "${ESORP_SHA256}  esorp.tar.gz" | sha256sum -c -
           tar -xzf esorp.tar.gz esorp
           sudo install -m 0755 esorp /usr/local/bin/esorp

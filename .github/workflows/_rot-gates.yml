@@ -74,9 +74,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Retried: a release asset that comes back 5xx once turns this gate red about nothing.
       - name: Install shellcheck
         run: |
-          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
             | tar -xJ -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/shellcheck-stable" >> "$GITHUB_PATH"
 
@@ -196,7 +197,7 @@ jobs:
       # Same install script the release and promote workflows use; the ubuntu runner has no Homebrew.
       - name: Install wharfy
         run: |
-          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # verify needs no local state: with no .wharfy/ record it takes the version from

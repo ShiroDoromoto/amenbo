@@ -45,7 +45,7 @@ jobs:
       # BYO inputs, so nothing else needs installing.
       - name: Install wharfy
         run: |
-          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # promote flips one flag on the release GitHub already holds — no asset is

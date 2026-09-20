@@ -438,6 +438,28 @@ fn px(value: &str) -> Option<f32> {
     v.strip_suffix("px")?.trim().parse::<f32>().ok().filter(|n| n.is_finite())
 }
 
+/// The two names a face carried in the skin can be asked for under. A skin carries one face and
+/// these are the two stacks on screen, so a face named in neither is a face nothing draws.
+const FONT_STACKS: [&str; 2] = ["font", "font-mono"];
+
+/// Does this stack ask for that family?
+///
+/// Read entry by entry rather than by looking for the name inside the line: `"Dot"` is in
+/// `"DotGothic16"` and neither is the other, and a stack is a list of names before it is a string.
+/// The quotes are the author's — a family whose name has a space has to be written in them — so
+/// they come off before the comparison, and the comparison ignores case the way a family name is
+/// matched.
+fn names_family(stack: &str, family: &str) -> bool {
+    let wanted = family.trim().trim_matches(['"', '\'']).trim();
+    if wanted.is_empty() {
+        return false;
+    }
+    stack.split(',').any(|entry| {
+        let entry = entry.trim().trim_matches(['"', '\'']).trim();
+        entry.eq_ignore_ascii_case(wanted)
+    })
+}
+
 /// The bytes of one embedded font, or why it was set aside.
 ///
 /// The face is a file the skin carries and the document names, so what is read here comes out of
@@ -1531,6 +1553,14 @@ pub enum Warning {
     /// The embedded font was set aside. The colours are taken either way — a look built on a face
     /// nobody can read still has its palette, and refusing the file over it would throw that away.
     FontDropped(FontProblem),
+    /// The face was read and nothing asks for it: neither side writes the family into `font` or
+    /// `font-mono`, so it is registered with the window and never drawn.
+    ///
+    /// A warning rather than a refusal, and rather than putting the name at the head of a stack
+    /// nobody wrote. Which of the two stacks it belongs at the head of is the author's to say —
+    /// `retro` carries one face and names it in both — and a build that chose for them would be
+    /// setting a screen in a face the document does not ask for.
+    FontNotNamed { family: String },
     /// A background named for a place this build does not lay one behind.
     UnknownBackground { place: String },
     /// A background that is not laid. The place keeps its colour, which is what is under every
@@ -1761,6 +1791,21 @@ impl Skin {
             table.scales = asked_for;
             frame(side, table, &mut warnings);
             smoothing(side, table, &mut warnings);
+        }
+
+        // Read after the tables, because what counts is what a side kept: a stack dropped for being
+        // a shape a value may not have is a stack that names nothing, whatever it said.
+        if let Some(file) = &skin.font {
+            let named = [Side::Light, Side::Dark].iter().any(|side| {
+                let table = skin.side(*side);
+                FONT_STACKS
+                    .iter()
+                    .filter_map(|key| table.values.get(*key))
+                    .any(|stack| names_family(stack, &file.family))
+            });
+            if !named {
+                warnings.push(Warning::FontNotNamed { family: file.family.trim().to_string() });
+            }
         }
 
         // The backgrounds, which are the header's rather than a side's. Whether the file named is
@@ -2135,9 +2180,14 @@ dark:
 
     /// A skin carrying a face, as the zip it arrives in: the document with the `font_file` fields
     /// given, and the bytes beside it under [`FONT_FILE`].
+    ///
+    /// The table names [`FONT_HEAD`]'s family, which is what a skin carrying a face is for. A
+    /// document that carried one and named it nowhere would draw a warning of its own, and the
+    /// cases below are about the face rather than about the stack.
     fn with_font(fields: &str, bytes: &[u8]) -> Vec<u8> {
         let yaml = format!(
-            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{fields}"
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n  \
+             font: '\"Silkscreen\", sans-serif'\nfont_file:\n{fields}"
         );
         packed(&[(FONT_FILE, bytes), (PACK_DOCUMENT, yaml.as_bytes())])
     }
@@ -2430,6 +2480,66 @@ dark:
         assert_eq!(taken.skin.font.as_ref().unwrap().family, "Silkscreen");
         assert_eq!(taken.skin.font.as_ref().unwrap().file, FONT_FILE);
         assert_eq!(taken.skin.font.as_ref().unwrap().license, "OFL-1.1");
+    }
+
+    /// A face is registered under its family name, and a screen is set in it by a stack asking for
+    /// that name. Carrying one and asking for it nowhere is a skin whose font does nothing, which
+    /// is worth saying before the file is taken in rather than after.
+    #[test]
+    fn a_face_no_stack_asks_for_is_carried_and_never_drawn() {
+        let bytes = [b"wOF2".as_slice(), &[0u8; 64]].concat();
+        let yaml = format!(
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{FONT_HEAD}"
+        );
+        let file = packed(&[(FONT_FILE, bytes.as_slice()), (PACK_DOCUMENT, yaml.as_bytes())]);
+        let taken = out_of(&file).unwrap();
+        assert_eq!(taken.warnings, [Warning::FontNotNamed { family: "Silkscreen".into() }]);
+        assert_eq!(taken.font.as_deref(), Some(bytes.as_slice()), "the face is taken either way");
+    }
+
+    /// Either stack answers, and so does either side: a skin carries one face and where it belongs
+    /// is the author's to say. The name is matched as a name — quotes are how a family with a space
+    /// in it is written, and case is not what tells two families apart.
+    #[test]
+    fn a_stack_asking_for_the_face_is_read_wherever_the_author_wrote_it() {
+        let bytes = [b"wOF2".as_slice(), &[0u8; 64]].concat();
+        for wrote in [
+            "themes: [light]\nlight:\n  font: '\"Silkscreen\", sans-serif'\n",
+            "themes: [light]\nlight:\n  font-mono: 'Silkscreen, monospace'\n",
+            "themes: [light]\nlight:\n  font: 'silkscreen'\n",
+            "themes: [dark]\ndark:\n  font: '\"Silkscreen\"'\n",
+        ] {
+            let yaml = format!("name: n\ntitle: t\nskin_v: 1\n{wrote}font_file:\n{FONT_HEAD}");
+            let file = packed(&[(FONT_FILE, bytes.as_slice()), (PACK_DOCUMENT, yaml.as_bytes())]);
+            let taken = out_of(&file).unwrap();
+            assert!(taken.warnings.is_empty(), "{wrote}: {:?}", taken.warnings);
+        }
+    }
+
+    /// A name that is only inside another name is not that name. `Silk` and `Silkscreen` are two
+    /// families, and a stack asking for one is not asking for the other.
+    #[test]
+    fn a_stack_asking_for_a_name_the_family_starts_with_is_not_asking_for_the_family() {
+        let bytes = [b"wOF2".as_slice(), &[0u8; 64]].concat();
+        let yaml = format!(
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  font: '\"Silk\", sans-serif'\n\
+             font_file:\n{FONT_HEAD}"
+        );
+        let file = packed(&[(FONT_FILE, bytes.as_slice()), (PACK_DOCUMENT, yaml.as_bytes())]);
+        let taken = out_of(&file).unwrap();
+        assert_eq!(taken.warnings, [Warning::FontNotNamed { family: "Silkscreen".into() }]);
+    }
+
+    /// A face that was set aside is not carried on, so there is nothing left for a stack to ask
+    /// for: the one thing said about it is why it was dropped.
+    #[test]
+    fn a_face_that_was_dropped_is_not_also_reported_as_one_nothing_asks_for() {
+        let yaml = format!(
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{FONT_HEAD}"
+        );
+        let file = packed(&[(FONT_FILE, b"not a font at all"), (PACK_DOCUMENT, yaml.as_bytes())]);
+        let taken = out_of(&file).unwrap();
+        assert_eq!(taken.warnings, [Warning::FontDropped(FontProblem::Unreadable)]);
     }
 
     /// A document on its own is one file, so there is nothing beside it to be the face. The

@@ -1010,6 +1010,14 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                         key: "font_file".into(),
                         detail: Some(why.en()),
                     },
+                    Warning::FontNotNamed { family } => SkinWarningDto {
+                        kind: "font".into(),
+                        theme: None,
+                        key: "font_file".into(),
+                        detail: Some(format!(
+                            "neither font nor font-mono names '{family}', so nothing is set in it"
+                        )),
+                    },
                     Warning::Scale { theme, key, wrote, used } => SkinWarningDto {
                         kind: "scale".into(),
                         theme: Some(theme.as_str().to_string()),

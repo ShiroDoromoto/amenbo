@@ -7,11 +7,12 @@ import { useStore } from "../store/store";
 import { t } from "../core/i18n";
 import { flowEdges } from "../core/edgeScroll";
 import { draggedFar } from "../core/pointerDrag";
+import { useShrunkImage } from "../core/shrinkImage";
 import { Icon, type IconName } from "../components/Icon";
 import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
 import { landing } from "./rowDrag";
-import { inkOn, initialOf } from "./projectMark";
+import { inkOn, initialOf, MARK_PX } from "./projectMark";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
@@ -351,15 +352,18 @@ function ProjectMark({ color, name, icon }: { color: string; name: string; icon:
   // A project whose colour cannot be read has no ink either: the mark keeps the rail's own surface
   // and the face's text colour, which is readable in both themes.
   const ink = color ? inkOn(color) : null;
+  // The registered image is baked down to the pixels this box draws it at (`../core/shrinkImage`) —
+  // it is stored at 96px, and a 24px mark on a 1x screen is a quarter of that.
+  const src = useShrunkImage(icon, MARK_PX);
   return (
     <span
       className="navitem__mark"
       // The image fills the mark, so the colour is left off underneath it — it would only show
       // through the corners of the picture.
-      style={icon === null ? { background: color, ...(ink === null ? {} : { color: ink }) } : undefined}
+      style={src === null ? { background: color, ...(ink === null ? {} : { color: ink }) } : undefined}
       aria-hidden="true"
     >
-      {icon === null ? initialOf(name) : <img className="navitem__icon" src={icon} alt="" />}
+      {src === null ? initialOf(name) : <img className="navitem__icon" src={src} alt="" />}
     </span>
   );
 }

@@ -1758,6 +1758,38 @@ impl Instructor {
             // the road is for: a slot redrawn under the operator's eye says the screen heard, and only
             // coming back to it says the store did.
             (Domain::Store, "open-settings") => "Open Amenbo's own settings.".to_string(),
+            // A skin, on the screen it is chosen from. Four of the five moves are here; taking one
+            // off the device is the fifth and has no screen at all — the window offers taking a
+            // skin *off*, which is putting none on, and nothing on it removes a file. An op with
+            // no line is refused by name, which is the answer a road asking for that one deserves.
+            //
+            // The file is named and where it is lying is not, the way every other step that points
+            // at a file does it: these lines are rendered from the YAML alone, and the folder the
+            // run writes into is made per run. The run says that path on its way in.
+            // No file is named here, because on this face the road does not read what came out: the
+            // window's own save dialog decides the name, and the step is that a document was
+            // written at all.
+            (Domain::Store, "skin-template") => "In the appearance part of Amenbo's own settings, press the button that writes out a skin to start from, and save it into the folder the run laid down, under whatever name is offered."
+                .to_string(),
+            // Reading a file over without taking it in. The window does both on one panel — what is
+            // pressed to choose a file draws the judgement, and taking it in is a second press — so
+            // this line stops at the judgement and says so.
+            (Domain::Store, "skin-validate") => format!(
+                "In the appearance part of Amenbo's own settings, choose the file \"{}\" the run laid down to be read over. Read the judgement that comes up beside it and press nothing else: this step is the reading, not the taking in.",
+                req(with, "path")?
+            ),
+            (Domain::Store, "skin-add") => format!(
+                "With the judgement of \"{}\" on the screen, press what takes it in.",
+                req(with, "path")?
+            ),
+            // Putting one on, or taking off whatever is on. The word `none` is not a skin's name and
+            // cannot be one, so the two are told apart by it rather than by a second op.
+            (Domain::Store, "skin-use") => match req(with, "name")? {
+                "none" => "In the appearance part of Amenbo's own settings, take off whatever skin is on, so the colours the build ships with are what is drawn.".to_string(),
+                name => format!(
+                    "In the appearance part of Amenbo's own settings, choose the skin called \"{name}\" from the list, and press what makes the one being tried on the one that is worn."
+                ),
+            },
             // Giving a face its image, and taking it away again. Neither line ends at a button the way
             // a project's icon does: this row writes the store as the picker closes, so a step that
             // waited for a save would be waiting for a press the screen has none of.
@@ -5238,6 +5270,20 @@ impl Instructor {
                     .to_string(),
                 _ => "Confirm the file manager came forward with the file standing out in the folder it is in. Go no further into it — that the file reached it is the whole of this reading — and, the shot being of Amenbo's own window, say what you saw."
                     .to_string(),
+            },
+            // What the window says is on. `on` is the one field of that listing a screen answers:
+            // the rest of it is the shape a terminal reads, and a road asking for one of those
+            // here is asking the operator to read JSON off a picture.
+            (Domain::Store, "skin-list") => match req(with, "field")? {
+                "on" => match with.get("equals").and_then(|v| v.as_str()) {
+                    Some(name) => format!(
+                        "In the appearance part of Amenbo's own settings, confirm the skin shown as the one on is \"{name}\"."
+                    ),
+                    None => "In the appearance part of Amenbo's own settings, confirm no skin is shown as on — what is chosen is the entry standing for none of them.".to_string(),
+                },
+                other => return Err(format!(
+                    "`skin-list` reads `{other}` off a listing, and a screen has no such listing to read: this face answers for `on` alone"
+                )),
             },
             _ => return Err(unmapped(domain, op)),
         })

@@ -720,6 +720,22 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "hard-erase", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
     // The store's own settings, changed the one way a user can change them.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "config-set", required: &["key", "value"], refs: &[], strings: &["key", "value"], binds: false },
+    // A skin: one document of token values, carried from person to person as a file. The five moves
+    // are the whole of what anybody does with one — write a starting point out, read a file over
+    // before trusting it, take it in, put it on, take it off the device — and they sit in `store`
+    // rather than in a domain of their own for the reason the settings above do: a skin is this
+    // device's. None of it is filed under a project and none of it syncs.
+    //
+    // `skin-template` writes a file and binds it, so a road can hand what came out to the reading
+    // that follows without a path being written down twice. The two that name a `path` name one
+    // the run already has on disk — the fixture a road copies in, or what the template wrote.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-template", required: &[], refs: &[], strings: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-validate", required: &["path"], refs: &[], strings: &["path"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-add", required: &["path"], refs: &[], strings: &["path"], binds: false },
+    // `name` is the skin's own name, which is the word both faces take. `none` is not a skin's name
+    // and cannot be one, so `skin-use` with it is how a road takes off whatever is on.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-use", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "skin-rm", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // The one of those settings a road walks rather than declares: the language the interface is
     // read in. It is written as a move and not as a premise because what turns on it is what the
     // screen does **when it changes** — a listing drawn in one language and redrawn in another is
@@ -1685,6 +1701,11 @@ const REGISTRY: &[OpSpec] = &[
     // `config` its settings, `identity` the name and the hardware it was raised on, `update` what a
     // check for a newer build comes back with.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "config", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
+    // What this device holds and which of them is on. One field read out of one listing, the way
+    // every other `field`/`equals` assert here works. `on` is the field worth asking for: what
+    // ships with the build stands in the same listing as what was taken in, so a row named by its
+    // place in it moves the day a fifth one ships.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "skin-list", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "identity", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "update", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     // Which of the two a facet's slot holds: the image registered for it, or the pattern Amenbo draws

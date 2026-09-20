@@ -1,0 +1,225 @@
+# A skin is kept under the name it gives itself, so a second file calling itself the same thing
+# does not stand beside the first — it takes its place. That is how a skin is updated, and it is
+# also how somebody's own work is lost: a file handed over by a third person can carry any name,
+# and the one it carries may be the one the reader has been editing all week.
+#
+# What stands between the two is a sentence. The window says, on the panel that would take the
+# file in, that this one goes in place of the one already held, and which version each of the two
+# is — and then the press is the same press it would be for a file nothing is held under. So the
+# sentence is the whole of the warning, and a build that stopped drawing it would read exactly
+# like a build importing a skin for the first time. It is written down here for that reason, on
+# both sides of the same reading: absent while nothing is held, and there once something is.
+#
+# The two files are one skin at two versions, and the second carries less than the first — one
+# picture, no drawing, no face. That is what lets the road say which of the two is being drawn
+# without being told: after the second lands, the marks are this build's own again and the text is
+# back in the face it ships with. A pair of files differing only in a colour would leave the same
+# step resting on an eye telling two blues apart.
+#
+# **The look the new file draws comes up with the app, not on the press.** Taking a skin in writes
+# the file and the window goes on wearing what it read at startup, so the road asks for the app
+# again before it looks. That is written into the road rather than worked around in it: a build
+# that began applying it on the press would walk this the same way.
+#
+# The terminal's road cannot see any of that, so it asks the file instead. It hands the held skin
+# back out before and after, and reads the two copies for a name that is in one and not the other
+# — which is the same claim the screen makes, put to the only face that can answer it in words.
+id: take-in-a-skin-over-one-you-already-hold
+title: A skin file naming a skin the device already holds says so before it is taken in, and what is held afterwards is the newer file
+description: >
+  Take a skin in, then hand over a second file calling itself the same thing. Confirm the window
+  says the second goes in place of the first and names both versions, and that what is drawn and
+  what is held afterwards are the second file's rather than the first's.
+given:
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/a-skin-with-its-materials.zip
+      path: a-skin-with-its-materials.zip
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/a-skin-a-version-on.zip
+      path: a-skin-a-version-on.zip
+
+steps_cli:
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: atelier
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: atelier
+
+  # What is held before the second file arrives, handed back out so it can be read. The face is
+  # the name to read for: the first file carries one and the second does not.
+  - type: action
+    domain: store
+    op: skin-write-out
+    with:
+      name: atelier
+      path: before.zip
+    as: before
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: before
+      contains: "DotGothic16.woff2"
+
+  # The second file, under the same name. Nothing is said here about being asked: this face asks
+  # outright and takes an answer, which is a road of its own.
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-a-version-on.zip
+
+  # Still worn. Replacing the file under a skin that is on does not take it off — the name has not
+  # moved, and it is the name the config holds.
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: atelier
+
+  # And what is held now is the second file. Two readings rather than one: the face gone says the
+  # first is no longer there, and the picture arriving says the second is — either alone would
+  # pass on a device holding nothing at all.
+  - type: action
+    domain: store
+    op: skin-write-out
+    with:
+      name: atelier
+      path: after.zip
+    as: after
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: after
+      absent: "DotGothic16.woff2"
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: after
+      contains: "slate.png"
+
+steps_gui:
+  - type: action
+    domain: store
+    op: open-settings
+
+  # The first file, which nothing is held under. The line about replacing has to be missing here,
+  # or its being there later says nothing.
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: assert
+    domain: store
+    op: skin-replaces
+    with:
+      present: false
+
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-with-its-materials.zip
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: atelier
+
+  # What the first file draws, in the two kinds the second one drops.
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: font
+
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: icons
+      name: gear
+
+  # The second file, under a name the device now holds. This is the sentence the road is about.
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-a-version-on.zip
+
+  - type: assert
+    domain: store
+    op: skin-replaces
+
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-a-version-on.zip
+
+  # The app again, because the window wears what it read as it came up.
+  - type: action
+    domain: store
+    op: run-again
+
+  # The second file's look: still a picture behind the window, and the two the second file does
+  # not carry back to what this build draws.
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: background
+
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: font
+      present: false
+
+  - type: assert
+    domain: store
+    op: skin-material
+    with:
+      material: icons
+      name: gear
+      present: false
+
+  - type: action
+    domain: store
+    op: open-settings
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: atelier

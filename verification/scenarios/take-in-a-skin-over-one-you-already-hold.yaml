@@ -194,6 +194,7 @@ steps_gui:
     op: skin-material
     with:
       material: background
+      on: [c-bg]
 
   - type: assert
     domain: store

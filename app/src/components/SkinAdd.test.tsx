@@ -60,6 +60,7 @@ import { SkinAdd } from "./SkinAdd";
 const judgement = (over: Partial<SkinJudgementDto> = {}): SkinJudgementDto => ({
   name: "washi",
   title: "和紙",
+  titles: {},
   author: null,
   version: "1.2.0",
   themes: ["light", "dark"],

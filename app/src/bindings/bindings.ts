@@ -2299,7 +2299,12 @@ data: string, };
  * away does not come back as one of these — it comes back as the command failing, because there is
  * nothing of it to show and nothing to decide.
  */
-export type SkinJudgementDto = { name: string, title: string, author: string | null, version: string | null, themes: Array<string>, 
+export type SkinJudgementDto = { name: string, title: string, 
+/**
+ * The name per language, on the terms `SkinTablesDto` holds it — here as well, because the
+ * panel names the skin before it is taken in, and it names it to the same reader.
+ */
+titles: { [key in string]: string }, author: string | null, version: string | null, themes: Array<string>, 
 /**
  * The version of the skin already kept under this name, where one is. `Some(None)` cannot be
  * spelled here, so a held skin whose author wrote no version comes back as `held` with a null
@@ -2342,7 +2347,12 @@ export type SkinReadingDto = { theme: string, ink: string, ground: string, ratio
  * `error` is what came back where the file would not read — it is one of the person's own files,
  * sitting in the directory, so it is listed rather than left out.
  */
-export type SkinRowDto = { name: string, title: string, author: string | null, version: string | null, 
+export type SkinRowDto = { name: string, title: string, 
+/**
+ * The name per language, on the terms `SkinTablesDto` holds it. Empty on a row that would not
+ * read, the way the rest of the header is.
+ */
+titles: { [key in string]: string }, author: string | null, version: string | null, 
 /**
  * The sides the author says they made, `light` and `dark` in the order written.
  */
@@ -2373,6 +2383,12 @@ name: string,
  * What it is called on screen, in the author's own words.
  */
 title: string, 
+/**
+ * The same name per language, where the author wrote any: language code to the name in that
+ * language. Empty on a skin that wrote none, which is every skin that came from before
+ * `titles:` was a key. Picking one of them is the window's (`AMB-D-396`).
+ */
+titles: { [key in string]: string }, 
 /**
  * The light side's values, as the check left them: known names a skin may set, text only.
  */

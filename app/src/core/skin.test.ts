@@ -14,6 +14,7 @@ import { setThemePref } from "./theme";
 const wearing = (over: Partial<SkinTablesDto>): SkinTablesDto => ({
   name: "n",
   title: "n",
+  titles: {},
   light: {},
   dark: {},
   font: null,

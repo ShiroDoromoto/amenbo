@@ -1,0 +1,185 @@
+# How much of a page a pane takes is the pane's own answer, and a pane belongs to the project it was
+# opened in. This is the road that says so: a pane sized in one project is still that size on coming
+# back, and a pane opened in the next project is drawn at the size a pane nobody has sized gets.
+#
+# ── Why a size is the pane's and not the face's ──────────────────────────────────────────────────
+# How much room a piece of work wants is a fact about that piece of work — an agent and the shell it
+# is watched from are not the same size of thing — so one answer for the whole face fits whichever
+# pane it was set on and fights every other. Worse than fitting badly: with one answer, arriving
+# somewhere rewrites the size the reader set there, and they never pressed anything. What this road
+# promises instead is that the press was a thing they said once, about one pane, and going somewhere
+# else does not spend it. It is the unit the reading column's two widths are already kept in, and the
+# road that walks those is
+# `find-the-reading-column-at-the-width-you-left-this-project-at`.
+#
+# ── How a size is read ───────────────────────────────────────────────────────────────────────────
+# Off the pane itself, as the share of the page between the columns it is taking. There is no word
+# for it anywhere on the screen — the control is six drawn shapes — so the reading is the pane, and
+# the road takes it twice on every leg: the size, and the way in beside it. A full page draws no way
+# in and a page with room draws exactly one, so the second reading says the same thing a second way
+# and neither can be got right by accident.
+#
+# ── Why the unpressed size is read before the press ──────────────────────────────────────────────
+# The reading after the press means nothing on its own: a face that drew every pane at half a page
+# would pass it. The pair is the road — whole, then half, then whole again in the other project — and
+# each leg is read the same way, so nothing in the middle can be a difference in how it was measured.
+#
+# ── Why the middle leg is the one that goes red on a face keeping one answer ─────────────────────
+# It is also the leg that catches a face which never moved. A build keeping one size for the whole
+# face draws the second project's pane at the half set in the first, and a face that swallowed the
+# press on the tab would be reading the first project's page again — both come out as a way in beside
+# the pane, where this road wants none. The last leg is the other half, and no build fails only it: a
+# face that kept the size while the project was shown, and dropped it on leaving, passes everything
+# above and fails here, which is the half a reader is actually promised.
+#
+# ── Why the pane opened in each project is left standing ─────────────────────────────────────────
+# Panes do not move between projects — a pane belongs to the one it was opened in — so the one opened
+# in the first project is still there on coming back, and the last leg needs nothing pressed to read
+# against. That is also why the size pressed for is half the page rather than an eighth of it: at an
+# eighth the reading is the same way in beside the same one pane, and half is the size a reader would
+# actually press for on a pane they mean to work beside.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A size is a thing on a screen. The binary is handed no page and has nothing to say here.
+id: find-a-project-with-its-panes-the-size-you-left-them
+title: How much of a page a pane takes is the pane's own, so a pane in another project is drawn at the size nobody has set and the first is still at the set one on coming back
+description: >
+  Raise two projects, each with a folder of its own. In the first, open a terminal — it takes the
+  whole page, with no room left beside it, which is what a pane nobody has sized is drawn at — then
+  cut it to half the page and see a way in appear next to it. Go to the second project and open a
+  terminal there: it takes the whole page too, the press having been about a pane in the other
+  project and not about this face. Go back to the first: its pane is still at half, with the way in
+  still beside it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means to
+  # set the size in rather than reading whichever was selected.
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell, which is what a pane is when nothing is being asked of it. Nothing is typed:
+  # what this road is about is how much of the page the pane takes, not what is running in it.
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  # The size a pane nobody has sized is drawn at, which is what the press is about to move away from.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  # And the same thing said a second way: the pane fills the page, so there is no way in beside it.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
+
+  # The press has landed: the same one pane, at half the page, with room beside it now.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # The other project, which was never pressed in.
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  # The half a face keeping one answer for the whole of itself would fail, and the half a face that
+  # swallowed the press on the tab would fail with it — the reason is at the top of this road.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # And the press is still spent here. The pane opened in this project never went anywhere, so there is
+  # nothing to press before reading — a face that kept the size only while the project was shown would
+  # pass every reading above and fail this one.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1

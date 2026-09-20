@@ -945,29 +945,30 @@ indentation taken off, and no reading answers where a line begins, so it is an e
 with the pane above still drawing the rows as they were printed to hold it against.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
-most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves
+most of what there is: `set-pane-size` gives one pane a share of the page and the rest are laid down
+again around it, `go-page` moves
 the whole screen to another page, `go-project` moves it to another project's panes altogether, and
 `open-pane` starts a terminal where there is not one yet — `from: face` at the empty frame a page with
 room draws, `from: strip` at the thin strip a full page draws instead, which opens nothing itself and
 moves the screen to the page with room, where that same frame is waiting. What they are
-walked for is what they must not do. Every one of those moves re-cuts or replaces what is drawn, and
-a pane that left the screen is a pane still running behind it.
-`come-back-to-the-terminal-a-page-turn-took-away` is the road for the two that re-cut. It types a
+walked for is what they must not do. Every one of those moves lays the page out again or replaces what
+is drawn, and a pane that left the screen is a pane still running behind it.
+`come-back-to-the-terminal-a-page-turn-took-away` is the road for the two that re-lay. It types a
 second line into the pane once the page has come back, which is the half a reading of the first cannot
 carry: what a terminal printed stays printed, so the first line says the screen was restored and only
 something typed after the return says anything is still listening. And it keeps a second pane going
-for the length of it — with one frame there is nothing for a new count to move, so a road with a
-single pane walks `set-panes` past the only thing it is dangerous for.
+for the length of it — with one pane there is nothing for a new size to push anywhere, so a road with
+a single pane walks the size control past the only thing it is dangerous for.
 `go-to-the-panes-of-another-project` is the road for the one that replaces, and it reads the half the
 other cannot: the tabs down the edge are the division itself rather than a grouping laid over one
 list, so what a project's press leaves on the screen is that project's panes and nothing of any
 other's.
 
-`set-orient` is the one move on that row that re-cuts nothing. At two panes and at no other count it
-says which way they sit — side by side, or one above the other — and every frame stays on the page it
-was on. Two is where it is asked because two is where the face's rule turns around: width is spent
-before height everywhere else, and two across halves a pane's columns, which on a window with a
-column beside it is under the eighty a TUI wants.
+Half the page is the one size that comes two ways round — half the width with the whole height, or
+the whole width with half the height — and that is where the face's rule turns around: width is spent
+before height everywhere else, and half the width on a window with a column beside it is under the
+eighty a TUI wants. They are two sizes and not one size with an answer on it, which is what lets one
+pane sit the way its work wants while the pane beside it sits the other way.
 The order the panes themselves stand in is four ops of its own — `reorder-panes` opens the panel of
 cards, `carry-pane` moves one card onto the half of another, and `keep-order` / `drop-order` are the
 two ways out of it. They are four because the four moments are what is being defended: a pane is a
@@ -975,19 +976,23 @@ terminal somebody is reading, so nothing about the arrangement may move until th
 and from the far side of that press a build that reordered on the drag reads identically to one that
 reordered on the press.
 `put-the-open-panes-in-the-order-you-want` is the road, and it walks the leaving before the taking for
-exactly that reason. It keeps its two panes one to a page and names each of them: the order is read by
-turning to a page and reading the one row on it, and two panes opened in the same folder carry the same
-words on their rows until somebody's own name is put over them.
+exactly that reason. Its two panes fill a page each without anything being pressed for, which is both
+what draws the way in — the panel is offered only where there is a page to cross to — and what makes
+the order readable: it is read by turning to a page and reading the one row on it, and two panes
+opened in the same folder carry the same words on their rows until somebody's own name is put over
+them.
 
-`stack-the-two-panes-so-each-keeps-the-whole-width` is the road, and what `panes-sit` reads there is
+`stack-the-two-panes-so-each-keeps-the-whole-width` is the road, and what `pane-size` reads there is
 the width rather than the arrangement — a build that shuffled the boxes about without handing either
 of them more room would have honoured the press and missed what it was for. Both shapes are walked,
 a page read only after the press having nothing to say about what it was before, and a terminal is
-kept running across the change for the reason the re-cut roads keep one: the grid is redrawn under
-the panes, and a page put up again rather than re-laid would come back drawn and with nothing on it.
+kept running across the change for the reason the re-laying roads keep one: the page is drawn again
+under the panes, and one put up afresh rather than re-laid would come back drawn and with nothing on
+it. It takes two presses because a size is one pane's answer: the first leaves the two in shapes that
+cannot share a page, so the road walks to the page the other was laid down on and presses there.
 
 What none of those moves reaches is the end of the run itself. What crosses it is what the reader
-*set* — the split, the way two panes sit, the project they were looking at — and the places they
+*set* — how much of a page each pane takes, the project they were looking at — and the places they
 *opened*, each with the folder it works in and the name they gave it. What does not is the process in
 one: a terminal died with the run that started it. `open-the-app-again-on-the-places-you-left` is the
 road that walks the line with `store run-again`.
@@ -1043,10 +1048,9 @@ the reader pressed away from, and only a reading taken off the pane can tell tha
 landed. A road walks two sizes and never the asked-for one alone: a face stuck at whichever size a
 road happened to ask for last would come out green from end to end.
 
-`set-panes`, `set-orient` and `panes-sit` are the pair's retired predecessors, and they are kept only
-while the roads that still speak them are moved. What a count was is gone from the build: a pane
-carries how much of a page it takes, and the page is what falls out of laying the panes down in
-order.
+They took the place of `set-panes`, `set-orient` and `panes-sit`, which are gone with the roads that
+spoke them. What a count was is gone from the build too: a pane carries how much of a page it takes,
+and the page is what falls out of laying the panes down in order.
 
 `opens-with` reads the other thing an empty frame carries: the row above its press, which is what a
 pane opened there would start with. It names `shell` and nothing else — which agents are on that row

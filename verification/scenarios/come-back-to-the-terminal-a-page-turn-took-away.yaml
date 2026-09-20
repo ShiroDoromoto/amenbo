@@ -19,26 +19,27 @@
 # typed *after* the return says the terminal on the other end of it is still listening — which is what
 # a reader means when they say the pane is still theirs.
 #
-# ── Why a second pane, and why the page is cut to hold it ────────────────────────────────────────
+# ── Why a second pane, and why the first is cut to half the page ─────────────────────────────────
 # One terminal would prove the page turn on its own, an empty page being somewhere to turn to. It
-# would not prove the re-cut: with one frame there is nothing for a new count to move, so a road with
-# a single pane would walk `set-panes` past the only thing it is dangerous for. A second frame is what
-# makes the count a re-cut — at one to a page the two are on pages of their own, at two they are side
-# by side — and the re-cut is what carries a running terminal off the screen without anybody paging.
+# would not prove the re-laying: with one pane there is nothing for a new size to push anywhere, so a
+# road with a single pane would walk the size control past the only thing it is dangerous for. A
+# second pane is what makes a size a re-laying — a pane given the whole page cannot share one, so the
+# pane beside it is laid down on the next — and the re-laying is what carries a running terminal off
+# the screen without anybody paging.
 #
 # The second pane is opened rather than started: a page is one project, and a pane opened on a page
 # that already has a folder takes it, so nothing is asked. It opens on the page the first is on
 # rather than on a page of its own because that is where the room is — the way in goes to the page
 # with a gap in it, and a page comes into being only where every one of them is full.
 #
-# **The page has to hold two for the second to open beside the first**, which is what the count is
-# asked for before it. A project nobody has answered for is drawn at one pane to a page, so the pane
-# opened next would come up on a page of its own — carrying the first off the screen before any of
-# the moves this road is about had been made.
+# **The first has to be cut to half the page for the second to open beside it**, which is what the
+# size is asked for before it. A pane with nothing to be measured against takes the whole page, so the
+# pane opened next would come up on a page of its own — carrying the first off the screen before any
+# of the moves this road is about had been made.
 #
 # Only the first pane is ever spoken to. The second is not named by a line of its own, because a step
 # that typed into it would have to say which of two running panes it meant and there is no way to say
-# that; what it is here for is to be re-cut, and being re-cut needs no name.
+# that; what it is here for is to be laid down again, and being laid down again needs no name.
 #
 # ── The pane the reader is working in ────────────────────────────────────────────────────────────
 # Two of the moves below take the screen somewhere the step did not name, and both follow the pane
@@ -94,17 +95,17 @@ steps_gui:
     with:
       shows: SCENARIO the terminal behind the page
 
-  # Room on the page for a second pane beside the first. At the one pane a project nobody has answered
-  # for is drawn at, the pane opened next would be on a page of its own, and the first would go off
-  # the screen without any of the moves this road follows having been made.
+  # Room on the page for a second pane beside the first. At the whole page a pane with nothing to be
+  # measured against takes, the pane opened next would be on a page of its own, and the first would go
+  # off the screen without any of the moves this road follows having been made.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
+      size: half
 
-  # A second pane, from the empty frame beside the first: the page holds two and one is on it, so the
-  # room is drawn where the pane will be. Nothing is asked — the folder is the project's — and the new
+  # A second pane, from the empty frame beside the first: half the page is taken and half is not, so
+  # the room is drawn where the pane will be. Nothing is asked — the folder is the project's — and the new
   # pane becomes the one being worked in, which is what decides where the next step leaves the screen.
   - type: action
     domain: workspace
@@ -121,13 +122,15 @@ steps_gui:
     with:
       shows: SCENARIO the terminal behind the page
 
-  # One pane to a page, which cuts the two frames onto pages of their own. The screen stays with the
-  # pane being worked in — the one just opened — so what is on it now is the second page.
+  # The whole page for the pane being worked in — the one just opened — which is what puts the two of
+  # them on pages of their own: it cannot share a page at that size, so the one it was beside is laid
+  # down where it was and this one starts the next. The screen follows the pane that was pressed for,
+  # so what is on it now is the second page.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 1
+      size: whole
 
   - type: assert
     domain: workspace
@@ -165,13 +168,24 @@ steps_gui:
     with:
       shows: SCENARIO still taking what is typed
 
-  # Cut back to two, which brings the second pane onto this page again. The first pane has now been
-  # through both cuts and a page turn, and the line it was named by is still the line on it.
+  # Back to the page the second was laid down on, and back to half of it — which brings that pane onto
+  # the first's page again and the screen with it. The first pane has now been through both layings
+  # and a page turn, and the line it was named by is still the line on it.
   - type: action
     domain: workspace
-    op: set-panes
+    op: go-page
     with:
-      count: 2
+      page: 2
+
+  - type: action
+    domain: workspace
+    op: press-pane
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
 
   - type: assert
     domain: workspace

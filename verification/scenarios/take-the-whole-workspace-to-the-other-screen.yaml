@@ -1,5 +1,5 @@
 # The window the workspace is split out into holds it whole — every pane, the rail, the
-# split and the pages — and comes up on the pane the person was working in.
+# sizes and the pages — and comes up on the pane the person was working in.
 #
 # `put-the-workspace-on-its-own-screen` walks the same control on a board with one pane on it, and one
 # pane is the shape everything this road is about is invisible in. A window that carried one pane out
@@ -22,11 +22,17 @@
 # of them, so "the page the reader was on" is a page that is neither the first nor the last.
 #
 # ── Why the panes are one to a page ──────────────────────────────────────────────────────────────
-# One pane to a page is what makes the pages worth reading: with three pages, the window coming up on
-# the second is a fact about where the reader was rather than an accident of there being only one
-# place to come up on. The split is set back to four at the end for the same reason in reverse — a
-# page that draws all three at once is what says the panes came over as panes and not as a picture of
-# one.
+# A pane with nothing to be measured against takes the whole page, so three panes opened in a row are
+# three pages without anything being pressed for. That is what makes the pages worth reading: with
+# three of them, the window coming up on the second is a fact about where the reader was rather than
+# an accident of there being only one place to come up on.
+#
+# They are gathered onto one page at the end for the same reason in reverse — a page that draws all
+# three at once is what says the panes came over as panes and not as a picture of one. It takes three
+# presses rather than one because a size is one pane's answer: the reader points the control at a
+# pane, and the panes behind it are laid down again around what they asked for. Walking that in the
+# second window is the reading — the control is there, and what it does there is what it does on the
+# board.
 #
 # ── Why it folds back ────────────────────────────────────────────────────────────────────────────
 # The shape a machine last used the app in is remembered where a throwaway store does not reach, so a
@@ -76,14 +82,6 @@ steps_gui:
     op: go-project
     with:
       project: Sawmill
-
-  # Set while nothing is open, so what follows is pages filling rather than pages cut out of panes
-  # already standing.
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 1
 
   # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
   # agent's own, and these lines have to sit where they were put.
@@ -201,15 +199,67 @@ steps_gui:
     with:
       shows: SCENARIO the first page
 
-  # And the split, which is the last of the three controls a window carrying one pane would have lost.
-  # Four is a ceiling rather than a number of boxes to fill, so what stands on the page is the three
-  # panes and the one way in beside them.
+  # And the sizes, which are the last of the three controls a window carrying one pane would have
+  # lost. The pane this window came up on goes first: at a quarter it no longer fills its page, and
+  # the panes behind it are laid down again around it.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     window: "Amenbo — "
     with:
-      count: 4
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    window: "Amenbo — "
+    with:
+      size: quarter
+
+  # The one before it, which comes back to the first page and takes this one with it. The page a
+  # pane is on is worked out from the order every time, so a pane that shrank lets the ones behind it
+  # come up — and the screen follows the pane that was pressed for.
+  - type: action
+    domain: workspace
+    op: go-page
+    window: "Amenbo — "
+    with:
+      page: 1
+
+  - type: action
+    domain: workspace
+    op: press-pane
+    window: "Amenbo — "
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    window: "Amenbo — "
+    with:
+      size: quarter
+
+  # And the last of the three, which is now alone on the page after the first.
+  - type: action
+    domain: workspace
+    op: go-page
+    window: "Amenbo — "
+    with:
+      page: 2
+
+  - type: action
+    domain: workspace
+    op: press-pane
+    window: "Amenbo — "
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    window: "Amenbo — "
+    with:
+      size: quarter
+
+  # All three on one page now, with the one way in beside them — which is what says they came over as
+  # panes and not as a picture of one.
 
   - type: assert
     domain: workspace

@@ -2969,11 +2969,11 @@ const REGISTRY: &[OpSpec] = &[
     // program never started — what makes it a guard is the present half after it, where a person
     // sends something of their own and the same mark comes up.
     OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "answered", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
-    // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
-    // ceiling on how many a page may hold, and this is how many are actually standing there. The two
-    // part company on exactly the thing worth defending — a face that filled the ceiling with empty
-    // boxes would be asking the same question four times over, and a count of the ceiling could never
-    // tell that from a face with one pane on it.
+    // How many panes the page being shown draws. It is not the room on the page read back: what a
+    // pane's size leaves over is how much of the page is free, and this is how many panes are
+    // actually standing in it. The two part company on exactly the thing worth defending — a face
+    // that filled the room left with empty boxes would be asking the same question three times over,
+    // and a reading of the room could never tell that from a face with one pane on it.
     //
     // `empty` is how many of the boxes beside them are the way in — 0 or 1, since the page draws one
     // at its first gap and never a second. Left out, the reading is that there is at most one, which
@@ -3000,25 +3000,6 @@ const REGISTRY: &[OpSpec] = &[
     // nothing to say about what it was before, so a face stuck at one size — the one a road happened
     // to ask for last — would come out green from end to end.
     OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "pane-size", required: &["size"], refs: &[], strings: &["size"], binds: false },
-    // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
-    // frames are one list cut into pages, so a new count re-pages every pane this device has — which
-    // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
-    //
-    // **Retired, and kept while the roads that still speak it are moved.** What a count was is gone
-    // from the build: a pane carries how much of a page it takes, and the page is what falls out of
-    // laying them down (`set-pane-size`).
-    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
-    // Which way the two panes of a two-pane page sit: `across` side by side, `down` one above the
-    // other. It is asked at two and at no other count — everywhere else the rows are already spent
-    // and there is nothing left to arrange (`app/src/talk/layout.ts`) — so a road walks it with two
-    // panes standing, and never as a shape a page of any other count could be put into.
-    //
-    // **It is an op of its own rather than an argument on the count**, for the reason `split-out` and
-    // `fold-back` are two: the presses are two controls, and what they do differs on exactly the
-    // thing worth defending. A new count re-pages every frame this device has; a new orientation
-    // moves no pane anywhere and turns no page. A road that said both in one step would be asking for
-    // a re-cut it did not want, and could not tell which of the two had done what came out.
-    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-orient", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
     // The panes put in an order the person asked for. It is four ops and not one,
     // because what is being defended is that they are four separate moments: the modal is opened,
     // cards are carried about inside it, and then the arrangement is either taken or thrown away. A
@@ -3040,15 +3021,6 @@ const REGISTRY: &[OpSpec] = &[
     // third of the gate. What every one of them owes is the same: the panes are where they were,
     // however much was dragged about in there.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drop-order", required: &["how"], refs: &[], strings: &["how"], binds: false },
-    // And the shape the page came out in, read off the panes themselves. It is the whole of what the
-    // press is for: `down` is asked for so that each pane keeps the window's whole width, and a build
-    // that lit the control without re-laying the grid under it would draw exactly the screen the
-    // reader pressed away from.
-    //
-    // Both shapes are walked, never the asked-for one alone. A page read only after the press has
-    // nothing to say about what it was before, so a face stuck in one arrangement — the one a road
-    // happened to ask for last — would come out green from end to end.
-    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "panes-sit", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
     // Which page is being shown, counted from 1. Paging is one of the two ways to a pane that is not
     // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
     // a page is drawn rather than held, and the panes it took away are still running behind it.

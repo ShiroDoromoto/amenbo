@@ -357,6 +357,8 @@ export const ru: Translation = {
     "settings.skinAddDrop": "или перетащите сюда .zip",
     "settings.skinWriteOut": "Записать один",
     "settings.skinWriteOutNote": "Всё, что может задать скин, у каждого строка о том, для чего оно. Взято со скина, который надет.",
+    "settings.skinWriteKept": "Передать этот скин",
+    "settings.skinWriteKeptNote": "Файл в том виде, в каком пришёл, байт в байт — вместе с материалами.",
     "settings.skinAddTake": "Взять",
     "settings.skinOnlySide": "только {side}",
     "settings.skinReplace": "Скин с таким именем уже есть: сейчас {held}, приходит {coming}.",

@@ -357,6 +357,8 @@ export const pl: Translation = {
     "settings.skinAddDrop": "albo upuść tu plik .zip",
     "settings.skinWriteOut": "Zapisz jedną",
     "settings.skinWriteOutNote": "Wszystko, co skórka może ustawić, każde z linijką o tym, do czego służy. Wzięte ze skórki, która jest na sobie.",
+    "settings.skinWriteKept": "Przekaż tę skórkę",
+    "settings.skinWriteKeptNote": "Plik dokładnie taki, jaki przyszedł, bajt w bajt — razem z materiałami.",
     "settings.skinAddTake": "Wczytaj",
     "settings.skinOnlySide": "tylko {side}",
     "settings.skinReplace": "Skórka o tej nazwie już jest: na miejscu {held}, wchodzi {coming}.",

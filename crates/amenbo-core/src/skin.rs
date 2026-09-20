@@ -786,6 +786,25 @@ fn weigh(bytes: &[u8]) -> Result<u64, Error> {
     Ok(total)
 }
 
+/// One document, packed as a skin file — a zip holding it as [`PACK_DOCUMENT`] and nothing else.
+///
+/// What amenbo writes out when it is the one making the skin rather than taking one: the template.
+/// A skin the device already holds is written out by copying its file, never by packing it again —
+/// that file is the author's own, materials and all, and rebuilding it would hand back less than
+/// arrived.
+pub fn pack_document(yaml: &str) -> Result<Vec<u8>, Error> {
+    use std::io::Write as _;
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let how =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let packed = (|| -> Result<Vec<u8>, zip::result::ZipError> {
+        out.start_file(PACK_DOCUMENT, how)?;
+        out.write_all(yaml.as_bytes())?;
+        Ok(out.finish()?.into_inner())
+    })();
+    packed.map_err(|e| Error::invalid(format!("this skin would not pack: {e}")))
+}
+
 /// The zip, open, or why it is not one this build can read.
 fn open_pack(bytes: &[u8]) -> Result<zip::ZipArchive<std::io::Cursor<&[u8]>>, Error> {
     zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(unreadable_pack)
@@ -1995,6 +2014,19 @@ dark:
         let big = vec![0u8; PACK_FILE_MAX_BYTES as usize + 1];
         let heavy = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("big.bin", &big)]);
         assert!(arriving(&heavy).is_err());
+    }
+
+    #[test]
+    fn a_document_amenbo_packs_itself_reads_back_as_the_skin_it_was() {
+        // The round trip the template takes: written out packed, handed back in, and the same
+        // skin comes out the other side.
+        let packed = pack_document(ONE_SKIN).unwrap();
+        assert_eq!(Packing::of(&packed), Packing::Packed);
+        let (packing, yaml) = document(&packed).unwrap();
+        assert_eq!(packing, Packing::Packed);
+        assert_eq!(yaml, ONE_SKIN);
+        assert_eq!(Skin::read(&yaml).unwrap().name, "kozo");
+        assert_eq!(weigh(&packed).unwrap(), ONE_SKIN.len() as u64);
     }
 
     #[test]

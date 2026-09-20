@@ -355,6 +355,8 @@ export const it: Translation = {
     "settings.skinAddDrop": "oppure trascina qui uno .zip",
     "settings.skinWriteOut": "Scrivine uno",
     "settings.skinWriteOutNote": "Tutto ciò che uno skin può impostare, ognuno con una riga che dice a cosa serve. Preso dallo skin addosso.",
+    "settings.skinWriteKept": "Passa questo skin",
+    "settings.skinWriteKeptNote": "Il file così com'è arrivato, byte per byte, materiali compresi.",
     "settings.skinAddTake": "Portalo dentro",
     "settings.skinOnlySide": "solo {side}",
     "settings.skinReplace": "Uno skin con questo nome c’è già: presente {held}, in arrivo {coming}.",

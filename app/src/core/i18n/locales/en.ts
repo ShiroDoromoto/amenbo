@@ -373,6 +373,8 @@ const ui = {
   "settings.skinAddDrop": "or drop a .zip here",
   "settings.skinWriteOut": "Write one out",
   "settings.skinWriteOutNote": "Everything a skin can set, each with a line saying what it is for. Taken from the skin that is on.",
+  "settings.skinWriteKept": "Hand this one on",
+  "settings.skinWriteKeptNote": "The file it arrived as, byte for byte — materials and all.",
   "settings.skinAddTake": "Take it in",
   "settings.skinOnlySide": "{side} only",
   "settings.skinReplace": "A skin is already kept under this name: {held} is there, {coming} is coming in.",

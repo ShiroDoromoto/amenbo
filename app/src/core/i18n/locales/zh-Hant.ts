@@ -348,6 +348,8 @@ export const zhHant: Translation = {
     "settings.skinAddDrop": "或把 .zip 拖到這裡",
     "settings.skinWriteOut": "寫一份出來",
     "settings.skinWriteOutNote": "主題能設的全部，每項都附一句說明用途。取自目前所用的主題。",
+    "settings.skinWriteKept": "把這個外觀主題交出去",
+    "settings.skinWriteKeptNote": "就是收進來時的那個檔案，一位元組不差，素材也都在。",
     "settings.skinAddTake": "裝進來",
     "settings.skinOnlySide": "僅{side}",
     "settings.skinReplace": "這個名字已經有主題了：現在是 {held}，要進來的是 {coming}。",

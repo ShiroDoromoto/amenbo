@@ -348,6 +348,8 @@ export const tr: Translation = {
     "settings.skinAddDrop": "ya da buraya bir .zip bırak",
     "settings.skinWriteOut": "Bir tane yaz",
     "settings.skinWriteOutNote": "Bir kaplamanın belirleyebildiği her şey, her birinin ne işe yaradığını söyleyen bir satırla. Üstteki kaplamadan alınır.",
+    "settings.skinWriteKept": "Bu kaplamayı ver",
+    "settings.skinWriteKeptNote": "Geldiği hâliyle dosyanın kendisi, bayt bayt — malzemeleriyle birlikte.",
     "settings.skinAddTake": "İçeri al",
     "settings.skinOnlySide": "yalnızca {side}",
     "settings.skinReplace": "Bu adla bir kaplama zaten var: duran {held}, gelen {coming}.",

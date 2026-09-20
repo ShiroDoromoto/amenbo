@@ -350,6 +350,8 @@ export const id: Translation = {
     "settings.skinAddDrop": "atau jatuhkan .zip di sini",
     "settings.skinWriteOut": "Tulis satu",
     "settings.skinWriteOutNote": "Semua yang bisa diatur skin, masing-masing dengan satu baris keterangan. Diambil dari skin yang dipakai.",
+    "settings.skinWriteKept": "Teruskan skin ini",
+    "settings.skinWriteKeptNote": "Berkasnya seperti saat datang, bita demi bita, berikut materialnya.",
     "settings.skinAddTake": "Masukkan",
     "settings.skinOnlySide": "{side} saja",
     "settings.skinReplace": "Sudah ada skin dengan nama ini: yang ada {held}, yang masuk {coming}.",

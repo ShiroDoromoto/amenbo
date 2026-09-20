@@ -2391,7 +2391,13 @@ error: string | null,
  * took. The licence in full is not here — it is a document, and it is fetched when it is
  * opened rather than on every listing.
  */
-fontFamily: string | null, fontLicense: string | null, };
+fontFamily: string | null, fontLicense: string | null, 
+/**
+ * The name of the file this device keeps the skin under, extension and all. `null` for the
+ * four that ship inside the build, which are held in no file — which is also what says
+ * whether there is anything to write out.
+ */
+fileName: string | null, };
 
 /**
  * The skin this device has on, as the window wears it: the two sides' tables of token name to

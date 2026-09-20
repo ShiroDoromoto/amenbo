@@ -352,6 +352,8 @@ export const ja: Translation = {
     "settings.skinAddDrop": "または .zip をここへ落とす",
     "settings.skinWriteOut": "ひな形を書き出す",
     "settings.skinWriteOutNote": "スキンで変えられるものを全部、それぞれ何に使うかを添えて。当てているスキンがあれば、その値で。",
+    "settings.skinWriteKept": "このスキンを渡す",
+    "settings.skinWriteKeptNote": "取り込んだときのファイルを、そのまま。素材も入ったまま。",
     "settings.skinAddTake": "取り込む",
     "settings.skinOnlySide": "{side}専用",
     "settings.skinReplace": "この名前のスキンが既に入っています。いまあるのが {held}、入ろうとしているのが {coming} です。",

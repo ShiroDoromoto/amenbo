@@ -347,6 +347,8 @@ export const ko: Translation = {
     "settings.skinAddDrop": "또는 .zip 을 여기에 놓기",
     "settings.skinWriteOut": "하나 써 내보내기",
     "settings.skinWriteOutNote": "스킨으로 바꿀 수 있는 것 전부에, 무엇에 쓰는지 한 줄씩. 입고 있는 스킨이 있으면 그 값으로.",
+    "settings.skinWriteKept": "이 스킨 건네주기",
+    "settings.skinWriteKeptNote": "받았을 때의 파일 그대로, 한 바이트도 바뀌지 않고 — 재료까지 함께.",
     "settings.skinAddTake": "받아들이기",
     "settings.skinOnlySide": "{side} 전용",
     "settings.skinReplace": "같은 이름의 스킨이 이미 있습니다. 지금 있는 것은 {held}, 들어오는 것은 {coming} 입니다.",

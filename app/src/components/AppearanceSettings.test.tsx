@@ -18,6 +18,19 @@ const hoisted = vi.hoisted(() => ({
   worn: [] as (string | null)[],
   /** What the host answers for a font's licence in full. */
   licence: null as string | null,
+  /** Every `skin_write_out` the screen asked for, in order. */
+  handedOn: [] as { name: string; path: string }[],
+  /** The path the save panel answers with, or `null` for a reader who cancelled. */
+  saveAs: null as string | null,
+  /** The name the save panel was opened under. */
+  suggested: null as string | null,
+}));
+
+vi.mock("../core/dialog", () => ({
+  pickSaveAs: (suggested: string) => {
+    hoisted.suggested = suggested;
+    return Promise.resolve(hoisted.saveAs);
+  },
 }));
 
 vi.mock("../core/ipc", () => ({
@@ -27,6 +40,10 @@ vi.mock("../core/ipc", () => ({
     if (cmd === "skin_tables") return Promise.resolve(hoisted.tables[args?.name as string] ?? null);
     if (cmd === "skin_use") {
       hoisted.worn.push((args?.name as string | null) ?? null);
+      return Promise.resolve(undefined);
+    }
+    if (cmd === "skin_write_out") {
+      hoisted.handedOn.push({ name: args?.name as string, path: args?.path as string });
       return Promise.resolve(undefined);
     }
     return Promise.reject(new Error(`unmocked ${cmd}`));
@@ -48,6 +65,9 @@ const row = (name: string, themes: string[]) => ({
   error: null,
   fontFamily: null,
   fontLicense: null,
+  // One of the four that ship inside the build, which are kept in no file. A device's own is a
+  // row with a filename on it, and that is what the write-out is offered for.
+  fileName: null as string | null,
 });
 
 let host: HTMLDivElement;
@@ -78,6 +98,9 @@ beforeEach(() => {
   hoisted.tables = {};
   hoisted.worn = [];
   hoisted.licence = null;
+  hoisted.handedOn = [];
+  hoisted.saveAs = null;
+  hoisted.suggested = null;
   document.documentElement.dataset.theme = "light";
 });
 
@@ -218,5 +241,48 @@ describe("the name a skin goes by", () => {
     await draw();
     expect(host.textContent).toContain("レトロゲーム");
     expect(host.textContent, "and not the author's one name beside it").not.toContain("Retro");
+  });
+});
+
+describe("handing a skin on", () => {
+  /** The button that writes the shown skin's own file out, where the screen is offering one. */
+  const handOn = () =>
+    [...host.querySelectorAll("button")].find(
+      (b) => b.textContent === "このスキンを渡す" || b.textContent === "Hand this one on",
+    );
+
+  it("offers the file under the name it is kept as, and hands those bytes on", async () => {
+    hoisted.list = {
+      on: "kozo",
+      skins: [{ ...row("kozo", ["light"]), fileName: "kozo.zip" }],
+    };
+    hoisted.saveAs = "/tmp/somewhere/kozo.zip";
+    await draw();
+
+    await act(async () => handOn()!.click());
+    await act(async () => {});
+    expect(hoisted.suggested).toBe("kozo.zip");
+    expect(hoisted.handedOn).toEqual([{ name: "kozo", path: "/tmp/somewhere/kozo.zip" }]);
+  });
+
+  it("writes nothing where the reader closed the panel", async () => {
+    hoisted.list = {
+      on: "kozo",
+      skins: [{ ...row("kozo", ["light"]), fileName: "kozo.zip" }],
+    };
+    hoisted.saveAs = null;
+    await draw();
+
+    await act(async () => handOn()!.click());
+    await act(async () => {});
+    expect(hoisted.handedOn).toEqual([]);
+  });
+
+  it("is not offered for one that ships inside the build", async () => {
+    // There is no file of a person's to hand on, and what would be written out is this build's
+    // own values — which is what the template already writes.
+    hoisted.list = { on: "washi", skins: [row("washi", ["light", "dark"])] };
+    await draw();
+    expect(handOn()).toBe(undefined);
   });
 });

@@ -378,8 +378,9 @@ export function pageCount(layout: Layout): number {
 }
 
 /** The pages the shown project's panes actually fill, which is every page but the one `addPane` may
- *  have brought into being. */
-function filledPages(layout: Layout): number {
+ *  have brought into being. It is what a reader can carry a pane between: a page nobody has opened
+ *  anything on is the asking, and it goes away with it (`../shell/PaneOrder`). */
+export function filledPages(layout: Layout): number {
   const laid = placing(panesOf(layout, layout.project));
   return Math.max(1, laid[laid.length - 1]?.page ?? 1);
 }

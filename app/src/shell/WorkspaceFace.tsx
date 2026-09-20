@@ -13,9 +13,9 @@ import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  addPane, closedFrame, closedIn, EMPTY_LAYOUT, focusOn, folding, goPage, goProject, gridAt,
-  landingOn, laidOut, movedTo, movedWithin, openedFrame, openedIn, pageCount, paneIn, panesOf,
-  reordered, resized, restored, SIZES, sizing, slotsOf, writing,
+  addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
+  gridAt, landingOn, laidOut, movedTo, movedWithin, openedFrame, openedIn, pageCount, paneIn,
+  panesOf, reordered, resized, restored, SIZES, sizing, slotsOf, writing,
   type Layout, type Size,
 } from "../talk/layout";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
@@ -1456,12 +1456,14 @@ export function WorkspaceFace({
             ))}
           </div>
         )}
-        {/* The way to putting the panes in order (`./PaneOrder`). It is beside the pages because
-            both are about where a pane is, and it is drawn from two panes up: with one there is
-            nothing to put in an order, and a control saying so would be a press to find that out.
-            **It does not follow the row of pages**, which goes away at one page — two panes on one
-            page are an order somebody can want changed. */}
-        {panes.length > 1 && (
+        {/* The way to carrying a pane onto another page (`./PaneOrder`). It is beside the pages
+            because both are about where a pane is, and **it follows them**: a move within a page is
+            made on the page itself now (`./paneDrag`, `AMB-D-939`), so on a project with one page
+            there is nothing left for the modal to do that the page cannot. A control offering it
+            anyway would be a press to find that out. **It counts the pages the panes fill**, not the
+            one `addPane` may have brought into being: a page nobody has opened anything on is the
+            asking, and the modal draws no such page (`../talk/layout`). */}
+        {filledPages(layout) > 1 && (
           <button
             className="workspace__action"
             onClick={() => { setAsking(null); setOrdering(true); }}

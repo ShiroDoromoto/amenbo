@@ -314,10 +314,10 @@ input[type="color"] {
   border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text);
 }
 
-/* Putting the panes in order (`../shell/PaneOrder`). The pages are drawn one under another at the
-   same grid the face lays them out at, so what is being arranged has the shape of what comes back.
-   It is wider than a modal's usual card because eight across is what the widest split draws, and
-   eight boxes squeezed into 440px are not the boxes the reader is arranging. */
+/* Carrying a pane onto another page (`../shell/PaneOrder`). The pages are drawn one under another at
+   the same grid the face lays them out at, so what is being arranged has the shape of what comes
+   back. It is wider than a modal's usual card because an eighth is a quarter of a row, and eight
+   boxes squeezed into 440px are not the boxes the reader is arranging. */
 .paneorder {
   width: min(880px, 100%); max-height: 84vh;
   display: flex; flex-direction: column; gap: var(--s-3);

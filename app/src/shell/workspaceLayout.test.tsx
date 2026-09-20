@@ -52,6 +52,7 @@ vi.mock("../core/boundFolders", () => ({
 vi.mock("../core/dialog", () => ({ confirmDialog: async () => true }));
 
 import { SIZES, type Size } from "../talk/layout";
+import { t } from "../core/i18n";
 import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -425,5 +426,47 @@ describe("moving and sizing a pane where it is drawn", () => {
     await atSize("quarter");
     await openPane();
     expect(q(".slot__bar--grab")).toHaveLength(2);
+  });
+});
+
+// A move within a page is made on the page itself now (`./paneDrag`, `AMB-D-939`), so the modal is
+// left with the one move the page cannot show — a pane carried onto a page that is not on the
+// screen. What it is offered from has to follow that.
+describe("the way to carrying a pane onto another page", () => {
+  const wayIn = () => q(".workspace__action").find((one) => one.getAttribute("title") === t("face.order"));
+
+  it("is not drawn while every pane of the project is on one page", async () => {
+    await mount();
+    await openPane();
+    await atSize("half");
+    await openPane();                              // two panes, both on page 1
+    expect(q(".workspace__page")).toHaveLength(0);
+    expect(wayIn(), "a modal was offered with nowhere to carry a pane to").toBeUndefined();
+  });
+
+  it("is not drawn on the page the strip brought into being, which holds nothing yet", async () => {
+    // That page is the asking, and the modal draws only the pages the panes fill — so a way in there
+    // would open on one page and say nothing (`../talk/layout`).
+    await mount();
+    await openPane();
+    await atSize("half");
+    await openPane();                              // page 1 is full
+    await click(q(".workspace__addstrip")[0]!);
+    expect(q(".workspace__page")).toHaveLength(2);
+    expect(wayIn()).toBeUndefined();
+  });
+
+  it("is drawn once there is a second page to reach, and opens on every page at once", async () => {
+    await mount();
+    await openPane();
+    await atSize("half");
+    await openPane();
+    await openPane();                              // a third pane, which is page 2
+    expect(q(".workspace__page")).toHaveLength(2);
+
+    await click(wayIn()!);
+    expect(q(".paneorder__page")).toHaveLength(2);
+    // The cards of both pages are in it, which is the one thing the face cannot draw.
+    expect(q(".paneorder__card")).toHaveLength(3);
   });
 });

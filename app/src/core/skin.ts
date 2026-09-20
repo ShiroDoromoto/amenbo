@@ -19,6 +19,10 @@
 // it are counted is the engine's business rather than something to build on. So the shape a token
 // value may have is asked here (`VALUE`), and a value outside it is left out.
 //
+// It is asked in core as well (`usable_value` in `crates/amenbo-core/src/skin.rs`), which is the
+// side that can say why a value of the author's went nowhere — this one is handed a table over IPC
+// with nobody left to tell. Two spellings of one rule, held to each other by `skin.test.ts`.
+//
 // An app draws more than one window and each wears the same skin, so this rides the road appearance
 // already takes: the window it was changed in applies it and tells the others (`CHANGED`).
 import { invoke } from "./ipc";

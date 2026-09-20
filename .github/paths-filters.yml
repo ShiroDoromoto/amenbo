@@ -63,6 +63,7 @@ gui:
   - 'crates/amenbo-core/src/error.rs'
   - 'crates/amenbo-core/src/doctor.rs'
   - 'crates/amenbo-core/src/store/tests.rs'
+  - 'crates/amenbo-core/src/skin.rs'
 # The Viewer's Cloudflare Worker: its own npm project, and the only face in this tree that
 # needs Node to be judged. The baked copy core embeds is on this layer as well as on `rust`,
 # because the two ask different questions of it — `rust` compiles what it says, and this asks

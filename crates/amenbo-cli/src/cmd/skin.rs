@@ -304,6 +304,9 @@ fn warnings_json(taken: &Taken) -> Vec<serde_json::Value> {
             Warning::UnknownToken { theme, key } => json!({ "kind": "unknown_token", "theme": theme.as_str(), "key": key }),
             Warning::ClosedToken { theme, key } => json!({ "kind": "closed_token", "theme": theme.as_str(), "key": key }),
             Warning::NotText { theme, key } => json!({ "kind": "not_text", "theme": theme.as_str(), "key": key }),
+            Warning::UnsafeValue { theme, key, why } => json!({
+                "kind": "unsafe_value", "theme": theme.as_str(), "key": key, "why": why.en(),
+            }),
             Warning::FontDropped(why) => json!({ "kind": "font_dropped", "why": why.en() }),
             Warning::Frame { theme, key, wrote, used } => json!({
                 "kind": "frame", "theme": theme.as_str(), "key": key,
@@ -338,6 +341,7 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
             Warning::UnknownToken { theme, key } => format!("  · {theme}.{key}: not a name this Amenbo has — dropped"),
             Warning::ClosedToken { theme, key } => format!("  · {theme}.{key}: this one is not a skin's to move — dropped"),
             Warning::NotText { theme, key } => format!("  · {theme}.{key}: the value is not text — dropped"),
+            Warning::UnsafeValue { theme, key, why } => format!("  · {theme}.{key}: the value {} — dropped", why.en()),
             Warning::FontDropped(why) => format!("  · the embedded font: {} — dropped", why.en()),
             Warning::Frame { theme, key, wrote, used } => match used {
                 Some(used) => format!("  · {theme}.{key}: '{wrote}' — drawn at {used}"),

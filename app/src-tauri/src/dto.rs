@@ -812,12 +812,14 @@ pub struct SkinListDto {
 #[serde(rename_all = "camelCase")]
 pub struct SkinWarningDto {
     /// `unknown` (a name this build has no meaning for), `closed` (one it keeps to itself),
-    /// `notText` (a value that did not arrive as text), or `font` (the one embedded font).
+    /// `notText` (a value that did not arrive as text), `unsafeValue` (one that is text and is not
+    /// a shape a value may have), `scale` (a multiplier not taken as written), `frame` (a frame
+    /// value not taken as written), or `font` (the one embedded font).
     pub(crate) kind: String,
     pub(crate) theme: Option<String>,
     pub(crate) key: String,
-    /// Why, where the kind alone does not say it — the font's reason, in English, the way a
-    /// refusal reads. `null` for the three that are about one named key.
+    /// Why, where the kind alone does not say it — in English, the way a refusal reads. `null` for
+    /// the three that are about one named key and say the whole of it by kind.
     pub(crate) detail: Option<String>,
 }
 

@@ -142,3 +142,69 @@ describe("applySkin", () => {
     expect(light).not.toContain("#000");
   });
 });
+
+// Two spellings of one rule, held to each other.
+//
+// `usable` above asks what shape a value may have at the moment the declaration is written, and
+// `usable_value` in `crates/amenbo-core/src/skin.rs` asks it while the file is being read. Neither
+// can be dropped. The window is handed a table over IPC and reads it where it arrives; core is the
+// only side that can tell the author why a value of theirs went nowhere. So the rule is written
+// twice — and a value core keeps that the window then drops is exactly the silence the warning was
+// added to end.
+//
+// Both spellings are read out of the tree with Vite's `?raw`, the way the Rust↔TS parity tests do:
+// move one side alone and this breaks.
+import skinTs from "./skin.ts?raw";
+import skinRs from "../../../crates/amenbo-core/src/skin.rs?raw";
+
+/** What a `\x` in a character literal stands for. The three this rule spells are all that is here. */
+function unescape(after: string): string {
+  return after === "\\" ? "\\" : after === "n" ? "\n" : after === "r" ? "\r" : after;
+}
+
+/** The one capture of a pattern, or a failure naming what stopped matching. */
+function only(src: string, re: RegExp, what: string): string {
+  const m = src.match(re);
+  if (!m) throw new Error(`${what} is no longer spelled the way this test reads it`);
+  return m[1];
+}
+
+describe("the shape a value may have", () => {
+  it("is the same set of characters on both sides", () => {
+    const fromTs = only(skinTs, /const VALUE = \/\^\[\^([^\]]*)\]\{1,\d+\}\$\/;/, "`VALUE` in skin.ts");
+    const inTs = new Set<string>();
+    for (let i = 0; i < fromTs.length; i++) {
+      inTs.add(fromTs[i] === "\\" ? unescape(fromTs[++i]) : fromTs[i]);
+    }
+
+    const fromRs = only(
+      skinRs,
+      /pub const NOT_IN_A_VALUE: &\[char\] = &\[([^\]]*)\];/,
+      "`NOT_IN_A_VALUE` in skin.rs",
+    );
+    const inRs = new Set(
+      [...fromRs.matchAll(/'(\\.|[^'])'/g)].map((m) =>
+        m[1].startsWith("\\") ? unescape(m[1].slice(1)) : m[1],
+      ),
+    );
+
+    expect([...inRs].sort()).toEqual([...inTs].sort());
+  });
+
+  it("is capped at the same length on both sides", () => {
+    const inTs = only(skinTs, /const VALUE = \/\^\[\^[^\]]*\]\{1,(\d+)\}\$\/;/, "`VALUE` in skin.ts");
+    const inRs = only(skinRs, /pub const VALUE_MAX: usize = (\d+);/, "`VALUE_MAX` in skin.rs");
+    expect(inRs).toBe(inTs);
+  });
+
+  it("keeps out the same three things a character class cannot say", () => {
+    // A comment delimiter either way round, and `url(` with the space the applying side allows.
+    expect(only(skinTs, /const NOT_IN_A_VALUE = \/(.*)\/i;/, "`NOT_IN_A_VALUE` in skin.ts")).toBe(
+      "\\/\\*|\\*\\/|url\\s*\\(",
+    );
+    const asked = only(skinRs, /pub fn usable_value[\s\S]*?\n}\n([\s\S]*?)\n}\n/, "`usable_value` in skin.rs");
+    expect(skinRs).toContain('value.contains("/*") || value.contains("*/")');
+    expect(asked).toContain('"url"');
+    expect(asked).toContain("starts_with('(')");
+  });
+});

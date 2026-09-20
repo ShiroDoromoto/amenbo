@@ -916,6 +916,12 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                         key: key.clone(),
                         detail: None,
                     },
+                    Warning::UnsafeValue { theme, key, why } => SkinWarningDto {
+                        kind: "unsafeValue".into(),
+                        theme: Some(theme.as_str().to_string()),
+                        key: key.clone(),
+                        detail: Some(format!("the value {}", why.en())),
+                    },
                     Warning::FontDropped(why) => SkinWarningDto {
                         kind: "font".into(),
                         theme: None,

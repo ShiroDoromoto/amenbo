@@ -132,8 +132,9 @@ describe("reading a skin file over", () => {
         { kind: "closed", theme: "light", key: "k-slack", detail: null },
         { kind: "notText", theme: "light", key: "s-3", detail: null },
         // One dropped font can be four different things, so the reason travels with it rather
-        // than being named by the kind.
+        // than being named by the kind. A value has five, and travels the same way.
         { kind: "font", theme: null, key: "font_file", detail: "format is 'ttf'; woff2 is the one taken" },
+        { kind: "unsafeValue", theme: "light", key: "c-bg", detail: "the value holds ';', which no value may" },
       ],
     });
     await drawAndPick();
@@ -142,6 +143,8 @@ describe("reading a skin file over", () => {
     expect(said).toContain("light.k-slack");
     expect(said).toContain("light.s-3");
     expect(said).toContain("woff2 is the one taken");
+    expect(said).toContain("light.c-bg");
+    expect(said).toContain("which no value may");
   });
 
   it("says which scripts the font it carries has no letters for", async () => {

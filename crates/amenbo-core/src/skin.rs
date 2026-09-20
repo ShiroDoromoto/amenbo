@@ -485,6 +485,94 @@ const WOFF2_MAGIC: &[u8; 4] = b"wOF2";
 /// that enumerates the directory — the device's own, and an archive's entries.
 pub const FILE_EXT: &str = ".yaml";
 
+/// The most a token's value may be. Counted the way the applying side counts it — `VALUE` in
+/// `app/src/core/skin.ts` is a JavaScript regular expression, so its `{1,512}` counts UTF-16 code
+/// units and a character outside the BMP counts as two. Long enough for a font stack naming a dozen
+/// families, and short of a value that is carrying something other than a value.
+pub const VALUE_MAX: usize = 512;
+
+/// What a token's value may not hold: the punctuation that ends a declaration or opens a rule, the
+/// backslash, and a newline. None of them has a use in a colour, a length, a font stack or a
+/// keyword, and each is a way out of the declaration in an engine that counts brackets loosely.
+pub const NOT_IN_A_VALUE: &[char] = &[';', '{', '}', '<', '>', '\\', '\n', '\r'];
+
+/// Why a value is not one a token may be set to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValueProblem {
+    /// Nothing was written. A declaration with no value is not one, and the name is better left at
+    /// this build's own than set to nothing.
+    Empty,
+    /// Holds one of [`NOT_IN_A_VALUE`].
+    Punctuation(char),
+    /// Holds a comment delimiter, which would take whatever follows it into the comment.
+    Comment,
+    /// Reaches for `url(`. No token here takes one, and a skin is a file somebody was handed: it
+    /// says what colour a thing is, and it does not fetch from the reader's machine.
+    Url,
+    /// Longer than [`VALUE_MAX`].
+    TooLong { units: usize },
+}
+
+impl ValueProblem {
+    /// Why the value was dropped, as a phrase that follows "the value". English on both faces, the
+    /// way a refusal is: a person told it in the terminal and a person shown it in the window are
+    /// told the same thing.
+    ///
+    /// **The value itself is not in it.** It is the one string in the file written to get out of a
+    /// declaration, and the terminal is a place where a string can do more than be read.
+    pub fn en(&self) -> String {
+        match self {
+            ValueProblem::Empty => "is empty".to_string(),
+            ValueProblem::Punctuation(c) => {
+                let named = match c {
+                    '\n' => "a newline".to_string(),
+                    '\r' => "a carriage return".to_string(),
+                    c => format!("'{c}'"),
+                };
+                format!("holds {named}, which no value may")
+            }
+            ValueProblem::Comment => "holds a comment delimiter".to_string(),
+            ValueProblem::Url => "reaches for url(), and no token here takes one".to_string(),
+            ValueProblem::TooLong { units } => {
+                format!("is {units} characters, over the {VALUE_MAX} a value may be")
+            }
+        }
+    }
+}
+
+/// May a token be set to this value? Asked in two places for one reason: this build drops what it
+/// will not pass on, and the window that wears a skin asks again at the moment it writes the
+/// declaration (`usable` in `app/src/core/skin.ts`). Neither can stand alone — the window is handed
+/// a table over IPC and reads it where it arrives, and a value dropped there with nothing said is a
+/// value the author never hears about. So the rule is written twice and held together by
+/// `app/src/core/skin.test.ts`, which reads both spellings out of the tree.
+pub fn usable_value(value: &str) -> Result<(), ValueProblem> {
+    if value.is_empty() {
+        return Err(ValueProblem::Empty);
+    }
+    let units: usize = value.chars().map(char::len_utf16).sum();
+    if units > VALUE_MAX {
+        return Err(ValueProblem::TooLong { units });
+    }
+    if let Some(c) = value.chars().find(|c| NOT_IN_A_VALUE.contains(c)) {
+        return Err(ValueProblem::Punctuation(c));
+    }
+    if value.contains("/*") || value.contains("*/") {
+        return Err(ValueProblem::Comment);
+    }
+    if reaches_for_url(value) {
+        return Err(ValueProblem::Url);
+    }
+    Ok(())
+}
+
+/// Does the value reach for `url(`? The applying side asks `/url\s*\(/i`, so the word is found
+/// whatever its case and the bracket is allowed to sit a space away from it.
+fn reaches_for_url(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    lower.match_indices("url").any(|(at, _)| lower[at + 3..].trim_start().starts_with('('))
+}
+
 /// May this name be a skin's? Asked in two places for one reason: the name is what the skin is kept
 /// under (`<base>/skins/<name>.yaml`), so a name that is not a filename is a path somewhere else.
 pub fn usable_name(name: &str) -> bool {
@@ -623,6 +711,9 @@ pub enum Warning {
     ClosedToken { theme: Side, key: String },
     /// A value that did not arrive as text: a length where a colour belongs, a list, a nested map.
     NotText { theme: Side, key: String },
+    /// A value that is text and is not a shape a token may be set to. Dropped, so the name keeps
+    /// this build's own value — which is what the window would do with it anyway, silently.
+    UnsafeValue { theme: Side, key: String, why: ValueProblem },
     /// A family's multiplier that was not taken as written. `used` is the number put to work
     /// instead, written out, or `None` where the value was not a number and the family did not
     /// move. Written rather than held as one, so a warning stays a thing two of them can be
@@ -789,7 +880,14 @@ impl Skin {
                 if let Some((_, moves)) = SCALES.iter().find(|(name, _)| *name == key) {
                     scale(side, &key, &value, moves, &mut kept, &mut warnings);
                 } else if OPEN.binary_search(&key.as_str()).is_ok() {
-                    kept.insert(key, value);
+                    // The name is a skin's to move; whether the value is one it may be moved to is
+                    // the next question, and the last place it can be answered out loud.
+                    match usable_value(&value) {
+                        Ok(()) => {
+                            kept.insert(key, value);
+                        }
+                        Err(why) => warnings.push(Warning::UnsafeValue { theme: side, key, why }),
+                    }
                 } else if CLOSED.binary_search(&key.as_str()).is_ok() {
                     warnings.push(Warning::ClosedToken { theme: side, key });
                 } else {
@@ -974,6 +1072,66 @@ dark:
             taken.warnings,
             [Warning::NotText { theme: Side::Light, key: "c-text".into() }]
         );
+    }
+
+    #[test]
+    fn a_value_written_to_get_out_of_the_declaration_is_dropped_with_the_reason_named() {
+        // The case the task opens with: the file is read, the check passes it, the screen does not
+        // change, and nothing anywhere says why. Now the name is dropped and the author is told.
+        let taken = Skin::read(&doc(
+            "skin_v: 1\nthemes: [light]\n",
+            "light:\n  c-bg: \"red; } body { display: none }\"\n  c-text: \"#000\"\n",
+        ))
+        .unwrap()
+        .check()
+        .unwrap();
+        assert!(!taken.skin.light.values.contains_key("c-bg"), "dropped, not worn");
+        assert_eq!(taken.skin.light.values["c-text"], "#000", "the rest of the file still stands");
+        assert_eq!(
+            taken.warnings,
+            [Warning::UnsafeValue {
+                theme: Side::Light,
+                key: "c-bg".into(),
+                why: ValueProblem::Punctuation(';'),
+            }]
+        );
+    }
+
+    #[test]
+    fn each_shape_a_value_may_not_have_is_named_by_its_own_reason() {
+        let long = "a".repeat(VALUE_MAX + 1);
+        let cases: &[(&str, ValueProblem)] = &[
+            ("", ValueProblem::Empty),
+            ("red;", ValueProblem::Punctuation(';')),
+            ("red{", ValueProblem::Punctuation('{')),
+            ("red<", ValueProblem::Punctuation('<')),
+            ("red\\", ValueProblem::Punctuation('\\')),
+            ("red\n", ValueProblem::Punctuation('\n')),
+            ("red /* and */", ValueProblem::Comment),
+            ("URL(x)", ValueProblem::Url),
+            ("url (x)", ValueProblem::Url),
+            (&long, ValueProblem::TooLong { units: VALUE_MAX + 1 }),
+        ];
+        for (value, why) in cases {
+            assert_eq!(usable_value(value), Err(why.clone()), "{value:?}");
+            assert!(!why.en().is_empty());
+            assert!(!why.en().contains(*value) || value.is_empty(), "the value itself is not said");
+        }
+        assert_eq!(usable_value("#fff"), Ok(()));
+        assert_eq!(usable_value("ui-sans-serif, 'Hiragino Sans', sans-serif"), Ok(()));
+        assert_eq!(usable_value("0 1px 2px rgba(0, 0, 0, 0.4)"), Ok(()));
+        assert_eq!(usable_value(&"a".repeat(VALUE_MAX)), Ok(()), "the cap is a length, not a bound");
+    }
+
+    #[test]
+    fn a_value_is_counted_the_way_the_window_counts_it() {
+        // `VALUE` on the applying side is a JavaScript regular expression, so its `{1,512}` counts
+        // UTF-16 code units. Counting characters here would keep a value the window then drops
+        // without a word, which is the hole this warning was added to close.
+        let astral = "\u{1f600}".repeat(VALUE_MAX / 2);
+        assert_eq!(usable_value(&astral), Ok(()), "512 units exactly");
+        let over = format!("{astral}{}", '\u{1f600}');
+        assert_eq!(usable_value(&over), Err(ValueProblem::TooLong { units: VALUE_MAX + 2 }));
     }
 
     #[test]
@@ -1173,7 +1331,7 @@ dark:
 
     #[test]
     fn a_way_of_drawing_a_frame_this_build_does_not_offer_is_dropped() {
-        for style in ["dashed", "dotted", "groove", ""] {
+        for style in ["dashed", "dotted", "groove"] {
             let taken = framed(&format!("  border-style: \"{style}\"\n"));
             assert!(!taken.skin.light.values.contains_key("border-style"), "{style}");
             assert_eq!(
@@ -1186,6 +1344,23 @@ dark:
                 }]
             );
         }
+    }
+
+    #[test]
+    fn a_frame_written_as_nothing_is_answered_as_an_empty_value_rather_than_as_a_style() {
+        // The shape of a value is asked before what the value says, so an empty one is told what it
+        // is — "none" is how a frame is taken away, and a reader shown "'' is not one this build
+        // draws" would go looking for the style they mistyped.
+        let taken = framed("  border-style: \"\"\n");
+        assert!(!taken.skin.light.values.contains_key("border-style"));
+        assert_eq!(
+            taken.warnings,
+            [Warning::UnsafeValue {
+                theme: Side::Light,
+                key: "border-style".into(),
+                why: ValueProblem::Empty,
+            }]
+        );
     }
 
     #[test]

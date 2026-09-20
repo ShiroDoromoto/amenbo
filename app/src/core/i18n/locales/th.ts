@@ -350,6 +350,8 @@ export const th: Translation = {
     "settings.skinAddDrop": "หรือปล่อยไฟล์ .zip หรือ .yaml ลงตรงนี้",
     "settings.skinWriteOut": "เขียนออกมาสักอัน",
     "settings.skinWriteOutNote": "ทุกอย่างที่สกินตั้งได้ พร้อมบรรทัดบอกว่าแต่ละอย่างใช้ทำอะไร เอาจากสกินที่ใส่อยู่",
+    "settings.skinWriteKept": "ส่งต่อสกินนี้",
+    "settings.skinWriteKeptNote": "ไฟล์ตามที่รับเข้ามา ไบต์ต่อไบต์ พร้อมวัสดุทั้งหมด",
     "settings.skinAddTake": "รับเข้ามา",
     "settings.skinOnlySide": "เฉพาะ{side}",
     "settings.skinReplace": "มีสกินชื่อนี้อยู่แล้ว ของเดิมคือ {held} ที่กำลังเข้ามาคือ {coming}",

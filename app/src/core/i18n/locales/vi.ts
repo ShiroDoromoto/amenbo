@@ -350,6 +350,8 @@ export const vi: Translation = {
     "settings.skinAddDrop": "hoặc thả một tệp .zip hoặc .yaml vào đây",
     "settings.skinWriteOut": "Viết ra một cái",
     "settings.skinWriteOutNote": "Tất cả những gì một skin đặt được, mỗi thứ kèm một dòng nói dùng vào việc gì. Lấy từ skin đang mặc.",
+    "settings.skinWriteKept": "Chuyển skin này đi",
+    "settings.skinWriteKeptNote": "Đúng tệp lúc nhận, từng byte một — kèm cả vật liệu.",
     "settings.skinAddTake": "Nhận vào",
     "settings.skinOnlySide": "chỉ {side}",
     "settings.skinReplace": "Đã có skin mang tên này: đang có {held}, sắp vào là {coming}.",

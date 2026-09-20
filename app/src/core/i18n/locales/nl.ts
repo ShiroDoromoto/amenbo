@@ -348,6 +348,8 @@ export const nl: Translation = {
     "settings.skinAddDrop": "of sleep hier een .zip of .yaml naartoe",
     "settings.skinWriteOut": "Er een uitschrijven",
     "settings.skinWriteOutNote": "Alles wat een skin kan instellen, elk met een regel waar het voor is. Van de skin die aan is.",
+    "settings.skinWriteKept": "Deze doorgeven",
+    "settings.skinWriteKeptNote": "Het bestand zoals het binnenkwam, byte voor byte — met materialen.",
     "settings.skinAddTake": "Binnenhalen",
     "settings.skinOnlySide": "alleen {side}",
     "settings.skinReplace": "Er ligt al een skin onder deze naam: {held} is er, {coming} komt erbij.",

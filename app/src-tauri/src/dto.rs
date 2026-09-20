@@ -799,6 +799,10 @@ pub struct SkinRowDto {
     /// opened rather than on every listing.
     pub(crate) font_family: Option<String>,
     pub(crate) font_license: Option<String>,
+    /// The name of the file this device keeps the skin under, extension and all. `null` for the
+    /// four that ship inside the build, which are held in no file — which is also what says
+    /// whether there is anything to write out.
+    pub(crate) file_name: Option<String>,
 }
 
 /// What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —

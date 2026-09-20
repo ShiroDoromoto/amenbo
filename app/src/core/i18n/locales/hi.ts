@@ -348,6 +348,8 @@ export const hi: Translation = {
     "settings.skinAddDrop": "या .zip या .yaml यहाँ छोड़ें",
     "settings.skinWriteOut": "एक लिखकर निकालें",
     "settings.skinWriteOutNote": "जो कुछ भी स्किन बदल सकती है, हर एक के साथ एक पंक्ति कि वह किसलिए है। जो स्किन लगी है, उसी के मानों से।",
+    "settings.skinWriteKept": "यह स्किन आगे दें",
+    "settings.skinWriteKeptNote": "जैसी फ़ाइल आई थी, वैसी ही — बाइट दर बाइट, सामग्री समेत।",
     "settings.skinAddTake": "अंदर लें",
     "settings.skinOnlySide": "सिर्फ़ {side}",
     "settings.skinReplace": "इस नाम की स्किन पहले से है: अभी {held} है, आ रही है {coming}।",

@@ -456,6 +456,7 @@ pub fn run() {
       commands::skin_in_use,
       commands::skin_read,
       commands::skin_template_to,
+      commands::skin_write_out,
       commands::skin_list,
       commands::skin_tables,
       commands::skin_use,

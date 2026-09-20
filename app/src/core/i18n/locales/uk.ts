@@ -357,6 +357,8 @@ export const uk: Translation = {
     "settings.skinAddDrop": "або перетягніть сюди .zip чи .yaml",
     "settings.skinWriteOut": "Записати один",
     "settings.skinWriteOutNote": "Усе, що може задати скін, кожне з рядком про те, для чого воно. Узяте зі скіна, який надітий.",
+    "settings.skinWriteKept": "Передати цей скін",
+    "settings.skinWriteKeptNote": "Файл у тому вигляді, в якому надійшов, байт у байт — разом із матеріалами.",
     "settings.skinAddTake": "Узяти",
     "settings.skinOnlySide": "лише {side}",
     "settings.skinReplace": "Скін із таким іменем уже є: зараз {held}, надходить {coming}.",

@@ -350,6 +350,8 @@ export const de: Translation = {
     "settings.skinAddDrop": "oder eine .zip oder .yaml hierher ziehen",
     "settings.skinWriteOut": "Eine herausschreiben",
     "settings.skinWriteOutNote": "Alles, was ein Skin setzen kann, jeweils mit einer Zeile dazu, wofür es da ist. Vom Skin, der gerade an ist.",
+    "settings.skinWriteKept": "Diesen weitergeben",
+    "settings.skinWriteKeptNote": "Die Datei, wie sie ankam, Byte für Byte – samt Materialien.",
     "settings.skinAddTake": "Übernehmen",
     "settings.skinOnlySide": "nur {side}",
     "settings.skinReplace": "Unter diesem Namen liegt schon ein Skin: vorhanden ist {held}, hinzu kommt {coming}.",

@@ -21,10 +21,11 @@
 //! being worked in is this run's as well: it is where the reader is looking, and an older write must
 //! not move them.
 //!
-//! **The split is one answer per project and not one for the face** ([`Split`]). How many panes a
-//! project wants is about the work in it — one repository is watched in a pane and another is worked
-//! in four — so a person moving between projects is not changing their mind about either. It is the
-//! rule the columns beside the panes already read by (`AMB-D-835`).
+//! **How much of a page a pane takes is the pane's own answer** ([`PaneSize`], `AMB-D-939`). How
+//! much room a piece of work wants is about that piece of work — an agent and the shell it is
+//! watched from are not the same size of thing — so one answer held for a whole project made every
+//! pane on it change together. Where each pane is drawn is not written down at all: the window works
+//! it out from the order every time it draws (`app/src/talk/layout.ts`).
 //!
 //! **Two things name a frame, and they are ranked** ([`NamedBy`]). `talk name` from the agent running
 //! in the pane names it, and a person renaming it outranks that, for good — an agent that says
@@ -148,23 +149,44 @@ impl FrameNames {
     }
 }
 
-/// How one project's page is split.
+/// How much of a page one pane takes (`AMB-D-939`).
+///
+/// **Six sizes, and every one of them divides the page exactly**, so one grid draws all of them —
+/// twelve cells across and two down, of which an eighth is three and a sixth is four
+/// (`app/src/talk/layout.ts`). Where the small end stops is settled by columns of text: what an
+/// agent's TUI wants is eighty columns, and a twelfth would put a pane under eighty on every screen
+/// there is.
+///
+/// **A half comes two ways round.** Side by side it halves the columns, which is under the eighty a
+/// TUI wants on a window with a column beside it; laid down the page it leaves the columns whole and
+/// takes the lines instead. They are two sizes rather than one size with an answer on it, which is
+/// what lets one pane sit the way its work wants while the pane beside it sits the other way.
+///
+/// A row written without one is a pane nobody sized, and it comes back at the whole page — which is
+/// what one pane on its own fills.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Split {
-    /// How many panes to a page.
-    pub count: u32,
-    /// Which way a two-pane page sits ([`Orient`]). It is kept whatever the split is: a person who
-    /// went to four panes and back to two means the two they set up.
-    #[serde(default, skip_serializing_if = "Orient::is_across")]
-    pub orient: Orient,
+#[serde(rename_all = "kebab-case")]
+pub enum PaneSize {
+    /// The whole page.
+    #[default]
+    Whole,
+    /// Half of it, side by side — six cells across and both rows.
+    Half,
+    /// Half of it, one above the other — the whole width and one row.
+    HalfDown,
+    /// A quarter: six cells across and one row.
+    Quarter,
+    /// A sixth: four cells across and one row.
+    Sixth,
+    /// An eighth: three cells across and one row.
+    Eighth,
 }
 
 /// The talk window's arrangement as one machine left it: what a person set, and what they opened.
 ///
-/// **A project nobody has split is absent rather than written at a default.** What is kept is an
-/// answer somebody gave, and a row that carried every project the store has would grow with the
-/// store while saying nothing about most of them.
+/// **The order is the whole of the arrangement.** A pane carries how much of a page it takes and
+/// nothing about where it sits: the window lays the panes down in order and the pages fall out of
+/// that, so there is no place here for a row to be put back in the wrong one (`AMB-D-939`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedLayout {
@@ -172,9 +194,6 @@ pub struct SavedLayout {
     /// told of one yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<u32>,
-    /// How each project's page is split, by project.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub splits: BTreeMap<u32, Split>,
     /// The panes, in the order they were opened ([`SavedPane`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub panes: Vec<SavedPane>,
@@ -202,6 +221,10 @@ pub struct SavedPane {
     /// The project it is one of. A pane is a project's from the moment it is made and never moves
     /// between them, so it comes back under the same one.
     pub project: u32,
+    /// How much of a page it takes ([`PaneSize`]). A row written before sizes were kept has none, and
+    /// comes back at the whole page.
+    #[serde(default)]
+    pub size: PaneSize,
     /// The folder its terminal works in — one of the folders that project is bound to. `None` for a
     /// pane that took up a terminal somebody else started and had not yet been told where it runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -254,61 +277,6 @@ pub struct SavedPane {
     pub compose_open: Option<bool>,
 }
 
-/// Which way the two panes of a two-pane page sit: side by side, or one above the other.
-///
-/// **It is asked about two panes and about nothing else.** Every count spends width before height —
-/// a terminal runs short of columns long before it runs short of lines — and at four and above the
-/// rows are already spent, so there is no arrangement left to choose between. Two is the count where
-/// spending width first stops paying: half a window is under the eighty columns an agent's TUI wants,
-/// while two down leaves the columns whole and takes the lines instead (`app/src/talk/layout.ts`).
-///
-/// An arrangement written before there was anything to ask reads as [`Across`](Orient::Across), which
-/// is what two panes did then.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Orient {
-    /// Side by side, which is what every other count does.
-    #[default]
-    Across,
-    /// One above the other.
-    Down,
-}
-
-impl Orient {
-    /// Whether this is the way a page sits when nobody has said otherwise — what lets the answer stay
-    /// out of the row until it is one.
-    pub fn is_across(&self) -> bool {
-        matches!(self, Orient::Across)
-    }
-}
-
-/// The row as it may be written, in either of the shapes this build can meet.
-///
-/// A build before the split was per project wrote one for the whole face. That answer belonged to
-/// whichever project the face was on, and [`saved_layout`] is where it is put back under it — so a
-/// person who set four panes and updated finds four panes on the project they set them on.
-///
-/// **The panes an older build wrote are read straight past.** It kept them under `frames`, a shape
-/// with no name, no agent and no handle on it, numbered by a run that began again at "1" — so what
-/// there is to take from one is a place with nothing to say and an id another pane may already be
-/// holding. A store written by such a build comes back with its splits and no panes.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Row {
-    #[serde(default)]
-    project: Option<u32>,
-    #[serde(default)]
-    splits: BTreeMap<u32, Split>,
-    #[serde(default)]
-    panes: Vec<SavedPane>,
-    /// The one split an older build wrote. `None` in anything this build has written.
-    #[serde(default)]
-    count: Option<u32>,
-    /// And the way it sat, which only ever meant anything beside that count.
-    #[serde(default)]
-    orient: Orient,
-}
-
 /// What this device kept of the arrangement, or nothing where it kept none.
 ///
 /// A scalar that will not parse reads as nothing rather than as a failure: it is one machine's screen,
@@ -316,21 +284,13 @@ struct Row {
 /// far more than the answer is worth. Anything in the row beyond the fields read here is read straight
 /// past, so a row that carries more than them still answers with what they say.
 ///
-/// **An older build's one split is put back under the project it was set on.** Where the row names no
-/// project there is nowhere to put it, and it is let go: a split with nothing to hold it against is
-/// not an answer about anything.
+/// **The shapes older builds wrote are converted once, on the way in** — the split a whole project
+/// was held at becomes a size on each of that project's panes (`AMB-D-939`, migration v49). So there
+/// is one shape to read here, and nothing in this module knows what a count was.
 pub fn saved_layout(engine: &StoreEngine) -> Result<Option<SavedLayout>> {
-    let Some(row) = engine
+    Ok(engine
         .get_meta(LAYOUT_META)?
-        .and_then(|json| serde_json::from_str::<Row>(&json).ok())
-    else {
-        return Ok(None);
-    };
-    let mut splits = row.splits;
-    if let (true, Some(count), Some(project)) = (splits.is_empty(), row.count, row.project) {
-        splits.insert(project, Split { count, orient: row.orient });
-    }
-    Ok(Some(SavedLayout { project: row.project, splits, panes: row.panes }))
+        .and_then(|json| serde_json::from_str::<SavedLayout>(&json).ok()))
 }
 
 /// Keep what outlives the run. It is written as the window is changed rather than as it closes: a
@@ -348,6 +308,21 @@ mod tests {
     use super::*;
 
     use NamedBy::{Person, Session};
+
+    /// One pane's row, with nothing on it but where it is and how much of a page it takes.
+    fn pane(id: &str, project: u32, size: PaneSize) -> SavedPane {
+        SavedPane {
+            id: id.into(),
+            project,
+            size,
+            folder: None,
+            agent: None,
+            name: None,
+            resume: None,
+            model: None,
+            compose_open: None,
+        }
+    }
 
     /// The ranking, as the one question it answers: may this naming take the place of that one?
     #[test]
@@ -386,43 +361,75 @@ mod tests {
         assert_eq!(kept, &"の".repeat(NAME_LIMIT), "and cut on a character");
     }
 
-    /// A split for each project, kept apart: how many panes one project wants says nothing about
-    /// what another one wants, and moving between them is not changing your mind about either.
+    /// A size on each pane, kept apart: how much room one piece of work wants says nothing about
+    /// what the pane beside it wants (`AMB-D-939`).
     #[test]
-    fn each_project_keeps_its_own_split() {
+    fn each_pane_keeps_its_own_size() {
         let engine = StoreEngine::open_in_memory().unwrap();
         let kept = SavedLayout {
             project: Some(1),
-            splits: BTreeMap::from([
-                (1, Split { count: 4, orient: Orient::Across }),
-                (2, Split { count: 2, orient: Orient::Down }),
-            ]),
-            ..SavedLayout::default()
+            panes: vec![pane("a", 1, PaneSize::Quarter), pane("b", 1, PaneSize::HalfDown)],
         };
         save_layout(&engine, &kept).unwrap();
 
         let back = saved_layout(&engine).unwrap().expect("the arrangement");
         assert_eq!(back, kept);
-        assert_eq!(back.splits[&1].count, 4);
-        assert_eq!(back.splits[&2].orient, Orient::Down);
-        // A project nobody has split is absent, not written at a default: what is kept is an answer
-        // somebody gave.
-        assert!(!back.splits.contains_key(&3));
+        assert_eq!(back.panes[0].size, PaneSize::Quarter);
+        assert_eq!(back.panes[1].size, PaneSize::HalfDown);
+    }
+
+    /// The six sizes go over as the window spells them, which is what lets the two sides be read
+    /// against each other (`app/src/talk/layout.ts`).
+    #[test]
+    fn a_size_is_written_the_way_the_window_spells_it() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let all = [
+            PaneSize::Whole,
+            PaneSize::Half,
+            PaneSize::HalfDown,
+            PaneSize::Quarter,
+            PaneSize::Sixth,
+            PaneSize::Eighth,
+        ];
+        let kept = SavedLayout {
+            project: Some(1),
+            panes: all.iter().enumerate().map(|(at, size)| pane(&at.to_string(), 1, *size)).collect(),
+        };
+        save_layout(&engine, &kept).unwrap();
+
+        let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
+        for spelling in ["whole", "half", "half-down", "quarter", "sixth", "eighth"] {
+            assert!(written.contains(spelling), "{spelling} is not in it: {written}");
+        }
+        assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
+    }
+
+    /// A row from before sizes were kept comes back at the whole page, which is what one pane on its
+    /// own fills. The conversion of an older store's splits is the migration's (v49), so nothing
+    /// here has to know what a count was.
+    #[test]
+    fn a_pane_written_without_a_size_comes_back_at_the_whole_page() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        engine
+            .set_meta(LAYOUT_META, Some(r#"{"project":1,"panes":[{"id":"5","project":1}]}"#))
+            .unwrap();
+        let back = saved_layout(&engine).unwrap().expect("the arrangement");
+        assert_eq!(back.panes[0].size, PaneSize::Whole);
     }
 
     /// What a person set comes back, and so do the places they opened — with nothing running in any
     /// of them, and no word about which one they were working in.
     #[test]
-    fn the_split_the_project_and_the_panes_come_back() {
+    fn the_project_and_the_panes_come_back() {
         let engine = StoreEngine::open_in_memory().unwrap();
         assert_eq!(saved_layout(&engine).unwrap(), None, "nothing has been laid out yet");
 
         let kept = SavedLayout {
             project: Some(1),
-            splits: BTreeMap::from([(1, Split { count: 4, orient: Orient::Across })]),
             panes: vec![SavedPane {
                 id: "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114".into(),
                 project: 1,
+                size: PaneSize::Quarter,
                 folder: Some("/work/repo".into()),
                 agent: Some("claude".into()),
                 name: Some(FrameName { name: "the migration".into(), by: Person }),
@@ -446,10 +453,10 @@ mod tests {
         let engine = StoreEngine::open_in_memory().unwrap();
         let kept = SavedLayout {
             project: Some(1),
-            splits: BTreeMap::new(),
             panes: vec![SavedPane {
                 id: "1f0b6d92-8c47-4a10-b3e5-5d9a7c204e6b".into(),
                 project: 1,
+                size: PaneSize::Whole,
                 folder: Some("/work/repo".into()),
                 agent: None,
                 name: None,
@@ -491,45 +498,6 @@ mod tests {
         assert!(!written.contains("nextId"), "and the count is not written again: {written}");
     }
 
-    /// An arrangement an older build wrote still reads: the frames beside it are read past rather
-    /// than refused, and its one split is put back under the project the face was on — which is the
-    /// project it was set on.
-    #[test]
-    fn an_older_arrangement_gives_its_one_split_to_the_project_it_was_set_on() {
-        let engine = StoreEngine::open_in_memory().unwrap();
-        engine
-            .set_meta(
-                LAYOUT_META,
-                Some(
-                    r#"{"count":4,"nextId":3,"project":2,
-                        "frames":[{"id":"1","project":2,"folder":"/work/repo"}],"splitOut":"1"}"#,
-                ),
-            )
-            .unwrap();
-        assert_eq!(
-            saved_layout(&engine).unwrap(),
-            Some(SavedLayout {
-                project: Some(2),
-                splits: BTreeMap::from([(2, Split { count: 4, orient: Orient::Across })]),
-                // Its places are read past: what it kept of one is a folder under an id its own run
-                // began handing out from the first, with nothing to say about what was in it.
-                panes: Vec::new(),
-            })
-        );
-    }
-
-    /// And an older one that names no project has nowhere to put its split, so it lets it go: a
-    /// count with nothing to hold it against is not an answer about anything.
-    #[test]
-    fn an_older_arrangement_naming_no_project_lets_its_split_go() {
-        let engine = StoreEngine::open_in_memory().unwrap();
-        engine.set_meta(LAYOUT_META, Some(r#"{"count":4}"#)).unwrap();
-        assert_eq!(
-            saved_layout(&engine).unwrap(),
-            Some(SavedLayout { project: None, splits: BTreeMap::new(), panes: Vec::new() })
-        );
-    }
-
     /// The names an older build kept are cleared where they are met: ids start again at "1" every
     /// run, so a kept name would come back on a place nobody gave it to.
     #[test]
@@ -542,40 +510,6 @@ mod tests {
         save_layout(&engine, &SavedLayout::default()).unwrap();
 
         assert_eq!(engine.get_meta(RETIRED_NAMES_META).unwrap(), None);
-    }
-
-    /// The orientation comes back the way the split does, and stays out of the row while it is the
-    /// one every count has: a person who never asked has nothing of theirs to keep.
-    #[test]
-    fn the_way_two_panes_sit_is_kept_only_once_it_has_been_asked() {
-        let engine = StoreEngine::open_in_memory().unwrap();
-
-        let across = SavedLayout {
-            project: Some(1),
-            splits: BTreeMap::from([(1, Split { count: 2, orient: Orient::Across })]),
-            ..SavedLayout::default()
-        };
-        save_layout(&engine, &across).unwrap();
-        let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
-        assert!(!written.contains("orient"), "nothing was asked: {written}");
-
-        let kept = SavedLayout {
-            project: Some(1),
-            splits: BTreeMap::from([(1, Split { count: 2, orient: Orient::Down })]),
-            ..SavedLayout::default()
-        };
-        save_layout(&engine, &kept).unwrap();
-        assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
-    }
-
-    /// An arrangement written before there was anything to ask is two panes side by side, which is
-    /// what two panes were then.
-    #[test]
-    fn an_arrangement_with_no_orientation_in_it_is_side_by_side() {
-        let engine = StoreEngine::open_in_memory().unwrap();
-        engine.set_meta(LAYOUT_META, Some(r#"{"count":2,"project":1}"#)).unwrap();
-        let back = saved_layout(&engine).unwrap().expect("the arrangement");
-        assert_eq!(back.splits[&1].orient, Orient::Across);
     }
 
     /// A scalar nobody can read is no arrangement, not a failure to open the window over.

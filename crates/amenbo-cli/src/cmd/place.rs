@@ -335,7 +335,7 @@ mod tests {
     fn store_with_panes(panes: Vec<SavedPane>) -> Store {
         let store = Store::open_at(Paths::at(amenbo_scratch::scratch("place"))).expect("a store");
         store
-            .save_layout(&SavedLayout { project: None, splits: Default::default(), panes })
+            .save_layout(&SavedLayout { project: None, panes })
             .expect("the arrangement");
         store
     }
@@ -345,6 +345,8 @@ mod tests {
         SavedPane {
             id: id.to_string(),
             project: 1,
+            // Nothing here reads how much of a page a pane takes; a name is held against the id.
+            size: Default::default(),
             folder: None,
             agent: None,
             name: name.map(|name| FrameName { name: name.to_string(), by: NamedBy::Session }),

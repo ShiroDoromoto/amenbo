@@ -168,12 +168,11 @@ beforeEach(() => {
   hoisted.carry = undefined;
   hoisted.pasted = [];
   hoisted.saved = {
-    count: 2,
     nextId: 3,
     project: 1,
     frames: [
-      { id: "1", project: 1, folder: "/work/a" },
-      { id: "2", project: 1, folder: "/work/b" },
+      { id: "1", project: 1, size: "half", folder: "/work/a" },
+      { id: "2", project: 1, size: "half", folder: "/work/b" },
     ],
   };
   hoisted.running = ["a", "b"].map((one) => ({

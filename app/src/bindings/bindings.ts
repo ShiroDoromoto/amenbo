@@ -1809,13 +1809,13 @@ dir?: string,
 pane?: string, };
 
 /**
- * Which way the two panes of a two-pane page sit ([`amenbo_core::frames::Orient`]).
+ * How much of a page one pane takes ([`amenbo_core::frames::PaneSize`]).
  *
- * It crosses because it is the person's answer rather than a measurement: what a page is laid out
- * by is chosen on the face and kept in the store, and the two windows hand it between themselves the
- * way they hand the split.
+ * It crosses because it is the person's answer rather than a measurement: what a pane is drawn at is
+ * chosen on the face and kept in the store, and the two windows hand it between themselves along
+ * with the pane it is about.
  */
-export type OrientDto = "across" | "down";
+export type PaneSizeDto = "whole" | "half" | "half-down" | "quarter" | "sixth" | "eighth";
 
 /**
  * Where one task sits (project only — classification lives on the dimension axes). The real data
@@ -2636,19 +2636,6 @@ tickRemovalLeavesARow: boolean,
 defaultView: "list" | "board" | "calendar" | "timeline", };
 
 /**
- * How one project's page is split ([`amenbo_core::frames::Split`]).
- */
-export type SplitDto = { 
-/**
- * How many panes to a page.
- */
-count: number, 
-/**
- * Which way a two-pane page sits, absent where it sits the way every other count does.
- */
-orient?: OrientDto, };
-
-/**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's
  * block; `current` is this binary's version ([`amenbo_core::agents::MANAGED_BLOCK_VERSION`]).
  */
@@ -2723,6 +2710,11 @@ id: string,
  */
 project?: number, 
 /**
+ * How much of a page it takes ([`PaneSizeDto`]). It goes on to the store, because how much room
+ * a piece of work wants outlives the run (`amenbo_core::frames::SavedPane::size`).
+ */
+size: PaneSizeDto, 
+/**
  * The folder its terminal was working in, where it had one.
  */
 folder?: string, 
@@ -2770,38 +2762,20 @@ composeOpen?: boolean, };
 /**
  * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).
  *
- * The shape only: how many panes to a page, the frames in slot order, and the folder each was
- * working in. **What was running is not here** — a session is a process, and a pane drawn as though
- * one were still in it would be the window saying something untrue (`AMB-T-3607`).
+ * The shape only: the frames in the order they were opened, how much of a page each takes, and the
+ * folder each was working in. **What was running is not here** — a session is a process, and a pane
+ * drawn as though one were still in it would be the window saying something untrue (`AMB-T-3607`).
+ *
+ * **Where a pane sits is not here either** (`AMB-D-939`). The window lays the panes down in order
+ * and the pages fall out of that, so a place carried across would be a second answer to a question
+ * the order already settles.
  *
  * It is what the two windows hand the face between themselves with. What of it outlives the run is
- * the store's word (`amenbo_core::frames::SavedLayout`): the splits, the project, and a row a pane
- * — so an arrangement read at the start of a run comes with the places the reader left and nothing
- * running in any of them (`AMB-D-869`).
+ * the store's word (`amenbo_core::frames::SavedLayout`): the project, and a row a pane — so an
+ * arrangement read at the start of a run comes with the places the reader left and nothing running
+ * in any of them (`AMB-D-869`).
  */
 export type TalkLayoutDto = { 
-/**
- * How many panes to a page, on the project the face is showing.
- */
-count: number, 
-/**
- * Which way a two-pane page sits, absent where it sits the way every other count does
- * ([`amenbo_core::frames::Orient`]).
- */
-orient?: OrientDto, 
-/**
- * How each project's page is split, by project — the same answer the store keeps
- * ([`amenbo_core::frames::SavedLayout`]).
- *
- * **The two above are this set read at `project`.** They are here as well because the face
- * reads them on every render and a lookup per render is a lookup that can be got wrong; the set
- * is what crosses to the other window, so a reader that switches projects over there has the
- * answers without a trip to the store.
- *
- * Absent from a window that has not been told of the shape yet, which is the whole of what the
- * host then falls back on `count` for.
- */
-splits?: Record<string, SplitDto>, 
 /**
  * The project whose panes the face was showing. It is what the window the terminal is split out
  * into opens as, where the arrangement came with no panes to name one — which is every window

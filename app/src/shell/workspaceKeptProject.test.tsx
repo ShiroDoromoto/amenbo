@@ -91,14 +91,8 @@ async function mount(projectId: number | null) {
 
 beforeEach(() => {
   window.innerWidth = 1600;
-  // A run that ended: no panes left behind, and the second project with the split it was left at.
-  hoisted.saved = {
-    count: 2,
-    nextId: 1,
-    project: 2,
-    splits: { 2: { count: 2, orient: "across" } },
-    frames: [],
-  };
+  // A run that ended: no panes left behind, and the second project is the one it was left on.
+  hoisted.saved = { nextId: 1, project: 2, frames: [] };
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);

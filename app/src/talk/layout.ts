@@ -101,28 +101,16 @@ export const BOXES: Readonly<Record<Size, Box>> = {
  * window is drawing the face writes it, and the one the workspace is split out into reads it as it
  * comes up (`app/src-tauri/src/frames.rs`).
  *
- * **What outlives the run is the splits, `project` and the panes** (`AMB-D-869`). So an
- * arrangement read at the start of a run comes back with the places the reader left, on the project
- * they were looking at, at the sizes those panes were left at — and with nothing running in any of
- * them, because a session is a process and that one has ended.
+ * **What outlives the run is `project` and the panes** (`AMB-D-869`). So an arrangement read at the
+ * start of a run comes back with the places the reader left, on the project they were looking at, at
+ * the sizes those panes were left at — and with nothing running in any of them, because a session is
+ * a process and that one has ended.
  *
- * **It still speaks in splits, and a pane's size is not in it** (`laidOut`, `restored`). The store
- * and everything under it are moved to sizes in `AMB-T-5212`; until then this shape is the one the
- * host reads, so a project goes over as the split its first pane's size answers to and comes back
- * with every one of its panes at that size. A page of mixed sizes is the one thing that does not
- * survive the crossing.
+ * **Where a pane sits is not in it** (`AMB-D-939`). The pages are laid out from the order on every
+ * render, so a place carried here would be a second answer to a question the order already settles —
+ * and the one that went stale the moment a pane was closed.
  */
 export type SavedLayout = {
-  count: number;
-  /** Which way a two-pane page sits, absent where it sits the way every other count does. It is kept
-   *  at every count and not only at two: a person who went to four and asked for two again means the
-   *  two they set up, not the default back. */
-  orient?: "across" | "down";
-  /** The split of each project that has one, by project — and the two above read at `project`, which
-   *  is what the face was laid out from before sizes (`SplitDto`). A project nobody has answered for
-   *  is not in it: what is kept is the answers, and a row for every project a reader ever walked
-   *  through would say nothing about most of them. */
-  splits?: Record<string, { count: number; orient?: "across" | "down" }>;
   /** The project whose panes the face was showing. It answers for the window the workspace was split
    *  out into, which has no ledger to have taken one from — and only where the arrangement came back
    *  with no panes in it, since a pane names its own project (`../shell/WorkspaceFace`). */
@@ -135,6 +123,9 @@ export type SavedLayout = {
   frames: {
     id: string;
     project?: number;
+    /** How much of a page it takes (`Size`). A row from a build that kept none reads as the whole
+     *  page, which is what one pane on its own fills. */
+    size?: Size;
     folder?: string;
     agent?: string;
     written?: string;
@@ -204,7 +195,7 @@ export type Frame = {
    * **It crosses to the other window with the arrangement, and stops there** (`laidOut`). The
    * arrangement is how the board and the window a terminal is split out into hand the face over, so
    * a draft left out of it would be one the person loses at exactly the press that moves their work
-   * to the other screen. What goes on from there to the store is the splits and the project and
+   * to the other screen. What goes on from there to the store is the panes and the project and
    * nothing else (`app/src-tauri/src/frames.rs`), so this is held for as long as the process is up
    * and is never written down.
    */
@@ -804,38 +795,14 @@ export function reordered(layout: Layout, order: readonly Frame[]): Layout {
   return { ...layout, frames };
 }
 
-/** The split a size answers to, for as long as the shape handed over speaks in splits
- *  (`SavedLayout`). */
-const SPLIT_OF: Readonly<Record<Size, { count: number; orient?: "across" | "down" }>> = {
-  whole: { count: 1 },
-  half: { count: 2 },
-  "half-down": { count: 2, orient: "down" },
-  quarter: { count: 4 },
-  sixth: { count: 6 },
-  eighth: { count: 8 },
-};
-
-/** And the size a split comes back as (`AMB-D-939`). A count this build has no size for is read as
- *  no answer at all: it was written by a build that offered some other split, and a pane put back at
- *  a guess would be this one inventing what the reader left. */
-function sizeOfSplit(count: number, orient?: string): Size | null {
-  if (count === 2) return orient === "down" ? "half-down" : "half";
-  return SIZES.find((size) => size !== "half-down" && SPLIT_OF[size].count === count) ?? null;
-}
-
 /**
  * The arrangement as it is written down, for the other window to read.
  *
- * **What is written is the shape**: the split each project has been answered at, the panes in the
- * order they were opened, and for each the project it is one of, the folder it is working in, what
- * was started in it and whatever is written in the box under it. What is running is not — a session
- * is a process, and a pane drawn as though one were still in it would be the window saying something
+ * **What is written is the shape**: the panes in the order they were opened, and for each the
+ * project it is one of, how much of a page it takes, the folder it is working in, what was started
+ * in it and whatever is written in the box under it. What is running is not — a session is a
+ * process, and a pane drawn as though one were still in it would be the window saying something
  * untrue. So a pane comes over as a place, and nothing is started until somebody presses.
- *
- * **A project goes over as one split, which is the size of its first pane** (`SavedLayout`). The
- * shape the host reads has no room for a size on a pane, so a page of mixed sizes is the one thing
- * that cannot be said in it — until `AMB-T-5212` moves the store to sizes, what comes back is the
- * whole project at the size the first pane was left at.
  *
  * **The draft is here and the session is not, for the same reason in either direction.** A sentence
  * somebody is part-way through writing is theirs and exists nowhere else, so it has to travel with
@@ -847,18 +814,14 @@ function sizeOfSplit(count: number, orient?: string): Size | null {
  * panes in it opens as the project the board was on (`../talk.tsx`).
  */
 export function laidOut(layout: Layout): SavedLayout {
-  const first = new Map<number, Size>();
-  for (const frame of layout.frames) if (!first.has(frame.project)) first.set(frame.project, frame.size);
-  const splits = [...first].map(([project, size]) => [String(project), SPLIT_OF[size]] as const);
-  const opening = SPLIT_OF[(layout.project === null ? undefined : first.get(layout.project)) ?? DEFAULT_SIZE];
   return {
-    count: opening.count,
-    ...(opening.orient === undefined ? {} : { orient: opening.orient }),
-    ...(splits.length === 0 ? {} : { splits: Object.fromEntries(splits) }),
     ...(layout.project === null ? {} : { project: layout.project }),
     frames: layout.frames.map((frame) => ({
       id: frame.id,
       project: frame.project,
+      // How much of the page it takes, which is the whole of what a pane says about where it is
+      // drawn (`AMB-D-939`).
+      size: frame.size,
       ...(frame.folder === null ? {} : { folder: frame.folder }),
       // What was started in it, left out where nothing has been: a place nobody has opened anything
       // in has nothing to come back to.
@@ -886,32 +849,30 @@ export function laidOut(layout: Layout): SavedLayout {
  * The layout an arrangement comes back as.
  *
  * **The places come back and nothing is running in any of them** (`AMB-D-869`). A window that comes
- * up after a run reads the panes the reader left — each with its folder and what was started in it —
- * on the project they were on, at the size the split that project was left at answers to
- * (`sizeOfSplit`). An arrangement with no panes in it says nothing at all any more: a size is a fact
- * about a pane, so a project with no panes has nobody to have answered for it.
+ * up after a run reads the panes the reader left — each with its folder, what was started in it, and
+ * how much of a page it takes — on the project they were on. An arrangement with no panes in it says
+ * nothing at all: a size is a fact about a pane, so a device with none has nobody to have answered
+ * for it.
  *
  * `onto` is the project the window is on, and it answers for the frames an older build wrote without
  * one: a pane whose project nothing records is put where the person is rather than dropped, and where
  * there is nowhere to put it there is nothing to draw.
  */
 export function restored(saved: SavedLayout, onto: number | null, composeOpen = false): Layout {
-  const kept = saved.splits ?? {};
   const frames: Frame[] = [];
   for (const frame of saved.frames) {
     const project = frame.project ?? onto;
     if (project === null) continue;
-    // The split this project was left at, or the pair beside the splits where it has no row of its
-    // own — which is what an arrangement written before the answers were kept by project has, and
-    // all it has.
-    const split = kept[String(project)] ?? { count: saved.count, orient: saved.orient };
     // The box comes over as it was left, which is what carries a half-written sentence to the window
     // the workspace is split out into (`Frame.written`). An arrangement that came from the store has
     // no frames in it at all, so a run that has just started has nothing here to take.
     frames.push({
       id: frame.id,
       project,
-      size: sizeOfSplit(split.count, split.orient) ?? DEFAULT_SIZE,
+      // A row from a build that kept no sizes is a pane nobody sized, and one pane on its own fills
+      // the page. An older store's splits are read once, on the way in
+      // (`crates/amenbo-core/src/store_engine/migrate.rs`, v49).
+      size: SIZES.find((size) => size === frame.size) ?? DEFAULT_SIZE,
       session: null,
       folder: frame.folder ?? null,
       agent: frame.agent ?? null,

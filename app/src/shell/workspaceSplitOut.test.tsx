@@ -121,14 +121,13 @@ beforeEach(() => {
   // Four panes over two pages, and the person was working in the third — which is on the second
   // page, and is not where a restore lands by itself.
   hoisted.saved = {
-    count: 2,
     nextId: 5,
     project: 1,
     frames: [
-      { id: "1", project: 1, folder: "/work/a" },
-      { id: "2", project: 1, folder: "/work/b" },
-      { id: "3", project: 1, folder: "/work/c" },
-      { id: "4", project: 1, folder: "/work/d" },
+      { id: "1", project: 1, size: "half", folder: "/work/a" },
+      { id: "2", project: 1, size: "half", folder: "/work/b" },
+      { id: "3", project: 1, size: "half", folder: "/work/c" },
+      { id: "4", project: 1, size: "half", folder: "/work/d" },
     ],
     splitOut: "3",
   };
@@ -178,12 +177,11 @@ describe("the terminals that were running in the face it left", () => {
     // oldest terminal in the oldest place. Paired any other way the two panes trade contents, and
     // each is drawn under the other's name — a name belongs to the place (`../talk/frames`).
     hoisted.saved = {
-      count: 2,
       nextId: 3,
       project: 1,
       frames: [
-        { id: "1", project: 1, folder: "/work/a" },
-        { id: "2", project: 1, folder: "/work/a" },
+        { id: "1", project: 1, size: "half", folder: "/work/a" },
+        { id: "2", project: 1, size: "half", folder: "/work/a" },
       ],
       splitOut: "1",
     };
@@ -202,12 +200,11 @@ describe("the sentence somebody was part-way through writing", () => {
     // carry it over — otherwise the one press a person makes to get more room is the press that
     // throws away what they were saying (`AMB-D-864`).
     hoisted.saved = {
-      count: 2,
       nextId: 3,
       project: 1,
       frames: [
-        { id: "1", project: 1, folder: "/work/a", written: "run the tests" },
-        { id: "2", project: 1, folder: "/work/b" },
+        { id: "1", project: 1, size: "half", folder: "/work/a", written: "run the tests" },
+        { id: "2", project: 1, size: "half", folder: "/work/b" },
       ],
       splitOut: "1",
     };

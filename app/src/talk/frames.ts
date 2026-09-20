@@ -107,9 +107,9 @@ export function frameLabel(names: FrameNames, frame: string, folder: string | nu
  * The arrangement the face is laid out from, or nothing where there is none to read.
  *
  * Read once, as the face comes up. What comes back is a shape and no sessions, so nothing about it
- * starts anything (`./layout`). In the first window of a run it holds what the store kept: the split,
- * the project, and the places the reader left, each with the folder it works in and what was started
- * in it (`AMB-D-869`).
+ * starts anything (`./layout`). In the first window of a run it holds what the store kept: the
+ * project, and the places the reader left — each with how much of a page it takes, the folder it
+ * works in and what was started in it (`AMB-D-869`, `AMB-D-939`).
  */
 export async function savedLayout(): Promise<SavedLayout | null> {
   return await invoke<TalkLayoutDto | null>("talk_layout", {});
@@ -119,7 +119,7 @@ export async function savedLayout(): Promise<SavedLayout | null> {
  * Write the arrangement down as it stands, for the other window to read.
  *
  * Written as the window is changed rather than as it closes: a window that is killed, or a machine
- * that loses power, is exactly the case a person wants the split they chose back after.
+ * that loses power, is exactly the case a person wants the sizes they chose back after.
  */
 export async function keepLayout(layout: SavedLayout): Promise<void> {
   await invoke<void>("save_talk_layout", { layout });

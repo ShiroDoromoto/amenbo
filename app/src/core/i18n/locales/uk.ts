@@ -461,7 +461,7 @@ export const uk: Translation = {
     "settings.backupDialogTitle": "Зберегти копію як",
     "settings.restoreDialogTitle": "Оберіть копію для відновлення",
     "settings.backupDone": "Копію збережено ({kb} КБ)",
-    "settings.restoreDone": "Відновлено (записано вкладень: {attachments})",
+    "settings.restoreDone": "Відновлено (записано вкладень: {attachments}, скінів: {skins})",
     "settings.restoreAside": "Попередній стан відкладено в {path} (щоб це скасувати, відновіть звідти).",
     "settings.restoreSwept.one": "Повернутися можна лише до останнього відкладеного стану, тож {n} давніший видалено.",
     "settings.restoreSwept.few": "Повернутися можна лише до останнього відкладеного стану, тож {n} давніші видалено.",

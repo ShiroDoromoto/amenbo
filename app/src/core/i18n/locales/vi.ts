@@ -454,7 +454,7 @@ export const vi: Translation = {
     "settings.backupDialogTitle": "Lưu bản sao lưu thành",
     "settings.restoreDialogTitle": "Chọn bản sao lưu để phục hồi",
     "settings.backupDone": "Đã lưu bản sao lưu ({kb} KB)",
-    "settings.restoreDone": "Đã phục hồi (ghi {attachments} tệp đính kèm)",
+    "settings.restoreDone": "Đã phục hồi (ghi {attachments} tệp đính kèm và {skins} skin)",
     "settings.restoreAside": "Trạng thái trước đó đã được để riêng tại {path} (muốn hoàn tác việc này thì phục hồi từ đó).",
     "settings.restoreSwept.other": "Chỉ quay lại được bản để riêng mới nhất, nên {n} bản cũ hơn đã bị bỏ.",
     "settings.restoreMigrated": "Kho lưu không còn ở hình dạng lúc được sao lưu — nó đã được đưa lên phiên bản này (định dạng v{from} → v{to}: {steps}).",

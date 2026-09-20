@@ -452,7 +452,7 @@ export const nl: Translation = {
     "settings.backupDialogTitle": "Back-up opslaan als",
     "settings.restoreDialogTitle": "Kies de back-up om terug te zetten",
     "settings.backupDone": "Back-up opgeslagen ({kb} KB)",
-    "settings.restoreDone": "Teruggezet ({attachments} bijlage(n) geschreven)",
+    "settings.restoreDone": "Teruggezet ({attachments} bijlage(n) en {skins} skin(s) geschreven)",
     "settings.restoreAside": "De vorige staat is apart gezet in {path} (zet vandaar terug om dit ongedaan te maken).",
     "settings.restoreSwept.one": "Alleen naar de laatst apart gezette staat kun je terug, dus {n} oudere is verwijderd.", "settings.restoreSwept.other": "Alleen naar de laatst apart gezette staat kun je terug, dus {n} oudere zijn verwijderd.",
     "settings.restoreMigrated": "Het archief is niet gelaten in de vorm waarin het geback-upt is — het is meegenomen naar deze versie (formaat v{from} → v{to}: {steps}).",

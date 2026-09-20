@@ -483,7 +483,7 @@ const ui = {
   "settings.backupDialogTitle": "Save backup as",
   "settings.restoreDialogTitle": "Choose a backup to restore",
   "settings.backupDone": "Backup saved ({kb} KB)",
-  "settings.restoreDone": "Restored ({attachments} attachment(s) written)",
+  "settings.restoreDone": "Restored ({attachments} attachment(s) and {skins} skin(s) written)",
   "settings.restoreAside": "The previous state was set aside at {path} (restore from there to undo this).",
   "settings.restoreSwept.one": "Only the latest set-aside store can be rewound to, so {n} earlier one was removed.", "settings.restoreSwept.other": "Only the latest set-aside store can be rewound to, so {n} earlier ones were removed.",
   "settings.restoreMigrated": "The archive was not left in the shape it was backed up in — it was brought forward to this version (format v{from} → v{to}: {steps}).",

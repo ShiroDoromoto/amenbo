@@ -451,7 +451,7 @@ export const ko: Translation = {
     "settings.backupDialogTitle": "백업을 다른 이름으로 저장",
     "settings.restoreDialogTitle": "복원할 백업 고르기",
     "settings.backupDone": "백업을 저장했습니다({kb} KB)",
-    "settings.restoreDone": "복원했습니다(첨부 {attachments}개 기록)",
+    "settings.restoreDone": "복원했습니다(첨부 {attachments}개, 스킨 {skins}개 기록)",
     "settings.restoreAside": "이전 상태는 {path}에 치워 두었습니다(거기서 복원하면 이번 작업을 되돌립니다).",
     "settings.restoreSwept.other": "되돌릴 수 있는 것은 가장 최근에 치워 둔 하나뿐이라, 그보다 오래된 {n}개를 지웠습니다.",
     "settings.restoreMigrated": "보관 파일이 백업할 때의 모습 그대로가 아니어서, 이 버전으로 가져왔습니다(형식 v{from} → v{to}: {steps}).",

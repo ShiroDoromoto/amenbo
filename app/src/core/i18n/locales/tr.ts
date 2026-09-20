@@ -452,7 +452,7 @@ export const tr: Translation = {
     "settings.backupDialogTitle": "Yedeği farklı kaydet",
     "settings.restoreDialogTitle": "Geri yüklenecek yedeği seçin",
     "settings.backupDone": "Yedek kaydedildi ({kb} KB)",
-    "settings.restoreDone": "Geri yüklendi ({attachments} ek yazıldı)",
+    "settings.restoreDone": "Geri yüklendi ({attachments} ek ve {skins} tema kaplaması yazıldı)",
     "settings.restoreAside": "Önceki durum {path} konumuna ayrıldı (bunu geri almak için oradan geri yükleyin).",
     "settings.restoreSwept.one": "Yalnızca en son ayrılan duruma dönülebildiği için, ondan eski {n} tanesi kaldırıldı.", "settings.restoreSwept.other": "Yalnızca en son ayrılan duruma dönülebildiği için, ondan eski {n} tanesi kaldırıldı.",
     "settings.restoreMigrated": "Arşiv yedeklendiği biçimde bırakılmadı — bu sürüme taşındı (biçim v{from} → v{to}: {steps}).",

@@ -452,7 +452,7 @@ export const zhHans: Translation = {
     "settings.backupDialogTitle": "备份另存为",
     "settings.restoreDialogTitle": "选择要恢复的备份",
     "settings.backupDone": "备份已保存（{kb} KB）",
-    "settings.restoreDone": "已恢复（写入附件 {attachments} 个）",
+    "settings.restoreDone": "已恢复（写入附件 {attachments} 个、皮肤 {skins} 个）",
     "settings.restoreAside": "先前的状态已退避到 {path}（从那里恢复即可撤销这次操作）。",
     "settings.restoreSwept.other": "只有最新的退避数据能被回退，因此删除了 {n} 份更早的。",
     "settings.restoreMigrated": "归档不再是备份时的样子——它已被带到这个版本（格式 v{from} → v{to}：{steps}）。",

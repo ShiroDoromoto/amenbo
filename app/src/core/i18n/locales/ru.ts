@@ -461,7 +461,7 @@ export const ru: Translation = {
     "settings.backupDialogTitle": "Сохранить копию как",
     "settings.restoreDialogTitle": "Выберите копию для восстановления",
     "settings.backupDone": "Копия сохранена ({kb} КБ)",
-    "settings.restoreDone": "Восстановлено (записано вложений: {attachments})",
+    "settings.restoreDone": "Восстановлено (записано вложений: {attachments}, скинов: {skins})",
     "settings.restoreAside": "Прежнее состояние отложено в {path} (восстановите оттуда, чтобы отменить это).",
     "settings.restoreSwept.one": "Откатиться можно только к последнему отложенному состоянию, поэтому {n} более раннее удалено.",
     "settings.restoreSwept.few": "Откатиться можно только к последнему отложенному состоянию, поэтому {n} более ранних удалено.",

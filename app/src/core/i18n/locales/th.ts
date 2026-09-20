@@ -454,7 +454,7 @@ export const th: Translation = {
     "settings.backupDialogTitle": "บันทึกไฟล์สำรองเป็น",
     "settings.restoreDialogTitle": "เลือกไฟล์สำรองที่จะกู้คืน",
     "settings.backupDone": "บันทึกไฟล์สำรองแล้ว ({kb} KB)",
-    "settings.restoreDone": "กู้คืนแล้ว (เขียนไฟล์แนบ {attachments} ไฟล์)",
+    "settings.restoreDone": "กู้คืนแล้ว (เขียนไฟล์แนบ {attachments} ไฟล์ และสกิน {skins} รายการ)",
     "settings.restoreAside": "สถานะก่อนหน้าถูกวางแยกไว้ที่ {path} (ถ้าจะย้อนสิ่งนี้ ให้กู้คืนจากที่นั่น)",
     "settings.restoreSwept.other": "ย้อนกลับได้เฉพาะข้อมูลที่วางแยกไว้ล่าสุดเท่านั้น จึงลบของเก่ากว่าไป {n} ชุด",
     "settings.restoreMigrated": "ไฟล์เก็บถาวรไม่ได้ถูกทิ้งไว้ในรูปตอนที่สำรอง — มันถูกพามาถึงรุ่นนี้ (รูปแบบ v{from} → v{to}: {steps})",

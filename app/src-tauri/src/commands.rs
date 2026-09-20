@@ -3881,6 +3881,7 @@ pub async fn run_restore(window: tauri::Window, path: String) -> Result<RestoreR
         Ok(RestoreReportDto {
             previous_saved_to: report.previous_saved_to,
             blobs: report.blobs,
+            skins: report.skins,
             superseded: report.superseded.len(),
             migration,
         })

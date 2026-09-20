@@ -454,7 +454,7 @@ export const id: Translation = {
     "settings.backupDialogTitle": "Simpan cadangan sebagai",
     "settings.restoreDialogTitle": "Pilih cadangan untuk dipulihkan",
     "settings.backupDone": "Cadangan tersimpan ({kb} KB)",
-    "settings.restoreDone": "Dipulihkan ({attachments} lampiran ditulis)",
+    "settings.restoreDone": "Dipulihkan ({attachments} lampiran dan {skins} skin ditulis)",
     "settings.restoreAside": "Keadaan sebelumnya disisihkan di {path} (pulihkan dari sana untuk membatalkan ini).",
     "settings.restoreSwept.other": "Yang bisa dikembalikan hanya data tersisih yang paling baru, jadi {n} yang lebih lama dihapus.",
     "settings.restoreMigrated": "Arsipnya tidak dibiarkan dalam bentuk saat dicadangkan — ia dibawa maju ke versi ini (format v{from} → v{to}: {steps}).",

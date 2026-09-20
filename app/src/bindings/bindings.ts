@@ -2113,6 +2113,11 @@ previousSavedTo: string | null,
  */
 blobs: number, 
 /**
+ * How many skin files were written beside the restored store (a skin the destination already
+ * held under that name is left alone, and is not counted).
+ */
+skins: number, 
+/**
  * How many older rollback points this restore's set-aside copy overtook and deleted. It is a
  * report so that nothing is deleted silently, so the screen shows it only when it is non-zero.
  */

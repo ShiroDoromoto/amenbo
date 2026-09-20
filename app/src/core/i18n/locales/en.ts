@@ -694,15 +694,19 @@ const ui = {
   // drawn inside it is never reached and the number has to be said here. The two are joined by
   // this language's own punctuation rather than by a space, which is not a pause everywhere.
   "face.tabPanes": "{name}, {panes}",
-  "face.paneCount": "Panes on screen",
-  // The orientation, named in words because the control itself is drawn
+  // The six sizes a pane can be, named in words because the control itself is drawn
   // (`app/src/shell/WorkspaceFace.tsx`): a shape with nothing said about it is a
   // press to find out, and a screen reader has only what is written here.
-  "face.paneOrient": "How the two panes sit",
-  "face.paneAcross": "Side by side",
-  "face.paneDown": "One above the other",
-  // The split, as words rather than a bare digit: the row of pages beside it is digits too, so the
-  // count says what it counts (`app/src/shell/WorkspaceFace.tsx`).
+  "face.paneSize": "How much of the page this pane takes",
+  "face.paneWhole": "The whole page",
+  "face.paneAcross": "Half the page, side by side",
+  "face.paneDown": "Half the page, one above the other",
+  "face.paneQuarter": "A quarter of the page",
+  "face.paneSixth": "A sixth of the page",
+  "face.paneEighth": "An eighth of the page",
+  // How many panes a project has open, read out with the project's name on its tab
+  // (`app/src/shell/ProjectTabs.tsx`). As words rather than a bare digit: what stands beside the
+  // number is a name, so nothing but this says what the number counts.
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
   "face.pages": "Pages",
   "face.page": "Page {n}",

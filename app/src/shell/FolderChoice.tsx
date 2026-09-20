@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import type { BoundFolderDto } from "../bindings/bindings";
 import { t } from "../core/i18n";
 
@@ -21,8 +22,11 @@ import { t } from "../core/i18n";
  * folder that could not be bound leaves the reader where they were, which is with one still to choose.
  */
 export function FolderChoice({
-  folders, onPick, onBind, note,
+  at, folders, onPick, onBind, note,
 }: {
+  /** Where on the page's grid this question sits — the place the pane it is about would land
+   *  (`../talk/layout`). Left out where this is drawn outside a page. */
+  at?: CSSProperties;
   /** The folders this project is bound to that are actually there. */
   folders: readonly BoundFolderDto[];
   onPick: (folder: string) => void;
@@ -37,7 +41,7 @@ export function FolderChoice({
   const [pressed, setPressed] = useState(false);
 
   return (
-    <div className="slot slot--asking">
+    <div className="slot slot--asking" style={at}>
       <div className="agent__ask">
         <p className="agent__askTitle">
           {folders.length === 0 ? t("talk.folder") : t("face.whichFolder")}

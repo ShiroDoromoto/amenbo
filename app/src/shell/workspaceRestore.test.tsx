@@ -18,7 +18,6 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { tn } from "../core/i18n";
 import type { PaneStart } from "../talk/terminal";
 
 const hoisted = vi.hoisted(() => ({
@@ -103,7 +102,7 @@ let root: Root;
 
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
 /** The split the control says is on, as a number of panes to a page. */
-const splitOn = () => container.querySelector(".workspace__count--on")?.textContent ?? null;
+const splitOn = () => container.querySelector(".workspace__count--on")?.getAttribute("aria-label") ?? null;
 
 /** Let the host answer, and let React settle around it. */
 async function answered() {
@@ -150,10 +149,12 @@ describe("the first window of a run", () => {
     expect(q(".slot")).toHaveLength(0);
   });
 
-  it("comes up on the split that was kept, with one way in and nothing running", async () => {
+  it("comes up with one way in and nothing running, and no size to be about", async () => {
     await answered();
-    // Nothing was open to come back to, so what the split is drawn on is the one way in.
-    expect(splitOn()).toBe(tn("face.panes", 4));
+    // Nothing was open to come back to. A size is a fact about a pane (`../talk/layout`), so a
+    // device with no panes brings none back and the row has nothing to be about — what the face
+    // draws is the one way in.
+    expect(splitOn()).toBeNull();
     expect(q(".slot--empty")).toHaveLength(1);
     expect(q(".slot")).toHaveLength(1);
     expect(hoisted.mounts).toHaveLength(0);
@@ -164,7 +165,7 @@ describe("the first window of a run", () => {
     // yet — in the other window, the panes it was split out of.
     expect(hoisted.kept).toHaveLength(0);
     await answered();
-    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ count: 4, project: 1, frames: [] });
+    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ count: 1, project: 1, frames: [] });
   });
 
   it("comes up with the way in and nothing running where nothing was kept at all", async () => {
@@ -240,6 +241,9 @@ describe("a window that reads an arrangement with panes in it", () => {
         { id: "2", project: 1, folder: "/work/repo", agent: "claude", composeOpen: false },
       ],
       splitOut: "1",
+      // The project's split, read off the size of its first pane — which is how a size crosses to
+      // the host until the store moves to sizes (`../talk/layout`, `AMB-T-5212`).
+      splits: { 1: { count: 2 } },
     });
   });
 });

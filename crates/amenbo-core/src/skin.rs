@@ -722,8 +722,9 @@ pub const ICONS: &[&str] = &[
     "chevronDown", "chevronLeft", "chevronRight", "clipboard", "clock", "close", "comment",
     "document", "dot", "error", "foldLeft", "foldRight", "folder", "gavel", "gear", "goose",
     "hourglass", "inbox", "keyboard", "link", "menu", "more", "newWindow", "paneAcross",
-    "paneDown", "paperclip", "pause", "pencil", "person", "pin", "plug", "plus", "refresh",
-    "reorder", "reply", "robot", "rocket", "search", "stop", "tag", "trash", "unlock", "warning",
+    "paneDown", "paneEighth", "paneQuarter", "paneSixth", "paneWhole", "paperclip", "pause",
+    "pencil", "person", "pin", "plug", "plus", "refresh", "reorder", "reply", "robot", "rocket",
+    "search", "stop", "tag", "trash", "unlock", "warning",
 ];
 
 /// The most a material's name may be. Long enough for a folder and a filename inside the zip, and
@@ -2927,7 +2928,7 @@ dark:
         let mut sorted = ICONS.to_vec();
         sorted.sort_unstable();
         assert_eq!(ICONS, sorted.as_slice(), "the list is searched by halving");
-        assert_eq!(ICONS.len(), 51);
+        assert_eq!(ICONS.len(), 55);
     }
 
     const A_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";

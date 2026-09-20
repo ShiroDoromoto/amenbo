@@ -64,6 +64,10 @@ gui:
   - 'crates/amenbo-core/src/doctor.rs'
   - 'crates/amenbo-core/src/store/tests.rs'
   - 'crates/amenbo-core/src/skin.rs'
+  # The shipped skins are read the same way, and for the same reason: each says its own name per
+  # language inside the skin file, and the gate that they say it in every language this build reads
+  # is a GUI test. A language added to a dictionary, or a name dropped from a skin, both land here.
+  - 'crates/amenbo-core/skins/*.yaml'
 # The Viewer's Cloudflare Worker: its own npm project, and the only face in this tree that
 # needs Node to be judged. The baked copy core embeds is on this layer as well as on `rust`,
 # because the two ask different questions of it — `rust` compiles what it says, and this asks

@@ -106,7 +106,7 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
           <span className="meta">{t("settings.skinAddDrop")}</span>
         </div>
         {/* The other way in is to write one. A reader with no file to be handed starts from the
-            screen they have: every colour, with a line saying what each is for. */}
+            screen they have: everything a skin may set, with a line saying what each is for. */}
         <div className="skinwrite">
           <button className="btn" onClick={writeOut}>{t("settings.skinWriteOut")}</button>
           <span className="meta">{t("settings.skinWriteOutNote")}</span>

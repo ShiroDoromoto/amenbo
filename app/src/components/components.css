@@ -79,6 +79,9 @@
 /* The other way in: writing one out to start from. Beside the well rather than inside it — one is
    a place a file lands, the other a press that makes one. */
 .skinwrite { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
+/* The press keeps its label on one line. The note beside it is the longer of the two and the one
+   that should wrap; a row that shares the squeeze breaks the button's words instead. */
+.skinwrite > .btn { flex: none; }
 /* What reading the handed-over file gave, before anything is written. */
 .skinread {
   display: flex; flex-direction: column; gap: var(--s-2);

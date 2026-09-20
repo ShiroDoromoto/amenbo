@@ -1,11 +1,11 @@
 # A face with nothing open on it offers one empty frame, and grows a pane each time one is opened.
 #
-# The count at the top of this face is the most a page will draw and not a number of boxes to stand
-# up. The difference is the whole of this road. A page that filled its count with empty slots would
-# be asking the same question four times over — four boxes, each of them "which folder?" — and a
-# reader with nothing open would meet a screen of them before they had opened anything at all. So
-# there is one, at the first gap on the page, and it is the page saying it has room rather than a
-# button for opening a terminal.
+# The room left on a page is not a number of boxes to stand up. The difference is the whole of this
+# road. A page that filled the room it had left with empty slots would be asking the same question
+# three times over — three boxes, each of them "which folder?" — and a reader who had made one pane
+# small would meet a screen of them before they had opened anything else. So there is one, where the
+# next pane would land, and it is the page saying it has room rather than a button for opening a
+# terminal.
 #
 # ── What is counted, and why it is counted rather than read ──────────────────────────────────────
 # The boxes carry no words the road put there: a pane that has not been typed into yet is a fresh
@@ -20,19 +20,26 @@
 # pane drawing that session and nowhere else — and it is still there after the second pane opens,
 # which is the other half: a frame arriving beside it is not a re-cut of the first.
 #
-# ── Why the count is moved to four before anything is opened ─────────────────────────────────────
-# At one to a page there is nothing to tell the two readings apart: a page holding its ceiling in
-# empty boxes and a page holding nothing both draw at most one thing. Four is where the two come
-# apart, and it is set while nothing is open so that what follows is the page growing from nothing
-# rather than a page being cut down to size.
+# ── Why the pane is cut to a quarter, and why it is cut after it is opened ───────────────────────
+# At the whole page there is nothing to tell the two readings apart: a page with its room in empty
+# boxes and a page with no room at all both draw at most one thing. A quarter is where the two come
+# apart — three quarters of the page are left, so a build that filled the room would draw three boxes
+# where this road wants one.
+#
+# It is cut after the pane is opened because the control is about a pane: with nothing standing there
+# is nothing for it to be about, and the row is not drawn at all (`app/src/talk/layout.ts`). That is
+# also why the road reads the page twice over — once with nothing open and the one way in on it, and
+# once with a pane on it taking a quarter — rather than reading a count that was set before anything
+# existed.
 id: find-one-way-in-rather-than-a-page-of-empty-boxes
-title: A project with nothing open draws one empty frame, and a pane appears for each one opened and for nothing else
+title: A project with nothing open draws one empty frame, and room left on a page draws one and not a box per gap
 description: >
-  Open the workspace on a project with nothing open in it: what is on the page is one empty
-  frame, and no other box. Set the page to four panes and it is still the one — the count is the
-  most a page draws, not slots waiting to be filled. Open a pane and get a line onto it, and there
-  is one terminal on the page, one empty frame beside it, and two bare quarters. Open a second and
-  there are two terminals, the first still showing its own line.
+  Open the workspace on a project with nothing open in it: what is on the page is one empty frame,
+  and no other box. Open a pane and it fills the page, so there is no way in beside it. Cut it to a
+  quarter and three quarters of the page come free — and what is drawn in them is one empty frame,
+  not three: room on a page is room, not slots waiting to be filled. Get a line onto the pane, open a
+  second from that frame, and there are two terminals with one way in beside them, the first still
+  showing its own line.
 
 given:
   - type: action
@@ -67,20 +74,7 @@ steps_gui:
     with:
       project: Sunroom
 
-  - type: assert
-    domain: workspace
-    op: frames
-    with:
-      count: 0
-
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 4
-
-  # The count moved and the page did not fill. This is the step the road is named after: four is what
-  # the page may draw, and what it draws is what somebody opened.
+  # Where the road starts from: nothing open, so the page draws its one way in and nothing else.
   - type: assert
     domain: workspace
     op: frames
@@ -93,16 +87,31 @@ steps_gui:
     with:
       from: face
 
-  # One terminal, and the empty frame moved along to the next gap rather than being replaced by a
-  # second question. What is ruled out here is the page filling itself: the count is four and what
-  # stands on it is one pane and one remark about the room left.
+  # A pane with nothing to be measured against takes the whole page, so the page is full and offers
+  # nothing. This is what the cut below moves away from.
   - type: assert
     domain: workspace
     op: frames
     with:
       count: 1
+      empty: 0
 
-  # And the one frame is a terminal. Down to a plain shell first, for the reason every road that
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: quarter
+
+  # Three quarters of the page came free and one box was drawn in them. This is the step the road is
+  # named after: room on a page is room, and what stands on it is what somebody opened.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # And the one pane is a terminal. Down to a plain shell first, for the reason every road that
   # speaks in a pane does it: what an agent does with a line typed at it is the agent's own.
   - type: action
     domain: workspace
@@ -120,7 +129,7 @@ steps_gui:
     with:
       shows: SCENARIO the frame that was opened
 
-  # A second one, from the empty frame that moved along to the next gap — which is the whole of what
+  # A second one, from the empty frame standing where the next pane lands — which is the whole of what
   # this road is named after. The folder is the project's, so nothing is asked on the way.
   - type: action
     domain: workspace
@@ -128,14 +137,17 @@ steps_gui:
     with:
       from: face
 
+  # Two terminals, and the empty frame moved along to where the next one would land rather than being
+  # joined by a second question. Half the page is taken and half is not, and one box says so.
   - type: assert
     domain: workspace
     op: frames
     with:
       count: 2
+      empty: 1
 
   # The first is untouched by the second arriving. A page that re-made its frames on every open would
-  # read the same on the count above and lose the session here.
+  # read the same on the counts above and lose the session here.
   - type: assert
     domain: workspace
     op: pane

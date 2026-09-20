@@ -1,50 +1,49 @@
-# The other half of what a run keeps: not how many panes to a page, but which way two of them sit.
+# The other half of what a run keeps: not which places came back, but how much of a page each of them
+# takes.
 #
-# A reader asks for two panes one above the other because two side by side halve the columns each of
-# them gets, and half of a window with a column beside it is under the eighty a TUI wants
+# A reader gives a pane the whole width because sharing it halves the columns, and half of a window
+# with a column beside it is under the eighty a TUI wants
 # (`stack-the-two-panes-so-each-keeps-the-whole-width`). That is a thing about the machine they are at
-# and the work they do in it, not about this afternoon — so it is kept the way the split is, and a run
-# that dropped it would put the reader back under eighty columns every morning.
+# and the work they do in it, not about this afternoon — so it is kept the way the places are, and a
+# run that dropped it would put the reader back under eighty columns every morning.
 #
-# The line is worth walking for the reason the split's is: **both sides of it look right.** A face
-# that fell back to the arrangement every fresh device starts on and a face that remembered are each a
-# working screen, drawn without complaint, and nothing goes red on the way between them. The only way
-# to tell is to end a run and look at what the next one lays out.
+# The line is worth walking for the reason the places' is: **both sides of it look right.** A face
+# that fell back to the size every fresh pane starts at and a face that remembered are each a working
+# screen, drawn without complaint, and nothing goes red on the way between them. The only way to tell
+# is to end a run and look at what the next one lays out.
 #
 # ── Why the press is not read before the run ─────────────────────────────────────────────────────
-# Because it is another road's, and because there would be nothing to read it on. What the press does
-# is proved where it is pressed; what is under test here is what survives. And a reading of the shape
-# wants two panes standing — one pane and the empty frame beside it draw the arrangement without
-# saying what it was for — so the road would have to open two panes for a reading, only for the run to
-# take both away a step later. The pane it does open is there to make the screen before the ending a
-# definite one: what a folder starts a pane with is the operator's own machine, and a plain shell is
-# the one state every machine can be put in.
+# Because it is another road's. What the press does is proved where it is pressed; what is under test
+# here is what survives. The pane it does open before ending is there to make the screen a definite
+# one: what a folder starts a pane with is the operator's own machine, and a plain shell is the one
+# state every machine can be put in.
 #
-# ── Why the count is pressed as well ─────────────────────────────────────────────────────────────
-# Two is the one count this arrangement is asked at, and a project nobody has answered for is drawn
-# at one — so the road has to ask for two before there is a way to sit them. The two readings stay
-# apart all the same: `frames` says both panes are standing, which is what makes an arrangement of
-# two something there is to look at, and `panes-sit` says which way they went. Whether the split and
-# the places themselves come back is `open-the-app-again-on-the-places-you-left`; what is under test
-# here is the answer riding home beside them.
+# ── Why one pane is enough to set, and two are wanted to read ────────────────────────────────────
+# A size is one pane's answer, so one pane is the whole of what there is to press for. Reading it is
+# another matter: the whole width is what a pane with nothing beside it has anyway, so a page holding
+# one pane cannot tell the kept answer from the unkept one. The second pane is what makes the reading
+# say something — it comes up measured against the one already showing, so the two end up stacked,
+# which is the screen the reader asked for and not the side by side an unkept answer would draw.
 #
 # ── Why only one pane is opened after the run ────────────────────────────────────────────────────
 # Because the other one came back. The run keeps the place the road opened before it ended, with
 # nothing running in it, so the page after it holds one place and room for one more: a shell started
 # in the place that came back, a press for the one beside it, and the two are standing.
 #
+# Whether the places themselves come back is `open-the-app-again-on-the-places-you-left`; what is
+# under test here is the size riding home beside them.
+#
 # The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
 # what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
 # belongs to, so the road makes what it needs by walking in.
 id: open-the-app-again-on-the-way-you-set-two-panes-to-sit
-title: A run of the app keeps the way a reader set two panes to sit, and the next run lays its panes out that way
+title: A run of the app keeps how much of a page a reader gave a pane, and the next run lays it out that way
 description: >
-  Open the workspace, choose the folder it runs in, and get the pane down to a plain shell. Cut
-  the page to two panes and ask for them to sit one above the other. End the run and open the app
-  again on the same store: the place comes back with nothing running in it, so start a shell there
-  and open the pane beside it. They are stacked, each taking the whole width between the columns —
-  the arrangement the reader set, and not the side by side a page that was never answered for would
-  draw.
+  Open the workspace, choose the folder it runs in, and get the pane down to a plain shell. Give it
+  the whole width and half the height. End the run and open the app again on the same store: the
+  place comes back at that size with nothing running in it, so start a shell there and open the pane
+  beside it. The two are stacked, each taking the whole width between the columns — the size the
+  reader set, and not the side by side a pane nobody had sized would draw.
 
 steps_gui:
   - type: action
@@ -54,7 +53,7 @@ steps_gui:
       face: workspace
 
   # The way in, and what binds the folder to the project the face is on. Which project the run comes
-  # back on is the split road's question; here there is one, so it is the one that answers.
+  # back on is the places road's question; here there is one, so it is the one that answers.
   - type: action
     domain: workspace
     op: open-folder
@@ -68,21 +67,13 @@ steps_gui:
     domain: workspace
     op: open-shell
 
-  # Two to a page, which is the count the question about sitting is asked at — a project nobody has
-  # answered for is drawn at one, and one pane has nothing to arrange.
+  # What the reader set, and the whole of what this road is about. It is one press because a size is
+  # one pane's answer — there is nothing else standing for it to be about.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
-
-  # What the reader set, and the whole of what this road is about. The control is on the row whether
-  # or not there are panes to lay out — it belongs to the page rather than to what is standing on it.
-  - type: action
-    domain: workspace
-    op: set-orient
-    with:
-      orient: down
+      size: half-down
 
   # The run ends here and another comes up on the same store. Nothing is pressed for it — the app is
   # the run's own, and ending it is the harness's — and what the operator confirms is the window that
@@ -99,14 +90,23 @@ steps_gui:
     with:
       face: workspace
 
-  # Two panes, because an arrangement of two is what is being read. One of them is the place the run
-  # brought back — standing with nothing in it, so a shell is started there — and the other is a
-  # press on the way in beside it. The folder is the project's own and it is the only one, which is
-  # why that press is a press and nothing else.
+  # The place the run brought back, standing with nothing in it, so a shell is started there.
   - type: action
     domain: workspace
     op: open-shell
 
+  # The size that rode home with it. Half a page laid down the page is the whole width and half the
+  # height, and a pane that came back unsized would be taking the whole of both.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half-down
+
+  # The pane beside it, which is what makes the reading above say something on a screen rather than
+  # on its own. The folder is the project's and it is the only one, which is why that press is a press
+  # and nothing else — and the pane it opens is measured against the one already showing, so it comes
+  # up at the same size.
   - type: action
     domain: workspace
     op: open-pane
@@ -123,11 +123,11 @@ steps_gui:
       count: 2
       empty: 0
 
-  # The arrangement the last run was told to keep. Had it been dropped, these two would be side by
-  # side under eighty columns each — a screen that draws perfectly well and is not the one the reader
-  # asked for.
+  # The arrangement the last run was told to keep. Had the size been dropped, these two would be side
+  # by side under eighty columns each — a screen that draws perfectly well and is not the one the
+  # reader asked for.
   - type: assert
     domain: workspace
-    op: panes-sit
+    op: pane-size
     with:
-      orient: down
+      size: half-down

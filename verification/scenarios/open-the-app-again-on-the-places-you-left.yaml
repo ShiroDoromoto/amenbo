@@ -5,12 +5,12 @@
 # the process — so the pane comes back with nothing running in it, and the reader says when something
 # does.
 #
-# Beside the places, the two answers a person *set*: how many panes to a page, and the project they
-# were looking at.
+# Beside the places, the two answers a person *set*: how much of a page a pane takes, and the project
+# they were looking at.
 #
 # The line is worth a road of its own because **both sides of it look right**. A face with one way in
-# on it and a face standing the places back up are each a working screen, and so are a split that was
-# kept and a split that fell back to the one every fresh device starts on. Nothing goes red on the
+# on it and a face standing the places back up are each a working screen, and so are a size that was
+# kept and a size that fell back to the whole page every unsized pane takes. Nothing goes red on the
 # way; the only way to tell is to end a run and look at what the next one drew.
 #
 # ── Why the reading is the name on the row and not the words on a pane ───────────────────────────
@@ -27,11 +27,11 @@
 # road opens the place it came back to — which is also the reading that it is a *place* and not a
 # picture of one — and reads the name off the row that comes up with the prompt.
 #
-# ── How a split is read at all ───────────────────────────────────────────────────────────────────
-# A count is not on the screen: what says which split a page is at is what it does with the panes on
-# it. One place came back, so at two to a page there is room beside it and the way in is drawn; at
-# the one a project nobody has answered for is drawn at, that same place fills the page and there is
-# no empty frame anywhere. One pane, one reading, and the kept split is told from the default.
+# ── How a size is read ───────────────────────────────────────────────────────────────────────────
+# Off the pane, as the share of the page it is taking, and off the page a second time: one place came
+# back, so at half the page there is room beside it and the way in is drawn, while a pane that came
+# back unsized would fill the page and no empty frame would be drawn anywhere. The two readings say
+# the same thing two ways, and neither can be got right by accident.
 #
 # ── Why two projects, and why the pane is asked where it is ──────────────────────────────────────
 # A project that is the only one comes back by having nowhere else to be. The road raises two and
@@ -49,12 +49,12 @@
 # The world raises the two projects and puts that one file in each folder, and nothing else: a
 # terminal is not a record, and what a pane runs is the reader's own shell.
 id: open-the-app-again-on-the-places-you-left
-title: A run of the app keeps the places a reader opened, the split they set and the project they were looking at
+title: A run of the app keeps the places a reader opened, the size they gave one and the project they were looking at
 description: >
-  Raise two projects, go to the second, cut its page to two panes and open a terminal in it, then
-  give that pane a name of your own. End the run and open the app again on the same store: the place
-  is standing where it was left, with a way in beside it — the split the reader set, and not the one
-  pane a project nobody has answered for is drawn at. Nothing is running in the place, so open a
+  Raise two projects, go to the second, open a terminal in it, cut it to half the page and give it a
+  name of your own. End the run and open the app again on the same store: the place is standing where
+  it was left at half the page, with a way in beside it — the size the reader set, and not the whole
+  page a pane nobody had sized would take. Nothing is running in the place, so open a
   plain shell in it: the row above it carries the name it was given in the run before, and asking it
   where it is standing answers with the folder of the project the reader was looking at.
 
@@ -110,15 +110,6 @@ steps_gui:
     with:
       project: Boathouse
 
-  # The split the reader set, which is one of the things a run keeps. Two to a page is worth setting
-  # here: it is not what a project nobody has answered for is drawn at, so a split that was forgotten
-  # and a split that was kept draw different screens.
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 2
-
   # Nothing is open in this project, so the face has one empty frame on it. The folder is the
   # project's own and it is the only one, which is why this press is a press and nothing else.
   - type: action
@@ -161,8 +152,18 @@ steps_gui:
     with:
       shows: SCENARIO the place of the run before
 
-  # The page as the reader leaves it: one pane, with the room the split left for a second one drawn
-  # as the way in beside it. It is the picture the reading after the run is taken against.
+  # The size the reader set, which is one of the things a run keeps. Half the page is worth setting
+  # here: it is not what a pane nobody has sized takes, so a size that was forgotten and a size that
+  # was kept draw different screens. It is pressed after the pane is open because the control is about
+  # a pane (`app/src/talk/layout.ts`).
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
+
+  # The page as the reader leaves it: one pane at half of it, with the room it left for a second one
+  # drawn as the way in beside it. It is the picture the reading after the run is taken against.
   - type: assert
     domain: workspace
     op: frames
@@ -186,14 +187,22 @@ steps_gui:
       face: workspace
 
   # The place is standing, and the way in is beside it rather than in its stead. Two things are read
-  # at once here: that the run brought the place back at all, and that the page is still cut at two —
-  # at one, this same place would fill the page and no empty frame would be drawn anywhere.
+  # at once here: that the run brought the place back at all, and that it came back at half the page —
+  # unsized, this same place would fill the page and no empty frame would be drawn anywhere.
   - type: assert
     domain: workspace
     op: frames
     with:
       count: 1
       empty: 1
+
+  # And the size read off the pane itself, which is the same answer without going through the room
+  # left beside it.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half
 
   # Nothing is running in it, so the road starts something: the place comes back as a place, and what
   # runs in it is a press. The shell opens in the pane already standing, which is the one that came

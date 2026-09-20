@@ -1,55 +1,65 @@
 # Two panes were put one above the other, and each of them got the window's whole width.
 #
-# The workspace spends width before height: a pane runs short of columns long before it runs
-# short of lines, so every count puts as many across as it can (`app/src/talk/layout.ts`). **At two
-# that turns around.** Two across halves the columns of each pane, and half of a window with a column
-# beside it is under the eighty a TUI wants; two down leaves the columns whole and takes the lines
-# instead. So two is the one count a reader is asked about, and this road is the asking.
+# The workspace spends width before height: a pane runs short of columns long before it runs short of
+# lines, so every size but one is a row tall (`app/src/talk/layout.ts`). **Half the page is where that
+# turns around.** Half of it side by side halves the columns of each pane, and half of a window with a
+# column beside it is under the eighty a TUI wants; half of it laid down the page leaves the columns
+# whole and takes the lines instead. They are two sizes and not one size with an answer on it, and
+# this road is the pressing of the second.
 #
 # ── What the reading is about ────────────────────────────────────────────────────────────────────
 # The width, and not the arrangement for its own sake. A build could move the two boxes about and
 # hand neither of them any more room than it had — the control lit, the panes rearranged, and the one
-# thing the press was for missing — so what the step confirms is that each pane is taking the whole
-# width between the columns rather than half of it. That is why both shapes are walked: a page read
-# only after the press has nothing to say about what it was before, and a face stuck in whichever
-# arrangement a road asked for last would come out green from end to end.
+# thing the press was for missing — so what the step confirms is the share of the page each pane comes
+# out with. That is why both shapes are walked: a page read only after the press has nothing to say
+# about what it was before, and a face stuck at whichever size a road asked for last would come out
+# green from end to end.
+#
+# ── Why it takes two presses to stack them ───────────────────────────────────────────────────────
+# Because a size is one pane's answer and never the page's. The first press leaves the two panes in
+# shapes that do not fit together — the whole width and half of it cannot share a page — so the
+# second pane is laid down on a page of its own until it is pressed for too. That is the model
+# rather than an awkwardness to route around: what the reader asks about is a pane, and the pages are
+# what falls out of laying the panes down in order. The road walks the page it lands on and presses
+# there, which is what a reader would do.
 #
 # ── Why a terminal is running in it ──────────────────────────────────────────────────────────────
-# Because the grid is redrawn under the panes, and a pane is drawn rather than held. The count beside
-# this control re-pages every frame on the device, and what has to survive that is the terminals
-# inside them (`come-back-to-the-terminal-a-page-turn-took-away`); a new orientation moves no pane
-# anywhere, which is exactly the sort of change a build can make by tearing the page down and putting
-# it up again. Nothing on the screen would say so — a terminal that was restarted comes up drawn.
+# Because the page is laid out again under the panes, and a pane is drawn rather than held. What has
+# to survive that is the terminals inside them (`come-back-to-the-terminal-a-page-turn-took-away`);
+# re-laying a page moves no pane between projects and opens nothing, which is exactly the sort of
+# change a build can make by tearing the page down and putting it up again. Nothing on the screen
+# would say so — a terminal that was restarted comes up drawn.
 #
 # So the road types a line into the pane and reads it back afterwards, and then types a **second**
 # one. That is the half a reading of the first cannot carry: what a terminal has printed stays where
 # it was printed, so the first line coming back says the screen was re-laid and only something typed
 # after the change says the terminal on the other end of it is still listening.
 #
-# ── Why two panes, and why the split is pressed for ──────────────────────────────────────────────
+# ── Why two panes, and why the first is sized before the second is opened ────────────────────────
 # Two is what the road is about: one pane and the empty frame beside it would draw the shape, but a
 # single pane cannot say what the shape was for, half a window being the whole of a window when there
 # is nothing to share it with. Only the first is ever spoken to — a step that typed into the other
 # would have to say which of two running panes it meant, and what the second is here for is to be the
 # one taking the other half.
 #
-# So the count is asked for. A project nobody has answered for is drawn at one pane, which is a full
-# page with nowhere to open the second — and it is the count this control is not drawn at, there
-# being nothing to arrange. The press comes before the reading of how the two sit, so what it is is
-# the road standing the arrangement up rather than a change the reading afterwards could be about.
+# A pane with nothing to be measured against takes the whole page, which is a full page with nowhere
+# to open the second. So the first is cut to half of it, and the frame that appears beside it is where
+# the second is opened. A pane opened there is measured against the one already showing, so it comes
+# up at that size too — which is the arrangement this road starts from.
 #
 # The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
 # what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
 # belongs to, so the road makes what it needs by walking in.
 id: stack-the-two-panes-so-each-keeps-the-whole-width
-title: Two panes side by side are stacked one above the other, each takes the window's whole width, and the terminals in them come through the re-shape still running
+title: Two panes sharing the width are given the whole of it each, one above the other, and the terminals in them come through the re-laying still running
 description: >
   Open the workspace, choose the folder it runs in, get the pane down to a plain shell and type a
-  line into it. Cut the page to two and open a second pane beside it, so the page is full and the two
-  are sharing the width. Ask for them one above the other: the panes are stacked and each takes
-  the whole width between the columns, the first one's line is still on it, and a second line typed
-  at it is taken — so the terminal behind the re-shape is still running and not a picture of one. Ask
-  for them side by side again, and they go back to sharing it with the same session in each.
+  line into it. Cut it to half the page and open a second pane beside it, so the page is full and the
+  two are sharing the width. Give the first the whole width instead: it takes the top half and the
+  second no longer fits beside it, so that one is laid down on a page of its own. Go there and give
+  it the whole width too — the two are stacked on one page again, each taking the whole width between
+  the columns, the first one's line is still on it, and a second line typed at it is taken, so the
+  terminal behind the re-laying is still running and not a picture of one.
 
 steps_gui:
   - type: action
@@ -86,16 +96,17 @@ steps_gui:
     with:
       shows: SCENARIO the pane that keeps its width
 
-  # Room for the other half. A project nobody has answered for is drawn at one pane, so this is what
-  # puts a second place on the page for the press below to open.
+  # Room for the other half. A pane with nothing to be measured against takes the whole page, so this
+  # is what puts a second place on it for the press below to open.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
+      size: half
 
-  # The other half of the page. Nothing is asked — the folder is the project's — and with it the page
-  # is full: two panes at a split of two, which is the arrangement the whole of this road is about.
+  # The other half of the page. Nothing is asked — the folder is the project's — and the pane opened
+  # here is measured against the one already showing, so it comes up at half the page too. With it
+  # the page is full: two panes sharing the width, which is the arrangement this road starts from.
   - type: action
     domain: workspace
     op: open-pane
@@ -112,31 +123,87 @@ steps_gui:
       count: 2
       empty: 0
 
-  # Where a page nobody has answered about sits: across, because that is what every other count does.
-  # It is read before the press so that the press has something to have changed.
+  # What the pane just opened came up at, read before anything is pressed so that the press has
+  # something to have changed. Half the width is the share this road is about moving away from.
   - type: assert
     domain: workspace
-    op: panes-sit
+    op: pane-size
     with:
-      orient: across
+      size: half
+
+  # The pane the line was typed into, which is the one the press below is about. A size is one pane's
+  # answer, so the control has to be pointed at the pane it is meant for.
+  - type: action
+    domain: workspace
+    op: press-pane
+    with:
+      shows: SCENARIO the pane that keeps its width
 
   - type: action
     domain: workspace
-    op: set-orient
+    op: set-pane-size
     with:
-      orient: down
+      size: half-down
 
-  # The point of the press, and the reading it is worth having: not that the boxes moved, but that
-  # each of them came out with the whole width instead of half of it.
+  # The point of the press, and the reading it is worth having: not that the box moved, but that it
+  # came out with the whole width instead of half of it.
   - type: assert
     domain: workspace
-    op: panes-sit
+    op: pane-size
     with:
-      orient: down
+      size: half-down
 
-  # The pane is the same pane. The grid was redrawn under it, and a build that put the page up again
-  # rather than re-laying it would have a fresh terminal here — drawn exactly like this one, with
-  # nothing on it.
+  # And the pane is the same pane. The page was laid out again under it, and a build that put the page
+  # up again rather than re-laying it would have a fresh terminal here — drawn exactly like this one,
+  # with nothing on it.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane that keeps its width
+
+  # The other pane is not beside it any more. The whole width and half of it cannot share a page, so
+  # the one that was not pressed for is laid down on the next one — which is what this road goes to
+  # next rather than routing around.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 2
+
+  - type: action
+    domain: workspace
+    op: press-pane
+
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half-down
+
+  # And the two are stacked on one page again: the second fits under the first now that both want the
+  # whole width, so it is laid back onto the page the first is on and the screen follows it there.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half-down
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # The first pane, through both re-layings, still showing what was typed into it.
   - type: assert
     domain: workspace
     op: pane
@@ -144,7 +211,7 @@ steps_gui:
       shows: SCENARIO the pane that keeps its width
 
   # And it is still listening. Words on a pane outlive the process that wrote them, so the line above
-  # says the screen came through and nothing more; only something typed after the re-shape says the
+  # says the screen came through and nothing more; only something typed after the re-laying says the
   # terminal on the other end of it did too.
   - type: action
     domain: workspace
@@ -153,28 +220,6 @@ steps_gui:
       text: SCENARIO still taking what is typed
       shows: SCENARIO the pane that keeps its width
 
-  - type: assert
-    domain: workspace
-    op: pane
-    with:
-      shows: SCENARIO still taking what is typed
-
-  # Back to sharing the width. A shape with no way out of it is the one failure this control cannot
-  # recover from: a reader who tried the stack and wanted their columns back would have nothing to
-  # press, and nothing else on the face would say the arrangement had ever been a choice.
-  - type: action
-    domain: workspace
-    op: set-orient
-    with:
-      orient: across
-
-  - type: assert
-    domain: workspace
-    op: panes-sit
-    with:
-      orient: across
-
-  # Through both presses now, and still the reader's own terminal.
   - type: assert
     domain: workspace
     op: pane

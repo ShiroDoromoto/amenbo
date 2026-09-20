@@ -870,8 +870,7 @@ pub fn skin_use(name: Option<String>) -> Result<(), CmdError> {
 pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
     let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
     let bytes = std::fs::read(&path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
-    amenbo_core::skin::weigh(&bytes).map_err(CmdError::from)?;
-    let (_, yaml) = amenbo_core::skin::document(&bytes).map_err(CmdError::from)?;
+    let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let read = amenbo_core::skin::Skin::read(&yaml).map_err(CmdError::from)?;
     let taken = read.check().map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     // Turned away here rather than shown as a judgement: a file calling itself one of the names
@@ -994,8 +993,7 @@ fn font_of(taken: &amenbo_core::skin::Taken) -> Option<SkinFontDto> {
 pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
     let bytes = std::fs::read(&path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
-    amenbo_core::skin::weigh(&bytes).map_err(CmdError::from)?;
-    let (packing, yaml) = amenbo_core::skin::document(&bytes).map_err(CmdError::from)?;
+    let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let taken = amenbo_core::skin::Skin::read(&yaml)
         .map_err(CmdError::from)?
         .check()
@@ -1006,7 +1004,7 @@ pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     {
         return Err(CmdError::from(format!("a skin is already kept as '{name}'")));
     }
-    amenbo_core::skin::Skin::install(&paths, &name, packing, &bytes).map_err(CmdError::from)?;
+    amenbo_core::skin::Skin::install(&paths, &name, &bytes).map_err(CmdError::from)?;
     Ok(name)
 }
 

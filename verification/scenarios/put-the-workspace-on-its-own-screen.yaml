@@ -1,8 +1,8 @@
-# The terminal moved out to a screen of its own, and moved back — with the same session still running
-# in it.
+# The workspace moved out to a screen of its own, and moved back — with the same session still running
+# in the pane on it.
 #
 # Every other road here walks the app as one window, which is what it is by default: the ledger and
-# the terminal are two faces of one window, and switching between them is a press. That default is
+# the workspace are two faces of one window, and switching between them is a press. That default is
 # walked all over this set already — every screen road opens on the board — so what has never been
 # walked is the other shape. It is also the only place the screen tool can shoot the wrong window,
 # since it is the only place there are two.
@@ -36,7 +36,7 @@
 # words are different words, and the box's own mark says which of the two the keyboard is answering.
 #
 # ── How the two windows are told apart ───────────────────────────────────────────────────────────
-# The window the terminal is split out into holds the whole face rather than one pane of it, so it is
+# The window the workspace is split out into holds the whole face rather than one pane of it, so it is
 # not named after anything on the screen: what its bar carries is the app's own name for that window.
 # The board keeps the product's name alone and the other carries it with a dash and a word after it —
 # the word after it is in the run's own language, so `window:` below names that window by the part of
@@ -53,13 +53,13 @@
 # reader's own shell, and standing up tasks would be furnishing a board this road never looks at. The
 # folder the road chooses is not furniture either: choosing one is what raises the project it belongs
 # to, so the road makes the world it needs by walking in.
-id: put-the-terminal-on-its-own-screen
-title: The terminal moves to a screen of its own and back, with the session never restarting and the half-written sentence still in its box
+id: put-the-workspace-on-its-own-screen
+title: The workspace moves to a screen of its own and back, with the session never restarting and the half-written sentence still in its box
 description: >
   Open the workspace of the one window, choose the folder it runs in, open a plain shell there,
   and type a line into the pane. Write a second line in the box beneath it and leave it unsent.
   Switch to the ledger and back: both are still there, because hiding a terminal must not end it.
-  Then open the terminal in a separate window — the printed line is on the pane there, the written one
+  Then open the workspace in a separate window — the printed line is on the pane there, the written one
   still standing in the box, the same session drawn in the new window — and fold it back, where both
   are in the one window again. What is under test is the process and the draft surviving all three
   moves: what a reader has running in the pane, and what they are part-way through saying to it, are
@@ -140,7 +140,7 @@ steps_gui:
       shows: SCENARIO the same terminal
       present: false
 
-  # Back to the terminal. This is the first of the three moves, and the one a reader makes most: a
+  # Back to the workspace. This is the first of the three moves, and the one a reader makes most: a
   # look at the board must not cost them the session they left running.
   - type: action
     domain: workspace
@@ -194,7 +194,7 @@ steps_gui:
     op: fold-back
     window: "Amenbo — "
 
-  # Folded back: one window again, and the terminal is its face once more with the same line on it.
+  # Folded back: one window again, and the workspace is its face once more with the same line on it.
   # Nothing names a window here, which is the other half of what this step says — the second window
   # has gone, and a road that still had to name one would be looking at an app that never folded.
   - type: assert

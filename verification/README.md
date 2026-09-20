@@ -1176,7 +1176,7 @@ exactly like a pane still drawing the session that was running until a line the 
 it. A window is named separately — `window:` matches on the title bar, which carries the frame's name
 where a pane has one and the app's own word where it has none. A road that needs a window told apart
 by a word of its own names its pane first (`name-pane`).
-`put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
+`put-the-workspace-on-its-own-screen` is the road, and it folds the window back before it ends
 — the shape a machine was last used in belongs to the webview rather than to the throwaway store, so
 a run that walked away split would hand the next person two windows they never asked for.
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import {
   boxHeight,
@@ -97,7 +97,7 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen,
+  inserted = [], composeOpen, held = false, goes = null, onGrab, onStretch,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -140,6 +140,22 @@ export function TerminalPane({
    * same surface, because to a reader they are the same act.
    */
   offered?: boolean;
+  /** Whether this is the pane being carried, so it can stand back while it is out of its place
+   *  (`./WorkspaceFace`). */
+  held?: boolean;
+  /**
+   * Where a pane let go of over this one would land — before it in the order, after it, or nowhere.
+   *
+   * It is the one thing drawn while a pane is carried, because the panes themselves do not move
+   * until the press ends: a page that rearranged under the hand would be moving terminals somebody
+   * is reading, to show them an arrangement they have not asked for yet (`AMB-D-939`).
+   */
+  goes?: { readonly side: "before" | "after"; readonly axis: "across" | "down" } | null;
+  /** Take hold of this pane by its row, to carry it somewhere else in the order. Left out where
+   *  there is nothing to reorder — one pane is already in order (`./WorkspaceFace`). */
+  onGrab?: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** Pull this pane's corner, to leave it at one of the sizes there are (`./paneDrag`). */
+  onStretch?: (e: ReactPointerEvent<HTMLElement>) => void;
   onOpened: (frame: string, session: string, folder: string | null, agent: string | null) => void;
   onSaid: (statement: SessionSaidDto) => void;
   /** A file path drawn in this pane was clicked, as it was drawn. */
@@ -675,7 +691,8 @@ export function TerminalPane({
 
   return (
     <div
-      className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}`}
+      className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}${
+        held ? " slot--held" : ""}`}
       style={at}
       data-hand={frame}
       onMouseDown={pressedOn}
@@ -694,7 +711,16 @@ export function TerminalPane({
             because the row is what is said about this pane, and removing it is the last thing there is
             to say. The control is drawn whether or not anything is running: a frame kept from the last
             run has no session and is still a place somebody has to be able to get rid of. */}
-        <div className="slot__bar">
+        <div
+          className={`slot__bar${onGrab === undefined ? "" : " slot__bar--grab"}`}
+          onPointerDown={(e) => {
+            // The row is a handle and the things on it are not: a press that started on the menu or
+            // on the box a name is typed in is that control's, and carrying the pane off under it
+            // would take the press away from what it was aimed at.
+            if (e.target instanceof Element && e.target.closest("button, input") !== null) return;
+            onGrab?.(e);
+          }}
+        >
           {/* The line above the pane, which is empty until there is a session to say something about
               — and holds the row's width open either way, so the control does not walk across it.
               It stays up while a name is being typed in its place, out of sight rather than out of
@@ -799,6 +825,25 @@ export function TerminalPane({
             under the drag has to stay the pane, or the point being resolved would land on the surface
             itself and the highlight would flicker itself away. */}
         {(handing || offered) && <div className="slot__handing">{t("face.handHere")}</div>}
+        {/* Where a carried pane would land, drawn down the edge it would go in at: the midline that
+            settles it runs the way this pane has neighbours, so a pane taking the whole width says
+            it above and below rather than left and right (`./paneDrag`). */}
+        {goes !== null && (
+          <div className="slot__goes" data-side={goes.side} data-axis={goes.axis} />
+        )}
+        {/* The corner, which is the other half of what a person can do to a pane's place. It is a
+            corner and not an edge because what is being pulled is a size and not a width: both
+            numbers come off the one drag, and an edge would only ever say one of them
+            (`./paneDrag`). */}
+        {onStretch !== undefined && (
+          <div
+            className="slot__corner"
+            role="separator"
+            title={t("face.paneSize")}
+            aria-label={t("face.paneSize")}
+            onPointerDown={onStretch}
+          />
+        )}
         {running
           ? (
             <>

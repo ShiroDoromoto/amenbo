@@ -14,10 +14,12 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, focusOn, folding, goPage, goProject, gridAt,
-  landingOn, laidOut, movedTo, openedFrame, openedIn, pageCount, paneIn, panesOf, reordered,
-  resized, restored, SIZES, sizing, slotsOf, writing,
+  landingOn, laidOut, movedTo, movedWithin, openedFrame, openedIn, pageCount, paneIn, panesOf,
+  reordered, resized, restored, SIZES, sizing, slotsOf, writing,
   type Layout, type Size,
 } from "../talk/layout";
+import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
+import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import {
   clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
   getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, getTabsWidth, setRailShown,
@@ -64,6 +66,19 @@ const SIZE_MARKS: Readonly<Record<Size, { mark: IconName; says: string }>> = {
   quarter: { mark: "paneQuarter", says: "face.paneQuarter" },
   sixth: { mark: "paneSixth", says: "face.paneSixth" },
   eighth: { mark: "paneEighth", says: "face.paneEighth" },
+};
+
+/**
+ * Where a carried pane would land — the pane it is over, which side of it, and which way that pane's
+ * neighbours run (`./paneDrag`).
+ *
+ * The axis is carried with the side rather than worked out again where the mark is drawn: it is the
+ * same answer the side was settled by, and reading it twice is two places for one midline.
+ */
+type Landing = {
+  readonly id: string;
+  readonly side: "before" | "after";
+  readonly axis: "across" | "down";
 };
 
 /**
@@ -1055,6 +1070,141 @@ export function WorkspaceFace({
   // (`../talk/layout`).
   const spare = landingOn(layout, page);
 
+  // The grid the panes are drawn on, which is what a corner being pulled is measured against: a size
+  // is a rectangle of the page and the page is this box (`./paneDrag`).
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * The pane being carried and where letting go would put it, or nothing.
+   *
+   * **The order is not written while the hand is moving.** These panes have terminals running in
+   * them, so a page that rearranged under the pointer would carry somebody's output out from under
+   * their eyes to show them an arrangement they have not asked for. What moves during the drag is the
+   * mark on the pane it would land against (`./TerminalPane`), and the order is written when the
+   * press ends.
+   */
+  const [carried, setCarried] = useState<{ readonly id: string; readonly over: Landing | null } | null>(null);
+  /** The pane whose corner is being pulled and the size it would be let go at, drawn as an outline
+   *  over the page for the same reason the order is not written yet. */
+  const [stretch, setStretch] = useState<{ readonly id: string; readonly size: Size } | null>(null);
+  // What the two gestures read while they run, out of a ref because a pointer reports far more often
+  // than the screen redraws and neither of them draws the pointer (`./PaneOrder`).
+  const pressed = useRef<{ id: string; from: Point; dragging: boolean } | null>(null);
+  const at = useRef<Point>({ x: 0, y: 0 });
+  const frameAsked = useRef<number | null>(null);
+  const letGo = useRef<(() => void) | null>(null);
+  // A press outliving the face would leave listeners on a document with no panes to arrange.
+  useEffect(() => () => letGo.current?.(), []);
+
+  /**
+   * Run a press as a drag: the listeners go on the document, one hit test a frame, and `settle` is
+   * handed the point the press ended at.
+   *
+   * The listeners are the document's rather than the pane's because a pane is redrawn — and a corner
+   * is unmounted — the moment anything about the arrangement changes, and a listener on one would be
+   * cut off mid-gesture (`AMB-D-775`).
+   */
+  const dragPane = useCallback((
+    e: ReactPointerEvent<HTMLElement>,
+    id: string,
+    follow: (point: Point) => void,
+    settle: (dragged: boolean) => void,
+  ) => {
+    // The primary button alone. A right-click is the menu's and a middle-click is nobody's.
+    if (e.button !== 0) return;
+    pressed.current = { id, from: { x: e.clientX, y: e.clientY }, dragging: false };
+    at.current = { x: e.clientX, y: e.clientY };
+    const move = (ev: PointerEvent) => {
+      const on = pressed.current;
+      if (on === null) return;
+      at.current = { x: ev.clientX, y: ev.clientY };
+      if (!on.dragging) {
+        if (!draggedFar(on.from, at.current)) return;
+        on.dragging = true;
+      }
+      // Against the selection the terminal below would otherwise take.
+      ev.preventDefault();
+      if (frameAsked.current !== null) return;
+      frameAsked.current = requestAnimationFrame(() => {
+        frameAsked.current = null;
+        if (pressed.current?.dragging === true) follow(at.current);
+      });
+    };
+    const up = () => {
+      const dragged = pressed.current?.dragging === true;
+      letGo.current?.();
+      settle(dragged);
+    };
+    letGo.current = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", up);
+      if (frameAsked.current !== null) cancelAnimationFrame(frameAsked.current);
+      frameAsked.current = null;
+      pressed.current = null;
+      letGo.current = null;
+      document.body.classList.remove("dragging-row");
+    };
+    document.body.classList.add("dragging-row");
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", up);
+  }, []);
+
+  /** Take a pane by its row and carry it to another place in the order (`AMB-D-939`). */
+  const grabPane = useCallback((e: ReactPointerEvent<HTMLElement>, id: string) => {
+    // Where the drag stands, kept beside the state rather than read out of it: what `settle` is
+    // handed is where the hand ended up, and a closure over the state would be reading where it was
+    // when the press went down.
+    let over: Landing | null = null;
+    dragPane(e, id, (point) => {
+      const on = elementUnder(point, "data-hand");
+      const target = on?.dataset.hand;
+      const size = target === undefined || target === id
+        ? undefined
+        : panesOf(layout, layout.project).find((one) => one.id === target)?.size;
+      over = on == null || target == null || size === undefined
+        ? null
+        : { id: target, side: sideOnPane(point, on.getBoundingClientRect(), size), axis: axisOnPane(size) };
+      setCarried({ id, over });
+    }, (dragged) => {
+      setCarried(null);
+      if (!dragged || over === null) return;
+      const put = over;
+      setLayout((was) => reordered(
+        was,
+        movedWithin(panesOf(was, was.project), id, put.id, put.side),
+      ));
+    });
+  }, [dragPane, layout]);
+
+  // Where the pane being pulled stands on this page, which is where the outline is drawn from. It
+  // is read off the page rather than kept with the press: the corner is let go of at a size and the
+  // spot it was pulled from is the one it still holds.
+  const stretchAt = slots.find(({ frame }) => frame.id === stretch?.id);
+
+  /** Pull a pane's corner, and leave it at the size the pointer let go over (`./paneDrag`). */
+  const stretchPane = useCallback((
+    e: ReactPointerEvent<HTMLElement>,
+    id: string,
+    spot: { readonly across: number; readonly down: number },
+  ) => {
+    let size: Size | null = null;
+    dragPane(e, id, (point) => {
+      const grid = gridRef.current?.getBoundingClientRect();
+      if (grid === undefined) return;
+      size = sizeStretchedTo(grid, spot, point);
+      setStretch({ id, size });
+    }, (dragged) => {
+      const to = size;
+      setStretch(null);
+      if (!dragged || to === null) return;
+      // The question about where a pane works goes with it, as it does on every other press that
+      // moves the panes about: a question left up would be drawn on whatever page this lands on.
+      setAsking(null);
+      setLayout((was) => resized(was, id, to));
+    });
+  }, [dragPane]);
+
   /**
    * Open a file in the reading column, or bring it up where it is already open.
    *
@@ -1405,6 +1555,7 @@ export function WorkspaceFace({
             stays blank: a hole is where the next pane did not fit, and a grid that closed up around
             it would move the panes a reader is watching. */}
         <div
+          ref={gridRef}
           className={`workspace__page-grid${spare === null ? " workspace__page-grid--add" : ""}`}
         >
           {/* Nothing until the arrangement has been read back, and nothing while the face has been
@@ -1447,6 +1598,14 @@ export function WorkspaceFace({
                     focused={layout.focus === frame.id}
                     landed={landed === frame.id}
                     offered={overFrame === frame.id}
+                    held={carried?.id === frame.id}
+                    goes={carried?.over?.id === frame.id
+                      ? { side: carried.over.side, axis: carried.over.axis }
+                      : null}
+                    // A pane on its own is already in order and has nothing to be carried past, so
+                    // the row is not a handle on a project with one pane.
+                    onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
+                    onStretch={(e) => stretchPane(e, frame.id, { across, down })}
                     onOpened={opened}
                     onPath={pathClicked}
                     onSaid={(statement) => {
@@ -1470,6 +1629,17 @@ export function WorkspaceFace({
                     onFold={(id, open) => setLayout((was) => folding(was, id, open))}
                   />
                 ))}
+                {/* What the corner would leave this pane at, drawn from where the pane stands now.
+                    The pane itself is untouched until the press ends: it holds a terminal, and one
+                    that was resized on every report of the pointer would be telling the program in
+                    it a new width dozens of times for one gesture (`./paneDrag`). */}
+                {stretch !== null && stretchAt !== undefined && (
+                  <div
+                    className="workspace__stretch"
+                    aria-hidden="true"
+                    style={gridAt(stretch.size, stretchAt.across, stretchAt.down)}
+                  />
+                )}
                 {asking !== null && (
                   <FolderChoice
                     at={spare === null ? undefined : gridAt(spare.size, spare.across, spare.down)}

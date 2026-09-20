@@ -61,14 +61,15 @@ steps_cli:
     op: skin-template
     as: starting-point
 
-  # This build's own values, written out, read back by the same check a stranger's file meets. The
-  # file is the artifact the step above bound, named by that binding.
+  # What came out is a skin's own shape: a zip carrying the document. The entry's name is in the
+  # zip's own header, so this reads the file as it sits on disk rather than as anything unpacked it.
+  # The file is the artifact the step above bound, named by that binding.
   - type: assert
     domain: store
     op: snapshot
     with:
       target: starting-point
-      contains: "c-bg"
+      contains: "skin.yaml"
 
   # Nothing is on before the road puts something on. Read first because "it is on" and "it was
   # already on" are the same picture afterwards.

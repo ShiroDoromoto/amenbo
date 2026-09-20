@@ -133,21 +133,19 @@ impl Driver<'_> {
                 self.run_json(&["config", "set", key, value, "--json"])?;
                 Ok(Outcome::action(format!("set `{key}` to `{value}`")))
             }
-            // The starting point an author is handed: this build's own colours, written out as a
-            // document that is already a skin. It lands beside the run's other artifacts and is
-            // bound, so the reading that follows names what came out rather than a path spelled
-            // twice.
+            // The starting point an author is handed: this build's own values, written out as a zip
+            // that is already a skin. The command writes the file itself — a skin is a zip, and bytes
+            // do not come back through `--json` — so what lands beside the run's other artifacts is
+            // the path this names, bound, so the reading that follows names what came out rather than
+            // a path spelled twice.
             "skin-template" => {
-                let out = self.artifact(bind, "skin-template", ".yaml");
-                let v = self.run_json(&["skin", "template", "--json"])?;
-                let yaml = v["yaml"].as_str().ok_or("`skin template --json` carried no `yaml`")?;
-                std::fs::write(&out, yaml)
-                    .map_err(|e| format!("could not write {}: {e}", out.display()))?;
+                let out = self.artifact(bind, "skin-template", ".zip");
+                let v = self.run_json(&["skin", "template", path_str(&out)?, "--json"])?;
+                let bytes = v["bytes"].as_u64().ok_or("`skin template --json` carried no `bytes`")?;
                 self.remember(bind, "skin-template", out.clone());
                 Ok(Outcome::action(format!(
-                    "wrote a skin to start from at {} ({} bytes)",
-                    out.display(),
-                    yaml.len()
+                    "wrote a skin to start from at {} ({bytes} bytes)",
+                    out.display()
                 )))
             }
             // The author's face of the check the import runs. It writes nothing: what it is for is

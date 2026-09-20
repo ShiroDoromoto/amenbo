@@ -13,7 +13,14 @@ import { t, tf } from "../core/i18n";
  *
  * **The page itself is where a pane is carried past the one beside it** (`./paneDrag`, `AMB-D-939`),
  * so what is left to this is the move the page cannot show: a pane carried onto a page that is not
- * on the screen. Every page of the list is drawn in here, which is the one thing the face cannot do.
+ * on the screen. Every page of the list is drawn in here, which is the one thing the face cannot do —
+ * and the way in is drawn only where there is a second page to reach, since on one page the face can
+ * already make every move this could (`./WorkspaceFace`).
+ *
+ * **A card is still dropped on a card, and one on the same page still moves.** Where a pane lands on
+ * the page it is carried to is said the only way it can be said — beside the pane it is going in
+ * front of or behind — and a gesture that worked on one page and died on another would be a rule the
+ * reader has to learn from a drag that did nothing.
  *
  * **Nothing leaves here except by the button.** The cross, Escape and the backdrop all leave the
  * arrangement exactly as it was, however much has been dragged about in here — this is a proposal

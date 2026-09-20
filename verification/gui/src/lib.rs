@@ -3737,9 +3737,25 @@ impl Instructor {
             // an eye's — and each is written as a comparison with what this build draws rather than
             // as a description of the material, since the line is rendered from the YAML alone and
             // the YAML does not hold the file.
+            //
+            // A background is laid per place, and a skin carries only the places it wrote. So the
+            // step names them under `on` and the line is built from that — a line naming all four
+            // would send an operator hunting a picture the fixture never packed.
             (Domain::Store, "skin-material") => match (req(with, "material")?, present(with)) {
-                ("background", true) => "Confirm the window behind everything, and the cards standing on it, are drawn over a picture of the skin's own rather than over flat colour.".to_string(),
-                ("background", false) => "Confirm the window behind everything, and the cards standing on it, are drawn in flat colour, with no picture standing behind them.".to_string(),
+                ("background", there) => {
+                    let (places, several) = surfaces(with)?;
+                    match there {
+                        true => format!(
+                            "Confirm {places} {} drawn over a picture of the skin's own rather than over flat colour.",
+                            if several { "are" } else { "is" }
+                        ),
+                        false => format!(
+                            "Confirm {places} {} drawn in flat colour, with no picture standing behind {}.",
+                            if several { "are" } else { "is" },
+                            if several { "them" } else { "it" }
+                        ),
+                    }
+                }
                 ("icons", there) => {
                     let mark = match with.get("name").and_then(|v| v.as_str()) {
                         Some(name) => format!("the mark Amenbo draws as \"{name}\""),
@@ -5470,6 +5486,40 @@ fn names(with: &Args, key: &str) -> Result<String, String> {
     match words.as_slice() {
         [] => Ok(" none of them".to_string()),
         words => Ok(format!(" {}", words.join(", "))),
+    }
+}
+
+/// The surfaces a background step names under `on`, as one clause an operator reads, and whether
+/// there is more than one of them — the caller needs the number to agree with the verb after it.
+///
+/// A skin lays a picture per place, and the places are the four the application is built out of
+/// (`BACKGROUNDS`, `crates/amenbo-core/src/skin.rs`). A fixture carries only the ones it wrote, so
+/// what the line may ask an operator to look at is what the road declared. The place names are the
+/// skin document's own, which is what the road is written against; the words for them are here,
+/// because `c-sunken` is not something anyone can find on a screen.
+fn surfaces(with: &Args) -> Result<(String, bool), String> {
+    let listed = with.get("on").and_then(|v| v.as_sequence()).ok_or_else(|| {
+        "`material: background` lays a picture per place, so the step names the places under `on`"
+            .to_string()
+    })?;
+    let places: Vec<&str> = listed
+        .iter()
+        .map(|one| match one.as_str() {
+            Some("c-bg") => Ok("the window behind everything"),
+            Some("c-surface") => Ok("the cards standing on it"),
+            Some("c-sunken") => Ok("the wells sunk into those cards"),
+            Some("c-pane-bg") => Ok("the field a terminal pane prints on"),
+            Some(other) => Err(format!(
+                "`on` names a place a skin lays a picture — `c-bg`, `c-surface`, `c-sunken` or \
+                 `c-pane-bg`; `{other}` is none of the four"
+            )),
+            None => Err("every entry under `on` names a place".to_string()),
+        })
+        .collect::<Result<_, _>>()?;
+    match places.as_slice() {
+        [] => Err("`on` is empty, which leaves the step with nothing to look at".to_string()),
+        [one] => Ok(((*one).to_string(), false)),
+        [rest @ .., last] => Ok((format!("{}, and {last},", rest.join(", ")), true)),
     }
 }
 

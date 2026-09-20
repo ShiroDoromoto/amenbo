@@ -187,6 +187,7 @@ steps_gui:
     op: skin-material
     with:
       material: background
+      on: [c-bg, c-surface]
 
   - type: assert
     domain: store
@@ -223,6 +224,7 @@ steps_gui:
     op: skin-material
     with:
       material: background
+      on: [c-bg, c-surface]
       present: false
 
   - type: assert

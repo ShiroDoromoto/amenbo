@@ -270,6 +270,7 @@ pub fn template(name: &str, from: Option<&Skin>) -> String {
     out.push_str("themes: [light, dark]\n");
     write_headers(&mut out, from);
     write_font(&mut out, from);
+    write_materials(&mut out);
     for side in [Side::Light, Side::Dark] {
         out.push_str(&format!("\n{side}:\n"));
         for (token, light, dark) in
@@ -393,6 +394,53 @@ fn write_font(out: &mut String, from: Option<&Skin>) {
     for line in font.license_text.lines() {
         out.push_str(&format!("    {line}\n"));
     }
+}
+
+/// The materials a skin may carry beside its document, as a shape to copy.
+///
+/// **Commented, always, and never written out from the skin it was taken from.** What stands here
+/// is a filename, and the file it names is in the other skin's zip — a template that wrote the name
+/// out would hand the author a document whose own check drops every line of it. The road that keeps
+/// a skin's materials is `skin write-out`, which hands back the file it arrived in.
+fn write_materials(out: &mut String) {
+    out.push_str("\n# A picture behind one of the surfaces, named for the colour drawn there:\n");
+    out.push_str(&format!("# {}.\n", crate::skin::BACKGROUNDS.join(", ")));
+    out.push_str(&format!(
+        "# The file sits beside this document, up to {}MB of it and {}MB for the whole zip;\n",
+        crate::skin::PACK_FILE_MAX_BYTES / (1024 * 1024),
+        crate::skin::PACK_MAX_BYTES / (1024 * 1024)
+    ));
+    out.push_str("# png, jpeg, webp and svg are drawn. `fit` is contain, cover or tile and `at` is\n");
+    out.push_str("# one of the nine spots — cover and center stand where nothing is written.\n");
+    out.push_str("# backgrounds:\n");
+    out.push_str("#   c-bg:\n");
+    out.push_str("#     file: \"paper.png\"\n");
+    out.push_str("#     fit: tile\n");
+    out.push_str("#     at: top-left\n");
+    out.push_str("#   c-surface:\n");
+    out.push_str("#     file: \"grain.webp\"\n");
+    out.push_str(&format!(
+        "\n# Your own drawing for any of the {} icons the window draws, by the name each is drawn\n",
+        crate::skin::ICONS.len()
+    ));
+    out.push_str("# under. One file each, beside this document; a name left out keeps the drawing\n");
+    out.push_str("# this build has. Laid as a mask, so png, webp and svg are taken and the colour\n");
+    out.push_str("# stays the one the text beside it is in.\n");
+    out.push_str("# icons:\n");
+    out.push_str("#   gear: \"gear.svg\"\n");
+    out.push_str("#   gavel: \"gavel.svg\"\n");
+    out.push_str("# The names, in full:\n");
+    // Written out rather than pointed at. An author holding this file is holding the whole of what
+    // they may replace; a list that lived only in the source would be one they had to be told.
+    let mut line = String::from("#  ");
+    for name in crate::skin::ICONS {
+        if line.len() + name.len() + 2 > 92 {
+            out.push_str(&format!("{line}\n"));
+            line = String::from("#  ");
+        }
+        line.push_str(&format!(" {name},"));
+    }
+    out.push_str(&format!("{}\n", line.trim_end_matches(',')));
 }
 
 /// The name a template gives itself, from the name of whatever it was taken from. Not that name:
@@ -752,7 +800,7 @@ mod tests {
         assert!(yaml.contains("fs-scale: \"1\"") && yaml.contains("0.85 to 1.3"));
         assert!(yaml.contains("shadow-scale: \"1\"") && yaml.contains("0 and up"));
         // What only the author can fill in is offered as a shape to copy.
-        for shape in ["# author:", "# license:", "# titles:", "# font_file:"] {
+        for shape in ["# author:", "# license:", "# titles:", "# font_file:", "# backgrounds:", "# icons:"] {
             assert!(yaml.contains(shape), "{shape} is not offered");
         }
     }

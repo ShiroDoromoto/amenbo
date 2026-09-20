@@ -2,7 +2,8 @@
 // overridden by them.
 //
 // The application's CSS is bundled by Vite, so there is no `:root` left outside it to redefine. What
-// there is instead is one sheet of our own, appended to `<head>`, holding the two sides a skin has.
+// there is instead is one sheet of our own, appended to `<head>`, holding the two sides a skin has
+// and the drawings it hands over for this build's icons.
 // Later in the document order at equal specificity, so its values win over the ones tokens.css set —
 // which is the whole mechanism, and the reason the sheet is appended rather than placed anywhere
 // else.
@@ -60,6 +61,28 @@ const NAME = /^[a-z0-9][a-z0-9-]*$/;
  */
 const VALUE = /^[^;{}<>\\\n\r]{1,512}$/;
 const NOT_IN_A_VALUE = /\/\*|\*\/|url\s*\(/i;
+
+/**
+ * The name of an icon a skin may hand a drawing over for. The names are `Icon.tsx`'s own, written
+ * the way the markup writes them, so letters and digits and nothing else — which is also what lets
+ * one be put into a selector here without anything to escape.
+ *
+ * Held to `ICONS` in `crates/amenbo-core/src/skin.rs` by the check, which is what says whether a
+ * name the author wrote is one this build draws. Asked again here for the reason a token name is:
+ * what arrives came out of a file somebody was handed.
+ */
+const ICON_NAME = /^[A-Za-z][A-Za-z0-9]*$/;
+
+/**
+ * The shape a drawing arrives in: a `data:` URI carrying one of the three forms a mask can be read
+ * off, base64 and nothing else. The host builds it out of bytes it read the form off, so this is
+ * not where the form is decided — it is where a value that is about to be written into a `url()`
+ * is read over, the way {@link usable} reads a token's value over.
+ *
+ * A jpeg is not in the list: it carries no transparency, so laid as a mask it draws a filled square
+ * where the drawing was. The check turns one away on the way in (`icon` in `skin.rs`).
+ */
+const DRAWING = /^data:image\/(png|webp|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Is this a value a skin may set a token to? */
 function usable(value: string): boolean {
@@ -424,14 +447,69 @@ export function applySkin(tables: SkinTablesDto | null): void {
       rule.style.setProperty(`--${name}`, value);
     }
   }
-  // The pictures on a rule of their own, matching both sides: a skin lays one picture per place and
-  // none per side (`AMB-D-936`), so writing them twice would be writing the same thing twice. It is
-  // a slot each rather than a value the author wrote, so `usable` has nothing to say about it.
+  layPictures(s, tables);
+  layDrawings(s, tables.icons);
+}
+
+/**
+ * Lay the skin's pictures behind the places they name — one rule for the lot of them, after the
+ * two sides and matching both, because a picture is the header's rather than a side's: a skin
+ * that draws paper draws paper on both sides of it (`AMB-D-936`).
+ *
+ * What goes in is a slot each rather than a value the author wrote — the layer was built here,
+ * around a filename, so `usable` has nothing to say about it and the `url()` it holds is one no
+ * document could have spelled.
+ */
+function layPictures(s: CSSStyleSheet, tables: SkinTablesDto): void {
   const slots = pictureSlots(tables);
   if (Object.keys(slots).length === 0) return;
   const at = s.insertRule("[data-theme] {}", s.cssRules.length);
   const rule = s.cssRules[at] as CSSStyleRule;
   for (const [slot, layer] of Object.entries(slots)) rule.style.setProperty(`--${slot}`, layer);
+}
+
+/**
+ * Lay the skin's drawings over the icons they stand in for — one rule per name, after the two
+ * sides because an icon is the header's rather than a side's: a skin that draws its own gear draws
+ * it on both.
+ *
+ * **The drawing is a mask and not a picture.** What is painted is `currentColor`, through the
+ * drawing's own alpha, so an icon goes on taking the colour of the text beside it and goes on
+ * changing with the theme — which is what an inline `<svg>` of this build's own does, and the
+ * whole of what has to keep holding (`AMB-D-937`). It also keeps a drawing a drawing: an `<svg>`
+ * behind `mask-image` is never a document, so nothing written inside it runs and nothing it names
+ * is fetched.
+ *
+ * The rule lands on the element `Icon.tsx` already draws, by the name the markup already carries
+ * (`data-icon`), so no call site is touched and the one mark built without React around it
+ * (`iconSvg`) is covered by the same rule. This build's own geometry is inside that element, so it
+ * is turned off rather than removed: `fill` and `stroke` are what `.icon` gives the paths, and
+ * with neither of them there is nothing left to draw.
+ *
+ * `-webkit-` as well as the plain names: WebView2 took the unprefixed ones late, and the prefixed
+ * pair is what every webview this ships into has.
+ */
+function layDrawings(s: CSSStyleSheet, icons: Record<string, string>): void {
+  for (const [name, drawing] of Object.entries(icons)) {
+    if (!ICON_NAME.test(name) || !DRAWING.test(drawing)) continue;
+    const at = s.insertRule(`.icon[data-icon="${name}"] {}`, s.cssRules.length);
+    const rule = s.cssRules[at] as CSSStyleRule;
+    for (const [property, value] of [
+      ["-webkit-mask-image", `url("${drawing}")`],
+      ["mask-image", `url("${drawing}")`],
+      ["-webkit-mask-size", "contain"],
+      ["mask-size", "contain"],
+      ["-webkit-mask-repeat", "no-repeat"],
+      ["mask-repeat", "no-repeat"],
+      ["-webkit-mask-position", "center"],
+      ["mask-position", "center"],
+      ["background-color", "currentColor"],
+      ["fill", "none"],
+      ["stroke", "none"],
+    ]) {
+      rule.style.setProperty(property, value);
+    }
+  }
 }
 
 /**

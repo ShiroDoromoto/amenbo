@@ -758,18 +758,27 @@ pub fn skin_in_use() -> Option<SkinTablesDto> {
     let config = amenbo_core::config::Config::load(&paths.config_file);
     let name = config.skin?;
     let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    Some(worn(&paths, skin.check(&materials).ok()?))
+    Some(worn(&paths, skin.check(&materials).ok()?, &materials))
 }
 
 /// One checked skin, as the window wears it. The font's bytes go back to base64 on the way out —
 /// they came in as base64 with an author's line wrapping in them, and what leaves here is the same
 /// bytes with nothing for the window to clean.
 ///
-/// The pictures do not travel with it. They stay in the zip and are fetched one at a time through
-/// [`crate::skinproto`], so what goes out is the filename and the two words that say how each one
-/// is laid — plus the stamp that makes the address change when the file behind it does.
-fn worn(paths: &amenbo_core::config::Paths, taken: amenbo_core::skin::Taken) -> SkinTablesDto {
+/// The materials are wanted as well as the check's answer: what the check left is the name of the
+/// file each drawing is in, and the window is handed the drawing.
+///
+/// The pictures are the other way round. They are the big ones, so they stay in the zip and are
+/// fetched one at a time through [`crate::skinproto`]: what goes out is the filename and the two
+/// words that say how each one is laid — plus the stamp that makes the address change when the
+/// file behind it does.
+fn worn(
+    paths: &amenbo_core::config::Paths,
+    taken: amenbo_core::skin::Taken,
+    materials: &amenbo_core::skin::Materials<'_>,
+) -> SkinTablesDto {
     let font = font_of(&taken);
+    let icons = drawings_of(&taken, materials);
     let stamp = stamp_of(paths, &taken.skin.name);
     SkinTablesDto {
         name: taken.skin.name,
@@ -777,6 +786,7 @@ fn worn(paths: &amenbo_core::config::Paths, taken: amenbo_core::skin::Taken) -> 
         titles: taken.skin.titles,
         light: taken.skin.light.values,
         dark: taken.skin.dark.values,
+        icons,
         font,
         backgrounds: taken
             .skin
@@ -813,6 +823,30 @@ fn stamp_of(paths: &amenbo_core::config::Paths, name: &str) -> String {
         .map(|d| d.as_millis())
         .unwrap_or(0);
     format!("{written}-{}", meta.len())
+}
+
+/// The drawings a skin hands over, by the name of the icon each one stands in for, each as the
+/// `data:` URI the window lays as a mask.
+///
+/// A name whose file is not there, or whose bytes are no drawing a mask can be read off, is left
+/// out rather than raised: this runs on the way to a window with nobody to tell, and what draws in
+/// its place is this build's own icon. The reader was told on the way in, by the screen that read
+/// the file over.
+fn drawings_of(
+    taken: &amenbo_core::skin::Taken,
+    materials: &amenbo_core::skin::Materials<'_>,
+) -> std::collections::BTreeMap<String, String> {
+    use base64::Engine as _;
+    taken
+        .skin
+        .icons
+        .iter()
+        .filter_map(|(name, file)| {
+            let (drawing, bytes) = amenbo_core::skin::icon(materials, file).ok()?;
+            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+            Some((name.clone(), format!("data:{};base64,{data}", drawing.mime())))
+        })
+        .collect()
 }
 
 /// What this device holds and what is on, for the settings screen's list.
@@ -867,7 +901,7 @@ pub fn skin_list() -> SkinListDto {
 pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
     let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    Some(worn(&paths, skin.check(&materials).ok()?))
+    Some(worn(&paths, skin.check(&materials).ok()?, &materials))
 }
 
 /// The licence of the font a held skin carries, in full.

@@ -403,7 +403,8 @@ amenbo tick uninstall                       # take it away, and record that this
 # and face it names — kept beside the store and handed from person to person as an
 # attachment. Nothing in it runs, and the `:root { … }` built from it is amenbo's own. One is
 # worn at a time, and which one is a device setting, never synced. All of it is here as well
-# as in the window, because a skin's one failure mode is a window nobody can read.
+# as in the window, because a skin's one failure mode is a window nobody can read — and the
+# way back is from out here: `skin use none`, or `skin use high-contrast`.
 amenbo skin template ./my-skin.zip          # every name a skin may set, at this build's own values
 amenbo skin validate ./my-skin.zip          # what would be dropped, and what falls under WCAG AA
 amenbo skin add ./my-skin.zip               # take it in (a name already held needs --yes)

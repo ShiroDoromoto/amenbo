@@ -1964,6 +1964,31 @@ export type ProjectSettingsDto = { id: number, name: string, notes: string, colo
 icon: string | null, view: "list" | "board" | "calendar" | "timeline", archived: boolean, };
 
 /**
+ * What a pane is handed when it adopts a session already running (`crate::pty::pty_attach`).
+ *
+ * **Three things, because a pane that was not on the screen missed all three.** The bytes are the
+ * screen to draw; the name is what the session called this frame; the records are what was filed
+ * from it. Each of them also travels as it happens, to whichever window is drawing the pane — and a
+ * window drawing no pane for this session is told with nothing listening, the drop box already read
+ * past (`AMB-T-5196`). So the pane asks for all of it at the one moment it can ask.
+ */
+export type PtyAdoptDto = { 
+/**
+ * The tail, in the runs it was written in.
+ */
+replay: Array<PtyReplayDto>, 
+/**
+ * The last name the session gave itself, or `None` where it never did. Whether it goes on the
+ * frame is the window's call: a name a person typed is not one a session may replace
+ * (`amenbo_core::frames`).
+ */
+name?: string, 
+/**
+ * The records filed from this pane, in the order they were filed, each one once.
+ */
+made: Array<SessionMadeDto>, };
+
+/**
  * One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk
  * window's `pty://output` event).
  *

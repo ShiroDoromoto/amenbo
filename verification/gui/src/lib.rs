@@ -1411,17 +1411,18 @@ impl Instructor {
             // which one to expect could not tell a card that named the wrong one from a card that
             // named the right one.
             //
-            // What follows the press is said, because it is the press landing: the terminal comes up
-            // by itself and a pane is already open there. An operator left to find the terminal for
-            // themselves would walk a road that passed whether or not the press did anything at all.
+            // What follows the press is said, because it is the press landing: the workspace comes
+            // up by itself and a pane is already open there. An operator left to find the workspace
+            // for themselves would walk a road that passed whether or not the press did anything at
+            // all.
             //
-            // **Where the terminal comes up is not the same in both shapes**, so neither is named:
-            // one window switches to the workspace, and two brings the window the terminal was
-            // split out into forward (`app/src-tauri/src/windows.rs`). A line that named the face
-            // alone would read as a failure on the road walked in two windows, where the press does
-            // land and the board is not where it lands.
+            // **Where the workspace comes up is not the same in both shapes**, so neither is named:
+            // one window switches to it, and two brings the window it was split out into forward
+            // (`app/src-tauri/src/windows.rs`). A line that named the face alone would read as a
+            // failure on the road walked in two windows, where the press does land and the board is
+            // not where it lands.
             (Domain::Folder, "start-terminal") => {
-                "In the first loop, press the one move it offers — the one that starts a terminal in the folder the card names above it. The terminal comes up on its own — the face here where the app is one window, and the window the terminal was split out into where it is two — with a pane already open in it and nothing asked."
+                "In the first loop, press the one move it offers — the one that starts a terminal in the folder the card names above it. The workspace comes up on its own — the face here where the app is one window, and the window it was split out into where it is two — with a pane already open in it and nothing asked."
                     .to_string()
             }
             // Two ops the CLI drives as one command apiece, and the screen as one form apiece. They
@@ -2556,10 +2557,10 @@ impl Instructor {
             // is in the window it made, and a road that pressed the wrong one would be in the wrong
             // window for every step after it.
             (Domain::Workspace, "split-out") =>
-                "On the workspace, press the control that opens the terminal in a separate window. A second window appears, offset from this one."
+                "On the workspace, press the control that opens it in a separate window. A second window appears, offset from this one."
                     .to_string(),
             (Domain::Workspace, "fold-back") =>
-                "Press the control that puts the terminal back into one window. This window closes and the terminal returns to the other one."
+                "Press the control that puts the workspace back into one window. This window closes and the workspace returns to the other one."
                     .to_string(),
             // The surface layer, said from inside the pane it is about. The command is written out in
             // full rather than described, because it is the one instruction on these roads that is
@@ -3426,7 +3427,7 @@ impl Instructor {
             (Domain::Files, "edit-and-leave") => {
                 let door = match req(with, "how")? {
                     "menu" => "ask Amenbo to end from its own menu — the item ⌘Q reaches, and not the machine's own way of forcing an application to stop. Nothing is asked and the app ends, there being no terminal open to lose, and the run then brings another up on the same store",
-                    "split-window" => "press the close at the corner of this window — the one the terminal was split out into, not the board behind it. That window goes and the app stays, the board still standing",
+                    "split-window" => "press the close at the corner of this window — the one the workspace was split out into, not the board behind it. That window goes and the app stays, the board still standing",
                     other => {
                         return Err(format!(
                             "action `edit-and-leave` does not know the way out `{other}` — it is menu or split-window"

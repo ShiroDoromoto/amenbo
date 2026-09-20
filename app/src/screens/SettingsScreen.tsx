@@ -495,7 +495,7 @@ function BackupSetting() {
     const unlisten = await listenDataProgress(setProgress);
     try {
       const r = await runRestore(path);
-      const lines = [tf("settings.restoreDone", { attachments: r.blobs })];
+      const lines = [tf("settings.restoreDone", { attachments: r.blobs, skins: r.skins })];
       if (r.previousSavedTo) lines.push(tf("settings.restoreAside", { path: r.previousSavedTo }));
       if (r.superseded > 0) lines.push(tn("settings.restoreSwept", r.superseded));
       const m = r.migration;

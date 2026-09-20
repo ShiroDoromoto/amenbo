@@ -452,7 +452,7 @@ export const zhHant: Translation = {
     "settings.backupDialogTitle": "備份另存為",
     "settings.restoreDialogTitle": "選擇要還原的備份",
     "settings.backupDone": "備份已儲存（{kb} KB）",
-    "settings.restoreDone": "已還原（寫入附件 {attachments} 個）",
+    "settings.restoreDone": "已還原（寫入附件 {attachments} 個、外觀主題 {skins} 個）",
     "settings.restoreAside": "先前的狀態已挪到 {path}（從那裡還原即可撤銷這次操作）。",
     "settings.restoreSwept.other": "只有最新挪開的那一份能倒回去，因此刪除了 {n} 份更早的。",
     "settings.restoreMigrated": "壓縮檔已經不是備份當時的樣子——它被帶到了這個版本（格式 v{from} → v{to}：{steps}）。",

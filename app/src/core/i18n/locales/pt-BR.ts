@@ -460,7 +460,7 @@ export const ptBR: Translation = {
     "settings.backupDialogTitle": "Salvar o backup como",
     "settings.restoreDialogTitle": "Escolha o backup a restaurar",
     "settings.backupDone": "Backup salvo ({kb} KB)",
-    "settings.restoreDone": "Restaurado ({attachments} anexo(s) escritos)",
+    "settings.restoreDone": "Restaurado ({attachments} anexo(s) e {skins} skin(s) escritos)",
     "settings.restoreAside": "O estado anterior foi posto de lado em {path} (restaure de lá para desfazer isto).",
     "settings.restoreSwept.one": "Só dá para voltar ao último estado posto de lado, então {n} mais antigo foi removido.",
     "settings.restoreSwept.many": "Só dá para voltar ao último estado posto de lado, então {n} mais antigos foram removidos.",

@@ -459,7 +459,7 @@ export const es: Translation = {
     "settings.backupDialogTitle": "Guardar la copia como",
     "settings.restoreDialogTitle": "Elige la copia que restaurar",
     "settings.backupDone": "Copia guardada ({kb} KB)",
-    "settings.restoreDone": "Restaurado ({attachments} adjunto(s) escritos)",
+    "settings.restoreDone": "Restaurado ({attachments} adjunto(s) y {skins} skin(s) escritos)",
     "settings.restoreAside": "El estado anterior se apartó en {path} (restaura desde ahí para deshacer esto).",
     "settings.restoreSwept.one": "Solo se puede volver al último estado apartado, así que se eliminó {n} anterior.",
     "settings.restoreSwept.many": "Solo se puede volver al último estado apartado, así que se eliminaron {n} anteriores.",

@@ -459,7 +459,7 @@ export const it: Translation = {
     "settings.backupDialogTitle": "Salva il backup come",
     "settings.restoreDialogTitle": "Scegli il backup da ripristinare",
     "settings.backupDone": "Backup salvato ({kb} KB)",
-    "settings.restoreDone": "Ripristinato ({attachments} allegato/i scritti)",
+    "settings.restoreDone": "Ripristinato ({attachments} allegato/i e {skins} skin scritti)",
     "settings.restoreAside": "Lo stato precedente è stato messo da parte in {path} (ripristina da lì per annullare questa operazione).",
     "settings.restoreSwept.one": "Si può tornare solo all'ultimo stato messo da parte, quindi {n} più vecchio è stato rimosso.",
     "settings.restoreSwept.many": "Si può tornare solo all'ultimo stato messo da parte, quindi {n} più vecchi sono stati rimossi.",

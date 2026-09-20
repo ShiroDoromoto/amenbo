@@ -459,7 +459,7 @@ export const fr: Translation = {
     "settings.backupDialogTitle": "Enregistrer la sauvegarde sous",
     "settings.restoreDialogTitle": "Choisissez la sauvegarde à restaurer",
     "settings.backupDone": "Sauvegarde enregistrée ({kb} Ko)",
-    "settings.restoreDone": "Restauré ({attachments} pièce(s) jointe(s) écrites)",
+    "settings.restoreDone": "Restauré ({attachments} pièce(s) jointe(s) et {skins} skin(s) écrits)",
     "settings.restoreAside": "L'état précédent a été mis de côté dans {path} (restaurez depuis là pour annuler ceci).",
     "settings.restoreSwept.one": "On ne peut revenir qu'au dernier état mis de côté, donc {n} plus ancien a été supprimé.",
     "settings.restoreSwept.many": "On ne peut revenir qu'au dernier état mis de côté, donc {n} plus anciens ont été supprimés.",

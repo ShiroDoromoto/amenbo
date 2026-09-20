@@ -452,7 +452,7 @@ export const hi: Translation = {
     "settings.backupDialogTitle": "बैकअप इस नाम से सहेजें",
     "settings.restoreDialogTitle": "बहाल करने के लिए बैकअप चुनें",
     "settings.backupDone": "बैकअप सहेजा गया ({kb} KB)",
-    "settings.restoreDone": "बहाल हुआ ({attachments} संलग्नक लिखे गए)",
+    "settings.restoreDone": "बहाल हुआ ({attachments} संलग्नक और {skins} स्किन लिखे गए)",
     "settings.restoreAside": "पिछली स्थिति {path} पर रख दी गई है (इसे पलटना हो तो वहीं से बहाल करें)।",
     "settings.restoreSwept.one": "सिर्फ़ सबसे नई रखी हुई स्थिति तक लौटा जा सकता है, इसलिए उससे पुरानी {n} हटा दी गई।", "settings.restoreSwept.other": "सिर्फ़ सबसे नई रखी हुई स्थिति तक लौटा जा सकता है, इसलिए उससे पुरानी {n} हटा दी गईं।",
     "settings.restoreMigrated": "संग्रह उसी रूप में नहीं छोड़ा गया जिसमें उसका बैकअप लिया गया था — उसे इस संस्करण तक आगे लाया गया (प्रारूप v{from} → v{to}: {steps})।",

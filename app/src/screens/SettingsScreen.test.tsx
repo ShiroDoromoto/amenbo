@@ -26,7 +26,7 @@ const hoisted = vi.hoisted(() => ({
   /** The archive the restore picks (null = the file chooser was cancelled). */
   restoreArchive: null as string | null,
   /** The report `runRestore` comes back with. */
-  restoreReport: { previousSavedTo: null, blobs: 0, superseded: 0, migration: null } as RestoreReportDto,
+  restoreReport: { previousSavedTo: null, blobs: 0, skins: 0, superseded: 0, migration: null } as RestoreReportDto,
   /** What `fetchDevBadge` answers — the badge text on a development build, null on a shipped one. */
   devBadge: null as string | null,
   /** Every view `setDefaultView` was asked to write, in the order the pull-down asked for them. */
@@ -125,7 +125,7 @@ function fixButton(): HTMLButtonElement {
 
 /** A `runRestore` report; by default, a restore with nothing worth remarking on. */
 function restored(over: Partial<RestoreReportDto> = {}): RestoreReportDto {
-  return { previousSavedTo: null, blobs: 0, superseded: 0, migration: null, ...over };
+  return { previousSavedTo: null, blobs: 0, skins: 0, superseded: 0, migration: null, ...over };
 }
 
 /** The section headings, as a reader meets them going down the screen. Read as elements rather than
@@ -293,7 +293,7 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     hoisted.restoreReport = restored({ migration: { from: 2, to: 3, applied: ["0003_add_thing"] } });
     await render();
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
-    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 0 }));
+    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 0, skins: 0 }));
     expect(container.textContent).toContain(
       tf("settings.restoreMigrated", { from: 2, to: 3, steps: "0003_add_thing" }),
     );
@@ -304,7 +304,7 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     hoisted.restoreReport = restored();
     await render();
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
-    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 0 }));
+    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 0, skins: 0 }));
     expect(container.textContent).not.toContain(t("settings.restoreMigrated").slice(0, 12));
   });
 
@@ -314,8 +314,16 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     hoisted.restoreReport = restored({ previousSavedTo: aside, blobs: 7 });
     await render();
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
-    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 7 }));
+    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 7, skins: 0 }));
     expect(container.textContent).toContain(aside); // the way back the confirmation promised is actually spelled out
+  });
+
+  it("the completion view says how many skins the backup brought over", async () => {
+    hoisted.restoreArchive = "/w/backup.amenbo-backup";
+    hoisted.restoreReport = restored({ blobs: 2, skins: 3 });
+    await render();
+    await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
+    expect(container.textContent).toContain(tf("settings.restoreDone", { attachments: 2, skins: 3 }));
   });
 
   it("a restore with nothing to set aside does not claim a set-aside location", async () => {

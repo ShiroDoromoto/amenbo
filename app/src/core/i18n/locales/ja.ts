@@ -456,7 +456,7 @@ export const ja: Translation = {
     "settings.backupDialogTitle": "バックアップの保存先",
     "settings.restoreDialogTitle": "復元するバックアップを選択",
     "settings.backupDone": "バックアップを保存しました（{kb} KB）",
-    "settings.restoreDone": "復元しました（添付 {attachments} 件）",
+    "settings.restoreDone": "復元しました（添付 {attachments} 件、スキン {skins} 件）",
     "settings.restoreAside": "直前の状態は {path} へ退避しました（ここから元に戻せます）。",
     "settings.restoreSwept.other": "巻き戻せるのは最新の退避 1 本だけなので、古い退避 {n} 件を削除しました。",
     "settings.restoreMigrated": "アーカイブはバックアップした時の形のままではなく、このバージョンへ移行しました（形式 v{from} → v{to}: {steps}）。",

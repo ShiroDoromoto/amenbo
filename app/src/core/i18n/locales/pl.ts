@@ -461,7 +461,7 @@ export const pl: Translation = {
     "settings.backupDialogTitle": "Zapisz kopię jako",
     "settings.restoreDialogTitle": "Wybierz kopię do przywrócenia",
     "settings.backupDone": "Zapisano kopię ({kb} KB)",
-    "settings.restoreDone": "Przywrócono (zapisane załączniki: {attachments})",
+    "settings.restoreDone": "Przywrócono (zapisane załączniki: {attachments}, skórki: {skins})",
     "settings.restoreAside": "Poprzedni stan odłożono w {path} (żeby to cofnąć, przywróć stamtąd).",
     "settings.restoreSwept.one": "Cofnąć można się tylko do ostatniego odłożonego stanu, więc {n} wcześniejszy został usunięty.",
     "settings.restoreSwept.few": "Cofnąć można się tylko do ostatniego odłożonego stanu, więc {n} wcześniejsze zostały usunięte.",

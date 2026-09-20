@@ -454,7 +454,7 @@ export const de: Translation = {
     "settings.backupDialogTitle": "Sicherung speichern unter",
     "settings.restoreDialogTitle": "Wähle die Sicherung zum Wiederherstellen",
     "settings.backupDone": "Sicherung gespeichert ({kb} KB)",
-    "settings.restoreDone": "Wiederhergestellt ({attachments} Anhang/Anhänge geschrieben)",
+    "settings.restoreDone": "Wiederhergestellt ({attachments} Anhang/Anhänge und {skins} Skin(s) geschrieben)",
     "settings.restoreAside": "Der vorherige Stand wurde nach {path} beiseitegelegt (von dort wiederherstellen macht das hier rückgängig).",
     "settings.restoreSwept.one": "Zurück geht es nur zum zuletzt beiseitegelegten Stand, deshalb wurde {n} älterer entfernt.",
     "settings.restoreSwept.other": "Zurück geht es nur zum zuletzt beiseitegelegten Stand, deshalb wurden {n} ältere entfernt.",

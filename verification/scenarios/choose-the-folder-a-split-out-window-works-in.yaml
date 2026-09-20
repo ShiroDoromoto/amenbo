@@ -1,4 +1,4 @@
-# The window a terminal is split out into asks where its pane works, and offers this project's
+# The window the workspace is split out into asks where its pane works, and offers this project's
 # folders and nothing else.
 #
 # A pane belongs to a project and works in a folder that project is bound to. That is the board's
@@ -6,11 +6,11 @@
 # a window keeping a different rule would be a way out to any folder on the machine, reached by
 # pressing the one control that is supposed to change nothing but which screen the pane is drawn on.
 #
-# ── Why the terminal is split out with nothing running ───────────────────────────────────────────
+# ── Why the workspace is split out with nothing running ───────────────────────────────────────────
 # A window that took up a running terminal never asks: where the session opened was settled when it
 # started. The question only comes up where the window has to start one, which is the split with
 # nothing to adopt — the one path on which a window chooses a folder for itself, and so the only one
-# where it could reach past the project for it. `put-the-terminal-on-its-own-screen` walks the other
+# where it could reach past the project for it. `put-the-workspace-on-its-own-screen` walks the other
 # half, where a session moves and is not restarted.
 #
 # ── Why the project keeps two folders ────────────────────────────────────────────────────────────
@@ -25,9 +25,9 @@
 # a dash and a word after it, and the word is in the run's own language — so it is named here by the
 # part of its title every language keeps.
 id: choose-the-folder-a-split-out-window-works-in
-title: A terminal split into a window of its own with nothing running asks which of the project's folders it works in
+title: A workspace split into a window of its own with nothing running asks which of the project's folders it works in
 description: >
-  Split the terminal out of the board with nothing running in it. The window that opens does not
+  Split the workspace out of the board with nothing running in it. The window that opens does not
   reach for the machine's folder picker: it asks which of this project's folders its pane works in,
   offering those and nothing else. Answer it, and the pane opens there — a plain shell, carrying the
   line the road typed into it.
@@ -128,7 +128,7 @@ steps_gui:
       present: false
 
   # Folded back, so the run leaves the machine in the shape it found it — one window, with the
-  # terminal on its face.
+  # workspace as its face.
   - type: action
     domain: workspace
     op: fold-back

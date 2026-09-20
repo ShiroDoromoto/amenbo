@@ -305,52 +305,103 @@ const GUIDANCE_FILES: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
 ///
 /// **It rewrites nothing**, and it raises nothing where git cannot be run — with no git there is no index,
 /// nothing reads as tracked, and no branch reads as having anything.
+///
+/// **The folders are looked at several at a time** ([`DIRS_AT_ONCE`]). One folder's three calls stay in
+/// order — each decides whether the next one is worth making — but no folder's answer depends on another's,
+/// and what this check spends is git starting up rather than anything being worked out: on the store this
+/// was measured on, 2198ms of 2260 was process start and 33ms was reading the store (`AMB-T-5200`). The
+/// answer is put back in the order the folders were read in, so the report reads the same however the
+/// threads finished. Measured on eighteen folders that each raise both files: around a second one at a
+/// time, and between a sixth and a half of that several at a time.
 fn guidance_blocks_checkout_issues(store: &Store) -> Vec<DoctorIssue> {
     let in_reach = crate::binding::dirs_in_reach(store);
-    let mut issues = Vec::new();
-    for dir in store.bindings().all_dirs() {
-        if !in_reach.contains(&dir) {
-            continue;
-        }
-        let at = std::path::Path::new(&dir);
-        // Ours, on disk. A folder that is gone, or whose files are somebody else's, falls out on the read
-        // and costs no git call at all.
-        let ours: Vec<&'static str> = GUIDANCE_FILES
-            .into_iter()
-            .filter(|name| {
-                std::fs::read_to_string(at.join(name))
-                    .ok()
-                    .and_then(|text| crate::agents::managed_block_version(&text))
-                    .is_some()
+    let dirs: Vec<String> =
+        store.bindings().all_dirs().into_iter().filter(|dir| in_reach.contains(dir)).collect();
+    if dirs.len() < 2 {
+        return dirs.first().map(|dir| checkout_issues_in(dir)).unwrap_or_default();
+    }
+
+    // A shared cursor rather than a folder each: what a folder costs is whatever git does in it, and a
+    // repository with one branch and one with forty are not the same errand. Handed a chunk apiece, a
+    // thread that drew the short folders would finish and stand there.
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut answers: Vec<(usize, Vec<DoctorIssue>)> = std::thread::scope(|s| {
+        let hands: Vec<_> = (0..DIRS_AT_ONCE.min(dirs.len()))
+            .map(|_| {
+                let (next, dirs) = (&next, &dirs);
+                s.spawn(move || {
+                    let mut mine = Vec::new();
+                    loop {
+                        let nth = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(dir) = dirs.get(nth) else { break };
+                        mine.push((nth, checkout_issues_in(dir)));
+                    }
+                    mine
+                })
             })
             .collect();
-        if ours.is_empty() {
-            continue;
-        }
-        let tracked = tracked_here(at, &ours);
-        let loose: Vec<&'static str> = ours.into_iter().filter(|name| !tracked.iter().any(|t| t == name)).collect();
-        if loose.is_empty() {
-            continue;
-        }
-        let branches = local_branches(at);
-        if branches.is_empty() {
-            continue;
-        }
-        for (name, blocked) in branches_holding(at, &branches, &loose) {
-            let path = at.join(name).display().to_string();
-            let named = if blocked.len() > BRANCH_NAME_CAP {
-                format!("{}, …", blocked[..BRANCH_NAME_CAP].join(", "))
-            } else {
-                blocked.join(", ")
-            };
-            issues.push(DoctorIssue::new(
-                DoctorIssueKind::GuidanceBlocksCheckout,
-                &path,
-                // A surface names the file, and a person acts on the folder — the same pair
-                // `stale_managed_block` hands over, for the same reason.
-                &[("path", &path), ("dir", &dir), ("branches", &named)],
-            ));
-        }
+        // A hand that panicked is a bug in this file and not a folder that answered nothing, so it is let
+        // through rather than turned into a shorter report.
+        hands.into_iter().flat_map(|hand| hand.join().expect("a folder's check panicked")).collect()
+    });
+    answers.sort_by_key(|(nth, _)| *nth);
+    answers.into_iter().flat_map(|(_, issues)| issues).collect()
+}
+
+/// How many bound folders are looked at once.
+///
+/// It is not the machine's core count, because none of this is arithmetic: what a folder costs is git
+/// starting up three times at the very most. What the cap holds down is how many of those exist at the
+/// same moment — eighteen folders all at once would be fifty-four processes, which is a storm on a laptop
+/// for no gain, the folders after the first handful only waiting on the disk the rest are already on.
+///
+/// **The number itself is a middle and not a measurement.** Four, eight and eighteen were all far quicker
+/// than one at a time and none of them was clearly quicker than the others — the machine they were read
+/// on had other work on it, and the spread inside one setting was wider than the gap between settings.
+const DIRS_AT_ONCE: usize = 8;
+
+/// One bound folder's answer — the whole of what a thread above is handed, and where every git call this
+/// check makes is made.
+fn checkout_issues_in(dir: &str) -> Vec<DoctorIssue> {
+    let at = std::path::Path::new(dir);
+    // Ours, on disk. A folder that is gone, or whose files are somebody else's, falls out on the read
+    // and costs no git call at all.
+    let ours: Vec<&'static str> = GUIDANCE_FILES
+        .into_iter()
+        .filter(|name| {
+            std::fs::read_to_string(at.join(name))
+                .ok()
+                .and_then(|text| crate::agents::managed_block_version(&text))
+                .is_some()
+        })
+        .collect();
+    if ours.is_empty() {
+        return Vec::new();
+    }
+    let tracked = tracked_here(at, &ours);
+    let loose: Vec<&'static str> = ours.into_iter().filter(|name| !tracked.iter().any(|t| t == name)).collect();
+    if loose.is_empty() {
+        return Vec::new();
+    }
+    let branches = local_branches(at);
+    if branches.is_empty() {
+        return Vec::new();
+    }
+    let mut issues = Vec::new();
+    for (name, blocked) in branches_holding(at, &branches, &loose) {
+        let path = at.join(name).display().to_string();
+        let named = if blocked.len() > BRANCH_NAME_CAP {
+            format!("{}, …", blocked[..BRANCH_NAME_CAP].join(", "))
+        } else {
+            blocked.join(", ")
+        };
+        issues.push(DoctorIssue::new(
+            DoctorIssueKind::GuidanceBlocksCheckout,
+            &path,
+            // A surface names the file, and a person acts on the folder — the same pair
+            // `stale_managed_block` hands over, for the same reason.
+            &[("path", &path), ("dir", dir), ("branches", &named)],
+        ));
     }
     issues
 }
@@ -748,6 +799,52 @@ mod tests {
         git(&dir, &["checkout", "-q", "main"]);
         crate::agents::upsert_into_dir(&dir, None, "amenbo");
         assert!(of_kind(&store).is_empty(), "no branch has the path any more");
+    }
+
+    /// Several folders go through the threaded path, and the report reads the same as it would have if
+    /// they had gone one at a time: grouped by folder, in the order the folders were read in. A check
+    /// handing back whatever finished first would move rows about under a reader who changed nothing.
+    #[test]
+    fn folders_looked_at_at_once_answer_in_the_order_they_were_read() {
+        let (store, pid) = store_with_project("guidance-checkout-many");
+        // Enough folders that more than one hand is in use, each one of them raising both files.
+        for nth in 0..4 {
+            let dir = bind_folder(&store, pid, &format!("guidance-checkout-many-{nth}"));
+            crate::agents::upsert_into_dir(&dir, None, "amenbo");
+            git(&dir, &["init", "-q", "-b", "main"]);
+            std::fs::write(dir.join("README.md"), "x").unwrap();
+            git(&dir, &["add", "README.md"]);
+            git(&dir, &["commit", "-q", "-m", "first"]);
+            git(&dir, &["checkout", "-q", "-b", "beds"]);
+            git(&dir, &["add", "CLAUDE.md", "AGENTS.md"]);
+            git(&dir, &["commit", "-q", "-m", "guidance"]);
+            git(&dir, &["checkout", "-q", "main"]);
+            crate::agents::upsert_into_dir(&dir, None, "amenbo");
+        }
+
+        let raised: Vec<DoctorIssue> = report(&store)
+            .unwrap()
+            .issues
+            .into_iter()
+            .filter(|i| i.kind == DoctorIssueKind::GuidanceBlocksCheckout)
+            .collect();
+
+        assert_eq!(raised.len(), 8, "both files in each of the four folders: {raised:?}");
+        // The folders the check walks, in the order it walks them. The rows come back grouped by folder
+        // and in that same order — which is both halves of "the threads changed nothing": interleaved
+        // rows would break the grouping, and a slow folder answering last would break the order.
+        let in_reach = crate::binding::dirs_in_reach(&store);
+        let walked: Vec<String> =
+            store.bindings().all_dirs().into_iter().filter(|dir| in_reach.contains(dir)).collect();
+        let answered: Vec<String> = raised.iter().map(|i| i.params["dir"].clone()).collect();
+        let mut grouped: Vec<String> = Vec::new();
+        for dir in &answered {
+            if grouped.last() != Some(dir) {
+                grouped.push(dir.clone());
+            }
+        }
+        let raising: Vec<String> = walked.into_iter().filter(|dir| answered.contains(dir)).collect();
+        assert_eq!(grouped, raising, "the rows came back out of the folders' own order: {answered:?}");
     }
 
     /// A folder whose AI does not start on Amenbo is raised until the wiring lands or the reader says no —

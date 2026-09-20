@@ -1,11 +1,11 @@
-# The window a terminal is split out into holds the workspace whole — every pane, the rail, the
+# The window the workspace is split out into holds it whole — every pane, the rail, the
 # split and the pages — and comes up on the pane the person was working in.
 #
-# `put-the-terminal-on-its-own-screen` walks the same control on a board with one pane on it, and one
+# `put-the-workspace-on-its-own-screen` walks the same control on a board with one pane on it, and one
 # pane is the shape everything this road is about is invisible in. A window that carried one pane out
 # carries the right one where there is only one, and a window that came up on the first page comes up
 # in the right place where there is only one page. **Neither of them is what a person has on their
-# screen**: a board holds several panes over several pages, and what "put the terminal on the other
+# screen**: a board holds several panes over several pages, and what "put the workspace on the other
 # display" means is that all of it goes.
 #
 # ── What breaks without this road ────────────────────────────────────────────────────────────────
@@ -38,11 +38,11 @@
 # question is `choose-the-folder-a-split-out-window-works-in`'s and
 # `open-a-pane-where-a-project-keeps-more-than-one-folder`'s. What the panes run is the reader's own
 # shell, and a terminal is not a record: there is no work on the board to stand up.
-id: take-the-whole-terminal-to-the-other-screen
-title: The window the terminal is split out into holds the whole face, and opens on the pane that was being worked in
+id: take-the-whole-workspace-to-the-other-screen
+title: The window the workspace is split out into holds the whole face, and opens on the pane that was being worked in
 description: >
   Open three panes one to a page and get a line onto each, go back to the middle one, and split the
-  terminal out. The window that opens comes up on that pane, and the other two are reachable in it by
+  workspace out. The window that opens comes up on that pane, and the other two are reachable in it by
   the pages beside them — then set it to four panes to see all three standing on one page, which is
   the split control working in the second window too. Fold back, and the board has them all again.
 

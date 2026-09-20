@@ -1,15 +1,15 @@
-# The first loop's one press, made while the terminal is in a window of its own.
+# The first loop's one press, made while the workspace is in a window of its own.
 #
 # `start-a-terminal-in-the-project-whose-loop-was-pressed` walks this press in the shape the app is by
 # default — one window, two faces — and reads which project the pane lands under. It cannot reach this
 # question, because in that shape the press has a face to hand the folder to and here it has none: the
-# ledger is in this window and the terminal is in the other one.
+# ledger is in this window and the workspace is in the other one.
 #
 # The wrong answer is the quiet one. Raising the other window is half of what the press means, and a
 # window that comes forward looks exactly like a press that worked — until the reader looks for the
 # pane and there is none, on a screen where nothing says the folder was dropped on the way over. The
 # same button then does two different things depending on how many windows the app is in, and how
-# many windows it is in is supposed to change nothing but where the terminal is drawn.
+# many windows it is in is supposed to change nothing but where the workspace is drawn.
 #
 # ── Why a terminal is already running when the split is made ─────────────────────────────────────
 # A window split out with nothing to adopt chooses a folder for itself, and that question is
@@ -29,13 +29,13 @@
 # that word is in the run's own language — so `window:` names it by the part of its title every
 # language keeps.
 #
-# It folds back at the end for the reason `put-the-terminal-on-its-own-screen` does: the shape a
+# It folds back at the end for the reason `put-the-workspace-on-its-own-screen` does: the shape a
 # machine last used the app in is remembered where a throwaway store does not reach, and a road that
 # walked away split would hand whoever owns the machine two windows they never asked for.
 id: start-a-terminal-while-it-is-drawn-in-the-other-window
-title: The press that starts a terminal opens its pane in the window the terminal was split out into, rather than raising that window empty-handed
+title: The press that starts a terminal opens its pane in the window the workspace was split out into, rather than raising that window empty-handed
 description: >
-  With a session running, split the terminal out into a window of its own. Back on the board, raise a
+  With a session running, split the workspace out into a window of its own. Back on the board, raise a
   project and press the one move its first loop offers. The pane opens over there, in the folder the
   card named — the same thing the press does when both faces share one window — and the terminal that
   moved out is no longer on that screen, the face having gone to the project the press was made in.

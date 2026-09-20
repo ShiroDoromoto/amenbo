@@ -3000,6 +3000,49 @@ const REGISTRY: &[OpSpec] = &[
     // nothing to say about what it was before, so a face stuck at one size — the one a road happened
     // to ask for last — would come out green from end to end.
     OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "pane-size", required: &["size"], refs: &[], strings: &["size"], binds: false },
+    // Which pane is in which place on the page being shown. The panes are laid down in reading order
+    // — the top row left to right, then the row under it — so `place` is `first`, `second`, `third`
+    // or `fourth`, and `shows` is the words a road typed into the pane it expects there.
+    //
+    // **It is the only reading that can tell an order from a count.** Two panes swapped on one page
+    // leave everything else exactly as it was: the same panes standing, the same room left over, the
+    // same page. Nothing but where they are says the carry landed, so a road that walked the gesture
+    // and read `frames` would be green on a build that dropped it entirely.
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "pane-at", required: &["place", "shows"], refs: &[], strings: &["place", "shows"], binds: false },
+    // One pane carried past the one beside it, on the page itself. The row above a pane
+    // is the handle — the pane below it is a running terminal, and a drag that began anywhere on it
+    // would be a person selecting text — so what is held is that row and nothing else.
+    //
+    // The two panes are named by the words a road typed into them, the way `press-pane` names one:
+    // that is what an operator can see, and a row above a pane nobody has named carries its folder,
+    // which two panes in one folder would carry alike.
+    //
+    // `side` is which half of the pane it was let go over, `before` or `after`, since that is the
+    // whole of what decides where it lands. Which halves those are depends on the pane: one taking
+    // the whole width has its neighbours above and below it, and every narrower one has them to the
+    // left and right (`app/src/shell/paneDrag.ts`).
+    //
+    // **Nothing moves until it is let go**, which is the promise this op carries and the reason it is
+    // one step rather than two. A pane is a terminal somebody is reading, so an order that rewrote
+    // itself under the hand would move what is under their eyes while a program is running in it.
+    // What appears while the pointer is over a pane is a mark on the half it would land on, and
+    // nothing else on the page moves at all.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drag-pane", required: &["pane", "onto", "side"], refs: &[], strings: &["pane", "onto", "side"], binds: false },
+    // And the other gesture the page itself offers: the corner of a pane pulled until it is the size
+    // the reader wants. It is the grip at the bottom right and nowhere else, for the reason the row
+    // above is the handle — the rest of a pane belongs to what is running in it.
+    //
+    // `size` is the size it is pulled to, one of the six. They are not a continuous width: what the
+    // pull lands on snaps to the nearest of them, so an operator is told the size to stop at rather
+    // than a distance to pull.
+    //
+    // `shows` is which pane, named by the words a road typed into it, the way `press-pane` names one.
+    // Left out, it is the page's one pane.
+    //
+    // **Nothing changes size until it is let go**, for the reason nothing reorders until a carry is:
+    // the terminal inside would be re-drawn at every step of the pull. What moves while the pointer
+    // does is an outline over the page, and the pane under it is the size it was.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "stretch-pane", required: &["size"], refs: &[], strings: &["size", "shows"], binds: false },
     // The panes put in an order the person asked for. It is four ops and not one,
     // because what is being defended is that they are four separate moments: the modal is opened,
     // cards are carried about inside it, and then the arrangement is either taken or thrown away. A

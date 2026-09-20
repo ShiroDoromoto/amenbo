@@ -969,7 +969,18 @@ the whole width with half the height — and that is where the face's rule turns
 before height everywhere else, and half the width on a window with a column beside it is under the
 eighty a TUI wants. They are two sizes and not one size with an answer on it, which is what lets one
 pane sit the way its work wants while the pane beside it sits the other way.
-The order the panes themselves stand in is four ops of its own — `reorder-panes` opens the panel of
+Within a page the order and the sizes are changed on the panes themselves: `drag-pane` takes a pane
+by the row above it and lets it go over a half of another, `stretch-pane` pulls the grip at a pane's
+bottom right corner until the outline is the size wanted. Both say two things an operator cannot see
+for themselves — where the handle is, the rest of a pane being a running terminal somebody is
+reading, and that nothing moves until the hand opens. The second is the promise:
+`carry-a-pane-past-the-one-beside-it` and `pull-a-pane-by-its-corner-to-the-size-you-want` are the
+roads, and what they defend is that a terminal under a reader's eyes does not shift while they are
+still deciding. `pane-at` is what reads a carry, and the only reading that can: two panes swapped on
+one page leave the same panes standing with the same room over, so a road that counted boxes
+afterwards would be green on a build that dropped the gesture.
+
+The order across pages is four ops of its own — `reorder-panes` opens the panel of
 cards, `carry-pane` moves one card onto the half of another, and `keep-order` / `drop-order` are the
 two ways out of it. They are four because the four moments are what is being defended: a pane is a
 terminal somebody is reading, so nothing about the arrangement may move until the press that takes it,

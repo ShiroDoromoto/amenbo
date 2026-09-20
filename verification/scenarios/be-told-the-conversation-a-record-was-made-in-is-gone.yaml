@@ -76,7 +76,7 @@ given:
   # in one of their panes, and that refuse a way back, so the press at the end meets the answer a
   # provider gives for a conversation it does not have.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -85,19 +85,19 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
@@ -106,23 +106,23 @@ steps_gui:
   # position cannot promise: a provider whose way back is a handle on its line, which is what the
   # ending below is about (`amenbo_core::harness::Back`).
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Claude Code
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane the decision was written in
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the potting shed
@@ -140,20 +140,20 @@ steps_gui:
     as: reglaze
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: SCENARIO the pane the decision was written in
 
   # Nothing is standing, so the frame after the press is the one the press put there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -179,7 +179,7 @@ steps_gui:
   # provider is what this machine last opened a pane with, which is the one picked above, and the way
   # back is what the record put on the frame.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-again
 
   # The goal. The program was handed a session it never issued, said so and left within moments, and
@@ -187,7 +187,7 @@ steps_gui:
   # opened. A build that let the ending pass as any other would leave a reader looking at a pane that
   # opened and closed for no reason they can read.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: ended
     with:
       names: none
@@ -197,14 +197,14 @@ steps_gui:
   # next one is started, and it comes up holding the provider this one was on — so this press is the
   # reader going on working where they are.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-next
 
   # The other half of the goal. The line carries the flag a **new** session goes under, which is the
   # dead way back having been taken off the frame as the program went: a build that left it there
   # would have this pane refusing itself for as long as the frame stood.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO arg --session-id

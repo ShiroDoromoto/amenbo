@@ -851,7 +851,7 @@ pub enum SkinCmd {
     /// short of AA is said too and does not stop it — an author has to be able to try their own
     /// work in progress.
     Add {
-        /// The `.yaml` to take in.
+        /// The zip to take in: `skin.yaml` at its root, beside the materials it names.
         path: std::path::PathBuf,
         /// Replace the skin already kept under that name. Without it, a name that is taken is
         /// refused with both versions named.
@@ -875,7 +875,7 @@ pub enum SkinCmd {
     /// Run the reading and the check over a file without taking it in — the author's face of what
     /// an import does, so the reason a file will be turned away is learned before it is handed on.
     Validate {
-        /// The `.yaml` to read.
+        /// The zip to read: `skin.yaml` at its root, beside the materials it names.
         path: std::path::PathBuf,
     },
 

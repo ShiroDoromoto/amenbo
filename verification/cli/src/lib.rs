@@ -704,9 +704,9 @@ impl<'a> Driver<'a> {
             // run's own store, and nothing further.
             Domain::Tick => self.tick_action(op, with),
             // Where a terminal is drawn is a question about a screen, and this driver has none —
-            // bar the one premise that stands the machine up underneath it (`domain::terminal`),
+            // bar the one premise that stands the machine up underneath it (`domain::workspace`),
             // which is settled before any app comes up and is nobody's screen.
-            Domain::Terminal => self.terminal_action(op, with),
+            Domain::Workspace => self.workspace_action(op, with),
             // The file face is a screen too. Reading a file at a shell is `cat`, which is not Amenbo
             // doing anything, so there is nothing here to walk and no gap in the road.
             Domain::Files => Err(unmapped(domain, op)),
@@ -741,7 +741,7 @@ impl<'a> Driver<'a> {
             Domain::Mcp => self.mcp_assert(op, with),
             Domain::Tick => self.tick_assert(op, with),
             // The screen's alone, the same way its actions are.
-            Domain::Terminal => Err(unmapped(domain, op)),
+            Domain::Workspace => Err(unmapped(domain, op)),
             Domain::Files => Err(unmapped(domain, op)),
             Domain::Notify => self.notify_assert(op, with),
             Domain::Viewer => self.viewer_assert(op, with),

@@ -22,7 +22,7 @@
 id: see-a-picture-rewritten-under-you
 title: A picture rewritten from outside is drawn again, without being reopened
 description: >
-  Open the terminal face on a project whose folder holds a picture, unfold the folder's section and
+  Open the workspace on a project whose folder holds a picture, unfold the folder's section and
   open the picture: it has FIRST written across it. Without touching the panel, overwrite the file
   from outside with a different picture of exactly the same length. What the panel draws becomes the
   new picture, which says SECOND.
@@ -52,13 +52,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

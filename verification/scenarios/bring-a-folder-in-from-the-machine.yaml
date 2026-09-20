@@ -23,7 +23,7 @@
 id: bring-a-folder-in-from-the-machine
 title: A folder dragged in from the machine lands where it was let go, with what was inside it still inside
 description: >
-  Open the terminal face on a project whose folder holds a folder, and drag a
+  Open the workspace on a project whose folder holds a folder, and drag a
   folder in from somewhere else on the machine — one with a file in it — letting it go over the
   folder already there. Open what landed and read that the file inside came with it.
 
@@ -54,13 +54,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

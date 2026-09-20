@@ -12,8 +12,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { SkinRowDto } from "../bindings/bindings";
+import { pickSaveAs } from "../core/dialog";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged } from "../core/skin";
+import { fitOnto, listSkins, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged, writeSkinOut } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -62,6 +63,13 @@ export function AppearanceSettings() {
   // is on otherwise. What is said under the select is about that one.
   const shownName = fitting ? fitting.name : on;
   const shown = rows.find((r) => r.name === shownName);
+
+  /** Hand the shown skin's own file on, under the name it is kept under. */
+  const writeOut = (name: string, suggested: string) => {
+    void pickSaveAs(suggested)
+      .then((at) => (at ? writeSkinOut(name, at) : undefined))
+      .catch(() => {});
+  };
   // The skin that is on: the one the theme row names, and the one it reads the declared side off.
   const onRow = rows.find((r) => r.name === on);
   // What the select says about the theme while a one-sided skin is on. Applying it is not this
@@ -122,6 +130,18 @@ export function AppearanceSettings() {
             ))}
           </select>
           <div className="meta">{t("settings.skinHow")}</div>
+          {/* Handing the shown skin on. Only for one this device keeps in a file — the four that
+              ship inside the build are held in none, and what would be written out for them is
+              this build's own values, which is what the template already writes. The file goes
+              out as it came in, so what the next person opens is what the author sent. */}
+          {shown?.fileName && (
+            <div className="meta">
+              <button className="btn" onClick={() => writeOut(shown.name, shown.fileName ?? "")}>
+                {t("settings.skinWriteKept")}
+              </button>{" "}
+              {t("settings.skinWriteKeptNote")}
+            </div>
+          )}
           {/* Where the shown skin carries a face, where that face came from. OFL asks that the
               notice and the licence travel with the font and that a reader can see them, and the
               seeing is the screen's half — the travelling is the file's. */}

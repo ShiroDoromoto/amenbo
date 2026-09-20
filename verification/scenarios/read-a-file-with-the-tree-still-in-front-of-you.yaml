@@ -80,15 +80,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The column on the far side of the panes, which is where a file is drawn. It opens on the page a
   # person writes on rather than on a file, so the road asks for it before reading anything in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -124,7 +124,7 @@ steps_gui:
   # Opened wide, because what a reader asked for is the file. The panes keep the room they had — the
   # column lies over them rather than pushing them aside — and the reading is of the change.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-width
     with:
       side: files
@@ -159,7 +159,7 @@ steps_gui:
   # the rail and the rail is outside the column. The file is untouched by that — it is the room the
   # reading was given that went, and the row above says so still.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-width
     with:
       side: files
@@ -182,7 +182,7 @@ steps_gui:
       key: escape
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-width
     with:
       side: files
@@ -204,7 +204,7 @@ steps_gui:
       key: escape
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side
     with:
       side: files

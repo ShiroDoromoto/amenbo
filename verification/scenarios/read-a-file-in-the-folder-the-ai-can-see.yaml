@@ -63,7 +63,7 @@
 id: read-a-file-in-the-folder-the-ai-can-see
 title: The folder a project answers for is read from inside Amenbo, down to the words in a file — and a file it will not show says why
 description: >
-  Open the terminal face on a project whose folder already holds a small tree, unfold the folder's
+  Open the workspace on a project whose folder already holds a small tree, unfold the folder's
   section and open it one level at a time, then press a file and read the words that are in it. Come
   back out and press a second file, named as Markdown but holding bytes that are not text: what comes
   back is the line saying it cannot be shown, because the verdict is taken from the bytes and never
@@ -140,16 +140,16 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The panel beside the panes opens on the page a person writes on rather than on the folder: a
   # person goes to the files when they want them, and what an agent points at calls from the switch
   # itself. So the road asks for the half it is about before reading anything in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -286,7 +286,7 @@ steps_gui:
       key: escape
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side
     with:
       side: files
@@ -295,7 +295,7 @@ steps_gui:
   # And back in, because the road is not finished. A panel opened again stands at the folder's first
   # level, which is where every reader starts.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

@@ -31,7 +31,7 @@
 id: open-a-pane-on-a-model-the-agent-itself-named
 title: A model pressed on the row is the model the pane is started on, and it is still chosen afterwards
 description: >
-  Stand a machine up whose agents answer with three models each, and open the terminal face. Choose
+  Stand a machine up whose agents answer with three models each, and open the workspace. Choose
   the first agent, and the model row under it comes up drawn whole — the agent's own default first,
   then the names it answered with. The line under the row names no model until one is pressed, and
   then it names the one that was. Press what opens the pane: the program comes up in it and prints
@@ -57,7 +57,7 @@ given:
   # printed and gone has no row under it to read — what stands there instead is the frame offering to
   # open another one.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -66,27 +66,27 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # pane this road opens has to open in the folder this road named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
 
   # The line before anybody has named a model, which is what the two readings after it are worth
   # anything against.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: none
@@ -96,27 +96,27 @@ steps_gui:
   # the agent's own default, and a road that pressed at the front would pass on a build that had drawn
   # the row in some other order and pressed whatever was there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-model
     with:
       name: scenario-model-02
       how: press
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: scenario-model-02
 
   # ── And the line is not the promise. The program is ───────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # What the program was started with, in its own words. The name is on a line of its own, so what is
   # read is the whole of it and not a spelling that happens to carry it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO arg scenario-model-02
@@ -124,7 +124,7 @@ steps_gui:
   # And the pane says so itself, with nothing pressed on it. The row under a running pane names what
   # that pane is on, which is the one place a reader can look to tell two panes of one provider apart.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       model: scenario-model-02
@@ -132,13 +132,13 @@ steps_gui:
   # ── And the choice was kept, not left standing ────────────────────────────────────────────────
   # The pane goes, so the frame that answers next is a frame drawn again.
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: SCENARIO arg scenario-model-02
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: scenario-model-02

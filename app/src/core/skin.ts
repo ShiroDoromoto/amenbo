@@ -118,9 +118,21 @@ export async function watchSkinChanged(said: () => void): Promise<() => void> {
   }
 }
 
-/** Write a whole skin out to `path`, to start from — this build's, or the one that is on. */
+/**
+ * Write a whole skin out to `path`, to start from — this build's, or the one that is on. It lands
+ * packed, which is the shape one is handed over in: what comes out goes straight back in.
+ */
 export function writeSkinTemplate(path: string): Promise<void> {
   return invoke<void>("skin_template_to", { path });
+}
+
+/**
+ * Write a held skin out to `path` — the file itself, byte for byte, materials and all. Only the
+ * ones this device keeps in a file: the four that ship inside the build have none, and
+ * {@link writeSkinTemplate} is the road from those.
+ */
+export function writeSkinOut(name: string, path: string): Promise<void> {
+  return invoke<void>("skin_write_out", { name, path });
 }
 
 /** The licence of the font a held skin carries, in full. `null` where it carries none. */

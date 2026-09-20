@@ -54,16 +54,16 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face came up on is the run's business, so the road puts itself on one before it
   # opens anything. It may well be the one already shown — that press is allowed to change nothing,
   # and what the step says is where the screen is afterwards.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
@@ -71,7 +71,7 @@ steps_gui:
   # Nothing is open in this project, so the face has one empty frame on it. The folder is the
   # project's own and it is the only one, which is why this press is a press and nothing else.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -80,23 +80,23 @@ steps_gui:
   # its own to draw, and a line typed at one is something to answer rather than something left where
   # it was put.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal in the greenhouse
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the greenhouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
@@ -104,36 +104,36 @@ steps_gui:
   # The half that says the tabs are a division rather than a grouping: the pane of the project being
   # left is not somewhere further down the screen, it is off it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the greenhouse
       present: false
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal in the boathouse
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the boathouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
@@ -141,7 +141,7 @@ steps_gui:
   # Back, and it is the same pane: the line it was named by is on it, having been carried off the
   # screen and brought back by nothing but two presses on the tabs.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the greenhouse
@@ -149,7 +149,7 @@ steps_gui:
   # And the other project's pane came nowhere with it. This is the promise the whole face rests on —
   # panes of two projects are never on one screen — read from the side a reader would notice it from.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the boathouse
@@ -159,13 +159,13 @@ steps_gui:
   # read exactly like this one until something is typed at it, the words already on it having been
   # printed before any of this happened.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO still taking what is typed
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO still taking what is typed

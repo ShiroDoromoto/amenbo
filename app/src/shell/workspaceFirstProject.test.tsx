@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The terminal face on a machine that has no project at all (`AMB-T-4358`).
+// The workspace on a machine that has no project at all (`AMB-T-4358`).
 //
 // Every road that starts in a pane starts here: the world is empty, and choosing a folder is what
 // raises the project the pane belongs to. What is pinned is that the way in is drawn at all — the
@@ -55,7 +55,7 @@ vi.mock("../core/mutations", async (original) => ({
   },
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 import { tf, tn } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,7 +65,7 @@ let root: Root;
 
 const draw = () =>
   act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
   });
 
 const pressOpen = () =>
@@ -89,7 +89,7 @@ afterEach(() => {
   container.remove();
 });
 
-describe("the terminal face with no project on the machine", () => {
+describe("the workspace with no project on the machine", () => {
   it("draws the way in rather than an empty page", async () => {
     await draw();
 

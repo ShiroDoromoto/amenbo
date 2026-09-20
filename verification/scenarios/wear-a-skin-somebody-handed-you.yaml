@@ -1,9 +1,13 @@
 # A skin arrives as a file and nothing else. There is no place to fetch one from and no account to
-# sign into: somebody writes a document of token values, hands it over, and the person who received
-# it reads it over, takes it in and puts it on. That is the whole of the feature, and every part of
-# it is a file on a real disk meeting a real store — which is exactly the part no build-time test
-# reaches. The reader and the check have their own tests; what none of them walks is a document
-# arriving from outside and the colours on the screen changing because of it.
+# sign into: somebody writes a document of token values, zips it up, hands it over, and the person
+# who received it reads it over, takes it in and puts it on. That is the whole of the feature, and
+# every part of it is a file on a real disk meeting a real store — which is exactly the part no
+# build-time test reaches. The reader and the check have their own tests; what none of them walks is
+# a file arriving from outside and the colours on the screen changing because of it.
+#
+# The file is a zip and only a zip. A skin carries its materials beside its document, so the shape it
+# arrives in is the archive holding both, and the bare document is turned away at the door — which
+# is why the road hands over a zip rather than the `skin.yaml` inside it.
 #
 # The road opens by writing one out rather than by taking one in. The starting point an author is
 # handed is this build's own values as a document that is already a skin, and it is the first thing
@@ -24,10 +28,13 @@
 # actually on; and removing the file while it is worn would be asking the build to answer for a
 # config naming a file that is gone, which is a different road than this one.
 #
-# The file is a fixture rather than lines written here: what is under test is a document arriving
-# from outside, so a file the road described would be a file the road already trusts. It lands in the
-# folder the run makes for itself, and the run says that path before the first step is handed over —
-# nothing in these instructions can name it, since they are rendered from this file alone.
+# The file is a fixture rather than lines written here: what is under test is a file arriving from
+# outside, so one the road described would be a file the road already trusts — and a zip is not a
+# thing a road can write out in prose at all. It holds one entry, `skin.yaml`, a whole document on
+# both sides whose every pairing clears AA: a road about taking a skin in should not also be a road
+# about what a warning looks like. It lands in the folder the run makes for itself, and the run says
+# that path before the first step is handed over — nothing in these instructions can name it, since
+# they are rendered from this file alone.
 id: wear-a-skin-somebody-handed-you
 title: A skin to start from is written out, a skin somebody else wrote is read over and taken in, put on, taken off, and taken off the device
 description: >
@@ -36,14 +43,14 @@ description: >
   it on, and confirm it is the one the device says it is wearing. Take it off, so the colours the
   build ships with are back, and take the file off the device last.
 given:
-  # The document somebody handed over. A screen road cannot make a file — every move it has is a move
-  # on a record — so the one this road is about has to be laid down before it starts.
+  # The zip somebody handed over. A screen road cannot make a file — every move it has is a move on a
+  # record — so the one this road is about has to be laid down before it starts.
   - type: action
     domain: repo
     op: copy-fixture
     with:
-      from: files/a-skin-handed-over.yaml
-      path: a-skin-handed-over.yaml
+      from: files/a-skin-handed-over.zip
+      path: a-skin-handed-over.zip
 
 steps_cli:
   # The starting point. It is bound, so the reading below names what came out rather than a path
@@ -72,12 +79,12 @@ steps_cli:
       field: on
       equals: null
 
-  # The stranger's file, read over and not taken in.
+  # The stranger's zip, read over and not taken in.
   - type: action
     domain: store
     op: skin-validate
     with:
-      path: a-skin-handed-over.yaml
+      path: a-skin-handed-over.zip
 
   # Still nothing on, and nothing held: reading a file over must not install it.
   - type: assert
@@ -91,7 +98,7 @@ steps_cli:
     domain: store
     op: skin-add
     with:
-      path: a-skin-handed-over.yaml
+      path: a-skin-handed-over.zip
 
   # Held is not worn. This is the second of the two facts a name in the config stands for.
   #
@@ -165,13 +172,13 @@ steps_gui:
     domain: store
     op: skin-validate
     with:
-      path: a-skin-handed-over.yaml
+      path: a-skin-handed-over.zip
 
   - type: action
     domain: store
     op: skin-add
     with:
-      path: a-skin-handed-over.yaml
+      path: a-skin-handed-over.zip
 
   - type: action
     domain: store

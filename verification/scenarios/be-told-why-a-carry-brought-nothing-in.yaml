@@ -31,7 +31,7 @@
 id: be-told-why-a-carry-brought-nothing-in
 title: A file carried onto a name the folder already holds stops there, and the reader is told why
 description: >
-  Open the terminal face on a project whose folder holds a file, and carry a file of the same name in
+  Open the workspace on a project whose folder holds a file, and carry a file of the same name in
   from the machine — first with the paste key, then by dragging it. Neither comes in: a line at the
   foot of the window names the row it stopped on and says the name is taken, and the file that was
   already there still reads as itself. Then carry in a file whose name nobody holds: that one arrives
@@ -81,15 +81,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The panel beside the panes opens on the page a person writes on rather than on the folder, so the
   # road asks for the half it is about before reading anything in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

@@ -30,7 +30,7 @@
 id: take-a-file-back-after-binning-it
 title: A file binned from the panel leaves the list, and undo puts it back
 description: >
-  Open the terminal face on a project whose folder holds a file, unfold the folder's section and
+  Open the workspace on a project whose folder holds a file, unfold the folder's section and
   open the file. Press the bin: the file leaves the list. Press the key this machine undoes with,
   and the row is on the list again.
 
@@ -79,13 +79,13 @@ steps_gui:
       about: bin
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

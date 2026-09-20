@@ -12,7 +12,7 @@ export const SIDEBAR_DEFAULT = 232;
  * The width the column stands at compact — the marks and the icons, and the padding around them
  * (`core/sidebarCompact`, `styles/global.css`).
  *
- * It is the terminal face's compact tab column to the pixel (`../talk/columns`), because the two
+ * It is the workspace's compact tab column to the pixel (`../talk/columns`), because the two
  * columns are the same column on two faces (`AMB-D-848`): a project that folded to one width on one
  * face and another on the other would be saying the fold is about the face rather than about the
  * names. Not dragged and not clamped — compact is one width, and what a person drags is the named

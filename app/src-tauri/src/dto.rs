@@ -799,6 +799,10 @@ pub struct SkinRowDto {
     /// opened rather than on every listing.
     pub(crate) font_family: Option<String>,
     pub(crate) font_license: Option<String>,
+    /// The name of the file this device keeps the skin under, extension and all. `null` for the
+    /// four that ship inside the build, which are held in no file — which is also what says
+    /// whether there is anything to write out.
+    pub(crate) file_name: Option<String>,
 }
 
 /// What this device holds, and which of them is on. `on` may name a skin that is not in `skins` —
@@ -1042,7 +1046,7 @@ pub struct RefTargetDto {
 }
 
 /// A folder to work in and the project it belongs to — the first loop's one press, on its way from
-/// the ledger to the terminal face (`app/src/components/FirstLoop.tsx`).
+/// the ledger to the workspace (`app/src/components/FirstLoop.tsx`).
 ///
 /// It travels only when the two faces are in two windows: the press is made on the board and the
 /// face is in the other window, so it goes out to the host and comes back as the `terminal-open-in`
@@ -1062,7 +1066,7 @@ pub struct OpenInDto {
     pub(crate) project: i64,
     /// The folder to work in, or nothing where the ask names a pane and the record it came from
     /// holds no folder. The face checks it against that project's bindings before a pane is made,
-    /// and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`); an ask
+    /// and opens nothing where the pair does not hold (`app/src/shell/WorkspaceFace.tsx`); an ask
     /// with no folder is answered on the face instead, by the question a pane is always made
     /// through (`app/src/shell/FolderChoice.tsx`).
     #[ts(optional)]
@@ -1830,6 +1834,29 @@ pub struct PtySessionDto {
     /// is the control that moves a running pane to another model — a question about the provider in
     /// the pane, so a pane that cannot name the provider draws no control (`AMB-D-865`).
     pub(crate) agent: Option<String>,
+}
+
+/// What a pane is handed when it adopts a session already running (`crate::pty::pty_attach`).
+///
+/// **Three things, because a pane that was not on the screen missed all three.** The bytes are the
+/// screen to draw; the name is what the session called this frame; the records are what was filed
+/// from it. Each of them also travels as it happens, to whichever window is drawing the pane — and a
+/// window drawing no pane for this session is told with nothing listening, the drop box already read
+/// past (`AMB-T-5196`). So the pane asks for all of it at the one moment it can ask.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PtyAdoptDto {
+    /// The tail, in the runs it was written in.
+    pub(crate) replay: Vec<PtyReplayDto>,
+    /// The last name the session gave itself, or `None` where it never did. Whether it goes on the
+    /// frame is the window's call: a name a person typed is not one a session may replace
+    /// (`amenbo_core::frames`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) name: Option<String>,
+    /// The records filed from this pane, in the order they were filed, each one once.
+    pub(crate) made: Vec<SessionMadeDto>,
 }
 
 /// One run of a session's tail, as the pane adopting it is handed it (`crate::pty::pty_attach`).
@@ -2766,7 +2793,7 @@ pub struct TalkLayoutDto {
     pub(crate) splits: std::collections::BTreeMap<u32, SplitDto>,
     /// The project whose panes the face was showing. It is what the window the terminal is split out
     /// into opens as, where the arrangement came with no panes to name one — which is every window
-    /// that comes up after a run (`app/src/shell/TerminalFace.tsx`); absent where nothing has told
+    /// that comes up after a run (`app/src/shell/WorkspaceFace.tsx`); absent where nothing has told
     /// the face of a project yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

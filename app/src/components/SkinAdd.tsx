@@ -90,7 +90,7 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
   // only says where, so nothing of it passes through the page.
   const writeOut = () => {
     setError(null);
-    void pickSaveAs("my-skin.yaml")
+    void pickSaveAs("my-skin.zip")
       .then((at) => (at ? writeSkinTemplate(at) : undefined))
       .catch((e) => setError(errText(e)));
   };

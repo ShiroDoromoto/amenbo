@@ -51,7 +51,7 @@ vi.mock("../core/boundFolders", () => ({
 // here the answer is always yes, so what this file sees is what the face does with it.
 vi.mock("../core/dialog", () => ({ confirmDialog: async () => true }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,13 +64,13 @@ const click = async (el: HTMLElement) => {
   await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 };
 /** Go to a page by pressing its number in the row beside the panes. */
-const goPage = async (n: number) => { await click(q(".termface__page")[n - 1]!); };
+const goPage = async (n: number) => { await click(q(".workspace__page")[n - 1]!); };
 /** Open another pane in the project being shown. A page with room draws an empty frame and that is
  *  the one press; a full page draws the strip instead, which goes to a page with room — bringing one
  *  into being where every page is full — and the empty frame there is what opens it
  *  (`../talk/layout`). */
 const openPaneIn = async (host: HTMLElement) => {
-  const strip = [...host.querySelectorAll<HTMLElement>(".termface__addstrip")][0];
+  const strip = [...host.querySelectorAll<HTMLElement>(".workspace__addstrip")][0];
   if (strip) await click(strip);
   await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
@@ -78,13 +78,13 @@ const openPane = () => openPaneIn(container);
 /** Press for a split. A project nobody has answered for is drawn at one pane (`../talk/layout`), so
  *  a road about pages, gaps and the strip beside them says how many it wants first. */
 const atCount = async (count: 1 | 2 | 4 | 6 | 8) => {
-  await click(q(".termface__count")[[1, 2, 4, 6, 8].indexOf(count)]!);
+  await click(q(".workspace__count")[[1, 2, 4, 6, 8].indexOf(count)]!);
 };
 /** Put the face up. It is not in `beforeEach` because what the project is bound to is set per test,
  *  and the face reads it as it comes up. */
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
   });
 };
 
@@ -116,7 +116,7 @@ describe("the face comes up with nothing open", () => {
 
   it("draws no page numbers, because there is nowhere to go from one page", async () => {
     await mount();
-    expect(q(".termface__page")).toHaveLength(0);
+    expect(q(".workspace__page")).toHaveLength(0);
   });
 });
 
@@ -182,7 +182,7 @@ describe("turning a page", () => {
     await openPane();
     await openPane();               // a third pane, which is page 2 at two a page
     const started = mounts().slice(0, 2).map((one) => one.session);
-    expect(q(".termface__page")).toHaveLength(2);
+    expect(q(".workspace__page")).toHaveLength(2);
 
     await goPage(2);
     expect(hoisted.detached, "the panes were left drawn on a page nobody is on").toBe(2);
@@ -212,10 +212,10 @@ describe("the empty frame", () => {
     await atCount(2);
     await openPane();
     await openPane();                              // page 1 full at two a page
-    await click(q(".termface__addstrip")[0]!);
+    await click(q(".workspace__addstrip")[0]!);
 
-    expect(q(".termface__page")).toHaveLength(2);
-    expect(q(".termface__page--on")[0]!.textContent).toBe("2");
+    expect(q(".workspace__page")).toHaveLength(2);
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
     expect(q(".slot--empty")).toHaveLength(1);
     expect(mounts(), "asking for room opened a terminal by itself").toHaveLength(2);
   });
@@ -228,14 +228,14 @@ describe("taking a pane away", () => {
     await openPane();
     await openPane();
     await openPane();                              // three panes, so two pages at two a page
-    expect(q(".termface__page")).toHaveLength(2);
+    expect(q(".workspace__page")).toHaveLength(2);
 
     await act(async () => { q(".slot__end")[0]!.click(); });
     await act(async () => { await Promise.resolve(); });
 
     // Two panes left, both on one page — and the page nobody can go to any more is gone with them.
     expect(q(".slot")).toHaveLength(2);
-    expect(q(".termface__page")).toHaveLength(0);
+    expect(q(".workspace__page")).toHaveLength(0);
   });
 });
 
@@ -249,7 +249,7 @@ describe("how many panes", () => {
 
     // At one a page the second pane is page 2, and that is where the screen is: a person who asks for
     // one pane means the one they were looking at.
-    expect(q(".termface__page--on")[0]!.textContent).toBe("2");
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
     expect(q(".slot")).toHaveLength(1);
     expect(mounts(), "the pane carried across was restarted rather than kept").toHaveLength(2);
   });
@@ -260,27 +260,27 @@ describe("how many panes", () => {
     await openPane();
     // A page with a gap draws the empty frame, and that frame is the way in. A second one beside it
     // would be the same offer twice.
-    expect(q(".termface__addstrip")).toHaveLength(0);
+    expect(q(".workspace__addstrip")).toHaveLength(0);
 
     await openPane();                              // two a page, so the page is now full
     expect(q(".slot--empty")).toHaveLength(0);
-    expect(q(".termface__addstrip")).toHaveLength(1);
+    expect(q(".workspace__addstrip")).toHaveLength(1);
 
     // Pressing it goes to where the room is, which is the next page — the same thing the rail's own
     // way in does.
-    await click(q(".termface__addstrip")[0]!);
-    expect(q(".termface__page--on")[0]!.textContent).toBe("2");
+    await click(q(".workspace__addstrip")[0]!);
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
     expect(q(".slot--empty")).toHaveLength(1);
   });
 
   it("splits the page by what was asked for, not by what is open", async () => {
     await mount();
     await openPane();
-    await click(q(".termface__count")[2]!);         // four a page, with one pane open
+    await click(q(".workspace__count")[2]!);         // four a page, with one pane open
 
     // The grid is the split. A page that shrank to fit what is open would make the control look as
     // though it had done nothing.
-    expect(q(".termface__page-grid--4")).toHaveLength(1);
+    expect(q(".workspace__page-grid--4")).toHaveLength(1);
   });
 
   it("asks which way two panes sit, and asks it of no other count", async () => {
@@ -288,22 +288,22 @@ describe("how many panes", () => {
     await openPane();
     // One is where a project nobody has answered for comes up, and one has nothing to arrange — the
     // question appears with the count it is about.
-    expect(q(".termface__count--glyph")).toHaveLength(0);
+    expect(q(".workspace__count--glyph")).toHaveLength(0);
 
     await atCount(2);
-    expect(q(".termface__page-grid--2")).toHaveLength(1);
-    expect(q(".termface__count--glyph")).toHaveLength(2);
+    expect(q(".workspace__page-grid--2")).toHaveLength(1);
+    expect(q(".workspace__count--glyph")).toHaveLength(2);
 
-    await click(q(".termface__count--glyph")[1]!);  // one above the other
-    expect(q(".termface__page-grid--2-down")).toHaveLength(1);
+    await click(q(".workspace__count--glyph")[1]!);  // one above the other
+    expect(q(".workspace__page-grid--2-down")).toHaveLength(1);
 
     // Four has spent its rows already, so there is nothing left to choose between and nothing drawn.
-    await click(q(".termface__count")[2]!);
-    expect(q(".termface__count--glyph")).toHaveLength(0);
-    expect(q(".termface__page-grid--4")).toHaveLength(1);
+    await click(q(".workspace__count")[2]!);
+    expect(q(".workspace__count--glyph")).toHaveLength(0);
+    expect(q(".workspace__page-grid--4")).toHaveLength(1);
 
     // The answer stood while it could not be asked: two is the two they set up.
-    await click(q(".termface__count")[1]!);
-    expect(q(".termface__page-grid--2-down")).toHaveLength(1);
+    await click(q(".workspace__count")[1]!);
+    expect(q(".workspace__page-grid--2-down")).toHaveLength(1);
   });
 });

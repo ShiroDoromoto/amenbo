@@ -8,15 +8,15 @@
 // somebody asks for it.
 //
 // The face is **not** persisted. A launch shows the board, in one window or two: what someone opens
-// Amenbo to look at is the ledger, and a terminal that came up because it was up last time would be
+// Amenbo to look at is the ledger, and a workspace that came up because it was up last time would be
 // a window's worth of shell the user did not ask for.
 const SHAPE_KEY = "amenbo.windowShape";
 
-/** One window with two faces in it, or the terminal split out into a window of its own. */
+/** One window with two faces in it, or the workspace split out into a window of its own. */
 export type WindowShape = "one" | "two";
 
-/** The face the board's window is showing: the ledger, or the terminal. */
-export type Face = "tasks" | "terminal";
+/** The face the board's window is showing: the ledger, or the workspace. */
+export type Face = "tasks" | "workspace";
 
 export function getWindowShape(): WindowShape {
   return (typeof localStorage !== "undefined" ? localStorage.getItem(SHAPE_KEY) : null) === "two"

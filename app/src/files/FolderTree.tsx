@@ -246,9 +246,9 @@ export function FolderTree({
   onGone?: (root: string, went: string[]) => void;
   /**
    * Hand rows to the pane the reader is working in, as the whole paths they are at — the reverse of
-   * a path drawn in a pane opening the file beside them (`../shell/TerminalFace`).
+   * a path drawn in a pane opening the file beside them (`../shell/WorkspaceFace`).
    *
-   * Which pane that is, and whether there is one at all, is the terminal face's own answer: with
+   * Which pane that is, and whether there is one at all, is the workspace's own answer: with
    * none, none of this is handed down and the row's menu draws no item for it.
    */
   onHandOver?: (wholes: string[]) => void;
@@ -561,7 +561,7 @@ export function FolderTree({
     }
   };
 
-  // No project to root the tree in — the terminal face before it has been told which one it is on,
+  // No project to root the tree in — the workspace before it has been told which one it is on,
   // and the machine that has none at all. Nothing is said either way: what is on the screen is about
   // a project, and there is no project here for it to be about (`AMB-T-4358`).
   if (projectId === null) return <div className="files" />;

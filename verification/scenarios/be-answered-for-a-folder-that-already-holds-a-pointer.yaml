@@ -48,7 +48,7 @@
 id: be-answered-for-a-folder-that-already-holds-a-pointer
 title: The way in answers for a folder that already holds a pointer — turned away from another store's, and let in on one that leads nowhere
 description: >
-  On a device with nothing raised on it, the terminal face offers one control. Press it and pick a
+  On a device with nothing raised on it, the workspace offers one control. Press it and pick a
   folder another store claimed: the way in answers under itself, naming the store the folder belongs
   to, and no pane comes up. Press it again and pick a folder whose project this store no longer has:
   that one is taken — a project is raised for it, the pointer is written again naming one that
@@ -83,22 +83,22 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, pressed on a machine with no project — and answered with a refusal rather than a
   # pane. The reader is left where they were, which is with a folder still to choose.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: orchard
       refused: pointer_other_store
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: turned-away
     with:
       store: amenbo-dev
@@ -106,24 +106,24 @@ steps_gui:
   # The same control, pressed again on the folder whose project is gone. This one is taken: the
   # project it belongs to is raised, and the pointer is written again naming it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
 
   # Down to a plain shell, which is what a road that speaks in a pane speaks to.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the folder the way in took
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the folder the way in took
@@ -137,13 +137,13 @@ steps_gui:
   # press for another. Which control it is does not matter here — what is under test is what the
   # press does not ask.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: strip
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     with:
       dir: workshop

@@ -52,7 +52,7 @@ title: A decision says which session made it, and on the screen that is a press 
 description: >
   On the screen: open two panes, put a line into each, and record a decision at the shell in the
   first one. Rename that pane, then go to the ledger and open the decision — the row saying which
-  session made it carries the pane's name as it reads today. Press it, and the terminal face comes up
+  session made it carries the pane's name as it reads today. Press it, and the workspace comes up
   with that pane being worked in, not the one beside it. At a terminal: record a decision in each of
   two panes and ask for each back, and each names the pane it was typed in, with the way back into
   that conversation beside it. Either way, a decision recorded outside a pane names no session at
@@ -123,21 +123,21 @@ steps_cli:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # panes below have to be this project's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -145,17 +145,17 @@ steps_gui:
   # The pane the decision is made in. Down to a plain shell, because what an agent does with a line
   # typed at it is the agent's own and the create below has to be run rather than asked for.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane the decision was written in
@@ -163,7 +163,7 @@ steps_gui:
   # The name the record keeps. It is given before the create, since what is written down is whatever
   # the pane was called at the moment the line was run.
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the potting shed
@@ -180,7 +180,7 @@ steps_gui:
   # And the name the row will draw. The record still holds "the potting shed"; a reader looking among
   # the panes today finds this one, so this is what the row has to say.
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the far bench
@@ -189,23 +189,23 @@ steps_gui:
   # The other pane, and the one the reader is standing in when they press. Its line is what makes the
   # reading at the end a reading of which pane took the keyboard.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane the reader was sitting in
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -227,11 +227,11 @@ steps_gui:
     with:
       target: reglaze
 
-  # Where the press landed: the terminal face, at the pane the decision was written in — with the
+  # Where the press landed: the workspace, at the pane the decision was written in — with the
   # frame drawn picked out and the keyboard in it. The reader was in the other pane a step ago, so a
   # press that only turned the face would leave this reading on the wrong line.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: worked-in
     with:
       shows: SCENARIO the pane the decision was written in
@@ -239,7 +239,7 @@ steps_gui:
   # The other half, and the one that keeps a build drawing the row on everything from reading green:
   # a decision recorded on the board was made at no pane, so its page names none.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks

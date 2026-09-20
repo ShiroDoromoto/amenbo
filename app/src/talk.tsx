@@ -1,11 +1,11 @@
-// The talk window's entry — the window the terminal is split out into, so the two faces can sit on
+// The talk window's entry — the window the workspace is split out into, so the two faces can sit on
 // two displays (`AMB-D-753`). It is not opened at launch and is not declared in `tauri.conf.json`:
 // the app comes up as one window showing the board, and this one is built when it is asked for
 // (`crate::windows`).
 //
-// **What is in it is the terminal face, whole.** The rail, the pages, the split, the files beside
+// **What is in it is the workspace, whole.** The rail, the pages, the split, the files beside
 // them — the same component the board puts up, with the same arrangement under it
-// (`./shell/TerminalFace`). Splitting out is meant to put the terminal on another display, so a
+// (`./shell/WorkspaceFace`). Splitting out is meant to put the workspace on another display, so a
 // window that arrived there with one pane and a way back would be a person carrying a terminal out
 // rather than moving where they work. The only difference is the one the reader asked for: the
 // ledger is not in this window, and the button that says so folds the app back.
@@ -14,7 +14,7 @@
 // was being worked in are all kept with the arrangement, and the terminals still running are asked
 // of the host — the same two questions the board answers when the app folds back into one window.
 // So the split says nothing and the window reads everything, which is one answer rather than two
-// that can disagree. What does cross afterwards is a press: "start in the terminal", made on the
+// that can disagree. What does cross afterwards is a press: "start in the workspace", made on the
 // board, names a folder this window has to open — and that is an ask, not a state the two windows
 // could hold different copies of (`crate::windows::talk_raise`).
 //
@@ -45,8 +45,9 @@ import { loadSnapshot, subscribe, watchStore } from "./core/snapshot";
 import { writesOn, writeUnwritten } from "./core/unwritten";
 import { initTheme } from "./core/theme";
 import { initSkin } from "./core/skin";
+import { carryOverKeptColumns } from "./talk/columns";
 import { ElevationBand } from "./talk/elevation";
-import { TerminalFace } from "./shell/TerminalFace";
+import { WorkspaceFace } from "./shell/WorkspaceFace";
 import "./styles/tokens.css";
 import "./styles/global.css";
 import "./components/components.css";
@@ -54,25 +55,26 @@ import "./styles/talk.css";
 
 initTheme();
 initSkin();
+carryOverKeptColumns();
 
 /**
  * Name the window, so a list of windows tells this one from the board (`AMB-D-396`).
  *
  * The name is the face's, not the window's: what was split out is the workspace, whole, and the
  * tab it was split out of says "workspace" too. A window with a name of its own would be a second
- * word for the one thing the reader is looking at — so the title is written from `face.terminal`,
+ * word for the one thing the reader is looking at — so the title is written from `face.workspace`,
  * the key every other place naming that face already reads.
  */
 function retitle(): void {
   void getCurrentWindow()
-    .setTitle(tf("app.talkWindow", { face: t("face.terminal") }))
+    .setTitle(tf("app.talkWindow", { face: t("face.workspace") }))
     // Outside Tauri (`npm run dev` in a browser) there is no window to name, and a title that could
     // not be set is not worth failing an otherwise-working window over.
     .catch(() => {});
 }
 
 /**
- * The window: the terminal face, and above it anything standing that has to be said about the
+ * The window: the workspace, and above it anything standing that has to be said about the
  * process it runs in.
  *
  * A record clicked here is read on the board, which is the other window — so the navigation seam
@@ -89,14 +91,14 @@ function TalkWindow() {
     void invoke<boolean>("elevated").then(setElevated).catch(() => {});
   }, []);
 
-  // A folder the ledger asked for, and the project it named — "start in the terminal", pressed on
+  // A folder the ledger asked for, and the project it named — "start in the workspace", pressed on
   // the board while the face is here (`./components/FirstLoop`).
   //
   // It arrives from the host rather than from a press in this tree, for the reason a ref clicked
   // here leaves the same way: the two faces are in two windows, and neither can reach the other
   // (`crate::windows::talk_raise`). What is left to do here is hand it down, because what to do
   // about a folder — open a pane or go to the one already in it — is the face's own
-  // (`./shell/TerminalFace`). An ask that names a pane instead of a folder travels the same road and
+  // (`./shell/WorkspaceFace`). An ask that names a pane instead of a folder travels the same road and
   // is handed down the same way (`AMB-D-897`).
   //
   // `nth` is what makes the same folder pressed twice two answers, the way it does on the board: a
@@ -149,7 +151,7 @@ function TalkWindow() {
             would not start. The bus these arrive on drops what nobody is listening for, and until
             this stood here nobody in this window was (`AMB-T-4668`). */}
         <NoticeToast />
-        <TerminalFace
+        <WorkspaceFace
           ownWindow
           // Fold the app back to one window. The board is told nothing: this window going is what
           // says it, whether it went from here or from the title bar (`crate::windows`).

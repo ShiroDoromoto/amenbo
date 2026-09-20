@@ -43,21 +43,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
   # that read a screen it had not put itself on would be reading somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -65,33 +65,33 @@ steps_gui:
   # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
   # agent's own, and this line has to sit where it was put.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane that goes
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane that stays
@@ -99,14 +99,14 @@ steps_gui:
   # The page is full, so it offers nothing. This is the reading "at most one empty frame" cannot make:
   # room the page has not got must not be drawn as a way in.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 2
       empty: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: SCENARIO the pane that goes
@@ -114,7 +114,7 @@ steps_gui:
   # One pane, and the room the page got back is offered again — at the gap the pane left, which is
   # what "the page closes up" means on a page that is drawn rather than held.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
@@ -123,7 +123,7 @@ steps_gui:
   # The one that stays is untouched by its neighbour going. A face that re-made its frames around the
   # gap would read the same on the count above and lose this session here.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane that stays
@@ -131,7 +131,7 @@ steps_gui:
   # And the one that went is gone rather than moved: not on this page, not on another, and not behind
   # the count — there is no page to turn to, because the panes of this project are one page's worth.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane that goes

@@ -1,6 +1,6 @@
 # A terminal went off the screen when the page turned, and came back still running.
 #
-# The terminal face is one list of frames cut into pages, and there are three ways to cut it: the
+# The workspace is one list of frames cut into pages, and there are three ways to cut it: the
 # count, the page digits, and asking for another pane. Every one of them takes panes off the screen. What a reader has running in one is theirs until they end it, so the whole of this
 # road is the thing those moves must not do — and a pane is drawn rather than held, so there is no
 # way to find out except by turning away and coming back.
@@ -52,7 +52,7 @@
 id: come-back-to-the-terminal-a-page-turn-took-away
 title: A terminal carried off the screen by a page turn comes back with the same session running in it
 description: >
-  Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
+  Open the workspace, choose the folder it runs in, get the pane down to a plain shell and type a
   line into it. Cut the page to two and open a second pane beside it, then cut the page down to one
   pane each: the screen follows the new pane, and the first one's line is gone from the screen. Turn
   back to its page — the line is there, and a second line typed at it is taken, so the terminal behind
@@ -61,16 +61,16 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, and what binds the folder to the project the face is on. Every pane opened in that
   # project afterwards works in it, which is what lets the second one below be one press and nothing
   # else.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -79,17 +79,17 @@ steps_gui:
   # its own to draw, and a line typed at one is something to answer rather than something left sitting
   # where it was put — and being left where it was put is the whole of what this road follows.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal behind the page
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal behind the page
@@ -98,7 +98,7 @@ steps_gui:
   # for is drawn at, the pane opened next would be on a page of its own, and the first would go off
   # the screen without any of the moves this road follows having been made.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -107,7 +107,7 @@ steps_gui:
   # room is drawn where the pane will be. Nothing is asked — the folder is the project's — and the new
   # pane becomes the one being worked in, which is what decides where the next step leaves the screen.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -116,7 +116,7 @@ steps_gui:
   # that happens on this face, so it is worth one step that it is not also the cheapest way to lose
   # one.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal behind the page
@@ -124,13 +124,13 @@ steps_gui:
   # One pane to a page, which cuts the two frames onto pages of their own. The screen stays with the
   # pane being worked in — the one just opened — so what is on it now is the second page.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal behind the page
@@ -139,13 +139,13 @@ steps_gui:
   # Back to the page the first pane was cut onto. This is the move a reader makes most on this face,
   # and the one a terminal has to be able to outlive.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     with:
       page: 1
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal behind the page
@@ -154,13 +154,13 @@ steps_gui:
   # read exactly like this one until something is typed at it, the words already on it having been
   # printed before any of this happened.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO still taking what is typed
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO still taking what is typed
@@ -168,13 +168,13 @@ steps_gui:
   # Cut back to two, which brings the second pane onto this page again. The first pane has now been
   # through both cuts and a page turn, and the line it was named by is still the line on it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal behind the page

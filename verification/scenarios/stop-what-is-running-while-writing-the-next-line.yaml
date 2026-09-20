@@ -52,7 +52,7 @@ given:
   # what makes them stay open once they have printed — a program that ended by itself would leave
   # nothing for the press to reach — and it is what makes one say it was stopped as it goes.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -60,14 +60,14 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: the pane this road opens has to open in the folder this road named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -75,23 +75,23 @@ steps_gui:
   # The first of the row. Which agent it is is nothing this road is about — what it is about is a
   # program that is running and can be stopped.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # The box, which a pane comes up without: the press this road is about is made in that box while it
   # is holding a line, and a pane still folded has neither.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   # What the pane has not said yet. Without it, the word read after the press would be one that might
   # have been on the screen the whole time for a reason nothing here is about.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO stopped
@@ -101,7 +101,7 @@ steps_gui:
   # while the box is holding something, and a box emptied first would be walking the plain rule
   # rather than its one exception.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO the next line was already being written
@@ -109,14 +109,14 @@ steps_gui:
   # Read here and not after the press, because the press ends the program and a pane with nothing
   # running in it draws no box: this is the premise of the press rather than its answer.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO the next line was already being written
 
   # The press itself, made without touching what is written.
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-through
     with:
       key: ctrl-c
@@ -126,7 +126,7 @@ steps_gui:
   # on the screen only where the press reached the thing it was aimed at — and not where the box took
   # it, which is the fault this road is here for.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO stopped

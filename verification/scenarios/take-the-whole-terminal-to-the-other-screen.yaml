@@ -1,4 +1,4 @@
-# The window a terminal is split out into holds the terminal face whole — every pane, the rail, the
+# The window a terminal is split out into holds the workspace whole — every pane, the rail, the
 # split and the pages — and comes up on the pane the person was working in.
 #
 # `put-the-terminal-on-its-own-screen` walks the same control on a board with one pane on it, and one
@@ -64,15 +64,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and it is
   # the project whose panes the split-out window draws.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Sawmill
@@ -80,7 +80,7 @@ steps_gui:
   # Set while nothing is open, so what follows is pages filling rather than pages cut out of panes
   # already standing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
@@ -88,17 +88,17 @@ steps_gui:
   # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
   # agent's own, and these lines have to sit where they were put.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the first page
@@ -106,33 +106,33 @@ steps_gui:
   # The second and the third, each landing on a page of its own because a page holds one. A page that
   # holds one is full as soon as it has one, so the way in is the strip beside the pane.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: strip
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the middle page
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: strip
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the last page
@@ -140,13 +140,13 @@ steps_gui:
   # Back to the middle one, which is where the reader is when they press. The line is a second one
   # and names nothing: what it does is put them in that pane.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     with:
       page: 2
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       shows: SCENARIO the middle page
@@ -157,14 +157,14 @@ steps_gui:
   # a dash and a word after it. The word is in the run's own language, so the window is named below by
   # the part of its title every language keeps.
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
 
   # **It came up where the reader was.** A window that opened on the first page would draw a terminal
   # and look exactly like this one, and the reader would be somewhere they did not ask to be.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -174,28 +174,28 @@ steps_gui:
   # board nobody is looking at. Read from the far one back, so a window that could only reach forward
   # is caught too.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     window: "Amenbo — "
     with:
       page: 3
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
       shows: SCENARIO the last page
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     window: "Amenbo — "
     with:
       page: 1
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -205,14 +205,14 @@ steps_gui:
   # Four is a ceiling rather than a number of boxes to fill, so what stands on the page is the three
   # panes and the one way in beside them.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     window: "Amenbo — "
     with:
       count: 4
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     window: "Amenbo — "
     with:
@@ -220,21 +220,21 @@ steps_gui:
       empty: 1
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "
 
   # One window again, with all three panes on its face — each still drawing its own session, which is
   # what says the move cost none of them anything.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 3
       empty: 1
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO still the middle page

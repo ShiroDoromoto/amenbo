@@ -41,7 +41,7 @@ id: read-what-an-agents-own-default-comes-to
 title: The first thing on the model row names the model it comes to, where the provider said which
 description: >
   Stand a machine up with the whole catalog of agents on it, each answering with three models and
-  the two that can say so saying they are on the second of them. Open the terminal face and choose
+  the two that can say so saying they are on the second of them. Open the workspace and choose
   Cursor: the model row comes up, and the first thing on it — the agent on its own settings — names
   that second model beside the words, while the line under the row still names no model at all. Press
   open, and the row under the pane that came up names the same model. Take that pane away, choose
@@ -68,7 +68,7 @@ given:
   # printed and gone has no row under it to read — what stands there instead is the frame offering to
   # open another one.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 6
@@ -78,15 +78,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # pane this road opens has to open in the folder this road named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -95,13 +95,13 @@ steps_gui:
   # Named rather than counted along, which the premise earns: this road is about which providers
   # answer, so which one is chosen is the whole of what each reading is worth.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Cursor
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: stands-for
     with:
       model: scenario-model-02
@@ -109,7 +109,7 @@ steps_gui:
   # And the line is untouched by it. The name is what the agent would do left alone, so a build that
   # drew it and then put it on the line would be starting the pane on a choice nobody made.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: none
@@ -121,18 +121,18 @@ steps_gui:
   # pane's row saying nothing would keep half of this promise, with nothing on the screen looking
   # wrong.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       model: scenario-model-02
 
   # The pane goes, so the frame the next agent is chosen on is a frame and not a pane.
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: standing in for cursor-agent
@@ -142,13 +142,13 @@ steps_gui:
   # writes into the label of a row and one Gemini CLI writes beside the list are the same fact read
   # two ways, and a build that had learnt only the first would draw a row here saying nothing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Gemini CLI
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: stands-for
     with:
       model: scenario-model-02
@@ -157,13 +157,13 @@ steps_gui:
   # The half that catches a build answering for a provider that never said: four of the six name no
   # default, and on this machine they answered a list of models without naming one of them.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Claude Code
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: stands-for
     with:
       model: none

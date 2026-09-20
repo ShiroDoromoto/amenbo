@@ -60,7 +60,7 @@ vi.mock("../core/mutations", async (original) => ({
   },
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,7 +69,7 @@ let root: Root;
 
 const draw = () =>
   act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
   });
 
 /** The read comes back, with the folders named. The face is drawn again because the hook it reads

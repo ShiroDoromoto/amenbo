@@ -5,7 +5,7 @@
 // somewhere else is the bar over both faces, where it cannot say which of the two it moves.
 //
 // What is asked here is what folding may and may not take away: the names and the headings go, and
-// everything that tells one row from another stays. The terminal face's side of the same rule is
+// everything that tells one row from another stays. The workspace's side of the same rule is
 // `projectTabs.test`.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

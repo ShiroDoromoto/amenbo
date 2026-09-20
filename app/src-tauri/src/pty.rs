@@ -47,7 +47,10 @@ use tauri::{Emitter, Manager};
 
 use amenbo_core::harness::Handle;
 
-use crate::dto::{PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionMadeDto, SessionSaidDto};
+use crate::dto::{
+    PtyAdoptDto, PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionMadeDto,
+    SessionSaidDto,
+};
 use crate::error::CmdError;
 use crate::launch;
 
@@ -444,6 +447,22 @@ struct Pane {
     /// The name this pane's provider is still to be told, and whether a thread is carrying one
     /// ([`Renaming`]).
     renaming: Mutex<Renaming>,
+    /// The last name the session in this pane gave itself, or `None` where it has not named itself.
+    ///
+    /// **Kept for the reason [`Pane::briefed`] is kept.** A statement goes past on its way to the
+    /// window, and the window is listening only while the pane is on the screen — a pane on another
+    /// project, or on another page of this one, has no listener at all, and `emit_to` answers `Ok`
+    /// either way. The drop box is read forwards and never again, so a name said while nobody was
+    /// drawing the pane was a name nobody could ever read (`AMB-T-5196`: three of nine live panes had
+    /// lost theirs). Held here, it is there for whichever pane draws the session next.
+    named: Mutex<Option<String>>,
+    /// The records filed from this pane, in the order they were filed, each one once.
+    ///
+    /// Held for the reason `named` is, and held whole rather than counted: the band under the pane
+    /// draws the number and the list behind it opens each record (`app/src/shell/PaneMade.tsx`). One
+    /// record is one entry however many times it arrives, which is the footing a count of commands
+    /// that ran stands on (`AMB-D-897`).
+    made: Mutex<Vec<SessionMadeDto>>,
 }
 
 /// A pane's rename, as the thread carrying it and the name it is to carry next.
@@ -473,20 +492,32 @@ impl Pane {
             unsent: Mutex::new(None),
             opening: AtomicBool::new(false),
             renaming: Mutex::new(Renaming::default()),
+            named: Mutex::new(None),
+            made: Mutex::new(Vec::new()),
         }
     }
 
     /// Take in one statement on its way to the window.
     ///
-    /// One of them is the pane's own business as well as the person's: the fact that `amenbo agent`
-    /// ran here. Every other verb passes straight through — a name is the frame being named, and a
-    /// record filed from here is counted under the pane on the screen, and both of those are the
-    /// window's.
+    /// **All three are kept, and the window is told as well.** What the window does with a statement
+    /// is drawn on the screen and dies with it, and the screen is not always there to be drawn on:
+    /// the pane may be on a page nobody is looking at. So each verb leaves behind the part of itself
+    /// a pane coming up later would need — the canon was read, this is the pane's name, these are the
+    /// records filed here — and [`Pane::adopt`] hands all of it over.
     fn take_in(&self, said: &amenbo_core::session::Said) {
         use amenbo_core::session::Statement;
         match &said.statement {
             Statement::Briefed => self.briefed.store(true, Ordering::Relaxed),
-            Statement::Name(_) | Statement::Made { .. } => {}
+            Statement::Name(name) => {
+                *self.named.lock().expect("pane named lock") = Some(name.clone());
+            }
+            Statement::Made { side, id } => {
+                let one = SessionMadeDto { kind: side.word(), id: *id };
+                let mut made = self.made.lock().expect("pane made lock");
+                if !made.iter().any(|held| held.kind == one.kind && held.id == one.id) {
+                    made.push(one);
+                }
+            }
         }
     }
 
@@ -635,7 +666,12 @@ impl Pane {
     /// After an overflow the tail begins wherever the cap fell, which can be part-way through an
     /// escape sequence — so a pane adopting a long-running session can open with a few characters
     /// of noise at the very top. The alternative is holding every byte a terminal ever wrote.
-    fn adopt(&self, label: &str) -> Vec<PtyReplayDto> {
+    ///
+    /// **The screen is not the whole of what a pane is owed.** The name the session gave itself and
+    /// the records filed from it went past while nobody may have been drawing the pane, and the drop
+    /// box they came in is read forwards only — so they ride out here beside the bytes, which is the
+    /// one moment a pane asks the session what it missed (`AMB-T-5196`).
+    fn adopt(&self, label: &str) -> PtyAdoptDto {
         let recent = self.recent.lock().expect("pane recent lock");
         self.point_at(label);
         let encode = |bytes: Vec<u8>| base64::engine::general_purpose::STANDARD.encode(bytes);
@@ -655,7 +691,12 @@ impl Pane {
             rows: run.at.1,
             base64: encode(run.bytes.iter().copied().collect::<Vec<u8>>()),
         }));
-        replay
+        drop(recent);
+        PtyAdoptDto {
+            replay,
+            name: self.named.lock().expect("pane named lock").clone(),
+            made: self.made.lock().expect("pane made lock").clone(),
+        }
     }
 }
 
@@ -1674,7 +1715,7 @@ impl CursorQuery {
 /// A pane asks this on the way up, to find out whether the terminal it is there to draw is already
 /// running — which it is every time the pane has moved rather than been made: split out into its own
 /// window, folded back into the board, or rebuilt in place because the interface around it was
-/// (`app/src/shell/TerminalFace.tsx`). The registry is the only thing that knows, because it is the
+/// (`app/src/shell/WorkspaceFace.tsx`). The registry is the only thing that knows, because it is the
 /// only part of a terminal that outlives the window: a webview that went away took its emulator with
 /// it and could tell nothing to whatever draws next.
 ///
@@ -1732,12 +1773,15 @@ fn in_open_order(mut open: Vec<(String, PtySessionDto)>) -> Vec<PtySessionDto> {
 /// are bytes rather than text. The pane reads them back run by run at the size on each, which is
 /// what keeps a tail written across a resize folded where it was written. See [`Pane::adopt`] for
 /// what the oldest of them can look like.
+///
+/// Beside the bytes come the name the session gave itself and the records filed from it, for the
+/// same reason the bytes come: a pane that was not on the screen heard none of it as it happened.
 #[tauri::command]
 pub fn pty_attach(
     window: tauri::Window,
     terminals: tauri::State<'_, Terminals>,
     session: String,
-) -> Result<Vec<PtyReplayDto>, CmdError> {
+) -> Result<PtyAdoptDto, CmdError> {
     let open = terminals.0.lock().expect("terminals lock");
     let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
     Ok(terminal.pane.adopt(window.label()))
@@ -2035,7 +2079,7 @@ mod tests {
         for _ in 0..8 {
             pane.keep(&vec![b'x'; RECENT / 2]);
         }
-        assert_eq!(run_bytes(&pane.adopt("main")).len(), RECENT);
+        assert_eq!(run_bytes(&pane.adopt("main").replay).len(), RECENT);
     }
 
     /// And what it keeps is the *end* of the output, not the start: what a pane has to draw is
@@ -2045,7 +2089,7 @@ mod tests {
         let pane = Pane::new("main", OPENED_AT);
         pane.keep(&vec![b'o'; RECENT]);
         pane.keep(b"$ ");
-        let kept = run_bytes(&pane.adopt("main"));
+        let kept = run_bytes(&pane.adopt("main").replay);
         assert_eq!(kept.len(), RECENT);
         assert_eq!(&kept[kept.len() - 2..], b"$ ");
     }
@@ -2060,7 +2104,7 @@ mod tests {
         pane.resized((26, 30));
         pane.keep(b"narrow");
 
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         assert_eq!(
             replay
                 .iter()
@@ -2081,7 +2125,7 @@ mod tests {
         pane.keep(b"one");
         pane.resized(OPENED_AT);
         pane.keep(b"two");
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         assert_eq!(replay.len(), 1);
         assert_eq!(run_bytes(&replay), b"onetwo".to_vec());
     }
@@ -2096,7 +2140,7 @@ mod tests {
         pane.resized((26, 30));
         pane.keep(&vec![b'n'; RECENT]);
 
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         assert_eq!(replay.len(), 1, "the wide run is wholly out of the tail");
         assert_eq!((replay[0].cols, replay[0].rows), (26, 30));
         assert_eq!(run_bytes(&replay).len(), RECENT);
@@ -2138,7 +2182,70 @@ mod tests {
     #[test]
     fn a_terminal_that_has_written_nothing_hands_over_no_runs() {
         let pane = Pane::new("main", OPENED_AT);
-        assert!(pane.adopt("main").is_empty());
+        assert!(pane.adopt("main").replay.is_empty());
+    }
+
+    /// One statement, as the drop box hands it over.
+    fn said(statement: amenbo_core::session::Statement) -> amenbo_core::session::Said {
+        amenbo_core::session::Said {
+            name: "0001".to_string(),
+            session: "s".to_string(),
+            at: "2026-09-20T00:00:00Z".to_string(),
+            cwd: None,
+            statement,
+        }
+    }
+
+    /// What a session said about itself outlives the window hearing it. The pane on the screen is
+    /// told as it happens, and there may be no pane on the screen — so a pane coming up later asks,
+    /// and is told the same thing (`AMB-T-5196`).
+    #[test]
+    fn a_pane_that_was_never_drawn_still_hands_over_its_name_and_its_records() {
+        use amenbo_core::session::{Side, Statement};
+        let pane = Pane::new("main", OPENED_AT);
+        pane.take_in(&said(Statement::Name("first".to_string())));
+        pane.take_in(&said(Statement::Made { side: Side::Task, id: 5197 }));
+        pane.take_in(&said(Statement::Name("second".to_string())));
+        pane.take_in(&said(Statement::Made { side: Side::Decision, id: 42 }));
+
+        let adopted = pane.adopt("main");
+        assert_eq!(adopted.name.as_deref(), Some("second"), "the last name, not the first");
+        assert_eq!(
+            adopted.made.iter().map(|one| (one.kind, one.id)).collect::<Vec<_>>(),
+            vec![("task", 5197), ("decision", 42)],
+            "in the order they were filed"
+        );
+    }
+
+    /// One record is one entry however many times it arrives. The band under the pane counts
+    /// commands that ran, and a number that went up twice for one `task add` is one nothing can
+    /// stand behind (`AMB-D-897`).
+    #[test]
+    fn a_record_that_arrives_twice_is_handed_over_once() {
+        use amenbo_core::session::{Side, Statement};
+        let pane = Pane::new("main", OPENED_AT);
+        pane.take_in(&said(Statement::Made { side: Side::Task, id: 7 }));
+        pane.take_in(&said(Statement::Made { side: Side::Task, id: 7 }));
+        pane.take_in(&said(Statement::Made { side: Side::Decision, id: 7 }));
+
+        let adopted = pane.adopt("main");
+        assert_eq!(
+            adopted.made.iter().map(|one| (one.kind, one.id)).collect::<Vec<_>>(),
+            vec![("task", 7), ("decision", 7)],
+            "the same number in the two spaces is two records"
+        );
+    }
+
+    /// A session that has said nothing about itself hands over nothing about itself. The pane still
+    /// has a name where a person gave it one, and that name is not this call's to touch.
+    #[test]
+    fn a_session_that_never_named_itself_hands_over_no_name() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.take_in(&said(amenbo_core::session::Statement::Briefed));
+        let adopted = pane.adopt("main");
+        assert_eq!(adopted.name, None);
+        assert!(adopted.made.is_empty());
+        assert!(pane.briefed(), "and the one verb that was said is still kept");
     }
 
     /// The modes the program asked for come back however long ago it asked. Bracketed paste is
@@ -2150,7 +2257,7 @@ mod tests {
         pane.keep(b"\x1b[?2004h\x1b[?1004h");
         pane.keep(&vec![b'x'; RECENT]);
 
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         let tail = run_bytes(&replay[1..]);
         assert!(!tail.windows(8).any(|w| w == b"\x1b[?2004"), "the tail has turned over");
         assert_eq!(
@@ -2190,7 +2297,7 @@ mod tests {
         pane.resized((26, 30));
         pane.keep(b"narrow");
 
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         assert_eq!((replay[0].cols, replay[0].rows), (110, 30));
     }
 
@@ -2204,7 +2311,7 @@ mod tests {
         pane.keep(b"\x1b[?2004l");
         pane.keep(&vec![b'x'; RECENT]);
 
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         assert_eq!(
             run_bytes(std::slice::from_ref(&replay[0])),
             b"\x1b[?2004l".to_vec()
@@ -2221,7 +2328,7 @@ mod tests {
         pane.keep(&vec![b'x'; RECENT]);
 
         assert_eq!(
-            run_bytes(std::slice::from_ref(&pane.adopt("main")[0])),
+            run_bytes(std::slice::from_ref(&pane.adopt("main").replay[0])),
             b"\x1b[?2004h".to_vec()
         );
     }
@@ -2236,7 +2343,7 @@ mod tests {
         pane.keep(&vec![b'x'; RECENT]);
 
         assert_eq!(
-            run_bytes(std::slice::from_ref(&pane.adopt("main")[0])),
+            run_bytes(std::slice::from_ref(&pane.adopt("main").replay[0])),
             b"\x1b[?1000h\x1b[?1006h".to_vec()
         );
     }
@@ -2246,7 +2353,7 @@ mod tests {
     fn a_terminal_in_no_modes_gets_nothing_in_front_of_its_tail() {
         let pane = Pane::new("main", OPENED_AT);
         pane.keep(b"plain");
-        let replay = pane.adopt("main");
+        let replay = pane.adopt("main").replay;
         assert_eq!(replay.len(), 1);
         assert_eq!(run_bytes(&replay), b"plain".to_vec());
     }
@@ -2292,7 +2399,7 @@ mod tests {
     fn adopting_a_session_sends_what_follows_to_the_new_window() {
         let pane = Pane::new(crate::windows::BOARD, OPENED_AT);
         assert_eq!(pane.keep(b"before"), crate::windows::BOARD);
-        assert_eq!(run_bytes(&pane.adopt(crate::windows::TALK)), b"before".to_vec());
+        assert_eq!(run_bytes(&pane.adopt(crate::windows::TALK).replay), b"before".to_vec());
         assert_eq!(pane.keep(b"after"), crate::windows::TALK);
     }
 

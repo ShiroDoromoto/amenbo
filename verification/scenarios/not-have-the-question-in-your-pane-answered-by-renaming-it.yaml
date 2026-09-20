@@ -84,7 +84,7 @@ given:
   # Two, because that is the fewest a machine can be stood up with, and the road opens on the first
   # of them by name. `asks` is the shape the head of this file describes.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -92,20 +92,20 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Harbour
 
   # One pane, so every step below means the one box on the page and none of them has to say so.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
@@ -113,19 +113,19 @@ steps_gui:
   # Named rather than taken by position, because what the road needs of it is the one thing a position
   # cannot promise: a provider with a rename command of its own, which is what a name is carried by.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       agent: Claude Code
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # The question is up and the program is waiting on it, which is what makes the pane one worth
   # carrying a name into at all. Without this the road could pass on a build that never started.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO which way out of here
@@ -134,7 +134,7 @@ steps_gui:
   # behind it is type the provider's own rename command into the pane, which is the half this road is
   # about (`crate::pty::pty_rename`).
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the north channel
@@ -142,7 +142,7 @@ steps_gui:
   # The goal. The pane showed nothing of what was pasted into it, so nothing submitted it — and the
   # question is standing where it was, with neither choice taken.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answered
     with:
       given-back: SCENARIO a line arrived
@@ -151,17 +151,17 @@ steps_gui:
   # ── And the pane was reading the whole time ──────────────────────────────────────────────────
   # The box under the pane, which is where a line is written that the reader can see.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO the north channel it is
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: send-written
     with:
       by: key
@@ -169,7 +169,7 @@ steps_gui:
   # The same mark, from the same program, on a press of the reader's own. It is what makes the reading
   # above a withholding rather than a pane that was never there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answered
     with:
       given-back: SCENARIO a line arrived

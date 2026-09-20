@@ -22,7 +22,7 @@
 id: narrow-the-tree-to-the-names-that-hold-a-word
 title: A word typed above the tree brings it down to the names holding it, reaching into folders nobody opened
 description: >
-  Open the terminal face on a project whose folder holds files a level down, and unfold the tree to
+  Open the workspace on a project whose folder holds files a level down, and unfold the tree to
   its first level only. Read that a file in a folder nobody opened is not on the screen. Press the
   key that finds things with the keyboard standing on the tree, type part of that file's name, and
   read it standing there — with the folder on the way to it drawn open above. A name without the
@@ -64,13 +64,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

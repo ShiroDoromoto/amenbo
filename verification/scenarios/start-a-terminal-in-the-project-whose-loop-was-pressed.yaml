@@ -43,35 +43,35 @@ steps_gui:
   # The state the wrong answer would be taken from: a project on the face, with a pane in it, and
   # the reader standing there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal in the greenhouse
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the greenhouse
@@ -79,7 +79,7 @@ steps_gui:
   # Off to raise another. What the ledger is showing from here on is a view, which is the whole of
   # why the press cannot be answered from what the reader was last looking at.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -96,17 +96,17 @@ steps_gui:
 
   # The pane the press opened, named so the face can be asked about it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal the new project's loop opened
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal the new project's loop opened
@@ -116,7 +116,7 @@ steps_gui:
   # other than beside it — under the project the loop was pressed on, which is the only other place
   # a pane can be.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the greenhouse
@@ -126,19 +126,19 @@ steps_gui:
   # pane that landed nowhere a reader can reach. The project the reader came from still has its own
   # terminal, and has not been given the new one.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the greenhouse
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal the new project's loop opened

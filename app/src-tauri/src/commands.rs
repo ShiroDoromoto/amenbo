@@ -787,6 +787,7 @@ pub fn skin_list() -> SkinListDto {
         .into_iter()
         .map(|(name, read)| match read {
             Ok(s) => SkinRowDto {
+                file_name: kept_file_name(&paths, &name),
                 name,
                 title: s.title,
                 titles: s.titles,
@@ -804,6 +805,7 @@ pub fn skin_list() -> SkinListDto {
             },
             Err(e) => SkinRowDto {
                 title: name.clone(),
+                file_name: kept_file_name(&paths, &name),
                 name,
                 titles: Default::default(),
                 author: None,
@@ -871,11 +873,10 @@ pub fn skin_use(name: Option<String>) -> Result<(), CmdError> {
 pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
     let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
     let bytes = std::fs::read(&path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
-    amenbo_core::skin::weigh(&bytes).map_err(CmdError::from)?;
-    let (packing, yaml) = amenbo_core::skin::document(&bytes).map_err(CmdError::from)?;
+    let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let read = amenbo_core::skin::Skin::read(&yaml).map_err(CmdError::from)?;
     let taken = read
-        .check(&amenbo_core::skin::Materials::of(packing, &bytes))
+        .check(&amenbo_core::skin::Materials::of(&bytes))
         .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     // Turned away here rather than shown as a judgement: a file calling itself one of the names
     // this build ships cannot be taken in under any answer the reader could give, so there is
@@ -997,11 +998,10 @@ fn font_of(taken: &amenbo_core::skin::Taken) -> Option<SkinFontDto> {
 pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
     let bytes = std::fs::read(&path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
-    amenbo_core::skin::weigh(&bytes).map_err(CmdError::from)?;
-    let (packing, yaml) = amenbo_core::skin::document(&bytes).map_err(CmdError::from)?;
+    let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let taken = amenbo_core::skin::Skin::read(&yaml)
         .map_err(CmdError::from)?
-        .check(&amenbo_core::skin::Materials::of(packing, &bytes))
+        .check(&amenbo_core::skin::Materials::of(&bytes))
         .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     let name = taken.skin.name;
     if !replace
@@ -1009,7 +1009,7 @@ pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     {
         return Err(CmdError::from(format!("a skin is already kept as '{name}'")));
     }
-    amenbo_core::skin::Skin::install(&paths, &name, packing, &bytes).map_err(CmdError::from)?;
+    amenbo_core::skin::Skin::install(&paths, &name, &bytes).map_err(CmdError::from)?;
     Ok(name)
 }
 
@@ -1035,7 +1035,38 @@ pub fn skin_template_to(path: String) -> Result<(), CmdError> {
         &amenbo_core::skin_contrast::template_name(on.as_ref()),
         on.as_ref(),
     );
-    std::fs::write(&path, yaml).map_err(|e| CmdError::from(format!("{path}: {e}")))
+    // Packed, because that is the shape a skin is handed over in: what lands here goes straight
+    // back in through `skin_add`, and an author who then puts a picture beside the document has
+    // somewhere to put it (`AMB-D-936`).
+    let bytes = amenbo_core::skin::pack_document(&yaml).map_err(CmdError::from)?;
+    std::fs::write(&path, bytes).map_err(|e| CmdError::from(format!("{path}: {e}")))
+}
+
+/// The name of the file this device keeps a skin under, extension and all — `None` for the four
+/// that ship inside the build, which are kept in no file.
+fn kept_file_name(paths: &amenbo_core::config::Paths, name: &str) -> Option<String> {
+    let (_, at) = amenbo_core::skin::kept_file(paths, name)?;
+    Some(at.file_name()?.to_string_lossy().into_owned())
+}
+
+/// Write a held skin out to `path` — the file itself, byte for byte.
+///
+/// **Copied rather than rebuilt.** What the device holds is the file its author handed over, with
+/// its materials, its licence text and its own wording in it; a skin written back out of what was
+/// parsed would be a different file, and the names the check dropped would be gone from it
+/// (`AMB-D-936`). So the one thing this does is hand the same bytes on.
+///
+/// One of the four shipped skins is refused: they are held in no file, so there is nothing of a
+/// person's to hand on. `skin_template_to` is the road from those — it writes what this build
+/// sets, which is a skin already.
+#[tauri::command]
+pub fn skin_write_out(name: String, path: String) -> Result<(), CmdError> {
+    let paths = amenbo_core::config::Paths::resolve().map_err(CmdError::from)?;
+    let Some((_, at)) = amenbo_core::skin::kept_file(&paths, &name) else {
+        return Err(CmdError::from(format!("no skin is kept as '{name}'")));
+    };
+    std::fs::copy(&at, &path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
+    Ok(())
 }
 
 /// The English sentence for a whole-skin refusal — the one the terminal prints for the same file, so
@@ -2795,7 +2826,7 @@ fn ambiguous_owners(path: &std::path::Path, owners: &[i64]) -> CmdError {
     )
 }
 
-/// **Make the chosen folder one a pane can be opened in** — the terminal face's single way in.
+/// **Make the chosen folder one a pane can be opened in** — the workspace's single way in.
 ///
 /// Choosing a folder there is three things at once: the folder becomes a project's, the project comes
 /// into being, and the terminal opens in it. The first two are here; where a pane opens is the face's
@@ -8280,7 +8311,7 @@ pub(crate) mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// A store with nothing in it, and a folder beside it to choose — the shape the terminal face's
+    /// A store with nothing in it, and a folder beside it to choose — the shape the workspace's
     /// way in is walked on, which is a machine that has no project yet.
     fn a_machine_with_no_project(tag: &str) -> std::path::PathBuf {
         let tmp = amenbo_scratch::scratch(tag);

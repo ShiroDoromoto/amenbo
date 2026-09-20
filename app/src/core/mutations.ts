@@ -1058,7 +1058,7 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
 
 /**
  * Open the native folder picker and return the absolute path chosen — this backs every place a folder
- * is asked for: the creation screen's field, the settings screen's list, and the terminal face's way in
+ * is asked for: the creation screen's field, the settings screen's list, and the workspace's way in
  * (`chooseWorkFolder`). Null if the dialog is cancelled. **It does not read the folder's contents**: it
  * returns a path string, and the actual binding (placing the `.amenbo` pointer) is done on the Rust
  * side by whatever the caller does with it. Outside Tauri (browser) nothing touches the filesystem, so
@@ -1106,7 +1106,7 @@ export async function chooseWorkFolder(): Promise<string | null> {
  * project the person is already looking at, rather than to whatever project the folder's own name
  * would raise. A pane belongs to a project (`../talk/layout`), so a folder chosen to open a pane in
  * has to end up in that project or the pane would be somewhere else entirely. The board's face takes
- * it from the rail (`../shell/TerminalFace`) and the window split out of it from the arrangement the
+ * it from the rail (`../shell/WorkspaceFace`) and the window split out of it from the arrangement the
  * board left (`../talk/agent`).
  *
  * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser

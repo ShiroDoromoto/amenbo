@@ -39,7 +39,7 @@ vi.mock("../talk/agent", () => ({
   },
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -53,16 +53,16 @@ const click = async (el: HTMLElement | null) => {
 };
 /** A button on the top row, by what it says. */
 const bar = (name: string) =>
-  [...container.querySelectorAll<HTMLElement>(".termface__bar button")]
+  [...container.querySelectorAll<HTMLElement>(".workspace__bar button")]
     .find((one) => (one.getAttribute("aria-label") ?? one.textContent) === name) ?? null;
 /** What the top row offers for the reading column. */
 const sides = () =>
-  [...container.querySelectorAll<HTMLElement>(".termface__sides button")]
+  [...container.querySelectorAll<HTMLElement>(".workspace__sides button")]
     .map((one) => one.textContent);
 
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
   });
 };
 
@@ -92,7 +92,7 @@ describe("the half the file face opens on", () => {
   });
 
   it("is whichever half was up last, so the default is only the first run's", async () => {
-    localStorage.setItem("amenbo.termface.sideTab", "files");
+    localStorage.setItem("amenbo.workspace.sideTab", "files");
     await mount();
     expect(q(".memo__field")).toBeNull();
   });
@@ -100,7 +100,7 @@ describe("the half the file face opens on", () => {
   it("is put away and brought back by the one control, on the half it was left on", async () => {
     await mount();
     await click(bar(t("files.side")));
-    expect(q(".termface__column--side")).toBeNull();
+    expect(q(".workspace__column--side")).toBeNull();
     await click(bar(t("files.side")));
     expect(q(".memo__field")).not.toBeNull();
   });

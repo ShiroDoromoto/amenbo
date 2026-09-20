@@ -37,7 +37,7 @@
 id: keep-the-sentence-a-window-was-closed-on
 title: A sentence typed on the draft page outlives the window it was typed in, whichever way that window goes
 description: >
-  Open the terminal face and split it out into a window of its own. On the draft page in that window,
+  Open the workspace and split it out into a window of its own. On the draft page in that window,
   type a line and close the window in the same movement, before the page has had its moment's quiet.
   The board is left standing: open its draft page and the line is there. Type a second line on it and
   end Amenbo from its own menu, again in one movement — and when the app comes up on the same store,
@@ -60,15 +60,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Out into a window of its own, which is the first of the two doors. From here there are two
   # windows and every step says which it is in, this one included.
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
 
@@ -76,7 +76,7 @@ steps_gui:
   # column is deliberately left unopened: a page it had already drawn would be holding the text in
   # front of it, and the reading at the end would no longer be of what was kept.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     window: "Amenbo — "
     with:
@@ -101,13 +101,13 @@ steps_gui:
   # The board, alone again. Nothing names a window from here, which is half of what these steps say:
   # the window that was typed in has gone.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -135,13 +135,13 @@ steps_gui:
       how: menu
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

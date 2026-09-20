@@ -51,7 +51,7 @@ description: >
   Open a pane, record a decision at the shell in it, rename it, and then take the pane away. Open the
   decision on the ledger: the row saying which session made it carries the name the pane had when the
   record was written, which is what is left once there is no pane to read a name off. Press it, and a
-  pane is standing on the terminal face again. Open a shell in it, give it a new name, and read the
+  pane is standing on the workspace again. Open a shell in it, give it a new name, and read the
   record's row once more — it carries that new name, which it can only do where the pane that came
   back is the pane the record names.
 
@@ -69,21 +69,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # pane below has to be this project's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
@@ -91,17 +91,17 @@ steps_gui:
   # The pane the decision is made in. Down to a plain shell, because what an agent does with a line
   # typed at it is the agent's own and the create below has to be run rather than asked for.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane the decision was written in
@@ -109,7 +109,7 @@ steps_gui:
   # The name the record keeps. It is given before the create, since what is written down is whatever
   # the pane was called at the moment the line was run.
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the potting shed
@@ -126,14 +126,14 @@ steps_gui:
   # And a name the record does not hold. While the pane is open this is what its row would draw; the
   # step below takes the pane away, and with it every name but the one that was written down.
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the far bench
       shows: SCENARIO the pane the decision was written in
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: SCENARIO the pane the decision was written in
@@ -141,13 +141,13 @@ steps_gui:
   # Nothing is standing, which is what makes everything after the press a reading of the press: the
   # page is bare first, so whatever the road works in below came from the row that was pressed.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
@@ -175,30 +175,30 @@ steps_gui:
   # a judgement rather than a reading. The page is asked for one pane, so there is no frame beside it
   # to be told from, and a press that put nothing there is caught at the end of the road instead.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-again
 
   # And down to a plain shell, which is what this machine was last opened with in any case: what the
   # road says in the pane below has to be said to something that will not answer it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane opened again
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       name: SCENARIO the shed reopened
       shows: SCENARIO the pane opened again
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks

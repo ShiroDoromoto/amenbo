@@ -111,15 +111,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project's panes the face is drawing, pressed rather than assumed: what the face comes up on
   # is the run's business, and the pane below has to be the one standing in this project's folder.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
@@ -133,25 +133,25 @@ steps_gui:
   # folder and asks nothing, and a road that reached for the picker here would be hunting a control
   # that is not on the screen.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # From the split on every step has to say which window it is in. The ledger's window is called after
   # the app, in the one word that is the same in every language the interface is drawn in; the other
-  # holds the whole terminal face rather than one pane of it, so it is not named after anything on the
+  # holds the whole workspace rather than one pane of it, so it is not named after anything on the
   # screen — it carries that same word with a dash and a word after it, and the word after is in the
   # run's own language. So it is named below by the part of its title every language keeps.
   #
   # This step is shot after it has been carried out, and by then there are two windows for a shot to
   # be of. What it is evidence of is the board the pane left.
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
 
@@ -160,14 +160,14 @@ steps_gui:
   # where an agent works — the hand at the prompt is standing in for one, and what it runs has to
   # reach as far as one does and no further.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     window: "Amenbo — "
     with:
       command: amenbo task list --actor ai
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-ref
     window: "Amenbo — "
     with:
@@ -198,7 +198,7 @@ steps_gui:
   # nothing on the screen but text. What finds the ref here is the reading of the drawn buffer, and
   # nothing else can be.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     window: "Amenbo — "
     with:
@@ -207,7 +207,7 @@ steps_gui:
   # The other record this time. A press that opened nothing would otherwise pass on the record the
   # press above left standing open.
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-ref
     window: "Amenbo — "
     with:
@@ -235,7 +235,7 @@ steps_gui:
   # which is what leaves the width free to be moved onto it. The words before the ref are the road's
   # own and mean nothing: what they are for is the distance.
   - type: action
-    domain: terminal
+    domain: workspace
     op: run
     window: "Amenbo — "
     with:
@@ -243,7 +243,7 @@ steps_gui:
       target: frames
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-ref
     window: "Amenbo — "
     with:
@@ -271,6 +271,6 @@ steps_gui:
   # the app in is remembered where a throwaway store does not reach, and a road that walked away from
   # two windows would hand whoever owns the machine a second one they never asked for.
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "

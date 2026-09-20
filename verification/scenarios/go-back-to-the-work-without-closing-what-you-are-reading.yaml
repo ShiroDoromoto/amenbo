@@ -65,37 +65,37 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The work the reader is going back to at the end of the road. It is opened first because the press
   # this road is about is aimed at it: a face with nothing running has no pane to press.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the terminal in the orchard
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the orchard
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -122,7 +122,7 @@ steps_gui:
   # Wide, because what the reader asked for is the file — and the reading is of the change, the width
   # being no number a person at the screen can measure.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-width
     with:
       side: files
@@ -131,13 +131,13 @@ steps_gui:
   # The line this road exists for. The press is on the terminal and means nothing to it: nothing is
   # typed, nothing is sent, and what answers is the column on the other side of the panes.
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-pane
     with:
       shows: SCENARIO the terminal in the orchard
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-width
     with:
       side: files
@@ -146,7 +146,7 @@ steps_gui:
   # And the work is back, with what was printed on it. The press reached the pane as a press and not
   # as an instruction: nothing was added to the line, and nothing was sent.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the terminal in the orchard

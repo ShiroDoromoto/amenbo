@@ -56,7 +56,7 @@
 id: put-the-terminal-on-its-own-screen
 title: The terminal moves to a screen of its own and back, with the session never restarting and the half-written sentence still in its box
 description: >
-  Open the terminal face of the one window, choose the folder it runs in, open a plain shell there,
+  Open the workspace of the one window, choose the folder it runs in, open a plain shell there,
   and type a line into the pane. Write a second line in the box beneath it and leave it unsent.
   Switch to the ledger and back: both are still there, because hiding a terminal must not end it.
   Then open the terminal in a separate window — the printed line is on the pane there, the written one
@@ -67,16 +67,16 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The face opens with no pane on it, because a terminal has to be started somewhere and only the
   # reader knows where. Choosing a folder is the whole of the way in — one press and a folder, with
   # nothing to name and nothing to submit — and the pane every step below is about opens in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -87,17 +87,17 @@ steps_gui:
   # window is exactly that — the line, still where it was put. A shell that does not know the command
   # leaves it there, which is the whole reason the command is one nothing knows.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the same terminal
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the same terminal
@@ -105,7 +105,7 @@ steps_gui:
   # The box, which a pane comes up without. It is named by the line above rather than left to the
   # step before, there being an assert between the two.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
     with:
       onto: SCENARIO the same terminal
@@ -113,13 +113,13 @@ steps_gui:
   # And a sentence started in the box under it, left where it was written. It goes to nothing: what
   # every step below reads is a line the reader is still in the middle of.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO this sentence is not finished
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this sentence is not finished
@@ -128,13 +128,13 @@ steps_gui:
   # says the two faces are one window rather than two things drawn at once, and it is the state the
   # step after it is coming back from.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
       face: tasks
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the same terminal
@@ -143,13 +143,13 @@ steps_gui:
   # Back to the terminal. This is the first of the three moves, and the one a reader makes most: a
   # look at the board must not cost them the session they left running.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the same terminal
@@ -157,7 +157,7 @@ steps_gui:
   # And the box came back with it. The pane was taken down and drawn again, so a draft the drawing had
   # been holding would have gone down with it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this sentence is not finished
@@ -167,12 +167,12 @@ steps_gui:
   # nobody stood at. This step is shot once it has been carried out, so the second window is already
   # up when it is: what it is evidence of is the board with the pane gone off it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -183,14 +183,14 @@ steps_gui:
   # from here, and what it draws it learns from the arrangement the two of them share, so anything
   # left out of that arrangement is lost at the press. Both of these are in it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     window: "Amenbo — "
     with:
       shows: SCENARIO this sentence is not finished
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "
 
@@ -198,7 +198,7 @@ steps_gui:
   # Nothing names a window here, which is the other half of what this step says — the second window
   # has gone, and a road that still had to name one would be looking at an app that never folded.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the same terminal
@@ -207,7 +207,7 @@ steps_gui:
   # would fail: the window folding away is the one holding the sentence. The box is open here without
   # a press for the reason it was open over there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO this sentence is not finished

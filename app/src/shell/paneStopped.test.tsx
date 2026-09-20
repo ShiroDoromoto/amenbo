@@ -94,7 +94,7 @@ async function ran(agent: string | null, code: number | null): Promise<void> {
 }
 
 /** What the pane says about the ending. */
-const note = () => container.querySelector(".termface__note")?.textContent ?? "";
+const note = () => container.querySelector(".workspace__note")?.textContent ?? "";
 
 describe("what a pane says the program stopped for", () => {
   it("says which of the reader's own files to set, where the provider named the pane's", async () => {

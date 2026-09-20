@@ -43,7 +43,7 @@
 id: hand-a-picture-on-the-clipboard-to-the-box-under-a-pane
 title: A picture on the clipboard reaches the box under a pane as a quoted path, beside what was already written
 description: >
-  Open the terminal face on a project's folder and get a shell running in a pane. Write a line in the
+  Open the workspace on a project's folder and get a shell running in a pane. Write a line in the
   box Amenbo draws under it and leave it unsent. Then copy a picture outside Amenbo — the image
   itself, out of whatever shows pictures on this machine — and paste it into that box: a quoted path
   appears at the caret, the line that was already there is still standing, and the terminal above has
@@ -76,26 +76,26 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # A shell, because the box is drawn only while a terminal is running under it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The box itself, which a pane comes up without. It is asked for before the reading below, that
   # reading being of an empty box rather than of no box at all.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-box
 
   # The box before anything is put in it. Both words the readings below rest on are absent here, so
   # finding them afterwards is the paste and nothing else.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: "pasted-"
@@ -104,7 +104,7 @@ steps_gui:
   # The sentence the paste has to go beside. It is emptied and written by this step, so what stands
   # in the box from here on is the road's own words and nothing left over.
   - type: action
-    domain: terminal
+    domain: workspace
     op: write-to-pane
     with:
       text: SCENARIO the seedlings in the picture
@@ -116,20 +116,20 @@ steps_gui:
       path: scenario-icon.png
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste-image-into-box
 
   # What the paste wrote, named the way the build names one. A picture that arrived as words, or as
   # nothing at all, has no such name in the box.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: "pasted-"
 
   # And the shape it arrived in: the extension the type it was handed decides.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: ".png"
@@ -143,7 +143,7 @@ steps_gui:
   # reaches the match as the empty string, so no reading answers for it either way. Written the other
   # way round, `.png'` folds to `png` and goes green on a box carrying no quote at all.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: "'/"
@@ -151,7 +151,7 @@ steps_gui:
   # And the line that was already there, still there. A paste that had replaced what was written
   # instead of going in beside it would pass every reading above and have thrown the sentence away.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: still-to-send
     with:
       shows: SCENARIO the seedlings in the picture

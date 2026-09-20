@@ -22,7 +22,7 @@
 # A line of one bare word would read alike whether Amenbo handed it over or rebuilt it from the first
 # word, which is exactly the fault worth catching. This is the one terminal road that may name a
 # program, and it may because the program is the road's own rather than the machine's
-# (`terminal register-start`).
+# (`workspace register-start`).
 #
 # ── Why the machine is stood up first ────────────────────────────────────────────────────────────
 # So the row is drawn at all. Where a machine can start one thing there is no row to write anything
@@ -54,20 +54,20 @@ given:
   # Two, so there is a row to write under: with one thing to start there is no choice to draw, and
   # with none there is no row.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lighthouse
@@ -75,7 +75,7 @@ steps_gui:
   # Written down from the frame itself. The reading that the line is shown back before saving belongs
   # to this step: after it is saved there is nothing left to change.
   - type: action
-    domain: terminal
+    domain: workspace
     op: register-start
     with:
       name: Lamp reader
@@ -84,7 +84,7 @@ steps_gui:
   # And kept on the screen afterwards, character for character. A build that tidied the line would
   # pass every other step on this road.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: registered
     with:
       name: Lamp reader
@@ -92,7 +92,7 @@ steps_gui:
 
   # It is a choice like any other, and pressing it opens a pane.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-registered
     with:
       name: Lamp reader
@@ -100,7 +100,7 @@ steps_gui:
   # The whole line ran. These are the road's own words, and they are on the screen because the
   # argument reached the program — which is the one thing the first word alone could never show.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the whole line ran

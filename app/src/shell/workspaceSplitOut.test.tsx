@@ -81,7 +81,7 @@ vi.mock("../core/ipc", async (importOriginal) => {
   };
 });
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -99,7 +99,7 @@ const worked = () => container.querySelector(".slot--focused")?.getAttribute("da
 /** Put the face up, in one window or the other, and let the arrangement come back. */
 async function mount(ownWindow: boolean) {
   await act(async () => {
-    root.render(createElement(TerminalFace, {
+    root.render(createElement(WorkspaceFace, {
       onWindow: pressed, ownWindow, note: null,
     }));
     await new Promise((r) => setTimeout(r, 0));
@@ -151,9 +151,9 @@ describe("the window the terminal is split out into", () => {
     // beyond the one on screen are panes the reader cannot get to. Two of them, because the split is
     // two panes here and two is the one count that is also asked which way it sits
     // (`../talk/layout`).
-    expect(q(".termface__counts")).toHaveLength(2);
-    expect(q(".termface__count--glyph")).toHaveLength(2);
-    expect(q(".termface__page")).toHaveLength(2);
+    expect(q(".workspace__counts")).toHaveLength(2);
+    expect(q(".workspace__count--glyph")).toHaveLength(2);
+    expect(q(".workspace__page")).toHaveLength(2);
   });
 
   it("comes up on the pane that was being worked in, and on its page", async () => {
@@ -161,7 +161,7 @@ describe("the window the terminal is split out into", () => {
     // The third place, which is the one the arrangement was left split out on.
     expect(worked()).toBe("3");
     // The second page, where that pane is — two panes to a page, and it is the third.
-    expect(container.querySelector(".termface__page--on")?.textContent).toContain("2");
+    expect(container.querySelector(".workspace__page--on")?.textContent).toContain("2");
   });
 
   it("leaves the board where a restore lands, on the first place", async () => {
@@ -230,23 +230,23 @@ describe("the button that changes how many windows the app is", () => {
   it("says the move it makes, from whichever window is being read", async () => {
     // The words, not the row: the button carries a mark before them, and what is pinned here is
     // which way the press goes (`../components/Icon`).
-    const says = () => q(".termface__action")[0]!.textContent!.trim();
+    const says = () => q(".workspace__action")[0]!.textContent!.trim();
     await mount(false);
     expect(says()).toBe(t("face.splitOut"));
-    expect(q(".termface__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
+    expect(q(".workspace__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
     await act(() => root.unmount());
     root = createRoot(container);
     await mount(true);
     expect(says()).toBe(t("face.merge"));
     // The same mark either way: what it draws is the arrangement the control is about, and the
     // words are what say which direction this press goes.
-    expect(q(".termface__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
+    expect(q(".workspace__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
   });
 
   it("hands nothing over — there is one arrangement, and both windows read it", async () => {
     await mount(false);
     await act(async () => {
-      q(".termface__action")[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      q(".workspace__action")[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(pressed).toHaveBeenCalledTimes(1);
     expect(pressed.mock.calls[0]).toHaveLength(0);

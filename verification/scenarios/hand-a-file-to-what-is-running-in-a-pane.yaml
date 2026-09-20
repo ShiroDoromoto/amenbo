@@ -98,16 +98,16 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project's panes the face is drawing, pressed rather than assumed: what the face comes up on
   # is the run's business, and every reading below — the folders down the panel, the rows handed over
   # — is this project's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
@@ -120,27 +120,27 @@ steps_gui:
   # asks nothing, and a road that reached for the way in here would be hunting a control that is not
   # on the screen.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # A line of the road's own, so this pane can be named later. Nothing reads it until the page has a
   # second pane on it — and by then "the pane" names two, which is exactly when the last road needs
   # to say which one it means.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane the reader is in
 
   # The panel, which is the door the second and third roads come through.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -165,13 +165,13 @@ steps_gui:
   # The road in from the machine. The operator brings the file, because a drop reads the disk they
   # are sitting at and nothing this run laid down is reachable from there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: drop-in
     with:
       brings: handed.txt
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: handed.txt
@@ -181,7 +181,7 @@ steps_gui:
   # puts the file there under the same name, which is what makes the path the reading that tells the
   # two apart — the name alone would say the same thing either way.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: .amenbo-inbox
@@ -201,20 +201,20 @@ steps_gui:
   # picked up together and let go once puts both paths on the line side by side, and two drops one
   # after the other would say nothing about what one hand full does.
   - type: action
-    domain: terminal
+    domain: workspace
     op: drop-in
     with:
       brings: seeds.csv
       beside: labels.txt
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: seeds.csv
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: labels.txt
@@ -222,7 +222,7 @@ steps_gui:
   # And still no landing on the line, which is the reading a hand full could break where one thing
   # did not: a carry that took the pair in would have put both of them there.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: .amenbo-inbox
@@ -242,7 +242,7 @@ steps_gui:
     op: hand-to-pane
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: notes
@@ -268,13 +268,13 @@ steps_gui:
     op: hand-to-pane
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: watering.md
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: handed.txt
@@ -284,23 +284,23 @@ steps_gui:
   # pane the reader was in" are the same box. From here they are two, and that is the only way the
   # rest of this can be read at all.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane beside it
@@ -315,7 +315,7 @@ steps_gui:
   # it by: a pane nobody has named wears the folder it works in, and both panes on this road work in
   # the one folder.
   - type: action
-    domain: terminal
+    domain: workspace
     op: name-pane
     with:
       shows: SCENARIO the pane beside it
@@ -325,14 +325,14 @@ steps_gui:
   # The paths standing on its line go off with the press, which is what a line typed under them
   # does — they have been read, and what this step is for is where the reader is standing.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       shows: SCENARIO the pane the reader is in
       text: SCENARIO the reader stands here
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: worked-in
     with:
       shows: SCENARIO the pane the reader is in
@@ -348,7 +348,7 @@ steps_gui:
       onto: SCENARIO the pane beside it
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: watering.md
@@ -358,7 +358,7 @@ steps_gui:
   # mean, so the next thing they type goes there — without this, the path lands in one pane and the
   # words after it in another, which is the one way a hand-over can be right and still be wrong.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: worked-in
     with:
       shows: SCENARIO the pane beside it
@@ -366,21 +366,21 @@ steps_gui:
   # Back again, for the drag from outside: it lands where the pointer is, so the reader has to be
   # somewhere else for that to be worth reading.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       shows: SCENARIO the pane the reader is in
       text: SCENARIO the reader stands here again
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: drop-in
     with:
       brings: handed.txt
       onto: SCENARIO the pane beside it
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: handed.txt
@@ -388,7 +388,7 @@ steps_gui:
 
   # The same reading for the other door. Both gestures point at a pane, so both answer for it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: worked-in
     with:
       shows: SCENARIO the pane beside it
@@ -397,13 +397,13 @@ steps_gui:
   # A page turn moves what is drawn and not which pane is worked in, so the pane the menu hands to is
   # often behind the page. One pane to a page is the plainest way to stand the two apart.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-page
     with:
       page: 1
@@ -413,7 +413,7 @@ steps_gui:
   # page that is not being shown draws neither the pane nor the row above it, so the row answers the
   # same question — and it answers the other half of it, further down, where the pane cannot.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the pane beside it
@@ -440,7 +440,7 @@ steps_gui:
   # before the page turned — what the menu answers for is showing it, and where the keyboard stands
   # after a page comes back is the page turn's own business, not this hand-over's.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: label
     with:
       shows: SCENARIO the pane beside it

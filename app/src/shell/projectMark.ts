@@ -52,7 +52,7 @@ export function initialOf(name: string): string {
 }
 
 /**
- * The side of a project's mark, in CSS pixels — `.ptabs__mark` on the terminal face and
+ * The side of a project's mark, in CSS pixels — `.ptabs__mark` on the workspace and
  * `.navitem__mark` in the task face's rail, which are the same size on purpose (`AMB-D-848`).
  *
  * It is written here as well as in the stylesheet because a registered image has to be baked down to

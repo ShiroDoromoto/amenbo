@@ -1,4 +1,4 @@
-// The machine's bin, as both columns of the terminal face reach it: the tree in the rail, where rows
+// The machine's bin, as both columns of the workspace reach it: the tree in the rail, where rows
 // are picked out and binned together, and the file being read in the column on the other side
 // (`AMB-D-835`).
 //

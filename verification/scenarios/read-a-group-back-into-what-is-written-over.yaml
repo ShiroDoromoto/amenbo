@@ -32,7 +32,7 @@
 id: read-a-group-back-into-what-is-written-over
 title: A replacement over a folder writes back part of each match, read out of the pattern that found it
 description: >
-  Open the terminal face on a project whose folder holds one file with the same word in front of two
+  Open the workspace on a project whose folder holds one file with the same word in front of two
   different numbers. Look through the folder with the control that says the query is a pattern
   pressed in, and put the numbers in brackets. Write over what was found with a replacement that
   names that bracket. The list empties, because the pattern finds nothing now; open the file and
@@ -67,13 +67,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

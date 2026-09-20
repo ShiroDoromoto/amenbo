@@ -20,7 +20,7 @@
 //! with a blank window and no way back to the terminal (`AMB-T-3701`, `AMB-T-3702`).
 //!
 //! **What is split out is the face and not a pane of it.** The window holds what the board's own
-//! terminal face holds — the rail, the pages, the split, the files beside them — because the point
+//! workspace holds — the rail, the pages, the split, the files beside them — because the point
 //! of the second window is to put the terminal on another display, and a face that lost its rail on
 //! the way there would be a person carrying one pane out rather than moving the work
 //! (`AMB-D-753`, `app/src/talk.tsx`).
@@ -49,7 +49,7 @@ use crate::error::CmdError;
 pub const BOARD: &str = "main";
 
 /// The window the agents run in, once the terminal has been split out of the board. What it draws is
-/// the terminal face whole, so nothing about the arrangement is this side's to know.
+/// the workspace whole, so nothing about the arrangement is this side's to know.
 pub const TALK: &str = "talk";
 
 /// The page the talk window is built on, and the second entry `app/vite.config.ts` emits for it.
@@ -177,7 +177,7 @@ pub fn allow_clipboard_read(win: &WebviewWindow) {
 /// "terminal" is asking, and wants the window in front. Coming up in the shape this machine was last
 /// used in is arranging, and must not take the front away from the board the user is looking at.
 ///
-/// **Nothing is handed over with it.** What the window draws is the whole terminal face, which reads
+/// **Nothing is handed over with it.** What the window draws is the whole workspace, which reads
 /// the arrangement this run holds (`crate::frames`) and takes up the terminals that are still
 /// running — the same two questions it answers when the app folds back into one window. A split that
 /// also passed a pane along would be a second, shorter-lived copy of an answer the process already
@@ -281,7 +281,7 @@ pub fn talk_ready(drawn: tauri::State<'_, TalkDrawn>) {
     }
 }
 
-/// The event the terminal face opens a folder on, when the press that asked for it was made in the
+/// The event the workspace opens a folder on, when the press that asked for it was made in the
 /// other window.
 const OPEN_IN_EVENT: &str = "terminal-open-in";
 

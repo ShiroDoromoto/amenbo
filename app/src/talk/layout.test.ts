@@ -390,7 +390,7 @@ describe("an arrangement kept between runs", () => {
   it("carries the project the face is on, for the window that has no ledger to be asked on", () => {
     // The window the terminal is split out into has no ledger to have taken a project from, so an
     // arrangement with no panes to name one opens as the project the board was showing
-    // (`../shell/TerminalFace`).
+    // (`../shell/WorkspaceFace`).
     expect(laidOut(withPanes(1)).project).toBe(1);
     // A face that has not been told of a project says so by leaving it out, rather than naming one
     // no pane is in.
@@ -399,7 +399,7 @@ describe("an arrangement kept between runs", () => {
 
   it("names the pane being worked in, for the window that comes up on it", () => {
     // The press that splits hands nothing over, so where the reader was is theirs to read back out
-    // of the shape (`../shell/TerminalFace`).
+    // of the shape (`../shell/WorkspaceFace`).
     const layout = focusOn(withPanes(2), "2");
     expect(laidOut(layout).splitOut).toBe("2");
     // A face with no pane to be working in leaves it out rather than naming a place that is not one.

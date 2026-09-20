@@ -51,15 +51,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
   # that read a screen it had not put itself on would be reading somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lighthouse
@@ -67,7 +67,7 @@ steps_gui:
   # A page that one pane fills. Set while nothing is open, so what follows is a page filling rather
   # than a page cut down to what is already on it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 1
@@ -75,7 +75,7 @@ steps_gui:
   # Where the road starts from, said rather than assumed: nothing is open, so the page draws its one
   # way in and nothing else.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
@@ -84,12 +84,12 @@ steps_gui:
   # row above the press is what it opens with — so this one step is the whole of somebody saying
   # "a plain prompt this time".
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The pane is named by the reader's own words, which is how the step below says which one goes.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane opened on a plain prompt
@@ -97,28 +97,28 @@ steps_gui:
   # The page is full, so the empty frame is gone from the screen rather than sitting behind the pane.
   # This is what makes the reading at the end a reading of a frame drawn again.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
       empty: 0
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: remove-pane
     with:
       shows: SCENARIO the pane opened on a plain prompt
 
   # The room the page got back, offered again — and this frame is new.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
 
   # And it comes up on the answer given a moment ago, without asking for it again.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: opens-with
     with:
       start: shell

@@ -1776,7 +1776,7 @@ projectsUsing: number, };
 
 /**
  * A folder to work in and the project it belongs to — the first loop's one press, on its way from
- * the ledger to the terminal face (`app/src/components/FirstLoop.tsx`).
+ * the ledger to the workspace (`app/src/components/FirstLoop.tsx`).
  *
  * It travels only when the two faces are in two windows: the press is made on the board and the
  * face is in the other window, so it goes out to the host and comes back as the `terminal-open-in`
@@ -1795,7 +1795,7 @@ project: number,
 /**
  * The folder to work in, or nothing where the ask names a pane and the record it came from
  * holds no folder. The face checks it against that project's bindings before a pane is made,
- * and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`); an ask
+ * and opens nothing where the pair does not hold (`app/src/shell/WorkspaceFace.tsx`); an ask
  * with no folder is answered on the face instead, by the question a pane is always made
  * through (`app/src/shell/FolderChoice.tsx`).
  */
@@ -1962,6 +1962,31 @@ export type ProjectSettingsDto = { id: number, name: string, notes: string, colo
  * the display version and sends a whole new pair when the human registers another image.
  */
 icon: string | null, view: "list" | "board" | "calendar" | "timeline", archived: boolean, };
+
+/**
+ * What a pane is handed when it adopts a session already running (`crate::pty::pty_attach`).
+ *
+ * **Three things, because a pane that was not on the screen missed all three.** The bytes are the
+ * screen to draw; the name is what the session called this frame; the records are what was filed
+ * from it. Each of them also travels as it happens, to whichever window is drawing the pane — and a
+ * window drawing no pane for this session is told with nothing listening, the drop box already read
+ * past (`AMB-T-5196`). So the pane asks for all of it at the one moment it can ask.
+ */
+export type PtyAdoptDto = { 
+/**
+ * The tail, in the runs it was written in.
+ */
+replay: Array<PtyReplayDto>, 
+/**
+ * The last name the session gave itself, or `None` where it never did. Whether it goes on the
+ * frame is the window's call: a name a person typed is not one a session may replace
+ * (`amenbo_core::frames`).
+ */
+name?: string, 
+/**
+ * The records filed from this pane, in the order they were filed, each one once.
+ */
+made: Array<SessionMadeDto>, };
 
 /**
  * One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk
@@ -2366,7 +2391,13 @@ error: string | null,
  * took. The licence in full is not here — it is a document, and it is fetched when it is
  * opened rather than on every listing.
  */
-fontFamily: string | null, fontLicense: string | null, };
+fontFamily: string | null, fontLicense: string | null, 
+/**
+ * The name of the file this device keeps the skin under, extension and all. `null` for the
+ * four that ship inside the build, which are held in no file — which is also what says
+ * whether there is anything to write out.
+ */
+fileName: string | null, };
 
 /**
  * The skin this device has on, as the window wears it: the two sides' tables of token name to
@@ -2692,7 +2723,7 @@ splits?: Record<string, SplitDto>,
 /**
  * The project whose panes the face was showing. It is what the window the terminal is split out
  * into opens as, where the arrangement came with no panes to name one — which is every window
- * that comes up after a run (`app/src/shell/TerminalFace.tsx`); absent where nothing has told
+ * that comes up after a run (`app/src/shell/WorkspaceFace.tsx`); absent where nothing has told
  * the face of a project yet.
  */
 project?: number, 

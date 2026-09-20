@@ -24,7 +24,7 @@ vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: hoisted.folders, live: hoisted.folders, answered: true }),
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 import {
   RAIL_DEFAULT, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT, TABS_COMPACT_WIDTH, TABS_DEFAULT,
 } from "../talk/columns";
@@ -42,12 +42,12 @@ const click = async (el: HTMLElement | null) => {
 /** A button on the top row, by what it is called — which for the rail's is not what it says: the
  *  control is drawn as bars and named after what it opens. */
 const bar = (name: string) =>
-  [...container.querySelectorAll<HTMLElement>(".termface__bar button")]
+  [...container.querySelectorAll<HTMLElement>(".workspace__bar button")]
     .find((one) => (one.getAttribute("aria-label") ?? one.textContent) === name) ?? null;
 
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
+    root.render(createElement(WorkspaceFace, { onWindow: () => {}, note: null }));
   });
 };
 
@@ -70,17 +70,17 @@ afterEach(() => {
 describe("the columns beside the panes", () => {
   it("are both there on a window with room for them, each at the width it starts at", async () => {
     await mount();
-    expect(q(".termface__column--rail")).not.toBeNull();
-    expect(q(".termface__column--side")).not.toBeNull();
-    const style = (q(".termface") as HTMLElement).style;
+    expect(q(".workspace__column--rail")).not.toBeNull();
+    expect(q(".workspace__column--side")).not.toBeNull();
+    const style = (q(".workspace") as HTMLElement).style;
     expect(style.getPropertyValue("--rail-w")).toBe(`${RAIL_DEFAULT}px`);
     expect(style.getPropertyValue("--side-w")).toBe(`${SIDE_NARROW_DEFAULT}px`);
   });
 
   it("each carry the edge their width is dragged by", async () => {
     await mount();
-    expect(q(".termface__grip--rail")).not.toBeNull();
-    expect(q(".termface__grip--side")).not.toBeNull();
+    expect(q(".workspace__grip--rail")).not.toBeNull();
+    expect(q(".workspace__grip--side")).not.toBeNull();
   });
 });
 
@@ -91,24 +91,24 @@ describe("the project tabs", () => {
   it("are drawn at the width the face keeps for them, with the edge that drags it", async () => {
     await mount();
     expect(q(".ptabs")).not.toBeNull();
-    const style = (q(".termface") as HTMLElement).style;
+    const style = (q(".workspace") as HTMLElement).style;
     expect(style.getPropertyValue("--tabs-w")).toBe(`${TABS_DEFAULT}px`);
-    expect(q(".termface__grip--tabs")).not.toBeNull();
+    expect(q(".workspace__grip--tabs")).not.toBeNull();
   });
 
   it("stay when both columns beside the panes are closed", async () => {
     await mount();
     await click(bar(t("face.railFolders")));
     await click(bar(t("files.side")));
-    expect(q(".termface__column--rail")).toBeNull();
-    expect(q(".termface__column--side")).toBeNull();
+    expect(q(".workspace__column--rail")).toBeNull();
+    expect(q(".workspace__column--side")).toBeNull();
     expect(q(".ptabs")).not.toBeNull();
   });
 
   it("give the middle back what their names were taking, and keep the answer", async () => {
     await mount();
     await click(q(".ptabs__fold"));
-    const style = () => (q(".termface") as HTMLElement).style.getPropertyValue("--tabs-w");
+    const style = () => (q(".workspace") as HTMLElement).style.getPropertyValue("--tabs-w");
     expect(style()).toBe(`${TABS_COMPACT_WIDTH}px`);
     await act(async () => root.unmount());
     root = createRoot(container);
@@ -121,16 +121,16 @@ describe("the project tabs", () => {
   it("lose the edge while they are folded, and have it back when the names are", async () => {
     await mount();
     await click(q(".ptabs__fold"));
-    expect(q(".termface__grip--tabs")).toBeNull();
+    expect(q(".workspace__grip--tabs")).toBeNull();
     await click(q(".ptabs__fold"));
-    expect(q(".termface__grip--tabs")).not.toBeNull();
+    expect(q(".workspace__grip--tabs")).not.toBeNull();
   });
 
   // The width the drag left is the device's, not the run's.
   it("come back at the width they were dragged to", async () => {
-    localStorage.setItem("amenbo.termface.tabsWidth", "200");
+    localStorage.setItem("amenbo.workspace.tabsWidth", "200");
     await mount();
-    expect((q(".termface") as HTMLElement).style.getPropertyValue("--tabs-w")).toBe("200px");
+    expect((q(".workspace") as HTMLElement).style.getPropertyValue("--tabs-w")).toBe("200px");
   });
 });
 
@@ -138,19 +138,19 @@ describe("closing a column, and opening it again", () => {
   it("takes the rail away on the press that brings it back", async () => {
     await mount();
     await click(bar(t("face.railFolders")));
-    expect(q(".termface__column--rail")).toBeNull();
+    expect(q(".workspace__column--rail")).toBeNull();
     // The press is still there, and it says the rail is not.
     expect(bar(t("face.railFolders"))?.getAttribute("aria-expanded")).toBe("false");
     await click(bar(t("face.railFolders")));
-    expect(q(".termface__column--rail")).not.toBeNull();
+    expect(q(".workspace__column--rail")).not.toBeNull();
   });
 
   it("closes the file face from its own cross and opens it from the top row", async () => {
     await mount();
     await click(q(".files__close"));
-    expect(q(".termface__column--side")).toBeNull();
+    expect(q(".workspace__column--side")).toBeNull();
     await click(bar(t("files.side")));
-    expect(q(".termface__column--side")).not.toBeNull();
+    expect(q(".workspace__column--side")).not.toBeNull();
   });
 
   it("puts the file face away on the press that brings it back", async () => {
@@ -158,10 +158,10 @@ describe("closing a column, and opening it again", () => {
     // One control for the column, the way the rail has one: it says the column is up, and pressing
     // it says that is no longer wanted. Which half comes up is the column's own row of tabs.
     await click(bar(t("files.side")));
-    expect(q(".termface__column--side")).toBeNull();
+    expect(q(".workspace__column--side")).toBeNull();
     expect(bar(t("files.side"))?.getAttribute("aria-expanded")).toBe("false");
     await click(bar(t("files.side")));
-    expect(q(".termface__column--side")).not.toBeNull();
+    expect(q(".workspace__column--side")).not.toBeNull();
   });
 
   it("keeps the answer, so a column closed is still closed on the next run", async () => {
@@ -170,7 +170,7 @@ describe("closing a column, and opening it again", () => {
     await act(async () => root.unmount());
     root = createRoot(container);
     await mount();
-    expect(q(".termface__column--rail")).toBeNull();
+    expect(q(".workspace__column--rail")).toBeNull();
   });
 });
 
@@ -178,7 +178,7 @@ describe("closing a column, and opening it again", () => {
 // would move the pane a reader is about to paste into. So the column has two widths and goes between
 // them, and the wide one lies over the panes (`AMB-D-835`).
 describe("the two widths the reading column stands on", () => {
-  const widthOf = () => (q(".termface") as HTMLElement).style.getPropertyValue("--side-w");
+  const widthOf = () => (q(".workspace") as HTMLElement).style.getPropertyValue("--side-w");
 
   it("goes wide from the control beside the way out, over the panes rather than beside them", async () => {
     await mount();
@@ -188,21 +188,21 @@ describe("the two widths the reading column stands on", () => {
     expect(widthOf()).toBe(`${SIDE_WIDE_DEFAULT}px`);
     // Over them: the panes keep the room they had, which is what makes the pane a reader is going
     // back to still be where they left it.
-    expect(q(".termface__column--wide")).not.toBeNull();
+    expect(q(".workspace__column--wide")).not.toBeNull();
   });
 
   it("goes back narrow on the next press outside it, and does not close", async () => {
     await mount();
     await click(q(".files__width"));
-    expect(q(".termface__column--wide")).not.toBeNull();
+    expect(q(".workspace__column--wide")).not.toBeNull();
 
     // A press on the panes is a reader going back to the work — and going back to the work is not
     // being finished with the file.
     await act(async () => {
-      q(".termface__page-grid")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      q(".workspace__page-grid")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     });
-    expect(q(".termface__column--wide")).toBeNull();
-    expect(q(".termface__column--side")).not.toBeNull();
+    expect(q(".workspace__column--wide")).toBeNull();
+    expect(q(".workspace__column--side")).not.toBeNull();
     expect(widthOf()).toBe(`${SIDE_NARROW_DEFAULT}px`);
   });
 
@@ -210,9 +210,9 @@ describe("the two widths the reading column stands on", () => {
     await mount();
     await click(q(".files__width"));
     await act(async () => {
-      q(".termface__column--side")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      q(".workspace__column--side")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     });
-    expect(q(".termface__column--wide")).not.toBeNull();
+    expect(q(".workspace__column--wide")).not.toBeNull();
   });
 });
 
@@ -224,8 +224,8 @@ describe("the narrowest window the application opens", () => {
     window.innerWidth = 960;
     await mount();
     expect(q(".ptabs")).not.toBeNull();
-    expect(q(".termface__column--rail")).not.toBeNull();
-    expect(q(".termface__column--side")).not.toBeNull();
-    expect(q(".termface__drawer")).toBeNull();
+    expect(q(".workspace__column--rail")).not.toBeNull();
+    expect(q(".workspace__column--side")).not.toBeNull();
+    expect(q(".workspace__drawer")).toBeNull();
   });
 });

@@ -58,15 +58,22 @@ export async function frameNames(): Promise<FrameNames> {
  * why the copy is made here rather than beside each of them. `session` is what is running in the
  * frame, or `null` for a frame nothing is: there is nobody to tell then, and a refused naming has
  * nothing to tell either, because the name it asked for is not the frame's.
+ *
+ * **`tell` is false for a name that came over with the session** — one an agent said while nothing
+ * was drawing its pane, written down as the pane takes it up (`./terminal`). The provider already
+ * has it, being the one that said it, and telling it again types a second `/rename` into the
+ * terminal: with the first still in the tail, the hand-over reads the echo as its own and sends a
+ * bare return into whatever the agent is asking (`AMB-T-5118`, `AMB-T-5074`).
  */
 export async function nameFrame(
   frame: string,
   name: string,
   by: NamedBy,
   session: string | null,
+  tell = true,
 ): Promise<FrameNames> {
   const names = named(await invoke<FrameNameDto[]>("name_frame", { frame, name, by }));
-  if (session !== null && names.get(frame) === name) void renameInTerminal(session, name);
+  if (tell && session !== null && names.get(frame) === name) void renameInTerminal(session, name);
   return names;
 }
 

@@ -314,6 +314,9 @@ fn warnings_json(taken: &Taken) -> Vec<serde_json::Value> {
                 "kind": "frame", "theme": theme.as_str(), "key": key,
                 "wrote": wrote, "used": used,
             }),
+            Warning::Choice { theme, key, wrote } => json!({
+                "kind": "choice", "theme": theme.as_str(), "key": key, "wrote": wrote,
+            }),
             Warning::Scale { theme, key, wrote, used } => json!({
                 "kind": "scale", "theme": theme.as_str(), "key": key,
                 "wrote": wrote, "used": used,
@@ -349,6 +352,9 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
                 Some(used) => format!("  · {theme}.{key}: '{wrote}' — drawn at {used}"),
                 None => format!("  · {theme}.{key}: '{wrote}' is not one this build draws — dropped"),
             },
+            Warning::Choice { theme, key, wrote } => {
+                format!("  · {theme}.{key}: '{wrote}' is not one this build draws — dropped")
+            }
             Warning::Scale { theme, key, wrote, used } => match used {
                 Some(used) => format!("  · {theme}.{key}: '{wrote}' — moved by {used}"),
                 None => format!("  · {theme}.{key}: '{wrote}' is not a number — nothing moved"),

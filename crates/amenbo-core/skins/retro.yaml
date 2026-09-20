@@ -1,5 +1,10 @@
 # Retro — dark only. A black command window in a white double frame, drawn in a pixel face that
 # travels with the file. There is no light side: this look is the black ground.
+#
+# `font-smooth: none` and the three weights go together. The face is drawn on a grid, so smoothing
+# puts a grey rim on every dot; with it off, the synthesised bold that the weights ask for is a
+# line two device pixels wide instead of one, and nothing in between. Turn the smoothing back on
+# and the same bold is what smears.
 
 name: retro
 title: "Retro"
@@ -65,9 +70,10 @@ dark:
   c-text-muted: "#b8b8c8"
   font: '"DotGothic16", "Hiragino Sans", "Noto Sans JP", sans-serif'
   font-mono: '"DotGothic16", ui-monospace, monospace'
+  font-smooth: "none"
   fw-normal: "400"
-  fw-medium: "400"
-  fw-bold: "400"
+  fw-medium: "550"
+  fw-bold: "680"
   lh: "1.6"
   shadow-scale: "0"
   border-w: "3px"

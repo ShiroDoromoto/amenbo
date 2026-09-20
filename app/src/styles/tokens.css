@@ -224,6 +224,15 @@
   --fw-medium: 550;
   --fw-bold: 680;
   --lh: 1.5;
+  /* whether the glyphs are drawn with grey edges (`-webkit-font-smoothing` in global.css).
+     `antialiased` is what a face with curves in it wants, and it is what every screen here is read
+     in. A face drawn on a grid does not: each dot picks up a grey rim, and the whole page reads as
+     if it were out of focus. That is a property of the face, so it is the skin that carries the
+     face which has to be able to turn it off — measured on the pixel face Retro ships, 55.9% of
+     the inked pixels are neither the ink nor the ground at `antialiased`, and 0.0% at `none`.
+     Windows draws the same picture whichever is written: the engine there reads the declaration
+     and does not use it (`AMB-T-5168`). */
+  --font-smooth: antialiased;
 
   /* ----- how wide a run of text is let get (`AMB-D-842`) -----
      Two steps, because a line of prose and a box to type in are read differently. Prose is read

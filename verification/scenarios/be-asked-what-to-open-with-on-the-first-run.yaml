@@ -9,7 +9,7 @@
 # The row is every agent this machine can start, found by running the pane's own login shell over
 # the operator's `PATH`. On a machine with one agent that one is on — a row of one is not a choice —
 # and on a machine with none there is no row at all. Both are correct, and neither is this state. So
-# the road says what the machine has (`terminal can-start`), which puts stand-in programs in front
+# the road says what the machine has (`workspace can-start`), which puts stand-in programs in front
 # of the `PATH` the app under test is launched with, and reads a row it stood up rather than one it
 # happened to find.
 #
@@ -51,22 +51,22 @@ given:
   # The machine the row is read on. Two, because that is the smallest number that makes what to open
   # with a question at all — with the plain shell beside them the row has three things on it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
   # that read a screen it had not put itself on would be reading somebody else's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lighthouse
@@ -74,14 +74,14 @@ steps_gui:
   # A page with room for two, set while nothing is open. It is what leaves an empty frame standing
   # beside the pane at the end, which is the frame the second reading is taken on.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   # Where the road starts from: nothing open, so the page draws its one way in and nothing else.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 0
@@ -89,7 +89,7 @@ steps_gui:
   # The state under test, read before a finger has touched the frame. Nothing on the row is on, and
   # the press will not open a pane — it asks to be told.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: opens-with
     with:
       start: none
@@ -97,26 +97,26 @@ steps_gui:
   # The answer. On an empty frame the row and the press are both on the frame itself, so this one
   # step is the whole of somebody saying "a plain prompt" and the press coming alive.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The pane is named by the reader's own words — the one thing on the page that is the road's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the first press was told what to open with
 
   # It opened. The press that would not answer a moment ago answered once it had been told.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the first press was told what to open with
 
   # The page had room for two, so one pane leaves one empty frame beside it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 1
@@ -124,7 +124,7 @@ steps_gui:
 
   # And that frame is not asking. The answer given a moment ago is on the row, and the press opens.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: opens-with
     with:
       start: shell

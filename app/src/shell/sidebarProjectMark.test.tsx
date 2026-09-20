@@ -2,7 +2,7 @@
 // What a project row in the rail is marked with (`AMB-D-848`): the image the project was given, or
 // the colour a person gave it with the first character of its name written on it. The rail drew an
 // 8px square of colour before this and no letter at all, so the same project arrived one way here
-// and another on the terminal face's tabs — and an image a person had registered was on neither.
+// and another on the workspace's tabs — and an image a person had registered was on neither.
 //
 // The tabs' side of the same rule is `projectTabs.test`. What is asked here is what the rail alone
 // answers: the archived rows, whose read path carries no image.

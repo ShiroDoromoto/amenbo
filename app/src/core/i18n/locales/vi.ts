@@ -581,7 +581,7 @@ export const vi: Translation = {
 
     "face.switch": "Cửa sổ này đang hiển thị gì",
     "face.tasks": "Công việc",
-    "face.terminal": "Không gian làm việc",
+    "face.workspace": "Không gian làm việc",
     "face.splitOut": "Mở trong cửa sổ riêng",
     "face.merge": "Trở lại một cửa sổ",
     "face.opening": "Đang mở không gian làm việc trong cửa sổ riêng…",

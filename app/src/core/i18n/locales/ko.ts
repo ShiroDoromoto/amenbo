@@ -577,7 +577,7 @@ export const ko: Translation = {
 
     "face.switch": "이 창이 보여 주는 화면",
     "face.tasks": "작업",
-    "face.terminal": "워크스페이스",
+    "face.workspace": "워크스페이스",
     "face.splitOut": "별도 창으로 열기",
     "face.merge": "하나의 창으로 되돌리기",
     "face.opening": "워크스페이스를 별도의 창에서 여는 중…",

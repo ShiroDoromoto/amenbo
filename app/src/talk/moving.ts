@@ -39,7 +39,7 @@ const HUES = [199, 152, 32, 280];
  *
  * **It is the place and not the pane's id** (`AMB-D-897`). An id is drawn now rather than counted,
  * so no two of them run on from each other — read for a hue, a screenful of panes would come out one
- * colour. Both faces that draw a dot know which slot they are drawing (`../shell/TerminalFace`,
+ * colour. Both faces that draw a dot know which slot they are drawing (`../shell/WorkspaceFace`,
  * `../shell/PaneOrder`), so the place is the thing to ask.
  */
 export function hueOf(at: number): number {

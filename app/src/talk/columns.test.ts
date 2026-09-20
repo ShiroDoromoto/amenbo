@@ -10,6 +10,7 @@ import {
   setSideNarrow, setSideShown, setSideTab,
   setSideWide, setTabsCompact, setTabsWidth, tabsMax, tabsWidth, TABS_COMPACT_WIDTH, TABS_DEFAULT,
   TABS_MIN, railMax, sideNarrowMax, sideWideMax, SIDE_MIN, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT,
+  carryOverKeptColumns,
 } from "./columns";
 
 /** What the tab column is taking while nothing has been folded or dragged — it comes off the window
@@ -44,13 +45,13 @@ describe("a column's width", () => {
 
   it("is clamped on the way out too, so a width kept on a wider screen cannot come back whole", () => {
     // Written straight into storage, the way a run on a 4K display would have left it.
-    localStorage.setItem("amenbo.termface.sideNarrow.1", "3000");
+    localStorage.setItem("amenbo.workspace.sideNarrow.1", "3000");
     expect(getSideNarrow(ONE)).toBeLessThanOrEqual(clampSideNarrow(3000));
     expect(getSideNarrow(ONE)).toBeLessThan(3000);
   });
 
   it("falls back where what was kept is not a width at all", () => {
-    localStorage.setItem("amenbo.termface.railWidth.1", "wide");
+    localStorage.setItem("amenbo.workspace.railWidth.1", "wide");
     expect(getRailWidth(ONE)).toBe(RAIL_DEFAULT);
   });
 
@@ -217,13 +218,13 @@ describe("the tab column's own width", () => {
   it("is clamped on the way out too, so a width kept on a wider screen cannot come back whole", () => {
     window.innerWidth = 960;
     // Written straight into storage, the way a run on a 4K display would have left it.
-    localStorage.setItem("amenbo.termface.tabsWidth", "3000");
+    localStorage.setItem("amenbo.workspace.tabsWidth", "3000");
     expect(getTabsWidth()).toBe(tabsMax());
     expect(getTabsWidth()).toBeLessThan(3000);
   });
 
   it("falls back where what was kept is not a width at all", () => {
-    localStorage.setItem("amenbo.termface.tabsWidth", "wide");
+    localStorage.setItem("amenbo.workspace.tabsWidth", "wide");
     expect(getTabsWidth()).toBe(TABS_DEFAULT);
   });
 
@@ -256,7 +257,7 @@ describe("which half of the file face is up", () => {
 
   it("reads as the memo where what was kept is not one of the two", () => {
     // An older build, or a store edited by hand: a word that is not an answer is not one.
-    localStorage.setItem("amenbo.termface.sideTab", "tree");
+    localStorage.setItem("amenbo.workspace.sideTab", "tree");
     expect(getSideTab()).toBe("memo");
   });
 
@@ -284,7 +285,7 @@ describe("which half of the rail is up", () => {
   });
 
   it("reads as the folder where what was kept is not one of the two", () => {
-    localStorage.setItem("amenbo.termface.railTab", "history");
+    localStorage.setItem("amenbo.workspace.railTab", "history");
     expect(getRailTab()).toBe("files");
   });
 });
@@ -327,5 +328,38 @@ describe("a column's ceiling", () => {
     window.innerWidth = 400;
     expect(railMax(SIDE_NARROW_DEFAULT)).toBe(RAIL_MIN);
     expect(sideNarrowMax(RAIL_DEFAULT)).toBe(SIDE_MIN);
+  });
+});
+
+// The face was called the terminal until `AMB-T-5178`, and what a person dragged then is theirs.
+describe("what was kept while the face was called the terminal", () => {
+  it("comes over, per device and per project alike", () => {
+    localStorage.setItem("amenbo.termface.tabsWidth", "200");
+    localStorage.setItem("amenbo.termface.sideNarrow.1", "400");
+
+    carryOverKeptColumns();
+
+    expect(localStorage.getItem("amenbo.workspace.tabsWidth")).toBe("200");
+    expect(localStorage.getItem("amenbo.workspace.sideNarrow.1")).toBe("400");
+    expect(localStorage.getItem("amenbo.termface.tabsWidth")).toBeNull();
+    expect(localStorage.getItem("amenbo.termface.sideNarrow.1")).toBeNull();
+  });
+
+  it("leaves an answer already kept under the new name alone, and clears the old one", () => {
+    localStorage.setItem("amenbo.termface.tabsWidth", "200");
+    localStorage.setItem("amenbo.workspace.tabsWidth", "240");
+
+    carryOverKeptColumns();
+
+    expect(localStorage.getItem("amenbo.workspace.tabsWidth")).toBe("240");
+    expect(localStorage.getItem("amenbo.termface.tabsWidth")).toBeNull();
+  });
+
+  it("touches nothing else this device kept", () => {
+    localStorage.setItem("amenbo.theme", "dark");
+
+    carryOverKeptColumns();
+
+    expect(localStorage.getItem("amenbo.theme")).toBe("dark");
   });
 });

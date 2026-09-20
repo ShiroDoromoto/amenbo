@@ -35,7 +35,7 @@ given:
       dir: lampstore
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -44,13 +44,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -58,29 +58,29 @@ steps_gui:
   # The second of the row, because the fault this road is about lives on some providers and not on
   # others. It is a position and not a name, the way every reading of this row is.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
     with:
       at: second
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-models
 
   # Said before the press: the command goes in alone, and the change reaches a file of the reader's.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: switch-says
     with:
       command: /model
       keeps: ~/.codex/config.toml
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: switch-model
     with:
       name: scenario-model-02
@@ -88,18 +88,18 @@ steps_gui:
 
   # The whole line the program was given, and the name is not on it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO said [/model]
 
   # And nothing claims the model moved: the provider's picker is where that is settled.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       model: waiting
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: end-pane

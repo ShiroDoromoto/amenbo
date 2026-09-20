@@ -28,7 +28,7 @@ export function FolderChoice({
   onPick: (folder: string) => void;
   /** Choose the first folder from outside the list — offered only where there is no list. It binds
    *  this project's first folder, or, on a machine with no project, raises the one the folder
-   *  belongs to (`./TerminalFace`). */
+   *  belongs to (`./WorkspaceFace`). */
   onBind: () => void;
   note: string | null;
 }) {

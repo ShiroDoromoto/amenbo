@@ -41,7 +41,7 @@
 id: pick-several-rows-and-act-on-all-of-them
 title: The rows picked out in the panel are the rows the row menu and the bin act on
 description: >
-  Open the terminal face on a project whose folder holds four files and a folder. Pick two rows that
+  Open the workspace on a project whose folder holds four files and a folder. Pick two rows that
   are not neighbours with the key this machine adds to a selection with, and copy their paths from
   the row menu: both come out, and the row between them does not. Pick two again, copy them with the
   key and paste them into the folder. Then reach back with Shift and press the bin: the three rows go
@@ -112,13 +112,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

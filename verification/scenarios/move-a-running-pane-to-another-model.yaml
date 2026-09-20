@@ -50,7 +50,7 @@ given:
   # once it has printed — a pane whose program has gone has no model row on it — and makes it print
   # back what it is given.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
@@ -59,15 +59,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # pane this road opens has to open in the folder this road named.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Lantern
@@ -76,28 +76,28 @@ steps_gui:
   # settles it there. Nothing is chosen on the model row: what a pane opens on is another road's, and
   # this one is about the pane once it is open.
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-start
 
   # The program is running, which is the state this whole road is about — and the row under the pane
   # names no model, because nothing has moved it yet.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       model: none
 
   # ── What the press will do, said before it is pressed ─────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-models
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: switch-says
     with:
       command: /model
@@ -107,7 +107,7 @@ steps_gui:
   # The second of the three rather than the first: a build that had drawn the row in some other order
   # and pressed whatever stood at the front would pass on the first.
   - type: action
-    domain: terminal
+    domain: workspace
     op: switch-model
     with:
       name: scenario-model-02
@@ -117,14 +117,14 @@ steps_gui:
   # what make this a reading of the whole line: a line carrying the name and a line not carrying it
   # are two readings here, and neither contains the other.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO said [/model scenario-model-02]
 
   # And the row says which model, because the line it sent is one that settles it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: answers-on
     with:
       model: scenario-model-02
@@ -132,5 +132,5 @@ steps_gui:
   # The program is ended deliberately: what a pane left running would do to the run after this one is
   # not this road's question to leave open.
   - type: action
-    domain: terminal
+    domain: workspace
     op: end-pane

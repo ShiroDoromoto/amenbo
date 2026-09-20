@@ -581,7 +581,7 @@ export const id: Translation = {
 
     "face.switch": "Yang ditampilkan jendela ini",
     "face.tasks": "Tugas",
-    "face.terminal": "Ruang kerja",
+    "face.workspace": "Ruang kerja",
     "face.splitOut": "Buka di jendela terpisah",
     "face.merge": "Kembali ke satu jendela",
     "face.opening": "Membuka ruang kerja di jendelanya sendiri…",

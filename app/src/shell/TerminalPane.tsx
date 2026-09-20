@@ -59,7 +59,7 @@ async function handOver(session: string, paths: string[]) {
 }
 
 /**
- * One slot of the terminal face: a frame, and the terminal in it when there is one.
+ * One slot of the workspace: a frame, and the terminal in it when there is one.
  *
  * **A frame is a place, so an empty one is not nothing.** It is a slot on this page with a way to
  * open a terminal in it, and it stays a place after the program in it exits — what is on the screen
@@ -102,7 +102,7 @@ export function TerminalPane({
   focused: boolean;
   /**
    * Whether a path has just been handed to this pane from somewhere else on the face, for as long as
-   * the pane is saying so (`./TerminalFace`).
+   * the pane is saying so (`./WorkspaceFace`).
    *
    * **Told rather than kept here**, because what it is about is the act and not the pane: the face
    * knows a hand-over happened and the pane only draws it. What is drawn takes no room — the box
@@ -777,12 +777,12 @@ export function TerminalPane({
           ? (
             <>
               {ended && (
-                <span className="termface__note">
+                <span className="workspace__note">
                   {t("face.ended")}
                   {stopped !== null && ` ${t(stopped)}`}
                 </span>
               )}
-              <div className="termface__face" ref={paneRef} />
+              <div className="workspace__face" ref={paneRef} />
             </>
           )
           : (

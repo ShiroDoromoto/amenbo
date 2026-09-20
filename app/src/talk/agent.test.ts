@@ -331,7 +331,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
   });
 });
 
-// A frame is told which project it is on by the face it sits on (`../shell/TerminalFace`), and from
+// A frame is told which project it is on by the face it sits on (`../shell/WorkspaceFace`), and from
 // there it keeps the rule that face keeps: a pane works in one of its project's folders and no other.
 describe("a window told which project it is on asks among that project's folders and no others", () => {
   it("offers the project's folders, and never the machine's", async () => {

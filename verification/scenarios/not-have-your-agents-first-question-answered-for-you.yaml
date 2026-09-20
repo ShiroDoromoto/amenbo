@@ -74,20 +74,20 @@ given:
   # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
   # with none there is no row.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Nightwatch
@@ -95,14 +95,14 @@ steps_gui:
   # Shows nothing, hands back everything, and prints once so that there is a pane worth pasting into
   # at all. Each of the three does a job — see the head of the file.
   - type: action
-    domain: terminal
+    domain: workspace
     op: register-start
     with:
       name: Silent log
       line: stty -echo; printf 'SCENARIO the pane is ready\n\033[?2004h'; sed 's/^/SCENARIO back> /'
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-registered
     with:
       name: Silent log
@@ -110,7 +110,7 @@ steps_gui:
   # The program is up and has drawn, which is what makes the pane one Amenbo will write into. Without
   # this the road could pass on a build that never tried.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane is ready
@@ -120,7 +120,7 @@ steps_gui:
   # into a pane which had shown Amenbo nothing. The road ends here — see the head of the file for
   # why there is nothing on the row above the pane left to read.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: handed-over
     with:
       given-back: SCENARIO back>

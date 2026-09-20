@@ -171,7 +171,7 @@ const box = () => container.querySelector<HTMLTextAreaElement>(".compose__box");
 /** The press that sends what is written. */
 const sendBtn = () => container.querySelector<HTMLButtonElement>(".compose__send");
 /** The box the emulator collects typing in, which is the terminal's own. */
-const typing = () => container.querySelector<HTMLTextAreaElement>(".termface__face textarea");
+const typing = () => container.querySelector<HTMLTextAreaElement>(".workspace__face textarea");
 /** The pane itself, which is what a press on any part of it reaches on its way up. */
 const slot = () => container.querySelector<HTMLElement>(".slot");
 
@@ -349,7 +349,7 @@ describe("the box under a pane", () => {
     const frame = container.querySelector(".slot__frame")!;
     const bands = [...frame.children].map((one) => one.className);
     expect(bands.findIndex((one) => one.includes("compose")))
-      .toBeGreaterThan(bands.findIndex((one) => one.includes("termface__face")));
+      .toBeGreaterThan(bands.findIndex((one) => one.includes("workspace__face")));
     expect(bands.findIndex((one) => one.includes("panerow")))
       .toBeGreaterThan(bands.findIndex((one) => one.includes("compose")));
   });

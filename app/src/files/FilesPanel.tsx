@@ -1,4 +1,4 @@
-// The reading column: the far side of the terminal face, where a file opened in the rail's tree is
+// The reading column: the far side of the workspace, where a file opened in the rail's tree is
 // read without leaving the window (`AMB-T-3602`).
 //
 // **It draws what is read and never what is found.** Finding a file is the tree's, and the tree is
@@ -65,7 +65,7 @@ export function openKey(one: OpenFile): string {
  * The reading column draws one file at a time, so the file a reader moves away from leaves the
  * screen — and the text they typed into it is in the editor and nowhere else (`./FileEditor`). It is
  * caught on the way out and handed to the face, which holds one of these per open file and hands it
- * back when that file comes up again (`../shell/TerminalFace`).
+ * back when that file comes up again (`../shell/WorkspaceFace`).
  *
  * **`edited` and `seen` travel with the text because the panel cannot work them out again.** Whether
  * any of it is unsaved is what the editor said while it stood, and the mark is the file as it was
@@ -89,7 +89,7 @@ export function FilesPanel({
    * asked the same question once, and two controls that do the same thing leave a reader looking for
    * the right one; the row that stayed is the one that can also say which files are open, and that
    * draws the draft page as a tab beside them. What the top row kept is opening the column and
-   * closing it (`../shell/TerminalFace`).
+   * closing it (`../shell/WorkspaceFace`).
    */
   tab: SideTab;
   /** Ask for another face — the tabs, which are the one door to each of them. */
@@ -154,9 +154,9 @@ export function FilesPanel({
   /** Open the history of one file, narrowed to it — handed the folder it is in and the path inside
    *  that folder (`./GitHistory`). */
   onFileHistory?: (root: string, path: string) => void;
-  /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
+  /** Leave the workspace for the ledger — what a reference or a record means when it is clicked. */
   onOpenLedger?: () => void;
-  /** Hand the file being read to the pane the reader is working in (`../shell/TerminalFace`). */
+  /** Hand the file being read to the pane the reader is working in (`../shell/WorkspaceFace`). */
   onHandOver?: (wholes: string[]) => void;
   /** Whether the folder-wide search has been opened. The tab stands from then on, the way the
    *  history's does: the column says nothing about it until somebody has asked (`AMB-D-905`). */
@@ -260,7 +260,7 @@ export function FilesPanel({
    * to be asked on one road and not the other.
    *
    * What a file is holding is in the editor and in the face's copy of what the editor said
-   * (`Typed`); a tab closed throws both away (`../shell/TerminalFace`), and a save is the only
+   * (`Typed`); a tab closed throws both away (`../shell/WorkspaceFace`), and a save is the only
    * thing that puts the text anywhere else. So this is the last moment there is to ask.
    *
    * **A file with nothing to lose is closed without a word.** Every tab would otherwise carry a

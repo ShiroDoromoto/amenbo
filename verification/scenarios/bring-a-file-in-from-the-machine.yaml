@@ -22,7 +22,7 @@
 id: bring-a-file-in-from-the-machine
 title: A file dragged in from the machine lands in the folder it was let go over, beside what was already there
 description: >
-  Open the terminal face on a project whose folder already holds a file, unfold the folder's section,
+  Open the workspace on a project whose folder already holds a file, unfold the folder's section,
   and drag a file in from somewhere else on the machine, letting it go over the folder inside it.
   Open that folder and read that the file arrived in it, with the file that was already there still
   standing beside it.
@@ -55,15 +55,15 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The panel beside the panes opens on the page a person writes on rather than on the folder, so the
   # road asks for the half it is about before reading anything in it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

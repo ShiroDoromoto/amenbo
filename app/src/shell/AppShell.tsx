@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { RefTargetDto } from "../bindings/bindings";
 import { TopBar } from "./TopBar";
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
 import { isBlankSpaceClose } from "./outsideClose";
 import { endingConfirm } from "./openPanes";
@@ -135,25 +135,25 @@ export function AppShell() {
     setSidebarCompactState(setSidebarCompact(want));
   }, []);
 
-  // Which face this window is showing, and whether the terminal has a window of its own
+  // Which face this window is showing, and whether the workspace has a window of its own
   // (`AMB-D-753`). A launch shows the ledger; the shape is what the machine was last used in.
   const [face, setFace] = useState<Face>("tasks");
   const [shape, setShapeState] = useState<WindowShape>(() => getWindowShape());
-  // Has the terminal been asked for in this window at all? Until it has, there is no pane and no
+  // Has the workspace been asked for in this window at all? Until it has, there is no pane and no
   // shell — a launch that never leaves the ledger starts no process it was not asked to. Once asked
-  // it stays true, because the face is hidden rather than taken down (`TerminalFace`).
-  const [terminalAsked, setTerminalAsked] = useState(false);
-  const hostsTerminal = shape === "one" && terminalAsked;
-  // The project the reader came to the terminal from, and nothing where they came from nowhere. A
+  // it stays true, because the face is hidden rather than taken down (`WorkspaceFace`).
+  const [workspaceAsked, setWorkspaceAsked] = useState(false);
+  const hostsWorkspace = shape === "one" && workspaceAsked;
+  // The project the reader came to the workspace from, and nothing where they came from nowhere. A
   // launch puts the ledger on the first project by itself (`initialNav`), which is not a reader
-  // saying what their terminal is about — a face handed that would open on it every launch instead
-  // of on the project the last run was left on (`./TerminalFace`, `AMB-T-4517`).
+  // saying what their workspace is about — a face handed that would open on it every launch instead
+  // of on the project the last run was left on (`./WorkspaceFace`, `AMB-T-4517`).
   const cameFromProject = nav !== initialNav && nav.type === "project" ? Number(nav.id) : null;
   // Splitting out and folding back are the same move seen from either end, and both go through the
   // shape: the window is opened and closed by the effect below, so every way into two windows — the
   // button, and a launch that remembers being two — arrives at the same place.
   const setShape = useCallback((next: WindowShape) => setShapeState(setWindowShape(next)), []);
-  // The window the terminal was split out into failing to become one. It is the one failure here a
+  // The window the workspace was split out into failing to become one. It is the one failure here a
   // person has to be told about, because they asked for the window and would otherwise watch the
   // button do nothing — and it is told on the face they are put back on, which is where they were
   // going. Two things can fail: the platform refusing to build the window at all, and a window that
@@ -164,31 +164,31 @@ export function AppShell() {
   // holds the answer until the other window says it drew.
   const [opening, setOpening] = useState(false);
   /**
-   * One window again, with the terminal as its face — and `note` to say why, where there is a why.
+   * One window again, with the workspace as its face — and `note` to say why, where there is a why.
    *
    * Every way the second window can fail to be there ends here: it was refused, it drew nothing, or
-   * it went without this window hearing. The reader was on their way to the terminal in all three,
-   * so this is where they are put, and `terminalAsked` is set because the face is only hosted once
+   * it went without this window hearing. The reader was on their way to the workspace in all three,
+   * so this is where they are put, and `workspaceAsked` is set because the face is only hosted once
    * it has been asked for — a launch that came up believing it was two windows never asked.
    */
-  const foldBackToTerminal = useCallback((note: string | null) => {
+  const foldBackToWorkspace = useCallback((note: string | null) => {
     setWindowError(note);
     setShapeState(setWindowShape("one"));
-    setTerminalAsked(true);
-    setFace("terminal");
+    setWorkspaceAsked(true);
+    setFace("workspace");
   }, []);
   /**
-   * A press meant for the terminal, made while this window believes the terminal is in the other one.
+   * A press meant for the workspace, made while this window believes the workspace is in the other one.
    *
    * It asks for that window rather than opening one, because opening is what a press means only when
-   * the reader asked for two windows — and here they are asking to *see* the terminal. A `false`
+   * the reader asked for two windows — and here they are asking to *see* the workspace. A `false`
    * means the belief was wrong and there is no window: the reader is put back on the face here
    * rather than left pressing at nothing, which is what a raise of a window that is not there
    * silently was (`crate::windows::talk_raise`).
    *
    * `openIn` is what the press was carrying, where it carried anything: the folder to work in and
    * whose project it is, handed on to the window that has the face. Raising without it would put the
-   * reader in front of the terminal with nothing opened, which is not what they pressed.
+   * reader in front of the workspace with nothing opened, which is not what they pressed.
    */
   const goToTalkWindow = useCallback((instead: () => void, openIn?: { project: number; dir?: string; pane?: string }) => {
     void invoke<boolean>("talk_raise", { openIn: openIn ?? null })
@@ -199,9 +199,9 @@ export function AppShell() {
   // front. A launch restoring the shape was not asking for anything, and the window the user is
   // looking at is this one — "nothing comes forward but what somebody pressed" (`AMB-D-753`).
   const raiseTalk = useRef(false);
-  // Nothing else travels with the press. What the window draws is the terminal face whole, and the
+  // Nothing else travels with the press. What the window draws is the workspace whole, and the
   // face reads the arrangement this run holds and takes up the terminals still running — the same two
-  // questions it answers when the app folds back into one window (`./TerminalFace`, `../talk.tsx`).
+  // questions it answers when the app folds back into one window (`./WorkspaceFace`, `../talk.tsx`).
   useEffect(() => {
     if (!inTauri()) return;
     if (shape !== "two") {
@@ -213,13 +213,13 @@ export function AppShell() {
     setOpening(true);
     void invoke("talk_open", { raise })
       .catch((e: unknown) => {
-        // Back to one window, where the terminal still is: what was split out is put back rather
+        // Back to one window, where the workspace still is: what was split out is put back rather
         // than left pointing at a window that was never built, or at one that was built and drew
         // nothing.
-        foldBackToTerminal(errLabel(e as CmdError));
+        foldBackToWorkspace(errLabel(e as CmdError));
       })
       .finally(() => setOpening(false));
-  }, [shape, foldBackToTerminal]);
+  }, [shape, foldBackToWorkspace]);
   // The talk window going away, however it went: the button that folds the app back, and the title
   // bar's close, which is the one an app that only watched its own button would miss. Either way the
   // terminal is still running and is now nobody's to draw, so this window takes it and shows it —
@@ -232,8 +232,8 @@ export function AppShell() {
       .then(({ listen }) =>
         listen("talk://closed", () => {
           setShape("one");
-          setTerminalAsked(true);
-          setFace("terminal");
+          setWorkspaceAsked(true);
+          setFace("workspace");
         }),
       )
       .then((un) => {
@@ -245,24 +245,24 @@ export function AppShell() {
       unlisten?.();
     };
   }, [setShape]);
-  // Pressing a segment. With the terminal in a window of its own there is nothing to switch to here,
+  // Pressing a segment. With the workspace in a window of its own there is nothing to switch to here,
   // so the press raises that window instead — and never opens a second one (`windows::talk_open`).
   const selectFace = useCallback((next: Face) => {
-    if (next === "terminal" && shape === "two") {
-      goToTalkWindow(() => foldBackToTerminal(null));
+    if (next === "workspace" && shape === "two") {
+      goToTalkWindow(() => foldBackToWorkspace(null));
       return;
     }
-    if (next === "terminal") setTerminalAsked(true);
+    if (next === "workspace") setWorkspaceAsked(true);
     setFace(next);
-  }, [shape, goToTalkWindow, foldBackToTerminal]);
-  // The folder the ledger has asked the terminal to work in, whose project it is, and a count of the
+  }, [shape, goToTalkWindow, foldBackToWorkspace]);
+  // The folder the ledger has asked the workspace to work in, whose project it is, and a count of the
   // asking: the face is a component, so what it is handed is where to work rather than a call to make
-  // (`./TerminalFace`).
+  // (`./WorkspaceFace`).
   const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; nth: number } | null>(null);
   /**
    * "Start in the workspace" — the one move the first loop offers (`../components/FirstLoop`).
    *
-   * With the terminal split out into a window of its own, this window has no face to hand the folder
+   * With the workspace split out into a window of its own, this window has no face to hand the folder
    * to — so the pair goes out to the host, which raises that window and hands it on
    * (`crate::windows::talk_raise`). **The press does the same thing in either shape**: a pane opens
    * in the folder that was pressed for. Raising the window and leaving the folder behind was a
@@ -278,26 +278,26 @@ export function AppShell() {
   const startTerminalIn = useCallback((project: number, dir: string) => {
     const here = () => {
       setOpenIn((asked) => ({ project, dir, nth: (asked?.nth ?? 0) + 1 }));
-      setTerminalAsked(true);
-      setFace("terminal");
+      setWorkspaceAsked(true);
+      setFace("workspace");
     };
     if (shape === "two") {
       // And where that window turns out not to exist, the folder is not dropped along with the
       // belief: the reader asked to work in it, and this window can now host the face that does.
-      goToTalkWindow(() => { foldBackToTerminal(null); here(); }, { project, dir });
+      goToTalkWindow(() => { foldBackToWorkspace(null); here(); }, { project, dir });
       return;
     }
     here();
-  }, [shape, goToTalkWindow, foldBackToTerminal]);
+  }, [shape, goToTalkWindow, foldBackToWorkspace]);
 
   /**
    * Go to the pane a task or a decision was made in (`AMB-D-897`, `../components/MadeIn`).
    *
-   * It travels the road "start in the terminal" travels, and for the same reason: the press is made
+   * It travels the road "start in the workspace" travels, and for the same reason: the press is made
    * on the ledger and the face that answers it may be in the other window. What is different is what
    * it names — a pane rather than a folder — and the face does with it what only it can: go to that
    * place where it is on the screen, and open it again under the same id where it is not
-   * (`./TerminalFace`).
+   * (`./WorkspaceFace`).
    *
    * **The way back into the conversation is not carried here.** It is already on that frame by the
    * time this runs — put there by the press, host-side, off the record itself
@@ -306,21 +306,21 @@ export function AppShell() {
   const goToPane = useCallback((project: number, pane: string) => {
     const here = () => {
       setOpenIn((asked) => ({ project, pane, nth: (asked?.nth ?? 0) + 1 }));
-      setTerminalAsked(true);
-      setFace("terminal");
+      setWorkspaceAsked(true);
+      setFace("workspace");
     };
     if (shape === "two") {
-      goToTalkWindow(() => { foldBackToTerminal(null); here(); }, { project, pane });
+      goToTalkWindow(() => { foldBackToWorkspace(null); here(); }, { project, pane });
       return;
     }
     here();
-  }, [shape, goToTalkWindow, foldBackToTerminal]);
+  }, [shape, goToTalkWindow, foldBackToWorkspace]);
 
 
   // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
   // its panes running for the window that is about to draw them, and this window goes back to the
   // ledger — the face it is now the only one of.
-  const splitOutTerminal = useCallback(() => {
+  const splitOutWorkspace = useCallback(() => {
     setWindowError(null);
     raiseTalk.current = true;
     setFace("tasks");
@@ -470,7 +470,7 @@ export function AppShell() {
   //
   // **And the ledger is put up, because the pane it came from may be a face of this window.** Split
   // out, the pane is in the other window and this one was already showing the ledger; in one window
-  // the two are faces of the same window, and a selection made behind the terminal face is a press
+  // the two are faces of the same window, and a selection made behind the workspace is a press
   // that opened nothing anybody can see. It is the move the file face beside the panes already makes
   // for the refs it draws (`../files/FilesPanel`, `AMB-D-747`) — and it is made only where the
   // selection actually happened, so a discard the reader refused does not move them off their pane.
@@ -603,7 +603,7 @@ export function AppShell() {
         <HandoverBanner />
         <HookSetupBanner asked={hooksAsked} />
         <TickBanner />
-        {/* The open that is still out. It is a band rather than something on the terminal segment
+        {/* The open that is still out. It is a band rather than something on the workspace segment
             because the face has already come down by now — the shape changed as the press landed —
             so the only place left to say anything is the board the reader is looking at. */}
         {opening && (
@@ -615,13 +615,13 @@ export function AppShell() {
           </div>
         )}
       </div>
-      {/* The terminal face, kept up from the moment it is first asked for. `hidden` is what the
+      {/* The workspace, kept up from the moment it is first asked for. `hidden` is what the
           other face being up means here: taking this down would take the emulator with it, and the
           agent running in the pane would have nowhere to come back to (`AMB-D-753`). */}
-      {hostsTerminal && (
-        <div className="shell__terminal" hidden={face !== "terminal"}>
-          <TerminalFace
-            onWindow={splitOutTerminal}
+      {hostsWorkspace && (
+        <div className="shell__workspace" hidden={face !== "workspace"}>
+          <WorkspaceFace
+            onWindow={splitOutWorkspace}
             note={windowError}
             projectId={cameFromProject}
             onOpenLedger={() => setFace("tasks")}
@@ -631,7 +631,7 @@ export function AppShell() {
       )}
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}`}
-        hidden={face === "terminal"}
+        hidden={face === "workspace"}
         // Compact is one width and not a width anybody dragged, so the column is handed that number
         // rather than the one the handle keeps: what was dragged is the named width, and it is still
         // there to come back to (`../core/sidebarWidth`).

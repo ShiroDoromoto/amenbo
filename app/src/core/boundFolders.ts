@@ -11,7 +11,7 @@
 // safe half of being wrong.
 //
 // It is re-read whenever the store moves, because a binding is exactly the kind of thing that happens
-// while this is on screen — the settings screen links one, and the terminal face binds a project's
+// while this is on screen — the settings screen links one, and the workspace binds a project's
 // first folder on the way to opening a pane. Held from the first read, the answer would send the next
 // press back to the folder picker for a project that has just been given one.
 import { useEffect, useState } from "react";
@@ -27,7 +27,7 @@ export type BoundFolders = {
   answered: boolean;
 };
 
-/** `projectId` is nullable for the terminal face, which asks before it has been told which project it
+/** `projectId` is nullable for the workspace, which asks before it has been told which project it
  *  is on. A read for nothing comes back answered-with-none: there is no project whose folders could be
  *  missing, so there is nothing to warn about and nothing to wait for. */
 export function useBoundFolders(projectId: number | null): BoundFolders {

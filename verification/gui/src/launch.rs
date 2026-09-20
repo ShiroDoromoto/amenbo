@@ -67,7 +67,7 @@ pub struct Gui<'a> {
 ///
 /// The third thing it carries is the **machine**: the session's own directory of stand-in programs
 /// goes in front of the `PATH`, which is how a road says what a pane could be opened with
-/// (`amenbo_verify_cli::domain::terminal`). It is handed over on every launch and is empty unless a
+/// (`amenbo_verify_cli::domain::workspace`). It is handed over on every launch and is empty unless a
 /// premise filled it, so a run that asked for nothing is a run on the operator's own machine. What
 /// reads it is a login shell of the operator's, started by the app when it probes — and a profile
 /// that rebuilds the `PATH` from scratch rather than adding to it would drop the directory on the
@@ -110,7 +110,7 @@ fn start(exe: &Path, store: &Session) -> Result<Child, String> {
 /// interactive shell, and the profile that shell reads runs after this is handed over — an operator
 /// whose profile puts `~/.local/bin` first takes the name back, and the road opens their install
 /// (measured 2026-09-14). Nothing here can hold that; what holds it is the premise refusing to
-/// stand where a name is answered from outside the run (`amenbo_verify_cli::domain::terminal`), and
+/// stand where a name is answered from outside the run (`amenbo_verify_cli::domain::workspace`), and
 /// a machine the roads are walked on carrying its own agents behind the `PATH` it hands over.
 ///
 /// A harness that could not read its own `PATH` hands over the directory alone, which is a machine

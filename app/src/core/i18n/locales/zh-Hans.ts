@@ -578,7 +578,7 @@ export const zhHans: Translation = {
 
     "face.switch": "此窗口显示的界面",
     "face.tasks": "任务",
-    "face.terminal": "工作区",
+    "face.workspace": "工作区",
     "face.splitOut": "在单独窗口中打开",
     "face.merge": "合并回一个窗口",
     "face.opening": "正在单独的窗口中打开工作区…",

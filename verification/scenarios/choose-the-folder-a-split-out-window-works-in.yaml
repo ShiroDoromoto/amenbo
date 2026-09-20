@@ -20,7 +20,7 @@
 #
 # ── How the windows are named ────────────────────────────────────────────────────────────────────
 # From the split onwards every step says which window it is walked in, because from there there are
-# two. The board is "Amenbo", its whole title. The other holds the whole terminal face rather than
+# two. The board is "Amenbo", its whole title. The other holds the whole workspace rather than
 # one pane of it, so it is not named after anything on the screen: it carries the product's name with
 # a dash and a word after it, and the word is in the run's own language — so it is named here by the
 # part of its title every language keeps.
@@ -57,22 +57,22 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and it is
   # the project the window inherits — nobody chose one on the way into a window nothing was arranged
   # in, so what it opens on is what the board was showing when it was split out.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Chandlery
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: split-out
     window: Amenbo
 
@@ -80,14 +80,14 @@ steps_gui:
   # both halves of it can be read on a screen in any language: this project's folder is on the list,
   # and what is not on it is anything else.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     window: "Amenbo — "
     with:
       dir: rope-walk
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-folder
     window: "Amenbo — "
     with:
@@ -96,7 +96,7 @@ steps_gui:
   # And down to a plain shell, for the reason every road that types into a pane does it: what an
   # agent does with a line typed at it is the agent's own, and this line has to sit where it was put.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
     window: "Amenbo — "
 
@@ -104,14 +104,14 @@ steps_gui:
   # own words, and so readable on a screen in any language — and it is how the reading below says it
   # is looking at this window's pane and no other.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     window: "Amenbo — "
     with:
       text: SCENARIO the window that asked
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     window: "Amenbo — "
     with:
@@ -120,7 +120,7 @@ steps_gui:
   # The question left nothing behind: the pane is standing where it was, and no half-made box beside
   # it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: asking-folder
     window: "Amenbo — "
     with:
@@ -130,6 +130,6 @@ steps_gui:
   # Folded back, so the run leaves the machine in the shape it found it — one window, with the
   # terminal on its face.
   - type: action
-    domain: terminal
+    domain: workspace
     op: fold-back
     window: "Amenbo — "

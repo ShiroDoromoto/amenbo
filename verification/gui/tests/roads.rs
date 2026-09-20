@@ -34,7 +34,7 @@ fn every_screen_road_renders_into_instructions() {
 }
 
 /// The two steps that name a project by word rather than by binding: opening one on the ledger, and
-/// going to one on the terminal face's rail. Both tell an operator to find that name in a list, so it
+/// going to one on the workspace's rail. Both tell an operator to find that name in a list, so it
 /// has to be in one. Nothing else checks it — a step naming a project nobody raised renders, lints and
 /// walks, and the operator is the one who finds out, mid-run, hunting a list for a name that was never
 /// in it.
@@ -43,7 +43,7 @@ fn every_screen_road_renders_into_instructions() {
 /// (Amenbo raises a project for the folder the run works in, and calls it after that folder).
 #[test]
 fn every_project_a_screen_road_opens_is_a_project_that_exists() {
-    let by_name = [(Domain::Project, "open"), (Domain::Terminal, "go-project")];
+    let by_name = [(Domain::Project, "open"), (Domain::Workspace, "go-project")];
     for f in scenario_files() {
         let scenario = amenbo_scenario::lint_file(&f, None).expect("lints");
         if !scenario.runs_on(Driver::Gui) {

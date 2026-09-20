@@ -36,7 +36,7 @@
 id: choose-the-model-before-the-pane-opens
 title: The model a pane would start on is chosen on the frame, and the line says so before the press
 description: >
-  Stand a machine up with agents on it and open the terminal face. Nobody has chosen what to open
+  Stand a machine up with agents on it and open the workspace. Nobody has chosen what to open
   with, so nothing on the row is on. Choose the first agent, and a model row comes up under it with
   the line the press would run written out below: the agent's own program name, with nothing after it
   naming a model. Write a model name of the road's own into the row's box and the line takes it — a
@@ -59,60 +59,60 @@ given:
   # Two, which is the floor: with one thing to start there is no row to choose the first of, and with
   # none there is no row at all.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Read before anything is pressed: a choice made anywhere in the run ends this state for good.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: opens-with
     with:
       start: none
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-start
 
   # ── Nobody has named a model, and the line says nothing about one ─────────────────────────────
   # The reading that has to come first: this is the line every reader who has never been asked is
   # already getting, and the two below are only worth anything against it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: none
 
   # ── A name written in the box reaches the line ────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-model
     with:
       name: scenario-model-from-the-lamp-store
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: scenario-model-from-the-lamp-store
 
   # ── And taking it back takes it off the line ──────────────────────────────────────────────────
   - type: action
-    domain: terminal
+    domain: workspace
     op: pick-model
     with:
       name: none
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: starts-on
     with:
       model: none

@@ -69,34 +69,34 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face opens on is the run's business, so the road presses for the one it means to
   # arrange in rather than reading whichever was selected.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   # Room for two, which is the one count this arrangement is asked at.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -104,7 +104,7 @@ steps_gui:
   # And the page is full, which is the same thing as saying both panes are standing. A page still
   # offering a way in would be a page with one pane on it, and there would be nothing to arrange.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 2
@@ -113,26 +113,26 @@ steps_gui:
   # Where a page nobody has answered about sits, read before the press so that the press has something
   # to have changed.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: across
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-orient
     with:
       orient: down
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: down
 
   # The other project, which was never arranged in.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
@@ -140,25 +140,25 @@ steps_gui:
   # Cut to two here as well: the split is kept per project too, so this project is standing at the one
   # pane nobody has answered for and has no room for a second.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 2
@@ -167,13 +167,13 @@ steps_gui:
   # The half a face keeping one answer for the whole of itself would fail, and the half a face that
   # swallowed the press on the tab would fail with it — the reason is at the top of this road.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: across
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
@@ -182,7 +182,7 @@ steps_gui:
   # is nothing to press before reading — a face that kept the arrangement only while the project was
   # shown would pass every reading above and fail this one.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: down

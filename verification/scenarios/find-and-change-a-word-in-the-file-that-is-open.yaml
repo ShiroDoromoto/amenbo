@@ -27,7 +27,7 @@
 id: find-and-change-a-word-in-the-file-that-is-open
 title: A word is found in the open file from the panel over it, walked to, written over, and the change is really on the disk
 description: >
-  Open the terminal face on a project whose folder holds a file of plain text with the same word on
+  Open the workspace on a project whose folder holds a file of plain text with the same word on
   two of its lines. Press the key that finds things, type that word into the box that comes up, walk
   to a match and write over it — one, not all of them. Keep the file, leave it and open it again,
   and read back both the line that was written over and the line that was not.
@@ -63,13 +63,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

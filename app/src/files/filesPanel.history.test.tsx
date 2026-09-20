@@ -42,7 +42,7 @@ const rows = () =>
 let widened: string | null | undefined;
 
 /** The reading column, which is where Escape is pressed. */
-const column = () => container.querySelector(".termface__column--side .files")!;
+const column = () => container.querySelector(".workspace__column--side .files")!;
 
 describe("the history in the reading column", () => {
   it("is drawn whole where nothing narrowed it", async () => {

@@ -1,4 +1,4 @@
-// How the panes of the terminal face are arranged: the project they belong to, the pages of one, and
+// How the panes of the workspace are arranged: the project they belong to, the pages of one, and
 // how many of them are drawn at once.
 //
 // **A pane belongs to a project, and the project is chosen before the pane is.** The rail names the
@@ -60,7 +60,7 @@ export const COUNTS: readonly Count[] = [1, 2, 4, 6, 8];
  * lines instead. So this is what a count puts across before the answer, and `acrossIn` is what it
  * puts across after it.
  *
- * The grid itself is drawn in the stylesheet (`.termface__page-grid--*`). This is the same shape
+ * The grid itself is drawn in the stylesheet (`.workspace__page-grid--*`). This is the same shape
  * said where it can be checked: the rule that no count asks for a third row is a claim about every
  * count at once, and a stylesheet can only be read one class at a time. Nothing measures room
  * against it — what the columns beside the panes leave the middle is a pane's worth of floor and
@@ -96,7 +96,7 @@ export function acrossIn(count: Count, orient: Orient): number {
 
 /**
  * The grid a count and an orientation ask for, as the stylesheet names it
- * (`.termface__page-grid--*`).
+ * (`.workspace__page-grid--*`).
  *
  * A count that has no orientation to choose is named by its number alone: the class is what the page
  * is laid out by, and a name with an answer in it that the count cannot be asked would be a second
@@ -136,7 +136,7 @@ const UNANSWERED: Split = { count: DEFAULT_COUNT, orient: DEFAULT_ORIENT };
  * The arrangement as it is handed over — the wire shape of `TalkLayoutDto`.
  *
  * **It is how the two windows share one face**, and it lasts as long as the app is up: whichever
- * window is drawing the face writes it, and the one the terminal is split out into reads it as it
+ * window is drawing the face writes it, and the one the workspace is split out into reads it as it
  * comes up (`app/src-tauri/src/frames.rs`).
  *
  * **What outlives the run is the splits, `project` and the panes** (`AMB-D-869`). So an
@@ -155,9 +155,9 @@ export type SavedLayout = {
    *  is not in it: what is kept is the answers, and a row for every project a reader ever walked
    *  through would say nothing about most of them. */
   splits?: Record<string, { count: number; orient?: Orient }>;
-  /** The project whose panes the face was showing. It answers for the window the terminal was split
+  /** The project whose panes the face was showing. It answers for the window the workspace was split
    *  out into, which has no ledger to have taken one from — and only where the arrangement came back
-   *  with no panes in it, since a pane names its own project (`../shell/TerminalFace`). */
+   *  with no panes in it, since a pane names its own project (`../shell/WorkspaceFace`). */
   project?: number;
   /** The panes, in the order they were opened — where each one is, what was started in it, and what
    *  has been written in the box under it. The draft is the one part that goes no further than the
@@ -254,7 +254,7 @@ export type Frame = {
    * Whether the box under this pane is open (`AMB-D-890`).
    *
    * **It is here for the reason the draft is**: the pane comes and goes — a page turned, a count
-   * changed, the tasks face brought up, the terminal put in a window of its own — and a reader who
+   * changed, the tasks face brought up, the workspace put in a window of its own — and a reader who
    * opened the box did not ask for it to shut at any of those. Kept in the drawing, it went down
    * with every one of them.
    *
@@ -270,7 +270,7 @@ export type Frame = {
   readonly composeOpen: boolean;
 };
 
-/** The arrangement of the terminal face, as it stands. */
+/** The arrangement of the workspace, as it stands. */
 export type Layout = {
   readonly frames: readonly Frame[];
   /** How many panes a page of the project on the screen holds — that project's own answer, or what
@@ -378,7 +378,7 @@ export function frameOfSession(layout: Layout, session: string): Frame | null {
  * The pane of this project already working in `folder`, or null where none is.
  *
  * **A folder already open is not opened beside itself.** It is what a folder handed in from the
- * ledger lands on (`../shell/TerminalFace`): pressing the first loop's one button on a project whose
+ * ledger lands on (`../shell/WorkspaceFace`): pressing the first loop's one button on a project whose
  * pane is already up is a person going to that pane, and a second one in the same folder would be the
  * same work in two places with the reader looking in the one they are not on.
  */
@@ -775,7 +775,7 @@ export function laidOut(layout: Layout): SavedLayout {
       // (`restored`).
       composeOpen: frame.composeOpen,
     })),
-    // The pane being worked in, written down for the window the terminal is split out into: the
+    // The pane being worked in, written down for the window the workspace is split out into: the
     // press says nothing, so where the reader was is theirs to read back out of the shape.
     ...(layout.focus === null ? {} : { splitOut: layout.focus }),
   };
@@ -801,7 +801,7 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
     const project = frame.project ?? onto;
     if (project === null) continue;
     // The box comes over as it was left, which is what carries a half-written sentence to the window
-    // the terminal is split out into (`Frame.written`). An arrangement that came from the store has
+    // the workspace is split out into (`Frame.written`). An arrangement that came from the store has
     // no frames in it at all, so a run that has just started has nothing here to take.
     frames.push({
       id: frame.id,

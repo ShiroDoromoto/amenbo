@@ -6,11 +6,13 @@ import "./components/components.css";
 import "./styles/utilities.css";
 import { initTheme } from "./core/theme";
 import { initSkin } from "./core/skin";
+import { carryOverKeptColumns } from "./talk/columns";
 import App from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
 initTheme();
 initSkin();
+carryOverKeptColumns();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

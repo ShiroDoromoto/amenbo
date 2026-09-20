@@ -34,7 +34,7 @@
 id: carry-a-file-through-the-machines-clipboard
 title: A file goes out of the panel to the reader's file manager, and comes in from it
 description: >
-  Open the terminal face on a project whose folder holds a file. Copy a row with the key this machine
+  Open the workspace on a project whose folder holds a file. Copy a row with the key this machine
   copies with, paste it in a file manager into another folder inside the same one, then bin the row
   it came from: the name is left on the copy the file manager wrote. Then copy a file that is nowhere
   in the folder, come back, and paste onto a row: that file is in the folder too.
@@ -84,13 +84,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files
@@ -138,10 +138,10 @@ steps_gui:
 
   # Back to the panel, since moving that row is done in the settings and leaves the reader there.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
     domain: files

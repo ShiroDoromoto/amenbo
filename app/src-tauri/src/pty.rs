@@ -1674,7 +1674,7 @@ impl CursorQuery {
 /// A pane asks this on the way up, to find out whether the terminal it is there to draw is already
 /// running — which it is every time the pane has moved rather than been made: split out into its own
 /// window, folded back into the board, or rebuilt in place because the interface around it was
-/// (`app/src/shell/TerminalFace.tsx`). The registry is the only thing that knows, because it is the
+/// (`app/src/shell/WorkspaceFace.tsx`). The registry is the only thing that knows, because it is the
 /// only part of a terminal that outlives the window: a webview that went away took its emulator with
 /// it and could tell nothing to whatever draws next.
 ///

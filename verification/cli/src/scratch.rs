@@ -39,7 +39,7 @@ pub struct Session {
     pub artifacts: PathBuf,
     /// **What this machine can start**, as far as the app under test can tell: a directory the GUI
     /// harness hands the app in front of its `PATH` (`amenbo_verify_gui::launch`), holding a program
-    /// per agent a premise said is here (`crate::domain::terminal`).
+    /// per agent a premise said is here (`crate::domain::workspace`).
     ///
     /// It is made with the session and left empty, so a run that asks for nothing gets the machine
     /// the operator actually has. Nothing outside the run ever sees it — the directory goes when the

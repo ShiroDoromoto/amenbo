@@ -2792,7 +2792,7 @@ fn ambiguous_owners(path: &std::path::Path, owners: &[i64]) -> CmdError {
     )
 }
 
-/// **Make the chosen folder one a pane can be opened in** — the terminal face's single way in.
+/// **Make the chosen folder one a pane can be opened in** — the workspace's single way in.
 ///
 /// Choosing a folder there is three things at once: the folder becomes a project's, the project comes
 /// into being, and the terminal opens in it. The first two are here; where a pane opens is the face's
@@ -8277,7 +8277,7 @@ pub(crate) mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// A store with nothing in it, and a folder beside it to choose — the shape the terminal face's
+    /// A store with nothing in it, and a folder beside it to choose — the shape the workspace's
     /// way in is walked on, which is a machine that has no project yet.
     fn a_machine_with_no_project(tag: &str) -> std::path::PathBuf {
         let tmp = amenbo_scratch::scratch(tag);

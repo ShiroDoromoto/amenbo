@@ -50,7 +50,7 @@ export function DecisionDetailPane({
   decisionId: number;
   onOpenTask?: (id: number) => void;
   /** Go to the pane this decision was made in, opening it again where it is gone (`AMB-D-897`).
-   *  Absent outside the shell, where there is no terminal face to go to. */
+   *  Absent outside the shell, where there is no workspace to go to. */
   onGoToPane?: (project: number, pane: string) => void;
   /** Opens the decision on the other end of an edge — superseded, amended or built on (mirrors onOpenTask). */
   onOpenDecision?: (id: number) => void;

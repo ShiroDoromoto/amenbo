@@ -50,21 +50,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and the
   # pane below has to be this project's.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -72,11 +72,11 @@ steps_gui:
   # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and the two
   # creates below have to be run rather than asked for.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane the session is running in
@@ -84,7 +84,7 @@ steps_gui:
   # Nothing filed, nothing said. Read before anything is created, because afterwards there is no way
   # back to a session that has filed nothing.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: made
     with:
       tasks: 0
@@ -113,10 +113,10 @@ steps_gui:
   # the shell — the two faces are a press apart and a road that did not make it would be asking for a
   # pane that is not on the screen.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
     domain: decision
@@ -127,7 +127,7 @@ steps_gui:
     as: putty
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: made
     with:
       tasks: 1
@@ -135,13 +135,13 @@ steps_gui:
       shows: SCENARIO the pane the session is running in
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-made
     with:
       shows: SCENARIO the pane the session is running in
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: press-made
     with:
       target: frames
@@ -157,21 +157,21 @@ steps_gui:
   # And the tally is the session's. The pane is the same place afterwards — its line is still on the
   # screen above the new prompt — and what the band counted went with the terminal that filed it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: end-pane
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: made
     with:
       tasks: 0

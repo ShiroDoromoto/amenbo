@@ -66,21 +66,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face came up on is the run's business, so the road puts itself on one before it
   # opens anything.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Foundry
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -88,19 +88,19 @@ steps_gui:
   # Down to a plain shell. It is the one program on the machine that is certain to be there and
   # certain to be reading a line the reader is writing — which is what a pasted block lands in.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # More than the pane keeps, from a job left running behind the prompt. Everything the session said
   # as it came up is gone from the tail by the time this stops.
   - type: action
-    domain: terminal
+    domain: workspace
     op: print-past-what-is-kept
     with:
       text: SCENARIO the printing is done
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the printing is done
@@ -108,26 +108,26 @@ steps_gui:
   # Off this project's panes and back, which is the pane being built a second time — from the tail,
   # which no longer says what the session asked for.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Foundry
 
   # The pane is drawn again and what it kept is on it, which is where the road it is about starts.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the printing is done
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: paste-lines
     with:
       above: clear
@@ -136,7 +136,7 @@ steps_gui:
   # The last line stands in the box unsent, which is the half a paste gets right even when it arrives
   # a line at a time.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: in-the-box
     with:
       shows: SCENARIO the line under it
@@ -145,7 +145,7 @@ steps_gui:
   # reading, because `clear` is a line whose running says so — the screen it took with it would have
   # taken this with it too.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the printing is done

@@ -28,7 +28,7 @@
 // **The invitation keeps to the same folders the board's does.** A pane belongs to a project, so what
 // it may work in is what that project is bound to and nothing else — a frame that could reach any
 // folder on the machine would put a pane from another project on a screen the rail promises cannot
-// hold one. Which project that is comes from the face the frame sits on (`../shell/TerminalFace`),
+// hold one. Which project that is comes from the face the frame sits on (`../shell/WorkspaceFace`),
 // and the one case with no list to keep to is the machine with no project yet, where the press is the
 // first run's and the folder chosen raises the project it belongs to.
 //
@@ -70,8 +70,8 @@ import { mountTerminal, SHELL, type PaneEvents, type PaneStart } from "./termina
 /** The class the terminal's box is drawn with. xterm.js measures the element it was opened in, so
  *  this is the rule that decides how many columns and rows the program inside is told it has
  *  (`app/src/styles/global.css`). One name, because there is one face that draws a pane — the board
- *  shows it and the split-out window shows the same one (`../shell/TerminalFace`). */
-const PANE_CLASS = "termface__pane";
+ *  shows it and the split-out window shows the same one (`../shell/WorkspaceFace`). */
+const PANE_CLASS = "workspace__pane";
 
 /**
  * Fill `host` with the frame — the pane, and whatever has to be put to the reader before or after

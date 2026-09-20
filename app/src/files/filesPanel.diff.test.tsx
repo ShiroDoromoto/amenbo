@@ -22,7 +22,7 @@ const names = () =>
   [...container.querySelectorAll(".gitdiff__name")].map((one) => one.textContent);
 
 /** The reading column, which is where Escape is pressed. */
-const column = () => container.querySelector(".termface__column--side .files")!;
+const column = () => container.querySelector(".workspace__column--side .files")!;
 
 describe("the picked rows' patches in the reading column", () => {
   it("asks about the picked paths, and draws one patch under each name", async () => {

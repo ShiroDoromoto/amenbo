@@ -85,20 +85,20 @@ given:
   # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
   # with none there is no row.
   - type: action
-    domain: terminal
+    domain: workspace
     op: can-start
     with:
       count: 2
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Beacon
@@ -106,14 +106,14 @@ steps_gui:
   # Draws as it starts, asks for a bracketed paste, then never stops drawing, and hands back what it
   # is given. Each of the four does a job — see the head of the file.
   - type: action
-    domain: terminal
+    domain: workspace
     op: register-start
     with:
       name: Ticking log
       line: printf 'SCENARIO the pane is ready\n\033[?2004h'; i=0; while [ $i -lt 150 ]; do sleep 1; i=$((i+1)); if [ $i -le 12 ]; then printf 'SCENARIO tick %s\n' "$i"; else printf .; fi; done & sed 's/^/SCENARIO back> /'
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-registered
     with:
       name: Ticking log
@@ -121,7 +121,7 @@ steps_gui:
   # The program is up and has drawn, which is what makes the pane one Amenbo will write into at all.
   # Without this the road could pass on a build that never tried.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane is ready
@@ -132,7 +132,7 @@ steps_gui:
   # read before it, and an operator who looked sooner would mark a working build red. It goes on
   # moving after this without saying so, which is what keeps the readings above it on the pane.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO tick 12
@@ -141,7 +141,7 @@ steps_gui:
   # for. The marked line is the reading: what the pane echoes says only that Amenbo wrote into it, and
   # a line the program was handed says the newline went too.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: handed-over
     with:
       given-back: SCENARIO back>

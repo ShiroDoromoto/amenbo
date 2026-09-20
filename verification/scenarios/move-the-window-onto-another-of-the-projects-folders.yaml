@@ -87,21 +87,21 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face came up on is the run's business, so the road puts itself on the one it
   # raised before reading anything off it.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

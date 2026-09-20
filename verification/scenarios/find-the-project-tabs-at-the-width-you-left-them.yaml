@@ -63,46 +63,46 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project the face opens on is the run's business, so the road presses for the one it means
   # to drag in rather than reading whichever was selected.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   # The width it shipped with, which is what the drag is about to move away from.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-span
     with:
       side: tabs
       span: thin
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: drag-side
     with:
       side: tabs
       toward: broad
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-span
     with:
       side: tabs
@@ -112,30 +112,30 @@ steps_gui:
   # project would fail: it would draw this project's tabs at the one the column ships with, and a
   # reader whose project names do not fit would have to say so again in every project they own.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Boathouse
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-span
     with:
       side: tabs
       span: broad
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Greenhouse
@@ -143,7 +143,7 @@ steps_gui:
   # And it is still spent here. A face that held the width only while the project it was dragged in
   # was shown would pass every reading above and fail this one.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: side-span
     with:
       side: tabs

@@ -37,7 +37,7 @@
 id: write-over-what-was-found-across-files-and-spare-one-line
 title: A word found across the folder is written over in files nobody opened, except the one hit that was struck out
 description: >
-  Open the terminal face on a project whose folder holds the same word in two files, one of them
+  Open the workspace on a project whose folder holds the same word in two files, one of them
   twice. Look through the whole folder for it, take one of the three hits out of the list, and write
   over the rest. Two files are still in the list, so the panel asks before it goes; answer that it
   should. The list comes back holding only the hit that was struck out. Open both files: the two hits
@@ -82,13 +82,13 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

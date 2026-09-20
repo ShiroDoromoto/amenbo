@@ -96,13 +96,13 @@ input[type="color"] {
 .shell > .topbar { grid-row: 1; }
 .shell > .shell__banners { grid-row: 2; }
 .shell > .shell__body { grid-row: 3; }
-/* The terminal face shares the body's row: the two are the same window showing one thing or the
+/* The workspace shares the body's row: the two are the same window showing one thing or the
    other (`AMB-D-753`). `hidden` is spelled out because `display: grid` / `display: flex` below is an
    author rule and would otherwise beat the user agent's `[hidden]`, leaving both faces drawn on top
    of each other. Hiding — rather than not rendering — is the whole of "the switch does not kill the
    terminal": the emulator stays, and the PTY keeps flowing behind it. */
-.shell > .shell__terminal { grid-row: 3; }
-.shell__body[hidden], .shell__terminal[hidden] { display: none; }
+.shell > .shell__workspace { grid-row: 3; }
+.shell__body[hidden], .shell__workspace[hidden] { display: none; }
 /* One band under the last, in the order they are written. */
 .shell__banners { display: flex; flex-direction: column; min-width: 0; }
 /* 2 rows x 3 columns. The header row (the project header) spans the full width of main
@@ -128,13 +128,13 @@ input[type="color"] {
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
 
-/* ---------- the terminal face ---------- */
+/* ---------- the workspace ---------- */
 /* The terminal as the board's window draws it: a bar with the way out to a window of its own and the
    controls for what is on screen, then the rail of panes and the page of slots beside it
    (../talk/layout.ts). The window a terminal is split out into draws the same face, so these rules
    are the ones it is drawn with there too (styles/talk.css). */
-.shell__terminal { min-height: 0; }
-.termface {
+.shell__workspace { min-height: 0; }
+.workspace {
   height: 100%; min-height: 0;
   display: flex; flex-direction: column;
 }
@@ -144,31 +144,31 @@ input[type="color"] {
    two faces are one window showing one thing or the other (`AMB-D-753`), so a reader must not be able
    to tell which is up by the colour under the same control. What sits inside the band keeps the gap
    the band's own padding gives it. */
-.termface__bar {
+.workspace__bar {
   display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-3) var(--s-5);
   background: var(--c-surface); border-bottom: var(--border-w) var(--border-style) var(--c-rule);
 }
-.termface__action {
+.workspace__action {
   position: relative;
   display: inline-flex; align-items: center; gap: var(--s-1);
   background: var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
-.termface__action:hover { color: var(--c-text); }
+.workspace__action:hover { color: var(--c-text); }
 /* A toggle whose side is on the screen. It is the same button either way — what it says is whether
    pressing it opens something or puts it away. */
-.termface__action--on { color: var(--c-text); border-color: var(--c-edge); }
+.workspace__action--on { color: var(--c-text); border-color: var(--c-edge); }
 /* The file face's two halves, at the far end of the row: they are about the other side of the
    screen, and the controls for what is in the middle sit between them and the way out. */
-.termface__sides { display: flex; gap: var(--s-2); margin-left: auto; }
+.workspace__sides { display: flex; gap: var(--s-2); margin-left: auto; }
 /* The program in the terminal having exited. What is on the screen stays as it was — that is what a
    terminal ends with — and this is the part of it the screen cannot show for itself. */
-.termface__note { color: var(--c-text-muted); font-size: var(--fs-md); }
+.workspace__note { color: var(--c-text-muted); font-size: var(--fs-md); }
 /* What the face holds: the frame the agent question is put in, and the pane once one is running
    (`app/src/talk/agent.ts`). It takes the room the bar above it leaves. */
-.termface__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.workspace__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has.
@@ -177,7 +177,7 @@ input[type="color"] {
    edge is the face's still: what is fixed is what the pane holds, and the border is where it stops.
    `color-scheme` goes with the ground, or the scrollbar the emulator's viewport puts up is drawn for
    a light one over a dark pane. */
-.termface__pane {
+.workspace__pane {
   flex: 1; min-height: 0;
   padding: var(--s-3);
   /* **Drawn and invisible.** What says where the focus is is the frame around the whole pane
@@ -200,72 +200,72 @@ input[type="color"] {
    **A page is a place to go**, so it is a bordered button with a number in it. Side by side as two
    rows of bare digits they were one control wearing two hats, and a reader who cannot tell which row
    is which presses one to find out. */
-.termface__counts {
+.workspace__counts {
   display: flex; margin-left: var(--s-2);
   padding: 2px;
   background: var(--c-sunken);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
 }
-.termface__count {
+.workspace__count {
   background: transparent; border: 0;
   padding: 2px var(--s-2); border-radius: var(--r-sm);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
-.termface__count:hover { color: var(--c-text); }
+.workspace__count:hover { color: var(--c-text); }
 /* The one that holds a drawing instead of words. The count says a number and the orientation says a
    shape, so one of the two cannot be words — and a box of a fixed height keeps the pair the same
    height whichever is in it. */
-.termface__count--glyph { display: flex; align-items: center; padding: 3px var(--s-2); }
+.workspace__count--glyph { display: flex; align-items: center; padding: 3px var(--s-2); }
 /* The one in force is the one lifted out of the well: a raised face on a sunken ground says which of
    a fixed few is on without a second colour, and the group says the three are one choice. */
-.termface__count--on {
+.workspace__count--on {
   background: var(--c-surface); color: var(--c-text); font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
 
-.termface__pages {
+.workspace__pages {
   display: flex; gap: var(--s-1);
   padding-left: var(--s-3); border-left: var(--border-w) var(--border-style) var(--c-rule);
 }
-.termface__page {
+.workspace__page {
   min-width: 29px; height: 25px;
   background: var(--c-surface); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
-.termface__page--on {
+.workspace__page--on {
   background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); font-weight: 600;
 }
 /* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
    take what is left: the panes are what the face is for, and a list of them that grew with their
    names would take the room from the thing it is a list of (`app/src/talk/columns.ts`). */
-.termface__body { position: relative; flex: 1; min-height: 0; display: flex; }
+.workspace__body { position: relative; flex: 1; min-height: 0; display: flex; }
 
 /* One of the columns beside the panes. It holds the column itself and the grip on the edge it shares
    with them, which is why it is a box of its own: the grip is drawn on the edge rather than in the
    flow, so it needs something to be positioned against. */
-.termface__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
-.termface__column--tabs { width: var(--tabs-w, 160px); }
-.termface__column--rail { width: var(--rail-w, 160px); }
-.termface__column--side { width: var(--side-w, 16rem); }
+.workspace__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
+.workspace__column--tabs { width: var(--tabs-w, 160px); }
+.workspace__column--rail { width: var(--rail-w, 160px); }
+.workspace__column--side { width: var(--side-w, 16rem); }
 /* The wide width lies over the panes rather than pushing them aside: a page that had to make room
    would move the pane a reader is about to paste into, and reading is a thing they came back from
    (`AMB-D-835`). The rail is never covered — how wide this may go is bounded by it
    (`app/src/talk/columns.ts`). */
-.termface__column--wide {
+.workspace__column--wide {
   position: absolute; top: 0; right: 0; bottom: 0;
   z-index: 4;
   box-shadow: var(--shadow-md);
 }
 /* The edge itself. It is wider than the line it sits on — a border is a pixel and a pointer is not —
    so it straddles that line rather than sitting to one side of it. */
-.termface__grip {
+.workspace__grip {
   position: absolute; top: 0; bottom: 0; width: 9px; z-index: 3;
   cursor: col-resize;
 }
-.termface__grip--tabs { right: -4px; }
-.termface__grip--rail { right: -4px; }
-.termface__grip--side { left: -4px; }
-.termface__grip:hover { background: var(--c-edge); }
+.workspace__grip--tabs { right: -4px; }
+.workspace__grip--rail { right: -4px; }
+.workspace__grip--side { left: -4px; }
+.workspace__grip:hover { background: var(--c-edge); }
 
 /* The page: the slots of it, laid out one across, two across, two down, or two rows of two, three or
    four. The grid is written per count rather than flowing, because a slot is a fixed place — panes
@@ -280,7 +280,7 @@ input[type="color"] {
    paying: half a window is under the eighty columns a TUI wants, and two down keeps them whole at the
    cost of the lines. Which of the two a page gets is a person's answer and not a measurement
    (`Orient` in the same file). */
-.termface__page-grid {
+.workspace__page-grid {
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
   padding: var(--s-3);
@@ -288,23 +288,23 @@ input[type="color"] {
 /* A full page has no gap to draw an empty frame in, so the way in goes beside the panes instead —
    a strip the width of the mark it holds, which costs the page no place. The grid gives up the room
    for it rather than the strip lying over a pane. */
-.termface__page-grid--add { position: relative; padding-right: calc(var(--s-3) + 26px + var(--s-2)); }
-.termface__addstrip {
+.workspace__page-grid--add { position: relative; padding-right: calc(var(--s-3) + 26px + var(--s-2)); }
+.workspace__addstrip {
   position: absolute; top: var(--s-3); right: var(--s-3); bottom: var(--s-3);
   width: 26px;
   display: flex; align-items: center; justify-content: center;
   border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
   background: transparent; color: var(--c-text-faint);
 }
-.termface__addstrip:hover {
+.workspace__addstrip:hover {
   border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text);
 }
-.termface__page-grid--1 { grid-template: 1fr / 1fr; }
-.termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
-.termface__page-grid--2-down { grid-template: 1fr 1fr / 1fr; }
-.termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
-.termface__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
-.termface__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
+.workspace__page-grid--1 { grid-template: 1fr / 1fr; }
+.workspace__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
+.workspace__page-grid--2-down { grid-template: 1fr 1fr / 1fr; }
+.workspace__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
+.workspace__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
+.workspace__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
 
 /* Putting the panes in order (`../shell/PaneOrder`). The pages are drawn one under another at the
    same grid the face lays them out at, so what is being arranged has the shape of what comes back.
@@ -325,8 +325,8 @@ input[type="color"] {
    card is the same shape at either — and the room a card gets is what its most crowded reading needs,
    a pane that is named, saying something, working in a folder, finished, and off another page. */
 .paneorder__grid { flex: none; padding: 0; margin-top: var(--s-1); height: 212px; }
-.termface__page-grid--1.paneorder__grid,
-.termface__page-grid--2.paneorder__grid { height: 106px; }
+.workspace__page-grid--1.paneorder__grid,
+.workspace__page-grid--2.paneorder__grid { height: 106px; }
 /* A card, and the whole of where a drop lands: the halves of it decide before and after, so there is
    no empty box anywhere in here for one to be aimed at (`AMB-D-853`). `touch-action` is what keeps a
    drag from scrolling the pages out from under the hand holding one. */
@@ -667,16 +667,16 @@ input[type="color"] {
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they
    last looked at a pane — so the pane says the path arrived rather than leaving them to find it
-   (`../shell/TerminalFace`).
+   (`../shell/WorkspaceFace`).
    **It is a shadow and not a border**: this element is the box xterm measures, and its size is what
    the program inside is told its number of columns from — so nothing that goes up here may take room.
    A shadow takes none, and drawing it inset puts it on the pane's own dark ground rather than over
    the gap between two panes. */
-.slot--landed .termface__pane { box-shadow: inset 0 0 0 2px var(--c-accent); }
+.slot--landed .workspace__pane { box-shadow: inset 0 0 0 2px var(--c-accent); }
 /* Motion turned down: the ring still goes up and comes down — it is what says where the path went —
    and it does so at once rather than fading. */
 @media (prefers-reduced-motion: reduce) {
-  .termface__pane { transition: none; }
+  .workspace__pane { transition: none; }
 }
 /* The empty frame: the dashed place a terminal is opened in, holding what it will be opened with
    and the one press that does it (`../shell/EmptySlot`). The box is the frame; the row and the
@@ -881,7 +881,7 @@ input[type="color"] {
    band of chrome at the side of the window, and a column of a different colour between the window's
    edge and the rail would read as a thing lying on the face rather than as part of it.
 
-   Its width is the column around it (`.termface__column--tabs`), which the face draws at `--tabs-w`:
+   Its width is the column around it (`.workspace__column--tabs`), which the face draws at `--tabs-w`:
    the named width is dragged by the grip on that column's edge, and the compact one is the mark's own
    and is not (`app/src/talk/columns.ts`, `AMB-D-848`). The list scrolls and the fold does not — a
    machine with many projects must not push the way back to the names off the bottom. */
@@ -975,7 +975,7 @@ input[type="color"] {
    It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface`
    with a rule down its edge, full height. Left with no ground of its own it fell through to `--c-bg`
    and the face came out inside out — the edges sunk below the middle, where every other face of this
-   window has them above it. Its width is the column's around it (`.termface__column--rail`), which is
+   window has them above it. Its width is the column's around it (`.workspace__column--rail`), which is
    what a person drags.
 
    The rail itself does not scroll — the tree inside it does. The padding is the header's and the
@@ -1444,7 +1444,7 @@ input[type="color"] {
 .githist__all:hover { color: var(--c-text); }
 
 /* ---------- the file face ---------- */
-/* The right side of the terminal face: what changed in the project's folder lately, and the folder
+/* The right side of the workspace: what changed in the project's folder lately, and the folder
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying
    on one, so it is drawn as the ledger's right pane is (`.rightpane`): `--c-surface` to the edges,
    held off the page by a rule rather than by a border round a rounded box. */
@@ -1847,7 +1847,7 @@ input[type="color"] {
 .files__stopped { margin: 0; color: var(--c-stop); font-size: var(--fs-xs); }
 
 /* The question before a row goes to the bin (`../files/TrashAsk`). Its own block rather than a share
-   of another feature's modal, for the reason the terminal face's is its own: a modal borrowing
+   of another feature's modal, for the reason the workspace's is its own: a modal borrowing
    another's class names cannot be restyled without touching that feature. The backdrop is the
    exception — `.modal__overlay` is every modal's in this app. */
 .trashask {
@@ -1998,7 +1998,7 @@ input[type="color"] {
 .search__mark { background: var(--c-accent-weak); color: inherit; }
 
 /* The row above whichever half is up. It holds the way out and nothing else: the switch between
-   files and the page written on is the terminal face's top row, which is where it can be reached
+   files and the page written on is the workspace's top row, which is where it can be reached
    from whether the panel is open or closed (`app/src/files/FilesPanel.tsx`). */
 .files__top { display: flex; }
 /* The two rows at the head of the column stand the same height, whichever half is up. Left to their
@@ -2068,7 +2068,7 @@ input[type="color"] {
 /* Wider or narrower, and the way out beside it, both pushed to the far end of the row they have to
    themselves: the two are the column's own, where every other control the panel draws is about a
    file. Quiet, like the control that ends a pane — what stops either being pressed by mistake is
-   that nothing is lost when it is: the terminal face's top row opens the column again, on the half
+   that nothing is lost when it is: the workspace's top row opens the column again, on the half
    it was showing (`app/src/files/FilesPanel.tsx`). */
 .files__width {
   margin-left: auto; flex: 0 0 auto;
@@ -2340,7 +2340,7 @@ input[type="color"] {
 .sidebar-wrap { grid-area: sidebar; position: relative; display: flex; min-height: 0; min-width: 0; }
 /* The column is a list with a control under it, so what scrolls is the list alone (.sidebar__list):
    the way between the two widths must not be pushed off the bottom by a machine with a project for
-   every folder it has ever opened. It is the terminal face's tab column, built the same way
+   every folder it has ever opened. It is the workspace's tab column, built the same way
    (.ptabs, `AMB-D-848`). */
 .sidebar {
   flex: 1; min-width: 0;
@@ -2391,7 +2391,7 @@ input[type="color"] {
 .navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 /* The project's mark: the image it was given, or its colour with the first character of its name on
-   it (`app/src/shell/projectMark.ts`). It is the terminal face's tab mark at the same 24px, so one
+   it (`app/src/shell/projectMark.ts`). It is the workspace's tab mark at the same 24px, so one
    project reads the same on both faces (`AMB-D-848`) — the rail drew an 8px square of colour before
    this, and no letter. The ground is the colour the person gave the project and the ink is worked out
    from it; a colour that could not be read leaves the surface underneath and the face's own text

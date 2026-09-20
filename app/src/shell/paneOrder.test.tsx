@@ -93,7 +93,7 @@ describe("the pages the modal draws", () => {
   it("lays a page out at the grid the face is drawn at", () => {
     draw(faceOf(2, 2));
     expect(host.querySelector(".paneorder__grid")!.className)
-      .toContain("termface__page-grid--2");
+      .toContain("workspace__page-grid--2");
   });
 
   it("calls a pane what it is called on the face — its name, else the folder it works in", () => {

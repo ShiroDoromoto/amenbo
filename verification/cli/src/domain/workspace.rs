@@ -1,4 +1,4 @@
-//! The `terminal` domain's one premise: **the machine a pane would be opened on**.
+//! The `workspace` domain's one premise: **the machine a pane would be opened on**.
 //!
 //! Everything else this domain names is a screen's — a pane is what a reader is already typing in,
 //! so the moves are the operator's and this driver walks none of them (`crate::Driver::action`).
@@ -644,9 +644,9 @@ fn write_program(path: &Path, body: &str) -> Result<(), String> {
 }
 
 impl Driver<'_> {
-    /// The terminal face's one action here, and it is a premise's: everything else in this domain is
+    /// The workspace's one action here, and it is a premise's: everything else in this domain is
     /// a move on a screen this driver has not got.
-    pub(crate) fn terminal_action(&self, op: &str, with: &Args) -> Result<Outcome, String> {
+    pub(crate) fn workspace_action(&self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
             // `models` is how many names each of them answers with when the frame asks what it can
             // be started on. Left off it is none, which is the machine every road before this one
@@ -707,7 +707,7 @@ impl Driver<'_> {
                 nothing_else_answers(&self.session.tools, named(count))?;
                 Ok(Outcome::action(said))
             }
-            _ => Err(unmapped(Domain::Terminal, op)),
+            _ => Err(unmapped(Domain::Workspace, op)),
         }
     }
 }

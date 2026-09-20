@@ -1,6 +1,6 @@
 # Two panes were put one above the other, and each of them got the window's whole width.
 #
-# The terminal face spends width before height: a pane runs short of columns long before it runs
+# The workspace spends width before height: a pane runs short of columns long before it runs
 # short of lines, so every count puts as many across as it can (`app/src/talk/layout.ts`). **At two
 # that turns around.** Two across halves the columns of each pane, and half of a window with a column
 # beside it is under the eighty a TUI wants; two down leaves the columns whole and takes the lines
@@ -44,7 +44,7 @@
 id: stack-the-two-panes-so-each-keeps-the-whole-width
 title: Two panes side by side are stacked one above the other, each takes the window's whole width, and the terminals in them come through the re-shape still running
 description: >
-  Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
+  Open the workspace, choose the folder it runs in, get the pane down to a plain shell and type a
   line into it. Cut the page to two and open a second pane beside it, so the page is full and the two
   are sharing the width. Ask for them one above the other: the panes are stacked and each takes
   the whole width between the columns, the first one's line is still on it, and a second line typed
@@ -53,16 +53,16 @@ description: >
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # The way in, and what binds the folder to the project the face is on. The pane opened after it
   # works in that folder, and so does the second one below — which is what makes that one press and
   # nothing else.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-folder
     with:
       dir: workshop
@@ -71,17 +71,17 @@ steps_gui:
   # its own to draw, and a line typed at one is something to answer rather than something left sitting
   # where it was put — and being left where it was put is what this road reads the pane by.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-shell
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO the pane that keeps its width
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane that keeps its width
@@ -89,7 +89,7 @@ steps_gui:
   # Room for the other half. A project nobody has answered for is drawn at one pane, so this is what
   # puts a second place on the page for the press below to open.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-panes
     with:
       count: 2
@@ -97,7 +97,7 @@ steps_gui:
   # The other half of the page. Nothing is asked — the folder is the project's — and with it the page
   # is full: two panes at a split of two, which is the arrangement the whole of this road is about.
   - type: action
-    domain: terminal
+    domain: workspace
     op: open-pane
     with:
       from: face
@@ -106,7 +106,7 @@ steps_gui:
   # offering a way in would be a page with one pane on it, and every reading below would be about a
   # box with nothing in it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: frames
     with:
       count: 2
@@ -115,13 +115,13 @@ steps_gui:
   # Where a page nobody has answered about sits: across, because that is what every other count does.
   # It is read before the press so that the press has something to have changed.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: across
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-orient
     with:
       orient: down
@@ -129,7 +129,7 @@ steps_gui:
   # The point of the press, and the reading it is worth having: not that the boxes moved, but that
   # each of them came out with the whole width instead of half of it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: down
@@ -138,7 +138,7 @@ steps_gui:
   # rather than re-laying it would have a fresh terminal here — drawn exactly like this one, with
   # nothing on it.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO the pane that keeps its width
@@ -147,14 +147,14 @@ steps_gui:
   # says the screen came through and nothing more; only something typed after the re-shape says the
   # terminal on the other end of it did too.
   - type: action
-    domain: terminal
+    domain: workspace
     op: type-line
     with:
       text: SCENARIO still taking what is typed
       shows: SCENARIO the pane that keeps its width
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO still taking what is typed
@@ -163,20 +163,20 @@ steps_gui:
   # recover from: a reader who tried the stack and wanted their columns back would have nothing to
   # press, and nothing else on the face would say the arrangement had ever been a choice.
   - type: action
-    domain: terminal
+    domain: workspace
     op: set-orient
     with:
       orient: across
 
   - type: assert
-    domain: terminal
+    domain: workspace
     op: panes-sit
     with:
       orient: across
 
   # Through both presses now, and still the reader's own terminal.
   - type: assert
-    domain: terminal
+    domain: workspace
     op: pane
     with:
       shows: SCENARIO still taking what is typed

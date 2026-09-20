@@ -206,7 +206,7 @@ and over would otherwise put every one of those launches into the numbers the pr
 by. The `PATH` is the third thing the launch carries, and the only one that is about the machine
 rather than about Amenbo: the session's own directory of stand-in programs goes in front of the
 inherited one, which is how a road says what a pane could be opened with
-([`terminal can-start`](#given--the-world-a-road-starts-from)). It is handed over on every launch and
+([`workspace can-start`](#given--the-world-a-road-starts-from)). It is handed over on every launch and
 is empty unless a premise filled it, so a run that asked for nothing is a run on the operator's own
 machine. The store follows this workspace's throwaway rules — one parent under the temp tree, a name
 that does not lean on the pid, a sweep of what is over a day old on the way in — and the app is
@@ -342,7 +342,7 @@ doing exactly what it should:
 | assert | the space | drawn | read |
 |---|---|---|---|
 | `files listed` | the rail a bound folder's tree stands in, whose width a person drags | `grafting…` | `grafting.md` |
-| `terminal label` | the row above a pane, which is only as wide as the pane | `SCENARIO named by h.` | `SCENARIO named by hand` |
+| `workspace label` | the row above a pane, which is only as wide as the pane | `SCENARIO named by h.` | `SCENARIO named by hand` |
 
 Widening the rail, or closing the second pane, before every run is not a road anybody walks.
 
@@ -460,7 +460,7 @@ under test lands on whatever window took the front — which no shot of the app 
 do: what it is for is a face that draws something for a pointer resting on it and takes it away when
 it leaves — a panel dropped under a row — and every verb that presses would take that away again.
 The shot the reading is made from is the one after it, so the road holds the pointer in a step of its
-own (`terminal hold-label`).
+own (`workspace hold-label`).
 The screen is a webview, so all three read it through the accessibility tree the app serves once
 asked. They read one window and not the app, and take the same `--window <title>` a road's step
 does — an app drawing two draws two screens, and a name reached on the wrong one is a check that
@@ -712,7 +712,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` /
-`mcp` / `tick` / `terminal` / `files` / `notify` / `viewer`) and an
+`mcp` / `tick` / `workspace` / `files` / `notify` / `viewer`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -859,7 +859,7 @@ registration as an absolute. The last piece is a premise rather than a road: `de
 the day the band was last put off, because "later"'s whole meaning — quiet today, back tomorrow —
 spans two launches, and no single run holds both.
 
-And the last one is about no record at all. **`terminal`** is the face an agent is run in: whether
+And the last one is about no record at all. **`workspace`** is the face an agent is run in: whether
 the app is showing the ledger or the pane (`show-face`), what a reader typed into that pane
 (`type-line`) and what a reader set running in it (`keep-printing`), and whether the pane is a face
 of the one window or a window of its own (`split-out` / `fold-back`), with `pane` reading the line
@@ -1039,7 +1039,7 @@ answer and a button that stayed pressed. What the row comes up on *before* anybo
 `start: none`, and it is the one reading here that no machine can be relied on to give — nothing on it
 where several agents were found, that one where a single agent was, no row at all where none were, all
 three correct on the machine they happen to be on. So the road that reads it stands the machine up
-first (`terminal can-start`, below) and reads before anything on the frame has been pressed: one press
+first (`workspace can-start`, below) and reads before anything on the frame has been pressed: one press
 anywhere keeps this person's answer, and the first run is over in that store for good.
 `be-asked-what-to-open-with-on-the-first-run` is that road. It reads both halves of the state, since
 either alone passes on a build carrying the other fault — a row with nothing lit above a press that
@@ -1079,7 +1079,7 @@ the list down — `find` is what is typed there and `name` is what is pressed af
 says what it must *not* be looking at, because finding the wrong one is finding out what the agent
 answered: a road that meant to press a name and found a box has learnt the answer never came.
 
-What decides the shape on the machine the gate runs on is `terminal can-start`'s `models` (below).
+What decides the shape on the machine the gate runs on is `workspace can-start`'s `models` (below).
 `choose-the-model-before-the-pane-opens` leaves it off and walks the box, which is the honest shape
 for a provider that cannot be asked at all;
 `open-a-pane-on-a-model-the-agent-itself-named` asks for three and presses one of them, then presses
@@ -1089,7 +1089,7 @@ promise falsely. It then takes the pane away and reads the row on the frame draw
 is where a kept choice is told from a button that stayed pressed.
 `narrow-a-long-row-of-models-to-the-one-you-want` asks for twenty and reaches one the row was not
 drawing, which is the whole of what the box above it is for.
-`read-what-an-agents-own-default-comes-to` asks for `terminal can-start`'s `on` as well — the
+`read-what-an-agents-own-default-comes-to` asks for `workspace can-start`'s `on` as well — the
 position of the model the stand-ins say they are standing on — and reads the row's first choice on
 three providers: the two whose own answer has room to say which model that is, and one of the four
 whose has none. Both halves are walked because a build answering for a provider that never said
@@ -1119,7 +1119,7 @@ three change a value on a status line and say nothing, so a build reading either
 provider's own screen.
 
 `move-a-running-pane-to-another-model` walks the provider that takes the name on its line, and reads
-the line back **off the program** — `terminal can-start`'s `then: reads` is what leaves one running to
+the line back **off the program** — `workspace can-start`'s `then: reads` is what leaves one running to
 read it with. `open-the-app-again-and-find-each-pane-on-the-model-it-was-on` is the third of that set and the one
 that crosses a run. Each pane keeps a model of its own, so two panes of one provider come back on the
 two models they were each on rather than both on whichever was chosen last — which takes two panes to
@@ -1400,13 +1400,13 @@ called is kept on the pane's own row, which the window writes and a terminal nev
 prints the id alone and the id is minted by the run — so what is asked there is identity, the record
 naming the pane the create was typed in. `present: false` is the other half on either face.
 `press-made-in` is the press, screen-only, and where it landed is read by the step after it
-(`terminal worked-in`): a press cannot say of itself which pane it went to. Where the pane it names is
-gone, the press puts it back instead, and the reading after it is `terminal open-again` and what comes
-up there — `terminal ended`'s `why: no-way-back` being the pane's own account of a way back the
+(`workspace worked-in`): a press cannot say of itself which pane it went to. Where the pane it names is
+gone, the press puts it back instead, and the reading after it is `workspace open-again` and what comes
+up there — `workspace ended`'s `why: no-way-back` being the pane's own account of a way back the
 provider would not honour.
 
 `task create-in-pane` is the same create on the task side, and is there for the second thing a pane
-writes: the band under it, which counts what the session in it has filed. `terminal made` reads that
+writes: the band under it, which counts what the session in it has filed. `workspace made` reads that
 count — `tasks` and `decisions` apart, because the band names them apart, and both at zero saying the
 band draws no count at all rather than a count of none. `open-made` presses it, which puts the records
 themselves on the screen, and `press-made` presses one of them, landing where a ref drawn in the pane
@@ -1503,7 +1503,7 @@ refusal, the row the screen lists the folder as — therefore open on it.
 it has, so a folder naming one nothing answers for is a folder some other store wrote in and then
 went away. There is no move on any face that leaves one behind, so a road that meets one opens on it.
 
-`terminal can-start` is the one premise that stands up **the machine** rather than anything Amenbo
+`workspace can-start` is the one premise that stands up **the machine** rather than anything Amenbo
 holds. What a frame offers to open a pane with is every agent the build could find, and it finds them
 by running the pane's own login shell over the `PATH` that shell reads — so a road left to itself is
 read against whatever the operator installed, which is a different row on every machine. The premise
@@ -1577,7 +1577,7 @@ spelled one tool's way.
 before it read one ending. A road says it where the *ending* is the reading: a pane says the program
 stopped whatever the status, and for a handful of statuses it also says what the stopping was about —
 the ones a provider leaves over a file Amenbo pointed at a home of its own making, whose own message
-then names that home rather than the reader's file. `terminal ended` is the reading, and `names` is
+then names that home rather than the reader's file. `workspace ended` is the reading, and `names` is
 the file the pane should be saying instead of the one the program printed; `names: none` is every
 other ending, which is nearly all of them and the half that catches a build explaining endings in
 general. `learn-why-a-pane-stopped-when-the-file-it-names-is-not-yours` walks both, on two providers
@@ -1660,7 +1660,7 @@ window at all, so what a road read was a screen it was not standing at and what 
 swallowed, both without a word.
 
 **What it names is where the step is carried out, not where the shot is taken.** The two are the
-same window everywhere but one: `terminal fold-back` is pressed in the window that the press closes,
+same window everywhere but one: `workspace fold-back` is pressed in the window that the press closes,
 so the shot after it is of the window left standing — the app's one window, which a road says by
 saying nothing. The harness works that out from the op rather than reading it off the road, for the
 reason it works out a restart from `store run-again`: it is not a thing a road chooses. A road that
@@ -1759,7 +1759,7 @@ the shot is a picture, and neither the image nor the colour-and-letter a project
 word there. `file:` here is not `attach`'s: what is under test is the picture, so the road names a
 file a premise copied off the fixtures shelf rather than one the operator brings, and the run says
 where it landed before the first step is handed over. The tab that project carries down the edge of
-the terminal face draws the same image (`terminal tab-icon`), and is a second op rather than an
+Amenbo's workspace draws the same image (`workspace tab-icon`), and is a second op rather than an
 argument on the first: it is another surface and not another way of asking, the square being the face
 an image is given on and the tabs being what it was given one for. That reading is a `Review` too, and
 names the project rather than pressing its tab — every project has one, and going to it would move the

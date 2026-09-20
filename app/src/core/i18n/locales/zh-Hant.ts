@@ -578,7 +578,7 @@ export const zhHant: Translation = {
 
     "face.switch": "此視窗顯示的介面",
     "face.tasks": "任務",
-    "face.terminal": "工作區",
+    "face.workspace": "工作區",
     "face.splitOut": "在另一個視窗開啟",
     "face.merge": "合併回單一視窗",
     "face.opening": "正在單獨的視窗中開啟工作區…",

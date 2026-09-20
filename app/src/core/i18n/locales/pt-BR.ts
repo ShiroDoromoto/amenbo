@@ -591,7 +591,7 @@ export const ptBR: Translation = {
 
     "face.switch": "O que esta janela mostra",
     "face.tasks": "Tarefas",
-    "face.terminal": "Espaço de trabalho",
+    "face.workspace": "Espaço de trabalho",
     "face.splitOut": "Abrir em uma janela separada",
     "face.merge": "Voltar para uma única janela",
     "face.opening": "Abrindo o espaço de trabalho em uma janela própria…",

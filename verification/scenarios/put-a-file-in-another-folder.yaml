@@ -78,20 +78,20 @@ given:
 
 steps_gui:
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-face
     with:
-      face: terminal
+      face: workspace
 
   # Which project's folder the panel draws, pressed rather than assumed.
   - type: action
-    domain: terminal
+    domain: workspace
     op: go-project
     with:
       project: Workshop
 
   - type: action
-    domain: terminal
+    domain: workspace
     op: show-side
     with:
       side: files

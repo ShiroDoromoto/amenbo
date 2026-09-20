@@ -1,4 +1,4 @@
-// The columns beside the panes of the terminal face — the project tabs at the edge, the rail, and the
+// The columns beside the panes of the workspace — the project tabs at the edge, the rail, and the
 // file face on the other side — and the three things a person may do to either of the two that move:
 // close it, open it again, and drag the edge between it and the panes.
 //
@@ -56,13 +56,42 @@ export const PANE_MIN = 320;
 const SIDE_NARROW = "sideNarrow";
 const SIDE_WIDE = "sideWide";
 
+/** What every answer on this face is kept under, per device and per project alike. */
+const KEPT = "amenbo.workspace.";
+
 /** Kept for the device, so these are whole keys rather than stems. */
-const RAIL_SHOWN = "amenbo.termface.railShown";
-const RAIL_TAB = "amenbo.termface.railTab";
-const SIDE_SHOWN = "amenbo.termface.sideShown";
-const SIDE_TAB = "amenbo.termface.sideTab";
-const TABS_COMPACT = "amenbo.termface.tabsCompact";
-const TABS_WIDTH = "amenbo.termface.tabsWidth";
+const RAIL_SHOWN = `${KEPT}railShown`;
+const RAIL_TAB = `${KEPT}railTab`;
+const SIDE_SHOWN = `${KEPT}sideShown`;
+const SIDE_TAB = `${KEPT}sideTab`;
+const TABS_COMPACT = `${KEPT}tabsCompact`;
+const TABS_WIDTH = `${KEPT}tabsWidth`;
+
+/**
+ * What the same answers were kept under while this face was called the terminal, and the move that
+ * carries them over (`AMB-T-5178`).
+ *
+ * **Every key under the old stem moves, not a list of six.** Four of them are kept per project, so
+ * how many there are is however many projects this device has dragged a column in — a list written
+ * out here would carry the device-wide answers and quietly drop the rest.
+ *
+ * It runs once at startup, ahead of anything that reads a width, and it leaves an answer already
+ * written under the new stem alone: that one is newer than whatever the old stem still holds.
+ */
+const KEPT_WAS = "amenbo.termface.";
+
+export function carryOverKeptColumns(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    for (const was of Object.keys(localStorage)) {
+      if (!was.startsWith(KEPT_WAS)) continue;
+      const value = localStorage.getItem(was);
+      const now = KEPT + was.slice(KEPT_WAS.length);
+      if (value !== null && localStorage.getItem(now) === null) localStorage.setItem(now, value);
+      localStorage.removeItem(was);
+    }
+  } catch { /* a device that will not let us read what it kept has nothing to carry over */ }
+}
 
 /** Which half of the rail is up: the folder's own names, or what git says about it (`AMB-D-905`). */
 export type RailTab = "files" | "git";
@@ -146,7 +175,7 @@ export function tabsWidth(compact: boolean): number {
  * widths being overwritten by a run that had not yet been told which project it was on.
  */
 function keyOf(name: string, project: number | null): string | null {
-  return project === null ? null : `amenbo.termface.${name}.${project}`;
+  return project === null ? null : `${KEPT}${name}.${project}`;
 }
 
 /** What this device has kept under a key, or `null` where nothing can be read. */

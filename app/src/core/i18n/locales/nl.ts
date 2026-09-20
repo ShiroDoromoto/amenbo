@@ -579,7 +579,7 @@ export const nl: Translation = {
 
     "face.switch": "Wat dit venster toont",
     "face.tasks": "Taken",
-    "face.terminal": "Werkruimte",
+    "face.workspace": "Werkruimte",
     "face.splitOut": "In een apart venster openen",
     "face.merge": "Terug naar één venster",
     "face.opening": "De werkruimte wordt in een eigen venster geopend…",

@@ -175,7 +175,7 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
             <section className="paneorder__page" key={at}>
               <div className="paneorder__pagename">{tf("face.page", { n: at + 1 })}</div>
               <div
-                className={`termface__page-grid termface__page-grid--${
+                className={`workspace__page-grid workspace__page-grid--${
                   pageShape(layout.count, layout.orient)} paneorder__grid`}
               >
                 {slots.map((frame, slot) => {

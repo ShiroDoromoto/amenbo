@@ -41,7 +41,7 @@ vi.mock("../core/mutations", async (importOriginal) => ({
   fetchBoundFolders: async (project: number) => hoisted.bound[project] ?? [],
 }));
 
-import { TerminalFace } from "./TerminalFace";
+import { WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,7 +59,7 @@ const click = (el: HTMLElement | null) => act(async () => {
  *  without a press on the empty frame having to choose what runs in it. */
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, {
+    root.render(createElement(WorkspaceFace, {
       onWindow: () => {},
       note: null,
       openIn: { project: 1, dir: "/repo", nth: 1 },

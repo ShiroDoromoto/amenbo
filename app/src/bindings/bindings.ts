@@ -2345,6 +2345,11 @@ short: Array<SkinReadingDto>,
  */
 unread: Array<string>, 
 /**
+ * The grounds a picture is laid over, by token name. Nothing on one of them was measured, so
+ * the screen says so rather than leaving a reader to read `measured` as the whole screen.
+ */
+covered: Array<string>, 
+/**
  * How many pairings were measured, so "nothing fell" is told from "nothing ran".
  */
 measured: number, 

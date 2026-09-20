@@ -31,7 +31,8 @@ pub(crate) fn skin(store: &mut Store, flags: &Flags, sub: SkinCmd) -> Result<i32
         SkinCmd::Use { name } => wear(store, flags, &name),
         SkinCmd::Rm { name } => remove(store, flags, &name),
         SkinCmd::Validate { path } => validate(flags, &path),
-        SkinCmd::Template => template(store, flags),
+        SkinCmd::Template { path } => template(store, flags, &path),
+        SkinCmd::WriteOut { name, path } => write_out(store, flags, &name, &path),
     }
 }
 
@@ -220,7 +221,12 @@ fn validate(flags: &Flags, path: &Path) -> Result<i32, CliError> {
 ///
 /// What only the author can fill in — their name, their licence, a name per language, a font carried
 /// in the file — is written as a commented shape to copy rather than as an empty value.
-fn template(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+///
+/// **It lands as a zip rather than on stdout.** A skin is a zip holding `skin.yaml` beside the
+/// materials it names (`AMB-D-936`), so what this writes is that zip with the document in it and
+/// nothing else — the author unpacks it, edits, puts their pictures next to it and packs it back up.
+/// Bytes do not go down a pipe a terminal is reading.
+fn template(store: &Store, flags: &Flags, path: &Path) -> Result<i32, CliError> {
     // Taken from the skin that is on, where one is: an author who is editing what they are looking
     // at starts from those values, and one who is starting out gets this build's.
     let on = match &store.config.skin {
@@ -231,12 +237,93 @@ fn template(store: &Store, flags: &Flags) -> Result<i32, CliError> {
         None => None,
     };
     let yaml = skin_contrast::template(&skin_contrast::template_name(on.as_ref()), on.as_ref());
+    let bytes = amenbo_core::skin::pack_document(&yaml).map_err(CliError::from)?;
+    lay_down(path, &bytes)?;
     if flags.json {
-        print_json(&json!({ "ok": true, "action": "skin.template", "yaml": yaml }));
+        print_json(&json!({
+            "ok": true, "action": "skin.template",
+            "path": path.display().to_string(), "bytes": bytes.len(),
+        }));
         return Ok(0);
     }
-    print!("{yaml}");
+    human(flags, format!("✓ a skin to start from is at {}", path.display()));
+    human(
+        flags,
+        format!(
+            "Unpack it, edit {}, put the materials it names beside it, and zip it back up.",
+            amenbo_core::skin::PACK_DOCUMENT
+        ),
+    );
     Ok(0)
+}
+
+/// Write a held skin back out, as the file it arrived in.
+///
+/// **Copied rather than rebuilt.** What the author handed over is one zip carrying the document and
+/// the pictures, the face and the licence it travels under; a document written back out of the values
+/// this build read would be the colours and nothing else (`AMB-D-936`). The four this build ships are
+/// not files on the device and are refused here — `template` is the road from one of those, and it
+/// takes the values of whichever is on.
+fn write_out(store: &Store, flags: &Flags, name: &str, path: &Path) -> Result<i32, CliError> {
+    if amenbo_core::skin_official::is_official(name) {
+        return Err(CliError {
+            code: "skin_ships_with_build",
+            message: format!("'{name}' ships with this build and is not a file on this device"),
+            hint: Some(format!(
+                "Put it on with `{} skin use {name}`, then `{} skin template <path>` writes its values out.",
+                Paths::command_name(),
+                Paths::command_name()
+            )),
+            exit: 1,
+        });
+    }
+    let Some((_, at)) = amenbo_core::skin::kept_file(&store.paths, name) else {
+        return Err(CliError {
+            code: "skin_not_found",
+            message: format!("no skin is kept as '{name}'"),
+            hint: Some(format!("`{} skin list` shows what is held.", Paths::command_name())),
+            exit: 1,
+        });
+    };
+    let bytes = std::fs::read(&at).map_err(|e| CliError {
+        code: "io_error",
+        message: format!("{}: {e}", at.display()),
+        hint: None,
+        exit: 1,
+    })?;
+    lay_down(path, &bytes)?;
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "skin.write-out", "name": name,
+            "path": path.display().to_string(), "bytes": bytes.len(),
+        }));
+        return Ok(0);
+    }
+    human(flags, format!("✓ {name} is at {} ({} bytes)", path.display(), bytes.len()));
+    Ok(0)
+}
+
+/// Write bytes where the caller asked, and nowhere a file already is.
+///
+/// **A skin is somebody's work and this command is not the one that ends it.** Both faces here write
+/// a file the person named on the command line, which is one mistyped path away from a skin they are
+/// still editing — so an existing file is a refusal rather than a thing to ask about. There is no
+/// `--yes`: the answer is another path.
+fn lay_down(path: &Path, bytes: &[u8]) -> Result<(), CliError> {
+    if path.exists() {
+        return Err(CliError {
+            code: "path_taken",
+            message: format!("{} is already there", path.display()),
+            hint: Some("Name a path nothing is at.".to_string()),
+            exit: 1,
+        });
+    }
+    std::fs::write(path, bytes).map_err(|e| CliError {
+        code: "io_error",
+        message: format!("{}: {e}", path.display()),
+        hint: None,
+        exit: 1,
+    })
 }
 
 /// Read one file, judge it, and measure it. The three steps every face here takes, in the one order
@@ -357,6 +444,7 @@ fn contrast_json(report: &Report) -> serde_json::Value {
         "unread": report.unread.iter().map(|u| json!({
             "theme": u.side.as_str(), "name": u.name, "value": u.value,
         })).collect::<Vec<_>>(),
+        "covered": report.covered,
     })
 }
 
@@ -395,6 +483,9 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
 }
 
 fn say_contrast(flags: &Flags, report: &Report) {
+    for ground in &report.covered {
+        human(flags, format!("  ? {ground}: a picture is laid over it, so nothing on it was measured"));
+    }
     for u in &report.unread {
         human(flags, format!("  ? {}.{}: '{}' is not a colour this Amenbo can measure", u.side, u.name, u.value));
     }

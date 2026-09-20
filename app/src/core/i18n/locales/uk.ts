@@ -371,6 +371,7 @@ export const uk: Translation = {
     "settings.skinWarnClosed": "це не скінові рухати",
     "settings.skinWarnNotText": "значення не текст",
     "settings.skinUnmeasured": "ця збірка не прочитає звідси числа",
+    "settings.skinCovered": "поверх лежить зображення, тому на ньому нічого не вимірювали",
     "settings.skinContrastClear": "Усі пари ({n}) проходять свій поріг.",
     "settings.skinContrastShort": "Нижче порога: {n} з {m}. Узяти все одно можна.",
     "settings.skinFontMissing": "У цьому шрифті немає знаків для: {langs}. Там читається шрифт самої машини.",

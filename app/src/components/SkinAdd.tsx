@@ -215,6 +215,15 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
                 ))}
               </ul>
             )}
+            {/* The grounds a picture is over. Said here rather than left out, because the count
+                above would otherwise read as the whole screen having been measured. */}
+            {read.covered.length > 0 && (
+              <ul className="skinread__list">
+                {read.covered.map((g) => (
+                  <li key={g}><code>{g}</code> — {t("settings.skinCovered")}</li>
+                ))}
+              </ul>
+            )}
 
             <div className="skinfit__answer">
               <button className="btn" onClick={take}>{t("settings.skinAddTake")}</button>

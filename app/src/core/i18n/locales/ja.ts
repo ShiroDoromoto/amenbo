@@ -366,6 +366,7 @@ export const ja: Translation = {
     "settings.skinWarnClosed": "スキンが動かせるものではありません",
     "settings.skinWarnNotText": "値が文字ではありません",
     "settings.skinUnmeasured": "このビルドでは数値を読めません",
+    "settings.skinCovered": "画像が載るので、この上は測れません",
     "settings.skinContrastClear": "{n} 組すべてが下限を満たしています。",
     "settings.skinContrastShort": "{m} 組のうち {n} 組が下限を割っています。このまま取り込むこともできます。",
     "settings.skinFontMissing": "この書体は次の字を持っていません: {langs}。そこは端末の字形で出ます。",

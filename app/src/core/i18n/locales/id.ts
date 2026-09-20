@@ -364,6 +364,7 @@ export const id: Translation = {
     "settings.skinWarnClosed": "ini bukan milik skin untuk diubah",
     "settings.skinWarnNotText": "nilainya bukan teks",
     "settings.skinUnmeasured": "build ini tidak bisa membaca angkanya",
+    "settings.skinCovered": "ada gambar di atasnya, jadi tidak ada yang diukur di sana",
     "settings.skinContrastClear": "Semua {n} pasangan melewati batasnya.",
     "settings.skinContrastShort": "{n} dari {m} pasangan di bawah batas. Tetap bisa dimasukkan.",
     "settings.skinFontMissing": "Fonta ini tidak punya huruf untuk: {langs}. Di situ yang tampil huruf mesin sendiri.",

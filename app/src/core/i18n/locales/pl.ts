@@ -371,6 +371,7 @@ export const pl: Translation = {
     "settings.skinWarnClosed": "tego skórka nie rusza",
     "settings.skinWarnNotText": "wartość nie jest tekstem",
     "settings.skinUnmeasured": "ta wersja nie odczyta z tego liczby",
+    "settings.skinCovered": "leży na tym obraz, więc nic na nim nie zmierzono",
     "settings.skinContrastClear": "Wszystkie pary ({n}) przekraczają swój próg.",
     "settings.skinContrastShort": "Par poniżej progu: {n} z {m}. Mimo to można wczytać.",
     "settings.skinFontMissing": "Ten krój nie ma znaków dla: {langs}. Tam czyta się krojem urządzenia.",

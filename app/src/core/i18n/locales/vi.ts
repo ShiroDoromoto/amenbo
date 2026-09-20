@@ -364,6 +364,7 @@ export const vi: Translation = {
     "settings.skinWarnClosed": "đây không phải thứ skin được đổi",
     "settings.skinWarnNotText": "giá trị không phải chữ",
     "settings.skinUnmeasured": "bản dựng này không đọc ra số",
+    "settings.skinCovered": "có một ảnh phủ lên, nên không đo gì trên đó",
     "settings.skinContrastClear": "Cả {n} cặp đều vượt ngưỡng.",
     "settings.skinContrastShort": "{n} trên {m} cặp dưới ngưỡng. Vẫn có thể nhận vào.",
     "settings.skinFontMissing": "Phông này không có chữ cho: {langs}. Chỗ đó hiện bằng phông của máy.",

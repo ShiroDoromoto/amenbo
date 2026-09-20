@@ -362,6 +362,7 @@ export const hi: Translation = {
     "settings.skinWarnClosed": "यह स्किन के बदलने की चीज़ नहीं",
     "settings.skinWarnNotText": "मान टेक्स्ट नहीं है",
     "settings.skinUnmeasured": "यह बिल्ड इससे संख्या नहीं निकाल सकता",
+    "settings.skinCovered": "इस पर एक चित्र बिछा है, इसलिए इस पर कुछ नहीं मापा गया",
     "settings.skinContrastClear": "सभी {n} जोड़े अपनी सीमा पार करते हैं।",
     "settings.skinContrastShort": "{m} में से {n} जोड़े सीमा से नीचे हैं। फिर भी अंदर ले सकते हैं।",
     "settings.skinFontMissing": "इस फ़ॉन्ट में इनके अक्षर नहीं हैं: {langs}। वहाँ मशीन का अपना फ़ॉन्ट दिखेगा।",

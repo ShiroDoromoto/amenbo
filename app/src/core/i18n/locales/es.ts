@@ -369,6 +369,7 @@ export const es: Translation = {
     "settings.skinWarnClosed": "esto no es del skin",
     "settings.skinWarnNotText": "el valor no es texto",
     "settings.skinUnmeasured": "esta versión no puede medirlo",
+    "settings.skinCovered": "hay una imagen encima, así que no se midió nada sobre ella",
     "settings.skinContrastClear": "Las {n} parejas superan su mínimo.",
     "settings.skinContrastShort": "{n} de {m} parejas quedan por debajo del mínimo. Aun así puedes incorporarlo.",
     "settings.skinFontMissing": "Esta tipografía no tiene letras para: {langs}. Ahí se lee con la del equipo.",

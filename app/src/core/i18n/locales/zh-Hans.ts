@@ -362,6 +362,7 @@ export const zhHans: Translation = {
     "settings.skinWarnClosed": "这个不是皮肤能动的",
     "settings.skinWarnNotText": "值不是文本",
     "settings.skinUnmeasured": "这个构建读不出数值",
+    "settings.skinCovered": "上面铺了图片，所以这上面没有测量",
     "settings.skinContrastClear": "{n} 组全部达到下限。",
     "settings.skinContrastShort": "{m} 组里有 {n} 组没到下限。仍然可以装进来。",
     "settings.skinFontMissing": "这个字体没有这些字: {langs}。那里用机器自带的字形显示。",

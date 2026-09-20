@@ -1,0 +1,149 @@
+# A session named itself and filed a task with nobody looking at its pane, and both were there on
+# the way back.
+#
+# What an agent says about its session goes past on its way to a window, and it is heard only where a
+# pane is drawing that session. A pane on another page has nobody listening for it, so the name and
+# the count used to be gone the moment they were said — which is a thing only a screen shows, and only
+# a screen that was looking somewhere else while it happened.
+#
+# ── Why the wait, and why it cannot be typed ─────────────────────────────────────────────────────
+# The one move this road is about is made **by the pane that is not on the screen**, and there is no
+# way to type into one. So the command is armed with a wait in front of it and the road walks on
+# (`run-when-away`): the step after it takes the pane off the screen, and the command runs there.
+#
+# ── Why a line is typed into the pane first ──────────────────────────────────────────────────────
+# The pane is named by the words on it, the way it is on every road on this face, and here the words
+# have a second job: a page turned back to a session that had died would come up on a *new* terminal —
+# the pane opens one where the old session is gone — and the name carried over would be nothing to
+# read. The line coming back is what says the terminal on the other end is the one that spoke.
+#
+# ── Why the second pane, and why it is opened from the strip ─────────────────────────────────────
+# Somewhere for the screen to be, and the cheapest one there is: a project nobody has answered for is
+# drawn at one pane to a page, so a second pane lands on a page of its own and the screen follows it.
+# The page it leaves is full, which is what the strip is for — the way in on a full page is the strip
+# beside the panes, and pressing it is what brings the next page into being.
+#
+# ── Why both halves, and why they are read in one road ───────────────────────────────────────────
+# The name and the count come over together, in the one answer a pane gets when it takes a terminal
+# up, and they land in two different places: the row above the pane, and the band under it. A road
+# that read one of them would leave the other resting on the same answer with nothing looking at it.
+#
+# The world is empty on purpose, as it is on every road on this face: what the pane runs is the
+# reader's own shell, and choosing the folder is what raises the project it belongs to.
+id: come-back-to-a-pane-that-named-itself-while-you-were-away
+title: A pane that named itself and filed a task with nobody looking at it carries both on the way back
+description: >
+  Open the workspace, choose the folder it runs in, get the pane down to a plain shell and type a
+  line into it. Arm two commands in it — the one that names the session, and the one that files a
+  task — then open a second pane, which lands on a page of its own and takes the screen with it.
+  Come back to the first page: the line is there, the row above the pane carries the name the session
+  gave itself while nobody was looking, and the band under it counts the task it filed.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The way in, and what binds the folder to the project the face is on. The pane opened below works
+  # in it, and so does the one after that.
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell. A road that arms a command in a pane speaks to a shell: an agent's screen
+  # is its own to draw, and a line typed at one is something to answer rather than something left
+  # sitting where it was put.
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane nobody was looking at
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane nobody was looking at
+
+  # And it is drawn by the folder it works in, which is a fact about the place rather than a name.
+  # Read before anything names it, so that what the row carries at the end is this road's doing and
+  # not something that was already there.
+  - type: assert
+    domain: workspace
+    op: label
+    with:
+      shows: workshop
+
+  # The band has nothing on it either. The same reading for the same reason: a count that was already
+  # standing would answer the last step without the session having filed anything.
+  - type: assert
+    domain: workspace
+    op: made
+    with:
+      tasks: 0
+      decisions: 0
+
+  # The two moves this road is about, in one line so that one wait covers both. They are the two
+  # halves of what a session says — the name it gives itself, and a record it files — and they are
+  # read in two different places afterwards.
+  - type: action
+    domain: workspace
+    op: run-when-away
+    with:
+      command: amenbo talk name "SCENARIO named while away" && amenbo task add --title "SCENARIO filed while away" --actor ai
+
+  # A second pane. The page this one is on is full at the one pane a project nobody has answered for
+  # is drawn at, so the way in is the strip beside it — and the page it brings into being is where the
+  # screen ends up, which is what takes the first pane off it.
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: strip
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane nobody was looking at
+      present: false
+
+  # Back to the page the first pane is on. By now the commands armed on it have run, with nothing
+  # drawing that pane and nothing listening for what it said.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 1
+
+  # The same terminal, which is what makes the two readings below worth anything: a pane that had come
+  # up on a new session would carry no name and no count, and read as a failure of the carrying rather
+  # than as the session having gone.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane nobody was looking at
+
+  # The name the session gave itself while the screen was on the other page.
+  - type: assert
+    domain: workspace
+    op: label
+    with:
+      shows: SCENARIO named while away
+
+  # And the record it filed in the same gap, counted on the band once.
+  - type: assert
+    domain: workspace
+    op: made
+    with:
+      tasks: 1
+      decisions: 0

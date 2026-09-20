@@ -370,6 +370,7 @@ export const ptBR: Translation = {
     "settings.skinWarnClosed": "isto não é do skin",
     "settings.skinWarnNotText": "o valor não é texto",
     "settings.skinUnmeasured": "esta versão não consegue ler um número disso",
+    "settings.skinCovered": "há uma imagem por cima, então nada sobre ela foi medido",
     "settings.skinContrastClear": "Os {n} pares passam do mínimo.",
     "settings.skinContrastShort": "{n} de {m} pares ficam abaixo do mínimo. Ainda assim dá para trazer.",
     "settings.skinFontMissing": "Esta fonte não tem letras para: {langs}. Ali aparece a fonte da máquina.",

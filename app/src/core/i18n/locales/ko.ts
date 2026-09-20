@@ -361,6 +361,7 @@ export const ko: Translation = {
     "settings.skinWarnClosed": "스킨이 건드릴 것이 아닙니다",
     "settings.skinWarnNotText": "값이 문자가 아닙니다",
     "settings.skinUnmeasured": "이 빌드로는 수치를 읽을 수 없습니다",
+    "settings.skinCovered": "그림이 깔려 그 위는 측정하지 않았습니다",
     "settings.skinContrastClear": "{n} 쌍 모두 기준을 넘습니다.",
     "settings.skinContrastShort": "{m} 쌍 가운데 {n} 쌍이 기준에 못 미칩니다. 그래도 받아들일 수 있습니다.",
     "settings.skinFontMissing": "이 글꼴에는 다음 글자가 없습니다: {langs}. 그 부분은 기기의 글꼴로 나옵니다.",

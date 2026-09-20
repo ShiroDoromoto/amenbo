@@ -873,6 +873,9 @@ pub struct SkinJudgementDto {
     pub(crate) short: Vec<SkinReadingDto>,
     /// The colours no number could be read from, as `side.name`.
     pub(crate) unread: Vec<String>,
+    /// The grounds a picture is laid over, by token name. Nothing on one of them was measured, so
+    /// the screen says so rather than leaving a reader to read `measured` as the whole screen.
+    pub(crate) covered: Vec<String>,
     /// How many pairings were measured, so "nothing fell" is told from "nothing ran".
     pub(crate) measured: u32,
     /// The font it carries, where the check took one. Here as well as in the tables because the

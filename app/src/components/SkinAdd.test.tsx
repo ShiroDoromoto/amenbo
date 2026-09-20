@@ -70,6 +70,7 @@ const judgement = (over: Partial<SkinJudgementDto> = {}): SkinJudgementDto => ({
   warnings: [],
   short: [],
   unread: [],
+  covered: [],
   measured: 35,
   font: null,
   carries: [],
@@ -170,6 +171,16 @@ describe("reading a skin file over", () => {
     expect(said).toContain("readme.txt");
     expect(said).toContain("nothing in the skin names it");
     expect(said).toContain("not a kind this build draws");
+  });
+
+  it("names each ground a picture is over, so the count is not read as the whole screen", async () => {
+    // Measured says 20 rather than 35 here: what a ratio would say about a ground with a picture
+    // over it is not a verdict on that screen, so nothing on it was measured.
+    hoisted.read = judgement({ covered: ["c-surface"], measured: 20 });
+    await drawAndPick();
+    const said = host.textContent ?? "";
+    expect(said).toContain("c-surface");
+    expect(said).toContain("a picture is laid over it");
   });
 
   it("says which scripts the font it carries has no letters for", async () => {

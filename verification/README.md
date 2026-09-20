@@ -882,6 +882,10 @@ words on a pane are what every `shows` names it by — so a step of the harness'
 something there would be writing on the screen a road reads. The same rule ends a program by a press:
 `open-shell` and `end-pane` both say control-D — the end of input, which is not a line — rather than
 a typed `exit`, which would have put `exit` on every pane they walked through.
+`run-when-away` is `run`'s sibling for the one thing typing cannot reach: what a session says while
+nothing is drawing its pane. The operator arms the command with a wait in front of it and walks on,
+and the step after it is what takes the pane off the screen — so the pane neither gets cleared nor
+gets waited for, the point being that the prompt comes back with nobody watching.
 `press-ref` is the press itself — the ref where the output
 drew it, naming the record rather than the characters — and `folded: true` asks for the same press on a ref
 the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable
@@ -1172,7 +1176,7 @@ exactly like a pane still drawing the session that was running until a line the 
 it. A window is named separately — `window:` matches on the title bar, which carries the frame's name
 where a pane has one and the app's own word where it has none. A road that needs a window told apart
 by a word of its own names its pane first (`name-pane`).
-`put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
+`put-the-workspace-on-its-own-screen` is the road, and it folds the window back before it ends
 — the shape a machine was last used in belongs to the webview rather than to the throwaway store, so
 a run that walked away split would hand the next person two windows they never asked for.
 

@@ -996,7 +996,41 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
         unread: report.unread.iter().map(|u| format!("{}.{}", u.side, u.name)).collect(),
         measured: report.measured as u32,
         font: font_of(&taken),
+        carries: carried(&bytes, &taken),
     })
+}
+
+/// Every file the skin carries, with where its document points at each.
+///
+/// Two questions put side by side: the zip says what is in the file, and the document says what
+/// each of those is for. A file nothing names comes back with nothing beside it rather than being
+/// left out — what the reader is deciding about is everything that would land on their machine.
+///
+/// A zip this cannot read lists nothing. It has already been through `arriving` by the time this
+/// is asked, so there is no second refusal to report here.
+fn carried(
+    bytes: &[u8],
+    taken: &amenbo_core::skin::Taken,
+) -> Vec<crate::dto::SkinMaterialDto> {
+    let mut named: std::collections::BTreeMap<&str, String> = taken
+        .skin
+        .backgrounds
+        .iter()
+        .map(|(place, laid)| (laid.file.as_str(), format!("backgrounds.{place}")))
+        .collect();
+    if let Some(font) = &taken.skin.font {
+        named.insert(font.file.as_str(), "font_file".to_string());
+    }
+    amenbo_core::skin::carries(bytes)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|one| crate::dto::SkinMaterialDto {
+            named_at: named.get(one.file.as_str()).cloned(),
+            kind: one.is.word().map(str::to_string),
+            file: one.file,
+            bytes: one.bytes,
+        })
+        .collect()
 }
 
 /// The font a checked skin carries, on the way to the window. `None` where it carried none and

@@ -18,9 +18,16 @@ export async function confirmDialog(message: string): Promise<boolean> {
  * **Paths, the way a drop hands them over** (`./hostDrop`) — so what is picked and what is dropped
  * go down the same road, and the two answers being one is what keeps either of them explainable.
  */
-export async function pickFiles(): Promise<string[]> {
-  return await picked(false);
+export async function pickFiles(only?: PickOnly): Promise<string[]> {
+  return await picked(false, only);
 }
+
+/**
+ * What a picker offers, where the caller takes one shape of file and no other. A hint rather than
+ * a gate: every machine's panel lets the reader widen it, and what actually decides is the read
+ * that follows, so this saves a reader from choosing a file that was never going to be taken.
+ */
+export type PickOnly = { name: string; extensions: string[] };
 
 /**
  * The same, for folders. It is a second door rather than a flag on the first because the machine's
@@ -46,10 +53,10 @@ export async function pickSaveAs(suggested: string): Promise<string | null> {
 }
 
 /** The one call both doors are: what the picker answered, as a list either way. */
-async function picked(directory: boolean): Promise<string[]> {
+async function picked(directory: boolean, only?: PickOnly): Promise<string[]> {
   if (!inTauri()) return [];
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const chosen = await open({ multiple: true, directory });
+  const chosen = await open({ multiple: true, directory, filters: only ? [only] : undefined });
   if (typeof chosen === "string") return [chosen];
   return Array.isArray(chosen) ? chosen.filter((one) => typeof one === "string") : [];
 }

@@ -1004,6 +1004,17 @@ impl Picture {
         opens_an_svg(bytes).then_some(Picture::Svg)
     }
 
+    /// The one word for this form. Shown rather than translated: `png` is `png` in every
+    /// language, the way a ratio and a token name are.
+    pub fn word(self) -> &'static str {
+        match self {
+            Picture::Png => "png",
+            Picture::Jpeg => "jpeg",
+            Picture::Webp => "webp",
+            Picture::Svg => "svg",
+        }
+    }
+
     /// What the file is served as. The door that hands a material to the window is told the type
     /// rather than left to work it out from the name.
     pub fn mime(self) -> &'static str {
@@ -1084,6 +1095,96 @@ pub fn picture(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
     }
 }
 
+/// What one of a skin's files turned out to be, read off its bytes rather than off its name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Material {
+    /// A picture, in the form it is in.
+    Picture(Picture),
+    /// A face. woff2 is the one form a skin's font is taken in, so there is no second word here.
+    Face,
+    /// Bytes this build has nothing to do with. Still in the file, so still counted and still
+    /// shown — what a reader is deciding about is the whole file.
+    Neither,
+}
+
+impl Material {
+    /// The one word for what this is, or `None` where it is neither a picture nor a face. A form
+    /// reads the same in every language, so what a window says around this word is the only part
+    /// of the line that is translated.
+    pub fn word(self) -> Option<&'static str> {
+        match self {
+            Material::Picture(picture) => Some(picture.word()),
+            Material::Face => Some("woff2"),
+            Material::Neither => None,
+        }
+    }
+}
+
+/// One file a packed skin carries, as somebody being handed the skin sees it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Carried {
+    /// The name it has in the zip, which is the name the document points at it by.
+    pub file: String,
+    /// What it weighs unpacked, counted rather than read off the index.
+    pub bytes: u64,
+    /// What its bytes turned out to be.
+    pub is: Material,
+}
+
+/// Every file a packed skin carries beside its document, in the order the zip holds them.
+///
+/// **What the file holds, not what the document names.** Somebody deciding whether to take another
+/// person's skin in is deciding about the whole file, and a material nothing in the document points
+/// at is still a file that arrived on their machine.
+///
+/// Each entry is unpacked to be weighed and to be read, because the index is the file's own claim
+/// about itself and the opening is what says what the bytes are. Bounded the way the way in is:
+/// the head is held and the rest is counted and let go, so a skin at the ceiling costs one buffer
+/// rather than 32MB.
+///
+/// A bare document carries nothing and answers with nothing — it is one file, and that file is the
+/// document.
+pub fn carries(pack: &[u8]) -> Result<Vec<Carried>, Error> {
+    if Packing::of(pack) == Packing::Bare {
+        return Ok(Vec::new());
+    }
+    use std::io::Read as _;
+    let mut zip = open_pack(pack)?;
+    let mut out = Vec::new();
+    let mut sink = [0u8; 64 * 1024];
+    for at in 0..zip.len() {
+        let mut entry = zip.by_index(at).map_err(unreadable_pack)?;
+        let file = entry.name().to_string();
+        held_in_the_pack(&file)?;
+        if file == PACK_DOCUMENT || file.ends_with('/') {
+            continue;
+        }
+        let mut head = Vec::new();
+        let mut bytes = 0u64;
+        loop {
+            let read = entry
+                .read(&mut sink)
+                .map_err(|_| Error::invalid(format!("'{file}' in this zip will not unpack")))?;
+            if read == 0 {
+                break;
+            }
+            if head.len() < SVG_HEAD {
+                head.extend_from_slice(&sink[..read.min(SVG_HEAD - head.len())]);
+            }
+            bytes += read as u64;
+            if bytes > PACK_FILE_MAX_BYTES {
+                return Err(too_heavy(&file, bytes, PACK_FILE_MAX_BYTES));
+            }
+        }
+        let is = match Picture::of(&head) {
+            Some(picture) => Material::Picture(picture),
+            None if head.starts_with(WOFF2_MAGIC) => Material::Face,
+            None => Material::Neither,
+        };
+        out.push(Carried { file, bytes, is });
+    }
+    Ok(out)
+}
 
 /// Where the files a skin's document names are read from (`AMB-D-936`). What an author writes is a
 /// filename; what stands behind that name is this.
@@ -2435,6 +2536,44 @@ dark:
     fn a_skin_that_fits_is_weighed_and_says_what_it_came_to() {
         let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("art.bin", &[7u8; 1000])]);
         assert_eq!(weigh(&zip).unwrap(), ONE_SKIN.len() as u64 + 1000);
+    }
+
+    #[test]
+    fn what_a_skin_carries_is_listed_by_what_the_bytes_are_rather_than_what_they_are_called() {
+        let zip = packed(&[
+            (PACK_DOCUMENT, ONE_SKIN.as_bytes()),
+            ("paper.png", A_PNG),
+            // Named `.png` and is a face. What is said is what the bytes say.
+            ("silkscreen.png", b"wOF2 and the rest of a face"),
+            ("notes.txt", b"nothing this build draws"),
+        ]);
+        let carried = carries(&zip).unwrap();
+        assert_eq!(
+            carried.iter().map(|c| (c.file.as_str(), c.is)).collect::<Vec<_>>(),
+            [
+                ("paper.png", Material::Picture(Picture::Png)),
+                ("silkscreen.png", Material::Face),
+                ("notes.txt", Material::Neither),
+            ],
+            "the document is not one of the files it carries"
+        );
+        assert_eq!(carried[0].bytes, A_PNG.len() as u64, "weighed unpacked");
+        assert_eq!(carried[0].is.word(), Some("png"));
+        assert_eq!(carried[2].is.word(), None, "there is no word for bytes nothing draws");
+    }
+
+    #[test]
+    fn a_skin_that_is_one_document_carries_nothing_to_list() {
+        assert_eq!(carries(ONE_SKIN.as_bytes()).unwrap(), []);
+    }
+
+    #[test]
+    fn a_file_that_unpacks_past_the_ceiling_stops_the_listing_rather_than_being_listed() {
+        // The same number the way in counts to, and counted the same way — out of the decoder.
+        let big = vec![0u8; PACK_FILE_MAX_BYTES as usize + 1];
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("huge.bin", &big)]);
+        let why = carries(&zip).unwrap_err().to_string();
+        assert!(why.contains("huge.bin"), "{why}");
     }
 
     #[test]

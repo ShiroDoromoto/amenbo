@@ -1,5 +1,9 @@
-// Taking a skin in: what the file says about itself, what the check set aside, and the pairings
-// nobody would be able to read — all of it before anything is written.
+// Taking a skin in: what the file says about itself, what is inside it, what the check set aside,
+// and the pairings nobody would be able to read — all of it before anything is written.
+//
+// **What is inside it is the file's own list, not the document's.** A reader is deciding about
+// everything that would land on their machine, so a material the document forgot to name is
+// listed too, saying that nothing points at it.
 //
 // **A short pairing does not stop it.** What that would stop is an author trying their own work in
 // progress, and there is no index here this could be keeping anybody off. The numbers are shown and
@@ -12,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkinJudgementDto } from "../bindings/bindings";
 import { ErrorNote } from "./ErrorNote";
 import { pickFiles, pickSaveAs } from "../core/dialog";
+import { humanSize } from "../core/size";
 import { watchHostDrop } from "../core/hostDrop";
 import { errText, t, tf } from "../core/i18n";
 import { langEndonym, type Lang } from "../core/i18n/lang";
@@ -23,6 +28,9 @@ const WHY: Record<string, string> = {
   closed: "settings.skinWarnClosed",
   notText: "settings.skinWarnNotText",
 };
+
+/** The one shape a skin arrives in, for the panel the machine's picker opens. */
+const ONLY_A_SKIN = { name: "Skin", extensions: ["zip"] };
 
 export function SkinAdd({ onAdded }: { onAdded: () => void }) {
   // The file being read over, and what reading it gave. Both go when the reader answers.
@@ -100,7 +108,10 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
       <span className="settings__k">{t("settings.skinAdd")}</span>
       <span>
         <div className="skinwell" ref={well}>
-          <button className="btn" onClick={() => void pickFiles().then((p) => p[0] && look(p[0]))}>
+          <button
+            className="btn"
+            onClick={() => void pickFiles(ONLY_A_SKIN).then((p) => p[0] && look(p[0]))}
+          >
             {t("settings.skinAddPick")}
           </button>
           <span className="meta">{t("settings.skinAddDrop")}</span>
@@ -141,6 +152,27 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
                 {tf("settings.skinFontMissing", {
                   langs: missing.map((l) => langEndonym(l as Lang)).join("、"),
                 })}
+              </div>
+            )}
+
+            {/* What is in the file, which is what the reader is deciding about. The check's
+                report below is about the document; this is about everything that would land.
+                The form and the weight read the same in every language, so what is translated is
+                the sentence around them. */}
+            {read.carries.length > 0 && (
+              <div>
+                <div className="meta">{t("settings.skinCarries")}</div>
+                <ul className="skinread__list">
+                  {read.carries.map((one) => (
+                    <li key={one.file}>
+                      <code>{one.file}</code> — {one.kind ?? t("settings.skinCarriedOther")} ·{" "}
+                      {humanSize(one.bytes)}
+                      {one.namedAt
+                        ? <> · <code>{one.namedAt}</code></>
+                        : <span className="meta"> · {t("settings.skinCarriedUnnamed")}</span>}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

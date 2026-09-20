@@ -464,7 +464,7 @@ export const nl: Translation = {
     "settings.doctor": "Problemen controleren en herstellen",
     "settings.doctorNote": "Controleert de binnenkant van de gegevens (verweesde verwijzingen en dergelijke) en de gekoppelde mappen van dit apparaat (.amenbo / AI-handleiding). De controle zelf schrijft niets. Dezelfde controles en hetzelfde herstel als `amenbo doctor` op de opdrachtregel.",
     "settings.doctorChecking": "Bezig met controleren…",
-    "settings.doctorRecheck": "Opnieuw controleren",
+    "settings.doctorRecheck": "Controleren",
     "settings.doctorClean": "Geen problemen gevonden.",
     "settings.doctorFound": "{errors} fout(en) / {warnings} waarschuwing(en)",
     "settings.doctorFix": "Veeg bestanden zonder verwijzing en overgebleven koppelingen op",

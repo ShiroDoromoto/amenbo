@@ -466,7 +466,7 @@ export const th: Translation = {
     "settings.doctor": "ตรวจและซ่อมปัญหา",
     "settings.doctorNote": "ตรวจภายในข้อมูล (การอ้างอิงกำพร้าและอื่น ๆ) และโฟลเดอร์ที่ผูกไว้ในเครื่องนี้ (.amenbo / คู่มือสำหรับ AI) ตัวการตรวจเองไม่เขียนอะไรเลย เป็นการตรวจและการซ่อมชุดเดียวกับ `amenbo doctor` บนบรรทัดคำสั่ง",
     "settings.doctorChecking": "กำลังตรวจ…",
-    "settings.doctorRecheck": "ตรวจอีกครั้ง",
+    "settings.doctorRecheck": "ตรวจ",
     "settings.doctorClean": "ไม่พบปัญหา",
     "settings.doctorFound": "ผิดพลาด {errors} / เตือน {warnings}",
     "settings.doctorFix": "กวาดไฟล์ที่ไม่มีใครอ้างถึงและการผูกที่ตกค้าง",

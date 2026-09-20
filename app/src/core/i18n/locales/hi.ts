@@ -464,7 +464,7 @@ export const hi: Translation = {
     "settings.doctor": "समस्याएँ जाँचें और ठीक करें",
     "settings.doctorNote": "डेटा के भीतर (अनाथ संदर्भ आदि) और इस डिवाइस के जुड़े फ़ोल्डरों (.amenbo / AI मार्गदर्शन) की जाँच करता है। जाँच स्वयं कुछ नहीं लिखती। कमांड लाइन के `amenbo doctor` जैसी ही जाँच और वैसी ही मरम्मत।",
     "settings.doctorChecking": "जाँचा जा रहा है…",
-    "settings.doctorRecheck": "फिर से जाँचें",
+    "settings.doctorRecheck": "जाँचें",
     "settings.doctorClean": "कोई समस्या नहीं मिली।",
     "settings.doctorFound": "{errors} त्रुटि / {warnings} चेतावनी",
     "settings.doctorFix": "बिना संदर्भ वाली फ़ाइलें और बची हुई कड़ियाँ साफ़ करें",

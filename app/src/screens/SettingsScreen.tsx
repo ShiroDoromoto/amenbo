@@ -540,32 +540,39 @@ function BackupSetting() {
  *  But that does not fix an issue with a bound folder, which is what the per-row buttons
  *  (`doctorRepair`) are for. A row can only carry a button where the fix is unambiguous (`bind`, or
  *  resyncing the guide); where it is not (`*_ambiguous`) the issue stays as prose, because we will not
- *  silently pick a different project. */
+ *  silently pick a different project.
+ *
+ *  **Nothing runs until it is pressed** (`AMB-D-938`). Opening this screen used to check, which cost
+ *  2.3 seconds — 97% of it git, started three times for each bound folder — and bought a count of
+ *  warnings that carry no button. Every problem a hand can act on is already said elsewhere: the
+ *  health banner at startup, and the two banners of its own. So the check is a press, and until it is
+ *  pressed this panel shows neither a count nor "no problems found". */
 function DoctorSetting() {
   const [report, setReport] = useState<DoctorReportDto | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Which of the three acts is running, so each button says what *it* is doing. Named rather than a
+  // flag: the three run one at a time and each has its own word for it, and telling them apart by
+  // whether a report has arrived stopped working once the check became a press.
+  const [busy, setBusy] = useState<"check" | "sweep" | "repair" | null>(null);
   const [msg, setMsg] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const check = async () => {
-    setBusy(true); setError(null);
+    setBusy("check"); setError(null);
     try {
       setReport(await fetchDoctorReport());
     } catch (e) {
       setError(errText(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
-
-  useEffect(() => { void check(); }, []); // Show the state as of opening Settings (the check is read-only).
 
   /** Repair a single row. It calls the one core path the difference (dir / project) determines, and
    *  shows whether it worked by checking again — if it did not, the issue is simply still there, so the
    *  success message cannot lie. Neither is destructive, so neither asks for confirmation (`bind` only
    *  lays down `.amenbo` and the guide again; a resync rewrites nothing outside the markers). */
   const repairOne = async (repair: DoctorRepair) => {
-    setBusy(true); setMsg(null); setError(null);
+    setBusy("repair"); setMsg(null); setError(null);
     try {
       if (repair.action === "rebind") await bindFolder(repair.project, repair.dir);
       else await resyncManagedBlocks(repair.dir);
@@ -574,7 +581,7 @@ function DoctorSetting() {
     } catch (e) {
       setError(errText(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -583,9 +590,11 @@ function DoctorSetting() {
   const groups = groupDoctorIssues(report?.issues ?? []);
   const anyRepairable = (report?.issues ?? []).some((iss) => doctorRepair(iss) !== null);
 
+  // The sweep asks for no report first. It repairs nothing the list is showing — what it touches is
+  // attachment files nothing references and bindings no project claims — so a panel that has not been
+  // checked is not a panel this cannot run in (`AMB-D-938`).
   const fix = async () => {
-    if (!report) return;
-    setBusy(true); setMsg(null); setError(null);
+    setBusy("sweep"); setMsg(null); setError(null);
     try {
       const r = await runDoctorFix();
       const touched = r.sweptAttachments + r.reclaimedBlobs + r.forgottenBindings;
@@ -603,7 +612,7 @@ function DoctorSetting() {
     } catch (e) {
       setError(errText(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -612,8 +621,8 @@ function DoctorSetting() {
       <span className="settings__k">{t("settings.doctor")}</span>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn" disabled={busy} onClick={() => void check()}>
-            {busy && !report ? t("settings.doctorChecking") : t("settings.doctorRecheck")}
+          <button className="btn" disabled={busy !== null} onClick={() => void check()}>
+            {busy === "check" ? t("settings.doctorChecking") : t("settings.doctorRecheck")}
           </button>
           {report && (
             <span className="meta">
@@ -642,8 +651,8 @@ function DoctorSetting() {
                     </span>
                     {repair && (
                       <span>
-                        <button className="btn" disabled={busy} onClick={() => void repairOne(repair)}>
-                          {busy ? t("settings.doctorRepairing")
+                        <button className="btn" disabled={busy !== null} onClick={() => void repairOne(repair)}>
+                          {busy === "repair" ? t("settings.doctorRepairing")
                             : repair.action === "rebind" ? t("settings.doctorRebind") : t("managedBlock.resync")}
                         </button>
                       </span>
@@ -663,8 +672,8 @@ function DoctorSetting() {
             what the list is showing, and standing next to "0 errors / 412 warnings" is exactly how it
             got read as the button that clears them. Its label names what it sweeps instead. */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
-          <button className="btn" disabled={busy || !report} onClick={() => void fix()}>
-            {busy && report ? t("settings.doctorFixing") : t("settings.doctorFix")}
+          <button className="btn" disabled={busy !== null} onClick={() => void fix()}>
+            {busy === "sweep" ? t("settings.doctorFixing") : t("settings.doctorFix")}
           </button>
           {report && report.issues.length > 0 && !anyRepairable && (
             <span className="meta">{t("settings.doctorNoneRepairable")}</span>

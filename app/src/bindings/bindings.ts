@@ -2479,7 +2479,8 @@ export type SkinWarningDto = {
  * `notText` (a value that did not arrive as text), `unsafeValue` (one that is text and is not
  * a shape a value may have), `scale` (a multiplier not taken as written), `frame` (a frame
  * value not taken as written), `choice` (a word outside the list this build draws),
- * `background` (a background that is not laid), or `font` (the one embedded font).
+ * `background` (a background that is not laid), `icon` (a drawing that is not laid in place
+ * of an icon), or `font` (the one embedded font).
  */
 kind: string, theme: string | null, key: string, 
 /**

@@ -979,6 +979,18 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
                         key: format!("backgrounds.{place}.{key}"),
                         detail: Some(format!("'{wrote}' is not one this build draws")),
                     },
+                    Warning::UnknownIcon { name } => SkinWarningDto {
+                        kind: "unknown".into(),
+                        theme: None,
+                        key: format!("icons.{name}"),
+                        detail: Some("this Amenbo draws no icon by that name".into()),
+                    },
+                    Warning::IconDropped { name, why } => SkinWarningDto {
+                        kind: "icon".into(),
+                        theme: None,
+                        key: format!("icons.{name}"),
+                        detail: Some(format!("it {}", why.en())),
+                    },
                 }
             })
             .collect(),
@@ -1019,6 +1031,9 @@ fn carried(
         .iter()
         .map(|(place, laid)| (laid.file.as_str(), format!("backgrounds.{place}")))
         .collect();
+    for (name, file) in &taken.skin.icons {
+        named.insert(file.as_str(), format!("icons.{name}"));
+    }
     if let Some(font) = &taken.skin.font {
         named.insert(font.file.as_str(), "font_file".to_string());
     }

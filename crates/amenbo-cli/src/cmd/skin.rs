@@ -429,6 +429,12 @@ fn warnings_json(taken: &Taken) -> Vec<serde_json::Value> {
             Warning::BackgroundChoice { place, key, wrote } => json!({
                 "kind": "background_choice", "place": place, "key": key, "wrote": wrote,
             }),
+            Warning::UnknownIcon { name } => json!({
+                "kind": "unknown_icon", "icon": name,
+            }),
+            Warning::IconDropped { name, why } => json!({
+                "kind": "icon_dropped", "icon": name, "why": why.en(),
+            }),
         })
         .collect()
 }
@@ -477,6 +483,12 @@ fn say_warnings(flags: &Flags, taken: &Taken) {
             Warning::BackgroundChoice { place, key, wrote } => format!(
                 "  · the background for {place}, {key}: '{wrote}' is not one this build draws — dropped"
             ),
+            Warning::UnknownIcon { name } => {
+                format!("  · the icon {name}: this Amenbo draws none by that name — dropped")
+            }
+            Warning::IconDropped { name, why } => {
+                format!("  · the icon {name}: it {} — dropped", why.en())
+            }
         };
         human(flags, line);
     }

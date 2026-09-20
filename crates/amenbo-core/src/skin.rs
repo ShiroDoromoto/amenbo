@@ -73,6 +73,14 @@ pub struct Skin {
     /// One picture per place and none per side. What a background is for is the material a skin is
     /// made of, and a skin that draws paper draws paper on both sides of it.
     pub backgrounds: BTreeMap<String, Background>,
+    /// The drawings a skin puts in place of this build's own, by the name of the icon each one
+    /// stands in for (`AMB-D-937`). Held as the document writes them, for the reason the
+    /// backgrounds are.
+    ///
+    /// One file per name, and a name the author left out keeps the drawing `Icon.tsx` holds. There
+    /// is no stroke beside it: the fifty-one drawings are each adjusted against a line 1.75 wide,
+    /// and a skin that could move that would move it under the ones it did not replace.
+    pub icons: BTreeMap<String, String>,
     /// The header keys this build does not know, in order. A skin written for a later amenbo is read
     /// as far as it goes, so these are carried out to be warned about rather than to refuse on.
     pub unknown_keys: Vec<String>,
@@ -166,6 +174,31 @@ fn laid_out(raw: BTreeMap<String, Value>) -> BTreeMap<String, Background> {
         .collect()
 }
 
+/// The file a material names, or why there is none to take. Asked of a background and of an icon
+/// alike: what can be wrong with a filename does not depend on where in the document it was
+/// written.
+fn material_file(wrote: &str) -> Result<String, MaterialProblem> {
+    let file = wrote.trim().to_string();
+    if file.is_empty() {
+        return Err(MaterialProblem::NoFile);
+    }
+    if !usable_file(&file) {
+        return Err(MaterialProblem::UnusableFile);
+    }
+    Ok(file)
+}
+
+/// Keep the icons that arrived, by the name of the icon each one stands in for.
+///
+/// An entry written as something other than a filename — a map, a list, a number — comes out with
+/// no file behind it, which the check then drops by the icon it was written for. Read as far as it
+/// goes rather than failing the document, the way a background's odd line is.
+fn drawn_for(raw: BTreeMap<String, Value>) -> BTreeMap<String, String> {
+    raw.into_iter()
+        .map(|(icon, value)| (icon, value.as_str().unwrap_or_default().to_string()))
+        .collect()
+}
+
 impl Skin {
     /// Read one skin document. The header's four naming keys are required; everything else is
     /// optional, because a skin that sets ten colours and leaves the rest is the ordinary case.
@@ -185,6 +218,7 @@ impl Skin {
             dark: ThemeTable::split(w.dark.unwrap_or_default()),
             font: w.font_file,
             backgrounds: laid_out(w.backgrounds.unwrap_or_default()),
+            icons: drawn_for(w.icons.unwrap_or_default()),
             unknown_keys: w.rest.into_keys().collect(),
         })
     }
@@ -461,6 +495,8 @@ struct Wire {
     font_file: Option<FontFile>,
     #[serde(default)]
     backgrounds: Option<BTreeMap<String, Value>>,
+    #[serde(default)]
+    icons: Option<BTreeMap<String, Value>>,
     #[serde(flatten)]
     rest: BTreeMap<String, Value>,
 }
@@ -673,6 +709,22 @@ pub const SPOTS: &[&str] = &[
 
 /// Where a picture sits where the author said nothing.
 pub const SPOT_DEFAULT: &str = "center";
+
+/// The icons a skin may put its own drawing in place of, by the name each one is drawn under
+/// (`AMB-D-937`). Fifty-one, and they are the whole set the window draws — a name the document
+/// leaves out keeps this build's own drawing, so a skin replaces as few of them as it likes.
+///
+/// Sorted, and held against `IconName` in `app/src/components/Icon.tsx` by
+/// `app/src/core/skin.test.ts` — an icon added there and not here is one a skin is told it may not
+/// replace, which is not what happened.
+pub const ICONS: &[&str] = &[
+    "activity", "arrowDown", "arrowUp", "bell", "blocked", "calendar", "check", "checkSquare",
+    "chevronDown", "chevronLeft", "chevronRight", "clipboard", "clock", "close", "comment",
+    "document", "dot", "error", "foldLeft", "foldRight", "folder", "gavel", "gear", "goose",
+    "hourglass", "inbox", "keyboard", "link", "menu", "more", "newWindow", "paneAcross",
+    "paneDown", "paperclip", "pause", "pencil", "person", "pin", "plug", "plus", "refresh",
+    "reorder", "reply", "robot", "rocket", "search", "stop", "tag", "trash", "unlock", "warning",
+];
 
 /// The most a material's name may be. Long enough for a folder and a filename inside the zip, and
 /// short of a name carrying something other than a name.
@@ -1095,6 +1147,23 @@ pub fn picture(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
     }
 }
 
+/// One of a packed skin's icons, read as a drawing — the bytes and what they turned out to be.
+///
+/// Where the two parts of "is this an icon" are put together, the way [`picture`] does it for a
+/// background. **A jpeg is not one of them.** An icon is laid as a mask and what is read off it is
+/// the alpha; a jpeg carries none, so one put here would draw as a filled square where the drawing
+/// was.
+pub fn icon(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
+    let (drawing, bytes) = picture(pack, name)?;
+    if drawing == Picture::Jpeg {
+        return Err(Error::invalid(format!(
+            "'{name}' is a jpeg, which carries no transparency — png, webp and svg are the \
+             drawings an icon is laid from"
+        )));
+    }
+    Ok((drawing, bytes))
+}
+
 /// What one of a skin's files turned out to be, read off its bytes rather than off its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Material {
@@ -1452,24 +1521,32 @@ pub enum Warning {
     UnknownBackground { place: String },
     /// A background that is not laid. The place keeps its colour, which is what is under every
     /// background anyway.
-    BackgroundDropped { place: String, why: BackgroundProblem },
+    BackgroundDropped { place: String, why: MaterialProblem },
     /// A background's word that is not one this build has a drawing for. Dropped, so the picture is
     /// laid the way this build lays one; there is nothing to bring inside, the way a number has.
     BackgroundChoice { place: String, key: &'static str, wrote: String },
+    /// An icon named for a drawing this build does not have — most often a skin written for a
+    /// later amenbo, the way an unknown token is.
+    UnknownIcon { name: String },
+    /// An icon that is not drawn. The name keeps this build's own drawing, which is what stands
+    /// under every replacement anyway.
+    IconDropped { name: String, why: MaterialProblem },
 }
 
-/// Why a background is not laid.
+/// Why a material the document names is not used — a background that is not laid, an icon that is
+/// not drawn. One enum for both: what can be wrong with a filename is the same wherever it was
+/// written.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BackgroundProblem {
-    /// No file named, so there is no picture to lay.
+pub enum MaterialProblem {
+    /// No file named, so there is nothing to draw with.
     NoFile,
     /// A name that is not one a file in a skin can have — reaching out of the zip, or carrying
     /// what an address and a declaration are cut at.
     UnusableFile,
 }
 
-impl BackgroundProblem {
-    /// Why the background was set aside, as a phrase that follows the place it was named for.
+impl MaterialProblem {
+    /// Why the material was set aside, as a phrase that follows the name it was written under.
     /// English on both faces, the way a refusal is.
     ///
     /// **The name itself is not in it**, for the reason a value is not in [`ValueProblem::en`]: it
@@ -1477,8 +1554,8 @@ impl BackgroundProblem {
     /// where a string can do more than be read.
     pub fn en(&self) -> String {
         match self {
-            BackgroundProblem::NoFile => "names no file".to_string(),
-            BackgroundProblem::UnusableFile => {
+            MaterialProblem::NoFile => "names no file".to_string(),
+            MaterialProblem::UnusableFile => {
                 "names a file a skin cannot hold".to_string()
             }
         }
@@ -1681,23 +1758,38 @@ impl Skin {
                 warnings.push(Warning::UnknownBackground { place });
                 continue;
             }
-            let file = wrote.file.trim().to_string();
-            let why = if file.is_empty() {
-                Some(BackgroundProblem::NoFile)
-            } else if !usable_file(&file) {
-                Some(BackgroundProblem::UnusableFile)
-            } else {
-                None
+            let file = match material_file(&wrote.file) {
+                Ok(file) => file,
+                Err(why) => {
+                    warnings.push(Warning::BackgroundDropped { place, why });
+                    continue;
+                }
             };
-            if let Some(why) = why {
-                warnings.push(Warning::BackgroundDropped { place, why });
-                continue;
-            }
             let fit = one_of(&place, "fit", &wrote.fit, FITS, FIT_DEFAULT, &mut warnings);
             let at = one_of(&place, "at", &wrote.at, SPOTS, SPOT_DEFAULT, &mut warnings);
             laid.insert(place, Background { file, fit, at });
         }
         skin.backgrounds = laid;
+
+        // The icons, ruled on the way the backgrounds are and for the same reason: the document
+        // says which file, and whether that file is a drawing this build lays is read off its
+        // bytes, in `icon`, where the name meets the zip it came in.
+        let mut drawn = BTreeMap::new();
+        for (name, wrote) in std::mem::take(&mut skin.icons) {
+            if ICONS.binary_search(&name.as_str()).is_err() {
+                warnings.push(Warning::UnknownIcon { name });
+                continue;
+            }
+            let file = match material_file(&wrote) {
+                Ok(file) => file,
+                Err(why) => {
+                    warnings.push(Warning::IconDropped { name, why });
+                    continue;
+                }
+            };
+            drawn.insert(name, file);
+        }
+        skin.icons = drawn;
 
         Ok(Taken { skin, font: font_bytes, warnings })
     }
@@ -2688,7 +2780,7 @@ dark:
                 taken.warnings,
                 [Warning::BackgroundDropped {
                     place: "c-sunken".into(),
-                    why: BackgroundProblem::NoFile,
+                    why: MaterialProblem::NoFile,
                 }],
                 "{wrote}"
             );
@@ -2704,7 +2796,7 @@ dark:
                 taken.warnings,
                 [Warning::BackgroundDropped {
                     place: "c-bg".into(),
-                    why: BackgroundProblem::UnusableFile,
+                    why: MaterialProblem::UnusableFile,
                 }],
                 "{name}"
             );
@@ -2745,6 +2837,85 @@ dark:
         }
     }
 
+
+    // ---- the drawings a skin puts in place of this build's own (`AMB-D-937`) ----
+
+    /// A document naming the icons written under it, over a skin that reads.
+    fn drawing(icons: &str) -> Skin {
+        Skin::read(&format!(
+            "name: kozo\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#ffffff\"\nicons:\n{icons}"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn an_icon_is_read_as_the_one_file_written_beside_its_name() {
+        let taken = drawing("  gear: art/gear.svg\n  gavel: gavel.png\n").check(&Materials::None).unwrap();
+        assert_eq!(taken.skin.icons["gear"], "art/gear.svg");
+        assert_eq!(taken.skin.icons["gavel"], "gavel.png");
+        assert!(taken.warnings.is_empty());
+    }
+
+    #[test]
+    fn an_icon_the_document_leaves_out_is_not_in_what_comes_back() {
+        // What a skin does not replace keeps the drawing `Icon.tsx` holds, and the way that is
+        // said here is by the name not being in the map at all.
+        let taken = drawing("  gear: gear.svg\n").check(&Materials::None).unwrap();
+        assert_eq!(taken.skin.icons.len(), 1);
+        assert!(!taken.skin.icons.contains_key("gavel"));
+    }
+
+    #[test]
+    fn an_icon_named_for_a_drawing_this_build_has_none_of_is_carried_out_by_name() {
+        let taken = drawing("  sundial: sundial.svg\n").check(&Materials::None).unwrap();
+        assert!(taken.skin.icons.is_empty());
+        assert_eq!(taken.warnings, [Warning::UnknownIcon { name: "sundial".into() }]);
+    }
+
+    #[test]
+    fn an_icon_with_no_file_behind_it_is_dropped_by_the_name_it_was_written_under() {
+        // Written empty, and written as something that is not a filename at all — both come to
+        // the same thing: there is no drawing to lay.
+        for wrote in ["  gear: \"\"\n", "  gear: 7\n", "  gear:\n    file: gear.svg\n"] {
+            let taken = drawing(wrote).check(&Materials::None).unwrap();
+            assert!(taken.skin.icons.is_empty(), "{wrote}");
+            assert_eq!(
+                taken.warnings,
+                [Warning::IconDropped {
+                    name: "gear".into(),
+                    why: MaterialProblem::NoFile,
+                }],
+                "{wrote}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_that_reaches_out_of_the_skin_is_not_an_icon() {
+        for name in ["../../gear.svg", "/etc/passwd", "a;b{.svg", "gear.svg?x=1"] {
+            let taken = drawing(&format!("  gear: '{name}'\n")).check(&Materials::None).unwrap();
+            assert!(taken.skin.icons.is_empty(), "{name}");
+            assert_eq!(
+                taken.warnings,
+                [Warning::IconDropped {
+                    name: "gear".into(),
+                    why: MaterialProblem::UnusableFile,
+                }],
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_icon_a_skin_may_replace_is_one_the_window_draws() {
+        // The list here is the one `Icon.tsx` declares, held to it by `app/src/core/skin.test.ts`.
+        // What this asserts is the shape it has to be in to be searched at all.
+        let mut sorted = ICONS.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(ICONS, sorted.as_slice(), "the list is searched by halving");
+        assert_eq!(ICONS.len(), 51);
+    }
+
     const A_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
 
     #[test]
@@ -2766,6 +2937,22 @@ dark:
         let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("paper.png", b"not a png")]);
         let why = picture(&zip, "paper.png").unwrap_err().to_string();
         assert!(why.contains("paper.png"), "{why}");
+    }
+
+    #[test]
+    fn a_drawing_with_nothing_to_read_a_mask_off_is_not_an_icon() {
+        // A jpeg is a picture and is not a drawing: laid as a mask it is opaque everywhere, which
+        // draws a filled square where the icon was.
+        let jpeg: &[u8] = b"\xff\xd8\xff\xe0\x00\x10JFIF";
+        let zip = packed(&[
+            (PACK_DOCUMENT, ONE_SKIN.as_bytes()),
+            ("gear.svg", b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
+            ("gear.jpg", jpeg),
+        ]);
+        assert_eq!(icon(&zip, "gear.svg").unwrap().0, Picture::Svg);
+        assert_eq!(picture(&zip, "gear.jpg").unwrap().0, Picture::Jpeg, "it is a picture");
+        let why = icon(&zip, "gear.jpg").unwrap_err().to_string();
+        assert!(why.contains("gear.jpg"), "{why}");
     }
 
     #[test]

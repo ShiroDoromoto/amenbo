@@ -495,7 +495,7 @@ const ui = {
   "settings.doctor": "Check and repair problems",
   "settings.doctorNote": "Checks inside the store (orphan references and the like) and this device's bound folders (.amenbo / AI guidance). The check itself writes nothing. Same checks and same repairs as `amenbo doctor` on the CLI.",
   "settings.doctorChecking": "Checking…",
-  "settings.doctorRecheck": "Check again",
+  "settings.doctorRecheck": "Check",
   "settings.doctorClean": "No problems found.",
   "settings.doctorFound": "{errors} error(s) / {warnings} warning(s)",
   "settings.doctorFix": "Sweep unreferenced files and leftover bindings",

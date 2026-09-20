@@ -464,7 +464,7 @@ export const zhHans: Translation = {
     "settings.doctor": "检查并修复问题",
     "settings.doctorNote": "检查数据内部（孤立引用之类）以及这台设备上关联的文件夹（.amenbo／AI 指南）。检查本身不写入任何内容。与命令行 `amenbo doctor` 的检查项和修复项相同。",
     "settings.doctorChecking": "正在检查…",
-    "settings.doctorRecheck": "再检查一次",
+    "settings.doctorRecheck": "检查",
     "settings.doctorClean": "未发现问题。",
     "settings.doctorFound": "错误 {errors} 个／警告 {warnings} 个",
     "settings.doctorFix": "清理无人引用的文件和残留的关联",

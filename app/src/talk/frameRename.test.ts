@@ -63,3 +63,17 @@ describe("naming a frame nothing is running in", () => {
     expect(renames()).toEqual([]);
   });
 });
+
+describe("a name that came over with the session", () => {
+  it("is written on the frame and not typed back into the terminal", async () => {
+    // The session said it while nothing was drawing its pane, and the pane was handed it on taking
+    // the terminal up (`./terminal`). The provider is the one that said it, so a second `/rename`
+    // here is a line the agent never asked for (`AMB-T-5118`).
+    hoisted.standing = [{ frame: "1", name: "the migration" }];
+
+    const names = await nameFrame("1", "the migration", "session", "session-7", false);
+
+    expect(names.get("1")).toBe("the migration");
+    expect(renames()).toEqual([]);
+  });
+});

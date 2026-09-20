@@ -2584,6 +2584,21 @@ impl Instructor {
                 };
                 format!("In {pane}, run: amenbo talk {command} \"{text}\" — this is {what}.")
             }
+            // The same layer, said with nobody watching. The wait is the harness's number rather than
+            // the road's: how long it takes to walk one step is this side's business, and a road that
+            // spelled it would be saying how fast the operator reads. It is generous on purpose — the
+            // command landing while the pane is **still** on the screen is the one way this reads
+            // green for the wrong reason, and a minute is longer than the step in front of it takes.
+            (Domain::Workspace, "run-when-away") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into {pane} and type `sleep 60; {}`, then press return and go straight on to the next step. **Do not wait for it.** What it does is meant to happen with this pane off the screen, and the step after this one is what takes it off. Do not clear the pane either: the words on it are how the steps below say which pane they mean.",
+                    req(with, "command")?
+                )
+            }
             // Ending the terminal in a pane, which is done from inside it. **The one control the pane
             // has takes the place away and is not this**, so there is nothing on the row to press
             // here: what ends a program is the program being told to end. The pane is left standing

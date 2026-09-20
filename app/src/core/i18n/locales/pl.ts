@@ -476,7 +476,7 @@ export const pl: Translation = {
     "settings.doctor": "Sprawdź i napraw problemy",
     "settings.doctorNote": "Sprawdza wnętrze danych (osierocone odwołania i podobne) oraz podpięte foldery tego urządzenia (.amenbo / przewodnik dla SI). Samo sprawdzanie niczego nie zapisuje. Te same kontrole i te same naprawy co `amenbo doctor` w wierszu poleceń.",
     "settings.doctorChecking": "Sprawdzanie…",
-    "settings.doctorRecheck": "Sprawdź ponownie",
+    "settings.doctorRecheck": "Sprawdź",
     "settings.doctorClean": "Nie znaleziono problemów.",
     "settings.doctorFound": "błędy: {errors} / ostrzeżenia: {warnings}",
     "settings.doctorFix": "Zamieć pliki bez odwołań i pozostałe po niczym powiązania folderów",

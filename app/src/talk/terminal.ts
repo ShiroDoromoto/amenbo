@@ -32,6 +32,7 @@ import type {
   PtyClosedDto,
   PtyReplayDto,
   PtySessionDto,
+  SessionMadeDto,
   SessionSaidDto,
 } from "../bindings/bindings";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
@@ -100,6 +101,23 @@ export type PaneEvents = {
   /** Something has named this pane's frame. Whether the name takes is the store's to say — a person's
    *  name for a frame is not taken back off it by the agent (`./frames`). */
   name(name: string, by: NamedBy): void;
+  /**
+   * What the session said while nothing was drawing it, handed over as this pane takes it up.
+   *
+   * **It is the same words, arriving late.** A statement goes past on its way to a window and is
+   * heard only where a pane is drawing that session; one on another page, or in the window the
+   * workspace was split out of, hears none of it. So the pane asks the session what it missed at the
+   * one moment it can — the attach — and what comes back is the last name that session gave itself
+   * and every record filed from it, each one once (`crate::pty::Pane::adopt`, `AMB-T-5196`).
+   *
+   * `name` is null where the session never named itself. `made` is empty where it filed nothing, and
+   * a terminal this pane **started** carries neither: it has not said anything yet.
+   *
+   * **The provider is not told the name.** It is the one that said it, so telling it again would
+   * type `/rename` into a terminal already called that — and a second `/rename` still in the tail
+   * lands as a bare return in whatever the agent is asking (`AMB-T-5118`, `AMB-T-5074`).
+   */
+  carried?(name: string | null, made: SessionMadeDto[]): void;
   /**
    * How large the terminal is now, in characters — said whenever that changes, and once when the
    * pane comes up.
@@ -557,6 +575,15 @@ export async function replayTail(term: Replay, runs: PtyReplayDto[]): Promise<vo
 }
 
 /**
+ * What this pane ended up with: the terminal it is drawing, and what that session said while
+ * nothing was drawing it.
+ *
+ * The second half is empty for a terminal this pane started — it has said nothing yet — and for one
+ * taken up that never named itself and filed nothing.
+ */
+type Drawn = { running: PtySessionDto; named: string | null; made: SessionMadeDto[] };
+
+/**
  * Which terminal this pane is to draw, as the thing putting it up knows it.
  *
  * A pane comes up for reasons it cannot tell apart from the inside — a person asked for a terminal
@@ -570,7 +597,7 @@ async function draw(
   fit: FitAddon,
   host: HTMLElement,
   start: PaneStart,
-): Promise<PtySessionDto> {
+): Promise<Drawn> {
   const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
   // The slot's own terminal where it has one. Otherwise, and only where this pane is the one that may:
   // a single open session is the only count that names one without guessing.
@@ -581,8 +608,8 @@ async function draw(
       : undefined;
   if (want) {
     try {
-      // What the session missed comes back beside the bytes. Reading it onto the pane is
-      // `AMB-T-5198`; the screen is what this call has always been for.
+      // What the session said while nothing was drawing it comes back beside the bytes, and is
+      // carried out of here for the pane to read onto itself (`PaneEvents.carried`).
       const adopted = await invoke<PtyAdoptDto>("pty_attach", { session: want.session });
       await replayTail(term, adopted.replay);
       refit(fit, host);
@@ -590,18 +617,20 @@ async function draw(
       // line has to arrive at the new one.
       void invoke("pty_resize", { session: want.session, cols: term.cols, rows: term.rows })
         .catch(() => {});
-      return want;
+      return { running: want, named: adopted.name ?? null, made: adopted.made };
     } catch {
       // It ended between the two calls. Opening one is what the pane was there to do anyway.
     }
   }
-  return await invoke<PtySessionDto>("pty_open", {
+  const opened = await invoke<PtySessionDto>("pty_open", {
     frame: start.frame ?? null,
     cwd: start.cwd ?? null,
     agent: start.agent ?? null,
     cols: term.cols,
     rows: term.rows,
   });
+  // A terminal started here has said nothing yet, so there is nothing it could have missed.
+  return { running: opened, named: null, made: [] };
 }
 
 /** The bytes that open and close a bracketed paste. A program that has turned bracketed paste on
@@ -1148,7 +1177,7 @@ export async function mountTerminal(
     else if (payload.session === session) take(payload);
   });
 
-  const running = await draw(term, fit, host, start);
+  const { running, named, made } = await draw(term, fit, host, start);
   session = running.session;
   // Which agent is in the pane, for the copy rules above. It comes off the session and not off
   // `start` for the reason the folder below does: a pane that took up a running terminal is running
@@ -1158,6 +1187,9 @@ export async function mountTerminal(
   // for a terminal this pane started. One it took up runs where it was started, which is what the page
   // holding it has to be told (`./layout`).
   on.opened(running.session, running.folder ?? null, running.agent ?? null);
+  // What the session said while nobody was drawing it, ahead of anything said since: `opened` has
+  // just emptied the band, and what is held below arrived during this mount.
+  if (named !== null || made.length > 0) on.carried?.(named, made);
   for (const chunk of held.splice(0)) {
     if (chunk.session !== session) continue;
     term.write(decode(chunk.base64));

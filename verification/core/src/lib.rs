@@ -2694,6 +2694,23 @@ const REGISTRY: &[OpSpec] = &[
     // `shows` is which pane it is said in, named the way `press-pane` and `paste` name one: by the
     // words a road typed into it earlier. Left out, it is the page's one pane.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text", "shows"], binds: false },
+    // A command left running in a pane the screen is about to leave — the one way a road reaches what
+    // a session says while nothing is drawing it.
+    //
+    // **The gap is the whole of what it is for.** A statement is heard only where a pane is drawing
+    // that session, so a pane on another page hears none of its own: what it said is kept on the
+    // terminal and handed over when a pane takes it up again (`crate::pty::Pane::adopt`). No road can
+    // reach that by typing — the pane is not on the screen to type in — so the operator arms the
+    // command with a wait in front of it and walks on, and the step that takes the pane off the
+    // screen is the next one in the road.
+    //
+    // It is `run`'s sibling and parts from it in the two ways that matter. **The pane is not
+    // cleared**, the words already on it being how every step below says which pane it means. And
+    // **nothing waits for the prompt**: the point is that the prompt comes back with nobody watching.
+    //
+    // `shows` is which pane, named the way `press-pane` and `paste` name one: by the words a road
+    // typed into it earlier. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "run-when-away", required: &["command"], refs: &[], strings: &["command", "shows"], binds: false },
     // A name the person gives a pane, typed on that same row. It and the session's own `talk name` are
     // the only two things that name a frame, and this is the one that wins: the last word on a frame
     // is the person's, so a name typed here stands over whatever the session called itself

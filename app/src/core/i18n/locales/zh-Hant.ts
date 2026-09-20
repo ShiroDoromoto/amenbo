@@ -464,7 +464,7 @@ export const zhHant: Translation = {
     "settings.doctor": "檢查並修復問題",
     "settings.doctorNote": "檢查資料內部（孤立參照之類）以及這台裝置上連結的資料夾（.amenbo／AI 指南）。檢查本身不會寫入任何東西。與命令列 `amenbo doctor` 的檢查項與修復項相同。",
     "settings.doctorChecking": "檢查中…",
-    "settings.doctorRecheck": "再檢查一次",
+    "settings.doctorRecheck": "檢查",
     "settings.doctorClean": "沒有發現問題。",
     "settings.doctorFound": "錯誤 {errors} 個／警告 {warnings} 個",
     "settings.doctorFix": "清掉沒人參照的檔案與殘留的連結",

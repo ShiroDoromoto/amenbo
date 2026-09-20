@@ -97,6 +97,10 @@ pub struct FontFile {
     /// `woff2`, and nothing else is taken.
     #[serde(default)]
     pub format: String,
+    /// The file the face is in, by the name it has beside `skin.yaml` in the zip (`AMB-D-936`).
+    /// A bare document has nothing beside it, so a name written in one has nothing behind it.
+    #[serde(default)]
+    pub file: String,
     /// The licence's name, for the line beside the skin.
     #[serde(default)]
     pub license: String,
@@ -104,10 +108,6 @@ pub struct FontFile {
     /// travels in — so this is not a field that may be left out.
     #[serde(default)]
     pub license_text: String,
-    /// The bytes, base64. A block scalar leaves its wrapping newlines in the value, so what arrives
-    /// here is not clean base64 and is not decoded until the check strips them.
-    #[serde(default)]
-    pub data: String,
 }
 
 /// One picture a skin lays behind one of its surfaces, as it comes off the document.
@@ -440,23 +440,25 @@ fn px(value: &str) -> Option<f32> {
 
 /// The bytes of one embedded font, or why it was set aside.
 ///
-/// The newlines a block scalar leaves in the value are taken out first: what a YAML parser hands
-/// back for `data: |` is wrapped at the column the author's editor wrapped it at, which is not
-/// base64 any decoder accepts. Whitespace is all that is stripped — anything else that does not
-/// decode is the file saying it is not what it claims.
-fn read_font(file: &FontFile) -> Result<Vec<u8>, FontProblem> {
-    use base64::Engine as _;
-
-    if file.family.trim().is_empty() {
+/// The face is a file the skin carries and the document names, so what is read here comes out of
+/// [`Materials`] rather than out of the text. The name is held to [`usable_file`] — the same names
+/// a background's file is held to — and then looked up in what the skin carries and nowhere else,
+/// so no part of this reaches the filesystem.
+fn read_font(font: &FontFile, materials: &Materials) -> Result<Vec<u8>, FontProblem> {
+    if font.family.trim().is_empty() {
         return Err(FontProblem::NoFamily);
     }
-    if file.format.trim() != "woff2" {
-        return Err(FontProblem::Format(file.format.trim().to_string()));
+    if font.format.trim() != "woff2" {
+        return Err(FontProblem::Format(font.format.trim().to_string()));
     }
-    let packed: String = file.data.chars().filter(|c| !c.is_whitespace()).collect();
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(packed)
-        .map_err(|_| FontProblem::Unreadable)?;
+    let named = font.file.trim();
+    if named.is_empty() {
+        return Err(FontProblem::NoFile);
+    }
+    if !usable_file(named) {
+        return Err(FontProblem::UnusableFile);
+    }
+    let bytes = materials.read(named).ok_or(FontProblem::Missing)?;
     if bytes.len() > FONT_MAX_BYTES {
         return Err(FontProblem::TooLarge { bytes: bytes.len() });
     }
@@ -634,12 +636,14 @@ pub const SMOOTHINGS: &[&str] = &["antialiased", "auto", "none"];
 /// was their own number that did it.
 pub const BORDER_W_DOUBLE: &str = "3px";
 
-/// The most an embedded font may weigh, decoded.
+/// The most an embedded font may weigh.
 ///
 /// Set where a Japanese face fits: a Latin-only pixel font is a few kilobytes, and DotGothic16 —
 /// which carries kana and han — is 500,480 bytes as one woff2. **It is not a time budget.** Two
-/// megabytes takes about 48ms from file to glyphs, which nobody waits on. What it turns away is a
-/// file that is not a font at all sitting in `data`.
+/// megabytes takes about 48ms from file to glyphs, which nobody waits on.
+///
+/// Tighter than [`PACK_FILE_MAX_BYTES`], which is what any one file in a skin may weigh and is set
+/// where a background fits. A file past this one, named as the face, is not a face.
 pub const FONT_MAX_BYTES: usize = 2 * 1024 * 1024;
 
 /// What a woff2 file opens with. Read so that "not woff2" is what the bytes say rather than what
@@ -1149,6 +1153,55 @@ pub fn icon(pack: &[u8], name: &str) -> Result<(Picture, Vec<u8>), Error> {
     Ok((drawing, bytes))
 }
 
+/// Where the files a skin's document names are read from (`AMB-D-936`). What an author writes is a
+/// filename; what stands behind that name is this.
+///
+/// Held as the file the skin arrived in rather than as an unpacked directory. The zip is what the
+/// device keeps, so unpacking it beside itself would leave two copies of every material to keep in
+/// step, and the one that went stale would be the one being drawn.
+#[derive(Debug, Clone)]
+pub enum Materials<'a> {
+    /// Nothing beside the document. A bare skin is one file, so a name written in one has nothing
+    /// behind it.
+    None,
+    /// The zip the skin is held in, opened again for each file read out of it.
+    Pack(std::borrow::Cow<'a, [u8]>),
+    /// The files a shipped skin carries, held in the binary beside its document. A shipped skin
+    /// does not arrive as a zip, and what a device's own reads out of its own file, it reads here.
+    Shipped(&'static [(&'static str, &'static [u8])]),
+}
+
+impl<'a> Materials<'a> {
+    /// What one file's bytes carry — the zip where they are one, and nothing where they are the
+    /// document on its own. Read off the bytes the way [`Packing::of`] reads them, so a caller
+    /// never carries the shape alongside the file it came off.
+    pub fn of(bytes: &'a [u8]) -> Materials<'a> {
+        match Packing::of(bytes) {
+            Packing::Bare => Materials::None,
+            Packing::Packed => Materials::Pack(std::borrow::Cow::Borrowed(bytes)),
+        }
+    }
+
+    /// The bytes of one file the document names, or `None` where the skin carries no such file.
+    ///
+    /// The two shapes answer the same question — a device's own skin out of the zip it arrived in
+    /// ([`material`]), and a shipped one out of the binary — so a caller that has a filename has
+    /// one place to take it.
+    ///
+    /// Why it fails is dropped here. What asks is the check, which says what it made of the
+    /// document, and "no such file" and "the zip will not open" are the same sentence to a reader
+    /// whose face did not arrive. A caller that needs the reason calls [`material`].
+    pub fn read(&self, file: &str) -> Option<Vec<u8>> {
+        match self {
+            Materials::None => None,
+            Materials::Shipped(held) => {
+                held.iter().find(|(name, _)| *name == file).map(|(_, bytes)| bytes.to_vec())
+            }
+            Materials::Pack(bytes) => material(bytes, file).ok(),
+        }
+    }
+}
+
 /// The skin a file in the skins directory is, by its name, with where its shape sits in
 /// [`FILE_EXTS`] — `None` where the file is not one of a skin's shapes, or is named something a
 /// skin may not be called.
@@ -1183,12 +1236,6 @@ pub fn usable_name(name: &str) -> bool {
 }
 
 impl Skin {
-    /// The skin kept under this name, if one is. Reading it is what lets the two versions be put
-    /// side by side when a second file arrives calling itself the same thing.
-    ///
-    /// A name that is not usable holds nothing, rather than reaching for a file: the answer to
-    /// "what is installed as `../../etc/passwd`" is nothing, and it is not a question to ask the
-    /// filesystem.
     /// Every skin this device holds, by the name its file is under, with what reading that file
     /// gave. A file that will not read is carried out as the failure rather than dropped: it is one
     /// of the person's own files, and a list that quietly skipped it would leave them looking for a
@@ -1286,18 +1333,40 @@ impl Skin {
         }
     }
 
-    pub fn installed(paths: &crate::config::Paths, name: &str) -> Result<Option<Skin>, Error> {
+    /// The skin kept under this name, with what its materials are read out of. Reading it is what
+    /// lets the two versions be put side by side when a second file arrives calling itself the same
+    /// thing.
+    ///
+    /// The skin and its materials travel together because they are one file: the document is read
+    /// out of the zip, and so is the face it names, and a caller handed only the first would have
+    /// nothing to read the second out of.
+    ///
+    /// A name that is not usable holds nothing, rather than reaching for a file: the answer to
+    /// "what is installed as `../../etc/passwd`" is nothing, and it is not a question to ask the
+    /// filesystem.
+    pub fn installed(
+        paths: &crate::config::Paths,
+        name: &str,
+    ) -> Result<Option<(Skin, Materials<'static>)>, Error> {
         if !usable_name(name) {
             return Ok(None);
         }
-        if let Some(yaml) = crate::skin_official::yaml(name) {
-            return Skin::read(yaml).map(Some);
+        if let Some(o) = crate::skin_official::find(name) {
+            return Skin::read(o.yaml).map(|s| Some((s, Materials::Shipped(o.materials))));
         }
         let Some((_, at)) = kept_file(paths, name) else {
             return Ok(None);
         };
         match std::fs::read(at) {
-            Ok(bytes) => Skin::read(&document(&bytes)?.1).map(Some),
+            Ok(bytes) => {
+                let (packing, yaml) = document(&bytes)?;
+                let skin = Skin::read(&yaml)?;
+                let materials = match packing {
+                    Packing::Bare => Materials::None,
+                    Packing::Packed => Materials::Pack(std::borrow::Cow::Owned(bytes)),
+                };
+                Ok(Some((skin, materials)))
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(Error::from(e)),
         }
@@ -1396,12 +1465,19 @@ impl MaterialProblem {
 pub enum FontProblem {
     /// Not `woff2`. It is the one format taken, so there is nothing to try.
     Format(String),
-    /// The base64 did not decode, or what came out is not a woff2 file.
+    /// The file named is not a woff2 file.
     Unreadable,
     /// Larger than [`FONT_MAX_BYTES`].
     TooLarge { bytes: usize },
     /// No family name, so there is nothing to put at the head of the stack.
     NoFamily,
+    /// No file named, so there is nowhere to read the face from.
+    NoFile,
+    /// A name that is not one a file in a skin can have — the same names a background's file is
+    /// held to.
+    UnusableFile,
+    /// The skin carries no file under the name the document wrote.
+    Missing,
 }
 
 impl FontProblem {
@@ -1413,11 +1489,14 @@ impl FontProblem {
                 "no format; woff2 is the one taken".to_string()
             }
             FontProblem::Format(said) => format!("format is '{said}'; woff2 is the one taken"),
-            FontProblem::Unreadable => "the data is not a woff2 file".to_string(),
+            FontProblem::Unreadable => "that file is not a woff2 file".to_string(),
             FontProblem::TooLarge { bytes } => {
                 format!("{bytes} bytes, over the {FONT_MAX_BYTES} this build takes")
             }
             FontProblem::NoFamily => "no family name to put at the head of the stack".to_string(),
+            FontProblem::NoFile => "no file named to read the face out of".to_string(),
+            FontProblem::UnusableFile => "a file name a skin cannot hold".to_string(),
+            FontProblem::Missing => "no file in this skin under that name".to_string(),
         }
     }
 }
@@ -1477,7 +1556,10 @@ impl Skin {
     /// written against, the sides it claims — cannot be dropped that way: what is left would be a
     /// skin nobody wrote. A name the author did not set is not a rule at all; it keeps the base value,
     /// which is what lets a skin be ten lines long.
-    pub fn check(self) -> Result<Taken, Refusal> {
+    ///
+    /// `materials` is what the document's filenames stand for — the file the skin arrived in. A
+    /// skin that names none is checked against [`Materials::None`] and nothing here reads.
+    pub fn check(self, materials: &Materials) -> Result<Taken, Refusal> {
         if !usable_name(&self.name) {
             return Err(Refusal::UnusableName(self.name.clone()));
         }
@@ -1518,7 +1600,7 @@ impl Skin {
             if file.license_text.trim().is_empty() {
                 return Err(Refusal::FontWithoutLicenceText);
             }
-            match read_font(file) {
+            match read_font(file, materials) {
                 Ok(bytes) => font_bytes = Some(bytes),
                 Err(why) => warnings.push(Warning::FontDropped(why)),
             }
@@ -1617,6 +1699,22 @@ impl Skin {
             Side::Dark => &self.dark,
         }
     }
+}
+
+/// A zip holding the entries given, as bytes. At module level rather than in the tests below
+/// because a skin's materials only exist inside a zip, so every module testing against one has to
+/// be able to write one.
+#[cfg(test)]
+pub(crate) fn packed(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    use std::io::Write as _;
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let how =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (name, bytes) in entries {
+        out.start_file(*name, how).unwrap();
+        out.write_all(bytes).unwrap();
+    }
+    out.finish().unwrap().into_inner()
 }
 
 #[cfg(test)]
@@ -1754,7 +1852,7 @@ dark:
             "light:\n  c-bg: \"#fff\"\n  border-w: \"2px\"\n",
         ))
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap();
         assert!(skin.warnings.is_empty(), "{:?}", skin.warnings);
         assert_eq!(skin.skin.light.values["c-bg"], "#fff");
@@ -1768,7 +1866,7 @@ dark:
             "light:\n  c-bg: \"#fff\"\n  c-sepia: \"#eee\"\n",
         ))
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap();
         assert!(!taken.skin.light.values.contains_key("c-sepia"));
         assert_eq!(
@@ -1784,7 +1882,7 @@ dark:
             "dark:\n  k-slack: \"#123456\"\n  sidebar-w: 400px\n",
         ))
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap();
         assert!(taken.skin.dark.values.is_empty());
         assert_eq!(
@@ -1803,7 +1901,7 @@ dark:
             "light:\n  c-bg: \"#fff\"\n  c-text: [1, 2]\n",
         ))
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap();
         assert_eq!(taken.skin.light.values["c-bg"], "#fff");
         assert_eq!(
@@ -1821,7 +1919,7 @@ dark:
             "light:\n  c-bg: \"red; } body { display: none }\"\n  c-text: \"#000\"\n",
         ))
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap();
         assert!(!taken.skin.light.values.contains_key("c-bg"), "dropped, not worn");
         assert_eq!(taken.skin.light.values["c-text"], "#000", "the rest of the file still stands");
@@ -1877,7 +1975,7 @@ dark:
         let taken =
             Skin::read(&doc("skin_v: 1\nthemes: [light]\nradius_scale: 1.5\n", "light:\n  c-bg: \"#fff\"\n"))
                 .unwrap()
-                .check()
+                .check(&Materials::None)
                 .unwrap();
         assert_eq!(taken.warnings, [Warning::UnknownHeaderKey("radius_scale".into())]);
         assert!(taken.skin.unknown_keys.is_empty());
@@ -1887,7 +1985,7 @@ dark:
     fn a_later_vocabulary_turns_the_whole_skin_away() {
         let e = Skin::read(&doc("skin_v: 2\nthemes: [light]\n", "light:\n  c-bg: \"#fff\"\n"))
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap_err();
         assert_eq!(e, Refusal::SkinVAhead { declared: 2, understood: SKIN_V });
     }
@@ -1896,7 +1994,7 @@ dark:
     fn a_side_that_was_declared_and_left_empty_turns_the_whole_skin_away() {
         let e = Skin::read(&doc("skin_v: 1\nthemes: [light, dark]\n", "light:\n  c-bg: \"#fff\"\n"))
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap_err();
         assert_eq!(e, Refusal::SideDeclaredEmpty(Side::Dark));
     }
@@ -1905,7 +2003,7 @@ dark:
     fn a_side_that_was_set_without_being_declared_turns_the_whole_skin_away() {
         let e = Skin::read(&doc("skin_v: 1\nthemes: [light]\n", "light:\n  c-bg: \"#fff\"\ndark:\n  c-bg: \"#000\"\n"))
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap_err();
         assert_eq!(e, Refusal::SideNotDeclared(Side::Dark));
     }
@@ -1914,29 +2012,38 @@ dark:
     fn a_side_this_build_does_not_have_turns_the_whole_skin_away() {
         let e = Skin::read(&doc("skin_v: 1\nthemes: [light, sepia]\n", "light:\n  c-bg: \"#fff\"\n"))
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap_err();
         assert_eq!(e, Refusal::UnknownSide("sepia".into()));
     }
 
-    /// A skin document carrying a font, built from the bytes the test wants in it.
-    fn with_font(fields: &str, bytes: &[u8]) -> String {
-        use base64::Engine as _;
-        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-        format!(
-            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{fields}  data: {data}\n"
-        )
+    /// A skin carrying a face, as the zip it arrives in: the document with the `font_file` fields
+    /// given, and the bytes beside it under [`FONT_FILE`].
+    fn with_font(fields: &str, bytes: &[u8]) -> Vec<u8> {
+        let yaml = format!(
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{fields}"
+        );
+        packed(&[(FONT_FILE, bytes), (PACK_DOCUMENT, yaml.as_bytes())])
     }
 
-    /// The four fields a usable font needs, with the bytes left to the caller.
-    const FONT_HEAD: &str =
-        "  family: Silkscreen\n  format: woff2\n  license: OFL-1.1\n  license_text: Copyright…\n";
+    /// One skin out of the file it arrived in — read, and checked against what that file carries.
+    fn out_of(file: &[u8]) -> Result<Taken, Refusal> {
+        let (_, yaml) = document(file).unwrap();
+        Skin::read(&yaml).unwrap().check(&Materials::of(file))
+    }
+
+    /// The name the face sits under in the zips these tests write.
+    const FONT_FILE: &str = "silkscreen.woff2";
+
+    /// The five fields a usable font needs, with the bytes left to the caller.
+    const FONT_HEAD: &str = "  family: Silkscreen\n  format: woff2\n  file: silkscreen.woff2\n  \
+         license: OFL-1.1\n  license_text: Copyright…\n";
 
     /// A skin setting the frame however the case wants it.
     fn framed(lines: &str) -> Taken {
         Skin::read(&format!("name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n{lines}"))
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap()
     }
 
@@ -2199,67 +2306,110 @@ dark:
     }
 
     #[test]
-    fn a_font_that_is_what_it_says_comes_through_decoded() {
+    fn a_font_the_document_names_comes_out_of_the_file_beside_it() {
         let bytes = [b"wOF2".as_slice(), &[0u8; 64]].concat();
-        let taken = Skin::read(&with_font(FONT_HEAD, &bytes)).unwrap().check().unwrap();
+        let taken = out_of(&with_font(FONT_HEAD, &bytes)).unwrap();
         assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
         assert_eq!(taken.font.as_deref(), Some(bytes.as_slice()));
         assert_eq!(taken.skin.font.as_ref().unwrap().family, "Silkscreen");
+        assert_eq!(taken.skin.font.as_ref().unwrap().file, FONT_FILE);
         assert_eq!(taken.skin.font.as_ref().unwrap().license, "OFL-1.1");
     }
 
+    /// A document on its own is one file, so there is nothing beside it to be the face. The
+    /// colours are taken and the name is said, the way any other face nobody can read is.
     #[test]
-    fn the_newlines_a_block_scalar_leaves_in_are_not_the_fonts_fault() {
-        // What a parser hands back for `data: |` is wrapped at the column the author's editor
-        // wrapped it at, which is not base64 any decoder takes.
-        use base64::Engine as _;
-        let bytes = [b"wOF2".as_slice(), &[7u8; 200]].concat();
-        let wrapped: String = base64::engine::general_purpose::STANDARD
-            .encode(&bytes)
-            .as_bytes()
-            .chunks(76)
-            .map(|line| format!("    {}\n", std::str::from_utf8(line).unwrap()))
-            .collect();
+    fn a_bare_document_has_nothing_to_read_a_face_out_of() {
         let yaml = format!(
-            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{FONT_HEAD}  data: |\n{wrapped}"
+            "name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\nfont_file:\n{FONT_HEAD}"
         );
-        let taken = Skin::read(&yaml).unwrap().check().unwrap();
-        assert_eq!(taken.font.as_deref(), Some(bytes.as_slice()));
+        let taken = out_of(yaml.as_bytes()).unwrap();
+        assert_eq!(
+            taken.warnings,
+            [Warning::FontDropped(FontProblem::Missing)]
+        );
+        assert!(taken.font.is_none());
+        assert_eq!(taken.skin.light.values["c-bg"], "#fff", "the colours are taken");
+    }
+
+    /// A name climbing out of the archive is not a name a file in a skin can have, and is turned
+    /// down on the name rather than looked for. Nothing here reaches the filesystem either way.
+    #[test]
+    fn a_face_named_outside_the_skin_is_not_a_name_a_file_can_have() {
+        for named in ["../../../../etc/passwd", "/etc/passwd"] {
+            let fields = format!(
+                "  family: Silkscreen\n  format: woff2\n  file: '{named}'\n  license: OFL-1.1\n  \
+                 license_text: Copyright…\n"
+            );
+            let taken = out_of(&with_font(&fields, b"wOF2 and a face")).unwrap();
+            assert_eq!(
+                taken.warnings,
+                [Warning::FontDropped(FontProblem::UnusableFile)],
+                "{named}"
+            );
+            assert!(taken.font.is_none(), "{named}");
+        }
     }
 
     #[test]
     fn a_font_that_is_not_what_it_says_is_set_aside_and_the_colours_are_taken() {
-        let cases: Vec<(String, FontProblem)> = vec![
+        let cases: Vec<(&str, Vec<u8>, FontProblem)> = vec![
             (
-                with_font("  family: F\n  format: ttf\n  license: X\n  license_text: Y\n", b"wOF2...."),
+                "ttf",
+                with_font(
+                    "  family: F\n  format: ttf\n  file: silkscreen.woff2\n  license: X\n  \
+                     license_text: Y\n",
+                    b"wOF2....",
+                ),
                 FontProblem::Format("ttf".into()),
             ),
             (
                 // Says woff2 and is not: the bytes are read rather than the claim about them.
+                "not a face",
                 with_font(FONT_HEAD, b"not a font at all"),
                 FontProblem::Unreadable,
             ),
             (
+                "no family",
                 with_font(
-                    "  family: \"\"\n  format: woff2\n  license: X\n  license_text: Y\n",
+                    "  family: \"\"\n  format: woff2\n  file: silkscreen.woff2\n  license: X\n  \
+                     license_text: Y\n",
                     b"wOF2....",
                 ),
                 FontProblem::NoFamily,
             ),
+            (
+                "no file named",
+                with_font(
+                    "  family: F\n  format: woff2\n  license: X\n  license_text: Y\n",
+                    b"wOF2....",
+                ),
+                FontProblem::NoFile,
+            ),
+            (
+                // Named, and the skin carries no such file.
+                "named and not there",
+                with_font(
+                    "  family: F\n  format: woff2\n  file: other.woff2\n  license: X\n  \
+                     license_text: Y\n",
+                    b"wOF2....",
+                ),
+                FontProblem::Missing,
+            ),
         ];
-        for (yaml, why) in cases {
-            let taken = Skin::read(&yaml).unwrap().check().unwrap();
-            assert_eq!(taken.warnings, [Warning::FontDropped(why)], "{yaml}");
-            assert!(taken.font.is_none());
-            assert!(taken.skin.font.is_none(), "and the family is not carried on");
-            assert_eq!(taken.skin.light.values["c-bg"], "#fff", "the colours are taken");
+        for (case, file, why) in cases {
+            let taken = out_of(&file).unwrap();
+            assert_eq!(taken.warnings, [Warning::FontDropped(why)], "{case}");
+            assert!(taken.font.is_none(), "{case}");
+            assert!(taken.skin.font.is_none(), "{case}: and the family is not carried on");
+            assert_eq!(taken.skin.light.values["c-bg"], "#fff", "{case}: the colours are taken");
         }
     }
 
     #[test]
     fn a_font_past_the_size_this_build_takes_is_set_aside_with_its_weight() {
         let bytes = [b"wOF2".as_slice(), &vec![0u8; FONT_MAX_BYTES]].concat();
-        let taken = Skin::read(&with_font(FONT_HEAD, &bytes)).unwrap().check().unwrap();
+        let taken = out_of(&with_font(FONT_HEAD, &bytes)).unwrap();
         assert_eq!(taken.warnings, [Warning::FontDropped(FontProblem::TooLarge { bytes: bytes.len() })]);
         assert!(taken.font.is_none());
     }
@@ -2268,21 +2418,19 @@ dark:
     fn a_font_with_no_licence_text_turns_the_whole_skin_away() {
         // The one thing about a font that is not dropped and gone on with: the terms it may be
         // passed on under have to travel in the file it travels in.
-        let yaml = with_font(
-            "  family: F\n  format: woff2\n  license: OFL-1.1\n  license_text: \"  \"\n",
+        let file = with_font(
+            "  family: F\n  format: woff2\n  file: silkscreen.woff2\n  license: OFL-1.1\n  \
+             license_text: \"  \"\n",
             b"wOF2....",
         );
-        assert_eq!(
-            Skin::read(&yaml).unwrap().check().unwrap_err(),
-            Refusal::FontWithoutLicenceText
-        );
+        assert_eq!(out_of(&file).unwrap_err(), Refusal::FontWithoutLicenceText);
     }
 
     #[test]
     fn a_skin_that_carries_no_font_says_so_rather_than_warning_about_one() {
         let taken = Skin::read("name: n\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n")
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap();
         assert!(taken.font.is_none());
         assert!(taken.warnings.is_empty());
@@ -2298,7 +2446,7 @@ dark:
         }
         let e = Skin::read("name: ../evil\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n")
             .unwrap()
-            .check()
+            .check(&Materials::None)
             .unwrap_err();
         assert_eq!(e, Refusal::UnusableName("../evil".into()));
     }
@@ -2312,7 +2460,7 @@ dark:
             "light:\n  c-bg: \"#fff\"\ndark:\n  c-sepia: \"#000\"\n",
         ))
         .unwrap()
-        .check()
+        .check(&Materials::None)
         .unwrap();
         assert!(taken.skin.dark.values.is_empty());
         assert_eq!(
@@ -2325,19 +2473,6 @@ dark:
 
     const ONE_SKIN: &str =
         "name: kozo\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#ffffff\"\n";
-
-    /// A zip holding the entries given, as bytes.
-    fn packed(entries: &[(&str, &[u8])]) -> Vec<u8> {
-        use std::io::Write as _;
-        let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-        let how = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        for (name, bytes) in entries {
-            out.start_file(*name, how).unwrap();
-            out.write_all(bytes).unwrap();
-        }
-        out.finish().unwrap().into_inner()
-    }
 
     #[test]
     fn the_document_comes_out_of_the_zip_and_out_of_a_bare_file_alike() {
@@ -2437,7 +2572,12 @@ dark:
         assert!(at.is_file(), "kept as the zip it arrived as");
         assert_eq!(std::fs::read(&at).unwrap(), zip, "byte for byte, the author's own file");
         assert_eq!(kept_file(&paths, "kozo").map(|(p, _)| p), Some(Packing::Packed));
-        assert_eq!(Skin::installed(&paths, "kozo").unwrap().unwrap().name, "kozo");
+        let (read, materials) = Skin::installed(&paths, "kozo").unwrap().unwrap();
+        assert_eq!(read.name, "kozo");
+        assert!(
+            matches!(materials, Materials::Pack(_)),
+            "and its materials are read back out of the same zip"
+        );
         assert_eq!(
             Skin::installed_all(&paths).iter().filter(|(n, _)| n == "kozo").count(),
             1
@@ -2459,7 +2599,7 @@ dark:
     #[test]
     fn a_background_is_read_with_the_two_words_beside_its_file() {
         let taken = laying("  c-bg:\n    file: paper.png\n    fit: tile\n    at: top-left\n")
-            .check()
+            .check(&Materials::None)
             .unwrap();
         let laid = &taken.skin.backgrounds["c-bg"];
         assert_eq!(laid.file, "paper.png");
@@ -2471,7 +2611,7 @@ dark:
     #[test]
     fn a_background_written_as_a_file_alone_is_laid_the_way_this_build_lays_one() {
         // The ordinary case: somebody who has not thought about how it sits should not have to.
-        let taken = laying("  c-surface:\n    file: art/grain.webp\n").check().unwrap();
+        let taken = laying("  c-surface:\n    file: art/grain.webp\n").check(&Materials::None).unwrap();
         let laid = &taken.skin.backgrounds["c-surface"];
         assert_eq!(laid.file, "art/grain.webp");
         assert_eq!(laid.fit, FIT_DEFAULT);
@@ -2481,7 +2621,7 @@ dark:
 
     #[test]
     fn a_background_named_for_a_place_this_build_has_none_is_carried_out_by_name() {
-        let taken = laying("  c-text:\n    file: paper.png\n").check().unwrap();
+        let taken = laying("  c-text:\n    file: paper.png\n").check(&Materials::None).unwrap();
         assert!(taken.skin.backgrounds.is_empty());
         assert_eq!(
             taken.warnings,
@@ -2494,7 +2634,7 @@ dark:
         // Written as a map with nothing in it, and written as something that is not a map at all
         // — both come to the same thing: there is no picture to lay.
         for wrote in ["  c-sunken:\n    fit: cover\n", "  c-sunken: paper.png\n"] {
-            let taken = laying(wrote).check().unwrap();
+            let taken = laying(wrote).check(&Materials::None).unwrap();
             assert!(taken.skin.backgrounds.is_empty(), "{wrote}");
             assert_eq!(
                 taken.warnings,
@@ -2510,7 +2650,7 @@ dark:
     #[test]
     fn a_file_that_reaches_out_of_the_skin_is_not_a_background() {
         for name in ["../../wallpaper.png", "/etc/passwd", "a;b{.png", "paper.png?x=1"] {
-            let taken = laying(&format!("  c-bg:\n    file: '{name}'\n")).check().unwrap();
+            let taken = laying(&format!("  c-bg:\n    file: '{name}'\n")).check(&Materials::None).unwrap();
             assert!(taken.skin.backgrounds.is_empty(), "{name}");
             assert_eq!(
                 taken.warnings,
@@ -2526,7 +2666,7 @@ dark:
     #[test]
     fn a_word_this_build_has_no_drawing_for_is_reported_and_the_picture_is_still_laid() {
         let taken = laying("  c-bg:\n    file: paper.png\n    fit: stretch\n    at: middle\n")
-            .check()
+            .check(&Materials::None)
             .unwrap();
         let laid = &taken.skin.backgrounds["c-bg"];
         assert_eq!(laid.fit, FIT_DEFAULT, "the picture is laid the way this build lays one");
@@ -2570,7 +2710,7 @@ dark:
 
     #[test]
     fn an_icon_is_read_as_the_one_file_written_beside_its_name() {
-        let taken = drawing("  gear: art/gear.svg\n  gavel: gavel.png\n").check().unwrap();
+        let taken = drawing("  gear: art/gear.svg\n  gavel: gavel.png\n").check(&Materials::None).unwrap();
         assert_eq!(taken.skin.icons["gear"], "art/gear.svg");
         assert_eq!(taken.skin.icons["gavel"], "gavel.png");
         assert!(taken.warnings.is_empty());
@@ -2580,14 +2720,14 @@ dark:
     fn an_icon_the_document_leaves_out_is_not_in_what_comes_back() {
         // What a skin does not replace keeps the drawing `Icon.tsx` holds, and the way that is
         // said here is by the name not being in the map at all.
-        let taken = drawing("  gear: gear.svg\n").check().unwrap();
+        let taken = drawing("  gear: gear.svg\n").check(&Materials::None).unwrap();
         assert_eq!(taken.skin.icons.len(), 1);
         assert!(!taken.skin.icons.contains_key("gavel"));
     }
 
     #[test]
     fn an_icon_named_for_a_drawing_this_build_has_none_of_is_carried_out_by_name() {
-        let taken = drawing("  sundial: sundial.svg\n").check().unwrap();
+        let taken = drawing("  sundial: sundial.svg\n").check(&Materials::None).unwrap();
         assert!(taken.skin.icons.is_empty());
         assert_eq!(taken.warnings, [Warning::UnknownIcon { name: "sundial".into() }]);
     }
@@ -2597,7 +2737,7 @@ dark:
         // Written empty, and written as something that is not a filename at all — both come to
         // the same thing: there is no drawing to lay.
         for wrote in ["  gear: \"\"\n", "  gear: 7\n", "  gear:\n    file: gear.svg\n"] {
-            let taken = drawing(wrote).check().unwrap();
+            let taken = drawing(wrote).check(&Materials::None).unwrap();
             assert!(taken.skin.icons.is_empty(), "{wrote}");
             assert_eq!(
                 taken.warnings,
@@ -2613,7 +2753,7 @@ dark:
     #[test]
     fn a_file_that_reaches_out_of_the_skin_is_not_an_icon() {
         for name in ["../../gear.svg", "/etc/passwd", "a;b{.svg", "gear.svg?x=1"] {
-            let taken = drawing(&format!("  gear: '{name}'\n")).check().unwrap();
+            let taken = drawing(&format!("  gear: '{name}'\n")).check(&Materials::None).unwrap();
             assert!(taken.skin.icons.is_empty(), "{name}");
             assert_eq!(
                 taken.warnings,

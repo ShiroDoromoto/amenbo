@@ -476,7 +476,7 @@ export const uk: Translation = {
     "settings.doctor": "Перевірити й полагодити проблеми",
     "settings.doctorNote": "Перевіряє нутрощі даних (осиротілі посилання тощо) та прив'язані папки цього пристрою (.amenbo / посібник для ШІ). Сама перевірка нічого не записує. Ті самі перевірки й ті самі полагодження, що й `amenbo doctor` у командному рядку.",
     "settings.doctorChecking": "Перевірка…",
-    "settings.doctorRecheck": "Перевірити ще раз",
+    "settings.doctorRecheck": "Перевірити",
     "settings.doctorClean": "Проблем не знайдено.",
     "settings.doctorFound": "помилок: {errors} / попереджень: {warnings}",
     "settings.doctorFix": "Підмести файли без посилань і залишені прив'язки папок",

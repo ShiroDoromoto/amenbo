@@ -757,8 +757,8 @@ pub fn skin_in_use() -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
     let config = amenbo_core::config::Config::load(&paths.config_file);
     let name = config.skin?;
-    let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
-    Some(worn(skin.check().ok()?))
+    let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    Some(worn(skin.check(&materials).ok()?))
 }
 
 /// One checked skin, as the window wears it. The font's bytes go back to base64 on the way out —
@@ -827,7 +827,8 @@ pub fn skin_list() -> SkinListDto {
 #[tauri::command]
 pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
-    Some(worn(amenbo_core::skin::Skin::installed(&paths, &name).ok()??.check().ok()?))
+    let (skin, materials) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    Some(worn(skin.check(&materials).ok()?))
 }
 
 /// The licence of the font a held skin carries, in full.
@@ -838,7 +839,7 @@ pub fn skin_tables(name: String) -> Option<SkinTablesDto> {
 #[tauri::command]
 pub fn skin_font_licence(name: String) -> Option<String> {
     let paths = amenbo_core::config::Paths::resolve().ok()?;
-    let skin = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
+    let (skin, _) = amenbo_core::skin::Skin::installed(&paths, &name).ok()??;
     skin.font.map(|f| f.license_text)
 }
 
@@ -874,7 +875,9 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
     let bytes = std::fs::read(&path).map_err(|e| CmdError::from(format!("{path}: {e}")))?;
     let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let read = amenbo_core::skin::Skin::read(&yaml).map_err(CmdError::from)?;
-    let taken = read.check().map_err(|r| CmdError::from(refusal_sentence(&r)))?;
+    let taken = read
+        .check(&amenbo_core::skin::Materials::of(&bytes))
+        .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     // Turned away here rather than shown as a judgement: a file calling itself one of the names
     // this build ships cannot be taken in under any answer the reader could give, so there is
     // nothing on the panel for them to decide.
@@ -891,7 +894,7 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
         version: taken.skin.version.clone(),
         themes: taken.skin.themes.clone(),
         held: there.is_some(),
-        held_version: there.and_then(|s| s.version),
+        held_version: there.and_then(|(s, _)| s.version),
         warnings: taken
             .warnings
             .iter()
@@ -1028,7 +1031,7 @@ pub fn skin_add(path: String, replace: bool) -> Result<String, CmdError> {
     let yaml = amenbo_core::skin::arriving(&bytes).map_err(CmdError::from)?;
     let taken = amenbo_core::skin::Skin::read(&yaml)
         .map_err(CmdError::from)?
-        .check()
+        .check(&amenbo_core::skin::Materials::of(&bytes))
         .map_err(|r| CmdError::from(refusal_sentence(&r)))?;
     let name = taken.skin.name;
     if !replace
@@ -1054,7 +1057,7 @@ pub fn skin_template_to(path: String) -> Result<(), CmdError> {
     let on = match amenbo_core::config::Config::load(&paths.config_file).skin {
         Some(name) => amenbo_core::skin::Skin::installed(&paths, &name)
             .map_err(CmdError::from)?
-            .and_then(|s| s.check().ok())
+            .and_then(|(s, materials)| s.check(&materials).ok())
             .map(|t| t.skin),
         None => None,
     };
@@ -4821,8 +4824,22 @@ pub fn repair_pointers() -> Result<PointerRepairDto, CmdError> {
 /// ([`StartupHealthDto`]) sees only the store-internal doctor and the binding pointers
 /// ([`pointer_issues`]); stale managed blocks and debris folder rows have banners of their own. So
 /// this screen is the only place that shows **all of it together**.
+///
+/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn
+/// ([`crate::agent_models`]), and the webview asks that thread for an answer on every frame it
+/// draws — so while this one is running, nothing anywhere in the window moves: no other screen
+/// updates, no animation, not the cursor's blink. What it waits on is git, started three times for
+/// each bound folder (`amenbo_core::doctor`), which over eighteen bound folders held the window
+/// still for 2318 ms (`AMB-T-5200`).
 #[tauri::command]
-pub fn doctor_report() -> Result<DoctorReportDto, CmdError> {
+pub async fn doctor_report() -> Result<DoctorReportDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(looked_over)
+        .await
+        .map_err(|e| -> CmdError { format!("the check did not finish: {e}").into() })?
+}
+
+/// The check itself, on whichever thread asked for it — [`doctor_report`] without the door.
+fn looked_over() -> Result<DoctorReportDto, CmdError> {
     let store = open_store_read()?;
     let result = amenbo_core::doctor::report(&store)?;
     Ok(DoctorReportDto {
@@ -4839,8 +4856,18 @@ pub fn doctor_report() -> Result<DoctorReportDto, CmdError> {
 /// without asking for
 /// confirmation. And since nothing it cleans up is referenced by a single row of any live read,
 /// there is no snapshot and no query to refetch — hence no `WriteAck`.
+///
+/// **Off the main thread**, for the reason [`doctor_report`] is: this one sweeps rows and walks the
+/// blobs on disk, and the thread it would run on is the one the webview asks for every frame.
 #[tauri::command]
-pub fn doctor_fix() -> Result<DoctorFixDto, CmdError> {
+pub async fn doctor_fix() -> Result<DoctorFixDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(swept)
+        .await
+        .map_err(|e| -> CmdError { format!("the repair did not finish: {e}").into() })?
+}
+
+/// The repair itself, on whichever thread asked for it — [`doctor_fix`] without the door.
+fn swept() -> Result<DoctorFixDto, CmdError> {
     let mut store = open_store()?;
     // Ahead of the blob sweep, as on the CLI: an orphaned attachment holds its hash in the GC root set,
     // so its bytes are not collectible until the row is.
@@ -7014,6 +7041,9 @@ pub(crate) mod tests {
     /// same cleanup entry points**. What is pinned here is the command's wiring: detection (core's
     /// `doctor::report`) carries the environment's issues through to the GUI, and the repair
     /// (`doctor_fix`) clears them.
+    ///
+    /// Walked through the work rather than the door ([`looked_over`], [`swept`]): what the doors add
+    /// is the thread the work runs on, and this is about what the work answers.
     #[test]
     fn the_gui_doctor_face_shows_the_same_issues_and_repairs_them() {
         let _env = env_guard();
@@ -7051,7 +7081,7 @@ pub(crate) mod tests {
                 .set_harness_consent(project_id, amenbo_core::harness::Consent::answered(false))
                 .unwrap();
         }
-        let clean = doctor_report().unwrap();
+        let clean = looked_over().unwrap();
         assert!(clean.ok && clean.issues.is_empty(), "a plain store has no issues");
 
         {
@@ -7061,7 +7091,7 @@ pub(crate) mod tests {
             store.save_bindings(&reg).unwrap();
         }
 
-        let dirty = doctor_report().unwrap();
+        let dirty = looked_over().unwrap();
         assert_eq!(dirty.issues.len(), 1, "an environment issue reaches the GUI surface");
         assert_eq!(dirty.issues[0].kind, "orphan_binding");
         assert_eq!(dirty.warnings, 1);
@@ -7071,9 +7101,9 @@ pub(crate) mod tests {
             "the GUI receives the details it needs (which folder) to compose a sentence in its own language",
         );
 
-        let fixed = doctor_fix().unwrap();
+        let fixed = swept().unwrap();
         assert_eq!(fixed.forgotten_bindings, 1, "the GUI's repair drops it from the index");
-        assert!(doctor_report().unwrap().issues.is_empty(), "the re-check after repair is clean");
+        assert!(looked_over().unwrap().issues.is_empty(), "the re-check after repair is clean");
         assert!(orphan.is_dir(), "only the index row was dropped (the folder is untouched)");
 
         let _ = std::fs::remove_dir_all(&tmp);

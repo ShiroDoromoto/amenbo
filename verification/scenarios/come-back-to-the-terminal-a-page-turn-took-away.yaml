@@ -7,7 +7,7 @@
 #
 # ── Why the line, and why a second one ───────────────────────────────────────────────────────────
 # The road types a line into the pane and reads it back afterwards, for the reason
-# `put-the-terminal-on-its-own-screen` does: it is the reader's own words, so a reading finds it on
+# `put-the-workspace-on-its-own-screen` does: it is the reader's own words, so a reading finds it on
 # the pane drawing that session and on no other, and a pane showing a fresh prompt looks exactly like
 # a pane still drawing the session that was running until the line is on it. A page turned back to a
 # session that had died would come up on a new terminal — the pane opens one where the old session is

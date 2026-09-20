@@ -79,14 +79,15 @@ const judgement = (over: Partial<SkinJudgementDto> = {}): SkinJudgementDto => ({
 
 let host: HTMLDivElement;
 let root: Root;
-let added = 0;
+/** The name each `onAdded` carried, in order. */
+let added: string[] = [];
 
 async function drawAndPick() {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
-    root.render(<SkinAdd onAdded={() => { added += 1; }} />);
+    root.render(<SkinAdd onAdded={(name) => { added.push(name); }} />);
   });
   await act(async () => {
     host.querySelector<HTMLButtonElement>(".skinwell .btn")!.click();
@@ -102,7 +103,7 @@ beforeEach(() => {
   hoisted.saveAs = null;
   hoisted.written = [];
   hoisted.missing = [];
-  added = 0;
+  added = [];
 });
 
 afterEach(() => {
@@ -126,7 +127,9 @@ describe("reading a skin file over", () => {
     await act(async () => take!.click());
     await act(async () => {});
     expect(hoisted.added).toEqual([{ path: "/tmp/washi.yaml", replace: false }]);
-    expect(added, "and the list it lands in is read again").toBe(1);
+    // The name the document gave itself, which is not the file's: a skin landing under the name
+    // of the one that is on is that skin changed, and the screen above has no other way to know.
+    expect(added, "and the name it landed under is handed on").toEqual(["washi"]);
   });
 
   it("names each thing the check set aside", async () => {

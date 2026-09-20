@@ -882,6 +882,10 @@ words on a pane are what every `shows` names it by — so a step of the harness'
 something there would be writing on the screen a road reads. The same rule ends a program by a press:
 `open-shell` and `end-pane` both say control-D — the end of input, which is not a line — rather than
 a typed `exit`, which would have put `exit` on every pane they walked through.
+`run-when-away` is `run`'s sibling for the one thing typing cannot reach: what a session says while
+nothing is drawing its pane. The operator arms the command with a wait in front of it and walks on,
+and the step after it is what takes the pane off the screen — so the pane neither gets cleared nor
+gets waited for, the point being that the prompt comes back with nobody watching.
 `press-ref` is the press itself — the ref where the output
 drew it, naming the record rather than the characters — and `folded: true` asks for the same press on a ref
 the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable

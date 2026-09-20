@@ -762,6 +762,10 @@ pub struct SkinTablesDto {
     pub(crate) name: String,
     /// What it is called on screen, in the author's own words.
     pub(crate) title: String,
+    /// The same name per language, where the author wrote any: language code to the name in that
+    /// language. Empty on a skin that wrote none, which is every skin that came from before
+    /// `titles:` was a key. Picking one of them is the window's (`AMB-D-396`).
+    pub(crate) titles: std::collections::BTreeMap<String, String>,
     /// The light side's values, as the check left them: known names a skin may set, text only.
     pub(crate) light: std::collections::BTreeMap<String, String>,
     /// The dark side's values, on the same terms.
@@ -779,6 +783,9 @@ pub struct SkinTablesDto {
 pub struct SkinRowDto {
     pub(crate) name: String,
     pub(crate) title: String,
+    /// The name per language, on the terms `SkinTablesDto` holds it. Empty on a row that would not
+    /// read, the way the rest of the header is.
+    pub(crate) titles: std::collections::BTreeMap<String, String>,
     pub(crate) author: Option<String>,
     pub(crate) version: Option<String>,
     /// The sides the author says they made, `light` and `dark` in the order written.
@@ -846,6 +853,9 @@ pub struct SkinReadingDto {
 pub struct SkinJudgementDto {
     pub(crate) name: String,
     pub(crate) title: String,
+    /// The name per language, on the terms `SkinTablesDto` holds it — here as well, because the
+    /// panel names the skin before it is taken in, and it names it to the same reader.
+    pub(crate) titles: std::collections::BTreeMap<String, String>,
     pub(crate) author: Option<String>,
     pub(crate) version: Option<String>,
     pub(crate) themes: Vec<String>,

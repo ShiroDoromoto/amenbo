@@ -33,8 +33,14 @@ pub const SKIN_V: u32 = 1;
 pub struct Skin {
     /// The identifier a skin is told apart by — the file it arrived in may be called anything.
     pub name: String,
-    /// The name shown on screen. Not translated: it is the author's own word for their work.
+    /// The name shown on screen where `titles` has nothing for the reader's language: the
+    /// author's own word for their work, and the one every skin has.
     pub title: String,
+    /// The name per language, where the author wrote any — language code to the name in that
+    /// language (`AMB-D-935`). Which one a reader is shown is the window's call (`AMB-D-396`); the
+    /// CLI stays on `title` (`AMB-D-11`). Carried as read, so a code this build has never heard of
+    /// is here too — the window looks its own language up rather than walking the map.
+    pub titles: BTreeMap<String, String>,
     pub author: Option<String>,
     pub version: Option<String>,
     /// The vocabulary the author wrote against, to be read against [`SKIN_V`].
@@ -95,6 +101,16 @@ pub struct ThemeTable {
     pub not_text: Vec<String>,
 }
 
+/// Keep the entries of a header map that arrived as text, by name.
+///
+/// A value that is a number, a list or a map is dropped rather than refused, for the reason the
+/// tables drop one: a document is read as far as it goes. It is not carried out to be warned about
+/// the way a token's is, because what a dropped name costs here is one language's spelling of the
+/// title, and `title` is standing behind it.
+fn text_only(raw: BTreeMap<String, Value>) -> BTreeMap<String, String> {
+    raw.into_iter().filter_map(|(key, value)| Some((key, value.as_str()?.to_string()))).collect()
+}
+
 impl Skin {
     /// Read one skin document. The header's four naming keys are required; everything else is
     /// optional, because a skin that sets ten colours and leaves the rest is the ordinary case.
@@ -103,6 +119,7 @@ impl Skin {
         Ok(Skin {
             name: w.name,
             title: w.title,
+            titles: text_only(w.titles.unwrap_or_default()),
             author: w.author,
             version: w.version,
             skin_v: w.skin_v,
@@ -338,6 +355,8 @@ fn read_font(file: &FontFile) -> Result<Vec<u8>, FontProblem> {
 struct Wire {
     name: String,
     title: String,
+    #[serde(default)]
+    titles: Option<BTreeMap<String, Value>>,
     skin_v: u32,
     themes: Vec<String>,
     #[serde(default)]
@@ -1002,6 +1021,35 @@ dark:
         assert_eq!(s.unknown_keys, ["radius_scale"]);
         assert_eq!(s.font.as_ref().unwrap().family, "Silkscreen");
         assert_eq!(s.skin_v, 2);
+    }
+
+    #[test]
+    fn the_names_per_language_are_read_and_are_not_carried_out_as_unknown() {
+        let s = Skin::read(
+            "name: n\ntitle: Retro\ntitles:\n  ja: \"レトロゲーム\"\n  fr: Rétro\nskin_v: 1\nthemes: [dark]\n",
+        )
+        .unwrap();
+        assert_eq!(s.title, "Retro");
+        assert_eq!(s.titles["ja"], "レトロゲーム");
+        assert_eq!(s.titles["fr"], "Rétro");
+        assert!(s.unknown_keys.is_empty(), "titles is a key this build knows");
+    }
+
+    #[test]
+    fn a_skin_that_wrote_no_names_per_language_has_none() {
+        let s = Skin::read(WASHI).unwrap();
+        assert!(s.titles.is_empty());
+    }
+
+    #[test]
+    fn a_name_per_language_that_is_not_text_is_dropped_and_the_rest_are_kept() {
+        let s = Skin::read(
+            "name: n\ntitle: t\ntitles:\n  ja: \"和紙\"\n  de: [a, b]\n  fr: 3\nskin_v: 1\nthemes: [dark]\n",
+        )
+        .unwrap();
+        assert_eq!(s.titles["ja"], "和紙");
+        assert!(!s.titles.contains_key("de"));
+        assert!(!s.titles.contains_key("fr"));
     }
 
     #[test]

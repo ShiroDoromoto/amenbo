@@ -45,7 +45,8 @@ fn list(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             "on": on,
             "skins": held.iter().map(|(name, read)| match read {
                 Ok(s) => json!({
-                    "name": name, "title": s.title, "author": s.author, "version": s.version,
+                    "name": name, "title": s.title, "titles": s.titles, "author": s.author,
+                    "version": s.version,
                     "themes": s.themes, "license": s.license, "homepage": s.homepage,
                     "on": Some(name) == on.as_ref(),
                     "official": amenbo_core::skin_official::is_official(name),
@@ -197,7 +198,8 @@ fn validate(flags: &Flags, path: &Path) -> Result<i32, CliError> {
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "skin.validate", "name": taken.skin.name,
-            "title": taken.skin.title, "themes": taken.skin.themes,
+            "title": taken.skin.title, "titles": taken.skin.titles,
+            "themes": taken.skin.themes,
             "warnings": warnings_json(&taken),
             "contrast": contrast_json(&report),
         }));

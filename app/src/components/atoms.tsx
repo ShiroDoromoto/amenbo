@@ -11,6 +11,7 @@ import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
 import { STATUS_ALL } from "../core/status";
 import { taskRef } from "../core/idref";
+import { useShrunkImage } from "../core/shrinkImage";
 import { Identicon } from "./identicon";
 import { Icon } from "./Icon";
 
@@ -43,6 +44,14 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   low: "var(--c-pri-low)",
 };
 
+/**
+ * The side of a facet's avatar, in CSS pixels — the `.facet__base` the image and the identicon both
+ * fill (`./components.css`). The ring is drawn inside it, so the image lands a little smaller than
+ * this; what it is written here for is the bake (`../core/shrinkImage`), which a size that errs
+ * denser does no harm.
+ */
+const FACET_PX = 18;
+
 export function facetColor(kind: "human" | "ai") {
   return kind === "ai" ? "var(--c-ai)" : "var(--c-human)";
 }
@@ -64,12 +73,16 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
   const isAi = actor.kind === "ai";
   const avatar = actor.avatar
     ?? getSnapshot().roster.find((a) => a.kind === actor.kind)?.avatar;
+  // A registered avatar is stored at 96px and drawn in an 18px base, so it is baked down to this
+  // screen's pixels first (`../core/shrinkImage`) — a fifth of the stored size in one browser step is
+  // where the detail breaks up (`AMB-T-5172`).
+  const src = useShrunkImage(avatar ?? null, FACET_PX);
   return (
     <span className="facet" title={tf("facet.named", { name: actor.name, facet: t(isAi ? "facet.ai" : "facet.human") })}>
       <span className="facet__base" style={{ borderColor: facetColor(actor.kind) }}>
-        {avatar
-          ? <img className="facet__img" src={avatar} alt="" width={18} height={18} />
-          : <Identicon seed={identiconSeed(actor)} size={18} />}
+        {src
+          ? <img className="facet__img" src={src} alt="" width={FACET_PX} height={FACET_PX} />
+          : <Identicon seed={identiconSeed(actor)} size={FACET_PX} />}
       </span>
       {showName && <span className="facet__name">{actor.name}</span>}
     </span>

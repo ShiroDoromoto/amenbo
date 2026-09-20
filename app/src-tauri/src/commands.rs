@@ -769,6 +769,7 @@ fn worn(taken: amenbo_core::skin::Taken) -> SkinTablesDto {
     SkinTablesDto {
         name: taken.skin.name,
         title: taken.skin.title,
+        titles: taken.skin.titles,
         light: taken.skin.light.values,
         dark: taken.skin.dark.values,
         font,
@@ -788,6 +789,7 @@ pub fn skin_list() -> SkinListDto {
             Ok(s) => SkinRowDto {
                 name,
                 title: s.title,
+                titles: s.titles,
                 author: s.author,
                 version: s.version,
                 themes: s.themes,
@@ -803,6 +805,7 @@ pub fn skin_list() -> SkinListDto {
             Err(e) => SkinRowDto {
                 title: name.clone(),
                 name,
+                titles: Default::default(),
                 author: None,
                 version: None,
                 themes: Vec::new(),
@@ -881,6 +884,7 @@ pub fn skin_read(path: String) -> Result<SkinJudgementDto, CmdError> {
     Ok(SkinJudgementDto {
         name: taken.skin.name.clone(),
         title: taken.skin.title.clone(),
+        titles: taken.skin.titles.clone(),
         author: taken.skin.author.clone(),
         version: taken.skin.version.clone(),
         themes: taken.skin.themes.clone(),

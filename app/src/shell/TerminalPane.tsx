@@ -25,12 +25,27 @@ import { Menu, MenuItem } from "../components/Menu";
 import { PaneMade, type Made } from "./PaneMade";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
-import type { SessionSaidDto } from "../bindings/bindings";
+import type { SessionMadeDto, SessionSaidDto } from "../bindings/bindings";
 import { currentLang, errText, t, tf } from "../core/i18n";
 import { asTyped, isComposing, isEnterSubmit } from "../core/keys";
 import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
+
+/**
+ * Put a record on the band's list, or leave the list as it is where it is already there.
+ *
+ * **One record is one entry however many times it arrives.** A count that went up twice for one
+ * `task add` would be a number the pane cannot stand behind, which is the whole point of counting
+ * commands that ran (`./PaneMade`). It arrives twice for a plain reason: what a session filed while
+ * nothing was drawing it is handed over as a pane takes it up, and a pane that was there for it
+ * heard the same record go past (`../talk/terminal`).
+ */
+function withRecord(made: Made[], one: SessionMadeDto): Made[] {
+  return made.some((h) => h.space === one.kind && h.num === one.id)
+    ? made
+    : [...made, { space: one.kind, num: one.id }];
+}
 
 /**
  * Put the paths of what was dropped on a pane in front of whatever is running there (`AMB-D-820`).
@@ -127,7 +142,10 @@ export function TerminalPane({
   onClosed: (session: string) => void;
   /** Take this place away — the frame and not the program in it (`../talk/layout`). */
   onDrop: (frame: string) => void;
-  onName: (frame: string, name: string, by: NamedBy) => void;
+  /** `carried` says the name came over with the session rather than as it was said — the pane took
+   *  up a terminal that had already named itself. It is written down the same way, and the provider
+   *  is not told: it is the one that said it (`../talk/terminal`). */
+  onName: (frame: string, name: string, by: NamedBy, carried?: boolean) => void;
   onFocus: (frame: string) => void;
   /** A way to read this pane's row, handed over while the pane is drawn and taken back when it is
    *  not. It is what lets a face draw this pane somewhere other than above it (`./PaneOrder`), and it
@@ -457,13 +475,8 @@ export function TerminalPane({
       // is made (`./FolderChoice`) — so there is no choice for the frame to report.
       chose: () => {},
       said: (statement) => {
-        // The band's own half of a statement, taken on the way past. One record is one entry however
-        // many times it arrives: a count that went up twice for one `task add` would be a number the
-        // pane cannot stand behind, which is the whole point of counting commands that ran.
-        if (statement.made) {
-          const one = { space: statement.made.kind, num: statement.made.id };
-          setMade((was) => was.some((h) => h.space === one.space && h.num === one.num) ? was : [...was, one]);
-        }
+        // The band's own half of a statement, taken on the way past.
+        if (statement.made) setMade((was) => withRecord(was, statement.made!));
         on.current.onSaid(statement);
       },
       closed: (session, code, noWayBack) => {
@@ -489,6 +502,13 @@ export function TerminalPane({
       // the windows it is drawn in. The name goes to the store, and what draws it is the line above
       // the pane.
       name: (text, by) => on.current.onName(frame, text, by),
+      // What the session said while nothing was drawing it. Both halves land where the live ones do
+      // — the band's count, and the name on the row — so a pane that was away reads the same as one
+      // that was there for all of it (`../talk/terminal`).
+      carried: (said, filed) => {
+        setMade((was) => filed.reduce(withRecord, was));
+        if (said !== null) on.current.onName(frame, said, "session", true);
+      },
     }, start, project)
       .then((take) => {
         // Taken away while the host was still answering. Detaching leaves the terminal running for

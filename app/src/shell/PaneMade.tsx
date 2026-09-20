@@ -13,9 +13,12 @@ import { showRef } from "../talk/terminal";
  * an id — the same footing the briefed mark stands on, and the reason `AMB-D-862` took the AI's own
  * word off this row.
  *
- * **Nothing about it is kept.** The notes die with the terminal that dropped them, the count dies
- * with the window, and neither is written down: this is the running session's own tally, and what
- * survives it is the row on the record, read afterwards from the record's own screen.
+ * **Nothing about it is written down, and it lasts exactly as long as the session does.** The
+ * records are kept on the terminal itself for as long as that terminal is running, and a pane taking
+ * one up is handed them (`crate::pty::Pane::adopt`, `../talk/terminal`) — so turning the page, going
+ * to another project or splitting the workspace out leaves the count where it was. It goes when the
+ * terminal goes. This is the running session's own tally, and what survives it is the row on the
+ * record, read afterwards from the record's own screen.
  *
  * **The band is for the count and the list is for the records.** A reader watching a session wants to
  * know how much it has filed, which is a number; a reader who wants one of them wants it open, which

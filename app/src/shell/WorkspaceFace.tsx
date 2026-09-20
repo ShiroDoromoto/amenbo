@@ -504,16 +504,17 @@ export function WorkspaceFace({
     return () => watch.disconnect();
   }, []);
 
-  const named = useCallback((frame: string, name: string, by: NamedBy) => {
+  const named = useCallback((frame: string, name: string, by: NamedBy, carried = false) => {
     // What comes back is the whole set rather than an acknowledgement: a naming can be refused, and
     // drawing what was asked for would show a name that is not the frame's (`../talk/frames`).
     //
     // The session goes with it because the provider running in the frame is told the same name
     // (`AMB-D-872`), and which one that is only the arrangement knows — read here the way the one
-    // below reads it.
+    // below reads it. **A carried name is the one exception**: it came over with the session, so the
+    // provider already has it and is left alone (`./TerminalPane`).
     setLayout((was) => {
       const session = was.frames.find((one) => one.id === frame)?.session ?? null;
-      void nameFrame(frame, name, by, session).then(setNames).catch(() => {});
+      void nameFrame(frame, name, by, session, !carried).then(setNames).catch(() => {});
       return was;
     });
   }, []);

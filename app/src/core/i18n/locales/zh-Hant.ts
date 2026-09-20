@@ -347,7 +347,7 @@ export const zhHant: Translation = {
     "settings.skinAddPick": "選檔案…",
     "settings.skinAddDrop": "或把 .yaml 拖到這裡",
     "settings.skinWriteOut": "寫一份出來",
-    "settings.skinWriteOutNote": "所有顏色，每個都附一句說明用途。取自目前所用的主題。",
+    "settings.skinWriteOutNote": "主題能設的全部，每項都附一句說明用途。取自目前所用的主題。",
     "settings.skinAddTake": "裝進來",
     "settings.skinOnlySide": "僅{side}",
     "settings.skinReplace": "這個名字已經有主題了：現在是 {held}，要進來的是 {coming}。",

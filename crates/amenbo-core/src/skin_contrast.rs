@@ -114,13 +114,56 @@ const BASE: &[(&str, &str, &str)] = &[
     ("k-slack", "#611f69", "#611f69"),
 ];
 
-/// What each colour is for, in one line, written beside it in a template. An author edits a value
+/// Every other name a skin may set, as this build sets it. Not colours: a frame, the font stacks,
+/// the weights, the icon and identicon steps, the line height, the reading widths.
+///
+/// **One value, not one per side.** Each of these is declared once in `:root` and no side overrides
+/// it, so a template that wrote two would be offering a difference the stylesheet does not make.
+/// The document still carries them per side, because that is the shape a skin has — an author who
+/// wants a heavier frame in the dark writes it there and leaves the light one alone.
+///
+/// Held against `app/src/styles/tokens.css` by `guards/check-skin-vocabulary.sh`, the way the
+/// colours are: a value moved there and not here would put a number into a template that no screen
+/// is drawn at.
+const PLAIN: &[(&str, &str)] = &[
+    ("border-style", "solid"),
+    ("border-w", "1px"),
+    ("font", "system-ui, -apple-system, \"Hiragino Sans\", \"Noto Sans JP\", sans-serif"),
+    ("font-mono", "ui-monospace, \"SFMono-Regular\", \"Menlo\", monospace"),
+    ("font-smooth", "antialiased"),
+    ("fw-bold", "680"),
+    ("fw-medium", "550"),
+    ("fw-normal", "400"),
+    ("icon-lg", "24px"),
+    ("icon-md", "20px"),
+    ("icon-sm", "16px"),
+    ("identicon-l", "52%"),
+    ("identicon-s", "58%"),
+    ("lh", "1.5"),
+    ("measure-form", "28rem"),
+    ("measure-prose", "40rem"),
+];
+
+/// The header keys an author writes and this build has no value for, with the shape each one takes.
+/// Written commented out: there is nothing to fill in for somebody's own name or their own licence,
+/// and a blank string written as a value is a value. Where the skin a template is taken from carries
+/// one, that one is written instead.
+const HEADERS: &[(&str, &str)] = &[
+    ("author", "\"your name\""),
+    ("version", "\"1.0\""),
+    ("license", "\"CC BY 4.0\""),
+    ("homepage", "\"https://example.org/my-skin\""),
+];
+
+/// What each name is for, in one line, written beside it in a template. An author edits a value
 /// they can place; a list of names is a list of guesses.
 ///
 /// English, on both faces and in every language the application is read in. The file goes from
 /// person to person as an attachment, and a template written in the language of whoever generated
 /// it is a file its next reader cannot follow.
 const ABOUT: &[(&str, &str)] = &[
+    ("border-style", "how an ordinary line is drawn: solid, double, or none"),
+    ("border-w", "how thick an ordinary line is, up to 4px"),
     ("c-accent", "the way in: a link, the press that acts, the tab that is on"),
     ("c-accent-faint", "the faintest wash of the accent, for a ground"),
     ("c-accent-text", "the accent, dark enough to read as words"),
@@ -174,11 +217,29 @@ const ABOUT: &[(&str, &str)] = &[
     ("c-text", "what is read"),
     ("c-text-faint", "not for words: a separator mark, the pale side of an icon"),
     ("c-text-muted", "read when looked for: a date, a count, a note"),
+    ("font", "the stack the interface is set in"),
+    ("font-mono", "the stack a path, a command and a file are set in"),
+    ("font-smooth", "how the glyphs are drawn: antialiased, none, or auto"),
+    ("fs-scale", "the type ladder, all four steps at once"),
+    ("fw-bold", "the weight a heading is drawn at"),
+    ("fw-medium", "the weight a label and a chosen row are drawn at"),
+    ("fw-normal", "the weight ordinary text is drawn at"),
+    ("icon-lg", "an icon on a banner or an onboarding page"),
+    ("icon-md", "an icon in a heading or a chip"),
+    ("icon-sm", "an icon in the nav, or set in a line of text"),
+    ("identicon-l", "how light the generated avatar is drawn"),
+    ("identicon-s", "how strong the colour of that avatar is"),
+    ("lh", "the height of a line of text"),
+    ("measure-form", "how wide a box a value is typed into is let get"),
+    ("measure-prose", "how wide a run of prose is let get"),
+    ("r-scale", "how round the corners are, all three steps at once"),
+    ("s-scale", "the spacing ladder, all six steps at once"),
+    ("shadow-scale", "how far a shadow is thrown"),
 ];
 
-/// A skin document, written out full: every colour a skin may set, on both sides, with a line
-/// saying what each one is for. An author starts from the screen in front of them and edits values,
-/// rather than from an empty file and a vocabulary to look up.
+/// A skin document, written out full: every name a skin may set, on both sides, with a line saying
+/// what each one is for. An author starts from the screen in front of them and edits values, rather
+/// than from an empty file and a vocabulary to look up.
 ///
 /// `from` is the skin the values are taken from — the one that is on — or `None` for this build's
 /// own. Either way **every** name is written, so a file that set ten colours comes back out with
@@ -188,35 +249,154 @@ const ABOUT: &[(&str, &str)] = &[
 /// **It is not a copy.** The name it gives itself is not the name it was taken from, because a file
 /// that calls itself what is already held replaces that one on the way back in.
 ///
-/// Two kinds of name are left out. The ones a skin may set that carry no colour (the type scale, the
-/// spacing, the font stacks) have nothing this table could write beside them, and are the author's
-/// to add — the check says whether a name is one. The ones a skin may not set are not written at
-/// all: a template that offered them would be teaching the author a line the check then drops.
+/// What is written as a value is everything that has one — the colours, the frame, the fonts, the
+/// weights and widths, and the four multipliers at whatever was asked for, `1` where nothing was.
+/// What is written as a
+/// comment is what only the author can fill in: their name, their licence, a name per language, a
+/// font carried in the file. A commented line is a shape to copy; a value is a value, and a template
+/// that put the author's own licence inside a comment would be handing back something they could not
+/// paste out again.
+///
+/// The names a skin may **not** set are not written at all: a template that offered them would be
+/// teaching the author a line the check then drops.
+///
+/// A multiplier is read from where the check put it (`ThemeTable::scales`) rather than from the
+/// table, because applying one leaves the sizes it moved and not the number behind them.
 pub fn template(name: &str, from: Option<&Skin>) -> String {
     let mut out = String::new();
     out.push_str(&format!("name: {name}\n"));
     out.push_str(&format!("title: {name}\n"));
     out.push_str("skin_v: 1\n");
     out.push_str("themes: [light, dark]\n");
+    write_headers(&mut out, from);
+    write_font(&mut out, from);
     for side in [Side::Light, Side::Dark] {
-        out.push_str(&format!("{side}:\n"));
-        for entry in BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()) {
+        out.push_str(&format!("\n{side}:\n"));
+        for (token, light, dark) in
+            BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok())
+        {
             let base = match side {
-                Side::Light => entry.1,
-                Side::Dark => entry.2,
+                Side::Light => light,
+                Side::Dark => dark,
             };
-            let value = from
-                .and_then(|s| s.side(side).values.get(entry.0))
-                .map(String::as_str)
-                .unwrap_or(base);
-            let about = ABOUT
-                .binary_search_by_key(&entry.0, |(n, _)| n)
-                .map(|at| ABOUT[at].1)
-                .unwrap_or("");
-            out.push_str(&format!("  {}: \"{}\"  # {}\n", entry.0, value, about));
+            write_token(&mut out, side, from, token, base);
+        }
+        for (token, base) in PLAIN {
+            write_token(&mut out, side, from, token, base);
+        }
+        for (token, _) in crate::skin::SCALES {
+            let asked = from.and_then(|s| s.side(side).scales.get(*token)).map(String::as_str);
+            let value = asked
+                .or_else(|| from.and_then(|s| s.side(side).values.get(*token)).map(String::as_str))
+                .unwrap_or("1");
+            out.push_str(&format!(
+                "  {token}: {}  # {}{}\n",
+                quoted(value),
+                about(token),
+                scale_range(token)
+            ));
         }
     }
     out
+}
+
+/// One line of a side's table: the value the skin being taken from set, or this build's own, with
+/// what the name is for written beside it.
+fn write_token(out: &mut String, side: Side, from: Option<&Skin>, token: &str, base: &str) {
+    let value =
+        from.and_then(|s| s.side(side).values.get(token)).map(String::as_str).unwrap_or(base);
+    out.push_str(&format!("  {token}: {}  # {}\n", quoted(value), about(token)));
+}
+
+/// The multipliers a family takes, as a phrase. Written out rather than left to the check, because a
+/// number with no range beside it is one an author finds the edge of by being told they went past it.
+fn scale_range(family: &str) -> String {
+    use crate::skin::{SCALE_MAX, SCALE_MIN, SCALE_TO_ZERO, SCALE_UNBOUNDED};
+    let floor = if SCALE_TO_ZERO.contains(&family) { 0.0 } else { SCALE_MIN };
+    if family == SCALE_UNBOUNDED {
+        format!(" — {floor} and up")
+    } else {
+        format!(" — {floor} to {SCALE_MAX}")
+    }
+}
+
+/// What a name is for, or nothing where this build has no line for it.
+fn about(token: &str) -> &'static str {
+    ABOUT.binary_search_by_key(&token, |(n, _)| n).map(|at| ABOUT[at].1).unwrap_or("")
+}
+
+/// One value, as a YAML double-quoted scalar. A font stack names its families in quotes of its own,
+/// and pasted between two more it would end the scalar in the middle of a family name.
+fn quoted(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// The header keys that are the author's own: their name, their version, their licence, where the
+/// skin lives, and the name per language. Written as values where the skin being taken from carries
+/// them, and as commented shapes where it does not.
+fn write_headers(out: &mut String, from: Option<&Skin>) {
+    out.push_str("\n# The author's own. Uncomment what applies; a line left out costs nothing.\n");
+    for (key, shape) in HEADERS {
+        let held = from.and_then(|s| match *key {
+            "author" => s.author.as_deref(),
+            "version" => s.version.as_deref(),
+            "license" => s.license.as_deref(),
+            _ => s.homepage.as_deref(),
+        });
+        match held {
+            Some(value) => out.push_str(&format!("{key}: {}\n", quoted(value))),
+            None => out.push_str(&format!("# {key}: {shape}\n")),
+        }
+    }
+    let titles = from.map(|s| &s.titles).filter(|t| !t.is_empty());
+    match titles {
+        Some(titles) => {
+            out.push_str("titles:  # the name on screen, per language\n");
+            for (language, title) in titles {
+                out.push_str(&format!("  {language}: {}\n", quoted(title)));
+            }
+        }
+        None => {
+            out.push_str("# titles:  # the name on screen per language; `title` stands where there is none\n");
+            out.push_str("#   ja: \"みずいろ\"\n");
+            out.push_str("#   fr: \"Bleu d'eau\"\n");
+        }
+    }
+}
+
+/// The one font a skin may carry. Written out where the skin being taken from has one — bytes and
+/// all, since a family named with nothing behind it is a face the next reader does not have — and as
+/// a commented shape where it does not.
+fn write_font(out: &mut String, from: Option<&Skin>) {
+    let Some(font) = from.and_then(|s| s.font.as_ref()) else {
+        out.push_str("\n# One face, carried in the file so it travels with the colours. woff2, up to\n");
+        out.push_str("# 2MB decoded, and the licence in full: a skin carrying a font and no licence\n");
+        out.push_str("# text is turned away.\n");
+        out.push_str("# font_file:\n");
+        out.push_str("#   family: \"My Face\"\n");
+        out.push_str("#   format: woff2\n");
+        out.push_str("#   license: \"SIL Open Font License 1.1\"\n");
+        out.push_str("#   license_text: |\n");
+        out.push_str("#     the licence, in full\n");
+        out.push_str("#   data: |\n");
+        out.push_str("#     <the woff2 file, base64>\n");
+        return;
+    };
+    out.push_str("\nfont_file:\n");
+    out.push_str(&format!("  family: {}\n", quoted(&font.family)));
+    out.push_str(&format!("  format: {}\n", quoted(&font.format)));
+    out.push_str(&format!("  license: {}\n", quoted(&font.license)));
+    out.push_str("  license_text: |2\n");
+    for line in font.license_text.lines() {
+        out.push_str(&format!("    {line}\n"));
+    }
+    out.push_str("  data: |\n");
+    let packed: String = font.data.chars().filter(|c| !c.is_whitespace()).collect();
+    for chunk in packed.as_bytes().chunks(76) {
+        out.push_str("    ");
+        out.push_str(std::str::from_utf8(chunk).unwrap_or(""));
+        out.push('\n');
+    }
 }
 
 /// The name a template gives itself, from the name of whatever it was taken from. Not that name:
@@ -459,19 +639,58 @@ mod tests {
         assert_eq!(channels("#ggg"), None);
     }
 
+    /// How many names one side of a checked template holds: the ones written directly, and the
+    /// ones the four multipliers moved (a multiplier is not itself a token).
+    fn settled() -> usize {
+        crate::skin::OPEN.len()
+            + crate::skin::SCALES.iter().map(|(_, moves)| moves.len()).sum::<usize>()
+    }
+
+    /// Every name the template writes, in the order the file writes them.
+    fn written() -> Vec<&'static str> {
+        let colours = BASE
+            .iter()
+            .filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok())
+            .map(|(n, _, _)| *n);
+        let plain = PLAIN.iter().map(|(n, _)| *n);
+        let scales = crate::skin::SCALES.iter().map(|(n, _)| *n);
+        colours.chain(plain).chain(scales).collect()
+    }
+
     #[test]
-    fn every_colour_the_template_writes_says_what_it_is_for() {
+    fn every_name_the_template_writes_says_what_it_is_for() {
         let mut sorted = ABOUT.to_vec();
         sorted.sort_unstable_by_key(|(n, _)| *n);
         assert_eq!(ABOUT, sorted, "ABOUT is in order");
-        for (name, _, _) in BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()) {
+        let mut plain = PLAIN.to_vec();
+        plain.sort_unstable_by_key(|(n, _)| *n);
+        assert_eq!(PLAIN, plain, "PLAIN is in order");
+        for name in written() {
             assert!(
-                ABOUT.binary_search_by_key(name, |(n, _)| n).is_ok(),
+                ABOUT.binary_search_by_key(&name, |(n, _)| n).is_ok(),
                 "{name} is written into a template with nothing said about it"
             );
         }
         for (name, _) in ABOUT {
-            assert!(BASE.binary_search_by_key(name, |(n, _, _)| n).is_ok(), "{name} is no longer a colour");
+            assert!(written().contains(name), "{name} is said and no longer written");
+        }
+    }
+
+    #[test]
+    fn the_template_carries_every_name_a_skin_may_set() {
+        let yaml = template("my-skin", None);
+        for name in crate::skin::OPEN.iter().chain(crate::skin::SCALES.iter().map(|(n, _)| n)) {
+            assert!(
+                yaml.contains(&format!("  {name}: ")),
+                "{name} may be set and the template does not offer it"
+            );
+        }
+        // The multipliers say how far they go, which the value alone does not.
+        assert!(yaml.contains("fs-scale: \"1\"") && yaml.contains("0.85 to 1.3"));
+        assert!(yaml.contains("shadow-scale: \"1\"") && yaml.contains("0 and up"));
+        // What only the author can fill in is offered as a shape to copy.
+        for shape in ["# author:", "# license:", "# titles:", "# font_file:"] {
+            assert!(yaml.contains(shape), "{shape} is not offered");
         }
     }
 
@@ -491,9 +710,62 @@ mod tests {
         assert_eq!(out.name, "washi-copy");
         assert_eq!(out.light.values["c-bg"], "#faf7f0", "what the author set");
         assert_eq!(out.light.values["c-text"], base("c-text", Side::Light), "and the rest, filled in");
-        let open_colours =
-            BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()).count();
-        assert_eq!(out.light.values.len(), open_colours, "every colour, not the ten it set");
+        assert_eq!(out.light.values.len(), settled(), "every name, not the one it set");
+    }
+
+    #[test]
+    fn a_template_taken_from_a_skin_carries_what_only_its_author_could_write() {
+        use base64::Engine as _;
+        let bytes = [b"wOF2".as_slice(), &[7u8; 200]].concat();
+        let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let mine = Skin::read(&format!(
+            "name: mine\ntitle: Mine\nskin_v: 1\nthemes: [light, dark]\n\
+             author: Alice\nversion: \"2.1\"\nlicense: CC BY 4.0\nhomepage: https://example.org/mine\n\
+             titles:\n  ja: \"わたしの\"\n\
+             font_file:\n  family: Pixel\n  format: woff2\n  license: OFL 1.1\n\
+             \x20 license_text: |\n    OFL, in full\n      an indented clause\n  data: |\n    {data}\n\
+             light:\n  c-bg: \"#faf7f0\"\ndark:\n  c-bg: \"#1a1713\"\n"
+        ))
+        .unwrap()
+        .check()
+        .unwrap()
+        .skin;
+
+        let yaml = template("mine-copy", Some(&mine));
+        let out = Skin::read(&yaml).unwrap().check().expect("still a skin");
+        assert_eq!(out.skin.author.as_deref(), Some("Alice"), "the author's own, not the shape");
+        assert_eq!(out.skin.version.as_deref(), Some("2.1"));
+        assert_eq!(out.skin.license.as_deref(), Some("CC BY 4.0"));
+        assert_eq!(out.skin.homepage.as_deref(), Some("https://example.org/mine"));
+        assert_eq!(out.skin.titles.get("ja").map(String::as_str), Some("わたしの"));
+        let font = out.skin.font.as_ref().expect("the face travels with the file");
+        assert_eq!(font.family, "Pixel");
+        assert!(font.license_text.contains("an indented clause"), "the licence, as written");
+        assert_eq!(out.font.as_deref(), Some(bytes.as_slice()), "and the bytes it named");
+        assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    }
+
+    #[test]
+    fn a_ladder_the_author_asked_for_comes_back_out_of_the_template() {
+        let wide = Skin::read(
+            "name: wide\ntitle: t\nskin_v: 1\nthemes: [light, dark]\n\
+             light:\n  fs-scale: \"1.2\"\n  shadow-scale: \"0\"\n  r-scale: \"9\"\n\
+             dark:\n  fs-scale: \"1.2\"\n",
+        )
+        .unwrap()
+        .check()
+        .unwrap()
+        .skin;
+
+        let yaml = template("wide-copy", Some(&wide));
+        let out = Skin::read(&yaml).unwrap().check().unwrap().skin;
+        assert_eq!(out.light.scales["fs-scale"], "1.2", "the ladder the author wrote");
+        assert_eq!(out.dark.scales["fs-scale"], "1.2", "on the side they wrote it");
+        assert_eq!(out.light.scales["shadow-scale"], "0", "and the one they took away");
+        // What was brought inside the range comes back as the number that was used, so a second
+        // pass through the template does not report the same value a second time.
+        assert_eq!(out.light.scales["r-scale"], format!("{}", crate::skin::SCALE_MAX));
+        assert_eq!(out.dark.scales["r-scale"], "1", "untouched on the side that left it alone");
     }
 
     #[test]
@@ -501,10 +773,8 @@ mod tests {
         let yaml = template("my-skin", None);
         let taken = Skin::read(&yaml).unwrap().check().expect("the template is a skin");
         assert!(taken.warnings.is_empty(), "{:?}", taken.warnings);
-        let open_colours =
-            BASE.iter().filter(|(n, _, _)| crate::skin::OPEN.binary_search(n).is_ok()).count();
-        assert_eq!(taken.skin.light.values.len(), open_colours, "every colour a skin may set");
-        assert_eq!(taken.skin.dark.values.len(), open_colours);
+        assert_eq!(taken.skin.light.values.len(), settled(), "every name a skin may set");
+        assert_eq!(taken.skin.dark.values.len(), settled());
         assert!(!yaml.contains("k-slack"), "and none it may not");
         assert!(yaml.contains("# what is read"), "each one says what it is for");
         // The values are this build's, so what the template measures is what the screen measures.

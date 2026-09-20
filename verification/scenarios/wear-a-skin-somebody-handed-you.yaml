@@ -6,7 +6,7 @@
 # arriving from outside and the colours on the screen changing because of it.
 #
 # The road opens by writing one out rather than by taking one in. The starting point an author is
-# handed is this build's own colours as a document that is already a skin, and it is the first thing
+# handed is this build's own values as a document that is already a skin, and it is the first thing
 # anybody making one asks for — so a build whose template comes out empty, or comes out as something
 # the check would refuse, has broken the feature before any skin exists to take in.
 #
@@ -54,7 +54,7 @@ steps_cli:
     op: skin-template
     as: starting-point
 
-  # This build's own colours, written out, read back by the same check a stranger's file meets. The
+  # This build's own values, written out, read back by the same check a stranger's file meets. The
   # file is the artifact the step above bound, named by that binding.
   - type: assert
     domain: store

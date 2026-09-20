@@ -404,7 +404,7 @@ amenbo tick uninstall                       # take it away, and record that this
 # built from it is amenbo's own. One is worn at a time, and which one is a device setting,
 # never synced. All of it is here as well as in the window, because a skin's one failure
 # mode is a window nobody can read.
-amenbo skin template > my-skin.yaml         # this build's own colours, to start from
+amenbo skin template > my-skin.yaml         # every name a skin may set, at this build's own values
 amenbo skin validate ./my-skin.yaml         # what would be dropped, and what falls under WCAG AA
 amenbo skin add ./my-skin.yaml              # take it in (a name already held needs --yes)
 amenbo skin list                            # what is held, and which is on

@@ -356,7 +356,7 @@ export const ru: Translation = {
     "settings.skinAddPick": "Выбрать файл…",
     "settings.skinAddDrop": "или перетащите сюда .yaml",
     "settings.skinWriteOut": "Записать один",
-    "settings.skinWriteOutNote": "Все цвета, у каждого строка о том, для чего он. Взяты со скина, который надет.",
+    "settings.skinWriteOutNote": "Всё, что может задать скин, у каждого строка о том, для чего оно. Взято со скина, который надет.",
     "settings.skinAddTake": "Взять",
     "settings.skinOnlySide": "только {side}",
     "settings.skinReplace": "Скин с таким именем уже есть: сейчас {held}, приходит {coming}.",

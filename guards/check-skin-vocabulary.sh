@@ -19,10 +19,12 @@
 # turns this red until somebody says which side it is on, which is the whole point — the choice is
 # made by a person, once, rather than defaulted to by whichever list was easier to reach.
 #
-# The second copy is the values themselves (`skin_contrast::BASE`), which the contrast check reads
-# for every name a skin leaves alone. A value moved in the stylesheet and not there would be
-# measured against a colour nobody is looking at, and the report would be about a screen that does
-# not exist. Aliases are followed on both sides, so what is compared is the colour, not the spelling.
+# The second copy is the values themselves — `skin_contrast::BASE` for the colours, `PLAIN` for the
+# open names that carry none, `SIZED` for the ones a multiplier moves. The contrast check reads the
+# first for every name a skin leaves alone, and the template writes all three. A value moved in the
+# stylesheet and not there would be measured against a colour nobody is looking at, or written into
+# a template at a number no screen is drawn at. Aliases are followed on both sides, so what is
+# compared is the colour, not the spelling.
 #
 # Usage: guards/check-skin-vocabulary.sh   (no args; reads the three files)
 # Exit codes: 0 = the copies agree, 1 = one of them has a name or a value the others do not.
@@ -148,6 +150,35 @@ for name in sorted(set(compiled) & set(in_css)):
             f"{name} is {want[0]} / {want[1]} in {tokens_path} and {got[0]} / {got[1]} in "
             f"{palette_path} (light / dark)."
         )
+
+# The open names that carry no colour, held the way the colours are: the template writes this
+# build's value beside each of them, and a value moved in the stylesheet and not there would put a
+# number into a template that no screen is drawn at.
+at = palette_rust.find("const PLAIN: &[(&str, &str)] = &[")
+if at < 0:
+    sys.exit(f"\u2717 skin vocabulary: {palette_path} no longer declares PLAIN.")
+end = palette_rust.index("\n];", at)
+plain = {
+    m.group(1): m.group(2).replace('\\"', '"').replace("\\\\", "\\")
+    for m in re.finditer(r'\("([a-z0-9-]+)", "((?:[^"\\]|\\.)*)"\)', palette_rust[at:end])
+}
+uncoloured = opened - set(in_css)
+for name in sorted(uncoloured - set(plain)):
+    failures.append(
+        f"--{name} is open, carries no colour, and is not in {palette_path}'s PLAIN.\n"
+        f"    The template writes a value beside every name it offers."
+    )
+for name in sorted(set(plain) - uncoloured):
+    failures.append(f"{name} is in {palette_path}'s PLAIN and is not an open non-colour token.")
+for name in sorted(set(plain) & uncoloured):
+    want, dark_value = light[f"--{name}"].strip(), dark[f"--{name}"].strip()
+    if want != dark_value:
+        failures.append(
+            f"--{name} is {want} on the light side and {dark_value} on the dark one in "
+            f"{tokens_path}, and PLAIN holds one value for both."
+        )
+    elif plain[name] != want:
+        failures.append(f"{name} is {want} in {tokens_path} and {plain[name]} in PLAIN.")
 
 # The sizes a multiplier multiplies, the way the colours are held.
 at = rust.find("const SIZED: &[(&str, &str, &str)] = &[")

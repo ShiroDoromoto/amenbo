@@ -372,7 +372,7 @@ const ui = {
   "settings.skinAddPick": "Choose a file…",
   "settings.skinAddDrop": "or drop a .yaml here",
   "settings.skinWriteOut": "Write one out",
-  "settings.skinWriteOutNote": "Every colour, with a line saying what each is for. Taken from the skin that is on.",
+  "settings.skinWriteOutNote": "Everything a skin can set, each with a line saying what it is for. Taken from the skin that is on.",
   "settings.skinAddTake": "Take it in",
   "settings.skinOnlySide": "{side} only",
   "settings.skinReplace": "A skin is already kept under this name: {held} is there, {coming} is coming in.",

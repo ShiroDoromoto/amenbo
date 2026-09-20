@@ -176,6 +176,23 @@ impl Driver<'_> {
                     None => Ok(Outcome::action("took off whatever skin was on".to_string())),
                 }
             }
+            // Handing a held skin back out. The file the device kept is copied rather than packed
+            // again, so what lands here is the author's own zip — which is the claim a road walks
+            // this for, and it is read by taking the same file in again further down.
+            //
+            // The path is the road's own so that a later step can name it; it is remembered as
+            // well, so an assert can look into what came out without spelling the path twice.
+            "skin-write-out" => {
+                let name = req_str(with, "name")?;
+                let out = self.in_session(req_str(with, "path")?)?;
+                let v = self.run_json(&["skin", "write-out", name, path_str(&out)?, "--json"])?;
+                let bytes = v["bytes"].as_u64().ok_or("`skin write-out --json` carried no `bytes`")?;
+                self.remember(bind, "skin-write-out", out.clone());
+                Ok(Outcome::action(format!(
+                    "wrote the skin `{name}` out at {} ({bytes} bytes)",
+                    out.display()
+                )))
+            }
             "skin-rm" => {
                 let name = req_str(with, "name")?;
                 let v = self.run_json(&["skin", "rm", name, "--json"])?;

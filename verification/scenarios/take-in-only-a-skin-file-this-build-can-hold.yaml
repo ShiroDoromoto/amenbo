@@ -1,0 +1,106 @@
+# A skin arrives as a file from somebody else, and the reader has no way to look inside it first.
+# Two things a zip can carry are not a look at all: an entry that unpacks to more than the machine
+# should be asked to hold, and an entry whose name reaches up out of the archive into the folders
+# around it. Both are refusals, and a refusal is the one behaviour that never shows on a screen
+# somebody is using — the file simply does not arrive, and a build that had stopped refusing would
+# look exactly like a build that had nothing to refuse.
+#
+# So the road walks the two of them, from the outside, against a real file on a real disk. Nothing
+# about them can be written in prose: a zip that unpacks to more than the ceiling is a file whose
+# packed bytes say nothing about it, and an entry named its way out of the archive is a name no
+# tool writes by accident. Both are fixtures, and both are small — what makes the heavy one heavy
+# is what it unpacks to, not what it weighs on the shelf.
+#
+# What is asserted after each is that nothing landed. A refusal that logged its complaint and kept
+# the file anyway is the failure worth catching, and the listing is where it would show.
+id: take-in-only-a-skin-file-this-build-can-hold
+title: A skin file that unpacks to more than this build takes, or that names its way out of its own archive, is turned away and nothing of it is kept
+description: >
+  Hand Amenbo two zips it must not take: one that unpacks to more than a file inside a skin may
+  weigh, and one carrying an entry whose name points outside the archive. Confirm each is turned
+  away rather than taken in, and that nothing is on after either.
+given:
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/a-skin-heavier-than-it-looks.zip
+      path: a-skin-heavier-than-it-looks.zip
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/a-skin-pointing-outside-itself.zip
+      path: a-skin-pointing-outside-itself.zip
+
+steps_cli:
+  # Nothing on before the road starts, so that "nothing is on" below is a fact about the refusals
+  # rather than about where the road began.
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  # The heavy one. It is a few kilobytes on the shelf and more than a skin's file ceiling once it
+  # is unpacked, which is the whole shape of the thing being refused: the weight that matters is
+  # the one the machine would have to hold.
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-heavier-than-it-looks.zip
+      refused: skin_refused
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  # The one that points out of itself. Refused for the name rather than for the bytes: a file
+  # carrying such an entry is not a skin with one odd thing in it.
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-pointing-outside-itself.zip
+      refused: skin_refused
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+steps_gui:
+  - type: action
+    domain: store
+    op: open-settings
+
+  # The refusal lands at the reading, and the road stops there because the screen does: the panel
+  # draws the sentence in place of the judgement, and there is nothing offered to press. That is
+  # the difference worth writing down — on this face a file like these never reaches a decision.
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-heavier-than-it-looks.zip
+      refused: skin_refused
+
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-pointing-outside-itself.zip
+      refused: skin_refused
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null

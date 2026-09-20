@@ -32,7 +32,7 @@ const WHY: Record<string, string> = {
 /** The one shape a skin arrives in, for the panel the machine's picker opens. */
 const ONLY_A_SKIN = { name: "Skin", extensions: ["zip"] };
 
-export function SkinAdd({ onAdded }: { onAdded: () => void }) {
+export function SkinAdd({ onAdded }: { onAdded: (name: string) => void }) {
   // The file being read over, and what reading it gave. Both go when the reader answers.
   const [path, setPath] = useState<string | null>(null);
   const [read, setRead] = useState<SkinJudgementDto | null>(null);
@@ -87,9 +87,12 @@ export function SkinAdd({ onAdded }: { onAdded: () => void }) {
   const take = () => {
     if (!path || !read) return;
     addSkinFile(path, read.held)
-      .then(() => {
+      .then((name) => {
         forget();
-        onAdded();
+        // The name it gave itself, rather than the one the file arrived under: a file taken in
+        // over the skin that is on is that skin changed, and the only thing that says so is the
+        // name the document carries.
+        onAdded(name);
       })
       .catch((e) => setError(errText(e)));
   };

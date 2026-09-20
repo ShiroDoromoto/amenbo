@@ -9,7 +9,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SkinListDto, SkinTablesDto } from "../bindings/bindings";
+import type { SkinJudgementDto, SkinListDto, SkinTablesDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   list: { on: null, skins: [] } as SkinListDto,
@@ -24,14 +24,20 @@ const hoisted = vi.hoisted(() => ({
   saveAs: null as string | null,
   /** The name the save panel was opened under. */
   suggested: null as string | null,
+  /** What the file picker answers with, for the panel that takes a skin in. */
+  picked: [] as string[],
+  /** What reading that file over gives back, and the name taking it in answers with. */
+  read: null as SkinJudgementDto | null,
 }));
 
 vi.mock("../core/dialog", () => ({
+  pickFiles: () => Promise.resolve(hoisted.picked),
   pickSaveAs: (suggested: string) => {
     hoisted.suggested = suggested;
     return Promise.resolve(hoisted.saveAs);
   },
 }));
+vi.mock("../core/hostDrop", () => ({ watchHostDrop: () => Promise.resolve(() => {}) }));
 
 vi.mock("../core/ipc", () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => {
@@ -42,6 +48,8 @@ vi.mock("../core/ipc", () => ({
       hoisted.worn.push((args?.name as string | null) ?? null);
       return Promise.resolve(undefined);
     }
+    if (cmd === "skin_read") return Promise.resolve(hoisted.read);
+    if (cmd === "skin_add") return Promise.resolve(hoisted.read?.name ?? "");
     if (cmd === "skin_write_out") {
       hoisted.handedOn.push({ name: args?.name as string, path: args?.path as string });
       return Promise.resolve(undefined);
@@ -101,6 +109,9 @@ beforeEach(() => {
   hoisted.handedOn = [];
   hoisted.saveAs = null;
   hoisted.suggested = null;
+  hoisted.picked = [];
+  hoisted.read = null;
+  document.head.innerHTML = "";
   document.documentElement.dataset.theme = "light";
 });
 
@@ -290,5 +301,90 @@ describe("handing a skin on", () => {
     hoisted.list = { on: "washi", skins: [row("washi", ["light", "dark"])] };
     await draw();
     expect(handOn()).toBe(undefined);
+  });
+});
+
+// Taking a skin in is how a skin is edited: an author moves a value, packs the file and hands it
+// to their own machine under the name it already has, with the screen it is meant to change in
+// front of them. The window wears what it read when it came up, so unless the file is read again
+// here, the value they moved is on disk and nowhere else until the app is opened next — which
+// reads exactly like a change that did not take.
+describe("a file landing under the name of the skin that is on", () => {
+  /** What the panel that takes a file in gives back about it. */
+  const judged = (name: string): SkinJudgementDto => ({
+    name,
+    title: name,
+    titles: {},
+    author: null,
+    version: "2",
+    themes: ["light"],
+    held: true,
+    heldVersion: "1",
+    warnings: [],
+    short: [],
+    unread: [],
+    covered: [],
+    measured: 35,
+    font: null,
+    carries: [],
+  });
+
+  /** Choose a file in the panel and press what takes it in. */
+  const takeIn = async () => {
+    await act(async () => host.querySelector<HTMLButtonElement>(".skinwell .btn")!.click());
+    await act(async () => {});
+    await act(async () => host.querySelector<HTMLButtonElement>(".skinfit__answer .btn")!.click());
+    await act(async () => {});
+  };
+
+  /** What the one sheet a skin is worn through holds. */
+  const sheet = () => {
+    const el = document.getElementById("amenbo-skin") as HTMLStyleElement | null;
+    return [...(el?.sheet?.cssRules ?? [])].map((r) => r.cssText).join("\n");
+  };
+
+  it("is worn again, so what the file changed is on the screen", async () => {
+    hoisted.list = { on: "kozo", skins: [{ ...row("kozo", ["light"]), fileName: "kozo.zip" }] };
+    hoisted.tables.kozo = {
+      name: "kozo",
+      title: "kozo",
+      titles: {},
+      light: { "c-bg": "#123456" },
+      dark: {},
+      icons: {},
+      font: null,
+      backgrounds: {},
+      stamp: "s2",
+    };
+    hoisted.picked = ["/tmp/kozo.zip"];
+    hoisted.read = judged("kozo");
+    await draw();
+    expect(sheet(), "nothing is worn through this screen before the file lands").toBe("");
+
+    await takeIn();
+    expect(sheet()).toContain("--c-bg: #123456");
+  });
+
+  it("is not worn where it landed under another name", async () => {
+    hoisted.list = { on: "kozo", skins: [{ ...row("kozo", ["light"]), fileName: "kozo.zip" }] };
+    hoisted.tables.washi = {
+      name: "washi",
+      title: "washi",
+      titles: {},
+      light: { "c-bg": "#654321" },
+      dark: {},
+      icons: {},
+      font: null,
+      backgrounds: {},
+      stamp: "s1",
+    };
+    hoisted.picked = ["/tmp/washi.zip"];
+    hoisted.read = judged("washi");
+    await draw();
+
+    await takeIn();
+    // It is held now and it is not on. A skin taken in is not a skin put on, and the screen this
+    // reader is looking at must not change under them because a file arrived.
+    expect(sheet()).toBe("");
   });
 });

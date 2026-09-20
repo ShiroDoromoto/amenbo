@@ -16,10 +16,12 @@
 # back in the face it ships with. A pair of files differing only in a colour would leave the same
 # step resting on an eye telling two blues apart.
 #
-# **The look the new file draws comes up with the app, not on the press.** Taking a skin in writes
-# the file and the window goes on wearing what it read at startup, so the road asks for the app
-# again before it looks. That is written into the road rather than worked around in it: a build
-# that began applying it on the press would walk this the same way.
+# **The new look is on the screen on the press.** Taking a skin in under the name of the one that
+# is on is how a skin is edited — an author moves a value, packs the file and hands it to their own
+# machine — so the window reads it back and wears it there and then. A build that wrote the file
+# and went on drawing the old one would leave every value an author moved on disk and nowhere
+# else, which reads exactly like a change that did not take, and the steps below are where that
+# shows.
 #
 # The terminal's road cannot see any of that, so it asks the file instead. It hands the held skin
 # back out before and after, and reads the two copies for a name that is in one and not the other
@@ -185,13 +187,8 @@ steps_gui:
     with:
       path: a-skin-a-version-on.zip
 
-  # The app again, because the window wears what it read as it came up.
-  - type: action
-    domain: store
-    op: run-again
-
-  # The second file's look: still a picture behind the window, and the two the second file does
-  # not carry back to what this build draws.
+  # The second file's look, on the press and with nothing else done: still a picture behind the
+  # window, and the two the second file does not carry back to what this build draws.
   - type: assert
     domain: store
     op: skin-material
@@ -212,10 +209,6 @@ steps_gui:
       material: icons
       name: gear
       present: false
-
-  - type: action
-    domain: store
-    op: open-settings
 
   - type: assert
     domain: store

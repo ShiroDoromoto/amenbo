@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkinRowDto } from "../bindings/bindings";
 import { pickSaveAs } from "../core/dialog";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, pictureSlots, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged, writeSkinOut } from "../core/skin";
+import { fitOnto, listSkins, pictureSlots, setSkin, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged, writeSkinOut } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -58,6 +58,26 @@ export function AppearanceSettings() {
     return () => stop?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * A file has been taken in. The list is read again for it — and where it landed under the name
+   * of the skin that is on, that skin is worn again.
+   *
+   * **Taking one in is how a skin is edited.** An author writes a value, packs the file and hands
+   * it to their own machine under the name it already has, and what they are looking at is the
+   * screen it is meant to change. The window wears what it read when it came up, so without this
+   * the value they moved is on disk and nowhere else until the app is opened again — which reads
+   * exactly like a change that did not take.
+   *
+   * It is read back rather than applied from anything here: what lands is the file, and what is
+   * worn is what the check makes of it. {@link setSkin} is the same road the screen that puts a
+   * skin on takes, so the other windows are told as well.
+   */
+  const added = (name: string) => {
+    reload();
+    if (name !== on) return;
+    void skinTables(name).then(setSkin).catch(() => {});
+  };
 
   // The skin the select is showing: the one being tried on while a fitting is up, and the one that
   // is on otherwise. What is said under the select is about that one.
@@ -169,7 +189,7 @@ export function AppearanceSettings() {
 
       {/* Taking one in sits under the list it lands in, so what was just added is the next thing
           read. */}
-      <SkinAdd onAdded={reload} />
+      <SkinAdd onAdded={added} />
 
       {fitting && (
         <div className="settings__row">

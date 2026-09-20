@@ -285,7 +285,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate skin-vocabulary-gate brand notify-wording notify-wording-gate worker-baked-gate gate-worker sweep-stale worker-install worker-build worker-test worker-baked schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate skin-vocabulary-gate css-vars-gate brand notify-wording notify-wording-gate worker-baked-gate gate-worker sweep-stale worker-install worker-build worker-test worker-baked schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -310,6 +310,7 @@ help:
 	@echo "make workflow-run-gate - assert every workflow_run trigger names a workflow that exists and can fire (a renamed name: stops the trigger without making anything red) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make token-contrast-gate - assert every colour pairing the tokens are used in still clears WCAG AA in both themes (a value nudged for one screen lands on every ground the token is used over) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make skin-vocabulary-gate - assert every token declared in tokens.css is named on exactly one of the skin vocabulary lists (a token added there and named on neither is silently un-settable) = the same guard CI runs (automatic at the start of make test)"
+	@echo "make css-vars-gate - assert every var(--name) the front end reads names a custom property something declares (an undeclared name drops the whole declaration and the element wears its parent's value) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make brand        - re-bake the brand images (assets/brand/, and the app bundle icons under app/src-tauri/) from the origin SVGs. The set is tracked, so run this only when the mark itself moves (macOS; needs Google Chrome and Pillow)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
@@ -759,6 +760,7 @@ gate-cheap:
 	$(MAKE) --no-print-directory workflow-run-gate
 	$(MAKE) --no-print-directory token-contrast-gate
 	$(MAKE) --no-print-directory skin-vocabulary-gate
+	$(MAKE) --no-print-directory css-vars-gate
 	$(MAKE) --no-print-directory notify-wording-gate
 
 ## The workspace stage: CI's `lint` job (clippy, the doctests, the doc link check) and its `rust`
@@ -1003,6 +1005,14 @@ token-contrast-gate:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 skin-vocabulary-gate:
 	@guards/check-skin-vocabulary.sh
+
+## Guard against a `var()` on a name nothing declares. The declaration it sits in is dropped at
+## compute time and the element inherits instead, so the screen draws, the tests pass, and a size
+## or a colour sits a little off the one that was written until somebody happens to look.
+## `--c-muted` was seven rules of that, found by hand.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+css-vars-gate:
+	@guards/check-css-vars.sh
 
 ## Trim a bloated cargo cache by atime LRU. `target/` has no GC, and old artifacts with a different
 ## hash pile up forever (measured ~3.7GB/day). A periodic run would eat idle time, so sweep at the end

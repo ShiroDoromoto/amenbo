@@ -1038,7 +1038,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .modal__card--wide { width: min(680px, 100%); max-height: 84vh; overflow-y: auto; }
 .modal__hero { text-align: center; margin-bottom: var(--s-4); }
 .modal__hero h2 { margin: var(--s-2) 0 var(--s-1); }
-.modal__goose { font-size: var(--fs-display-lg); line-height: 1; }
+/* The bird is a drawing and not a glyph, so its size is the icon step `--icon-lg` and not a
+   font size — the rule only takes the leading off the line it sits on. It carried a
+   `font-size` from when it was an emoji character, on a name no stylesheet declared. */
+.modal__goose { line-height: 1; }
 
 /* ---------- the lint hook consent modal (HookConsentModal) ---------- */
 /* The question the status pull-down asks before a rejection (RejectReasonModal). Its own block rather

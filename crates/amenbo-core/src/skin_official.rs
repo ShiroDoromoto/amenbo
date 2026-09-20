@@ -147,7 +147,8 @@ mod tests {
     #[test]
     fn shipped_names_are_reserved() {
         let paths = crate::config::Paths::at(amenbo_scratch::scratch("shipped-skins"));
-        assert!(Skin::install(&paths, "washi", yaml("washi").unwrap()).is_err());
+        let bare = crate::skin::Packing::Bare;
+        assert!(Skin::install(&paths, "washi", bare, yaml("washi").unwrap().as_bytes()).is_err());
         assert!(Skin::uninstall(&paths, "washi").is_err());
         // And they are held without anything being on the device.
         assert!(Skin::installed(&paths, "washi").unwrap().is_some());

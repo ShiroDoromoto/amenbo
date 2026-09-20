@@ -3726,6 +3726,13 @@ impl Instructor {
 
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
         Ok(match (domain, op) {
+            // The line that stands between a reader and their own file being written over. It is a
+            // sentence the panel draws rather than a question it asks — the press is the same one
+            // — so what is read here is that it is there at all.
+            (Domain::Store, "skin-replaces") => match present(with) {
+                true => "With the judgement of the file on the screen, confirm it says taking this one in puts it in place of the skin already held under that name, and that it names the version of each.".to_string(),
+                false => "With the judgement of the file on the screen, confirm it says nothing about replacing anything: no skin is held under this one's name.".to_string(),
+            },
             // What a skin's materials come to on screen. Each of the three is a picture, so each is
             // an eye's — and each is written as a comparison with what this build draws rather than
             // as a description of the material, since the line is rendered from the YAML alone and

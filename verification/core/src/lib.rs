@@ -1721,6 +1721,15 @@ const REGISTRY: &[OpSpec] = &[
     // has no face for it — the check says what a file carries, and whether it reached the screen is
     // a different question, which is the one worth a step.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "skin-material", required: &["material"], refs: &[], strings: &["material", "name"], binds: false },
+    // What the panel says about a file whose name the device already holds: that taking it in puts
+    // this one in place of that one, and which version each of the two is. It is the only warning
+    // a reader gets before a skin of theirs is written over, and the press that takes it in is the
+    // same press either way — so a build that stopped saying it would replace a person's own file
+    // on a screen that read exactly like a first import.
+    //
+    // A screen road alone. The terminal asks outright and takes an answer, which is a different
+    // move and not a sentence on a panel.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "skin-replaces", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "identity", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "update", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     // Which of the two a facet's slot holds: the image registered for it, or the pattern Amenbo draws

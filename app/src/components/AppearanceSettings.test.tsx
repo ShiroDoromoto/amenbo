@@ -118,6 +118,7 @@ describe("trying a skin on", () => {
       titles: {},
       light: { "c-bg": "#faf7f0" },
       dark: { "c-bg": "#1a1713" },
+      icons: {},
       font: null,
     };
     await draw();
@@ -141,6 +142,7 @@ describe("trying a skin on", () => {
       titles: {},
       light: { "c-bg": "#faf7f0" },
       dark: {},
+      icons: {},
       font: null,
     };
     await draw();
@@ -220,7 +222,7 @@ describe("the name a skin goes by", () => {
 
   it("is the one written for the reader's language, in the list and on the frame", async () => {
     hoisted.list = { on: null, skins: [retro] };
-    hoisted.tables.retro = { name: "retro", title: "Retro", titles: { ja: "レトロゲーム" }, light: {}, dark: {}, font: null };
+    hoisted.tables.retro = { name: "retro", title: "Retro", titles: { ja: "レトロゲーム" }, light: {}, dark: {}, icons: {}, font: null };
     await draw();
 
     const option = host.querySelector<HTMLOptionElement>('option[value="retro"]');

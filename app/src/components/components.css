@@ -21,6 +21,10 @@
    than the convention: at 16px a bar of the arrow's own weight reads as part of the arrowhead. */
 .icon[data-icon="foldLeft"] > path:first-child,
 .icon[data-icon="foldRight"] > path:first-child { stroke-width: 3; }
+/* A skin may hand over its own drawing for any of them (`AMB-D-937`). It arrives as a mask laid on
+   this same box, painted in `currentColor`, and it turns the two properties above off so that the
+   geometry underneath draws nothing. The rule is written at run time, in `core/skin.ts` — there is
+   no second convention here, and nothing to keep in step. */
 
 /* ---------- atoms ---------- */
 .facet { display: inline-flex; align-items: center; gap: var(--s-1); }

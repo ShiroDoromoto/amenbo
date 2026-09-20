@@ -770,6 +770,16 @@ pub struct SkinTablesDto {
     pub(crate) light: std::collections::BTreeMap<String, String>,
     /// The dark side's values, on the same terms.
     pub(crate) dark: std::collections::BTreeMap<String, String>,
+    /// The drawings it lays in place of this build's own, by the name of the icon each one stands
+    /// in for — each one a `data:` URI the window lays as a mask (`AMB-D-937`). Empty on a skin
+    /// that replaced none, which is every skin that carries no drawings.
+    ///
+    /// The bytes ride here rather than being fetched, the way the face's do: a drawing is a few
+    /// kilobytes, every replaced one is wanted the moment the window draws anything, and a mask
+    /// laid from a `data:` URI needs no door opened in the CSP that is not open already. What
+    /// the icon is held against is not here — the name is one this build draws and the bytes are
+    /// a drawing a mask can be read off, both settled by the check.
+    pub(crate) icons: std::collections::BTreeMap<String, String>,
     /// The font it carries, where it carries one the check took.
     pub(crate) font: Option<SkinFontDto>,
 }
@@ -902,9 +912,9 @@ pub struct SkinMaterialDto {
     /// they are neither a picture nor a face. A form is not translated: it reads the same in every
     /// language, the way a token name and a ratio do.
     pub(crate) kind: Option<String>,
-    /// Where the document points at this file, as the panel writes a key — `font_file`, or
-    /// `backgrounds.<place>`. `null` where nothing in the document names it, which is a file that
-    /// rides along and is drawn with nowhere.
+    /// Where the document points at this file, as the panel writes a key — `font_file`,
+    /// `backgrounds.<place>` or `icons.<name>`. `null` where nothing in the document names it,
+    /// which is a file that rides along and is drawn with nowhere.
     pub(crate) named_at: Option<String>,
 }
 

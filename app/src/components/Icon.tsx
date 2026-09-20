@@ -16,6 +16,11 @@ import type { ReactNode } from "react";
  * Those three live in `.icon` (`components.css`), not in the entries below: what each
  * entry holds is geometry, and nothing else.
  *
+ * A skin may hand over its own drawing for any of these names, and it is laid over this element as
+ * a mask rather than put inside it (`AMB-D-937`, `core/skin.ts`). So a name is part of what a skin
+ * writes: one added here is one an author may replace, and `app/src/core/skin.test.ts` holds the
+ * list to the one the check searches. The line width stays this build's either way.
+ *
  * How big it is drawn follows from what the icon *does*, never from the screen it is on
  * (`AMB-D-687`) — `sm` for nav and in-line marks, `md` for headings and chips, `lg` for
  * banners and onboarding. The three read the `--icon-*` tokens.

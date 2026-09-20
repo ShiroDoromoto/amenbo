@@ -13,7 +13,7 @@ use std::path::Path;
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::skin::{Refusal, Skin, Taken, Warning};
+use amenbo_core::skin::{Packing, Refusal, Skin, Taken, Warning};
 use amenbo_core::skin_contrast::{self, Report};
 use amenbo_core::Store;
 
@@ -90,7 +90,7 @@ fn list(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 /// taken anyway, and so is a pairing that falls short of AA — an author has to be able to try their
 /// own work in progress.
 fn add(store: &mut Store, flags: &Flags, path: &Path, yes: bool) -> Result<i32, CliError> {
-    let (yaml, taken, report) = judge(path)?;
+    let (packing, bytes, taken, report) = judge(path)?;
     let name = taken.skin.name.clone();
 
     // Asked before the one below, and not answerable with --yes: what this build ships is not a
@@ -117,18 +117,19 @@ fn add(store: &mut Store, flags: &Flags, path: &Path, yes: bool) -> Result<i32, 
         }
     }
 
-    Skin::install(&store.paths, &name, &yaml).map_err(CliError::from)?;
+    Skin::install(&store.paths, &name, packing, &bytes).map_err(CliError::from)?;
+    let kept = store.paths.skin_file(&name, packing.ext());
 
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "skin.add", "name": name,
-            "path": store.paths.skin_file(&name).display().to_string(),
+            "path": kept.display().to_string(),
             "warnings": warnings_json(&taken),
             "contrast": contrast_json(&report),
         }));
         return Ok(0);
     }
-    human(flags, format!("✓ {name} is in {}", store.paths.skin_file(&name).display()));
+    human(flags, format!("✓ {name} is in {}", kept.display()));
     say_warnings(flags, &taken);
     say_contrast(flags, &report);
     human(flags, format!("Put it on with `{} skin use {name}`.", Paths::command_name()));
@@ -194,7 +195,7 @@ fn remove(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError>
 
 /// The author's face: the same reading and the same check, over a file that is not being taken in.
 fn validate(flags: &Flags, path: &Path) -> Result<i32, CliError> {
-    let (_, taken, report) = judge(path)?;
+    let (_, _, taken, report) = judge(path)?;
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "skin.validate", "name": taken.skin.name,
@@ -240,17 +241,21 @@ fn template(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 
 /// Read one file, judge it, and measure it. The three steps every face here takes, in the one order
 /// they can be taken in.
-fn judge(path: &Path) -> Result<(String, Taken, Report), CliError> {
-    let yaml = std::fs::read_to_string(path).map_err(|e| CliError {
+fn judge(path: &Path) -> Result<(Packing, Vec<u8>, Taken, Report), CliError> {
+    let bytes = std::fs::read(path).map_err(|e| CliError {
         code: "io_error",
         message: format!("{}: {e}", path.display()),
         hint: None,
         exit: 1,
     })?;
+    // Weighed before it is read: what a packed skin unpacks to is the one thing about it that
+    // costs something to find out, and a file that will not fit is not one to go on parsing.
+    amenbo_core::skin::weigh(&bytes).map_err(CliError::from)?;
+    let (packing, yaml) = amenbo_core::skin::document(&bytes).map_err(CliError::from)?;
     let read = Skin::read(&yaml).map_err(CliError::from)?;
     let taken = read.check().map_err(|r| refused(path, r))?;
     let report = skin_contrast::measure(&taken.skin);
-    Ok((yaml, taken, report))
+    Ok((packing, bytes, taken, report))
 }
 
 /// A whole-skin refusal, said as the command's failure.

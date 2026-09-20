@@ -4,6 +4,12 @@
 //! (`light:` / `dark:`). Nothing in it is executed and no selector can be written in it — what is
 //! read here is names and values, and the `:root { … }` built from them is amenbo's own.
 //!
+//! **One skin is one file, in one of two shapes** (`AMB-D-936`): a zip holding that document as
+//! `skin.yaml` beside the skin's materials, or the document on its own. [`document`] is where the
+//! two come back together, and everything after it reads the one text. A zip is never unpacked to
+//! disk — it is kept as it arrived and opened each time, so what is written out again is the
+//! author's own file rather than one rebuilt from what was parsed.
+//!
 //! Reading and judging are two steps, and they are apart on purpose. [`Skin::read`] turns the
 //! document into a [`Skin`] and rules on nothing: a key this build does not know, a value that is
 //! not text, a later `skin_v` and a `themes` line that disagrees with the tables are all carried out
@@ -524,9 +530,33 @@ pub const FONT_MAX_BYTES: usize = 2 * 1024 * 1024;
 /// the document claims about them.
 const WOFF2_MAGIC: &[u8; 4] = b"wOF2";
 
-/// The extension a skin's file carries. The one shape a skin is kept in, and read back by everything
-/// that enumerates the directory — the device's own, and an archive's entries.
+/// The extension a bare skin document carries. What a skin was kept as before it could carry
+/// anything beside the document, and still read back — the device's own files, and an archive's.
 pub const FILE_EXT: &str = ".yaml";
+
+/// The extension a packed skin carries: the document and its materials in one zip (`AMB-D-936`).
+pub const PACK_EXT: &str = ".zip";
+
+/// Both, packed first, for everything that walks the skins directory. The order is the order a name
+/// is looked for in, so a device holding both shapes under one name wears the packed one.
+pub const FILE_EXTS: &[&str] = &[PACK_EXT, FILE_EXT];
+
+/// What the document is called inside a packed skin. At the root, under one name, so what a reader
+/// opens the zip to is the file they edit.
+pub const PACK_DOCUMENT: &str = "skin.yaml";
+
+/// The most one file inside a packed skin may weigh, unpacked. A background drawn for a large
+/// screen at two device pixels per point fits; past it the file is carrying a photograph rather
+/// than a look.
+pub const PACK_FILE_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+/// The most the whole of a packed skin may weigh, unpacked. Four backgrounds at the file ceiling,
+/// with the icons and a face carrying kana and han beside them.
+pub const PACK_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+/// What a zip opens with. Read so that "packed" is what the bytes say rather than what the name
+/// they arrived under claims.
+const ZIP_MAGIC: &[u8; 2] = b"PK";
 
 /// The most a token's value may be. Counted the way the applying side counts it — `VALUE` in
 /// `app/src/core/skin.ts` is a JavaScript regular expression, so its `{1,512}` counts UTF-16 code
@@ -616,8 +646,176 @@ fn reaches_for_url(value: &str) -> bool {
     lower.match_indices("url").any(|(at, _)| lower[at + 3..].trim_start().starts_with('('))
 }
 
+/// How a skin's bytes are packed. One skin is one file either way — what differs is whether that
+/// file is the document or a zip carrying it (`AMB-D-936`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Packing {
+    /// The document on its own.
+    Bare,
+    /// A zip holding [`PACK_DOCUMENT`] and the skin's materials.
+    Packed,
+}
+
+impl Packing {
+    /// What the bytes say they are. The magic rather than the name they arrived under: a person
+    /// renames a file, and what is inside it does not change with the name.
+    pub fn of(bytes: &[u8]) -> Packing {
+        if bytes.starts_with(ZIP_MAGIC) {
+            Packing::Packed
+        } else {
+            Packing::Bare
+        }
+    }
+
+    /// The extension a skin packed this way is kept under.
+    pub fn ext(self) -> &'static str {
+        match self {
+            Packing::Bare => FILE_EXT,
+            Packing::Packed => PACK_EXT,
+        }
+    }
+}
+
+/// The skin document out of whatever a file holds — the bytes themselves where they are the
+/// document, and [`PACK_DOCUMENT`] out of the zip where they are a zip.
+///
+/// **The other entries are not unpacked here.** This runs every time a skin is read, including at
+/// startup in every window, so what it costs has to be the document and not the archive. What it
+/// does read of them is their names, which cost nothing and are the half that can point outside
+/// the directory. The weights are read from the index, which a hostile file can lie about — the
+/// answer to that is [`weigh`], which unpacks and counts, and runs once on the way in.
+pub fn document(bytes: &[u8]) -> Result<(Packing, String), Error> {
+    if Packing::of(bytes) == Packing::Bare {
+        let text = String::from_utf8(bytes.to_vec())
+            .map_err(|_| Error::invalid("this file is neither a zip nor text"))?;
+        return Ok((Packing::Bare, text));
+    }
+    let mut zip = open_pack(bytes)?;
+    for at in 0..zip.len() {
+        let entry = zip.by_index(at).map_err(unreadable_pack)?;
+        held_in_the_pack(entry.name())?;
+        if entry.size() > PACK_FILE_MAX_BYTES {
+            return Err(too_heavy(entry.name(), entry.size(), PACK_FILE_MAX_BYTES));
+        }
+    }
+    let mut found = zip.by_name(PACK_DOCUMENT).map_err(|_| {
+        Error::invalid(format!("this zip has no {PACK_DOCUMENT} — that is the skin itself"))
+    })?;
+    let mut text = String::new();
+    // Capped on the way out as well as by the index: what `size` reports is the file's own claim
+    // about itself, and this is the one entry unpacked before anything has weighed it.
+    use std::io::Read as _;
+    (&mut found)
+        .take(PACK_FILE_MAX_BYTES + 1)
+        .read_to_string(&mut text)
+        .map_err(|_| Error::invalid(format!("{PACK_DOCUMENT} in this zip is not text")))?;
+    if text.len() as u64 > PACK_FILE_MAX_BYTES {
+        return Err(too_heavy(PACK_DOCUMENT, text.len() as u64, PACK_FILE_MAX_BYTES));
+    }
+    Ok((Packing::Packed, text))
+}
+
+/// Unpack the whole of a packed skin and count what comes out, so a file that unpacks to more than
+/// it says is turned away at the door rather than on the day something reads it.
+///
+/// Counted while unpacking, entry by entry, and stopped at the ceiling — the point is a file whose
+/// index says a few kilobytes and whose contents are gigabytes, so the number that decides is the
+/// one coming out of the decoder, never the one in the header. Answers with the total.
+///
+/// A bare document weighs itself and nothing else.
+pub fn weigh(bytes: &[u8]) -> Result<u64, Error> {
+    if Packing::of(bytes) == Packing::Bare {
+        let whole = bytes.len() as u64;
+        return (whole <= PACK_FILE_MAX_BYTES)
+            .then_some(whole)
+            .ok_or_else(|| too_heavy("this file", whole, PACK_FILE_MAX_BYTES));
+    }
+    use std::io::Read as _;
+    let mut zip = open_pack(bytes)?;
+    let mut total = 0u64;
+    let mut sink = [0u8; 64 * 1024];
+    for at in 0..zip.len() {
+        let mut entry = zip.by_index(at).map_err(unreadable_pack)?;
+        let name = entry.name().to_string();
+        held_in_the_pack(&name)?;
+        let mut weighs = 0u64;
+        loop {
+            let read = entry
+                .read(&mut sink)
+                .map_err(|_| Error::invalid(format!("'{name}' in this zip will not unpack")))?;
+            if read == 0 {
+                break;
+            }
+            weighs += read as u64;
+            total += read as u64;
+            if weighs > PACK_FILE_MAX_BYTES {
+                return Err(too_heavy(&name, weighs, PACK_FILE_MAX_BYTES));
+            }
+            if total > PACK_MAX_BYTES {
+                return Err(too_heavy("this zip", total, PACK_MAX_BYTES));
+            }
+        }
+    }
+    Ok(total)
+}
+
+/// The zip, open, or why it is not one this build can read.
+fn open_pack(bytes: &[u8]) -> Result<zip::ZipArchive<std::io::Cursor<&[u8]>>, Error> {
+    zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(unreadable_pack)
+}
+
+fn unreadable_pack(e: zip::result::ZipError) -> Error {
+    Error::invalid(format!("this zip will not open: {e}"))
+}
+
+fn too_heavy(what: &str, weighs: u64, ceiling: u64) -> Error {
+    Error::invalid(format!("'{what}' unpacks to {weighs} bytes, over the {ceiling} this build takes"))
+}
+
+/// Does this entry stay inside the skin? A name reaching up out of the archive, or starting from
+/// the root, is the one way a zip writes outside the directory it was unpacked into — and it is
+/// refused here rather than where a material is read, so no later reader has to remember.
+///
+/// Refused rather than skipped: a file carrying such a name is not a skin with one odd entry in it.
+fn held_in_the_pack(name: &str) -> Result<(), Error> {
+    let outside = name.starts_with('/')
+        || name.starts_with('\\')
+        || name.split(['/', '\\']).any(|part| part == "..")
+        || std::path::Path::new(name).is_absolute();
+    if outside {
+        return Err(Error::invalid(format!(
+            "'{name}' in this zip points outside it; a skin's files sit inside the skin"
+        )));
+    }
+    Ok(())
+}
+
+/// The skin a file in the skins directory is, by its name, with where its shape sits in
+/// [`FILE_EXTS`] — `None` where the file is not one of a skin's shapes, or is named something a
+/// skin may not be called.
+fn name_of_file(file: &str) -> Option<(String, usize)> {
+    FILE_EXTS.iter().enumerate().find_map(|(rank, ext)| {
+        let name = file.strip_suffix(ext)?;
+        usable_name(name).then(|| (name.to_string(), rank))
+    })
+}
+
+/// The file this device keeps a skin under, and how it is packed — `None` where it keeps none.
+///
+/// Both shapes are looked for, packed first: a name is one skin, and which file behind it is a
+/// fact for one place to settle rather than for every caller to go asking.
+pub fn kept_file(paths: &crate::config::Paths, name: &str) -> Option<(Packing, std::path::PathBuf)> {
+    if !usable_name(name) {
+        return None;
+    }
+    [Packing::Packed, Packing::Bare].into_iter().find_map(|packing| {
+        let at = paths.skin_file(name, packing.ext());
+        at.is_file().then_some((packing, at))
+    })
+}
+
 /// May this name be a skin's? Asked in two places for one reason: the name is what the skin is kept
-/// under (`<base>/skins/<name>.yaml`), so a name that is not a filename is a path somewhere else.
+/// under (`<base>/skins/<name><ext>`), so a name that is not a filename is a path somewhere else.
 pub fn usable_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= NAME_MAX
@@ -648,22 +846,26 @@ impl Skin {
         let Ok(entries) = std::fs::read_dir(paths.skins_dir()) else {
             return out; // nothing of this device's own
         };
-        let mut found: Vec<(String, Result<Skin, Error>)> = entries
+        let mut found: Vec<(String, usize, Result<Skin, Error>)> = entries
             .flatten()
             .filter(|e| e.path().is_file())
             .filter_map(|e| {
                 let file = e.file_name().to_string_lossy().into_owned();
-                let name = file.strip_suffix(FILE_EXT)?.to_string();
-                if !usable_name(&name) {
-                    return None;
-                }
-                let read = std::fs::read_to_string(e.path())
+                let (name, rank) = name_of_file(&file)?;
+                let read = std::fs::read(e.path())
                     .map_err(Error::from)
-                    .and_then(|yaml| Skin::read(&yaml));
-                Some((name, read))
+                    .and_then(|bytes| document(&bytes))
+                    .and_then(|(_, yaml)| Skin::read(&yaml));
+                Some((name, rank, read))
             })
             .collect();
-        found.sort_by(|a, b| a.0.cmp(&b.0));
+        // By name, and within a name by the order `FILE_EXTS` puts the shapes in. A device holding
+        // both shapes under one word shows the packed one — the same one `installed` answers with,
+        // because a list with two rows under one name is offering a skin nothing can reach.
+        found.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
+        found.dedup_by(|a, b| a.0 == b.0);
+        let mut found: Vec<(String, Result<Skin, Error>)> =
+            found.into_iter().map(|(name, _, read)| (name, read)).collect();
         // A file under a shipped name cannot arrive through `install`, and one put there by hand
         // is not a second entry under that name — the shipped one is what `installed` answers with,
         // and a list that showed both would be showing a skin nothing can reach.
@@ -672,12 +874,20 @@ impl Skin {
         out
     }
 
-    /// Keep this document on the device under `name`, replacing whatever was there. The bytes are
-    /// the author's own — a skin may carry a licence text and a font, and re-writing it from what
-    /// was parsed would hand on a different file from the one that arrived.
+    /// Keep this file on the device under `name`, replacing whatever was there. The bytes are the
+    /// author's own — a skin carries a licence text, a font and its materials, and re-writing it
+    /// from what was parsed would hand on a different file from the one that arrived.
+    ///
+    /// `packing` says which shape the bytes are, and so which extension they land under. Whichever
+    /// shape was already kept under that name goes, so one name is one file.
     ///
     /// Written aside and renamed into place, so a reader never sees half a skin.
-    pub fn install(paths: &crate::config::Paths, name: &str, yaml: &str) -> Result<(), Error> {
+    pub fn install(
+        paths: &crate::config::Paths,
+        name: &str,
+        packing: Packing,
+        bytes: &[u8],
+    ) -> Result<(), Error> {
         if !usable_name(name) {
             return Err(Error::invalid(format!("'{name}' is not a name a skin can be kept under")));
         }
@@ -689,10 +899,15 @@ impl Skin {
         }
         let dir = paths.skins_dir();
         std::fs::create_dir_all(&dir)?;
-        let dest = paths.skin_file(name);
-        let tmp = dir.join(format!("{name}{FILE_EXT}.tmp"));
-        std::fs::write(&tmp, yaml)?;
+        let dest = paths.skin_file(name, packing.ext());
+        let tmp = dir.join(format!("{name}{}.tmp", packing.ext()));
+        std::fs::write(&tmp, bytes)?;
         std::fs::rename(&tmp, &dest)?;
+        // The other shape, where the name was held in it. Done after the rename rather than
+        // before: what is being replaced stays readable until its replacement is whole.
+        for other in FILE_EXTS.iter().filter(|ext| **ext != packing.ext()) {
+            let _ = std::fs::remove_file(paths.skin_file(name, other));
+        }
         Ok(())
     }
 
@@ -707,7 +922,10 @@ impl Skin {
         if crate::skin_official::is_official(name) {
             return Err(Error::invalid(crate::skin_official::not_on_the_device(name)));
         }
-        match std::fs::remove_file(paths.skin_file(name)) {
+        let Some((_, at)) = kept_file(paths, name) else {
+            return Ok(false);
+        };
+        match std::fs::remove_file(at) {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(e) => Err(Error::from(e)),
@@ -721,8 +939,11 @@ impl Skin {
         if let Some(yaml) = crate::skin_official::yaml(name) {
             return Skin::read(yaml).map(Some);
         }
-        match std::fs::read_to_string(paths.skin_file(name)) {
-            Ok(yaml) => Skin::read(&yaml).map(Some),
+        let Some((_, at)) = kept_file(paths, name) else {
+            return Ok(None);
+        };
+        match std::fs::read(at) {
+            Ok(bytes) => Skin::read(&document(&bytes)?.1).map(Some),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(Error::from(e)),
         }
@@ -1657,5 +1878,112 @@ dark:
             taken.warnings,
             [Warning::UnknownToken { theme: Side::Dark, key: "c-sepia".into() }]
         );
+    }
+
+    // ---- the shape a skin arrives in (`AMB-D-936`) ----
+
+    const ONE_SKIN: &str =
+        "name: kozo\ntitle: t\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#ffffff\"\n";
+
+    /// A zip holding the entries given, as bytes.
+    fn packed(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        use std::io::Write as _;
+        let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let how = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, bytes) in entries {
+            out.start_file(*name, how).unwrap();
+            out.write_all(bytes).unwrap();
+        }
+        out.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn the_document_comes_out_of_the_zip_and_out_of_a_bare_file_alike() {
+        let bare = document(ONE_SKIN.as_bytes()).unwrap();
+        assert_eq!(bare, (Packing::Bare, ONE_SKIN.to_string()));
+
+        let zip = packed(&[
+            ("background.png", b"not really a png"),
+            (PACK_DOCUMENT, ONE_SKIN.as_bytes()),
+        ]);
+        let (packing, yaml) = document(&zip).unwrap();
+        assert_eq!(packing, Packing::Packed);
+        assert_eq!(yaml, ONE_SKIN);
+        assert_eq!(Skin::read(&yaml).unwrap().name, "kozo");
+    }
+
+    #[test]
+    fn a_zip_with_no_skin_in_it_says_which_file_is_missing() {
+        let zip = packed(&[("colours.yaml", ONE_SKIN.as_bytes())]);
+        let why = document(&zip).unwrap_err().to_string();
+        assert!(why.contains(PACK_DOCUMENT), "{why}");
+    }
+
+    #[test]
+    fn an_entry_pointing_out_of_the_zip_turns_the_whole_file_away() {
+        // Refused rather than skipped, and refused on the way to the document: a file carrying
+        // such a name is not a skin with one odd entry in it.
+        for name in ["../escaped.png", "art/../../escaped.png", "/etc/passwd"] {
+            let zip = packed(&[(name, b"x"), (PACK_DOCUMENT, ONE_SKIN.as_bytes())]);
+            assert!(document(&zip).is_err(), "{name}");
+            assert!(weigh(&zip).is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn what_unpacks_to_more_than_this_build_takes_is_stopped_while_it_unpacks() {
+        // The index says one thing and the decoder says another, which is the whole point: a run
+        // of one byte compresses to almost nothing, so the number that decides has to be the one
+        // coming out.
+        let big = vec![0u8; PACK_FILE_MAX_BYTES as usize + 1];
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("big.bin", &big)]);
+        assert!(zip.len() < 64 * 1024, "the file itself is small: {} bytes", zip.len());
+        let why = weigh(&zip).unwrap_err().to_string();
+        assert!(why.contains("big.bin"), "{why}");
+        // And the document still comes out, because reading it never touches that entry —
+        // except that the index already says how heavy it is, which is enough to say no.
+        assert!(document(&zip).is_err(), "the index is read on the way to the document");
+    }
+
+    #[test]
+    fn a_skin_that_fits_is_weighed_and_says_what_it_came_to() {
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes()), ("art.bin", &[7u8; 1000])]);
+        assert_eq!(weigh(&zip).unwrap(), ONE_SKIN.len() as u64 + 1000);
+        assert_eq!(weigh(ONE_SKIN.as_bytes()).unwrap(), ONE_SKIN.len() as u64);
+    }
+
+    #[test]
+    fn a_skin_is_kept_in_the_shape_it_arrived_in_and_read_back_out_of_it() {
+        let paths = crate::config::Paths::at(amenbo_scratch::scratch("skins-packed"));
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes())]);
+        Skin::install(&paths, "kozo", Packing::Packed, &zip).unwrap();
+
+        let at = paths.skin_file("kozo", PACK_EXT);
+        assert!(at.is_file(), "kept as the zip it arrived as");
+        assert_eq!(std::fs::read(&at).unwrap(), zip, "byte for byte, the author's own file");
+        assert_eq!(kept_file(&paths, "kozo").map(|(p, _)| p), Some(Packing::Packed));
+        assert_eq!(Skin::installed(&paths, "kozo").unwrap().unwrap().name, "kozo");
+        assert_eq!(
+            Skin::installed_all(&paths).iter().filter(|(n, _)| n == "kozo").count(),
+            1
+        );
+        assert!(Skin::uninstall(&paths, "kozo").unwrap());
+        assert!(!at.exists());
+    }
+
+    #[test]
+    fn one_name_is_one_file_however_the_shape_changes_under_it() {
+        // A bare skin replaced by a packed one leaves no `.yaml` behind: two files under one word
+        // is one skin nothing can reach, and which of them answered would be the directory's call.
+        let paths = crate::config::Paths::at(amenbo_scratch::scratch("skins-reshaped"));
+        Skin::install(&paths, "kozo", Packing::Bare, ONE_SKIN.as_bytes()).unwrap();
+        assert!(paths.skin_file("kozo", FILE_EXT).is_file());
+
+        let zip = packed(&[(PACK_DOCUMENT, ONE_SKIN.as_bytes())]);
+        Skin::install(&paths, "kozo", Packing::Packed, &zip).unwrap();
+        assert!(paths.skin_file("kozo", PACK_EXT).is_file());
+        assert!(!paths.skin_file("kozo", FILE_EXT).exists(), "the shape it left behind is gone");
+        assert_eq!(Skin::installed_all(&paths).iter().filter(|(n, _)| n == "kozo").count(), 1);
     }
 }

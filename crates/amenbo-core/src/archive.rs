@@ -13,7 +13,7 @@
 //! **without extracting** the (potentially large) snapshot; the store's `VACUUM INTO` snapshot at
 //! `store.sqlite`; and the attachment bytes beside it, `blobs/<hash>`.
 //!
-//! Beside them, the skins this device holds, `skins/<name>.yaml`. A skin is named from the config by
+//! Beside them, the skins this device holds, `skins/<name><ext>`. A skin is named from the config by
 //! one word, so carrying the word without the file restores a device that says it is wearing a skin
 //! it does not have. The reason `identity.json` is left out — a restore must not overwrite the
 //! destination's own — does not reach these: they go in additively, so nothing of the destination's
@@ -127,7 +127,7 @@ fn blobs_prefix() -> String {
     format!("{}/", crate::blob::BLOBS_SUBDIR)
 }
 
-/// The archive prefix the device's skins sit under — `skins/<name>.yaml`, mirroring the live
+/// The archive prefix the device's skins sit under — `skins/<name><ext>`, mirroring the live
 /// directory beside the store.
 const SKINS_PREFIX: &str = "skins/";
 
@@ -137,8 +137,9 @@ fn skins_dir_of(db_path: &Path) -> Option<PathBuf> {
     db_path.parent().map(|dir| dir.join("skins"))
 }
 
-/// The skin files a device holds, by name, in a settled order. Anything in the directory that is not
-/// a `<usable name>.yaml` is not a skin this build put there, and is left where it is.
+/// The skin files a device holds, by filename, in a settled order. Anything in the directory that
+/// is not a `<usable name>` under one of `crate::skin::FILE_EXTS` is not a skin this build put
+/// there, and is left where it is.
 fn list_skins(db_path: &Path) -> Vec<(String, PathBuf)> {
     let Some(dir) = skins_dir_of(db_path) else {
         return Vec::new();
@@ -151,8 +152,9 @@ fn list_skins(db_path: &Path) -> Vec<(String, PathBuf)> {
         .filter(|e| e.path().is_file())
         .filter_map(|e| {
             let file = e.file_name().to_string_lossy().into_owned();
-            let name = file.strip_suffix(crate::skin::FILE_EXT)?.to_string();
-            crate::skin::usable_name(&name).then(|| (name, e.path()))
+            // The filename, extension and all: the shape a skin is kept in is part of what is
+            // being carried, and an archive that renamed it would hand back a zip called `.yaml`.
+            skin_name_of(&file).map(|_| (file, e.path()))
         })
         .collect();
     found.sort();
@@ -509,9 +511,10 @@ pub fn backup_from(
         // are immutable, content-addressed files).
         blobs_bundled += append_blobs(&mut builder, source, progress)?;
 
-        // The device's skins. Small text files, so they are appended without a phase of their own.
-        for (name, path) in list_skins(&source.db_path) {
-            append_file(&mut builder, &format!("{SKINS_PREFIX}{name}{}", crate::skin::FILE_EXT), &path)?;
+        // The device's skins. One file each and small beside the store, so they are appended
+        // without a phase of their own.
+        for (file, path) in list_skins(&source.db_path) {
+            append_file(&mut builder, &format!("{SKINS_PREFIX}{file}"), &path)?;
             skins_bundled += 1;
         }
 
@@ -863,14 +866,23 @@ fn staging_dest(name: &str, stage: &Path) -> Option<PathBuf> {
     if let Some(hash) = name.strip_prefix(&blobs_prefix()) {
         return crate::blob::is_hash(hash).then(|| staged_blobs_dir(stage).join(hash));
     }
-    // A skin, under the one shape a skin has: a name it may be kept under, and nothing else in the
-    // path. The rule the live tree keeps its files by is the rule an archive's entry is read by.
+    // A skin, under one of the shapes a skin has: a name it may be kept under, and nothing else in
+    // the path. The rule the live tree keeps its files by is the rule an archive's entry is read by.
     let file = name.strip_prefix(SKINS_PREFIX)?;
-    let skin = file.strip_suffix(crate::skin::FILE_EXT)?;
-    crate::skin::usable_name(skin).then(|| staged_skins_dir(stage).join(file))
+    skin_name_of(file).map(|_| staged_skins_dir(stage).join(file))
 }
 
-/// Where the extracted skins are staged: `stage/skins/<name>.yaml`, the live layout, so the placing
+/// The skin a file is, by its name — `None` where the name is not one of a skin's shapes, or not
+/// one a skin may be kept under. The rule the live tree keeps its files by is the rule an archive's
+/// entries are read by, so both halves ask this.
+fn skin_name_of(file: &str) -> Option<String> {
+    crate::skin::FILE_EXTS.iter().find_map(|ext| {
+        let name = file.strip_suffix(ext)?;
+        crate::skin::usable_name(name).then(|| name.to_string())
+    })
+}
+
+/// Where the extracted skins are staged: `stage/skins/<name><ext>`, the live layout, so the placing
 /// half reads them back the way it would read a device's own.
 fn staged_skins_dir(stage: &Path) -> PathBuf {
     stage.join("skins")
@@ -889,10 +901,17 @@ fn place_skins(stage: &Path, dest_db: &Path) -> Result<u64> {
     };
     let mut written = 0u64;
     for entry in entries.flatten() {
-        let dest = live_dir.join(entry.file_name());
-        if dest.exists() {
+        let file = entry.file_name().to_string_lossy().into_owned();
+        // Held off by name rather than by filename: a skin has two shapes, and a device holding
+        // `washi.zip` must not also be handed the archive's `washi.yaml` — that is two files under
+        // one word, which is one skin nothing can reach.
+        let Some(name) = skin_name_of(&file) else {
+            continue;
+        };
+        if crate::skin::FILE_EXTS.iter().any(|ext| live_dir.join(format!("{name}{ext}")).exists()) {
             continue;
         }
+        let dest = live_dir.join(entry.file_name());
         std::fs::create_dir_all(&live_dir)?;
         move_file(&entry.path(), &dest)?;
         written += 1;
@@ -2183,6 +2202,37 @@ mod tests {
         let report = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap();
         assert_eq!(report.skins, 0, "nothing was written over");
         assert_eq!(std::fs::read(live.join("skins/washi.yaml")).unwrap(), b"already here");
+    }
+
+    /// A skin travels in the shape it is kept in, and the name — not the filename — is what says
+    /// the destination already has it. A device holding `washi.zip` handed an archive's
+    /// `washi.yaml` would otherwise end up with two files under one word (`AMB-D-936`).
+    #[test]
+    fn a_skin_travels_packed_and_is_held_off_by_its_name_rather_than_its_filename() {
+        let base = scratch("skins-packed-rt");
+        let a = base.join("a");
+        std::fs::create_dir_all(&a).unwrap();
+        seed_store(&a, &["alice"]);
+        std::fs::create_dir_all(a.join("skins")).unwrap();
+        std::fs::write(a.join("skins/washi.yaml"), b"name: washi\n").unwrap();
+        std::fs::write(a.join("skins/kozo.zip"), b"PK\x03\x04 not really, and not read here").unwrap();
+
+        let archive = base.join(format!("backup.{ARCHIVE_EXT}"));
+        let report = backup_from(&source(&a), &archive, &mut crate::progress::ignore).unwrap();
+        assert_eq!(report.skins, 2);
+        assert!(read_entry(&archive, "skins/kozo.zip").is_some(), "kept as the zip it is");
+
+        // The destination holds `washi` in the other shape, and `kozo` not at all.
+        let live = base.join("live");
+        std::fs::create_dir_all(live.join("skins")).unwrap();
+        std::fs::write(live.join("skins/washi.zip"), b"already here").unwrap();
+        let dest = live.join(crate::config::STORE_FILE_NAME);
+
+        let report = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap();
+        assert_eq!(report.skins, 1, "only the one the destination had no answer for");
+        assert!(!live.join("skins/washi.yaml").exists(), "one name is one file");
+        assert_eq!(std::fs::read(live.join("skins/washi.zip")).unwrap(), b"already here");
+        assert!(live.join("skins/kozo.zip").is_file());
     }
 
     /// Placing blobs is additive and idempotent: a hash the destination already holds is left alone (the

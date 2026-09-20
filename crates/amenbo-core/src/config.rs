@@ -470,11 +470,15 @@ impl Paths {
         self.base_dir.join("skins")
     }
 
-    /// One skin's file, `<base>/skins/<name>.yaml`. The caller passes a name
+    /// One skin's file, `<base>/skins/<name><ext>`. The caller passes a name
     /// [`crate::skin::usable_name`] has accepted; a name that is not one is not a file under this
     /// directory, and nothing here would make it one.
-    pub fn skin_file(&self, name: &str) -> PathBuf {
-        self.skins_dir().join(format!("{name}.yaml"))
+    ///
+    /// The extension is the caller's because a skin has two shapes — packed and bare
+    /// (`crate::skin::Packing`) — and which one a given skin is kept in is a fact about that file,
+    /// not about the directory. `crate::skin::kept_file` is the one that goes looking.
+    pub fn skin_file(&self, name: &str, ext: &str) -> PathBuf {
+        self.skins_dir().join(format!("{name}{ext}"))
     }
 }
 
@@ -1603,7 +1607,14 @@ mod tests {
     fn a_skin_is_kept_under_its_own_name_beside_the_store() {
         let paths = Paths::at(PathBuf::from("/base"));
         assert_eq!(paths.skins_dir(), PathBuf::from("/base/skins"));
-        assert_eq!(paths.skin_file("washi"), PathBuf::from("/base/skins/washi.yaml"));
+        assert_eq!(
+            paths.skin_file("washi", crate::skin::FILE_EXT),
+            PathBuf::from("/base/skins/washi.yaml")
+        );
+        assert_eq!(
+            paths.skin_file("washi", crate::skin::PACK_EXT),
+            PathBuf::from("/base/skins/washi.zip")
+        );
     }
 
     /// What is installed under a name is read back, so the two versions can be put side by side when
@@ -1614,7 +1625,7 @@ mod tests {
         let paths = Paths::at(dir.clone());
         std::fs::create_dir_all(paths.skins_dir()).unwrap();
         std::fs::write(
-            paths.skin_file("kozo"),
+            paths.skin_file("kozo", crate::skin::FILE_EXT),
             "name: kozo\ntitle: t\nversion: 1.2.0\nskin_v: 1\nthemes: [light]\nlight:\n  c-bg: \"#fff\"\n",
         )
         .unwrap();

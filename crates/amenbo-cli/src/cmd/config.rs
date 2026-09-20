@@ -80,7 +80,13 @@ pub(crate) fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -
         human(flags, format!("your name (human_name): {}", named_or_default(store.config.human_name.as_deref(), &store.config.human_display_name())));
         human(flags, format!("the AI's name (ai_name): {}", named_or_default(store.config.ai_name.as_deref(), &store.config.ai_display_name())));
         human(flags, format!("skin (skin): {}", match store.config.skin.as_deref() {
-            Some(name) => format!("{name} (from {})", store.paths.skin_file(name).display()),
+            Some(name) if amenbo_core::skin_official::is_official(name) => {
+                format!("{name} (ships with Amenbo)")
+            }
+            Some(name) => match amenbo_core::skin::kept_file(&store.paths, name) {
+                Some((_, at)) => format!("{name} (from {})", at.display()),
+                None => format!("{name} (nothing is kept under that name)"),
+            },
             None => "not set (the colours this build ships with)".to_string(),
         }));
         human(flags, format!("AI may archive and delete projects (ai_allow_project_ops): {}", if store.config.ai_allow_project_ops { "on" } else { "off (the AI is refused; the reversible project operations are not gated)" }));

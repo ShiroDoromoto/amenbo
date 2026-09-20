@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use amenbo_core::frames::{FrameName, FrameNames, NamedBy, Orient, SavedLayout, SavedPane, Split};
+use amenbo_core::frames::{FrameName, FrameNames, NamedBy, SavedLayout, SavedPane};
 
 use crate::commands::{open_store, open_store_read};
 use crate::dto::{FrameNameDto, TalkFrameDto, TalkLayoutDto};
@@ -334,7 +334,7 @@ pub fn frame_model(face: tauri::State<'_, TalkFace>, frame: String) -> Option<St
     face.models.lock().expect("pane models lock").get(&frame).cloned()
 }
 
-/// The arrangement of the talk window, as this run has it — and where it has none yet, the splits and
+/// The arrangement of the talk window, as this run has it — and where it has none yet, the panes and
 /// the project this device left behind.
 ///
 /// It is answered as a window comes up and is what the face is laid out from. Nothing in it is
@@ -342,24 +342,17 @@ pub fn frame_model(face: tauri::State<'_, TalkFace>, frame: String) -> Option<St
 /// (`AMB-T-3607`). After a run of the app there are no frames in it at all — what comes back then is
 /// one empty place on the project the reader was looking at.
 ///
-/// **`count` is the opening project's own split, and a count of nothing where it has none.** What a
-/// project nobody has split opens at is the window's to say, not this side's: `restored` reads a
-/// count it does not know as the one it lays a fresh project out at (`app/src/talk/layout.ts`).
+/// **Each pane carries how much of a page it takes, and none of them carries a place** (`AMB-D-939`).
+/// Where a pane is drawn is the window's to work out from the order, and it does so on every render
+/// (`app/src/talk/layout.ts`).
 #[tauri::command]
 pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayoutDto>, CmdError> {
     if let Some(live) = face.layout.lock().expect("talk layout lock").clone() {
         return Ok(Some(live));
     }
     Ok(open_store_read()?.saved_layout()?.map(|kept| {
-        // What the face opens at, which is the split of the project it opens on. A project with no
-        // answer kept opens at whatever the window lays out for one, which is the window's to decide
-        // (`app/src/talk/layout.ts`) — nothing here invents a count for it.
-        let opening = kept.project.and_then(|project| kept.splits.get(&project)).copied();
         seed(&face, &kept);
         TalkLayoutDto {
-            count: opening.map_or(0, |split| split.count),
-            orient: Some(opening.unwrap_or_default().orient.into()),
-            splits: kept.splits.iter().map(|(project, split)| (*project, (*split).into())).collect(),
             project: kept.project,
             // The places, with nothing running in any of them: a session died with the run that
             // started it, and what the window draws is the offer to carry on (`AMB-D-869`).
@@ -369,6 +362,9 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
                 .map(|pane| TalkFrameDto {
                     id: pane.id.clone(),
                     project: Some(pane.project),
+                    // How much of a page the reader left it at, which is what the pages are laid out
+                    // from (`AMB-D-939`).
+                    size: pane.size.into(),
                     folder: pane.folder.clone(),
                     agent: pane.agent.clone(),
                     written: None,
@@ -446,11 +442,7 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
     if forget_dropped(face, layout) {
         std::thread::spawn(crate::pane_home::rotate);
     }
-    let keeping = SavedLayout {
-        project: layout.project,
-        splits: splits_of(layout),
-        panes: panes_of(face, layout),
-    };
+    let keeping = SavedLayout { project: layout.project, panes: panes_of(face, layout) };
     if face.kept.lock().expect("kept layout lock").as_ref() == Some(&keeping) {
         return Ok(());
     }
@@ -505,6 +497,7 @@ fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
             Some(SavedPane {
                 id: frame.id.clone(),
                 project: frame.project?,
+                size: frame.size.into(),
                 folder: frame.folder.clone(),
                 agent: frame.agent.clone(),
                 name: names.all().get(&frame.id).cloned(),
@@ -514,32 +507,6 @@ fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
             })
         })
         .collect()
-}
-
-/// Which way the arrangement says a two-pane page sits. An arrangement that says nothing sits the way
-/// every other count does — the face writes the answer only once there is one.
-fn orient_of(layout: &TalkLayoutDto) -> Orient {
-    layout.orient.map_or(Orient::default(), Into::into)
-}
-
-/// The splits an arrangement is keeping, whichever shape the window sent.
-///
-/// **A window that sends the set is answered by the set.** One that does not is a window telling the
-/// host about the project it is showing and no other, so its one `count` is put back under that
-/// project — which is exactly where it came from, and leaves every other project's answer alone.
-fn splits_of(layout: &TalkLayoutDto) -> std::collections::BTreeMap<u32, Split> {
-    if !layout.splits.is_empty() {
-        return layout.splits.iter().map(|(project, split)| (*project, (*split).into())).collect();
-    }
-    layout
-        .project
-        .map(|project| {
-            std::collections::BTreeMap::from([(
-                project,
-                Split { count: layout.count, orient: orient_of(layout) },
-            )])
-        })
-        .unwrap_or_default()
 }
 
 /// The frame names in the shape the webview reads them: a list, in frame order, rather than a map —
@@ -567,6 +534,7 @@ mod tests {
         TalkFrameDto {
             id: id.to_string(),
             project: Some(1),
+            size: crate::dto::PaneSizeDto::Quarter,
             folder: Some("/work/repo".to_string()),
             agent: agent.map(str::to_string),
             written: Some("half a sentence".to_string()),
@@ -577,9 +545,6 @@ mod tests {
 
     fn layout(frames: Vec<TalkFrameDto>) -> TalkLayoutDto {
         TalkLayoutDto {
-            count: 2,
-            orient: None,
-            splits: std::collections::BTreeMap::new(),
             project: Some(1),
             frames,
             split_out: Some("1".to_string()),
@@ -738,10 +703,10 @@ mod tests {
         let face = TalkFace::default();
         seed(&face, &SavedLayout {
             project: Some(1),
-            splits: std::collections::BTreeMap::new(),
             panes: vec![SavedPane {
                 id: "1".to_string(),
                 project: 1,
+                size: amenbo_core::frames::PaneSize::Quarter,
                 folder: Some("/work/repo".to_string()),
                 agent: Some("claude-code".to_string()),
                 name: None,
@@ -771,10 +736,10 @@ mod tests {
         let face = TalkFace::default();
         seed(&face, &SavedLayout {
             project: Some(1),
-            splits: std::collections::BTreeMap::new(),
             panes: vec![SavedPane {
                 id: "1".to_string(),
                 project: 1,
+                size: amenbo_core::frames::PaneSize::Quarter,
                 folder: Some("/work/repo".to_string()),
                 agent: Some("gemini-cli".to_string()),
                 name: None,
@@ -823,10 +788,10 @@ mod tests {
         let face = TalkFace::default();
         let kept = SavedLayout {
             project: Some(1),
-            splits: std::collections::BTreeMap::new(),
             panes: vec![SavedPane {
                 id: "1".to_string(),
                 project: 1,
+                size: amenbo_core::frames::PaneSize::Quarter,
                 folder: Some("/work/repo".to_string()),
                 agent: Some("claude".to_string()),
                 name: Some(FrameName { name: "the migration".to_string(), by: NamedBy::Person }),

@@ -860,6 +860,16 @@ pub const STEPS: &[Step] = &[
         name: "fold decision.proposed away, and rename accepted to decided",
         apply: Apply::Custom(fold_the_proposal_away),
     },
+    Step {
+        to: 49,
+        name: "put the split a project was held at onto each of that project's panes, as a size",
+        // `AMB-D-939`: a pane holds an order and a size, and the pages fall out of laying them down.
+        // The split was one answer for a whole project, so it is read once here and written onto the
+        // panes — after which nothing in the build knows what a count was. Reading both shapes
+        // instead would leave every layer to decide which one it writes in, which is the split the
+        // decision is about.
+        apply: Apply::Custom(lay_the_panes_out_by_size),
+    },
 ];
 
 /// v43: take the plugin mechanism's tables and its execution log away (`AMB-D-884`).
@@ -977,6 +987,100 @@ fn draw_the_pane_ids_afresh(ctx: &Ctx<'_>) -> Result<()> {
             pane["resume"] = serde_json::Value::String(format!("{head}{now}"));
         }
         pane["id"] = serde_json::Value::String(now);
+    }
+    ctx.tx.execute(
+        "UPDATE store_meta SET value = ?2 WHERE key = ?1",
+        rusqlite::params![LAYOUT, row.to_string()],
+    )?;
+    Ok(())
+}
+
+/// v49: give every pane the size that the split its project was held at comes to (`AMB-D-939`).
+///
+/// **One answer for a project becomes one answer per pane.** The split said how many panes a page of
+/// that project drew; the size says how much of a page one pane takes, and the two say the same thing
+/// wherever a project's panes were all the same — which they were, there being no way to say anything
+/// else. So every pane of a project takes its project's split, and a project nobody answered for
+/// leaves its panes at the whole page.
+///
+/// **The one split an older build wrote is folded in on the way**, under the project the face was on
+/// — the same fold `crate::frames` did on every read until this step took it over. A row naming no
+/// project has nowhere to put it, and lets it go: a count with nothing to hold it against is not an
+/// answer about anything.
+///
+/// A count this build has no size for is let go the same way. It was written by a build that offered
+/// some other split, and a pane put back at a guess would be this step inventing what the reader left.
+///
+/// The three keys go with the write, so the row that comes out has one shape in it and not two.
+fn lay_the_panes_out_by_size(ctx: &Ctx<'_>) -> Result<()> {
+    // The key the talk window's arrangement is kept under, and the fields as they were spelled when
+    // this step was written.
+    const LAYOUT: &str = "talk.layout";
+
+    /// The size a split comes to, or `None` for a count this build cannot draw.
+    fn size_of(count: u64, orient: Option<&str>) -> Option<&'static str> {
+        Some(match count {
+            1 => "whole",
+            2 if orient == Some("down") => "half-down",
+            2 => "half",
+            4 => "quarter",
+            6 => "sixth",
+            8 => "eighth",
+            _ => return None,
+        })
+    }
+
+    let kept: Option<String> = ctx
+        .tx
+        .query_row("SELECT value FROM store_meta WHERE key = ?1", [LAYOUT], |row| row.get(0))
+        .optional()?;
+    // A store that never laid a window out, and one whose row will not parse, both have nothing to
+    // convert: the window reads such a row as no arrangement at all and lays itself out afresh.
+    let Some(Ok(mut row)) = kept.map(|json| serde_json::from_str::<serde_json::Value>(&json)) else {
+        return Ok(());
+    };
+    // The answers by project, as this row has them — the set, or the one split an older build wrote
+    // put back under the project it was set on.
+    let mut splits: std::collections::BTreeMap<String, &'static str> = row
+        .get("splits")
+        .and_then(|splits| splits.as_object())
+        .map(|splits| {
+            splits
+                .iter()
+                .filter_map(|(project, split)| {
+                    let count = split.get("count")?.as_u64()?;
+                    let orient = split.get("orient").and_then(|orient| orient.as_str());
+                    Some((project.clone(), size_of(count, orient)?))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if splits.is_empty() {
+        if let (Some(count), Some(project)) = (
+            row.get("count").and_then(serde_json::Value::as_u64),
+            row.get("project").and_then(serde_json::Value::as_u64),
+        ) {
+            let orient = row.get("orient").and_then(|orient| orient.as_str());
+            if let Some(size) = size_of(count, orient) {
+                splits.insert(project.to_string(), size);
+            }
+        }
+    }
+    if let Some(panes) = row.get_mut("panes").and_then(|panes| panes.as_array_mut()) {
+        for pane in panes {
+            let size = pane
+                .get("project")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|project| splits.get(&project.to_string()))
+                .copied()
+                .unwrap_or("whole");
+            pane["size"] = serde_json::Value::String(size.to_owned());
+        }
+    }
+    if let Some(row) = row.as_object_mut() {
+        row.remove("splits");
+        row.remove("count");
+        row.remove("orient");
     }
     ctx.tx.execute(
         "UPDATE store_meta SET value = ?2 WHERE key = ?1",
@@ -4758,5 +4862,79 @@ mod tests {
             "and the retired value is refused on the way in, not merely absent"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v49 in full: the split each project was held at lands on every one of that project's panes as
+    /// a size, and the three fields that said it go with the write (`AMB-D-939`). A project nobody
+    /// answered for leaves its panes at the whole page, and a count this build has no size for is let
+    /// go rather than rounded to one.
+    #[test]
+    fn the_split_a_project_was_held_at_lands_on_each_of_its_panes() {
+        let dir = scratch("pane-sizes");
+        let engine = store_at(&dir, 48);
+        engine
+            .set_meta(
+                "talk.layout",
+                Some(
+                    r#"{"project":1,"splits":{"1":{"count":2,"orient":"down"},"2":{"count":6},
+                        "4":{"count":5}},
+                        "panes":[{"id":"a","project":1},{"id":"b","project":1},
+                                 {"id":"c","project":2},{"id":"d","project":3},
+                                 {"id":"e","project":4}]}"#,
+                ),
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
+        let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
+        let size = |at: usize| row["panes"][at]["size"].as_str().unwrap().to_string();
+        assert_eq!(size(0), "half-down", "two panes laid down the page is half of it, that way round");
+        assert_eq!(size(1), "half-down", "and so is the pane beside it — one answer, two panes");
+        assert_eq!(size(2), "sixth");
+        assert_eq!(size(3), "whole", "a project nobody answered for is one pane to a page");
+        assert_eq!(size(4), "whole", "and so is a count this build has no size for");
+        assert!(!kept.contains("splits"), "the answers are on the panes now: {kept}");
+        assert!(!kept.contains("count"), "{kept}");
+        assert!(!kept.contains("orient"), "{kept}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The one split an older build wrote for the whole face is folded in under the project the face
+    /// was on — the fold `crate::frames` did on every read until this step took it over. A row naming
+    /// no project has nowhere to put it, and lets it go.
+    #[test]
+    fn the_one_split_an_older_build_wrote_lands_under_the_project_it_was_set_on() {
+        let dir = scratch("pane-sizes-older");
+        let engine = store_at(&dir, 48);
+        engine
+            .set_meta(
+                "talk.layout",
+                Some(r#"{"count":4,"project":2,"panes":[{"id":"a","project":2}]}"#),
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
+        let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
+        assert_eq!(row["panes"][0]["size"].as_str(), Some("quarter"));
+        assert!(!kept.contains("count"), "{kept}");
+    }
+
+    /// A row that names no project has nowhere to put its one split: a count with nothing to hold it
+    /// against is not an answer about anything, so the pane comes out at the whole page.
+    #[test]
+    fn a_split_with_no_project_to_hold_it_is_let_go() {
+        let dir = scratch("pane-sizes-no-project");
+        let engine = store_at(&dir, 48);
+        engine.set_meta("talk.layout", Some(r#"{"count":4,"panes":[{"id":"a","project":2}]}"#)).unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
+        let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
+        assert_eq!(row["panes"][0]["size"].as_str(), Some("whole"));
     }
 }

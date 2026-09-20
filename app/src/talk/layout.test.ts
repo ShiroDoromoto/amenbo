@@ -442,14 +442,13 @@ describe("an arrangement kept between runs", () => {
     layout = openedIn(layout, "2", "session-b", "/work/1", null);
 
     const kept = laidOut(layout);
-    expect(kept.count).toBe(2);
     expect(kept.frames).toEqual([
       // What was started in each, which is the half of a row a folder cannot carry: the second is at
       // a plain prompt, and a prompt has nothing to name. And which way the box under each was left,
       // written both ways round because a row without it is a row from before it was kept
       // (`AMB-D-890`).
-      { id: "1", project: 1, folder: "/work/1", agent: "claude", composeOpen: false },
-      { id: "2", project: 1, folder: "/work/1", composeOpen: false },
+      { id: "1", project: 1, size: "half", folder: "/work/1", agent: "claude", composeOpen: false },
+      { id: "2", project: 1, size: "half", folder: "/work/1", composeOpen: false },
     ]);
     // What was running is not in it at all: a session died with the last run, and a pane drawn as
     // though it were still there would be the window saying something untrue.
@@ -477,8 +476,10 @@ describe("an arrangement kept between runs", () => {
 
   it("comes back as places to open a terminal in, each in its own project", () => {
     const back = restored({
-      count: 4,
-      frames: [{ id: "1", project: 7, folder: "/work/repo" }, { id: "2", project: 8 }],
+      frames: [
+        { id: "1", project: 7, size: "quarter", folder: "/work/repo" },
+        { id: "2", project: 8, size: "quarter" },
+      ],
     }, null);
     expect(back.frames.map((one) => one.size)).toEqual(["quarter", "quarter"]);
     expect(back.frames.map((one) => one.session)).toEqual([null, null]);
@@ -493,7 +494,6 @@ describe("an arrangement kept between runs", () => {
     // The row is the way back into the session rather than a picture of one (`AMB-D-869`): the pane
     // says what was in it, and the window is what decides to start one again (`AMB-T-4641`).
     const back = restored({
-      count: 2,
       project: 1,
       frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude" }],
     }, 1);
@@ -501,7 +501,7 @@ describe("an arrangement kept between runs", () => {
     expect(back.frames[0]!.session).toBeNull();
     // And a pane that was at a plain prompt has nothing to name, which is not the same as a pane
     // nobody can account for.
-    const bare = restored({ count: 2, frames: [{ id: "1", project: 1 }] }, 1);
+    const bare = restored({ frames: [{ id: "1", project: 1 }] }, 1);
     expect(bare.frames[0]!.agent).toBeNull();
   });
 
@@ -509,7 +509,6 @@ describe("an arrangement kept between runs", () => {
     // What the mark is for is the press it spares: the face opens such a place without being asked
     // (`AMB-D-869`), and every other place is drawn with the way in on it.
     const back = restored({
-      count: 2,
       project: 1,
       frames: [
         { id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true },
@@ -525,7 +524,6 @@ describe("an arrangement kept between runs", () => {
     // A page turned away from and back again mounts the pane afresh, and a mark left standing would
     // read as a second reason to start something there.
     const back = restored({
-      count: 2,
       project: 1,
       frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true }],
     }, 1);
@@ -536,12 +534,12 @@ describe("an arrangement kept between runs", () => {
   });
 
   it("puts a pane whose project nothing recorded where the person is looking", () => {
-    const back = restored({ count: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5);
+    const back = restored({ frames: [{ id: "1", folder: "/work/repo" }] }, 5);
     expect(back.frames[0]!.project).toBe(5);
   });
 
   it("has nowhere to put one when the window is on no project either", () => {
-    expect(restored({ count: 2, frames: [{ id: "1" }] }, null).frames).toHaveLength(0);
+    expect(restored({ frames: [{ id: "1" }] }, null).frames).toHaveLength(0);
   });
 
   it("hands the next frame an id no name is already on", () => {
@@ -549,7 +547,7 @@ describe("an arrangement kept between runs", () => {
     // counted ones, or a hand-over nobody can vouch for — and a fresh frame must not take one of
     // them. Drawing the id is what settles that without reading them at all (`AMB-D-897`), so this
     // is the real drawing rather than the seeded count, whose next value is one of the two below.
-    const back = restored({ count: 2, frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null);
+    const back = restored({ frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null);
     vi.unstubAllGlobals();
     const made = openedFrame(back, 1, "/w").frame.id;
     expect(back.frames.map((one) => one.id)).not.toContain(made);
@@ -559,7 +557,7 @@ describe("an arrangement kept between runs", () => {
   it("comes back as the empty face where nothing was ever opened", () => {
     // A size is a fact about a pane, so a device with no panes has nothing to bring back but the
     // project it was left on.
-    const back = restored({ count: 4, project: 3, frames: [] }, 3);
+    const back = restored({ project: 3, frames: [] }, 3);
     expect(back.frames).toHaveLength(0);
     expect(back.project).toBe(3);
     expect(back.focus).toBeNull();
@@ -567,61 +565,48 @@ describe("an arrangement kept between runs", () => {
   });
 });
 
-// The store still speaks in splits, and moves to sizes in `AMB-T-5212`. Until then the crossing to
-// the host — and to the window the workspace is split out into — goes through them, so what each
-// size answers to has to hold in both directions.
-describe("the split a size is handed over as", () => {
-  it("writes each project's split from the size of its first pane", () => {
-    let layout = resized(withPanes(1, "quarter", 1), "1", "quarter");
-    layout = resized(openedFrame(goProject(layout, 2), 2, "/work/2").layout, "2", "half-down");
-    // Walked through and left alone: a project with no panes has nobody to have answered for it.
-    layout = goProject(layout, 3);
-
-    expect(laidOut(layout).splits).toEqual({ 1: { count: 4 }, 2: { count: 2, orient: "down" } });
-  });
-
-  it("brings every pane of a project back at the size that split answers to", () => {
-    const kept = laidOut(resized(withPanes(2, "sixth"), "1", "sixth"));
-    expect(kept.splits).toEqual({ 1: { count: 6 } });
-    expect(restored(kept, null).frames.map((one) => one.size)).toEqual(["sixth", "sixth"]);
-  });
-
-  it("tells the two halves apart, which is the one thing a bare count cannot", () => {
-    const down = laidOut(resized(withPanes(2, "half"), "1", "half-down"));
-    expect(down.splits).toEqual({ 1: { count: 2, orient: "down" } });
-    expect(restored(down, null).frames[0]!.size).toBe("half-down");
-    // Across is what a page does when nothing says otherwise, so it is left out of the row.
-    const across = laidOut(withPanes(2, "half"));
-    expect(across.splits).toEqual({ 1: { count: 2 } });
-    expect(restored(across, null).frames[0]!.size).toBe("half");
-  });
-
-  it("collapses a page of mixed sizes, which is what the shape has no room to say", () => {
-    // The one thing that does not survive the crossing. It is written down here so the day the store
-    // moves to sizes is the day this case changes.
+// The crossing to the host — and to the window the workspace is split out into — carries a size on
+// each pane and no place at all (`AMB-D-939`). A store written before sizes were kept is converted
+// once on the way in, by the migration, so nothing here reads two shapes.
+describe("a pane's size, crossing to the store and back", () => {
+  it("writes the size of every pane, and reads it back onto the same pane", () => {
     const mixed = resized(withPanes(3, "quarter"), "2", "eighth");
-    expect(restored(laidOut(mixed), null).frames.map((one) => one.size))
-      .toEqual(["quarter", "quarter", "quarter"]);
+    const kept = laidOut(mixed);
+    expect(kept.frames.map((one) => one.size)).toEqual(["quarter", "eighth", "quarter"]);
+    expect(restored(kept, null).frames.map((one) => one.size))
+      .toEqual(["quarter", "eighth", "quarter"]);
   });
 
-  it("keeps a split it has never heard of out of what comes back", () => {
-    // A build that offered some other split wrote one, and this one has to land on something it can
-    // draw rather than on a rectangle it has no name for. The row is dropped rather than rounded:
-    // what that project was left at is a thing this build does not know.
-    const kept = laidOut(withPanes(2));
-    expect(restored({ ...kept, count: 5, splits: { 1: { count: 5 } } }, null).frames[0]!.size)
-      .toBe(DEFAULT_SIZE);
-    expect(restored({ ...kept, count: 8, splits: { 1: { count: 8 } } }, null).frames[0]!.size)
-      .toBe("eighth");
-    // And an arrangement written before the answers were kept by project is read off the pair
-    // beside them, which is all it has.
-    expect(restored({ count: 8, frames: [{ id: "1", project: 1 }] }, 1).frames[0]!.size)
-      .toBe("eighth");
+  it("tells the two halves apart, which is what a count on the project could not", () => {
+    // And it tells them apart pane by pane: the first is laid down the page while the one beside it
+    // is still across, which one answer held for the project could not say at all.
+    const down = laidOut(resized(withPanes(2, "half"), "1", "half-down"));
+    expect(down.frames.map((one) => one.size)).toEqual(["half-down", "half"]);
+    expect(restored(down, null).frames.map((one) => one.size)).toEqual(["half-down", "half"]);
   });
 
-  it("leaves the row out of an arrangement with no panes to have sized", () => {
-    expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("splits");
-    expect(laidOut({ ...EMPTY_LAYOUT, project: 1 })).not.toHaveProperty("splits");
+  it("keeps one project's sizes off another's, which one answer per project could not", () => {
+    let layout = resized(withPanes(1, "quarter", 1), "1", "quarter");
+    layout = resized(openedFrame(goProject(layout, 2), 2, "/work/2").layout, "2", "sixth");
+    const kept = laidOut(layout);
+    expect(kept.frames.map((one) => [one.project, one.size]))
+      .toEqual([[1, "quarter"], [2, "sixth"]]);
+  });
+
+  it("reads a size it has never heard of as no answer at all", () => {
+    // A row from a build that offered some other set has to land on something this one can draw,
+    // rather than on a rectangle it has no name for. What is dropped comes back as the whole page,
+    // which is the honest reading — this build does not know what that pane was left at.
+    const odd = restored({ frames: [{ id: "1", project: 1, size: "third" as Size }] }, 1);
+    expect(odd.frames[0]!.size).toBe(DEFAULT_SIZE);
+    // And so does a row from a build that kept none. An older store's splits are read once, by the
+    // migration, so nothing here has to know what a count was.
+    expect(restored({ frames: [{ id: "1", project: 1 }] }, 1).frames[0]!.size).toBe(DEFAULT_SIZE);
+  });
+
+  it("says nothing about a face with no panes on it", () => {
+    expect(laidOut(EMPTY_LAYOUT).frames).toHaveLength(0);
+    expect(laidOut({ ...EMPTY_LAYOUT, project: 1 }).frames).toHaveLength(0);
   });
 });
 
@@ -762,7 +747,7 @@ describe("what is written in the box under a pane", () => {
   });
 
   it("is nothing in a place an arrangement carrying no draft is restored into", () => {
-    const bare = restored({ count: 1, project: 1, frames: [{ id: "1", project: 1 }] }, 1);
+    const bare = restored({ project: 1, frames: [{ id: "1", project: 1 }] }, 1);
     expect(bare.frames[0]!.written).toBe("");
   });
 
@@ -889,7 +874,6 @@ describe("what Amenbo put into the box under a pane", () => {
   // an agent that has no file to read.
   it("comes back only where the body it was put into came too", () => {
     const back = restored({
-      count: 1,
       project: 1,
       frames: [{ id: "1", project: 1, inserted: [PICTURE] }],
     }, 1);

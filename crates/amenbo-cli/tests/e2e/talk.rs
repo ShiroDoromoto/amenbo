@@ -281,10 +281,10 @@ fn name_the_pane(cli: &Cli, pane: &str, name: &str) {
     store
         .save_layout(&amenbo_core::frames::SavedLayout {
             project: None,
-            splits: Default::default(),
             panes: vec![amenbo_core::frames::SavedPane {
                 id: pane.to_string(),
                 project: 1,
+                size: Default::default(),
                 folder: None,
                 agent: None,
                 name: Some(amenbo_core::frames::FrameName {

@@ -130,9 +130,9 @@ beforeEach(async () => {
   hoisted.mounts = [];
   hoisted.kept = [];
   hoisted.answer = null;
-  // A device where the split and the project are all there is to come back to: nothing was open when
-  // the last run ended, so the arrangement names no place (`../talk/layout`).
-  hoisted.saved = { count: 4, project: 1, frames: [] };
+  // A device where the project is all there is to come back to: nothing was open when the last run
+  // ended, so the arrangement names no place (`../talk/layout`).
+  hoisted.saved = { project: 1, frames: [] };
   await mount();
 });
 
@@ -165,7 +165,7 @@ describe("the first window of a run", () => {
     // yet — in the other window, the panes it was split out of.
     expect(hoisted.kept).toHaveLength(0);
     await answered();
-    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ count: 1, project: 1, frames: [] });
+    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ project: 1, frames: [] });
   });
 
   it("comes up with the way in and nothing running where nothing was kept at all", async () => {
@@ -184,14 +184,13 @@ describe("a window that reads an arrangement with panes in it", () => {
     act(() => root.unmount());
     container.remove();
     hoisted.saved = {
-      count: 2,
       project: 1,
       frames: [
-        { id: "1", project: 1, folder: "/work/repo" },
+        { id: "1", project: 1, size: "half", folder: "/work/repo" },
         // What was started in the second is part of its row: coming back to a pane means coming back
         // to what was running in it (`AMB-D-869`). Nothing is pressed on this one, so it is the row
         // that comes through the run untouched.
-        { id: "2", project: 1, folder: "/work/repo", agent: "claude" },
+        { id: "2", project: 1, size: "half", folder: "/work/repo", agent: "claude" },
       ],
     };
     await mount();
@@ -231,19 +230,15 @@ describe("a window that reads an arrangement with panes in it", () => {
     // what a session says it was started with, so a place opened again on something else must not go
     // on naming what was there before it (`../talk/layout`).
     expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({
-      count: 2,
       project: 1,
       frames: [
         // And which way the box under each was left, written both ways round: a row without it is a
         // row from before it was kept, and reading one back is what the machine's habit answers
         // (`AMB-D-890`).
-        { id: "1", project: 1, folder: "/work/repo", composeOpen: false },
-        { id: "2", project: 1, folder: "/work/repo", agent: "claude", composeOpen: false },
+        { id: "1", project: 1, size: "half", folder: "/work/repo", composeOpen: false },
+        { id: "2", project: 1, size: "half", folder: "/work/repo", agent: "claude", composeOpen: false },
       ],
       splitOut: "1",
-      // The project's split, read off the size of its first pane — which is how a size crosses to
-      // the host until the store moves to sizes (`../talk/layout`, `AMB-T-5212`).
-      splits: { 1: { count: 2 } },
     });
   });
 });

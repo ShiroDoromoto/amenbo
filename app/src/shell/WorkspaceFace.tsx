@@ -135,7 +135,7 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
  * face takes them up again when it comes back (see the adoption below).
  *
  * **It is the same face in either window.** Splitting the workspace out puts this component up in a
- * window of its own (`../talk.tsx`) rather than one pane of it: the rail, the pages, the split and
+ * window of its own (`../talk.tsx`) rather than one pane of it: the rail, the pages, the sizes and
  * the files beside them all go, because a face that arrived on the second display with only a pane
  * left would be a person carrying one terminal out rather than moving where they work
  * (`AMB-D-753`). `ownWindow` is the whole of the difference, and it comes to two things.

@@ -84,7 +84,7 @@ beforeEach(async () => {
   hoisted.projects = [];
   // What was kept last run: the split, the project the face was on, and no frames — a project with
   // no folder has never had a pane opened in it (`../talk/layout`).
-  hoisted.saved = { count: 1, nextId: 1, project: 1, frames: [] };
+  hoisted.saved = { nextId: 1, project: 1, frames: [] };
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);

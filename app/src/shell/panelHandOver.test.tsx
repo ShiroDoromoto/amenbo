@@ -133,12 +133,11 @@ beforeEach(() => {
   hoisted.handOver = undefined;
   hoisted.pasted = [];
   hoisted.saved = {
-    count: 2,
     nextId: 3,
     project: 1,
     frames: [
-      { id: "1", project: 1, folder: "/work/a" },
-      { id: "2", project: 1, folder: "/work/b" },
+      { id: "1", project: 1, size: "half", folder: "/work/a" },
+      { id: "2", project: 1, size: "half", folder: "/work/b" },
     ],
   };
   hoisted.running = ["a", "b"].map((one) => ({
@@ -204,11 +203,10 @@ describe("handing a file from the panel to a pane", () => {
   it("brings the pane it handed the path to back on the screen", async () => {
     // Four panes over two pages, so the pane being worked in can be off the one being shown.
     hoisted.saved = {
-      count: 2,
       nextId: 5,
       project: 1,
       frames: ["a", "b", "c", "d"].map((one, at) => ({
-        id: String(at + 1), project: 1, folder: `/work/${one}`,
+        id: String(at + 1), project: 1, size: "half" as const, folder: `/work/${one}`,
       })),
     };
     hoisted.running = ["a", "b", "c", "d"].map((one) => ({

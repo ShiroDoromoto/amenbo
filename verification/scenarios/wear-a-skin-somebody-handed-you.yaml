@@ -1,0 +1,200 @@
+# A skin arrives as a file and nothing else. There is no place to fetch one from and no account to
+# sign into: somebody writes a document of token values, hands it over, and the person who received
+# it reads it over, takes it in and puts it on. That is the whole of the feature, and every part of
+# it is a file on a real disk meeting a real store — which is exactly the part no build-time test
+# reaches. The reader and the check have their own tests; what none of them walks is a document
+# arriving from outside and the colours on the screen changing because of it.
+#
+# The road opens by writing one out rather than by taking one in. The starting point an author is
+# handed is this build's own colours as a document that is already a skin, and it is the first thing
+# anybody making one asks for — so a build whose template comes out empty, or comes out as something
+# the check would refuse, has broken the feature before any skin exists to take in.
+#
+# Then the file somebody else wrote. It is read over first and taken in second, as two moves rather
+# than one, because they are two moves: the reading is what an author does before handing a file on,
+# and the taking in is what the receiver does after. A build where the second works and the first
+# does not is a build that will only tell you why a skin was refused once it is already installed.
+#
+# What is asserted after each move is the one thing the store can be asked: which skin is on. It is
+# read rather than inferred, because a name in the config and a file under it are two facts, and the
+# listing is the one place both are answered at once.
+#
+# The road ends by taking it off and then off the device, in that order. Taking a skin off is the
+# way out of one that made the screen unreadable, so it has to work from a state where something is
+# actually on; and removing the file while it is worn would be asking the build to answer for a
+# config naming a file that is gone, which is a different road than this one.
+#
+# The file is a fixture rather than lines written here: what is under test is a document arriving
+# from outside, so a file the road described would be a file the road already trusts. It lands in the
+# folder the run makes for itself, and the run says that path before the first step is handed over —
+# nothing in these instructions can name it, since they are rendered from this file alone.
+id: wear-a-skin-somebody-handed-you
+title: A skin to start from is written out, a skin somebody else wrote is read over and taken in, put on, taken off, and taken off the device
+description: >
+  Write out the skin this build would hand an author to start from. Then take the document somebody
+  else wrote — read it over first, without taking it in, and read it in again as it is taken in. Put
+  it on, and confirm it is the one the device says it is wearing. Take it off, so the colours the
+  build ships with are back, and take the file off the device last.
+given:
+  # The document somebody handed over. A screen road cannot make a file — every move it has is a move
+  # on a record — so the one this road is about has to be laid down before it starts.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/a-skin-handed-over.yaml
+      path: a-skin-handed-over.yaml
+
+steps_cli:
+  # The starting point. It is bound, so the reading below names what came out rather than a path
+  # written down a second time — and a template that is not itself a skin fails there rather than
+  # here, which is the verdict worth having.
+  - type: action
+    domain: store
+    op: skin-template
+    as: starting-point
+
+  # This build's own colours, written out, read back by the same check a stranger's file meets. The
+  # file is the artifact the step above bound, named by that binding.
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: starting-point
+      contains: "c-bg"
+
+  # Nothing is on before the road puts something on. Read first because "it is on" and "it was
+  # already on" are the same picture afterwards.
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  # The stranger's file, read over and not taken in.
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-handed-over.yaml
+
+  # Still nothing on, and nothing held: reading a file over must not install it.
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-handed-over.yaml
+
+  # Held is not worn. This is the second of the two facts a name in the config stands for.
+  #
+  # What the file is held *under* is not read out of a row here, and could not be: what ships with
+  # the build stands in the same listing, so a row this road named by its place would move the day a
+  # fifth one ships. It is proven a step further down instead — the name put on is the one the
+  # document gave itself, not the one the file arrived under, and the two differ on purpose.
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: dusk
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: dusk
+
+  # The way out. It is the answer to a skin that made the screen unreadable, so it is walked from a
+  # state where one is actually on.
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: none
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  # And off the device. Last, because removing the file under a skin that is on is a different road.
+  - type: action
+    domain: store
+    op: skin-rm
+    with:
+      name: dusk
+
+steps_gui:
+  - type: action
+    domain: store
+    op: open-settings
+
+  # The starting point, saved from the window rather than printed to a terminal. Where it lands is
+  # the run's business; that a document came out at all is this step.
+  - type: action
+    domain: store
+    op: skin-template
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null
+
+  # Chosen and read over, with nothing else pressed. The window draws the judgement on the same panel
+  # that takes the file in, so the two presses are two steps here as they are two commands there.
+  - type: action
+    domain: store
+    op: skin-validate
+    with:
+      path: a-skin-handed-over.yaml
+
+  - type: action
+    domain: store
+    op: skin-add
+    with:
+      path: a-skin-handed-over.yaml
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: dusk
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: dusk
+
+  - type: action
+    domain: store
+    op: skin-use
+    with:
+      name: none
+
+  - type: assert
+    domain: store
+    op: skin-list
+    with:
+      field: on
+      equals: null

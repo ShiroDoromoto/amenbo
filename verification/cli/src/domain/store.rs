@@ -133,6 +133,60 @@ impl Driver<'_> {
                 self.run_json(&["config", "set", key, value, "--json"])?;
                 Ok(Outcome::action(format!("set `{key}` to `{value}`")))
             }
+            // The starting point an author is handed: this build's own colours, written out as a
+            // document that is already a skin. It lands beside the run's other artifacts and is
+            // bound, so the reading that follows names what came out rather than a path spelled
+            // twice.
+            "skin-template" => {
+                let out = self.artifact(bind, "skin-template", ".yaml");
+                let v = self.run_json(&["skin", "template", "--json"])?;
+                let yaml = v["yaml"].as_str().ok_or("`skin template --json` carried no `yaml`")?;
+                std::fs::write(&out, yaml)
+                    .map_err(|e| format!("could not write {}: {e}", out.display()))?;
+                self.remember(bind, "skin-template", out.clone());
+                Ok(Outcome::action(format!(
+                    "wrote a skin to start from at {} ({} bytes)",
+                    out.display(),
+                    yaml.len()
+                )))
+            }
+            // The author's face of the check the import runs. It writes nothing: what it is for is
+            // learning why a file would be turned away before handing it to anybody.
+            "skin-validate" => {
+                let path = self.in_session(req_str(with, "path")?)?;
+                let v = self.run_json(&["skin", "validate", path_str(&path)?, "--json"])?;
+                let name = v["name"].as_str().unwrap_or("(unnamed)");
+                let short = v["contrast"]["short"].as_array().map_or(0, Vec::len);
+                Ok(Outcome::action(format!(
+                    "read {} over: it is the skin `{name}`, with {short} pairing(s) under their floor",
+                    path.display()
+                )))
+            }
+            // Taking one in. `--yes` because the driver is unattended and a road that adds the same
+            // file twice is a road about replacing, not about being asked.
+            "skin-add" => {
+                let path = self.in_session(req_str(with, "path")?)?;
+                let v = self.run_json(&["skin", "add", path_str(&path)?, "--yes", "--json"])?;
+                let name = v["name"].as_str().unwrap_or("(unnamed)");
+                Ok(Outcome::action(format!("took {} in as the skin `{name}`", path.display())))
+            }
+            "skin-use" => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["skin", "use", name, "--json"])?;
+                match v["on"].as_str() {
+                    Some(on) => Ok(Outcome::action(format!("put the skin `{on}` on"))),
+                    None => Ok(Outcome::action("took off whatever skin was on".to_string())),
+                }
+            }
+            "skin-rm" => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["skin", "rm", name, "--json"])?;
+                let gone = v["removed"].as_bool().unwrap_or(false);
+                Ok(Outcome::action(format!(
+                    "{} the skin `{name}` off the device",
+                    if gone { "took" } else { "found nothing to take" }
+                )))
+            }
             _ => Err(unmapped(Domain::Store, op)),
         }
     }
@@ -267,6 +321,10 @@ impl Driver<'_> {
             "config" => {
                 let v = self.run_json(&["config", "--json"])?;
                 judge_field("this store's configuration", with, &v)
+            }
+            "skin-list" => {
+                let v = self.run_json(&["skin", "list", "--json"])?;
+                judge_field("the skins this device can wear", with, &v)
             }
             "identity" => {
                 let v = self.run_json(&["whoami", "--json"])?;

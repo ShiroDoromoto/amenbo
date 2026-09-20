@@ -8,9 +8,13 @@
 # - `--all-features` is not usable: it turns on `sharing`, which breaks the cli_e2e_* suites' solo-mode
 #   assumption. Heavy suites are listed explicitly as `--features scale,e2e`.
 #
-# What SLOW means here, and how the lines below were chosen. A SLOW mark never kills a test — it puts
-# it in the closing summary — so the line's whole job is to name a test that costs more than its layer
-# should, and it earns nothing by being loose. There are two layers with an order of magnitude between
+# What SLOW means here, and how the lines below were chosen. A SLOW mark on its own never kills a test
+# — it puts it in the closing summary — so the line's whole job is to name a test that costs more than
+# its layer should, and it earns nothing by being loose. A line that also says `terminate-after` counts
+# those periods and then kills the test, which is a second question (how long is a hang?) asked in the
+# same units; only the e2e override below answers it.
+#
+# There are two layers with an order of magnitude between
 # them, so there are two lines: the everyday suite (unit + the integration tests against a real store)
 # and the e2e suite (which starts the CLI binary once per assertion). Each is set from what the layer
 # actually costs on the three platforms the gate runs, with the slowest legitimate test as the floor.
@@ -41,11 +45,22 @@ final-status-level = "slow"
 # and the slowest single test measured on any platform is 39.7s (Windows, the reach slices). 60s clears
 # that by half again — a Windows e2e test that reads SLOW has gone past anything the suite has cost.
 #
+# `terminate-after = 5` is the other question the same 60s answers: five periods — five minutes — and
+# nextest kills the test and names it. It is set because a shard of this suite once ran 61 minutes and
+# died with nothing to read (run 35478515969, `CLI e2e 1/4`, 2026-09-20): the step never completed, so
+# no log was kept, and the only thing left to say was that something had waited. Every test here drives
+# a child process, and several wait on one with no bound of their own — the MCP slices read a line back
+# from a server that is still running — so a hang is a shape this suite can take, and the run has to be
+# able to say which test took it. Five minutes is 7.5x the slowest single test ever measured, so no
+# legitimate test is near it; the job's own `timeout-minutes` in `_ci.yml` sits above this and catches
+# a hang outside any test, in the build or the setup.
+#
 # Written under `default` rather than per profile: nextest reads a profile's own overrides first and
-# falls back to `default`'s, so `--profile ci` inherits this one.
+# falls back to `default`'s, so `--profile ci` inherits this one — and a hang reproduces the same way
+# on a laptop as it does under the gate.
 [[profile.default.overrides]]
 filter = 'binary(/^cli_e2e/)'
-slow-timeout = { period = "60s" }
+slow-timeout = { period = "60s", terminate-after = 5 }
 
 [profile.ci]
 # CI: on a failure keep running the rest (take the whole picture), and print failures immediately

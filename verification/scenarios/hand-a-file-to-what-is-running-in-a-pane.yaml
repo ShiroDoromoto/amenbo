@@ -282,12 +282,13 @@ steps_gui:
   # ── The fifth road, and what a landing settles ────────────────────────────────────────────────
   # A second pane, because everything above this line happens where "the pane it landed on" and "the
   # pane the reader was in" are the same box. From here they are two, and that is the only way the
-  # rest of this can be read at all.
+  # rest of this can be read at all. The one standing is cut to half the page, which is what leaves
+  # room beside it for the other.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
+      size: half
 
   - type: action
     domain: workspace
@@ -395,12 +396,14 @@ steps_gui:
 
   # ── The sixth road: the same menu, to a pane that is not on the screen ────────────────────────
   # A page turn moves what is drawn and not which pane is worked in, so the pane the menu hands to is
-  # often behind the page. One pane to a page is the plainest way to stand the two apart.
+  # often behind the page. Giving the pane being worked in the whole page is the plainest way to
+  # stand the two apart: it no longer fits beside the one before it, so it starts a page of its own
+  # and the screen follows it there (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 1
+      size: whole
 
   - type: action
     domain: workspace

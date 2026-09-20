@@ -99,13 +99,14 @@ steps_gui:
     domain: workspace
     op: open-shell
 
-  # Room for the pane beside it. A project nobody has answered for is drawn at one pane, and a page
-  # with no room on it draws no frame for the steps below to set.
+  # Room for the pane beside it. A pane with nothing to be measured against takes the whole page, and
+  # a page with no room on it draws no frame for the steps below to set — so this one is cut to half
+  # of it (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
+      size: half
 
   # And beside it, the pane this road is about. The frame is set to the provider and nothing is
   # pressed yet — what the press will run is the line the frame writes out under the row.

@@ -104,12 +104,6 @@ steps_gui:
       project: Harbour
 
   # One pane, so every step below means the one box on the page and none of them has to say so.
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 1
-
   # Named rather than taken by position, because what the road needs of it is the one thing a position
   # cannot promise: a provider with a rename command of its own, which is what a name is carried by.
   - type: action

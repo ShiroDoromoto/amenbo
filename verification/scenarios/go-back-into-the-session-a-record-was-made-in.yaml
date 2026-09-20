@@ -136,12 +136,6 @@ steps_gui:
     with:
       project: Workshop
 
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 2
-
   # The pane the decision is made in. Down to a plain shell, because what an agent does with a line
   # typed at it is the agent's own and the create below has to be run rather than asked for.
   - type: action
@@ -153,6 +147,15 @@ steps_gui:
   - type: action
     domain: workspace
     op: open-shell
+
+  # Room for the pane the record is opened again in. A pane with nothing to be measured against takes
+  # the whole page, and the control is about a pane — so it is pressed once one is standing rather
+  # than before (`app/src/talk/layout.ts`).
+  - type: action
+    domain: workspace
+    op: set-pane-size
+    with:
+      size: half
 
   - type: action
     domain: workspace

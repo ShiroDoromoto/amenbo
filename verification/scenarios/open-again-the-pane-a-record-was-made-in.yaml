@@ -35,9 +35,10 @@
 #
 # ── Why one pane ────────────────────────────────────────────────────────────────────────────────
 # The road beside this one walks two, because which pane a press landed in is only a question where
-# there are several. Here the pane the press is about does not exist when it is pressed, and a page
-# asked for one is what makes what turns up on it unmistakable: a full page draws no way in beside
-# its frame, so the box the road goes on to work in is the only box there is.
+# there are several. Here the pane the press is about does not exist when it is pressed, and a pane
+# that fills the page is what makes what turns up on it unmistakable: a full page draws no way in
+# beside its frame, so the box the road goes on to work in is the only box there is. Nothing asks for
+# it — a pane with nothing to be measured against takes the whole page (`app/src/talk/layout.ts`).
 #
 # ── What this road stops short of ───────────────────────────────────────────────────────────────
 # The third landing is a way back the provider no longer honours: the pane opens, the program ends
@@ -81,12 +82,6 @@ steps_gui:
     op: go-project
     with:
       project: Workshop
-
-  - type: action
-    domain: workspace
-    op: set-panes
-    with:
-      count: 1
 
   # The pane the decision is made in. Down to a plain shell, because what an agent does with a line
   # typed at it is the agent's own and the create below has to be run rather than asked for.

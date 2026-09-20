@@ -110,13 +110,14 @@ steps_gui:
       shows: SCENARIO arg scenario-model-02
 
   # ── The second pane, on the other model ──────────────────────────────────────────────────────
-  # Two to a page, which is what makes a second place to open in. One pane is already standing, so
-  # there is exactly one way in on the page and the presses below are unambiguous.
+  # The one standing is cut to half the page, which is what makes a second place to open in. One pane
+  # is already standing, so there is exactly one way in on the page and the presses below are
+  # unambiguous.
   - type: action
     domain: workspace
-    op: set-panes
+    op: set-pane-size
     with:
-      count: 2
+      size: half
 
   - type: action
     domain: workspace

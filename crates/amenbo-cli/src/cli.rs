@@ -879,9 +879,23 @@ pub enum SkinCmd {
         path: std::path::PathBuf,
     },
 
-    /// Write this build's own colours out as a skin, to start from. Both sides, every colour a skin
-    /// may set, so the first edit is to a value rather than to an empty file.
-    Template,
+    /// Write out a skin to start from: this build's own values, or the ones the skin that is on
+    /// sets, as a zip holding `skin.yaml`. Both sides and every name a skin may set, so the first
+    /// edit is to a value rather than to an empty file — and the zip is where the materials go.
+    Template {
+        /// Where to write the zip. It must not already be a file.
+        path: std::path::PathBuf,
+    },
+
+    /// Write a skin this device holds back out, as the file it arrived in. Byte for byte: the
+    /// materials the author packed with it ride along, which rebuilding the document from its
+    /// values could not do.
+    WriteOut {
+        /// The skin's name, as `skin list` shows it.
+        name: String,
+        /// Where to write the file. It must not already be a file.
+        path: std::path::PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]

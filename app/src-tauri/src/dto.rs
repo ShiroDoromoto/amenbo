@@ -1832,6 +1832,29 @@ pub struct PtySessionDto {
     pub(crate) agent: Option<String>,
 }
 
+/// What a pane is handed when it adopts a session already running (`crate::pty::pty_attach`).
+///
+/// **Three things, because a pane that was not on the screen missed all three.** The bytes are the
+/// screen to draw; the name is what the session called this frame; the records are what was filed
+/// from it. Each of them also travels as it happens, to whichever window is drawing the pane — and a
+/// window drawing no pane for this session is told with nothing listening, the drop box already read
+/// past (`AMB-T-5196`). So the pane asks for all of it at the one moment it can ask.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PtyAdoptDto {
+    /// The tail, in the runs it was written in.
+    pub(crate) replay: Vec<PtyReplayDto>,
+    /// The last name the session gave itself, or `None` where it never did. Whether it goes on the
+    /// frame is the window's call: a name a person typed is not one a session may replace
+    /// (`amenbo_core::frames`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) name: Option<String>,
+    /// The records filed from this pane, in the order they were filed, each one once.
+    pub(crate) made: Vec<SessionMadeDto>,
+}
+
 /// One run of a session's tail, as the pane adopting it is handed it (`crate::pty::pty_attach`).
 ///
 /// **A run is as much of the tail as was written at one size**, and the tail is handed over as the

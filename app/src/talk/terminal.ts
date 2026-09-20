@@ -26,7 +26,14 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
+import type {
+  PtyAdoptDto,
+  PtyChunkDto,
+  PtyClosedDto,
+  PtyReplayDto,
+  PtySessionDto,
+  SessionSaidDto,
+} from "../bindings/bindings";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
@@ -574,8 +581,10 @@ async function draw(
       : undefined;
   if (want) {
     try {
-      const replay = await invoke<PtyReplayDto[]>("pty_attach", { session: want.session });
-      await replayTail(term, replay);
+      // What the session missed comes back beside the bytes. Reading it onto the pane is
+      // `AMB-T-5198`; the screen is what this call has always been for.
+      const adopted = await invoke<PtyAdoptDto>("pty_attach", { session: want.session });
+      await replayTail(term, adopted.replay);
       refit(fit, host);
       // The program is told last, because until now it was writing to the old width and its next
       // line has to arrive at the new one.

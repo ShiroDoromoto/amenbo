@@ -146,10 +146,13 @@ export const SIDE_WIDE_DEFAULT = 560;
  * and one character, the padding of the tab and of the list it is in (`styles/global.css`).
  *
  * **It is the one width on this face that is not dragged.** Folded, the column is the mark and nothing
- * else, and a mark is one size — a drag would be moving the room around a 24px square. What the
+ * else, and a mark is one size — a drag would be moving the room around a 40px square. What the
  * stylesheet still has to hold up is this leaving the mark that room.
+ *
+ * It is the rail's compact width to the pixel (`../core/sidebarWidth`), and both moved from 46 to 56
+ * when the mark went from 24px to 40px (`AMB-D-942`).
  */
-export const TABS_COMPACT_WIDTH = 46;
+export const TABS_COMPACT_WIDTH = 56;
 
 /** The named column's floor and where it starts — the fixed width it shipped with, so nothing moves
  *  until somebody drags it. The floor is the rail's own, because what it draws is a name of the same

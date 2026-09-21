@@ -59,3 +59,12 @@ export function initialOf(name: string): string {
  * the pixels this box draws it at (`../core/shrinkImage`), and that is arithmetic rather than layout.
  */
 export const MARK_PX = 24;
+
+/**
+ * The side of the same mark where the names are folded away (`AMB-D-942`).
+ *
+ * Folded, the mark is the whole of the row, so it is given the room the column has rather than the
+ * room left beside a name. The count badge sits in the corner over it either way, and the square the
+ * two share is fixed by the badge's own size — so a wider mark is a smaller share of it covered.
+ */
+export const MARK_COMPACT_PX = 40;

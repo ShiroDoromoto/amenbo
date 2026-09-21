@@ -5,7 +5,7 @@
 // **There is no state that takes the column away.** It had one, and what it cost was the way back:
 // a column that is gone has to be brought back from somewhere else, so the control for it sat in the
 // bar over the whole window and said nothing about which of the two faces it moved (`AMB-D-848`).
-// Compact is 46px — near enough to nothing that the width is still reclaimed — and the way back is
+// Compact is 56px — near enough to nothing that the width is still reclaimed — and the way back is
 // inside the column it is about, the way the workspace's tabs have always done it
 // (`../talk/columns`).
 //

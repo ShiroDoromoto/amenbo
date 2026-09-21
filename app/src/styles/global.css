@@ -995,19 +995,31 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
   background: var(--c-sunken-pic) var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 /* Compact: the count goes to the corner of the tab, over the mark rather than beside it, because
-   there is no beside left. Smaller and ringed in the column's own ground, the same way the sidebar
-   does it at the same width — at 46px a badge the size of the one beside a name would lie across the
-   letter that tells one project from another. */
+   there is no beside left. Narrower than the badge beside a name and ringed in the column's own
+   ground, the same way the sidebar does it at the same width. The text step is the badge step
+   (`AMB-D-942`): 10px was below the four the faces have, and the shipped retro skin draws with
+   `font-smooth: none`, so on a 1x screen the strokes of the digits fell out. */
 .ptabs--compact .ptabs__count {
   position: absolute; top: 0; right: 0; margin-left: 0;
   min-width: 0; padding: 0 3px;
-  font-size: 10px; line-height: 14px; border-radius: 7px;
+  font-size: var(--fs-xs); line-height: 16px; border-radius: 8px;
   box-shadow: 0 0 0 2px var(--c-surface);
 }
 /* Compact: the mark, centred, with the count off the row and onto the corner over it. There is no
    beside left to put anything in, and the tab keeps the width it had, so folding the names away
-   moves no edge. */
+   moves no edge. The mark takes the width the column has (`AMB-D-942`, `../shell/projectMark`), and
+   the padding round it is cut back to leave it that room: the column is 56px, the list keeps a 4px
+   gutter, and the tab's own 4px is what the badge in the corner overlaps into. */
 .ptabs--compact .ptabs__tab { justify-content: center; }
+.ptabs--compact .ptabs__mark { width: 40px; height: 40px; font-size: var(--fs-xl); }
+/* No scrollbar drawn in the folded column. A bar 10px wide is a fifth of 56px, and it would be taken
+   out of the room the mark needs; what says there is more below is the marks themselves, cut off at
+   the edge of the list. */
+.ptabs--compact .ptabs__list {
+  padding: var(--s-2) var(--s-1);
+  scrollbar-width: none;
+}
+.ptabs--compact .ptabs__list::-webkit-scrollbar { display: none; }
 /* The way between the two widths (`AMB-D-838`). It is pressed once and left, where the tabs above it
    are pressed all day — but drawn as a faint mark on the column's own ground it could not be found at
    all, so it is given the frame a control has (`AMB-D-848`): a sunken ground with a rule round it,
@@ -2444,7 +2456,7 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 .navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 /* The project's mark: the image it was given, or its colour with the first character of its name on
-   it (`app/src/shell/projectMark.ts`). It is the workspace's tab mark at the same 24px, so one
+   it (`app/src/shell/projectMark.ts`). It is the workspace's tab mark at the same size, so one
    project reads the same on both faces (`AMB-D-848`) — the rail drew an 8px square of colour before
    this, and no letter. The ground is the colour the person gave the project and the ink is worked out
    from it; a colour that could not be read leaves the surface underneath and the face's own text
@@ -2496,16 +2508,30 @@ body.dragging-row { user-select: none; }
    rather than beside it, because there is no beside left. The headings go with the names: a word over
    a column of marks is a word with nothing under it to head (`AMB-D-848`). */
 .sidebar--compact .navitem { justify-content: center; padding: var(--s-1); }
-/* Smaller than the badge in the named column, and cut to the corner: at 46px the row is barely wider
-   than the mark, so a badge the size of the one beside a name would lie across the letter that tells
-   one project from another. The ring is the column's own ground, which is what keeps the number
-   readable over whatever it lands on. */
+/* Narrower than the badge in the named column, and cut to the corner: the row is barely wider than
+   the mark, so a badge the size of the one beside a name would lie across the letter that tells one
+   project from another. The ring is the column's own ground, which is what keeps the number readable
+   over whatever it lands on. The text step is the badge step (`AMB-D-942`): 10px was below the four
+   the faces have, and the shipped retro skin draws with `font-smooth: none`, so on a 1x screen the
+   strokes of the digits fell out. */
 .sidebar--compact .navitem__count {
   position: absolute; top: 0; right: 0; margin-left: 0;
   min-width: 0; padding: 0 3px;
-  font-size: 10px; line-height: 14px; border-radius: 7px;
+  font-size: var(--fs-xs); line-height: 16px; border-radius: 8px;
   box-shadow: 0 0 0 2px var(--c-surface);
 }
+/* The mark takes the width the column has (`AMB-D-942`, `../shell/projectMark`). The badge keeps its
+   corner, so what it covers is decided by its own size and the row's padding — a wider mark is a
+   smaller share of it hidden, and more pixels for a registered image to be baked down to. */
+.sidebar--compact .navitem__mark { width: 40px; height: 40px; font-size: var(--fs-xl); }
+/* No scrollbar drawn in the folded column. A bar 10px wide is a fifth of 56px, and it would be taken
+   out of the room the mark needs; what says there is more below is the marks themselves, cut off at
+   the edge of the list. The gutter is cut to 4px for the same reason. */
+.sidebar--compact .sidebar__list {
+  padding: var(--s-2) var(--s-1);
+  scrollbar-width: none;
+}
+.sidebar--compact .sidebar__list::-webkit-scrollbar { display: none; }
 
 /* ---------- main ---------- */
 .main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }

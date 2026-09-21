@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The rail's two widths (`AMB-D-848`): named, and compact at 46px. There is no third state that
-// takes the column away, which is what lets the way between them live in the column itself — a
+// The rail's two widths (`AMB-D-848`): named, and compact at 56px (`AMB-D-942`). There is no third
+// state that takes the column away, which is what lets the way between them live in the column — a
 // control that could put the rail out of reach would have to be reachable from somewhere else, and
 // somewhere else is the bar over both faces, where it cannot say which of the two it moves.
 //

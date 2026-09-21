@@ -17,8 +17,12 @@ export const SIDEBAR_DEFAULT = 232;
  * face and another on the other would be saying the fold is about the face rather than about the
  * names. Not dragged and not clamped — compact is one width, and what a person drags is the named
  * one.
+ *
+ * It holds a 40px mark and the padding round it (`AMB-D-942`). The mark was 24px in a 46px column
+ * before that, where the count badge in the corner lay across a quarter of the letter that tells one
+ * project from another.
  */
-export const SIDEBAR_COMPACT = 46;
+export const SIDEBAR_COMPACT = 56;
 
 /** The maximum width = 40% of the viewport, never below the floor. Even on a narrow screen the minimum width is honoured. */
 export function sidebarMax(): number {

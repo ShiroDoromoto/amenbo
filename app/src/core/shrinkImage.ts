@@ -1,11 +1,12 @@
 // Re-bake a registered image down to the pixels the box actually draws it at.
 //
 // A registered image is stored at 96px square (`./mutations`, `fileToAvatarDataUrl`), and the places
-// it is shown are small: a project's mark is 24px on both faces, a facet's avatar is 18px. On a
-// Retina screen 24 CSS px is 48 device pixels, so the browser halves 96 once. On a 1x screen — an
-// external monitor, which is where this was seen — the same box is 24 device pixels, and the browser
-// takes 96 down to a quarter in a single step. One step filters over too few neighbouring pixels to
-// stand a quarter, so thin strokes drop out and the mark reads as grainy (`AMB-T-5172`).
+// it is shown are small: a project's mark is 24px beside its name on both faces and 40px where the
+// names are folded away, a facet's avatar is 18px. On a Retina screen 24 CSS px is 48 device pixels,
+// so the browser halves 96 once. On a 1x screen — an external monitor, which is where this was seen
+// — the same box is 24 device pixels, and the browser takes 96 down to a quarter in a single step.
+// One step filters over too few neighbouring pixels to stand a quarter, so thin strokes drop out and
+// the mark reads as grainy (`AMB-T-5172`).
 //
 // So the reduction is done here instead, halving at each step, and the `<img>` is handed a version
 // already at the device-pixel size. Halving is the one ratio every browser's filter covers well, and

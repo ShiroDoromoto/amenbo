@@ -1,5 +1,5 @@
 import { type Layout, panesOf } from "../talk/layout";
-import { inkOn, initialOf, MARK_PX } from "./projectMark";
+import { inkOn, initialOf, MARK_COMPACT_PX, MARK_PX } from "./projectMark";
 import type { Project } from "../mock/types";
 import { Icon } from "../components/Icon";
 import { useShrunkImage } from "../core/shrinkImage";
@@ -92,7 +92,7 @@ export function ProjectTabs({
               title={project.name}
               onClick={() => onProject(project.id)}
             >
-              <TabMark name={project.name} color={project.color} ink={ink} icon={icon} />
+              <TabMark name={project.name} color={project.color} ink={ink} icon={icon} compact={compact} />
               {!compact && <span className="ptabs__name">{project.name}</span>}
               {panes > 0 && <span className="ptabs__count">{panes}</span>}
             </button>
@@ -119,15 +119,19 @@ export function ProjectTabs({
  * to this screen's pixels (`../core/shrinkImage`), and that is a hook — one per tab, which a loop
  * inside the list could not hold.
  */
-function TabMark({ name, color, ink, icon }: {
+function TabMark({ name, color, ink, icon, compact }: {
   name: string;
   color: string;
   /** The ink for the letter, or `null` where the colour could not be read. */
   ink: string | null;
   /** The registered image, or `null` where the project has none. */
   icon: string | null;
+  /** Whether the names are folded away, which is what decides the size the mark is drawn at. */
+  compact: boolean;
 }) {
-  const src = useShrunkImage(icon, MARK_PX);
+  // Folded, the mark is 40px rather than 24px (`AMB-D-942`), and the bake is asked for at the size
+  // the stylesheet draws.
+  const src = useShrunkImage(icon, compact ? MARK_COMPACT_PX : MARK_PX);
   return (
     <span
       className="ptabs__mark"

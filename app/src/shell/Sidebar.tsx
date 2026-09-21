@@ -12,7 +12,7 @@ import { Icon, type IconName } from "../components/Icon";
 import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
 import { landing } from "./rowDrag";
-import { inkOn, initialOf, MARK_PX } from "./projectMark";
+import { inkOn, initialOf, MARK_COMPACT_PX, MARK_PX } from "./projectMark";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
@@ -241,7 +241,7 @@ export function Sidebar({
                 onPointerUp={canReorder ? onRowPointerUp : undefined}
                 onPointerCancel={canReorder ? onRowPointerCancel : undefined}
               >
-                <ProjectMark color={p.color} name={p.name} icon={p.icon} />
+                <ProjectMark color={p.color} name={p.name} icon={p.icon} compact={compact} />
                 {!compact && <span className="navitem__name">{p.name}</span>}
                 {count ? <span className="navitem__count">{count}</span> : null}
               </button>
@@ -316,7 +316,7 @@ export function Sidebar({
                     title={p.name}
                     onClick={() => onNav(n)}
                   >
-                    <ProjectMark color={p.color} name={p.name} icon={null} />
+                    <ProjectMark color={p.color} name={p.name} icon={null} compact={compact} />
                     {!compact && <span className="navitem__name">{p.name}</span>}
                   </button>
                 );
@@ -340,21 +340,31 @@ export function Sidebar({
  * A project's mark in the rail: the image it was given, or the colour a person gave it with the first
  * character of its name written on it (`./projectMark`).
  *
- * It is the workspace's tab mark, at the same 24px (`AMB-D-848`). Before this the rail drew an
- * 8px square of colour and no letter, so the same project arrived one way on one face and another on
- * the other, and the image a person had registered was shown on neither.
+ * It is the workspace's tab mark, at the same size on either face (`AMB-D-848`). Before this the rail
+ * drew an 8px square of colour and no letter, so the same project arrived one way on one face and
+ * another on the other, and the image a person had registered was shown on neither.
+ *
+ * **Folded, the mark is 40px rather than 24px** (`AMB-D-942`): there is no name beside it to leave
+ * room for, and the whole of the column is what it has.
  *
  * **The image is the caller's to hand over.** An archived project is fetched over its own read path
  * and that shape carries the colour and the name alone, so those rows pass `null` rather than having
  * an image looked up for them here.
  */
-function ProjectMark({ color, name, icon }: { color: string; name: string; icon: string | null }) {
+function ProjectMark({ color, name, icon, compact }: {
+  color: string;
+  name: string;
+  icon: string | null;
+  /** Whether the names are folded away, which is what decides the size the mark is drawn at. */
+  compact: boolean;
+}) {
   // A project whose colour cannot be read has no ink either: the mark keeps the rail's own surface
   // and the face's text colour, which is readable in both themes.
   const ink = color ? inkOn(color) : null;
   // The registered image is baked down to the pixels this box draws it at (`../core/shrinkImage`) —
-  // it is stored at 96px, and a 24px mark on a 1x screen is a quarter of that.
-  const src = useShrunkImage(icon, MARK_PX);
+  // it is stored at 96px, and a 24px mark on a 1x screen is a quarter of that. The size handed over
+  // is the one the stylesheet draws, so the folded column asks for its own.
+  const src = useShrunkImage(icon, compact ? MARK_COMPACT_PX : MARK_PX);
   return (
     <span
       className="navitem__mark"
@@ -378,8 +388,8 @@ function ProjectMark({ color, name, icon }: { color: string; name: string; icon:
  * colour is never the only thing that says which step it is. Any other view shows what the data says
  * it has, or nothing.
  *
- * **Compact, the two are added up and drawn as one** (`AMB-D-848`). There is no room beside a 24px
- * mark for a second badge, and the corner it goes to holds one. What is kept is the sum and the more
+ * **Compact, the two are added up and drawn as one** (`AMB-D-848`). There is no room beside the mark
+ * for a second badge, and the corner it goes to holds one. What is kept is the sum and the more
  * urgent of the two colours, which is the reading a badge in a folded column is for — that there is
  * something here, and how soon. Which step each part of the sum stands on is on the badge's own
  * words, and the whole of it is a press away.

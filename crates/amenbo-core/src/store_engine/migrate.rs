@@ -870,7 +870,281 @@ pub const STEPS: &[Step] = &[
         // decision is about.
         apply: Apply::Custom(lay_the_panes_out_by_size),
     },
+    Step {
+        to: 50,
+        name: "lay the automation tables down, and let a comment and an attachment name a step of a run",
+        apply: Apply::Custom(lay_the_automation_tables_down),
+    },
 ];
+
+/// v50: the floor the automation feature stands on — fifteen tables, and three widenings of what the
+/// store already had.
+///
+/// **The tables are `CREATE TABLE IF NOT EXISTS` over frozen text.** Genesis runs the registry's DDL
+/// before this chain on every open, so a store arriving here has already been given every one of them
+/// and there is nothing left for these statements to do; what they are for is the store that is *not*
+/// opened by this build first — and, more to the point, the version. The text is the step's own and
+/// does not follow the registry: renaming a column tomorrow must not reach back into a store migrated
+/// today.
+///
+/// **Three things the tables alone would not give an existing store.**
+///
+/// 1. `task_comment.automation_run_step_id` — an `ALTER TABLE ADD COLUMN`, which is the one shape that
+///    reaches a table `IF NOT EXISTS` has already left alone. It is nullable with no default, which is
+///    also what SQLite requires of a column added with a `REFERENCES` clause.
+/// 2. `attachment.target_type` admits one more kind. A `CHECK` cannot be altered, and the
+///    rebuild-and-swap SQLite documents is closed here for the reason
+///    [`admit_rejected_task_status`] gives at length — so the declaration is rewritten in place, the
+///    fifth time that procedure is met and the fifth time it is written out rather than shared: a
+///    step is frozen at the meaning it had when it was written, and a helper would move under it.
+/// 3. The index on `automation_run_task(task_id)`, which is `IF NOT EXISTS` for the same reason the
+///    tables are.
+fn lay_the_automation_tables_down(ctx: &Ctx<'_>) -> Result<()> {
+    /// The `target_type` set as every store from the baseline on declares it — frozen text.
+    const NARROW: &str =
+        "CHECK(target_type IN ('', 'task', 'decision', 'task_comment', 'decision_comment'))";
+    /// The same set with the step execution a produced file hangs off.
+    const WIDE: &str = "CHECK(target_type IN ('', 'task', 'decision', 'task_comment', \
+         'decision_comment', 'automation_run_step'))";
+
+    ctx.tx.execute_batch(TABLES)?;
+
+    // The column is added only where it is missing: a store born from today's registry already has it,
+    // and `ADD COLUMN` has no `IF NOT EXISTS`.
+    if !column_names(ctx.tx, "task_comment")?.iter().any(|c| c == "automation_run_step_id") {
+        ctx.tx.execute_batch(
+            "ALTER TABLE task_comment ADD COLUMN automation_run_step_id BIGINT \
+                 REFERENCES automation_run_step(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'attachment'",
+        [],
+        |r| r.get(0),
+    )?;
+    if !declared.contains(WIDE) {
+        // Not already wide: a store born from a registry that carries the kind, stamped back to an
+        // earlier version, is the one that arrives here with nothing to rewrite.
+        if !declared.contains(NARROW) {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "attachment",
+                expected: NARROW,
+            });
+        }
+        let widened = declared.replace(NARROW, WIDE);
+
+        let before = column_names(ctx.tx, "attachment")?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'attachment'",
+            [&widened],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the next statement
+        // sees the widened `CHECK` instead of the one this connection read at open.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, "attachment")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "attachment",
+                expected: NARROW,
+            });
+        }
+    }
+
+    ctx.tx.execute_batch(
+        "CREATE INDEX IF NOT EXISTS automation_run_task_by_task ON automation_run_task(task_id);",
+    )?;
+    Ok(())
+}
+
+/// The fifteen tables as this step lays them down — the shape the registry emitted when it was
+/// written, spelled out here so that what a store already migrated holds cannot be moved by a later
+/// edit to the registry.
+const TABLES: &str = r"
+CREATE TABLE IF NOT EXISTS automation_action (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    project_id BIGINT REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    prompt TEXT NOT NULL DEFAULT '',
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    preamble TEXT NOT NULL DEFAULT '',
+    entry_step_id BIGINT REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    archived BOOLEAN NOT NULL DEFAULT 0 CHECK(archived IN (0, 1)),
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_note (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_step (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    action_id BIGINT REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    prompt TEXT,
+    agent TEXT NOT NULL DEFAULT '',
+    model TEXT,
+    interactive BOOLEAN NOT NULL DEFAULT 0 CHECK(interactive IN (0, 1)),
+    work_dir_ref TEXT,
+    report_to_task BOOLEAN NOT NULL DEFAULT 0 CHECK(report_to_task IN (0, 1)),
+    show_history BOOLEAN NOT NULL DEFAULT 0 CHECK(show_history IN (0, 1)),
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_cfg (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    owner_kind TEXT NOT NULL DEFAULT '' CHECK(owner_kind IN ('', 'step', 'action')),
+    owner_id BIGINT NOT NULL DEFAULT 0,
+    name TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT '' CHECK(kind IN ('', 'taskfilter', 'folder', 'choice', 'number', 'text')),
+    required BOOLEAN NOT NULL DEFAULT 0 CHECK(required IN (0, 1)),
+    options TEXT,
+    value TEXT,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_step_note (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    note_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_note(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_exit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    owner_kind TEXT NOT NULL DEFAULT '' CHECK(owner_kind IN ('', 'step', 'action')),
+    owner_id BIGINT NOT NULL DEFAULT 0,
+    name TEXT,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_port (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    owner_kind TEXT NOT NULL DEFAULT '' CHECK(owner_kind IN ('', 'step', 'action', 'exit')),
+    owner_id BIGINT NOT NULL DEFAULT 0,
+    direction TEXT NOT NULL DEFAULT '' CHECK(direction IN ('', 'in', 'out')),
+    name TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT '' CHECK(kind IN ('', 'value', 'file', 'task_take', 'task_make')),
+    required BOOLEAN NOT NULL DEFAULT 0 CHECK(required IN (0, 1)),
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_edge (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    from_step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    exit_name TEXT,
+    to_step_id BIGINT REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    ends TEXT NOT NULL DEFAULT '' CHECK(ends IN ('', 'go', 'done', 'halt')),
+    max_times BIGINT,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_wire (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    from_step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    from_exit_name TEXT,
+    from_port_name TEXT NOT NULL DEFAULT '',
+    to_step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    to_port_name TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_run (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'queued', 'running', 'paused', 'done', 'stopped')),
+    pause_requested BOOLEAN NOT NULL DEFAULT 0 CHECK(pause_requested IN (0, 1)),
+    stopped_reason TEXT CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'by_human')),
+    started_by_kind TEXT CHECK(started_by_kind IN ('human', 'ai')),
+    started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_run_def (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    step_id BIGINT REFERENCES automation_step(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    prompt TEXT,
+    agent TEXT NOT NULL DEFAULT '',
+    model TEXT,
+    interactive BOOLEAN NOT NULL DEFAULT 0 CHECK(interactive IN (0, 1)),
+    work_dir_ref TEXT,
+    report_to_task BOOLEAN NOT NULL DEFAULT 0 CHECK(report_to_task IN (0, 1)),
+    show_history BOOLEAN NOT NULL DEFAULT 0 CHECK(show_history IN (0, 1)),
+    exits TEXT NOT NULL DEFAULT '',
+    ins TEXT NOT NULL DEFAULT '',
+    cfg TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_run_task (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    seq BIGINT NOT NULL DEFAULT 0,
+    task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_run_step (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    run_def_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_def(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    run_task_id BIGINT REFERENCES automation_run_task(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    seq BIGINT NOT NULL DEFAULT 0,
+    exit_name TEXT,
+    report TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'running', 'done', 'failed', 'stopped')),
+    started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_run_value (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    direction TEXT NOT NULL DEFAULT '' CHECK(direction IN ('', 'in', 'out')),
+    exit_name TEXT,
+    name TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT '' CHECK(kind IN ('', 'value', 'file', 'task_take', 'task_make')),
+    value TEXT,
+    attachment_id BIGINT REFERENCES attachment(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    from_run_step_id BIGINT REFERENCES automation_run_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+";
 
 /// v43: take the plugin mechanism's tables and its execution log away (`AMB-D-884`).
 ///

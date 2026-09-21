@@ -60,7 +60,7 @@
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
 //! | Amenbo's own settings for a project | `secret`, `hook_optout`, `harness_consent` | `CASCADE` |
 //! | the same settings, written at the **device** layer (`AMB-D-601`) | a `secret` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
-//! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
+//! | optional entity reference (keep the child, drop the reference) | a record of what an automation run did, pointing out at the task, the step or the file it worked on | `SET NULL` |
 //!
 //! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
 //! there rather than quietly taking it. It bites at the statement even under
@@ -152,6 +152,10 @@ pub struct PlainTable {
 const REQ: &str = "TEXT NOT NULL DEFAULT ''"; // required text
 const OPT: &str = "TEXT"; // nullable text
 const INT_OPT: &str = "BIGINT"; // nullable 64-bit integer (`attachment.size_bytes`)
+/// A required whole number that is **not** a key: how many times round a run has been
+/// (`automation_run_task.seq`, `automation_run_step.seq`). `0` is the not-yet-written sentinel the
+/// other required kinds spell `''`, and a create writes the real number over it — these count from 1.
+const COUNT: &str = "BIGINT NOT NULL DEFAULT 0";
 /// A polymorphic reference (`attachment.target_id`): a key like `fk!`'s, minus
 /// the `REFERENCES` — SQLite cannot branch a constraint on a sibling `target_type` column, so the ops
 /// sweep these rows by hand. An integer because every key is one; a TEXT affinity here would
@@ -337,6 +341,7 @@ macro_rules! column_type {
     ($name:ident : col(ORDER_KEY_OPT))  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : col(INT_OPT))        => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
     ($name:ident : col(KEY_REF))        => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
+    ($name:ident : col(COUNT))          => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : ts)                  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts_opt)              => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : date_opt)            => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
@@ -657,6 +662,16 @@ datasets! {
         // second-resolution, so an edit within the same second leaves it equal to `created_at`.
         // NULL = never edited.
         edited_at: ts_opt,
+        // Which step of which automation run wrote this comment, where one did. NULL is every comment a
+        // person wrote, and also the ones an AI typed itself while a step of a run had the terminal —
+        // what this records is the step's own report being carried onto the task, not who was at the
+        // keyboard. The run's id alone would not answer it: a run walks several tasks in turn, so the
+        // step *execution* is the smallest thing that says which of them a report was about.
+        //
+        // `SET NULL` and not `RESTRICT`, the one reference in the registry the delete policy's last row
+        // is written for: the comment is the task's and has to outlive the run it came from, so a run
+        // that goes leaves the line standing with its provenance dropped rather than taking it along.
+        automation_run_step_id: fk_opt("automation_run_step", "SET NULL"),
     }
 
     // Permanent comments on a decision record. Mirrors `task_comment`, but kept a **separate** table
@@ -807,7 +822,16 @@ datasets! {
     // (`target_type` / `target_id`). Blob bytes never land here — the truth source carries only the
     // metadata; the content-addressed bytes live out-of-band.
     attachment {
-        target_type: enum_col("task", "decision", "task_comment", "decision_comment"),
+        // The fifth kind is not a record a person wrote: it is one step of one automation run, and what
+        // hangs off it is the file that step produced (`automation_run_value.attachment_id`). Without
+        // it there is nowhere in the store for those bytes to live.
+        target_type: enum_col(
+            "task",
+            "decision",
+            "task_comment",
+            "decision_comment",
+            "automation_run_step",
+        ),
         // Polymorphic — no `REFERENCES` can branch on a sibling `target_type` column.
         target_id: col(KEY_REF),
         kind: enum_col("blob", "url"),
@@ -954,6 +978,285 @@ datasets! {
             "task.due_tomorrow",
         ),
     } => "UNIQUE (project_id, event)"
+
+    // ───────────────────────── automation: what is built ─────────────────────────
+    //
+    // Ten tables for the definition and five for the run, and the line between them is that a run
+    // never reads a definition again once it has started: `automation_run_def` is the copy taken at
+    // the moment of launch, so editing an automation cannot change what a run already under way is
+    // doing. Nothing below has an op yet — this is the floor the rest of the feature is built on.
+    //
+    // **Two tables are polymorphic on the same pair of owners.** A step and a library action both
+    // declare settings (`automation_cfg`) and both declare the ways out of themselves
+    // (`automation_exit`), so those two carry `owner_kind` + `owner_id` rather than one nullable key
+    // each. No `REFERENCES` can branch on a sibling column, so the ops sweep them by hand, as they do
+    // `attachment`'s.
+
+    // **A prompt worth using twice** — the library. `project_id` NULL is one held by the device
+    // rather than by a project, which is a shape `secret` already has here.
+    //
+    // It names no agent and no model: who is asked to carry a prompt out is the step's answer, so the
+    // same action can be run by different agents in two automations (the columns are on
+    // `automation_step`).
+    automation_action {
+        project_id: fk_opt("project", "RESTRICT"),
+        name: col(REQ),
+        prompt: col(REQ),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **One automation** — the steps, what runs after what, and the preamble every step's launch
+    // carries.
+    //
+    // `entry_step_id` is where a run starts, and from it the edges are walked: the place a step sits
+    // in the picture and the number it is drawn with both fall out of that walk, never out of
+    // `order_key`, which records only the order the steps were added in. Nullable because an
+    // automation under construction has no entry yet, and `RESTRICT` because deleting the step a run
+    // would start at is a thing the op has to be told to do.
+    automation {
+        project_id: fk("project", "RESTRICT"),
+        name: col(REQ),
+        notes: col(REQ),
+        preamble: col(REQ),
+        entry_step_id: fk_opt("automation_step", "RESTRICT"),
+        archived: bool_col,
+        order_key: col(ORDER_KEY),
+    }
+
+    // **A document the steps of one automation share.** Long is fine here — this is where the
+    // material a prompt would otherwise repeat is written once, and `automation_step_note` says which
+    // steps are handed it. `body` is the one automation face the word index carries
+    // (`store_engine::search::FACES`).
+    automation_note {
+        automation_id: fk("automation", "RESTRICT"),
+        name: col(REQ),
+        body: col(REQ),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **One step of one automation.** Either it points at a library action (`action_id`) or it
+    // carries its own `prompt`; the two are exclusive and exactly one is set.
+    //
+    // `agent` is required and `model` is not: a step has to say who is asked, while the model is the
+    // agent's own default unless someone names one.
+    //
+    // The three flags' product defaults are **not** the `0` in their declarations — that is the
+    // not-yet-written sentinel every required column carries, and the create writes the real answer
+    // over it. A step waits for a person only if it says so (`interactive`), keeps its report to the
+    // run unless asked to carry it onto the task (`report_to_task`), and is handed the run's story so
+    // far unless told not to be (`show_history`, which starts on).
+    //
+    // `work_dir_ref` names the setting or the input the folder is taken from — a name, not a path, so
+    // the answer is given once where the automation is built rather than baked into every step.
+    automation_step {
+        automation_id: fk("automation", "RESTRICT"),
+        name: col(REQ),
+        action_id: fk_opt("automation_action", "RESTRICT"),
+        prompt: col(OPT),
+        agent: col(REQ),
+        model: col(OPT),
+        interactive: bool_col,
+        work_dir_ref: col(OPT),
+        report_to_task: bool_col,
+        show_history: bool_col,
+        order_key: col(ORDER_KEY),
+    }
+
+    // **A setting, declared by an action or a step and answered where it is used.** An action's row
+    // is the declaration alone, so its `value` is NULL; a step that points at that action carries a
+    // row of its own under the same `name`, and that is where the answer written while building sits.
+    //
+    // `kind` decides what the build screen draws for it, and the five are a closed set that does not
+    // overlap `automation_port.kind`: a setting is written once while building and does not move
+    // while the run goes, which is the whole reason it is not a port.
+    //
+    // `options` and `value` are JSON, because a task filter and a choice list are not one scalar. The
+    // `''` both default to is the not-yet-written sentinel, not an empty document.
+    automation_cfg {
+        owner_kind: enum_col("step", "action"),
+        // Polymorphic — `owner_kind` says which table, and no `REFERENCES` can branch on it.
+        owner_id: col(KEY_REF),
+        name: col(REQ),
+        kind: enum_col("taskfilter", "folder", "choice", "number", "text"),
+        required: bool_col,
+        options: col(OPT),
+        value: col(OPT),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **Which shared documents a step is handed.** A join row and nothing else; both ends are inside
+    // one automation.
+    automation_step_note {
+        step_id: fk("automation_step", "RESTRICT"),
+        note_id: fk("automation_note", "RESTRICT"),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **A way out of a step or an action**, named by the person who built it: a review step has one
+    // way out for "nothing to fix" and another for "something to fix", and which of them the agent
+    // took is the whole condition the next step is chosen by. `name` NULL is the unnamed way out,
+    // which is what a step with only one has.
+    automation_exit {
+        owner_kind: enum_col("step", "action"),
+        owner_id: col(KEY_REF),
+        name: col(OPT),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **What a step takes in, and what a way out of it hands on.** One table for both, told apart by
+    // `direction`: an `in` hangs on the step or the action, an `out` hangs on the exit, which is why
+    // `owner_kind` admits all three.
+    //
+    // `kind` is what the thing carried *is*. `task_take` is the one that decides the run's subject —
+    // the task it comes out holding is the task the run is about from there on — and `task_make` is a
+    // task the step raised.
+    automation_port {
+        owner_kind: enum_col("step", "action", "exit"),
+        owner_id: col(KEY_REF),
+        direction: enum_col("in", "out"),
+        name: col(REQ),
+        kind: enum_col("value", "file", "task_take", "task_make"),
+        required: bool_col,
+        order_key: col(ORDER_KEY),
+    }
+
+    // **What happens after a way out is taken.** The edge carries no condition of its own: the exit
+    // *is* the condition.
+    //
+    // `exit_name` NULL is the unnamed exit; `'*'` is the error one, which every step has and nobody
+    // can delete. A step with no `'*'` row of its own stops the run rather than guessing, which is
+    // what `ends = 'halt'` says — and `'go'` moves to `to_step_id`, `'done'` closes the run.
+    //
+    // `max_times` is how often this edge may be taken **for one task**: the count is kept per
+    // `automation_run_task` row and starts again at the next task, so a loop that goes back to fix
+    // something cannot spin forever on the same one. NULL is no limit, which is the right answer for
+    // an edge into a step that takes a fresh task.
+    automation_edge {
+        automation_id: fk("automation", "RESTRICT"),
+        from_step_id: fk("automation_step", "RESTRICT"),
+        exit_name: col(OPT),
+        to_step_id: fk_opt("automation_step", "RESTRICT"),
+        ends: enum_col("go", "done", "halt"),
+        max_times: col(INT_OPT),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **What is handed from one step to the next.** Both ends are named rather than keyed: the same
+    // action used at two places in one automation gives two steps whose ports have the same ids, so
+    // only `step_id` + `exit_name` + `port_name` says which of them is meant. The names are also what
+    // survives the library action's ports being re-declared underneath, where an id would be left
+    // pointing at a row that is gone.
+    automation_wire {
+        automation_id: fk("automation", "RESTRICT"),
+        from_step_id: fk("automation_step", "RESTRICT"),
+        from_exit_name: col(OPT),
+        from_port_name: col(REQ),
+        to_step_id: fk("automation_step", "RESTRICT"),
+        to_port_name: col(REQ),
+    }
+
+    // ───────────────────────── automation: what ran ─────────────────────────
+
+    // **One launch of one automation.**
+    //
+    // `pause_requested` is the gap between the button and the pause: a step is under way and cannot
+    // be cut in half, so the request is recorded and the run reaches `paused` when that step reports.
+    //
+    // `stopped_reason` is why it stopped, and it is stored because it cannot be derived: the records
+    // show a crash (that step execution is left `failed`) and say nothing about a loop that ran out
+    // of turns, an agent that was not there, or a person who said stop. Set only while
+    // `status = 'stopped'`.
+    automation_run {
+        automation_id: fk("automation", "RESTRICT"),
+        project_id: fk("project", "RESTRICT"),
+        status: enum_col("queued", "running", "paused", "done", "stopped"),
+        pause_requested: bool_col,
+        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "by_human"),
+        started_by_kind: actor_kind,
+        started_at: ts_opt,
+        ended_at: ts_opt,
+    }
+
+    // **The step as it was at launch** — one row per step of the automation, written when the run is
+    // created and never rewritten. This is what makes a run readable months later: the automation it
+    // came from has moved on, and the columns here still say what was actually asked.
+    //
+    // The three JSON columns hold what has no columns of its own — the ways out and each one's ports,
+    // the step's inputs, and the settings' answers. They are read back as a whole, never queried
+    // into, which is what a snapshot is for.
+    //
+    // `step_id` is the only way back to the live definition, and it is `SET NULL`: a step deleted
+    // while building must not take the record of a run that used it, nor be held undeletable by one.
+    automation_run_def {
+        run_id: fk("automation_run", "RESTRICT"),
+        step_id: fk_opt("automation_step", "SET NULL"),
+        name: col(REQ),
+        prompt: col(OPT),
+        agent: col(REQ),
+        model: col(OPT),
+        interactive: bool_col,
+        work_dir_ref: col(OPT),
+        report_to_task: bool_col,
+        show_history: bool_col,
+        exits: col(REQ),
+        ins: col(REQ),
+        cfg: col(REQ),
+    }
+
+    // **One task a run worked on**, in the order it took them: `seq` is 1 for a run that never goes
+    // back, and the row is what the per-task edge counts are kept against.
+    //
+    // `task_id` is empty until a `task_take` port hands one over, so the row exists before it has a
+    // subject. It is `SET NULL` for the reason the comment's provenance is: deleting a task is the
+    // task's own op, and the record of a run that handled it must neither block that nor vanish with
+    // it.
+    automation_run_task {
+        run_id: fk("automation_run", "RESTRICT"),
+        seq: col(COUNT),
+        task_id: fk_opt("task", "SET NULL"),
+        started_at: ts_opt,
+        ended_at: ts_opt,
+    }
+
+    // **One step, run once.** `seq` is the move number within the run, so a step the run comes back
+    // to has a row per visit.
+    //
+    // `run_task_id` is NULL only where a step went looking for a task and found none — every other
+    // step of a run is about a task, the first step being the one that takes it.
+    //
+    // `report` is what the agent said when it finished, kept whole. The story handed to later steps
+    // shows its first line only, and the full text is here.
+    automation_run_step {
+        run_id: fk("automation_run", "RESTRICT"),
+        run_def_id: fk("automation_run_def", "RESTRICT"),
+        run_task_id: fk_opt("automation_run_task", "RESTRICT"),
+        seq: col(COUNT),
+        exit_name: col(OPT),
+        report: col(REQ),
+        status: enum_col("running", "done", "failed", "stopped"),
+        started_at: ts_opt,
+        ended_at: ts_opt,
+    }
+
+    // **One value that went in or came out of a step execution**, under the port's *name* — the port
+    // row itself may be re-declared or gone by the time this is read, so the name is what is kept.
+    // Which of the three payload columns means anything is `kind`'s to say, the way `attachment`'s
+    // mode decides between its two.
+    //
+    // `from_run_step_id` is where an `in` value came from. `run_step_id` is the step that received
+    // it, so without this column the chain from a value back to what produced it is not in the store;
+    // an `out` row has nothing to say here and leaves it NULL.
+    automation_run_value {
+        run_step_id: fk("automation_run_step", "RESTRICT"),
+        direction: enum_col("in", "out"),
+        exit_name: col(OPT),
+        name: col(REQ),
+        kind: enum_col("value", "file", "task_take", "task_make"),
+        value: col(OPT),
+        attachment_id: fk_opt("attachment", "SET NULL"),
+        task_id: fk_opt("task", "SET NULL"),
+        from_run_step_id: fk_opt("automation_run_step", "RESTRICT"),
+    }
 }
 
 /// Look up a dataset by name. A dataset's key and its table are the same word (`AMB-D-807`), so this
@@ -1446,6 +1749,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS search_doc_face ON search_doc(owner_kind, owne
 -- lookup has (`read::attachment_term`, and the delete op's own sweep); without the index each such
 -- lookup scans every attachment in the store once per candidate row.
 CREATE INDEX IF NOT EXISTS attachment_by_target ON attachment(target_type, target_id);
+-- Which run handled a given task. The run side already seeks its own rows by `run_id`, but the
+-- question a task's screen puts is the other way round — "what has been run on this one" — and
+-- without this index that lookup scans every row of the table once per task asked about.
+CREATE INDEX IF NOT EXISTS automation_run_task_by_task ON automation_run_task(task_id);
 -- The trigram index over that copy, and the three triggers that keep it in step. External-content
 -- (`content='search_doc'`), so the text is stored once: the index holds only the trigrams, and the row
 -- it points at is the copy itself. The triggers are the seam — a doc row cannot be written without its

@@ -100,12 +100,12 @@ steps_gui:
       text: SCENARIO the first press was told what to open with
 
   # Room for the frame the second reading is taken on. A pane on its own takes the whole page, so it
-  # is cut to half of it — which is what leaves an empty frame standing beside it. It is pressed
-  # after the pane is open because the control is about a pane: with nothing standing there is
-  # nothing for it to be about, and the row is not drawn at all (`app/src/talk/layout.ts`).
+  # is cut to half of it — which is what leaves an empty frame standing beside it. It is pulled after
+  # the pane is open because the grip is the pane's own corner: with nothing standing there is
+  # nothing to take hold of (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

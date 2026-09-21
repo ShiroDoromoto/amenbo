@@ -104,7 +104,7 @@ steps_gui:
   # of it (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

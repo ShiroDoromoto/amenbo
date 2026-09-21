@@ -115,7 +115,7 @@ steps_gui:
   # unambiguous.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

@@ -75,11 +75,11 @@ steps_gui:
       text: SCENARIO the pane that goes
 
   # Room for the second beside it. A pane with nothing to be measured against takes the whole page,
-  # and the control is about a pane — so it is pressed once one is standing rather than before
+  # and the grip is the pane's own corner — so it is pulled once one is standing rather than before
   # (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

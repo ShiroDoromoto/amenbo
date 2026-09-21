@@ -945,7 +945,7 @@ indentation taken off, and no reading answers where a line begins, so it is an e
 with the pane above still drawing the rows as they were printed to hold it against.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
-most of what there is: `set-pane-size` gives one pane a share of the page and the rest are laid down
+most of what there is: `stretch-pane` gives one pane a share of the page and the rest are laid down
 again around it, `go-page` moves
 the whole screen to another page, `go-project` moves it to another project's panes altogether, and
 `open-pane` starts a terminal where there is not one yet — `from: face` at the empty frame a page with
@@ -958,7 +958,7 @@ second line into the pane once the page has come back, which is the half a readi
 carry: what a terminal printed stays printed, so the first line says the screen was restored and only
 something typed after the return says anything is still listening. And it keeps a second pane going
 for the length of it — with one pane there is nothing for a new size to push anywhere, so a road with
-a single pane walks the size control past the only thing it is dangerous for.
+a single pane walks the corner past the only thing it is dangerous for.
 `go-to-the-panes-of-another-project` is the road for the one that replaces, and it reads the half the
 other cannot: the tabs down the edge are the division itself rather than a grouping laid over one
 list, so what a project's press leaves on the screen is that project's panes and nothing of any
@@ -1077,17 +1077,19 @@ is that the page draws a box per pane rather than slots waiting to be filled:
 the page still empty, then grows it one frame per pane opened. A face that filled the room with boxes
 would be asking the same question four times over, and nothing else here would say so.
 
-`set-pane-size` and `pane-size` are how much of a page **one** pane takes — `whole`, `half`,
-`half-down`, `quarter`, `sixth` or `eighth`. They say no pane, because the control does
-not: it is a row of six drawn shapes at the top of the face, and the pane it is about is the one
-being worked in. The press and the reading are two ops for the reason every pair here is two — a
-build that lit the control without laying the page out again under it would draw exactly the screen
-the reader pressed away from, and only a reading taken off the pane can tell that from a press that
-landed. A road walks two sizes and never the asked-for one alone: a face stuck at whichever size a
-road happened to ask for last would come out green from end to end.
+`stretch-pane` and `pane-size` are how much of a page **one** pane takes — `whole`, `half`,
+`half-down`, `quarter`, `sixth` or `eighth`. The size is pulled by the pane's own bottom right
+corner, there being nowhere else on the face to ask for one: a pane that is not named with `shows` is
+the one being worked in, which is what a road pointing at another presses `press-pane` for. The pull
+and the reading are two ops for the reason every pair here is two — a build that drew the outline
+without laying the page out again under it would draw exactly the screen the reader pulled away from,
+and only a reading taken off the pane can tell that from a pull that landed. A road walks two sizes
+and never the asked-for one alone: a face stuck at whichever size a road happened to ask for last
+would come out green from end to end.
 
-They took the place of `set-panes`, `set-orient` and `panes-sit`, which are gone with the roads that
-spoke them. What a count was is gone from the build too: a pane carries how much of a page it takes,
+They took the place of `set-panes`, `set-orient` and `panes-sit`, and of `set-pane-size` — the row of
+six shapes at the top of the face, gone with the header control it pressed. A size is one pane's
+answer, and a row that lit one of six said nothing about the rest of the page. What a count was is gone from the build too: a pane carries how much of a page it takes,
 and the page is what falls out of laying the panes down in order.
 
 `opens-with` reads the other thing an empty frame carries: the row above its press, which is what a

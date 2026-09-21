@@ -2773,28 +2773,10 @@ impl Instructor {
             // who was not told may read a page they did not ask for as the app having lost their
             // place, and go looking for a pane that is exactly where it should be. The screen stays
             // with the pane being worked in, which is the last one opened or typed at.
-            // How much of the page one pane takes. The control is a row of six drawn shapes — each
-            // the page cut into panes of that size — so the step says the shape it presses rather
-            // than naming it, the way `hide-side`'s controls are said by what they do.
-            //
-            // **Which pane it is about is said, because the control does not say it.** It is about
-            // the pane being worked in, and that is the last one opened or typed at — an operator
-            // who read it as "all of them" would take a page that kept its other panes for a press
-            // that never landed.
-            //
-            // Where the *screen* ends up is said too, and it is a different kind of thing: the panes
-            // behind this one are laid down again, so one of them may go onto the next page, and an
-            // operator who was not told would go looking for a pane that is exactly where it should
-            // be.
-            (Domain::Workspace, "set-pane-size") => format!(
-                "At the top of the workspace, in the row of six drawn shapes, press {}. Each of the six is a page cut into panes of one size, and the one in force is the one that is not dimmed. It is about the pane you are working in — the last one you opened or typed at — and that pane alone: it comes out taking {}. The panes after it in the order are laid down again, so one of them may end up on the next page.",
-                size(with)?.glyph(),
-                size(with)?.phrase()
-            ),
             // The way to putting the panes in order. The control carries no words — it is drawn as
             // the two boxes trading places — so the step says the shape and where it stands, the way
-            // the row of sizes beside it is said. It is drawn from a second page up, which is why the
-            // roads that reach it open panes onto one first.
+            // the row of page digits beside it is said. It is drawn from a second page up, which is
+            // why the roads that reach it open panes onto one first.
             (Domain::Workspace, "reorder-panes") =>
                 "At the top of the workspace, just before the row of page digits, press the small control drawn as two boxes with arrows between them. A panel opens over the face, drawing every pane of this project as a card, laid out page by page in the shape the pages themselves are drawn in. Nothing on the face behind it moves."
                     .to_string(),
@@ -2827,18 +2809,26 @@ impl Instructor {
                     side
                 )
             }
-            // The corner pulled to a size. The same two things have to be on it: where the grip is,
-            // since the rest of the pane belongs to what is running in it, and that the pane does not
-            // change under the hand — an operator who let go the moment the pointer reached the width
-            // they wanted would be letting go at whatever the outline had snapped to, which is the
-            // one thing this step names.
+            // The corner pulled to a size — the only way to one since the row of six shapes came off
+            // the header. Three things have to be on it: where the grip is, since the rest of the
+            // pane belongs to what is running in it; that the pane does not change under the hand —
+            // an operator who let go the moment the pointer reached the width they wanted would be
+            // letting go at whatever the outline had snapped to, which is the one thing this step
+            // names; and what becomes of the panes behind it, since they are laid down again and one
+            // of them may go onto the next page, and an operator who was not told would go looking
+            // for a pane that is exactly where it should be.
+            //
+            // **Which pane is said either way.** A road that named one has it named here; one that
+            // did not is pulling the pane it is working in, and that is the last one opened or typed
+            // at — on a page holding two, an operator left to choose would size the wrong one.
             (Domain::Workspace, "stretch-pane") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
-                    None => "the pane on the page".to_string(),
+                    None => "the pane you are working in (the last one you opened or typed at)"
+                        .to_string(),
                 };
                 format!(
-                    "On the page, press and hold the small grip at the bottom right corner of {pane}, and without letting go pull it until the outline drawn over the page is {}. The pane itself does not change while you pull: what moves is that outline, and it does not follow the pointer smoothly — it snaps to one of the six sizes, so pull until the one you want is drawn rather than to a width. Let go there, and the pane comes out at it.",
+                    "On the page, press and hold the small grip at the bottom right corner of {pane}, and without letting go pull it until the outline drawn over the page is {}. The pane itself does not change while you pull: what moves is that outline, and it does not follow the pointer smoothly — it snaps to one of the six sizes, so pull until the one you want is drawn rather than to a width. Let go there, and the pane comes out at it, and that pane alone. The panes after it in the order are laid down again, so one of them may end up on the next page.",
                     size(with)?.phrase()
                 )
             }
@@ -6036,20 +6026,6 @@ impl PaneSize {
             PaneSize::Eighth => "an eighth of the page — a quarter of the width, and half the height",
         }
     }
-
-    /// And what the control that picks it is drawn as, which is the page cut into panes of that size
-    /// (`app/src/components/Icon`). An operator told only what the press means would be looking for a
-    /// word, and the six carry none.
-    fn glyph(self) -> &'static str {
-        match self {
-            PaneSize::Whole => "the plain box, undivided — the first of the six",
-            PaneSize::Half => "the box divided down the middle — the second of the six",
-            PaneSize::HalfDown => "the box divided across the middle — the third of the six",
-            PaneSize::Quarter => "the box divided into four — the fourth of the six",
-            PaneSize::Sixth => "the box divided into six — the fifth of the six",
-            PaneSize::Eighth => "the box divided into eight — the last of the six",
-        }
-    }
 }
 
 fn size(with: &Args) -> Result<PaneSize, String> {
@@ -9236,7 +9212,7 @@ title: A page is re-cut, paged and opened on
 steps_gui:
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with: { size: whole }
   - type: action
     domain: workspace
@@ -9255,7 +9231,7 @@ steps_gui:
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(
-            lines[0].contains("six drawn shapes, press the plain box, undivided"),
+            lines[0].contains("the small grip at the bottom right corner"),
             "got: {}", lines[0]
         );
         assert!(lines[1].contains("page digits, press 2"), "got: {}", lines[1]);
@@ -9281,23 +9257,25 @@ steps_gui:
         }
     }
 
-    /// The row of sizes, and the reading that closes it. Three things have to be on the instruction:
-    /// the shape the control is drawn as, since it carries no word an operator could look for; which
-    /// pane it is about, since the control does not say and a reader taking it for all of them would
-    /// mark a working face red; and that the panes behind it are laid down again, since somebody
-    /// expecting a page that held still would read a pane moved onto the next one as a press that
-    /// went wrong. What the reading is about is the share of the page a pane came out with rather
-    /// than where the boxes went: a grid that shuffled them about and handed none of them more room
-    /// would have honoured the press and missed what it was for.
+    /// The corner pulled to a size, and the reading that closes it. Four things have to be on the
+    /// instruction: where the grip is, since a pull begun anywhere else on a pane is a person
+    /// selecting the output they are reading; that the pane does not change under the hand and the
+    /// outline snaps, since somebody letting go at the width they wanted would let go at whatever it
+    /// had snapped to; which pane it is about, since a page holding two would leave a reader to
+    /// choose; and that the panes behind it are laid down again, since somebody expecting a page that
+    /// held still would read a pane moved onto the next one as a pull that went wrong. What the
+    /// reading is about is the share of the page a pane came out with rather than where the boxes
+    /// went: a grid that shuffled them about and handed none of them more room would have honoured
+    /// the pull and missed what it was for.
     #[test]
-    fn a_size_is_pressed_by_its_shape_and_read_by_the_share_it_gives() {
+    fn a_size_is_pulled_by_the_corner_and_read_by_the_share_it_gives() {
         let s = load(r#"
 id: x
 title: A pane is given the whole width and then half of it
 steps_gui:
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with: { size: half-down }
   - type: assert
     domain: workspace
@@ -9305,8 +9283,8 @@ steps_gui:
     with: { size: half-down }
   - type: action
     domain: workspace
-    op: set-pane-size
-    with: { size: half }
+    op: stretch-pane
+    with: { size: half, shows: SCENARIO the pane that was named }
   - type: assert
     domain: workspace
     op: pane-size
@@ -9316,26 +9294,30 @@ steps_gui:
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(
-            lines[0].contains("the box divided across the middle")
+            lines[0].contains("the pane you are working in (the last one you opened or typed at)")
                 && lines[0].contains("the whole width, and half the height"),
-            "the press is found by the shape it is drawn as: {}",
+            "a pull that named no pane is the one being worked in: {}",
             lines[0]
         );
         assert!(
-            lines[2].contains("the box divided down the middle")
+            lines[2].contains(r#"the pane showing "SCENARIO the pane that was named""#)
                 && lines[2].contains("half the width, and the whole height"),
-            "and so is the way back: {}",
+            "and a pull that named one says that one: {}",
             lines[2]
         );
-        for pressed in [&lines[0], &lines[2]] {
+        for pulled in [&lines[0], &lines[2]] {
             assert!(
-                pressed.contains("the pane you are working in")
-                    && pressed.contains("that pane alone"),
-                "which pane the press is about is said, the control not saying it: {pressed}"
+                pulled.contains("the small grip at the bottom right corner"),
+                "where the grip is, the rest of the pane belonging to what runs in it: {pulled}"
             );
             assert!(
-                pressed.contains("laid down again"),
-                "and what it does to the panes behind it: {pressed}"
+                pulled.contains("does not change while you pull")
+                    && pulled.contains("snaps to one of the six sizes"),
+                "and that the outline snaps rather than following the pointer: {pulled}"
+            );
+            assert!(
+                pulled.contains("that pane alone") && pulled.contains("laid down again"),
+                "and what it does to the panes behind it: {pulled}"
             );
         }
         assert!(

@@ -1,9 +1,10 @@
 # The reader took the corner of a pane and pulled it until it was the size they wanted.
 #
-# The row of six shapes at the top of the face is one way to a size and this is the other, and they
-# are not the same act. The row is a size chosen from a list; the corner is a size arrived at by
-# looking — what a pane needs is how many columns the thing running in it wants, and that is a
-# judgement made against the screen rather than against a name.
+# This is the only way to a size the face has. There was a row of six shapes at the top of it once,
+# and a size chosen from a list is not the act this is: the corner is a size arrived at by looking —
+# what a pane needs is how many columns the thing running in it wants, and that is a judgement made
+# against the screen rather than against a name. The row also lit one of six for a whole page of
+# panes that each had a size of their own, which is what took it off the header.
 #
 # ── Why the corner and nowhere else ──────────────────────────────────────────────────────────────
 # The rest of a pane is a running terminal. A pull that began anywhere on it would be a person

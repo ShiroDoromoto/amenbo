@@ -154,11 +154,11 @@ steps_gui:
 
   # The size the reader set, which is one of the things a run keeps. Half the page is worth setting
   # here: it is not what a pane nobody has sized takes, so a size that was forgotten and a size that
-  # was kept draw different screens. It is pressed after the pane is open because the control is about
-  # a pane (`app/src/talk/layout.ts`).
+  # was kept draw different screens. It is pulled after the pane is open because the grip is the
+  # pane's own corner (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

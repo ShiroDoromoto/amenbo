@@ -72,10 +72,10 @@ steps_gui:
       text: SCENARIO the pane that was pressed
 
   # A quarter, which is what the other two are opened at: a pane opened on a page is measured against
-  # the one already showing, so one press here sizes all three.
+  # the one already showing, so one pull here sizes all three.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: quarter
 
@@ -100,8 +100,9 @@ steps_gui:
       count: 3
       empty: 1
 
-  # The pane the press is about, which is the first of the three — the one with the other two behind
-  # it. A size is one pane's answer, so the control has to be pointed at the pane it is meant for.
+  # The pane the pull is about, which is the first of the three — the one with the other two behind
+  # it. A size is one pane's answer, and a pull that names none is about the pane being worked in —
+  # so this is what makes it that one.
   - type: action
     domain: workspace
     op: press-pane
@@ -110,7 +111,7 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: whole
 
@@ -156,7 +157,7 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: quarter
 

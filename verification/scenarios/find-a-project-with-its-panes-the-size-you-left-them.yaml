@@ -95,7 +95,7 @@ steps_gui:
     domain: workspace
     op: open-shell
 
-  # The size a pane nobody has sized is drawn at, which is what the press is about to move away from.
+  # The size a pane nobody has sized is drawn at, which is what the pull is about to move away from.
   - type: assert
     domain: workspace
     op: pane-size
@@ -112,11 +112,11 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 
-  # The press has landed: the same one pane, at half the page, with room beside it now.
+  # The pull has landed: the same one pane, at half the page, with room beside it now.
   - type: assert
     domain: workspace
     op: pane-size
@@ -130,7 +130,7 @@ steps_gui:
       count: 1
       empty: 1
 
-  # The other project, which was never pressed in.
+  # The other project, which was never pulled in.
   - type: action
     domain: workspace
     op: go-project

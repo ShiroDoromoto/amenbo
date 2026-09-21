@@ -22,7 +22,7 @@
 # ── Why a second pane, and why the first is cut to half the page ─────────────────────────────────
 # One terminal would prove the page turn on its own, an empty page being somewhere to turn to. It
 # would not prove the re-laying: with one pane there is nothing for a new size to push anywhere, so a
-# road with a single pane would walk the size control past the only thing it is dangerous for. A
+# road with a single pane would walk the corner past the only thing it is dangerous for. A
 # second pane is what makes a size a re-laying — a pane given the whole page cannot share one, so the
 # pane beside it is laid down on the next — and the re-laying is what carries a running terminal off
 # the screen without anybody paging.
@@ -100,7 +100,7 @@ steps_gui:
   # off the screen without any of the moves this road follows having been made.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 
@@ -124,11 +124,11 @@ steps_gui:
 
   # The whole page for the pane being worked in — the one just opened — which is what puts the two of
   # them on pages of their own: it cannot share a page at that size, so the one it was beside is laid
-  # down where it was and this one starts the next. The screen follows the pane that was pressed for,
-  # so what is on it now is the second page.
+  # down where it was and this one starts the next. The screen follows the pane that was pulled, so
+  # what is on it now is the second page.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: whole
 
@@ -183,7 +183,7 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

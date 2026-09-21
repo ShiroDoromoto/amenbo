@@ -23,6 +23,7 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
     AutomationExit, AutomationNote, AutomationPort, AutomationRun, AutomationRunDef,
+    AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationStepNote,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
@@ -497,7 +498,7 @@ pub fn attachment(a: &Attachment) -> Record {
 }
 
 // ───────────────────────── automation: what is built ─────────────────────────
-// The five tables of the run side have no projection: nothing writes them yet.
+// The run side's five tables are at the foot of this file, under a heading of their own.
 
 pub fn automation_action(a: &AutomationAction) -> Record {
     Record::new(
@@ -691,8 +692,8 @@ pub fn automation_wire(w: &AutomationWire) -> Record {
 }
 
 // ───────────────────────── automation: what ran ─────────────────────────
-// Two of the run side's five tables. A step execution, the values it carried and the task it was about
-// are written by the ops that run the steps, and have no projection until then.
+// All five of the run side's tables. The first two are written when a run is launched; the other three
+// are written as its steps are opened and reported on.
 
 pub fn automation_run(r: &AutomationRun) -> Record {
     Record::new(
@@ -737,6 +738,68 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
             ],
             &d.created_at,
             &d.updated_at,
+        ),
+    )
+}
+
+pub fn automation_run_task(t: &AutomationRunTask) -> Record {
+    Record::new(
+        "automation_run_task",
+        t.id,
+        with_audit(
+            vec![
+                ("run_id", kv(t.run_id)),
+                ("seq", iv(t.seq)),
+                ("task_id", kv_opt(&t.task_id)),
+                ("started_at", tsov(&t.started_at)),
+                ("ended_at", tsov(&t.ended_at)),
+            ],
+            &t.created_at,
+            &t.updated_at,
+        ),
+    )
+}
+
+pub fn automation_run_step(s: &AutomationRunStep) -> Record {
+    Record::new(
+        "automation_run_step",
+        s.id,
+        with_audit(
+            vec![
+                ("run_id", kv(s.run_id)),
+                ("run_def_id", kv(s.run_def_id)),
+                ("run_task_id", kv_opt(&s.run_task_id)),
+                ("seq", iv(s.seq)),
+                ("exit_name", ov(&s.exit_name)),
+                ("report", tv(&s.report)),
+                ("status", tv(s.status.as_str())),
+                ("started_at", tsov(&s.started_at)),
+                ("ended_at", tsov(&s.ended_at)),
+            ],
+            &s.created_at,
+            &s.updated_at,
+        ),
+    )
+}
+
+pub fn automation_run_value(v: &AutomationRunValue) -> Record {
+    Record::new(
+        "automation_run_value",
+        v.id,
+        with_audit(
+            vec![
+                ("run_step_id", kv(v.run_step_id)),
+                ("direction", tv(v.direction.as_str())),
+                ("exit_name", ov(&v.exit_name)),
+                ("name", tv(&v.name)),
+                ("kind", tv(v.kind.as_str())),
+                ("value", ov(&v.value)),
+                ("attachment_id", kv_opt(&v.attachment_id)),
+                ("task_id", kv_opt(&v.task_id)),
+                ("from_run_step_id", kv_opt(&v.from_run_step_id)),
+            ],
+            &v.created_at,
+            &v.updated_at,
         ),
     )
 }

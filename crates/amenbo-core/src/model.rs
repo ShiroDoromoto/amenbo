@@ -1857,6 +1857,122 @@ pub struct RunDefCfg {
     pub value: Option<String>,
 }
 
+/// **How one step execution ended** — or that it has not.
+///
+/// `Failed` is the step that fell over, which is a different fact from the agent reporting that it found
+/// nothing: the first leaves through the error way out and the second through one somebody declared.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationRunStepStatus {
+    #[default]
+    Running,
+    Done,
+    Failed,
+    Stopped,
+}
+
+impl AutomationRunStepStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationRunStepStatus::Running => "running",
+            AutomationRunStepStatus::Done => "done",
+            AutomationRunStepStatus::Failed => "failed",
+            AutomationRunStepStatus::Stopped => "stopped",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationRunStepStatus> {
+        match s {
+            "running" => Some(AutomationRunStepStatus::Running),
+            "done" => Some(AutomationRunStepStatus::Done),
+            "failed" => Some(AutomationRunStepStatus::Failed),
+            "stopped" => Some(AutomationRunStepStatus::Stopped),
+            _ => None,
+        }
+    }
+}
+
+/// **One task a run worked on**, in the order it took them — a stretch of the run rather than a moment
+/// of it.
+///
+/// `seq` is 1 for a run that never goes back, and the row is what the per-task edge counts are kept
+/// against. `task_id` is empty until a `task_take` output hands one over, so the row exists before it
+/// has a subject.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationRunTask {
+    pub id: i64,
+    pub run_id: i64,
+    pub seq: i64,
+    /// The task this stretch is about, or `None` while nothing has handed one over — and where the
+    /// task has since been deleted.
+    #[serde(default)]
+    pub task_id: Option<i64>,
+    #[serde(default)]
+    pub started_at: Option<Timestamp>,
+    #[serde(default)]
+    pub ended_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One step, run once.** `seq` is the move number within the run, so a step the run comes back to has
+/// a row per visit.
+///
+/// `report` is what the agent said when it finished, kept whole. The story handed to later steps shows
+/// its first line only, and the full text is here.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationRunStep {
+    pub id: i64,
+    pub run_id: i64,
+    /// The step as it stood at launch — what this execution was asked to do.
+    pub run_def_id: i64,
+    /// The stretch of the run this execution belongs to. `None` only where a step went looking for a
+    /// task and found none.
+    #[serde(default)]
+    pub run_task_id: Option<i64>,
+    pub seq: i64,
+    /// The way out the agent left through — `None` for the unnamed one, and while it is still running.
+    #[serde(default)]
+    pub exit_name: Option<String>,
+    pub report: String,
+    pub status: AutomationRunStepStatus,
+    #[serde(default)]
+    pub started_at: Option<Timestamp>,
+    #[serde(default)]
+    pub ended_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One value that went in or came out of a step execution**, under the port's *name* — the port row
+/// itself may be re-declared or gone by the time this is read, so the name is what is kept.
+///
+/// Which of the three payload fields means anything is [`AutomationRunValue::kind`]'s to say.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AutomationRunValue {
+    pub id: i64,
+    /// The step execution that received it (`In`) or produced it (`Out`).
+    pub run_step_id: i64,
+    pub direction: AutomationPortDirection,
+    /// The way out it left through, for an `Out`. `None` on an `In`, and on the unnamed way out.
+    #[serde(default)]
+    pub exit_name: Option<String>,
+    pub name: String,
+    pub kind: AutomationPortKind,
+    #[serde(default)]
+    pub value: Option<String>,
+    #[serde(default)]
+    pub attachment_id: Option<i64>,
+    #[serde(default)]
+    pub task_id: Option<i64>,
+    /// Where an `In` value came from — without it the chain from a value back to what produced it is
+    /// not in the store. An `Out` has nothing to say here.
+    #[serde(default)]
+    pub from_run_step_id: Option<i64>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// A serde-shaped vessel holding every record of one store at once. It is **not the store's contents**:
 /// the truth source is SQLite, and [`crate::store::Store`] does not hold one of these. The shape exists
 /// for the two places that need the records handed over **as a single lump**: verifying a backup or a

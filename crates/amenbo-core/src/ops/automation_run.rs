@@ -36,7 +36,7 @@ use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPortDirection,
     AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationStep,
-    RunDefCfg, RunDefExit, RunDefPort,
+    RunDefCfg, RunDefExit, RunDefPort, ERROR_EXIT,
 };
 use crate::ops::automation::{declarer, port_declarer};
 use crate::ops::emit_create;
@@ -57,7 +57,8 @@ pub enum Unmet {
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
     EntryTakesNoTask { step: String },
-    /// A way out with nothing set to happen after it. The run would reach it and stop.
+    /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
+    /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     OpenExit { step: String, exit: Option<String> },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
     /// declared and reachable from the entry.
@@ -158,6 +159,14 @@ pub fn check(conn: &Connection, automation_id: i64, startable: Option<&[String]>
     }
     for step in steps.iter().filter(|s| live.contains(&s.id)) {
         for exit in read::automation_exits_of(conn, declarer(step).0, declarer(step).1)? {
+            // The error way out is the one nobody has to answer for. Every step and every action is
+            // born carrying it (crate::ops::automation), so asking for an edge on each of them
+            // would put one more thing to write on every step somebody adds — for the case that is
+            // already handled. Left alone it halts the run and calls a person, and an edge on it is
+            // how somebody says otherwise.
+            if exit.name.as_deref() == Some(ERROR_EXIT) {
+                continue;
+            }
             if !decided(conn, step.id, exit.name.as_deref(), &by_id)? {
                 unmet.push(Unmet::OpenExit { step: step.name.clone(), exit: exit.name.clone() });
             }
@@ -280,11 +289,12 @@ fn fed(
     Ok(false)
 }
 
-/// One step's settings, **declaration and answer together**. A step carrying its own prompt declared
+/// One step's settings, **declaration and answer together**. Public because the build screen draws the
+/// same pair and must not put them back together a second way ([`crate::ops::automation::cfg_set`]). A step carrying its own prompt declared
 /// them itself and answers on the same row; a step running a library action reads the declaration from
 /// the action and answers on a row of its own under the same name
 /// ([`crate::ops::automation::cfg_set`]), so the two have to be put back together here.
-fn settings_of(conn: &Connection, step: &AutomationStep) -> Result<Vec<AutomationCfg>> {
+pub fn settings_of(conn: &Connection, step: &AutomationStep) -> Result<Vec<AutomationCfg>> {
     let (owner_kind, owner_id) = declarer(step);
     let declared = read::automation_cfgs_of(conn, owner_kind, owner_id)?;
     if owner_kind == crate::model::AutomationOwner::Step {
@@ -465,7 +475,7 @@ pub fn promote_next(tx: &WriteTx<'_>, lanes: i64) -> Result<Option<AutomationRun
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{AutomationOwner, AutomationPortOwner, ERROR_EXIT};
+    use crate::model::{AutomationOwner, AutomationPortOwner};
     use crate::ops::automation::{
         self, EdgeTarget, NewAutomation, NewStep, StepSource,
     };
@@ -490,7 +500,9 @@ mod tests {
         .expect("add step");
         takes_task_on(tx, &step, None);
         automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
-        automation::edge_add(tx, step.id, Some(ERROR_EXIT), EdgeTarget::Halt, None).expect("error edge");
+        // Nothing is written for the error way out: it is carried from birth and halts unless
+        // somebody says otherwise, which is what `an_error_way_out_nobody_answered_for_is_not_open`
+        // holds this to.
         let automation = automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
         (automation, step)
     }
@@ -590,7 +602,6 @@ mod tests {
             )
             .expect("step");
             automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
-            automation::edge_add(tx, step.id, Some(ERROR_EXIT), EdgeTarget::Halt, None).expect("edge");
             automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude())).expect("check"),
@@ -610,6 +621,17 @@ mod tests {
                 vec![Unmet::OpenExit { step: "取る".into(), exit: exit.name.clone() }],
                 "it saves while building, and is refused at launch",
             );
+        });
+    }
+
+    #[test]
+    fn an_error_way_out_nobody_answered_for_is_not_open() {
+        with_tx(|tx| {
+            // `launchable` writes no edge on the error way out, so a check that asked for one would
+            // refuse the automation every other test here launches.
+            let (automation, _) = launchable(tx);
+            let unmet = check(tx.conn(), automation.id, Some(&claude())).expect("check");
+            assert_eq!(unmet, vec![], "the error way out is carried from birth, not written");
         });
     }
 
@@ -735,7 +757,6 @@ mod tests {
             .expect("step");
             takes_task_on(tx, &step, None);
             automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
-            automation::edge_add(tx, step.id, Some(ERROR_EXIT), EdgeTarget::Halt, None).expect("edge");
             automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude())).expect("check"),

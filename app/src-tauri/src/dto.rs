@@ -3370,9 +3370,10 @@ pub struct AutomationWireDto {
 /// **Whether this automation can be started, and what is in the way** — what the build screen's
 /// launch place draws before anybody presses.
 ///
-/// It is the picture and not the ruling: what refuses a launch is the launch itself, which writes a
-/// run. A definition that passes here can still be refused there, by a machine that changed between
-/// the reading and the press.
+/// It is core's own launch check ([`amenbo_core::ops::automation_run::check`]) and not a second
+/// reading of it. A definition that passes here can still be refused at the press, by a machine that
+/// changed in between or by a workspace that is closed — that one is not about the definition, so it
+/// is raised by the launch rather than listed here.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3381,26 +3382,25 @@ pub struct AutomationLaunchCheckDto {
     pub(crate) blocks: Vec<AutomationLaunchBlockDto>,
 }
 
-/// **One thing standing in the way of a launch.**
+/// **One thing standing in the way of a launch**, as core named it
+/// ([`amenbo_core::ops::automation_run::Unmet`]).
 ///
 /// `reason` is what it is, and `stepName` / `at` say where — the way out with nothing after it, the
-/// input nothing feeds, the agent this machine cannot start. A reason about the automation as a
-/// whole carries neither.
+/// input nothing feeds, the setting nobody answered, the agent this machine cannot start. A reason
+/// about the automation as a whole carries neither. `at` is absent on `open_exit` for the unnamed way
+/// out, which is the one a step with a single way out has.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationLaunchBlockDto {
     #[ts(
-        type = "\"no_steps\" | \"exit_without_next\" | \"input_unfed\" | \"agent_not_here\" | \"task_undecided\" | \"workspace_closed\""
+        type = "\"no_steps\" | \"no_entry\" | \"entry_takes_no_task\" | \"open_exit\" | \"unwired_input\" | \"unanswered_cfg\" | \"agent_missing\""
     )]
     pub(crate) reason: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) step_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step_name: Option<String>,
-    /// What on that step — a way out's name, an input's name, an agent's id.
+    /// What on that step — a way out's name, an input's name, a setting's name, an agent's id.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) at: Option<String>,

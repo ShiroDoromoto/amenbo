@@ -170,8 +170,13 @@ pub fn automation_step_open(
                 .id
         }
     };
+    // How many runs may be under way at once. It is a setting and lives outside the store, so it is
+    // read here and handed down: a step that cannot be opened stops the run, and stopping one hands
+    // its lane back to whatever was waiting for it.
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let lanes = amenbo_core::config::Config::load(&paths.config_file).automation_lanes;
     let mut store = crate::commands::open_store()?;
-    let opened = store.automation_step_open(run_id, def_id)?;
+    let opened = store.automation_step_open(run_id, def_id, lanes)?;
     let (project, step, missing) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
@@ -193,7 +198,9 @@ pub fn automation_step_open(
                 Vec::new(),
             )
         }
-        Opened::Stopped { run, missing } => (run.project_id, None, missing),
+        // `woke` is the run that took the lane this one gave up. It is the "running" tab's to draw
+        // and not this door's: what a step's pane is told about is its own step.
+        Opened::Stopped { run, missing, .. } => (run.project_id, None, missing),
     };
     let dto = AutomationStepOpenDto { run: run_id, project, step, missing };
     if let Err(e) = app.emit(STEP_EVENT, dto.clone()) {

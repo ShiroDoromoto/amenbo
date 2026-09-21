@@ -6191,6 +6191,452 @@ pub fn live_task_titles(conn: &Connection, project: Option<i64>) -> Result<Vec<(
     Ok(rows)
 }
 
+// ───────────────────────── automation: what is built ─────────────────────────
+//
+// Reads for the ten definition tables. Every one of them is taken inside the building operation's
+// transaction (crate::ops::automation): placing an order_key, minting an id and checking that a name is
+// free are all read-then-write, and two writers that read the same answer both act on it.
+//
+// The run side's five tables are read here only to be counted: an automation with a run behind it is
+// one whose delete is refused, and that is the whole of what this layer asks of them.
+
+/// Every row of one definition table matching `pred`, in `order_key` then `id` order — the order a
+/// screen lists them in, and the order the ops walk a subtree to delete it.
+fn automation_rows<T>(
+    conn: &Connection,
+    table: Table,
+    pred: &Pred,
+    order: &[Sort],
+    f: impl Fn(&Row) -> rusqlite::Result<T>,
+) -> Result<Vec<T>> {
+    let mut sql = Sql::new(format!("SELECT * FROM {}", table.name()));
+    sql.push_where(Some(pred)).order_by(order.iter().cloned());
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| f(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<T>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
+/// `name = ?` where a `None` name is the unnamed way out — `NULL`, which no `=` ever matches, so the
+/// two cases are different SQL rather than one parameter.
+fn named_or_unnamed<E: Expr<Ty = SqlText>>(col: E, name: Option<&str>) -> Pred {
+    match name {
+        Some(n) => Pred::eq(col, n),
+        None => Pred::is_null(col),
+    }
+}
+
+/// The `automation_action` record with this id.
+pub fn automation_action(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationAction>> {
+    super::hydrate::row_by_id(conn, "automation_action", id, super::hydrate::automation_action_row)
+}
+
+/// The `automation` record with this id.
+pub fn automation(conn: &Connection, id: i64) -> Result<Option<crate::model::Automation>> {
+    super::hydrate::row_by_id(conn, "automation", id, super::hydrate::automation_row)
+}
+
+/// The `automation_note` record with this id.
+pub fn automation_note(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationNote>> {
+    super::hydrate::row_by_id(conn, "automation_note", id, super::hydrate::automation_note_row)
+}
+
+/// The `automation_step` record with this id.
+pub fn automation_step(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationStep>> {
+    super::hydrate::row_by_id(conn, "automation_step", id, super::hydrate::automation_step_row)
+}
+
+/// The `automation_cfg` record with this id.
+pub fn automation_cfg(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationCfg>> {
+    super::hydrate::row_by_id(conn, "automation_cfg", id, super::hydrate::automation_cfg_row)
+}
+
+/// The `automation_step_note` record with this id.
+pub fn automation_step_note(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::AutomationStepNote>> {
+    super::hydrate::row_by_id(conn, "automation_step_note", id, super::hydrate::automation_step_note_row)
+}
+
+/// The `automation_exit` record with this id.
+pub fn automation_exit(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationExit>> {
+    super::hydrate::row_by_id(conn, "automation_exit", id, super::hydrate::automation_exit_row)
+}
+
+/// The `automation_port` record with this id.
+pub fn automation_port(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationPort>> {
+    super::hydrate::row_by_id(conn, "automation_port", id, super::hydrate::automation_port_row)
+}
+
+/// The `automation_edge` record with this id.
+pub fn automation_edge(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationEdge>> {
+    super::hydrate::row_by_id(conn, "automation_edge", id, super::hydrate::automation_edge_row)
+}
+
+/// The `automation_wire` record with this id.
+pub fn automation_wire(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationWire>> {
+    super::hydrate::row_by_id(conn, "automation_wire", id, super::hydrate::automation_wire_row)
+}
+
+/// Live automation siblings within one project — the `order_key` placement read.
+pub fn automation_siblings(
+    conn: &Connection,
+    project_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const A: col::automation::Cols = col::automation::ALL;
+    order_siblings(conn, A.id, A.order_key, Some(Pred::eq(A.project_id, project_id)), exclude)
+}
+
+/// Live library siblings within one reach — one project's library, or the device's own (`None`).
+pub fn automation_action_siblings(
+    conn: &Connection,
+    project_id: Option<i64>,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const A: col::automation_action::Cols = col::automation_action::ALL;
+    let scope = match project_id {
+        Some(p) => Pred::eq(A.project_id, p),
+        None => Pred::is_null(A.project_id),
+    };
+    order_siblings(conn, A.id, A.order_key, Some(scope), exclude)
+}
+
+/// Live step siblings within one automation.
+pub fn automation_step_siblings(
+    conn: &Connection,
+    automation_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const S: col::automation_step::Cols = col::automation_step::ALL;
+    order_siblings(conn, S.id, S.order_key, Some(Pred::eq(S.automation_id, automation_id)), exclude)
+}
+
+/// Live shared-document siblings within one automation.
+pub fn automation_note_siblings(
+    conn: &Connection,
+    automation_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const N: col::automation_note::Cols = col::automation_note::ALL;
+    order_siblings(conn, N.id, N.order_key, Some(Pred::eq(N.automation_id, automation_id)), exclude)
+}
+
+/// Live edge siblings within one automation.
+pub fn automation_edge_siblings(
+    conn: &Connection,
+    automation_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    order_siblings(conn, E.id, E.order_key, Some(Pred::eq(E.automation_id, automation_id)), exclude)
+}
+
+/// Live document-link siblings on one step.
+pub fn automation_step_note_siblings(
+    conn: &Connection,
+    step_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const L: col::automation_step_note::Cols = col::automation_step_note::ALL;
+    order_siblings(conn, L.id, L.order_key, Some(Pred::eq(L.step_id, step_id)), exclude)
+}
+
+/// Live way-out siblings on one owner (a step or a library action).
+pub fn automation_exit_siblings(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const X: col::automation_exit::Cols = col::automation_exit::ALL;
+    let scope = Pred::eq(X.owner_kind, owner_kind.as_str()).and(Pred::eq(X.owner_id, owner_id));
+    order_siblings(conn, X.id, X.order_key, Some(scope), exclude)
+}
+
+/// Live port siblings on one owner, facing one way.
+pub fn automation_port_siblings(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPortOwner,
+    owner_id: i64,
+    direction: crate::model::AutomationPortDirection,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const P: col::automation_port::Cols = col::automation_port::ALL;
+    let scope = Pred::eq(P.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(P.owner_id, owner_id))
+        .and(Pred::eq(P.direction, direction.as_str()));
+    order_siblings(conn, P.id, P.order_key, Some(scope), exclude)
+}
+
+/// Live settings siblings on one owner.
+pub fn automation_cfg_siblings(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
+    let scope = Pred::eq(C.owner_kind, owner_kind.as_str()).and(Pred::eq(C.owner_id, owner_id));
+    order_siblings(conn, C.id, C.order_key, Some(scope), exclude)
+}
+
+/// The ways out one owner declares, in display order. The error one
+/// ([`crate::model::ERROR_EXIT`]) is among them: it is a row like any other, and only its name is fixed.
+pub fn automation_exits_of(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+) -> Result<Vec<crate::model::AutomationExit>> {
+    const X: col::automation_exit::Cols = col::automation_exit::ALL;
+    let pred = Pred::eq(X.owner_kind, owner_kind.as_str()).and(Pred::eq(X.owner_id, owner_id));
+    automation_rows(
+        conn,
+        X.table,
+        &pred,
+        &[Sort::by(X.order_key), Sort::by(X.id)],
+        super::hydrate::automation_exit_row,
+    )
+}
+
+/// One owner's way out under this name — `None` for the unnamed one. Names are unique within an owner,
+/// so this answers at most one row.
+pub fn automation_exit_by_name(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+    name: Option<&str>,
+) -> Result<Option<crate::model::AutomationExit>> {
+    const X: col::automation_exit::Cols = col::automation_exit::ALL;
+    let pred = Pred::eq(X.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(X.owner_id, owner_id))
+        .and(named_or_unnamed(X.name, name));
+    Ok(automation_rows(conn, X.table, &pred, &[Sort::by(X.id)], super::hydrate::automation_exit_row)?
+        .into_iter()
+        .next())
+}
+
+/// The ports one owner declares in one direction, in display order.
+pub fn automation_ports_of(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPortOwner,
+    owner_id: i64,
+    direction: crate::model::AutomationPortDirection,
+) -> Result<Vec<crate::model::AutomationPort>> {
+    const P: col::automation_port::Cols = col::automation_port::ALL;
+    let pred = Pred::eq(P.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(P.owner_id, owner_id))
+        .and(Pred::eq(P.direction, direction.as_str()));
+    automation_rows(
+        conn,
+        P.table,
+        &pred,
+        &[Sort::by(P.order_key), Sort::by(P.id)],
+        super::hydrate::automation_port_row,
+    )
+}
+
+/// One owner's port of this name, facing this way.
+pub fn automation_port_by_name(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPortOwner,
+    owner_id: i64,
+    direction: crate::model::AutomationPortDirection,
+    name: &str,
+) -> Result<Option<crate::model::AutomationPort>> {
+    const P: col::automation_port::Cols = col::automation_port::ALL;
+    let pred = Pred::eq(P.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(P.owner_id, owner_id))
+        .and(Pred::eq(P.direction, direction.as_str()))
+        .and(Pred::eq(P.name, name));
+    Ok(automation_rows(conn, P.table, &pred, &[Sort::by(P.id)], super::hydrate::automation_port_row)?
+        .into_iter()
+        .next())
+}
+
+/// The settings one owner carries, in display order.
+pub fn automation_cfgs_of(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+) -> Result<Vec<crate::model::AutomationCfg>> {
+    const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
+    let pred = Pred::eq(C.owner_kind, owner_kind.as_str()).and(Pred::eq(C.owner_id, owner_id));
+    automation_rows(
+        conn,
+        C.table,
+        &pred,
+        &[Sort::by(C.order_key), Sort::by(C.id)],
+        super::hydrate::automation_cfg_row,
+    )
+}
+
+/// One owner's setting under this name.
+pub fn automation_cfg_by_name(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+    name: &str,
+) -> Result<Option<crate::model::AutomationCfg>> {
+    const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
+    let pred = Pred::eq(C.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(C.owner_id, owner_id))
+        .and(Pred::eq(C.name, name));
+    Ok(automation_rows(conn, C.table, &pred, &[Sort::by(C.id)], super::hydrate::automation_cfg_row)?
+        .into_iter()
+        .next())
+}
+
+/// What is set to happen after one step leaves through one way out. At most one row: a way out decides
+/// one thing.
+pub fn automation_edge_for_exit(
+    conn: &Connection,
+    from_step_id: i64,
+    exit_name: Option<&str>,
+) -> Result<Option<crate::model::AutomationEdge>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    let pred = Pred::eq(E.from_step_id, from_step_id).and(named_or_unnamed(E.exit_name, exit_name));
+    Ok(automation_rows(conn, E.table, &pred, &[Sort::by(E.id)], super::hydrate::automation_edge_row)?
+        .into_iter()
+        .next())
+}
+
+/// The wire drawn between exactly these two ends, if one is drawn — what a second `wire add` for the
+/// same pair reads to find itself already there.
+pub fn automation_wire_between(
+    conn: &Connection,
+    from_step_id: i64,
+    from_exit_name: Option<&str>,
+    from_port_name: &str,
+    to_step_id: i64,
+    to_port_name: &str,
+) -> Result<Option<crate::model::AutomationWire>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let pred = Pred::eq(W.from_step_id, from_step_id)
+        .and(named_or_unnamed(W.from_exit_name, from_exit_name))
+        .and(Pred::eq(W.from_port_name, from_port_name))
+        .and(Pred::eq(W.to_step_id, to_step_id))
+        .and(Pred::eq(W.to_port_name, to_port_name));
+    Ok(automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)?
+        .into_iter()
+        .next())
+}
+
+/// The steps of one automation, oldest key first — the subtree a delete walks.
+pub fn automation_step_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const S: col::automation_step::Cols = col::automation_step::ALL;
+    select_ids(conn, S.id, Some(&Pred::eq(S.automation_id, automation_id)))
+}
+
+/// The shared documents of one automation.
+pub fn automation_note_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const N: col::automation_note::Cols = col::automation_note::ALL;
+    select_ids(conn, N.id, Some(&Pred::eq(N.automation_id, automation_id)))
+}
+
+/// The edges of one automation.
+pub fn automation_edge_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    select_ids(conn, E.id, Some(&Pred::eq(E.automation_id, automation_id)))
+}
+
+/// The wires of one automation.
+pub fn automation_wire_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    select_ids(conn, W.id, Some(&Pred::eq(W.automation_id, automation_id)))
+}
+
+/// The edges that name one step at either end — what goes when the step does, since an edge pointing at
+/// a step that is gone is an edge that decides nothing.
+pub fn automation_edge_ids_naming_step(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    let pred = Pred::eq(E.from_step_id, step_id).or(Pred::eq(E.to_step_id, step_id));
+    select_ids(conn, E.id, Some(&pred))
+}
+
+/// The wires that name one step at either end.
+pub fn automation_wire_ids_naming_step(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let pred = Pred::eq(W.from_step_id, step_id).or(Pred::eq(W.to_step_id, step_id));
+    select_ids(conn, W.id, Some(&pred))
+}
+
+/// The document links on one step.
+pub fn automation_step_note_ids(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
+    const L: col::automation_step_note::Cols = col::automation_step_note::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.step_id, step_id)))
+}
+
+/// The document links naming one shared document.
+pub fn automation_step_note_ids_of_note(conn: &Connection, note_id: i64) -> Result<Vec<i64>> {
+    const L: col::automation_step_note::Cols = col::automation_step_note::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.note_id, note_id)))
+}
+
+/// The ways out one owner declares.
+pub fn automation_exit_ids(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+) -> Result<Vec<i64>> {
+    const X: col::automation_exit::Cols = col::automation_exit::ALL;
+    let pred = Pred::eq(X.owner_kind, owner_kind.as_str()).and(Pred::eq(X.owner_id, owner_id));
+    select_ids(conn, X.id, Some(&pred))
+}
+
+/// The ports one owner declares, both directions.
+pub fn automation_port_ids(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPortOwner,
+    owner_id: i64,
+) -> Result<Vec<i64>> {
+    const P: col::automation_port::Cols = col::automation_port::ALL;
+    let pred = Pred::eq(P.owner_kind, owner_kind.as_str()).and(Pred::eq(P.owner_id, owner_id));
+    select_ids(conn, P.id, Some(&pred))
+}
+
+/// The settings one owner carries.
+pub fn automation_cfg_ids(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationOwner,
+    owner_id: i64,
+) -> Result<Vec<i64>> {
+    const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
+    let pred = Pred::eq(C.owner_kind, owner_kind.as_str()).and(Pred::eq(C.owner_id, owner_id));
+    select_ids(conn, C.id, Some(&pred))
+}
+
+/// The steps that run one library action — what a delete of the action is refused by, since the step
+/// would be left pointing at a prompt that is gone.
+pub fn automation_step_ids_using_action(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
+    const S: col::automation_step::Cols = col::automation_step::ALL;
+    select_ids(conn, S.id, Some(&Pred::eq(S.action_id, action_id)))
+}
+
+/// The runs one automation has behind it. A definition with a run is not deleted: the run reads its own
+/// copy of the steps, but the row it was launched from is what it is filed under.
+pub fn automation_run_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    select_ids(conn, R.id, Some(&Pred::eq(R.automation_id, automation_id)))
+}
+
+/// The automations of one project, for the project delete's walk.
+pub fn automation_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
+    const A: col::automation::Cols = col::automation::ALL;
+    select_ids(conn, A.id, Some(&Pred::eq(A.project_id, project_id)))
+}
+
+/// The library actions of one project — the device's own (`project_id` NULL) are nobody's to sweep.
+pub fn automation_action_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
+    const A: col::automation_action::Cols = col::automation_action::ALL;
+    select_ids(conn, A.id, Some(&Pred::eq(A.project_id, project_id)))
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

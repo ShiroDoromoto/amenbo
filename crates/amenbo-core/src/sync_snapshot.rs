@@ -1011,11 +1011,12 @@ mod tests {
 
     /// The automation family, one row a table, written straight at the store.
     ///
-    /// **Raw SQL because there is no op yet**: v50 laid the tables down and the layer that builds and
-    /// runs an automation comes after it, while the two read-back tests below have to have a row in
-    /// every table the snapshot carries from the day the table exists. What they are proving is the
-    /// window and the by-id read, both of which are dataset-generic, so a row written this way exercises
-    /// them exactly as one written through an op would.
+    /// **Raw SQL because the run half has no op yet**: the layer that launches an automation comes after
+    /// the one that builds it, while the two read-back tests below have to have a row in every table the
+    /// snapshot carries from the day the table exists. What they are proving is the window and the by-id
+    /// read, both of which are dataset-generic, so a row written this way exercises them exactly as one
+    /// written through an op would — which is why the definition half is seeded the same way rather than
+    /// split across two idioms.
     ///
     /// The shapes are the smallest that are still true to the model: a step that points at a library
     /// action, one way out of it with a port that takes a task, an edge that closes the run, and one run

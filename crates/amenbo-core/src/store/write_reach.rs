@@ -8,8 +8,9 @@
 //!
 //! - **Creating a new entity** (`task add` / `decision add` / `project add`) — there is no id yet, so we
 //!   check the place it would go (the project) instead.
-//! - **Taking an id directly** (comment ids, attachment ids, dimension / dimension-value ids) — these are
-//!   not conversational refs, so nothing resolves them.
+//! - **Taking an id directly** (comment ids, attachment ids, dimension / dimension-value ids, the ids of
+//!   the rows an automation's definition is built from) — these are not conversational refs, so nothing
+//!   resolves them.
 //!
 //! The guard is not sprinkled across commands: it sits at the **single write entry point**
 //! (`Store::write_one`). That entry point **demands the declaration of what is being mutated**
@@ -52,10 +53,63 @@ pub(super) enum WriteTarget {
     Attachment(i64),
     /// An attachment's target (the polymorphic `target_type` + id).
     AttachTo(AttachmentTarget, i64),
+    /// One row of an automation's definition, named by the table it sits in. Which table it is decides
+    /// the walk up to the project, and that walk is the whole difference between them — so the ten ride
+    /// one variant rather than ten.
+    AutomationPart(AutomationPart, i64),
     /// Where an entity about to be created would go (`None` = in no project at all).
     NewIn(Option<i64>),
     /// A new project itself. It is **always** outside a narrowed reach.
     NewProject,
+}
+
+/// Which of the ten definition tables a [`WriteTarget::AutomationPart`] names.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum AutomationPart {
+    Automation,
+    Action,
+    Step,
+    Note,
+    Exit,
+    Port,
+    Cfg,
+    Edge,
+    Wire,
+}
+
+impl AutomationPart {
+    /// The project this row belongs to, walked from the row itself — the one lookup both the guard and
+    /// the sync version read.
+    fn project_of(self, conn: &Connection, id: i64) -> Result<Option<i64>> {
+        match self {
+            AutomationPart::Automation => owner::automation(conn, id),
+            AutomationPart::Action => owner::automation_action(conn, id),
+            AutomationPart::Step => owner::automation_step(conn, id),
+            AutomationPart::Note => owner::automation_note(conn, id),
+            AutomationPart::Exit => owner::automation_exit(conn, id),
+            AutomationPart::Port => owner::automation_port(conn, id),
+            AutomationPart::Cfg => owner::automation_cfg(conn, id),
+            AutomationPart::Edge => owner::automation_edge(conn, id),
+            AutomationPart::Wire => owner::automation_wire(conn, id),
+        }
+    }
+
+    /// How the row is named in a refusal. These carry no `AMB-` ref of their own — nobody types one
+    /// back at us — so the sentence says what the row is and quotes its id.
+    fn what(self, id: i64) -> String {
+        let en = match self {
+            AutomationPart::Automation => "automation",
+            AutomationPart::Action => "action",
+            AutomationPart::Step => "automation step",
+            AutomationPart::Note => "automation document",
+            AutomationPart::Exit => "automation way out",
+            AutomationPart::Port => "automation port",
+            AutomationPart::Cfg => "automation setting",
+            AutomationPart::Edge => "automation edge",
+            AutomationPart::Wire => "automation wire",
+        };
+        format!("{en} '{id}'")
+    }
 }
 
 /// Check the reach before mutating (out of reach ⇒ `out_of_reach`). Under `All` nothing is looked up, so
@@ -110,6 +164,7 @@ fn project_of(conn: &Connection, target: WriteTarget) -> Result<Option<i64>> {
         WriteTarget::DimensionValue(id) => owner::dimension_value(conn, id),
         WriteTarget::Attachment(id) => owner::attachment(conn, id),
         WriteTarget::AttachTo(kind, id) => owner::attach_target(conn, kind, id),
+        WriteTarget::AutomationPart(part, id) => part.project_of(conn, id),
         WriteTarget::NewIn(project) => Ok(project),
         // The project does not exist yet, so it has no version to move. Its first version is `0` — the
         // absent row — and the first write that names it carries it forward from there.
@@ -141,6 +196,9 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
             &owner::attach_target_ref(kind, id),
             owner::attach_target(conn, kind, id)?,
         ),
+        WriteTarget::AutomationPart(part, id) => {
+            reach.check(&part.what(id), part.project_of(conn, id)?)
+        }
         // A new entity has no id yet, so we check the place it would go. "No project" (the inbox) is
         // outside a narrowed reach — nobody should be able to create an entity they can no longer touch.
         WriteTarget::NewIn(Some(project)) => reach.check(&crate::idref::project(project), Some(project)),

@@ -220,6 +220,70 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
             " WHERE task_id IN (SELECT id FROM task WHERE project_id = ?1)))",
             " OR (target_type = 'decision_comment' AND target_id IN (SELECT id FROM decision_comment",
             " WHERE decision_id IN (SELECT id FROM decision WHERE project_id = ?1)))",
+            " OR (target_type = 'automation_run_step' AND target_id IN (SELECT id FROM",
+            " automation_run_step WHERE run_id IN",
+            " (SELECT id FROM automation_run WHERE project_id = ?1)))",
+        ),
+
+        // ── automation ──
+        //
+        // The whole family hangs on one automation, and that automation hangs on a project. A library
+        // action is the exception: like an unplaced task it may belong to no project at all
+        // (`project_id IS NULL` is the device's own), and that row is outside every closed reach.
+        //
+        // A step whose `action_id` names such a device-wide action still travels. It is the one place
+        // rule 2 is not applied, and deliberately: what rule 2 guards against is an id telling the
+        // carrier that a project it may not see exists, and an action belonging to no project tells it
+        // nothing of the kind — while dropping the step would leave the automation with a hole in the
+        // middle of it.
+        "automation_action" => "project_id = ?1",
+        "automation" => "project_id = ?1",
+        "automation_run" => "project_id = ?1",
+
+        "automation_note" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
+        "automation_step" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
+        "automation_edge" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
+        "automation_wire" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
+        "automation_run_def" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
+        "automation_run_task" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
+        "automation_run_step" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
+        "automation_run_value" => concat!(
+            "run_step_id IN (SELECT id FROM automation_run_step WHERE run_id IN",
+            " (SELECT id FROM automation_run WHERE project_id = ?1))",
+        ),
+
+        // Hangs on a step of one automation.
+        "automation_step_note" => concat!(
+            "step_id IN (SELECT id FROM automation_step WHERE automation_id IN",
+            " (SELECT id FROM automation WHERE project_id = ?1))",
+        ),
+
+        // Polymorphic on `owner_kind`, the way `attachment` is on `target_type`: one arm per owner the
+        // column admits, each reaching the project the way its own kind does. A step reaches it through
+        // its automation; an action is already a project's row, or the device's and outside.
+        "automation_cfg" => concat!(
+            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " OR (owner_kind = 'action'",
+            " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
+        ),
+        "automation_exit" => concat!(
+            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " OR (owner_kind = 'action'",
+            " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
+        ),
+        // The same two owners and one more: a port may hang on the way out of either of them.
+        "automation_port" => concat!(
+            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " OR (owner_kind = 'action'",
+            " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
+            " OR (owner_kind = 'exit' AND owner_id IN (SELECT id FROM automation_exit",
+            " WHERE (owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " OR (owner_kind = 'action'",
+            " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))))",
         ),
 
         _ => return None,
@@ -932,12 +996,156 @@ mod tests {
 
             s.attach_url(AttachmentTarget::Task, task, "https://example.com/seed", None, ActorKind::Ai)
                 .unwrap();
-            (project, comment)
+            (project, comment, task)
         };
 
-        let (mine, _) = fill(&mut s, "mine");
-        let (theirs, _) = fill(&mut s, "theirs");
+        let (mine, mine_comment, mine_task) = fill(&mut s, "mine");
+        let (theirs, theirs_comment, theirs_task) = fill(&mut s, "theirs");
+        drop(s);
+
+        let conn = rusqlite::Connection::open(store_file(dir)).unwrap();
+        seed_one_automation(&conn, mine, mine_task, mine_comment);
+        seed_one_automation(&conn, theirs, theirs_task, theirs_comment);
         (mine, theirs)
+    }
+
+    /// The automation family, one row a table, written straight at the store.
+    ///
+    /// **Raw SQL because there is no op yet**: v50 laid the tables down and the layer that builds and
+    /// runs an automation comes after it, while the two read-back tests below have to have a row in
+    /// every table the snapshot carries from the day the table exists. What they are proving is the
+    /// window and the by-id read, both of which are dataset-generic, so a row written this way exercises
+    /// them exactly as one written through an op would.
+    ///
+    /// The shapes are the smallest that are still true to the model: a step that points at a library
+    /// action, one way out of it with a port that takes a task, an edge that closes the run, and one run
+    /// that walked one task and produced one file.
+    fn seed_one_automation(conn: &rusqlite::Connection, project: i64, task: i64, comment: i64) {
+        let at = "2026-01-02T03:04:05Z";
+        let put = |sql: &str, params: &[&dyn rusqlite::ToSql]| {
+            conn.execute(sql, params).unwrap_or_else(|e| panic!("{sql}: {e}"));
+            conn.last_insert_rowid()
+        };
+
+        let action = put(
+            "INSERT INTO automation_action (project_id, name, prompt, order_key, created_at, updated_at) \
+             VALUES (?1, 'worktree を切る', 'あなたは…', 'a0', ?2, ?2)",
+            rusqlite::params![project, at],
+        );
+        let automation = put(
+            "INSERT INTO automation \
+                 (project_id, name, notes, preamble, archived, order_key, created_at, updated_at) \
+             VALUES (?1, '1件やる', '', '運転規約', 0, 'a0', ?2, ?2)",
+            rusqlite::params![project, at],
+        );
+        let note = put(
+            "INSERT INTO automation_note \
+                 (automation_id, name, body, order_key, created_at, updated_at) \
+             VALUES (?1, 'リポジトリの作法', 'ここに長い説明が入る', 'a0', ?2, ?2)",
+            rusqlite::params![automation, at],
+        );
+        let step = put(
+            "INSERT INTO automation_step \
+                 (automation_id, name, action_id, agent, model, interactive, work_dir_ref, \
+                  report_to_task, show_history, order_key, created_at, updated_at) \
+             VALUES (?1, 'worktree を切る', ?2, 'claude-code', 'opus', 0, 'リポジトリの場所', \
+                     0, 1, 'a0', ?3, ?3)",
+            rusqlite::params![automation, action, at],
+        );
+        put(
+            "UPDATE automation SET entry_step_id = ?2 WHERE id = ?1",
+            rusqlite::params![automation, step],
+        );
+        put(
+            "INSERT INTO automation_cfg \
+                 (owner_kind, owner_id, name, kind, required, value, order_key, created_at, updated_at) \
+             VALUES ('step', ?1, 'リポジトリの場所', 'folder', 1, '\"~/work/amenbo\"', 'a0', ?2, ?2)",
+            rusqlite::params![step, at],
+        );
+        put(
+            "INSERT INTO automation_step_note (step_id, note_id, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, 'a0', ?3, ?3)",
+            rusqlite::params![step, note, at],
+        );
+        let exit = put(
+            "INSERT INTO automation_exit \
+                 (owner_kind, owner_id, name, order_key, created_at, updated_at) \
+             VALUES ('step', ?1, '進行中にした', 'a0', ?2, ?2)",
+            rusqlite::params![step, at],
+        );
+        put(
+            "INSERT INTO automation_port \
+                 (owner_kind, owner_id, direction, name, kind, required, order_key, created_at, updated_at) \
+             VALUES ('exit', ?1, 'out', '進行中のタスク', 'task_take', 1, 'a0', ?2, ?2)",
+            rusqlite::params![exit, at],
+        );
+        put(
+            "INSERT INTO automation_edge \
+                 (automation_id, from_step_id, exit_name, ends, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, '進行中にした', 'done', 'a0', ?3, ?3)",
+            rusqlite::params![automation, step, at],
+        );
+        put(
+            "INSERT INTO automation_wire \
+                 (automation_id, from_step_id, from_exit_name, from_port_name, to_step_id, to_port_name, \
+                  created_at, updated_at) \
+             VALUES (?1, ?2, '進行中にした', '進行中のタスク', ?2, '扱うタスク', ?3, ?3)",
+            rusqlite::params![automation, step, at],
+        );
+
+        let run = put(
+            "INSERT INTO automation_run \
+                 (automation_id, project_id, status, pause_requested, started_by_kind, \
+                  started_at, ended_at, created_at, updated_at) \
+             VALUES (?1, ?2, 'done', 0, 'ai', ?3, ?3, ?3, ?3)",
+            rusqlite::params![automation, project, at],
+        );
+        let run_def = put(
+            "INSERT INTO automation_run_def \
+                 (run_id, step_id, name, agent, model, interactive, work_dir_ref, report_to_task, \
+                  show_history, exits, ins, cfg, created_at, updated_at) \
+             VALUES (?1, ?2, 'worktree を切る', 'claude-code', 'opus', 0, 'リポジトリの場所', 0, 1, \
+                     '[]', '[]', '{}', ?3, ?3)",
+            rusqlite::params![run, step, at],
+        );
+        let run_task = put(
+            "INSERT INTO automation_run_task \
+                 (run_id, seq, task_id, started_at, ended_at, created_at, updated_at) \
+             VALUES (?1, 1, ?2, ?3, ?3, ?3, ?3)",
+            rusqlite::params![run, task, at],
+        );
+        let run_step = put(
+            "INSERT INTO automation_run_step \
+                 (run_id, run_def_id, run_task_id, seq, exit_name, report, status, \
+                  started_at, ended_at, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 1, '進行中にした', '切った', 'done', ?4, ?4, ?4, ?4)",
+            rusqlite::params![run, run_def, run_task, at],
+        );
+        let file = put(
+            "INSERT INTO attachment \
+                 (target_type, target_id, kind, url, created_by_kind, order_key, created_at, updated_at) \
+             VALUES ('automation_run_step', ?1, 'url', 'https://example.com/report', 'ai', 'a0', ?2, ?2)",
+            rusqlite::params![run_step, at],
+        );
+        put(
+            "INSERT INTO automation_run_value \
+                 (run_step_id, direction, exit_name, name, kind, task_id, created_at, updated_at) \
+             VALUES (?1, 'out', '進行中にした', '進行中のタスク', 'task_take', ?2, ?3, ?3)",
+            rusqlite::params![run_step, task, at],
+        );
+        put(
+            "INSERT INTO automation_run_value \
+                 (run_step_id, direction, exit_name, name, kind, attachment_id, created_at, updated_at) \
+             VALUES (?1, 'out', '進行中にした', '指摘', 'file', ?2, ?3, ?3)",
+            rusqlite::params![run_step, file, at],
+        );
+
+        // The comment the step's report was carried onto, so the column v50 added to `task_comment`
+        // travels with a value in it rather than as a NULL that would round-trip either way.
+        put(
+            "UPDATE task_comment SET automation_run_step_id = ?2 WHERE id = ?1",
+            rusqlite::params![comment, run_step],
+        );
     }
 
     /// The rows of one table as the snapshot carries them, and their ids.

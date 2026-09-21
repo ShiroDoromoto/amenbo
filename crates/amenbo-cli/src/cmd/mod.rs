@@ -4,6 +4,7 @@
 pub(crate) mod activity;
 pub(crate) mod arg;
 pub(crate) mod attach;
+pub(crate) mod automation;
 pub(crate) mod binding;
 pub(crate) mod comment;
 pub(crate) mod config;

@@ -140,6 +140,23 @@ pub fn managed_block_body(language_label: &str, cmd: &str) -> String {
     )
 }
 
+/// The preamble a new automation starts with — what every step of it is told before its own prompt.
+///
+/// **Written here rather than in the CLI** because two surfaces raise an automation (`automation add`
+/// and the build screen), and a default each of them spells for itself is two defaults that drift.
+///
+/// **It names no command.** What a step types to hand its result back is the run's own vocabulary, and
+/// a preamble naming a command this build does not answer to teaches a road that is shut. An
+/// automation that wants those words written out says so in its own preamble, or in a document its
+/// steps share.
+pub const DEFAULT_PREAMBLE: &str = "\
+You are one step of an automation run, not the whole of it.
+
+- Do what this step's prompt asks, and stop there. The step after this one is the run's to open, never yours.
+- Leave through one of the ways out this step declares, and say which one you took.
+- Hand on what this step was asked to hand on, under the names it declares — nothing else travels to the next step.
+- If you cannot finish, say so and leave through the error way out rather than reporting work you did not do.";
+
 /// Wraps a body in the markers (body between them, no trailing newline).
 pub fn wrap(body: &str) -> String {
     format!("{BEGIN_MARKER}\n{body}\n{END_MARKER}")

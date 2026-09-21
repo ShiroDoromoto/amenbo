@@ -91,6 +91,11 @@ path = "tests/e2e/dimension.rs"
 required-features = ["e2e"]
 
 [[test]]
+name = "cli_e2e_automation"
+path = "tests/e2e/automation.rs"
+required-features = ["e2e"]
+
+[[test]]
 name = "cli_e2e_activity"
 path = "tests/e2e/activity.rs"
 required-features = ["e2e"]

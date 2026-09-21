@@ -1226,6 +1226,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // The three command groups that append observation events to the outbox (`AMB-D-367`): drive the
         // dispatcher once after each, at the short-lived CLI's write seam (`with_dispatch`).
         Command::Task { sub } => return with_dispatch(&mut store, |s| task(s, flags, sub)),
+        // Automations: the library of prompts, and the pictures built out of them. Only the building
+        // side, and nothing here refuses an unfinished automation — the launch check is where a person
+        // is let down by one.
+        Command::Automation { sub } => {
+            return with_dispatch(&mut store, |s| cmd::automation::automation(s, flags, sub))
+        }
         Command::Comment { sub } => return with_dispatch(&mut store, |s| comment(s, flags, sub)),
         Command::Decision { sub } => return with_dispatch(&mut store, |s| decision(s, flags, sub)),
         Command::Attach { sub } => return attach(&mut store, flags, sub),

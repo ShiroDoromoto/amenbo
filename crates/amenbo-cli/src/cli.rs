@@ -542,6 +542,24 @@ pub enum Command {
         #[command(subcommand)]
         sub: ViewerCmd,
     },
+
+    /// Automations: a library of prompts, and the pictures built out of them — steps, the ways out of
+    /// each one, what runs after each way out is taken, and what is handed along.
+    ///
+    /// These are the building commands. Nothing here refuses an unfinished automation — a step with no
+    /// way onward, no entry named, a required setting nobody answered. What refuses them is the launch
+    /// check, where a person is about to be let down by them.
+    ///
+    /// **The parts are named by id**, the one each `add` prints. They carry no ref of their own: a step
+    /// is named by the automation it sits in, not by a number anybody types back.
+    ///
+    /// **An edge and a wire name a way out by name, not by key**, because an action's declarations can
+    /// be rewritten underneath a step that points at it. Written `<step>:<way out>` — `4:` is the
+    /// unnamed way out, `4:*` the error one.
+    Automation {
+        #[command(subcommand)]
+        sub: AutomationCmd,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1793,5 +1811,514 @@ pub enum AttachCmd {
     Rm {
         /// attachment ref (AMB-ATT-n)
         id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationCmd {
+    /// Create an automation
+    Add {
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long)]
+        project: Option<String>,
+        /// what this automation is called
+        #[arg(long)]
+        name: String,
+        /// what it is for, in Markdown (`-` reads it from stdin)
+        #[arg(long, default_value = "")]
+        notes: String,
+        /// the text prepended to every step's launch. Left out, the standing operating rules go in;
+        /// pass an empty string for none (`-` reads it from stdin)
+        #[arg(long)]
+        preamble: Option<String>,
+    },
+    /// Change an automation's name, notes, preamble, or whether it is archived (only the given fields change)
+    Update {
+        /// automation id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// what it is for, in Markdown (`-` reads it from stdin)
+        #[arg(long)]
+        notes: Option<String>,
+        /// the text prepended to every step's launch (`-` reads it from stdin)
+        #[arg(long)]
+        preamble: Option<String>,
+        /// whether it is archived (`--archived true|false`)
+        #[arg(long)]
+        archived: Option<bool>,
+    },
+    /// Delete an automation with every step, way out, edge and wire built into it — confirms unless -y
+    Rm {
+        /// automation id
+        id: i64,
+    },
+    /// The step a run starts at
+    Entry {
+        #[command(subcommand)]
+        sub: AutomationEntryCmd,
+    },
+    /// The library: prompts worth using twice
+    Action {
+        #[command(subcommand)]
+        sub: AutomationActionCmd,
+    },
+    /// The steps of one automation
+    Step {
+        #[command(subcommand)]
+        sub: AutomationStepCmd,
+    },
+    /// The ways out of a step or a library action
+    Exit {
+        #[command(subcommand)]
+        sub: AutomationExitCmd,
+    },
+    /// What a step takes in, and what a way out of it hands on
+    Port {
+        #[command(subcommand)]
+        sub: AutomationPortCmd,
+    },
+    /// Settings: declared by a step or a library action, answered on the step that uses them
+    Cfg {
+        #[command(subcommand)]
+        sub: AutomationCfgCmd,
+    },
+    /// What happens after a way out is taken
+    Edge {
+        #[command(subcommand)]
+        sub: AutomationEdgeCmd,
+    },
+    /// What is handed from one step to the next
+    Wire {
+        #[command(subcommand)]
+        sub: AutomationWireCmd,
+    },
+    /// Documents the steps of one automation share
+    Note {
+        #[command(subcommand)]
+        sub: AutomationNoteCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationEntryCmd {
+    /// Name the step a run starts at, or clear it
+    Set {
+        /// automation id
+        id: i64,
+        /// the step to start at
+        #[arg(long, value_name = "ID", conflicts_with = "clear")]
+        step: Option<i64>,
+        /// leave the automation with no entry
+        #[arg(long)]
+        clear: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationActionCmd {
+    /// Add a prompt to the library
+    Add {
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long, conflicts_with = "global")]
+        project: Option<String>,
+        /// put it in the device's library, which every project on this machine reaches (a human's to write)
+        #[arg(long)]
+        global: bool,
+        /// what this action is called
+        #[arg(long)]
+        name: String,
+        /// the prompt itself (`-` reads it from stdin)
+        #[arg(long)]
+        prompt: String,
+    },
+    /// Rename a library action, or rewrite its prompt (only the given fields change)
+    Update {
+        /// action id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// the prompt itself (`-` reads it from stdin)
+        #[arg(long)]
+        prompt: Option<String>,
+    },
+    /// Delete a library action with everything it declared — refused while a step runs it; confirms unless -y
+    Rm {
+        /// action id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationStepCmd {
+    /// Add a step to an automation. It either runs a library action (--action) or carries a prompt of
+    /// its own (--prompt), and which it is decides where its ways out, settings and inputs are read from
+    Add {
+        /// automation id
+        automation: i64,
+        /// what this step is called
+        #[arg(long)]
+        name: String,
+        /// run this library action
+        #[arg(long, value_name = "ID", conflicts_with = "prompt")]
+        action: Option<i64>,
+        /// the prompt written for this step alone (`-` reads it from stdin)
+        #[arg(long)]
+        prompt: Option<String>,
+        /// who is asked to carry it out (e.g. claude)
+        #[arg(long)]
+        agent: String,
+        /// which model; left out, the agent's own default stands
+        #[arg(long)]
+        model: Option<String>,
+        /// let this step wait for a person (it then holds a lane while nobody answers)
+        #[arg(long)]
+        interactive: bool,
+        /// the name of the setting or the input the working folder is taken from — a name, not a path
+        #[arg(long, value_name = "NAME")]
+        work_dir: Option<String>,
+        /// also land this step's report as a comment on the task
+        #[arg(long)]
+        report_to_task: bool,
+        /// do not hand this step the run's story so far (it is handed on unless this is passed)
+        #[arg(long)]
+        no_history: bool,
+    },
+    /// Change a step (only the given fields change). Switching where its prompt comes from takes its
+    /// declarations with it
+    Update {
+        /// step id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// run this library action instead
+        #[arg(long, value_name = "ID", conflicts_with = "prompt")]
+        action: Option<i64>,
+        /// carry this prompt instead (`-` reads it from stdin)
+        #[arg(long)]
+        prompt: Option<String>,
+        /// who is asked to carry it out
+        #[arg(long)]
+        agent: Option<String>,
+        /// which model
+        #[arg(long, conflicts_with = "clear_model")]
+        model: Option<String>,
+        /// leave the agent's own default model
+        #[arg(long)]
+        clear_model: bool,
+        /// whether this step may wait for a person (`--interactive true|false`)
+        #[arg(long)]
+        interactive: Option<bool>,
+        /// the name of the setting or the input the working folder is taken from
+        #[arg(long, value_name = "NAME", conflicts_with = "clear_work_dir")]
+        work_dir: Option<String>,
+        /// take the working folder from nothing
+        #[arg(long)]
+        clear_work_dir: bool,
+        /// whether this step's report also lands as a comment on the task (`--report-to-task true|false`)
+        #[arg(long)]
+        report_to_task: Option<bool>,
+        /// whether this step is handed the run's story so far (`--history true|false`)
+        #[arg(long)]
+        history: Option<bool>,
+    },
+    /// Delete a step with its declarations and every edge and wire naming it — confirms unless -y
+    Rm {
+        /// step id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationExitCmd {
+    /// Declare a way out of a step or a library action. Both are born carrying the unnamed way out and
+    /// the error one (`*`), so this is for the second and every one after it
+    Add {
+        /// the step that declares it (one carrying its own prompt)
+        #[arg(long, value_name = "ID", conflicts_with = "action")]
+        step: Option<i64>,
+        /// the library action that declares it
+        #[arg(long, value_name = "ID")]
+        action: Option<i64>,
+        /// what this way out is called
+        #[arg(long)]
+        name: String,
+    },
+    /// Rename a way out. Whatever named the old name is parted from it — the edges and wires that named
+    /// it stop resolving, visibly, rather than being rewritten underneath
+    Rename {
+        /// way out id
+        id: i64,
+        /// the new name
+        #[arg(long, conflicts_with = "clear")]
+        name: Option<String>,
+        /// make it the unnamed way out
+        #[arg(long)]
+        clear: bool,
+    },
+    /// Delete a way out with the outputs declared on it — confirms unless -y
+    Rm {
+        /// way out id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationPortCmd {
+    /// Declare a port. An input belongs to the step or the action that reads it (--step / --action); an
+    /// output belongs to the way out that produced it (--exit)
+    Add {
+        /// the step that takes it in (one carrying its own prompt)
+        #[arg(long, value_name = "ID", conflicts_with_all = ["action", "exit"])]
+        step: Option<i64>,
+        /// the library action that takes it in
+        #[arg(long, value_name = "ID", conflicts_with = "exit")]
+        action: Option<i64>,
+        /// the way out that hands it on
+        #[arg(long, value_name = "ID")]
+        exit: Option<i64>,
+        /// what this port is called
+        #[arg(long)]
+        name: String,
+        /// what it carries: value | file | task_take | task_make
+        #[arg(long)]
+        kind: String,
+        /// refuse to run the step without it
+        #[arg(long)]
+        required: bool,
+    },
+    /// Change a port's name, what it carries, or whether it is required (only the given fields change).
+    /// Renaming parts every wire that named the old name
+    Update {
+        /// port id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// what it carries: value | file | task_take | task_make
+        #[arg(long)]
+        kind: Option<String>,
+        /// whether the step is refused without it (`--required true|false`)
+        #[arg(long)]
+        required: Option<bool>,
+    },
+    /// Delete a port — confirms unless -y. The wires that named it are left where they are, parted
+    Rm {
+        /// port id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationCfgCmd {
+    /// Declare a setting on a step or a library action
+    Add {
+        /// the step that declares it (one carrying its own prompt)
+        #[arg(long, value_name = "ID", conflicts_with = "action")]
+        step: Option<i64>,
+        /// the library action that declares it
+        #[arg(long, value_name = "ID")]
+        action: Option<i64>,
+        /// what this setting is called
+        #[arg(long)]
+        name: String,
+        /// what kind of answer it takes: taskfilter | folder | choice | number | text
+        #[arg(long)]
+        kind: String,
+        /// refuse to run the step until it is answered
+        #[arg(long)]
+        required: bool,
+        /// the choices, as a JSON array — for `--kind choice` and nothing else
+        #[arg(long, value_name = "JSON")]
+        options: Option<String>,
+    },
+    /// Change a setting's declaration (only the given fields change). The answer is `cfg set`
+    Update {
+        /// setting id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// what kind of answer it takes: taskfilter | folder | choice | number | text
+        #[arg(long)]
+        kind: Option<String>,
+        /// whether the step is refused until it is answered (`--required true|false`)
+        #[arg(long)]
+        required: Option<bool>,
+        /// the choices, as a JSON array — for `--kind choice` and nothing else
+        #[arg(long, value_name = "JSON", conflicts_with = "clear_options")]
+        options: Option<String>,
+        /// leave it with no choice list
+        #[arg(long)]
+        clear_options: bool,
+    },
+    /// Answer a setting on one step. The answer is written in the shape its kind takes, never as one
+    /// filter string: for `taskfilter`, the same option twice is any-of and two different options are
+    /// both
+    Set {
+        /// step id
+        step: i64,
+        /// the setting's name, as it was declared
+        #[arg(long)]
+        name: String,
+        /// leave it unanswered
+        #[arg(long)]
+        clear: bool,
+        /// `folder`: the working folder
+        #[arg(long, value_name = "PATH")]
+        folder: Option<String>,
+        /// `choice`: one of the declared choices
+        #[arg(long, value_name = "VALUE")]
+        choice: Option<String>,
+        /// `number`: the number
+        #[arg(long, value_name = "N")]
+        number: Option<i64>,
+        /// `text`: the text
+        #[arg(long, value_name = "STR")]
+        text: Option<String>,
+        /// `taskfilter`: the status a task is in (repeat for any-of)
+        #[arg(long, value_name = "VALUE")]
+        status: Vec<String>,
+        /// `taskfilter`: the priority (repeat for any-of)
+        #[arg(long, value_name = "VALUE")]
+        priority: Vec<String>,
+        /// `taskfilter`: who it is assigned to — none | me | me-ai (repeat for any-of)
+        #[arg(long, value_name = "VALUE")]
+        assignee: Vec<String>,
+        /// `taskfilter`: a classification, `<axis>=<value>` (repeat the same axis for any-of)
+        #[arg(long, value_name = "AXIS=VALUE")]
+        dim: Vec<String>,
+        /// `taskfilter`: whether the premises it declared are met — yes | no
+        #[arg(long, value_name = "VALUE")]
+        ready: Vec<String>,
+        /// `taskfilter`: whether it is closed — true | false
+        #[arg(long, value_name = "VALUE")]
+        done: Vec<String>,
+        /// `taskfilter`: when it is due — today | overdue | week | none | YYYY-MM-DD
+        #[arg(long, value_name = "VALUE")]
+        due: Vec<String>,
+    },
+    /// Delete a setting — confirms unless -y
+    Rm {
+        /// setting id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationEdgeCmd {
+    /// Say what happens after one step leaves through one way out. The way out is the whole condition:
+    /// the edge carries none of its own
+    Add {
+        /// where it leaves from, `<step>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
+        #[arg(long, value_name = "STEP:EXIT")]
+        from: String,
+        /// go on to this step
+        #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt"])]
+        to: Option<i64>,
+        /// close the run
+        #[arg(long, conflicts_with = "halt")]
+        done: bool,
+        /// stop the run and call a person
+        #[arg(long)]
+        halt: bool,
+        /// how often this edge may be taken for one task (left out: 10, the standing limit)
+        #[arg(long, value_name = "N", conflicts_with = "no_max")]
+        max_times: Option<i64>,
+        /// let it be taken as often as the run reaches it
+        #[arg(long)]
+        no_max: bool,
+    },
+    /// Change where an edge goes, or how often it may be taken (only the given fields change)
+    Update {
+        /// edge id
+        id: i64,
+        /// go on to this step
+        #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt"])]
+        to: Option<i64>,
+        /// close the run
+        #[arg(long, conflicts_with = "halt")]
+        done: bool,
+        /// stop the run and call a person
+        #[arg(long)]
+        halt: bool,
+        /// how often this edge may be taken for one task
+        #[arg(long, value_name = "N", conflicts_with = "no_max")]
+        max_times: Option<i64>,
+        /// take the limit off
+        #[arg(long)]
+        no_max: bool,
+    },
+    /// Delete an edge — confirms unless -y
+    Rm {
+        /// edge id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationWireCmd {
+    /// Join what one way out hands on to what a later step takes in. Both ends are named, never keyed
+    Add {
+        /// where it comes from, `<step>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
+        #[arg(long, value_name = "STEP:EXIT")]
+        from: String,
+        /// the output's name on that way out
+        #[arg(long, value_name = "NAME")]
+        from_port: String,
+        /// the step that takes it in
+        #[arg(long, value_name = "ID")]
+        to: i64,
+        /// the input's name on that step
+        #[arg(long, value_name = "NAME")]
+        to_port: String,
+    },
+    /// Delete a wire — confirms unless -y
+    Rm {
+        /// wire id
+        id: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationNoteCmd {
+    /// Write a document the steps of one automation share. Long is fine here — which steps are handed
+    /// it is `note link`'s to say
+    Add {
+        /// automation id
+        automation: i64,
+        /// what this document is called
+        #[arg(long)]
+        name: String,
+        /// the document itself, in Markdown (`-` reads it from stdin)
+        #[arg(long)]
+        body: String,
+    },
+    /// Rename a shared document, or rewrite it (only the given fields change)
+    Update {
+        /// document id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// the document itself, in Markdown (`-` reads it from stdin)
+        #[arg(long)]
+        body: Option<String>,
+    },
+    /// Delete a shared document with the links that hand it to steps — confirms unless -y
+    Rm {
+        /// document id
+        id: i64,
+    },
+    /// Hand a shared document to a step
+    Link {
+        /// step id
+        step: i64,
+        /// document id
+        note: i64,
+    },
+    /// Stop handing a shared document to a step
+    Unlink {
+        /// step id
+        step: i64,
+        /// document id
+        note: i64,
     },
 }

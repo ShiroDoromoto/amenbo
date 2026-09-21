@@ -2232,18 +2232,23 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    The loud ones fill the band, and there the parts are cut out of the ground rather than laid on it:
    `--banner-tint` for the patch a control sits on, and an action that swaps ink for ground. */
 .healthbanner {
+  /* The quiet band stands on two of the four places a skin may lay a picture behind, so each of them
+     is named here as a pair — the colour, and the slot the picture goes in. A band that read the
+     colour alone would be the one flat patch on a face wearing the author's paper, and no rule
+     downstream could tell: what they read is the band's own name for it. */
   --banner-ground: var(--c-surface);
+  --banner-ground-pic: var(--c-surface-pic);
   --banner-ink: var(--c-text);
   --banner-tint: var(--c-sunken);
+  --banner-tint-pic: var(--c-sunken-pic);
   --banner-tint-hover: var(--c-hover);
-  --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);
   --banner-btn-ink: var(--c-on-accent);
 
   display: flex; align-items: flex-start; gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
-  background: var(--banner-ground); color: var(--banner-ink);
+  background: var(--banner-ground-pic) var(--banner-ground); color: var(--banner-ink);
   border-bottom: var(--border-w) var(--border-style) var(--c-rule);
   font-size: var(--fs-md);
 }
@@ -2251,8 +2256,11 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    ladder — nothing is wrong, the reader is being handed something. */
 .healthbanner--stop, .healthbanner--heed, .healthbanner--offer {
   --banner-tint: rgba(0, 0, 0, 0.18);
+  /* A loud band is a step's own colour and not one of the four places, so no picture goes behind it
+     or behind the patch cut out of it — the slots are emptied rather than left holding the quiet
+     band's, which is what they would inherit. */
+  --banner-tint-pic: none;
   --banner-tint-hover: rgba(0, 0, 0, 0.3);
-  --banner-edge: rgba(255, 255, 255, 0.35);
   /* The action on a loud band turns the pairing round rather than taking a colour of its own: the
      band's ink becomes its ground and the band's ground its ink. The pair holds AA read either
      way, so one declaration covers all three bands and both themes. */
@@ -2261,18 +2269,18 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
   border-bottom-color: transparent;
 }
 /* Each band names the fill and the ink together — they are one pairing, and a theme swaps both. */
-.healthbanner--stop { --banner-ground: var(--c-stop); --banner-ink: var(--c-on-stop); }
-.healthbanner--heed { --banner-ground: var(--c-heed); --banner-ink: var(--c-on-heed); }
+.healthbanner--stop { --banner-ground: var(--c-stop); --banner-ground-pic: none; --banner-ink: var(--c-on-stop); }
+.healthbanner--heed { --banner-ground: var(--c-heed); --banner-ground-pic: none; --banner-ink: var(--c-on-heed); }
 /* The re-sync affordance for an outdated managed block, and the rest of the guidance the app offers
    rather than warns about. Accent, so it reads as an offer wherever it stands beside a step. */
-.healthbanner--offer { --banner-ground: var(--c-accent); --banner-ink: var(--c-on-accent); }
+.healthbanner--offer { --banner-ground: var(--c-accent); --banner-ground-pic: none; --banner-ink: var(--c-on-accent); }
 .healthbanner__body { flex: 1; min-width: 0; }
 .healthbanner__title { font-weight: var(--fw-bold); }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }
 .healthbanner__hint { font-size: var(--fs-xs); opacity: 0.85; margin-top: var(--s-1); }
 .healthbanner__close {
   flex: none; display: inline-flex; align-items: center; gap: var(--s-1);
-  color: var(--banner-ink); background: var(--banner-tint);
+  color: var(--banner-ink); background: var(--banner-tint-pic) var(--banner-tint);
   border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
   font-size: var(--fs-xs); cursor: pointer;
 }
@@ -2289,25 +2297,6 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 }
 .healthbanner__action:hover { opacity: 0.85; }
 .healthbanner__action:disabled { opacity: 0.6; cursor: default; }
-/* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the
-   reader's to edit a file of theirs, so it is read before it is handed on. Capped and scrolled, so a
-   banner cannot push the app off the screen. */
-/* Which tool the text is for, where the folder does not say. Sits above the sentence it changes. */
-.agenthook__pick {
-  margin: var(--s-1) 0;
-  padding: var(--s-1) var(--s-2);
-  background: var(--banner-tint); color: var(--banner-ink);
-  border: var(--border-w) var(--border-style) var(--banner-edge); border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
-}
-.agenthook__request {
-  max-height: 11em; overflow: auto;
-  margin: var(--s-1) 0 var(--s-2);
-  padding: var(--s-2);
-  background: var(--banner-tint); border-radius: var(--r-sm);
-  font-size: var(--fs-xs); font-family: var(--font-mono);
-  white-space: pre-wrap; word-break: break-word;
-}
 
 /* ---------- topbar ---------- */
 .topbar {

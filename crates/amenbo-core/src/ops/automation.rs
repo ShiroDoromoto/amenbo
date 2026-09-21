@@ -1,4 +1,6 @@
-//! Building an automation's definition — the ten tables of the definition side, and nothing of the run.
+//! Building an automation's definition — the ten tables of the definition side. Of the run side there
+//! is one op here, [`run_delete`], and it is a sweep rather than a launch: the definition and what was
+//! launched from it go down together when the project does.
 //!
 //! An automation is a set of steps, the ways out of each of them, and what happens after each way out is
 //! taken. It carries no order of its own: the picture is walked from
@@ -26,10 +28,10 @@
 
 use crate::error::{Error, Result};
 use crate::model::{
-    Automation, AutomationAction, AutomationCfg, AutomationCfgKind, AutomationEdge, AutomationEnds,
-    AutomationExit, AutomationNote, AutomationOwner, AutomationPort, AutomationPortDirection,
-    AutomationPortKind, AutomationPortOwner, AutomationStep, AutomationStepNote, AutomationWire,
-    ERROR_EXIT,
+    AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind, AutomationEdge,
+    AutomationEnds, AutomationExit, AutomationNote, AutomationOwner, AutomationPort,
+    AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
+    AutomationStepNote, AutomationWire, ERROR_EXIT,
 };
 use crate::ops::{emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -407,6 +409,41 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     tx.delete_record("automation", id)?;
     Ok(())
+}
+
+/// Delete one run and everything filed under it — the values each step execution carried, the
+/// executions themselves with whatever was attached to them, the tasks the run worked on, and the step
+/// snapshots it took at launch. Returns the blob hashes those attachments pointed at, for the caller to
+/// reclaim once the transaction commits.
+///
+/// **Nothing refuses this, and nothing calls it but the project delete.** A run is the record of what
+/// happened, so there is no reason to reach for it while the project it is filed under is still there —
+/// and no reason to keep it once that project is gone.
+///
+/// The order is what the `RESTRICT` clauses insist on: a value names the execution that produced it as
+/// well as the one that received it (`from_run_step_id`), so every value of the run goes before any
+/// execution does; and an execution names the task row and the snapshot it was run from, so those go
+/// after it.
+pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+    let steps = read::automation_run_step_ids(tx.conn(), id)?;
+    for step in &steps {
+        for value in read::automation_run_value_ids(tx.conn(), *step)? {
+            tx.delete_record("automation_run_value", value)?;
+        }
+    }
+    let mut orphaned = Vec::new();
+    for step in steps {
+        orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRunStep, step)?);
+        tx.delete_record("automation_run_step", step)?;
+    }
+    for run_task in read::automation_run_task_ids(tx.conn(), id)? {
+        tx.delete_record("automation_run_task", run_task)?;
+    }
+    for def in read::automation_run_def_ids(tx.conn(), id)? {
+        tx.delete_record("automation_run_def", def)?;
+    }
+    tx.delete_record("automation_run", id)?;
+    Ok(orphaned)
 }
 
 // ───────────────────────────── shared documents ─────────────────────────────

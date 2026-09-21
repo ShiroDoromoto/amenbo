@@ -1152,9 +1152,10 @@ impl AttachmentKind {
     }
 }
 
-/// What an attachment hangs off. Tasks and decision records themselves, and the comments on either
-/// (`task_comment` / `decision_comment`). A comment's attachments are kept **separately** from the parent
-/// record's, which is what preserves the chronology of which comment a file arrived with. The target is
+/// What an attachment hangs off. Tasks and decision records themselves, the comments on either
+/// (`task_comment` / `decision_comment`), and one execution of one step of an automation run
+/// (`automation_run_step`). A comment's attachments are kept **separately** from the parent record's,
+/// which is what preserves the chronology of which comment a file arrived with. The target is
 /// polymorphic — `target_type` names the table, and SQL cannot enforce a reference across it. The
 /// `target_type` column is a string, so adding a variant is purely additive.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1167,6 +1168,10 @@ pub enum AttachmentTarget {
     TaskComment,
     /// Attached to a durable comment on a decision record ([`DecisionComment`]).
     DecisionComment,
+    /// Attached to one execution of one step of an automation run (`automation_run_step`) — the file a
+    /// step produced, filed where it was produced. The run side has no model shape yet; this variant is
+    /// what lets the column's fifth value be read back.
+    AutomationRunStep,
 }
 
 impl AttachmentTarget {
@@ -1176,6 +1181,7 @@ impl AttachmentTarget {
             AttachmentTarget::Decision => "decision",
             AttachmentTarget::TaskComment => "task_comment",
             AttachmentTarget::DecisionComment => "decision_comment",
+            AttachmentTarget::AutomationRunStep => "automation_run_step",
         }
     }
 
@@ -1185,26 +1191,36 @@ impl AttachmentTarget {
             "decision" => Some(AttachmentTarget::Decision),
             "task_comment" => Some(AttachmentTarget::TaskComment),
             "decision_comment" => Some(AttachmentTarget::DecisionComment),
+            "automation_run_step" => Some(AttachmentTarget::AutomationRunStep),
             _ => None,
         }
     }
 
     /// The ref space the target is numbered in — what turns `(target_type, target_id)` back into the
     /// ref a reader knows it by (`AMB-T-12`, `AMB-TC-12`). The pair is polymorphic, so this mapping is
-    /// the one place the column's four values line up with [`crate::idref::RefKind`]; everything that
-    /// has to name a target quotes it through here rather than spelling the four cases again.
-    pub const fn ref_kind(self) -> crate::idref::RefKind {
+    /// the one place the column's values line up with [`crate::idref::RefKind`]; everything that has to
+    /// name a target quotes it through here rather than spelling the cases again.
+    ///
+    /// `None` for a step execution: it is named by the run it sits in, not by a number a person types
+    /// back, so there is no ref space to render it in ([`Self::target_ref`] says what is quoted instead).
+    pub const fn ref_kind(self) -> Option<crate::idref::RefKind> {
         match self {
-            AttachmentTarget::Task => crate::idref::RefKind::Task,
-            AttachmentTarget::Decision => crate::idref::RefKind::Decision,
-            AttachmentTarget::TaskComment => crate::idref::RefKind::TaskComment,
-            AttachmentTarget::DecisionComment => crate::idref::RefKind::DecisionComment,
+            AttachmentTarget::Task => Some(crate::idref::RefKind::Task),
+            AttachmentTarget::Decision => Some(crate::idref::RefKind::Decision),
+            AttachmentTarget::TaskComment => Some(crate::idref::RefKind::TaskComment),
+            AttachmentTarget::DecisionComment => Some(crate::idref::RefKind::DecisionComment),
+            AttachmentTarget::AutomationRunStep => None,
         }
     }
 
-    /// The target rendered as the ref a reader quotes it by.
+    /// The target rendered as the ref a reader quotes it by. A target with no ref space of its own falls
+    /// to the raw `(type, id)` pair — the same thing [`crate::validate`] prints for a `target_type` the
+    /// model does not know, and the whole of what can be quoted either way.
     pub fn target_ref(self, id: i64) -> String {
-        crate::idref::render(self.ref_kind(), id)
+        match self.ref_kind() {
+            Some(kind) => crate::idref::render(kind, id),
+            None => format!("{}:{}", self.as_str(), id),
+        }
     }
 }
 

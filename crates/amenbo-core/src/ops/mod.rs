@@ -140,7 +140,7 @@ pub(crate) fn emit_update(tx: &WriteTx<'_>, before: Record, after: Record) -> Re
 /// reclaimed only once nothing references them, and this is the only moment the candidates are knowable
 /// (with the rows gone there is nobody left to ask which blobs were orphaned). **Reclamation happens after
 /// commit**, so all we do here is hand the candidates back. What may be swept is named as an
-/// [`AttachmentTarget`], not as text: a caller can only say one of the four
+/// [`AttachmentTarget`], not as text: a caller can only say one of the
 /// things the column's `CHECK` accepts, so a sweep for something nothing can hang off — which would compile,
 /// run, and quietly match no row — is not sayable.
 pub(crate) fn sweep_polymorphic(

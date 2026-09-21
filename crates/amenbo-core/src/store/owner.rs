@@ -3,8 +3,9 @@
 //! answers it.
 //!
 //! The lookup differs per entity: tasks and decisions carry their project themselves, but a comment's
-//! project comes from its parent (task or decision), an attachment's from its target (task, decision, or
-//! a comment on either), and a dimension value's from its dimension. If the write side
+//! project comes from its parent (task or decision), an attachment's from its target (task, decision, a
+//! comment on either, or one execution of one step of an automation run), and a dimension value's from
+//! its dimension. If the write side
 //! ([`super::write_reach`]) and the read side ([`super::read`]) each kept their own copy of how to walk
 //! that, we would eventually fix one and leave the other wide open.
 //!
@@ -131,6 +132,12 @@ pub(super) fn automation_wire(conn: &Connection, id: i64) -> Result<Option<i64>>
     }
 }
 
+/// The project a step execution is filed under — the run's, since a run is filed under a project of its
+/// own and not only under the automation it was launched from.
+pub(super) fn automation_run_step(conn: &Connection, id: i64) -> Result<Option<i64>> {
+    read::automation_run_step_project(conn, id).map_err(crate::error::engine_on(conn))
+}
+
 pub(super) fn attachment(conn: &Connection, id: i64) -> Result<Option<i64>> {
     match read::attachment(conn, id).map_err(crate::error::engine_on(conn))? {
         Some(a) => attach_target(conn, a.target_type, a.target_id),
@@ -149,12 +156,13 @@ pub(super) fn attach_target(
         AttachmentTarget::Decision => decision(conn, id),
         AttachmentTarget::TaskComment => task_comment(conn, id),
         AttachmentTarget::DecisionComment => decision_comment(conn, id),
+        AttachmentTarget::AutomationRunStep => automation_run_step(conn, id),
     }
 }
 
 /// Render an attachment's target as the display ref an error message can quote. The mapping from the
 /// polymorphic pair to a ref space belongs to the target itself ([`AttachmentTarget::ref_kind`]), so the
-/// four cases are written once and every reader that has to name a target quotes the same ref.
+/// cases are written once and every reader that has to name a target quotes the same ref.
 pub(super) fn attach_target_ref(kind: AttachmentTarget, id: i64) -> String {
     kind.target_ref(id)
 }

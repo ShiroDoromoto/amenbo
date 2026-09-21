@@ -101,9 +101,6 @@ let container: HTMLDivElement;
 let root: Root;
 
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
-/** The split the control says is on, as a number of panes to a page. */
-const splitOn = () => container.querySelector(".workspace__count--on")?.getAttribute("aria-label") ?? null;
-
 /** Let the host answer, and let React settle around it. */
 async function answered() {
   await act(async () => {
@@ -149,12 +146,10 @@ describe("the first window of a run", () => {
     expect(q(".slot")).toHaveLength(0);
   });
 
-  it("comes up with one way in and nothing running, and no size to be about", async () => {
+  it("comes up with one way in and nothing running", async () => {
     await answered();
-    // Nothing was open to come back to. A size is a fact about a pane (`../talk/layout`), so a
-    // device with no panes brings none back and the row has nothing to be about — what the face
+    // Nothing was open to come back to, so a device with no panes brings none back — what the face
     // draws is the one way in.
-    expect(splitOn()).toBeNull();
     expect(q(".slot--empty")).toHaveLength(1);
     expect(q(".slot")).toHaveLength(1);
     expect(hoisted.mounts).toHaveLength(0);

@@ -6197,8 +6197,8 @@ pub fn live_task_titles(conn: &Connection, project: Option<i64>) -> Result<Vec<(
 // transaction (crate::ops::automation): placing an order_key, minting an id and checking that a name is
 // free are all read-then-write, and two writers that read the same answer both act on it.
 //
-// The run side is read at the foot of this section; what is asked of it from here is a count — an
-// automation with a run behind it is one whose delete is refused.
+// The run side's five tables are read further down, under a heading of their own. What is asked of them
+// from here is a count — an automation with a run behind it is one whose delete is refused.
 
 /// Every row of one definition table matching `pred`, in `order_key` then `id` order — the order a
 /// screen lists them in, and the order the ops walk a subtree to delete it.
@@ -6666,8 +6666,9 @@ pub fn automation_action_ids_in_project(conn: &Connection, project_id: i64) -> R
 
 // ───────────────────────── automation: what ran ─────────────────────────
 //
-// What the launch writes, and what it has to read to write it: how many lanes are held right now, and
-// which run is next in line for the one that just came free.
+// Two of the five carry a model shape — the two the launch writes — and the other three do not, so a
+// record comes back for those two alone. Beside that, what is needed here is the walk a delete takes
+// and the one column a reach check asks for, which answer ids and a project.
 
 /// The `automation_run` record with this id.
 pub fn automation_run(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRun>> {
@@ -6715,6 +6716,49 @@ pub fn automation_run_defs_of(
         &[Sort::by(D.id)],
         super::hydrate::automation_run_def_row,
     )
+}
+
+/// The runs filed under one project, for the project delete's walk.
+pub fn automation_run_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    select_ids(conn, R.id, Some(&Pred::eq(R.project_id, project_id)))
+}
+
+/// The step snapshots one run took at launch.
+pub fn automation_run_def_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    const D: col::automation_run_def::Cols = col::automation_run_def::ALL;
+    select_ids(conn, D.id, Some(&Pred::eq(D.run_id, run_id)))
+}
+
+/// The tasks one run worked on, as rows of the run.
+pub fn automation_run_task_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
+    select_ids(conn, T.id, Some(&Pred::eq(T.run_id, run_id)))
+}
+
+/// The step executions of one run.
+pub fn automation_run_step_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    const S: col::automation_run_step::Cols = col::automation_run_step::ALL;
+    select_ids(conn, S.id, Some(&Pred::eq(S.run_id, run_id)))
+}
+
+/// The values that went in or out of one step execution. `from_run_step_id` names another execution of
+/// the same run, so a value is read by the step that received it and the whole set goes before any
+/// execution row does.
+pub fn automation_run_value_ids(conn: &Connection, run_step_id: i64) -> Result<Vec<i64>> {
+    const V: col::automation_run_value::Cols = col::automation_run_value::ALL;
+    select_ids(conn, V.id, Some(&Pred::eq(V.run_step_id, run_step_id)))
+}
+
+/// The project a step execution is filed under — the reach of an attachment hanging off it. Two hops,
+/// since the execution knows its run and the run knows the project.
+pub fn automation_run_step_project(conn: &Connection, id: i64) -> Result<Option<i64>> {
+    const S: col::automation_run_step::Cols = col::automation_run_step::ALL;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    match scalar_by_id(conn, S.id, S.run_id, id)? {
+        Some(run_id) => scalar_by_id(conn, R.id, R.project_id, run_id),
+        None => Ok(None),
+    }
 }
 
 

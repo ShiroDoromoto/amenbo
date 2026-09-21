@@ -51,7 +51,7 @@ vi.mock("../core/boundFolders", () => ({
 // here the answer is always yes, so what this file sees is what the face does with it.
 vi.mock("../core/dialog", () => ({ confirmDialog: async () => true }));
 
-import { SIZES, type Size } from "../talk/layout";
+import { ACROSS, BOXES, DOWN, type Size } from "../talk/layout";
 import { t } from "../core/i18n";
 import { WorkspaceFace } from "./WorkspaceFace";
 
@@ -77,11 +77,46 @@ const openPaneIn = async (host: HTMLElement) => {
   await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
 const openPane = () => openPaneIn(container);
-/** Press for a size on the pane the page is showing. The first pane of a project opens at the whole
- *  page (`../talk/layout`), so a road about pages, gaps and the strip beside them sizes it first —
- *  and the row is drawn only where the page has a pane to be about. */
+/** The page as 1200 across and 400 down at the origin, so one cell is 100 wide and one row 200.
+ *  jsdom measures nothing, so the page answers for its own rectangle and the drag is arithmetic on
+ *  what it says. */
+const pageIs1200By400 = () => {
+  q(".workspace__page-grid")[0]!.getBoundingClientRect = () => ({
+    top: 0, left: 0, width: 1200, height: 400, right: 1200, bottom: 400,
+    x: 0, y: 0, toJSON: () => ({}),
+  }) as DOMRect;
+};
+/** Pull the corner of the pane the page is showing out to a size, which is the one way a person sets
+ *  one (`AMB-D-939`, `./paneDrag`). The pane is the one being worked in where it is on this page and
+ *  the last one of the page where it is not — the same pane a new one is measured against
+ *  (`../talk/layout`). The first pane of a project opens at the whole page, so a road about pages,
+ *  gaps and the strip beside them sizes it first. */
 const atSize = async (size: Size) => {
-  await click(q(".workspace__count")[SIZES.indexOf(size)]!);
+  pageIs1200By400();
+  const open = q(".slot:not(.slot--empty)");
+  const slot = open.find((one) => one.classList.contains("slot--focused")) ?? open[open.length - 1]!;
+  // Where the pane stands on the grid, which is what the corner is pulled from: the cell it is let
+  // go over is that spot plus the box the size comes to (`./paneDrag`).
+  const at = {
+    across: Number(slot.style.gridColumn.split(" ")[0]) - 1,
+    down: Number(slot.style.gridRow.split(" ")[0]) - 1,
+  };
+  const to = {
+    x: (at.across + BOXES[size].across) * (1200 / ACROSS),
+    y: (at.down + BOXES[size].down) * (400 / DOWN),
+  };
+  document.elementFromPoint = () => null;
+  await act(async () => {
+    slot.querySelector<HTMLElement>(".slot__corner")!.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 0, clientY: 0 }),
+    );
+    document.dispatchEvent(new MouseEvent("pointermove", { clientX: to.x, clientY: to.y }));
+    // The one hit test a frame the move asks for.
+    await new Promise((done) => setTimeout(done, 20));
+  });
+  await act(async () => {
+    document.dispatchEvent(new MouseEvent("pointerup", { clientX: to.x, clientY: to.y }));
+  });
 };
 /** Put the face up. It is not in `beforeEach` because what the project is bound to is set per test,
  *  and the face reads it as it comes up. */
@@ -293,13 +328,9 @@ describe("how much of the page a pane takes", () => {
     expect(q(".slot--empty")).toHaveLength(1);
   });
 
-  it("offers half the page both ways round, and offers nothing where the page has no pane", async () => {
+  it("takes half the page both ways round", async () => {
     await mount();
-    // Nothing is open, so there is no pane for the row to be about.
-    expect(q(".workspace__count")).toHaveLength(0);
-
     await openPane();
-    expect(q(".workspace__count")).toHaveLength(SIZES.length);
 
     await atSize("half");
     expect(q(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 6");
@@ -330,14 +361,6 @@ describe("how much of the page a pane takes", () => {
 // jsdom has no layout, so the page and the panes answer for their own rectangles and the document
 // for what is under a point. It is the same trade `./paneOrder.test` makes.
 describe("moving and sizing a pane where it is drawn", () => {
-  /** The page as 1200 across and 400 down at the origin, so one cell is 100 wide and one row 200. */
-  function pageIs1200By400() {
-    q(".workspace__page-grid")[0]!.getBoundingClientRect = () => ({
-      top: 0, left: 0, width: 1200, height: 400, right: 1200, bottom: 400,
-      x: 0, y: 0, toJSON: () => ({}),
-    }) as DOMRect;
-  }
-
   /** Press on this, move to that point, and let go — with the document answering for what is under
    *  it. `holding` is run with the hand still down, which is the only moment what a drag draws is on
    *  the screen. The wait before it is for the one hit test a frame the move asks for. */

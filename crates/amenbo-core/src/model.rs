@@ -1469,6 +1469,12 @@ impl AutomationEnds {
 /// the step fell over. It is spelled apart from every name a person can give
 /// ([`crate::ops::automation::exit_add`] refuses it as input), so an exit list can hold it without a
 /// flag column saying which row it is.
+///
+/// **With no edge on it, it halts** — stops the run and calls a person. That is what lets the launch
+/// check pass an automation nobody wrote an edge for on it
+/// ([`crate::ops::automation_run::check`]): every step is born carrying this way out, so asking for
+/// one more edge per step would be asking for the case that is already handled. An
+/// [`AutomationEdge`] on it is how somebody says otherwise.
 pub const ERROR_EXIT: &str = "*";
 
 /// The number of times a way back may be taken for one task before the run is stopped

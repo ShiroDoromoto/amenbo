@@ -11,9 +11,13 @@
 // to be let down by it, which is here: the reasons are listed, and the button is not offered while
 // there is one.
 //
-// **The list of reasons is read, not worked out here** (`../core/automations`). A screen that made
-// its own judgement would come to disagree with the refusal a launch actually gives, and the reader
-// would meet both.
+// **The list of reasons is read, not worked out here** (`../core/automations`). It was worked out
+// here once, beside core's own, and the two disagreed on five points — so the screen could say an
+// automation was ready and the press then refuse it (`AMB-T-5272`).
+//
+// **A closed workspace is not on the list.** It is not about the definition and stops being true the
+// moment a window opens, so the launch raises it at the press rather than the build screen drawing it
+// among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`).
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { t, tf } from "../core/i18n";
@@ -31,33 +35,24 @@ function blockText(block: AutomationLaunchBlockDto): string {
   switch (block.reason) {
     case "no_steps":
       return t("auto.block.noSteps");
-    case "exit_without_next":
+    case "no_entry":
+      return t("auto.block.noEntry");
+    case "entry_takes_no_task":
+      return tf("auto.block.entryTakesNoTask", { step });
+    case "open_exit":
       return block.at === undefined
-        ? tf("auto.block.exitWithoutNextUnnamed", { step })
-        : tf("auto.block.exitWithoutNext", { step, at });
-    case "input_unfed":
-      return tf("auto.block.inputUnfed", { step, at });
-    case "agent_not_here":
-      return tf("auto.block.agentNotHere", { step, at });
-    case "task_undecided":
-      return t("auto.block.taskUndecided");
-    case "workspace_closed":
-      return t("auto.block.workspaceClosed");
+        ? tf("auto.block.openExitUnnamed", { step })
+        : tf("auto.block.openExit", { step, at });
+    case "unwired_input":
+      return tf("auto.block.unwiredInput", { step, at });
+    case "unanswered_cfg":
+      return tf("auto.block.unansweredCfg", { step, at });
+    case "agent_missing":
+      return tf("auto.block.agentMissing", { step, at });
     default:
       return block.reason;
   }
 }
-
-/**
- * Whether the app has a workspace to open a run's panes in.
- *
- * From here it is always yes, and that is a fact about the shell rather than an assumption: in one
- * window the workspace is a face of this one, and split out it is a window whose closing folds the
- * app back into one (`../shell/AppShell`). The check still asks, because the same rule is read by a
- * launch made where no window is open at all — the CLI's — and a rule that only one caller could
- * answer would be written twice.
- */
-const WORKSPACE_OPEN = true;
 
 export function AutomationBuildScreen({
   id, projectId, onBack, onStart,
@@ -75,12 +70,7 @@ export function AutomationBuildScreen({
 }) {
   const automation = useAutomation(id);
   const folders = useBoundFolders(projectId);
-  const check = useLaunchCheck(
-    id,
-    projectId,
-    folders.live.map((one) => one.path),
-    WORKSPACE_OPEN,
-  );
+  const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
 
   return (
     <div className="settings">
@@ -108,7 +98,7 @@ export function AutomationBuildScreen({
               <div className="auto__notready">{t("auto.notReady")}</div>
               <ul className="auto__blocks">
                 {check.blocks.map((block, nth) => (
-                  <li key={`${block.reason}-${block.stepId ?? ""}-${block.at ?? ""}-${nth}`}>
+                  <li key={`${block.reason}-${block.stepName ?? ""}-${block.at ?? ""}-${nth}`}>
                     {blockText(block)}
                   </li>
                 ))}

@@ -136,24 +136,28 @@ describe("the launch place", () => {
   }
 
   it("puts every reason into words a person can act on", async () => {
+    // Every arm core's check can answer with (`amenbo_core::ops::automation_run::Unmet`), so a reason
+    // added there without words on this side is caught here rather than on somebody's screen.
     await open({
       ready: false,
       blocks: [
-        { reason: "exit_without_next", stepId: 1, stepName: "Read", at: "again" },
-        { reason: "exit_without_next", stepId: 1, stepName: "Read" },
-        { reason: "input_unfed", stepId: 2, stepName: "Write", at: "folder" },
-        { reason: "agent_not_here", stepId: 2, stepName: "Write", at: "codex-cli" },
-        { reason: "task_undecided" },
-        { reason: "workspace_closed" },
+        { reason: "no_entry" },
+        { reason: "entry_takes_no_task", stepName: "Read" },
+        { reason: "open_exit", stepName: "Read", at: "again" },
+        { reason: "open_exit", stepName: "Read" },
+        { reason: "unwired_input", stepName: "Write", at: "folder" },
+        { reason: "unanswered_cfg", stepName: "Write", at: "filter" },
+        { reason: "agent_missing", stepName: "Write", at: "codex-cli" },
       ],
     });
     expect(blocks()).toEqual([
-      tf("auto.block.exitWithoutNext", { step: "Read", at: "again" }),
-      tf("auto.block.exitWithoutNextUnnamed", { step: "Read" }),
-      tf("auto.block.inputUnfed", { step: "Write", at: "folder" }),
-      tf("auto.block.agentNotHere", { step: "Write", at: "codex-cli" }),
-      t("auto.block.taskUndecided"),
-      t("auto.block.workspaceClosed"),
+      t("auto.block.noEntry"),
+      tf("auto.block.entryTakesNoTask", { step: "Read" }),
+      tf("auto.block.openExit", { step: "Read", at: "again" }),
+      tf("auto.block.openExitUnnamed", { step: "Read" }),
+      tf("auto.block.unwiredInput", { step: "Write", at: "folder" }),
+      tf("auto.block.unansweredCfg", { step: "Write", at: "filter" }),
+      tf("auto.block.agentMissing", { step: "Write", at: "codex-cli" }),
     ]);
     // Nothing is left standing as a bare reason code: a line nobody wrote words for would ship as
     // `input_unfed` on the screen.

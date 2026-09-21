@@ -6,11 +6,10 @@
 // screen's picture, its step panel and its launch check all walk the same definition — so it is
 // fetched whole, once, and every part of the screen reads that one answer.
 //
-// **The launch check is read, not worked out here.** The rules about what makes a definition
-// unfinished live in one place (`crate::automation`), so the words this screen puts on the screen and
-// the refusal a launch would give cannot come to disagree. What this side supplies is the two facts
-// the host cannot know on its own: what this machine can start, and whether there is a workspace to
-// open the run's panes in.
+// **The launch check is read, not worked out here.** The rules live in core, where the launch itself
+// reads them (`amenbo_core::ops::automation_run::check`), so what a screen says is in the way and
+// what a press refuses cannot come to disagree. What this side supplies is the one fact the store
+// cannot answer: which agents this machine can actually start.
 import { useQuery } from "./query";
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
@@ -56,21 +55,20 @@ export function useAutomation(id: number | null): AutomationDetailDto | null {
  *
  * `folders` are the project's bound folders: whether an agent is installed is asked of the machine
  * the way the empty frame asks it, over the folders this project actually works in
- * (`crate::wake::wake_choices`). An answer that never came is an empty list of agents, and then no
- * step is judged on its agent at all — telling a reader to install what they already have is worse
- * than saying nothing about it.
+ * (`crate::wake::wake_choices`). **An answer that never came goes on as `null`, not as an empty
+ * list** — no step is then judged on its agent at all, because telling a reader to install what they
+ * already have is worse than saying nothing about it (`AMB-D-792`).
  */
 export async function fetchLaunchCheck(
   id: number,
   projectId: number,
   folders: readonly string[],
-  workspaceOpen: boolean,
 ): Promise<AutomationLaunchCheckDto | null> {
   if (!inTauri()) return null;
   const agents = await invoke<WakeDto>("wake_choices", { project: projectId, folders: [...folders] })
     .then((wake) => wake.candidates.filter((one) => one.installed).map((one) => one.id))
-    .catch(() => [] as string[]);
-  return invoke<AutomationLaunchCheckDto>("automation_launch_check", { id, agents, workspaceOpen });
+    .catch(() => null);
+  return invoke<AutomationLaunchCheckDto>("automation_launch_check", { id, agents });
 }
 
 /** Subscribing read of the launch check for one automation. */
@@ -78,14 +76,13 @@ export function useLaunchCheck(
   id: number | null,
   projectId: number | null,
   folders: readonly string[],
-  workspaceOpen: boolean,
 ): AutomationLaunchCheckDto | null {
   const { data } = useQuery<AutomationLaunchCheckDto | null>(
-    ["automationLaunchCheck", id ?? null, projectId ?? null, [...folders].join("\n"), workspaceOpen],
+    ["automationLaunchCheck", id ?? null, projectId ?? null, [...folders].join("\n")],
     () =>
       id === null || projectId === null
         ? Promise.resolve(null)
-        : fetchLaunchCheck(id, projectId, folders, workspaceOpen),
+        : fetchLaunchCheck(id, projectId, folders),
   );
   return data ?? null;
 }

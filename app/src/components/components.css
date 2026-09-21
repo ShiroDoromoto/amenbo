@@ -190,11 +190,12 @@
 .viewtabs { display: inline-flex; background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-md); padding: 2px; }
 .viewtab { border: none; background: none; padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .viewtab--active { background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font-weight: var(--fw-medium); box-shadow: var(--shadow-sm); }
-/* A vertical separator plus a standalone button, setting the view switcher apart from
-   decisions (a different kind of entity). */
+/* A vertical separator plus the standalone buttons after it, setting the view switcher apart from
+   the other things a project holds — its decisions and its automations, each a different kind of
+   entity from a task. */
 .board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-rule); }
-.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-surface-pic) var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
-.decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.boardtab { display: inline-flex; align-items: center; gap: var(--s-2); border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-surface-pic) var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
+.boardtab--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: var(--border-w) var(--border-style) var(--c-rule); flex-wrap: wrap; }
 /* The box that narrows a list, wherever a screen puts one. A control takes the page's font from the
    base rule, and a toolbar reads a step below the page — so the step is said here, once, rather than
@@ -1264,3 +1265,53 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The item that is not the kind of the ones above it, held off from them. The gap is the whole of
    the separation: a rule would draw a heading over a group of one. */
 .menu__item--apart { margin-top: var(--s-1); border-top: var(--border-w) var(--border-style) var(--c-rule); padding-top: var(--s-2); }
+
+/* ---------- the automations screen (`app/src/screens/AutomationsScreen.tsx`) ---------- */
+/* The three tabs, drawn as segments of one control: what a reader chooses between is which of the
+   three lists the screen holds, and three buttons sharing no box would read as three things. It is
+   the rail's shape (`.rail__tabs`) at the width a screen has rather than a column. */
+.autotabs {
+  display: flex;
+  background: var(--c-sunken-pic) var(--c-sunken);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
+  padding: 2px;
+}
+.autotabs__tab {
+  flex: 1 1 0; min-width: 0;
+  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
+  padding: var(--s-1) 0;
+  color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); line-height: 1.6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.autotabs__tab:hover { color: var(--c-text); }
+.autotabs__tab--on {
+  background: var(--c-surface-pic) var(--c-surface);
+  color: var(--c-text); font-weight: var(--fw-bold);
+}
+/* A tab with nothing in it, and the wait before the first answer: one muted line where the rows
+   would be, so neither reads as the other. */
+.auto__empty { font-size: var(--fs-md); color: var(--c-text-muted); }
+.auto__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+/* A whole row is the press, so the name and what is beside it open the same automation. */
+.auto__row {
+  display: flex; align-items: baseline; gap: var(--s-2); width: 100%;
+  background: none; border: 0; border-radius: var(--r-sm);
+  padding: var(--s-2); text-align: start;
+  color: var(--c-text); font: inherit; font-size: var(--fs-md);
+  cursor: pointer;
+}
+.auto__row:hover { background: var(--c-hover); }
+.auto__name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.auto__mark { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.auto__steps { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* The way back to the list, and the name of the automation that is open, on one line. */
+.auto__head { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); font-weight: var(--fw-bold); }
+/* The name of one of the build screen's three places. It is a heading and not a card title: the
+   card is the place, and this says which one it is. */
+.auto__place { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.auto__ready { font-size: var(--fs-md); color: var(--c-text-muted); }
+/* What stands between this automation and a launch. Marked on the heed step rather than the stop:
+   an automation still being built is short of something, not broken. */
+.auto__notready { font-size: var(--fs-md); color: var(--c-heed); font-weight: var(--fw-bold); }
+.auto__blocks { margin: 0; padding-inline-start: var(--s-4); font-size: var(--fs-md); }

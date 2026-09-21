@@ -1121,6 +1121,30 @@ const ui = {
   "tickBanner.start": "Start checking due dates",
   "tickBanner.never": "Don't show this again",
   "tickBanner.later": "Later",
+  // The automations screen: its three tabs, the list of definitions, and the build
+  // screen's launch place — what stands between one automation and a launch.
+  "auto.title": "Automations",
+  "auto.tab.running": "Running",
+  "auto.tab.automations": "Automations",
+  "auto.tab.actions": "Actions",
+  "auto.empty": "No automations in this project yet.",
+  "auto.archived": "Archived",
+  "auto.stepCount": "Steps {count}",
+  "auto.build.back": "Back to the list",
+  "auto.build.launch": "Launch",
+  "auto.build.picture": "Build",
+  "auto.build.step": "Step",
+  "auto.start": "Start",
+  "auto.ready": "Ready to start.",
+  "auto.notReady": "Not ready to start:",
+  "auto.block.noSteps": "It has no steps.",
+  "auto.block.exitWithoutNext": "{step}: nothing is set to happen after {at}.",
+  "auto.block.exitWithoutNextUnnamed": "{step}: nothing is set to happen after it.",
+  "auto.block.inputUnfed": "{step}: nothing feeds {at}.",
+  "auto.block.agentNotHere": "{step}: this machine cannot start {at}.",
+  "auto.block.taskUndecided": "Nothing picks up the task the run would be about.",
+  "auto.block.workspaceClosed": "There is no workspace to open the run in.",
+
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,
   // because the reader who has Amenbo on the command line needs none of it.

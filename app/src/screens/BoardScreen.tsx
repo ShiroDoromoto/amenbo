@@ -19,6 +19,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { inTauri } from "../core/snapshot";
 import { axesFor } from "../core/appliesTo";
 import { DecisionsScreen } from "./DecisionsScreen";
+import { AutomationsScreen } from "./AutomationsScreen";
 import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
 import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
@@ -115,7 +116,7 @@ export function BoardScreen({
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
   // The tasks surface (list/board/…) or the decisions one. Decisions shows only what sits under this project.
-  const [tab, setTab] = useState<"tasks" | "decisions">("tasks");
+  const [tab, setTab] = useState<"tasks" | "decisions" | "automations">("tasks");
   const [sel, setSel] = useState<FilterSelection>({});
   // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
   // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
@@ -276,10 +277,19 @@ export function BoardScreen({
       </div>
       <span className="board__sep" aria-hidden="true" />
       <button
-        className={`decisionsbtn ${tab === "decisions" ? "decisionsbtn--active" : ""}`}
+        className={`boardtab ${tab === "decisions" ? "boardtab--active" : ""}`}
         onClick={() => setTab("decisions")}
       >
         <Icon name="gavel" /> {t("nav.decisions")}
+      </button>
+      {/* The project's automations, beside its decisions rather than in the sidebar: an automation
+          belongs to a project the way a decision does, and a place in the sidebar would be asking
+          which project it was about all over again (`app/src/screens/AutomationsScreen.tsx`). */}
+      <button
+        className={`boardtab ${tab === "automations" ? "boardtab--active" : ""}`}
+        onClick={() => { setTab("automations"); onSelectDecision(null); }}
+      >
+        <Icon name="rocket" /> {t("auto.title")}
       </button>
       <div className="topbar__spacer" />
       {/* The one control the filters have while they are closed, so it says how many axes are narrowing:
@@ -318,6 +328,7 @@ export function BoardScreen({
           onSelectDecision={onSelectDecision}
         />
       )}
+      {tab === "automations" && <AutomationsScreen projectId={projectId} />}
       {/* The loop speaks about a folder, and `linkFolder` standing ahead of it is what guarantees there
           is one to speak about. */}
       {tab === "tasks" && notice === "firstLoop" && folders.live[0] && (

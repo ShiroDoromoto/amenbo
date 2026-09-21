@@ -3194,3 +3194,214 @@ pub struct ViewerRepairedDto {
     #[ts(optional)]
     pub(crate) sent: Option<ViewerSentDto>,
 }
+
+// ───────────────────────── automation: the definition, as a screen reads it ─────────────────────────
+//
+// The ten definition tables answer as three shapes: a card for the list, a detail for the build screen,
+// and the launch check's verdict. A step's ways out, its inputs and its settings are read from the
+// library action it points at or from the step itself (`amenbo_core::ops::automation::declarer`), and
+// the resolving is done on this side — a screen that had to know which of the two declared a name would
+// be drawing the storage rather than the automation.
+
+/// **One automation in the list** — what the "automations" tab draws a row from.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationCardDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    /// How many steps it is built out of. The row says it because "what is this" and "is it built
+    /// yet" are the two things a list is read for.
+    #[ts(type = "number")]
+    pub(crate) steps: usize,
+    pub(crate) archived: bool,
+}
+
+/// **One automation's whole definition** — every step, every way out of each, and what joins them.
+///
+/// It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
+/// picture, its launch check and its step panel all read the same walk from the entry step.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationDetailDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    #[ts(type = "number")]
+    pub(crate) project_id: i64,
+    pub(crate) name: String,
+    pub(crate) notes: String,
+    pub(crate) preamble: String,
+    /// The step a run opens its first terminal on. Absent while the automation is still being built.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) entry_step_id: Option<i64>,
+    pub(crate) archived: bool,
+    pub(crate) steps: Vec<AutomationStepDto>,
+    pub(crate) edges: Vec<AutomationEdgeDto>,
+    pub(crate) wires: Vec<AutomationWireDto>,
+}
+
+/// **One step**, with the declarations it runs under already resolved.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationStepDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    /// The library action this step runs. Absent when it carries its own prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) action_id: Option<i64>,
+    /// What that action is called, so a row can name it without a second read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) action_name: Option<String>,
+    /// The prompt this step carries, or the one it reads off the action — whichever it runs on.
+    pub(crate) prompt: String,
+    pub(crate) agent: String,
+    /// Absent leaves the agent's own default model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) model: Option<String>,
+    pub(crate) interactive: bool,
+    /// The name of the setting or the input the working folder is taken from — a name, not a path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) work_dir_ref: Option<String>,
+    pub(crate) report_to_task: bool,
+    pub(crate) show_history: bool,
+    pub(crate) exits: Vec<AutomationExitDto>,
+    /// What this step takes in, in declaration order.
+    pub(crate) inputs: Vec<AutomationPortDto>,
+    pub(crate) settings: Vec<AutomationCfgDto>,
+}
+
+/// **A way out of a step**, and what leaving through it hands on.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationExitDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    /// Absent is the unnamed way out, which is all a step with a single one needs.
+    /// `*` is the error one, which every owner carries from birth.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) name: Option<String>,
+    pub(crate) outputs: Vec<AutomationPortDto>,
+}
+
+/// **What a step takes, or what a way out of it hands on.**
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationPortDto {
+    pub(crate) name: String,
+    #[ts(type = "\"value\" | \"file\" | \"task_take\" | \"task_make\"")]
+    pub(crate) kind: &'static str,
+    pub(crate) required: bool,
+}
+
+/// **A setting, and the answer written for it while building.** An action declares and the step
+/// answers, so both are folded into one row here.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationCfgDto {
+    pub(crate) name: String,
+    #[ts(type = "\"taskfilter\" | \"folder\" | \"choice\" | \"number\" | \"text\"")]
+    pub(crate) kind: &'static str,
+    pub(crate) required: bool,
+    /// The choices, as JSON, for `choice`. Absent for every other kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) options: Option<String>,
+    /// The answer written while building, as JSON. Absent where nobody has answered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) value: Option<String>,
+}
+
+/// **What happens after a way out is taken.**
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationEdgeDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    #[ts(type = "number")]
+    pub(crate) from_step_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) exit_name: Option<String>,
+    /// Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) to_step_id: Option<i64>,
+    #[ts(type = "\"go\" | \"done\" | \"halt\"")]
+    pub(crate) ends: &'static str,
+    /// How often this edge may be taken for one task. Absent is no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) max_times: Option<i64>,
+}
+
+/// **What is handed from one step to the next.**
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationWireDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    #[ts(type = "number")]
+    pub(crate) from_step_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) from_exit_name: Option<String>,
+    pub(crate) from_port_name: String,
+    #[ts(type = "number")]
+    pub(crate) to_step_id: i64,
+    pub(crate) to_port_name: String,
+}
+
+/// **Whether this automation can be started, and what is in the way** — what the build screen's
+/// launch place draws before anybody presses.
+///
+/// It is the picture and not the ruling: what refuses a launch is the launch itself, which writes a
+/// run. A definition that passes here can still be refused there, by a machine that changed between
+/// the reading and the press.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchCheckDto {
+    pub(crate) ready: bool,
+    pub(crate) blocks: Vec<AutomationLaunchBlockDto>,
+}
+
+/// **One thing standing in the way of a launch.**
+///
+/// `reason` is what it is, and `stepName` / `at` say where — the way out with nothing after it, the
+/// input nothing feeds, the agent this machine cannot start. A reason about the automation as a
+/// whole carries neither.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchBlockDto {
+    #[ts(
+        type = "\"no_steps\" | \"exit_without_next\" | \"input_unfed\" | \"agent_not_here\" | \"task_undecided\" | \"workspace_closed\""
+    )]
+    pub(crate) reason: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) step_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) step_name: Option<String>,
+    /// What on that step — a way out's name, an input's name, an agent's id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) at: Option<String>,
+}

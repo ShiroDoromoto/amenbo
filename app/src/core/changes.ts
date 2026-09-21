@@ -89,8 +89,9 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // The ten tables an automation's definition is built in. Folded to nothing for `notify_target`'s
   // reason: no pane draws an automation yet, so no query goes stale when one is built, and falling to
   // gap would buy a full re-read for a change nobody can see. The screens that will draw them — the
-  // automation pane and its three tabs — name their scope here when they arrive. The five tables a run
-  // is written in are not listed: nothing writes them yet, so the feed cannot name them.
+  // automation pane and its three tabs — name their scope here when they arrive. Of the five tables a
+  // run is written in, the two the launch writes are listed for the same reason; the other three are
+  // not, because nothing writes a step execution, its values or its task yet.
   automation: [],
   automation_action: [],
   automation_note: [],
@@ -101,6 +102,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_port: [],
   automation_edge: [],
   automation_wire: [],
+  automation_run: [],
+  automation_run_def: [],
 };
 
 /**

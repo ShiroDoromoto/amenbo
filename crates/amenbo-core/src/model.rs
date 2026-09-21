@@ -1655,6 +1655,192 @@ pub struct AutomationWire {
     pub updated_at: Timestamp,
 }
 
+// ───────────────────────── automation: what ran ─────────────────────────
+
+/// How many runs may hold a lane at once when nobody has said otherwise
+/// ([`crate::config::Config::automation_lanes`]).
+///
+/// Three, because a lane is a terminal somebody watches: a person who launches a second automation
+/// while the first is going is doing an ordinary thing, and one who has four going at once is not
+/// reading any of them. It is a number to raise, not a ceiling to design around — what it guards is
+/// attention, and the reader is the only one who knows how much of it there is.
+pub const DEFAULT_LANES: i64 = 3;
+
+/// Where one launch of one automation stands.
+///
+/// `Queued` and `Running` are the two a lane decides between: a launch takes a lane if one is free and
+/// waits for one if not. `Paused` hands the lane back and keeps the place, `Done` and `Stopped` are the
+/// two ends — reached by running out of picture, and by everything else.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationRunStatus {
+    #[default]
+    Queued,
+    Running,
+    Paused,
+    Done,
+    Stopped,
+}
+
+impl AutomationRunStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationRunStatus::Queued => "queued",
+            AutomationRunStatus::Running => "running",
+            AutomationRunStatus::Paused => "paused",
+            AutomationRunStatus::Done => "done",
+            AutomationRunStatus::Stopped => "stopped",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationRunStatus> {
+        match s {
+            "queued" => Some(AutomationRunStatus::Queued),
+            "running" => Some(AutomationRunStatus::Running),
+            "paused" => Some(AutomationRunStatus::Paused),
+            "done" => Some(AutomationRunStatus::Done),
+            "stopped" => Some(AutomationRunStatus::Stopped),
+            _ => None,
+        }
+    }
+
+    /// Whether a run in this state is holding one of the lanes. Only `Running` does: a queued run is
+    /// waiting for a lane and a paused one gave its lane back, which is what lets somebody pause a long
+    /// run and start another without raising the number.
+    pub fn holds_a_lane(&self) -> bool {
+        matches!(self, AutomationRunStatus::Running)
+    }
+}
+
+/// Why a run stopped, where stopping was not the picture running out.
+///
+/// It is stored rather than worked out afterwards: the records show a crash (the step execution is left
+/// `failed`) and say nothing about a loop that ran out of turns, an agent that was not there, or a
+/// person who pressed stop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationStoppedReason {
+    Crashed,
+    MaxTimes,
+    NoAgent,
+    ByHuman,
+}
+
+impl AutomationStoppedReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationStoppedReason::Crashed => "crashed",
+            AutomationStoppedReason::MaxTimes => "max_times",
+            AutomationStoppedReason::NoAgent => "no_agent",
+            AutomationStoppedReason::ByHuman => "by_human",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationStoppedReason> {
+        match s {
+            "crashed" => Some(AutomationStoppedReason::Crashed),
+            "max_times" => Some(AutomationStoppedReason::MaxTimes),
+            "no_agent" => Some(AutomationStoppedReason::NoAgent),
+            "by_human" => Some(AutomationStoppedReason::ByHuman),
+            _ => None,
+        }
+    }
+}
+
+/// **One launch of one automation.**
+///
+/// `pause_requested` is the gap between the button and the pause: a step is under way and cannot be cut
+/// in half, so the request is recorded and the run reaches `paused` when that step reports.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationRun {
+    pub id: i64,
+    pub automation_id: i64,
+    /// The project the automation was launched from, carried here so a run can be found without
+    /// walking back through a definition that may since have been archived.
+    pub project_id: i64,
+    pub status: AutomationRunStatus,
+    pub pause_requested: bool,
+    /// Why it stopped. Set only while `status` is `Stopped`.
+    #[serde(default)]
+    pub stopped_reason: Option<AutomationStoppedReason>,
+    /// Who pressed launch. `None` for a run whose launcher said nothing about itself.
+    #[serde(default)]
+    pub started_by_kind: Option<ActorKind>,
+    /// When it first took a lane — `None` while it is still queued, so "launched" and "started" are
+    /// two different moments and a queue's wait is readable.
+    #[serde(default)]
+    pub started_at: Option<Timestamp>,
+    #[serde(default)]
+    pub ended_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **The step as it was at launch** — one record per step of the automation, written when the run is
+/// created and never rewritten.
+///
+/// This is what makes a run readable months later: the automation it came from has moved on, and these
+/// columns still say what was actually asked. The three JSON fields hold what has no column of its own —
+/// the ways out and each one's outputs, the step's inputs, and the settings' answers — and are read back
+/// whole, never queried into.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationRunDef {
+    pub id: i64,
+    pub run_id: i64,
+    /// The way back to the live definition, or `None` where that step has since been deleted.
+    #[serde(default)]
+    pub step_id: Option<i64>,
+    pub name: String,
+    /// The prompt as it read at launch — the step's own, or the library action's, already resolved.
+    #[serde(default)]
+    pub prompt: Option<String>,
+    pub agent: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    pub interactive: bool,
+    #[serde(default)]
+    pub work_dir_ref: Option<String>,
+    pub report_to_task: bool,
+    pub show_history: bool,
+    /// The ways out, with the outputs declared on each — JSON ([`RunDefExit`]).
+    pub exits: String,
+    /// The inputs the step takes — JSON ([`RunDefPort`]).
+    pub ins: String,
+    /// The settings and the answers written for them — JSON ([`RunDefCfg`]).
+    pub cfg: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// One way out, as [`AutomationRunDef::exits`] holds it: the name, and what leaves through it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunDefExit {
+    /// `None` is the unnamed way out; [`ERROR_EXIT`] is the error one.
+    #[serde(default)]
+    pub name: Option<String>,
+    pub outs: Vec<RunDefPort>,
+}
+
+/// One port, as the snapshot holds it — a name, what it carries, and whether it has to be there.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunDefPort {
+    pub name: String,
+    pub kind: AutomationPortKind,
+    pub required: bool,
+}
+
+/// One setting and the answer written for it while the automation was built.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunDefCfg {
+    pub name: String,
+    pub kind: AutomationCfgKind,
+    pub required: bool,
+    #[serde(default)]
+    pub options: Option<String>,
+    #[serde(default)]
+    pub value: Option<String>,
+}
+
 /// A serde-shaped vessel holding every record of one store at once. It is **not the store's contents**:
 /// the truth source is SQLite, and [`crate::store::Store`] does not hold one of these. The shape exists
 /// for the two places that need the records handed over **as a single lump**: verifying a backup or a

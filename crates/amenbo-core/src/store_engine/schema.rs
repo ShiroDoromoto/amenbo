@@ -984,7 +984,9 @@ datasets! {
     // Ten tables for the definition and five for the run, and the line between them is that a run
     // never reads a definition again once it has started: `automation_run_def` is the copy taken at
     // the moment of launch, so editing an automation cannot change what a run already under way is
-    // doing. The definition half is built through `crate::ops::automation`; the run half has no op yet.
+    // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
+    // `crate::ops::automation_run`, which writes the first two of the five and leaves the three a step
+    // execution is written in to the ops that run the steps.
     //
     // **Two tables are polymorphic on the same pair of owners.** A step and a library action both
     // declare settings (`automation_cfg`) and both declare the ways out of themselves

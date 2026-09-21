@@ -30,7 +30,8 @@ use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
     AutomationCfg, AutomationCfgKind, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationNote, AutomationOwner, AutomationPort, AutomationPortDirection, AutomationPortKind,
-    AutomationPortOwner, AutomationStep, AutomationStepNote, AutomationWire, Database,
+    AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
+    AutomationStep, AutomationStepNote, AutomationStoppedReason, AutomationWire, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -460,7 +461,9 @@ pub(super) fn attachment_row(r: &Row) -> rusqlite::Result<Attachment> {
 }
 
 // ───────────────────────── automation: what is built ─────────────────────────
-// The run side's five tables have no reader: nothing writes them yet, so there is nothing to read back.
+// Three of the run side's five tables have no reader: nothing writes a step execution, a value or a task
+// of a run yet, so there is nothing to read back. The two the launch writes are at the foot of this
+// section.
 
 pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationAction> {
     const C: col::automation_action::Cols = col::automation_action::ALL;
@@ -619,6 +622,49 @@ pub(super) fn automation_wire_row(r: &Row) -> rusqlite::Result<AutomationWire> {
         from_port_name: get(r, C.from_port_name)?,
         to_step_id: get(r, C.to_step_id)?,
         to_port_name: get(r, C.to_port_name)?,
+        created_at,
+        updated_at,
+    })
+}
+
+// ───────────────────────── automation: what ran ─────────────────────────
+
+pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
+    const C: col::automation_run::Cols = col::automation_run::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationRun {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        project_id: get(r, C.project_id)?,
+        status: enum_req(r, C.status, AutomationRunStatus::parse)?,
+        pause_requested: get(r, C.pause_requested)?,
+        stopped_reason: enum_opt(r, C.stopped_reason, AutomationStoppedReason::parse)?,
+        started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
+        started_at: ts_opt(r, C.started_at)?,
+        ended_at: ts_opt(r, C.ended_at)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunDef> {
+    const C: col::automation_run_def::Cols = col::automation_run_def::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationRunDef {
+        id: get(r, C.id)?,
+        run_id: get(r, C.run_id)?,
+        step_id: get(r, C.step_id)?,
+        name: get(r, C.name)?,
+        prompt: get(r, C.prompt)?,
+        agent: get(r, C.agent)?,
+        model: get(r, C.model)?,
+        interactive: get(r, C.interactive)?,
+        work_dir_ref: get(r, C.work_dir_ref)?,
+        report_to_task: get(r, C.report_to_task)?,
+        show_history: get(r, C.show_history)?,
+        exits: get(r, C.exits)?,
+        ins: get(r, C.ins)?,
+        cfg: get(r, C.cfg)?,
         created_at,
         updated_at,
     })

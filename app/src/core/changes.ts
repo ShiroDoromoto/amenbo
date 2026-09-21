@@ -90,8 +90,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // reason: no pane draws an automation yet, so no query goes stale when one is built, and falling to
   // gap would buy a full re-read for a change nobody can see. The screens that will draw them — the
   // automation pane and its three tabs — name their scope here when they arrive. Of the five tables a
-  // run is written in, the two the launch writes are listed for the same reason; the other three are
-  // not, because nothing writes a step execution, its values or its task yet.
+  // run is written in, all five are listed for the same reason: the run screens that will draw them —
+  // the automation pane and the "running" tab — name their scope here when they arrive.
   automation: [],
   automation_action: [],
   automation_note: [],
@@ -104,6 +104,9 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_wire: [],
   automation_run: [],
   automation_run_def: [],
+  automation_run_task: [],
+  automation_run_step: [],
+  automation_run_value: [],
 };
 
 /**

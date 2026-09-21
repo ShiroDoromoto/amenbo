@@ -6666,9 +6666,9 @@ pub fn automation_action_ids_in_project(conn: &Connection, project_id: i64) -> R
 
 // ───────────────────────── automation: what ran ─────────────────────────
 //
-// Two of the five carry a model shape — the two the launch writes — and the other three do not, so a
-// record comes back for those two alone. Beside that, what is needed here is the walk a delete takes
-// and the one column a reach check asks for, which answer ids and a project.
+// All five carry a model shape: the launch writes the first two, and opening a step writes the rest.
+// Beside the reads the running of a run asks for, what is here is the walk a delete takes and the one
+// column a reach check asks for, which answer ids and a project.
 
 /// The `automation_run` record with this id.
 pub fn automation_run(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRun>> {
@@ -6748,6 +6748,82 @@ pub fn automation_run_step_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64
 pub fn automation_run_value_ids(conn: &Connection, run_step_id: i64) -> Result<Vec<i64>> {
     const V: col::automation_run_value::Cols = col::automation_run_value::ALL;
     select_ids(conn, V.id, Some(&Pred::eq(V.run_step_id, run_step_id)))
+}
+
+/// The `automation_run_task` record with this id.
+pub fn automation_run_task(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRunTask>> {
+    super::hydrate::row_by_id(conn, "automation_run_task", id, super::hydrate::automation_run_task_row)
+}
+
+/// The `automation_run_step` record with this id.
+pub fn automation_run_step(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRunStep>> {
+    super::hydrate::row_by_id(conn, "automation_run_step", id, super::hydrate::automation_run_step_row)
+}
+
+/// **The stretch a run is in right now** — the task row with the highest `seq`, or `None` before the
+/// first step has opened one. A run moves forward through these, so the last one raised is the current
+/// one; there is no column saying so, because a second answer to "which one is current" is a second
+/// place for it to be wrong.
+pub fn automation_run_task_last(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Option<crate::model::AutomationRunTask>> {
+    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
+    Ok(automation_rows(
+        conn,
+        T.table,
+        &Pred::eq(T.run_id, run_id),
+        &[Sort::by(T.seq).desc(), Sort::by(T.id).desc()],
+        super::hydrate::automation_run_task_row,
+    )?
+    .into_iter()
+    .next())
+}
+
+/// The step executions of one run, in the order they happened.
+pub fn automation_run_steps_of(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Vec<crate::model::AutomationRunStep>> {
+    const S: col::automation_run_step::Cols = col::automation_run_step::ALL;
+    automation_rows(
+        conn,
+        S.table,
+        &Pred::eq(S.run_id, run_id),
+        &[Sort::by(S.seq), Sort::by(S.id)],
+        super::hydrate::automation_run_step_row,
+    )
+}
+
+/// The step executions of one stretch of a run, in the order they happened — the story a later step of
+/// the same stretch is handed.
+pub fn automation_run_steps_of_task(
+    conn: &Connection,
+    run_task_id: i64,
+) -> Result<Vec<crate::model::AutomationRunStep>> {
+    const S: col::automation_run_step::Cols = col::automation_run_step::ALL;
+    automation_rows(
+        conn,
+        S.table,
+        &Pred::eq(S.run_task_id, run_task_id),
+        &[Sort::by(S.seq), Sort::by(S.id)],
+        super::hydrate::automation_run_step_row,
+    )
+}
+
+/// The values one step execution received or produced.
+pub fn automation_run_values_of(
+    conn: &Connection,
+    run_step_id: i64,
+) -> Result<Vec<crate::model::AutomationRunValue>> {
+    const V: col::automation_run_value::Cols = col::automation_run_value::ALL;
+    automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.run_step_id, run_step_id),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_run_value_row,
+    )
 }
 
 /// The project a step execution is filed under — the reach of an attachment hanging off it. Two hops,

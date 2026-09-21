@@ -1,0 +1,319 @@
+# A row in the ledger's own column carries two things: the mark that says which row it is, and the
+# count standing on it. Folded to its marks, the column is 56px wide, the mark is 40px and the count
+# is drawn at 12px on the row's top corner. This is the road that reads both of them there, at once.
+#
+# ── Why the road beside it does not cover this ───────────────────────────────────────────────────
+# `fold-the-ledgers-column-to-its-marks-and-back` walks the fold itself, and it walks it in a world
+# with no work in it: two projects and not one task, so no row it reads has ever drawn a count. What
+# a count does to a folded row — whether it takes the mark under it, whether its own digits still
+# read at the size a narrow column leaves them — is on no step of that road. It is the whole of this
+# one.
+#
+# ── Why ten and not one ──────────────────────────────────────────────────────────────────────────
+# A badge grows with its number, and the mark it has to clear does not. One digit would read on a
+# column of any width and settle nothing about this one; two is what a backlog carries within a day
+# of being used, and it is the width the column was cut for. Ten is the smallest number that is two
+# digits, so the world is seeded to exactly it.
+#
+# ── Why every day seeded is on the stop step ─────────────────────────────────────────────────────
+# Folded, the smart view for days adds its two steps into a single badge: there is room beside the
+# mark for one, and the sum is drawn in the more urgent of the two colours. A world
+# carrying both steps would therefore put one number in front of the reader at the narrow width and
+# another at the wide one, and a road reading a different set on each side of the press could not say
+# which of the two the fold had changed. Seeded on one step, the same ten stands at both widths, and
+# what moved between the readings is the width alone. The step with nothing on it is read as well, so
+# that is a seeded fact rather than an assumption.
+#
+# ── Why the marks are read again once the column is folded ───────────────────────────────────────
+# The count goes to the corner the mark is already in. A build whose badge sat over the mark would
+# still be drawing every mark, and would still pass a reading that only asked for the words to be
+# gone — so the folded reading names what each row is told apart by: a project's colour with its
+# letter on it, and a drawn icon for every other row. Ten open tasks means the project's own row
+# carries a two-digit count over its letter, which is where that reading bites hardest.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A count on a corner of a row 56px wide is a thing on a screen. A terminal has no column to fold and
+# no corner to draw on; asked what stands on those days, it answers with `status`.
+id: read-what-a-row-carries-with-the-column-folded
+title: A folded column still says which row is which and how much stands on it — the mark clears the count, and the count's digits read
+description: >
+  Raise a project with ten tasks whose day has come or gone. The column down the left of the ledger
+  draws a count on the smart view for days and a count on the project's own row. Fold it to its marks
+  and both counts are still there: two digits apiece, readable, and neither of them standing over the
+  mark that says which row it is.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  # Six whose day went by, and four whose day is today. Both land on the stop step — the day a task
+  # is due is a day nothing but doing the work moves — so the row's count is ten and its other step
+  # is empty.
+  #
+  # Every one of them names the project rather than being left to the one the run raises for itself,
+  # so the count on Greenhouse's row is the ten seeded here and not a number split between two rows.
+  # The run's own project stands beside it carrying nothing, which is the row a count-over-mark fault
+  # cannot be read off.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by long ago
+      project: greenhouse
+    as: gone_1
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone_1
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone_1
+      due: "2020-01-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by the winter before last
+      project: greenhouse
+    as: gone_2
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone_2
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone_2
+      due: "2021-02-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by two springs ago
+      project: greenhouse
+    as: gone_3
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone_3
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone_3
+      due: "2022-03-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by one summer
+      project: greenhouse
+    as: gone_4
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone_4
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone_4
+      due: "2023-06-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by last autumn
+      project: greenhouse
+    as: gone_5
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone_5
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone_5
+      due: "2024-10-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by a week or so back
+      project: greenhouse
+    as: gone_6
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone_6
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone_6
+      due: "-7d"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is today, and it is the watering
+      project: greenhouse
+    as: today_1
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: today_1
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: today_1
+      due: today
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is today, and it is the glass
+      project: greenhouse
+    as: today_2
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: today_2
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: today_2
+      due: today
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is today, and it is the seed trays
+      project: greenhouse
+    as: today_3
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: today_3
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: today_3
+      due: today
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is today, and it is the vents
+      project: greenhouse
+    as: today_4
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: today_4
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: today_4
+      due: today
+
+steps_gui:
+  # The width it ships with, read before anything is pressed — the same half the fold's own road
+  # reads, and here it is what says the counts below were read at the wide width.
+  - type: assert
+    domain: task
+    op: sidebar-drawn
+    with:
+      names: shown
+
+  - type: assert
+    domain: task
+    op: view-warns
+    with:
+      view: due
+      step: stop
+      count: 10
+
+  # And nothing on the other step. Read rather than assumed: it is what makes the ten after the press
+  # the same ten, instead of a sum the fold arrived at.
+  - type: assert
+    domain: task
+    op: view-warns
+    with:
+      view: due
+      step: heed
+      count: 0
+
+  - type: action
+    domain: task
+    op: sidebar
+    with:
+      names: hidden
+
+  # The marks, with the counts standing on them. This is the reading a badge over a mark fails.
+  - type: assert
+    domain: task
+    op: sidebar-drawn
+    with:
+      names: hidden
+
+  # And the digits, at the size the narrow column leaves them.
+  - type: assert
+    domain: task
+    op: view-warns
+    with:
+      view: due
+      step: stop
+      count: 10

@@ -15,7 +15,7 @@ import {
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
   gridAt, landingOn, laidOut, movedTo, movedWithin, openedFrame, openedIn, pageCount, paneIn,
-  panesOf, reordered, resized, restored, SIZES, sizing, slotsOf, writing,
+  panesOf, reordered, resized, restored, slotsOf, writing,
   type Layout, type Size,
 } from "../talk/layout";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
@@ -36,7 +36,7 @@ import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
 import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
-import { Icon, type IconName } from "../components/Icon";
+import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
@@ -50,23 +50,6 @@ import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal"
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
  *  ordinary mark of the pane being worked in. */
 const LANDED_MS = 900;
-
-/**
- * The mark and the words for each size a pane can be (`../talk/layout`).
- *
- * The mark is the page cut into panes of that size (`../components/Icon`), because what the press
- * picks is a shape and a row of six shapes is read at a glance where six phrases are not. The words
- * are what a reader who has only the label is given, so nothing about the row is in the drawing
- * alone.
- */
-const SIZE_MARKS: Readonly<Record<Size, { mark: IconName; says: string }>> = {
-  whole: { mark: "paneWhole", says: "face.paneWhole" },
-  half: { mark: "paneAcross", says: "face.paneAcross" },
-  "half-down": { mark: "paneDown", says: "face.paneDown" },
-  quarter: { mark: "paneQuarter", says: "face.paneQuarter" },
-  sixth: { mark: "paneSixth", says: "face.paneSixth" },
-  eighth: { mark: "paneEighth", says: "face.paneEighth" },
-};
 
 /**
  * Where a carried pane would land — the pane it is over, which side of it, and which way that pane's
@@ -1056,9 +1039,6 @@ export function WorkspaceFace({
   const page = layout.page;
   const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
-  // The pane the size control is about, and the one a new pane is measured against
-  // (`../talk/layout`).
-  const sized = sizing(layout);
   // The panes of this project as one list, which is what the reorder is about — the pages are that
   // list laid down in order, so the modal is handed the list and not the page (`../talk/layout`).
   const panes = panesOf(layout, layout.project);
@@ -1419,43 +1399,6 @@ export function WorkspaceFace({
         >
           <Icon name="menu" />
         </button>
-        {/* How much of the page one pane takes. Six steps, always all six shown: which one is on is
-            what a person is choosing between, and a control that only said the next step would make
-            them press it to find out.
-
-            **It is about one pane — the one the new pane would be measured against** (`sizing` in
-            `../talk/layout`), which is the pane being worked in wherever that is on this page. So it
-            is drawn only where the page has a pane to be about, and the row goes away on a page that
-            has none. The panes behind it in the order move when it changes size, because they are a
-            list laid down in order and nothing holds a place (`AMB-D-939`). */}
-        {sized !== null && (
-          <div className="workspace__counts" role="radiogroup" aria-label={t("face.paneSize")}>
-            {SIZES.map((size) => (
-              <button
-                key={size}
-                className={`workspace__count workspace__count--glyph${
-                  sized.size === size ? " workspace__count--on" : ""}`}
-                // One of six, and exactly one: a toggle each would say six independent things can be
-                // on, which is not what the control does.
-                role="radio"
-                aria-checked={sized.size === size}
-                // The mark is the whole of what is drawn, so the words that say which shape it is go
-                // where a reader can reach them rather than being left off.
-                aria-label={t(SIZE_MARKS[size].says)}
-                title={t(SIZE_MARKS[size].says)}
-                // The question about where a pane works goes with it, the same way it goes when a
-                // page or a pane is reached for: resizing is a person doing something else, and a
-                // question left up would be drawn on whatever page the resize lands on.
-                onClick={() => {
-                  setAsking(null);
-                  setLayout((was) => resized(was, sized.id, size));
-                }}
-              >
-                <Icon name={SIZE_MARKS[size].mark} />
-              </button>
-            ))}
-          </div>
-        )}
         {/* The way to carrying a pane onto another page (`./PaneOrder`). It is beside the pages
             because both are about where a pane is, and **it follows them**: a move within a page is
             made on the page itself now (`./paneDrag`, `AMB-D-939`), so on a project with one page

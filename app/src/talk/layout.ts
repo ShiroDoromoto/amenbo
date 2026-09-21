@@ -386,23 +386,10 @@ export function filledPages(layout: Layout): number {
 }
 
 /**
- * The pane the size control is about (`AMB-D-939`).
- *
- * **It is one of the panes on the page being read** — the pane being worked in where that is on this
- * page, and the last pane of the page where it is not. A pane the reader cannot see is not one they
- * can be resizing, and a page with no panes on it has nothing to be about.
- */
-export function sizing(layout: Layout): Frame | null {
-  const here = slotsOf(layout, layout.page);
-  return here.find((one) => one.frame.id === layout.focus)?.frame
-    ?? here[here.length - 1]?.frame
-    ?? null;
-}
-
-/**
- * The size a pane opened on this page would be: the pane the size control is about (`sizing`), or,
- * on a page brought into being by `addPane` and so having no panes at all, the last pane of the
- * project. The first pane of a project has nothing to be measured against and takes the whole page.
+ * The size a pane opened on this page would be: the pane being worked in where that is on this page,
+ * the last pane of the page where it is not, or, on a page brought into being by `addPane` and so
+ * having no panes at all, the last pane of the project. The first pane of a project has nothing to
+ * be measured against and takes the whole page.
  */
 function sizeOn(layout: Layout, page: number): Size {
   const here = slotsOf(layout, page);

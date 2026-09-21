@@ -694,16 +694,9 @@ const ui = {
   // drawn inside it is never reached and the number has to be said here. The two are joined by
   // this language's own punctuation rather than by a space, which is not a pause everywhere.
   "face.tabPanes": "{name}, {panes}",
-  // The six sizes a pane can be, named in words because the control itself is drawn
-  // (`app/src/shell/WorkspaceFace.tsx`): a shape with nothing said about it is a
-  // press to find out, and a screen reader has only what is written here.
+  // What the grip on a pane's corner does (`app/src/shell/TerminalPane.tsx`). The grip is drawn and
+  // says nothing by itself, so a screen reader has only what is written here.
   "face.paneSize": "How much of the page this pane takes",
-  "face.paneWhole": "The whole page",
-  "face.paneAcross": "Half the page, side by side",
-  "face.paneDown": "Half the page, one above the other",
-  "face.paneQuarter": "A quarter of the page",
-  "face.paneSixth": "A sixth of the page",
-  "face.paneEighth": "An eighth of the page",
   // How many panes a project has open, read out with the project's name on its tab
   // (`app/src/shell/ProjectTabs.tsx`). As words rather than a bare digit: what stands beside the
   // number is a name, so nothing but this says what the number counts.

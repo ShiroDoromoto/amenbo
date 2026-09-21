@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACROSS, addPane, BOXES, closedFrame, closedIn, DEFAULT_SIZE, DOWN, EMPTY_LAYOUT, focusOn, goPage,
   goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, openedFrame, openedIn, pageCount,
-  pageOfFrame, paneIn, panesOf, placing, reordered, resized, restored, roomOnPage, SIZES, sizing,
+  pageOfFrame, paneIn, panesOf, placing, reordered, resized, restored, roomOnPage, SIZES,
   slotsOf, writing, folding, type Layout, type Size,
 } from "./layout";
 
@@ -424,14 +424,17 @@ describe("a pane is laid down at its size, and the pages fall out of the order",
     expect(roomOnPage(wide, 1)).toBe(true);
   });
 
-  it("is about the pane being worked in, and about the last pane of the page where it is not", () => {
+  it("measures a new pane against the pane being worked in, and against the last of the page where it is not", () => {
     const three = withPanes(3, "half");
     // The reader is on page two, in the pane they just opened.
-    expect(sizing(three)?.id).toBe("3");
-    // Back on page one with the focus left behind: the page's own last pane is what is being sized.
-    expect(sizing(goPage(three, 1))?.id).toBe("2");
-    // And a page with no panes on it has nothing to be about.
-    expect(sizing(addPane(withPanes(2, "half")))).toBeNull();
+    expect(openedFrame(resized(three, "3", "sixth"), 1, "/work/1").frame.size).toBe("sixth");
+    // Back on page one with the focus left behind: the page's own last pane is what it is measured
+    // against.
+    expect(openedFrame(goPage(resized(three, "2", "quarter"), 1), 1, "/work/1").frame.size)
+      .toBe("quarter");
+    // And on a page `addPane` brought into being, which has no panes at all, the last pane of the
+    // project is.
+    expect(openedFrame(addPane(withPanes(2, "half")), 1, "/work/1").frame.size).toBe("half");
   });
 });
 

@@ -78,7 +78,7 @@ pub struct Skin {
     /// backgrounds are.
     ///
     /// One file per name, and a name the author left out keeps the drawing `Icon.tsx` holds. There
-    /// is no stroke beside it: the fifty-one drawings are each adjusted against a line 1.75 wide,
+    /// is no stroke beside it: the forty-nine drawings are each adjusted against a line 1.75 wide,
     /// and a skin that could move that would move it under the ones it did not replace.
     pub icons: BTreeMap<String, String>,
     /// The header keys this build does not know, in order. A skin written for a later amenbo is read
@@ -733,7 +733,7 @@ pub const SPOTS: &[&str] = &[
 pub const SPOT_DEFAULT: &str = "center";
 
 /// The icons a skin may put its own drawing in place of, by the name each one is drawn under
-/// (`AMB-D-937`). Fifty-one, and they are the whole set the window draws — a name the document
+/// (`AMB-D-937`). Forty-nine, and they are the whole set the window draws — a name the document
 /// leaves out keeps this build's own drawing, so a skin replaces as few of them as it likes.
 ///
 /// Sorted, and held against `IconName` in `app/src/components/Icon.tsx` by
@@ -743,8 +743,7 @@ pub const ICONS: &[&str] = &[
     "activity", "arrowDown", "arrowUp", "bell", "blocked", "calendar", "check", "checkSquare",
     "chevronDown", "chevronLeft", "chevronRight", "clipboard", "clock", "close", "comment",
     "document", "dot", "error", "foldLeft", "foldRight", "folder", "gavel", "gear", "goose",
-    "hourglass", "inbox", "keyboard", "link", "menu", "more", "newWindow", "paneAcross",
-    "paneDown", "paneEighth", "paneQuarter", "paneSixth", "paneWhole", "paperclip", "pause",
+    "hourglass", "inbox", "keyboard", "link", "menu", "more", "newWindow", "paperclip", "pause",
     "pencil", "person", "pin", "plug", "plus", "refresh", "reorder", "reply", "robot", "rocket",
     "search", "stop", "tag", "trash", "unlock", "warning",
 ];
@@ -3038,7 +3037,7 @@ dark:
         let mut sorted = ICONS.to_vec();
         sorted.sort_unstable();
         assert_eq!(ICONS, sorted.as_slice(), "the list is searched by halving");
-        assert_eq!(ICONS.len(), 55);
+        assert_eq!(ICONS.len(), 49);
     }
 
     const A_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";

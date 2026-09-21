@@ -74,12 +74,6 @@ export type IconName =
   | "pause"
   | "stop"
   | "newWindow"
-  | "paneWhole"
-  | "paneAcross"
-  | "paneDown"
-  | "paneQuarter"
-  | "paneSixth"
-  | "paneEighth"
   | "foldLeft"
   | "foldRight"
   | "reorder";
@@ -407,41 +401,6 @@ const ART: Record<IconName, ReactNode> = {
     <>
       <path d="M7.4 16.6H4.6a1.4 1.4 0 0 1-1.4-1.4V4.6a1.4 1.4 0 0 1 1.4-1.4h10.6a1.4 1.4 0 0 1 1.4 1.4v2.8" />
       <rect x="7.4" y="7.4" width="13.4" height="13.4" rx="1.6" />
-    </>
-  ),
-  // The six sizes a pane can be, each drawn as the page cut into panes of that size: the whole page,
-  // two side by side, two one above the other, four, six, eight. They are the grid itself rather than
-  // an arrow at it — what the press chooses is a shape, and the six read as the choice they are only
-  // while they are drawn as the same box divided six ways (`../talk/layout.ts`).
-  paneWhole: <rect x="3" y="4.5" width="18" height="15" rx="1.6" />,
-  paneAcross: (
-    <>
-      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
-      <path d="M12 4.5v15" />
-    </>
-  ),
-  paneDown: (
-    <>
-      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
-      <path d="M3 12h18" />
-    </>
-  ),
-  paneQuarter: (
-    <>
-      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
-      <path d="M12 4.5v15M3 12h18" />
-    </>
-  ),
-  paneSixth: (
-    <>
-      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
-      <path d="M9 4.5v15M15 4.5v15M3 12h18" />
-    </>
-  ),
-  paneEighth: (
-    <>
-      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
-      <path d="M7.5 4.5v15M12 4.5v15M16.5 4.5v15M3 12h18" />
     </>
   ),
   // An arrow run into a bar and stopped there — the way between a column's two widths

@@ -21,8 +21,10 @@ use crate::error::{Error, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, AutomationEnds, AutomationPortDirection, AutomationPortKind,
     AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus,
-    AutomationRunTask, AutomationRunValue, RunDefExit, RunDefPort, Task, TaskStatus, ERROR_EXIT,
+    AutomationRunTask, AutomationRunValue, AutomationStoppedReason, RunDefExit, RunDefPort, Task,
+    TaskStatus, ERROR_EXIT,
 };
+use crate::ops::automation_stop::{self, Ended};
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -45,11 +47,16 @@ pub enum Produced<'a> {
 pub enum Next {
     /// Open a terminal on this step ([`super::automation_step::open`] takes it from here).
     Step(Box<AutomationRunDef>),
-    /// The run is over and the lane is free.
-    Closed(AutomationRun),
+    /// The run is over and the lane is free. `woke` is the run that took that lane, where one was
+    /// waiting — a step of **that** run is what to open next ([`super::automation_stop::Ended`]).
+    Closed(Ended),
     /// The run is stopped and a person is owed a look — either because the way out says so, or because
     /// nothing says what happens after it.
-    Halted(AutomationRun),
+    Halted(Ended),
+    /// Somebody pressed pause while this step was under way, and this is the end of it. The next step
+    /// is not opened; the run keeps its task and gives up its lane
+    /// ([`super::automation_stop::resume`] picks it up from the same way out).
+    Paused(Ended),
 }
 
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
@@ -255,6 +262,7 @@ pub fn done(
     run_step_id: i64,
     exit_name: Option<&str>,
     report: &str,
+    lanes: i64,
 ) -> Result<Next> {
     let run_step = live_execution(tx, run_step_id)?;
     let def = def_of(tx, &run_step)?;
@@ -352,7 +360,7 @@ pub fn done(
     if !took_a_task {
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
     }
-    whats_next(tx, &def, taken.as_deref(), now)
+    whats_next(tx, &def, &ended, taken.as_deref(), lanes)
 }
 
 /// A step that went looking for a task and found none leaves no stretch behind it. The row was raised
@@ -391,72 +399,102 @@ fn no_task_after_all(
 /// **A way out nothing decides stops the run.** The launch check refuses an automation with one, so
 /// reaching this means the picture was edited underneath a run — and walking on from a way out that
 /// says nothing would be the run choosing for itself.
+///
+/// **A pause that was asked for is answered here and nowhere else**, because this is the one moment a
+/// step is known to have finished. It is read last of all: a picture that has run out is over, and
+/// pausing a run that has ended would leave one nobody could pick up again.
 fn whats_next(
     tx: &WriteTx<'_>,
     def: &AutomationRunDef,
+    ended: &AutomationRunStep,
     taken: Option<&str>,
-    now: Timestamp,
+    lanes: i64,
 ) -> Result<Next> {
     let conn = tx.conn();
-    let run = read::automation_run(conn, def.run_id)?
-        .ok_or_else(|| not_found("run", def.run_id))?;
+    let run = read::automation_run(conn, def.run_id)?.ok_or_else(|| not_found("run", def.run_id))?;
     let edge = match def.step_id {
         Some(step_id) => read::automation_edge_for_exit(conn, step_id, taken)?,
         None => None,
     };
     let Some(edge) = edge else {
-        return Ok(Next::Halted(end_run(tx, run, AutomationRunStatus::Stopped, now)?));
+        return Ok(Next::Halted(stopped(tx, run, None, lanes)?));
     };
     match edge.ends {
-        AutomationEnds::Done => Ok(Next::Closed(end_run(tx, run, AutomationRunStatus::Done, now)?)),
-        AutomationEnds::Halt => {
-            Ok(Next::Halted(end_run(tx, run, AutomationRunStatus::Stopped, now)?))
-        }
+        AutomationEnds::Done => Ok(Next::Closed(automation_stop::ended(
+            tx,
+            run,
+            AutomationRunStatus::Done,
+            None,
+            lanes,
+        )?)),
+        AutomationEnds::Halt => Ok(Next::Halted(stopped(tx, run, None, lanes)?)),
         AutomationEnds::Go => {
             let to = edge.to_step_id;
             let next = read::automation_run_defs_of(conn, run.id)?
                 .into_iter()
                 .find(|d| d.step_id == to && to.is_some());
-            match next {
-                Some(next) => Ok(Next::Step(Box::new(next))),
-                // The edge goes to a step the run never copied down — one added after the launch. The
-                // run has no snapshot of it and will not read a live one, so there is nowhere to go.
-                None => Ok(Next::Halted(end_run(tx, run, AutomationRunStatus::Stopped, now)?)),
+            // The edge goes to a step the run never copied down — one added after the launch. The run
+            // has no snapshot of it and will not read a live one, so there is nowhere to go.
+            let Some(next) = next else {
+                return Ok(Next::Halted(stopped(tx, run, None, lanes)?));
+            };
+            if over_its_turns(tx, ended, &edge)? {
+                let reason = Some(AutomationStoppedReason::MaxTimes);
+                return Ok(Next::Halted(stopped(tx, run, reason, lanes)?));
             }
+            if run.pause_requested {
+                return Ok(Next::Paused(automation_stop::settle(tx, run, lanes)?));
+            }
+            Ok(Next::Step(Box::new(next)))
         }
     }
 }
 
-/// Close a run, one way or the other. The lane it held is handed back by whoever called — the one place
-/// every way a run can end is dealt with ([`super::automation_run::promote_next`]).
-///
-/// `stopped_reason` is left empty: the four it offers are a crash, a loop out of turns, an agent that
-/// was not there and a person who said stop, and a run that reached the end of its picture is none of
-/// them.
-fn end_run(
+/// Stop the run, through the one cleanup every ending goes through
+/// ([`super::automation_stop::ended`]).
+fn stopped(
     tx: &WriteTx<'_>,
-    before: AutomationRun,
-    status: AutomationRunStatus,
-    now: Timestamp,
-) -> Result<AutomationRun> {
-    let mut after = before.clone();
-    after.status = status;
-    after.ended_at = Some(now);
-    after.updated_at = now;
-    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
-    if let Some(before_stretch) = read::automation_run_task_last(tx.conn(), before.id)? {
-        if before_stretch.ended_at.is_none() {
-            let mut ended = before_stretch.clone();
-            ended.ended_at = Some(now);
-            ended.updated_at = now;
-            crate::ops::emit_update(
-                tx,
-                record::automation_run_task(&before_stretch),
-                record::automation_run_task(&ended),
-            )?;
+    run: AutomationRun,
+    reason: Option<AutomationStoppedReason>,
+    lanes: i64,
+) -> Result<Ended> {
+    automation_stop::ended(tx, run, AutomationRunStatus::Stopped, reason, lanes)
+}
+
+/// **Has this way back been taken as often as it is allowed to be?**
+///
+/// What is counted is this edge, within this stretch of the run: how many times the step it leaves
+/// from has already reported that way out for the task under way. The count starts again at every
+/// task, because the limit is there to catch a review that never converges on one piece of work rather
+/// than to cap how much work a run may do.
+///
+/// An edge with no limit is never over its turns — which is the right answer for one leading into a
+/// step that takes a fresh task, since that edge is walked once per task by design
+/// ([`crate::model::AutomationEdge::max_times`]).
+///
+/// The execution that has just reported is counted with the rest: it is already stamped `done` and
+/// carrying its way out by the time this is asked, so the count is how many times the edge would have
+/// been taken including this one.
+fn over_its_turns(
+    tx: &WriteTx<'_>,
+    ended: &AutomationRunStep,
+    edge: &crate::model::AutomationEdge,
+) -> Result<bool> {
+    let Some(limit) = edge.max_times else { return Ok(false) };
+    // A step that went looking for a task and found none left no stretch behind it, and a per-task
+    // limit has nothing to count against.
+    let Some(stretch) = ended.run_task_id else { return Ok(false) };
+    let mut taken = 0;
+    for step in read::automation_run_steps_of_task(tx.conn(), stretch)? {
+        if step.exit_name.as_deref() != edge.exit_name.as_deref() {
+            continue;
+        }
+        let Some(def) = read::automation_run_def(tx.conn(), step.run_def_id)? else { continue };
+        if def.step_id == Some(edge.from_step_id) {
+            taken += 1;
         }
     }
-    Ok(after)
+    Ok(taken > limit)
 }
 
 /// How a way out is spoken of in a sentence: by its name, or as the unnamed one.
@@ -476,6 +514,10 @@ mod tests {
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
     use crate::ops::test_support::{mk_project, with_tx};
+
+    /// How many lanes the machine these tests run on has. Three, so that handing one back has
+    /// somewhere to put it and nothing here is testing a queue by accident.
+    const LANES: i64 = 3;
 
     /// The picture these tests walk: a step that takes a task and hands a note on through "found", and
     /// a second step wired to read it. Both ways out of both steps are decided, so it launches.
@@ -577,7 +619,7 @@ mod tests {
     }
 
     fn opened(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> Opening {
-        match open(tx, run.id, def_of(tx, run, step).id).expect("open") {
+        match open(tx, run.id, def_of(tx, run, step).id, LANES).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
         }
@@ -698,7 +740,8 @@ mod tests {
             take(tx, step.run_step.id, task.id).expect("take");
             out(tx, step.run_step.id, "note", Produced::Value("what I found")).expect("out");
 
-            let next = done(tx, step.run_step.id, Some("found"), "Looked at it.").expect("done");
+            let next = done(tx, step.run_step.id, Some("found"), "Looked at it.", LANES)
+                .expect("done");
             match next {
                 Next::Step(def) => assert_eq!(def.step_id, Some(p.second.id)),
                 other => panic!("the edge goes on to the second step: {other:?}"),
@@ -727,7 +770,7 @@ mod tests {
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
 
-            let refused = done(tx, step.run_step.id, Some("found"), "Looked at it.")
+            let refused = done(tx, step.run_step.id, Some("found"), "Looked at it.", LANES)
                 .expect_err("the note is required");
             assert!(refused.to_string().contains("note"), "{refused}");
             let still = read::automation_run_step(tx.conn(), step.run_step.id)
@@ -747,7 +790,8 @@ mod tests {
             take(tx, step.run_step.id, task.id).expect("take");
 
             let refused =
-                done(tx, step.run_step.id, Some("found"), "   ").expect_err("a report is owed");
+                done(tx, step.run_step.id, Some("found"), "   ", LANES)
+                .expect_err("a report is owed");
             assert!(refused.to_string().contains("owes a report"), "{refused}");
         });
     }
@@ -760,7 +804,8 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let stretch_id = step.run_step.run_task_id.expect("a stretch was opened");
 
-            let next = done(tx, step.run_step.id, None, "").expect("done with nothing to say");
+            let next = done(tx, step.run_step.id, None, "", LANES)
+                .expect("done with nothing to say");
             assert!(matches!(next, Next::Closed(_)), "the unnamed way out closes the run: {next:?}");
             let ended = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
@@ -782,7 +827,8 @@ mod tests {
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
 
-            let next = done(tx, step.run_step.id, Some("all good"), "Did the thing.").expect("done");
+            let next = done(tx, step.run_step.id, Some("all good"), "Did the thing.", LANES)
+                .expect("done");
             assert!(matches!(next, Next::Halted(_)), "the error way out halts here: {next:?}");
             let ended = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
@@ -814,7 +860,8 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
-            done(tx, step.run_step.id, Some("found"), "Looked at it.").expect("done");
+            done(tx, step.run_step.id, Some("found"), "Looked at it.", LANES)
+                .expect("done");
 
             let ids = read::task_comment_ids(tx.conn(), task.id).expect("comments");
             assert_eq!(ids.len(), 1);
@@ -834,7 +881,8 @@ mod tests {
             let p = picture(tx, false);
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
-            done(tx, step.run_step.id, None, "").expect("done");
+            done(tx, step.run_step.id, None, "", LANES)
+                .expect("done");
 
             let refused = out(tx, step.run_step.id, "note", Produced::Value("late"))
                 .expect_err("it has ended");

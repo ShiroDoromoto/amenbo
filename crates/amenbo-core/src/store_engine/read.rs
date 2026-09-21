@@ -6690,6 +6690,16 @@ pub fn automation_run_ids_running(conn: &Connection) -> Result<Vec<i64>> {
     select_ids(conn, R.id, Some(&pred))
 }
 
+/// **The runs waiting for a lane** — the ones that are `queued`, across every project.
+///
+/// A queue is what a restart catches out: nobody is holding these, and nothing will promote one once the
+/// process that would have is gone ([`crate::ops::automation_stop::sweep`]).
+pub fn automation_run_ids_queued(conn: &Connection) -> Result<Vec<i64>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.status, crate::model::AutomationRunStatus::Queued.as_str());
+    select_ids(conn, R.id, Some(&pred))
+}
+
 /// **The run that has waited longest for a lane**, or `None` when nothing is queued — what a lane coming
 /// free hands itself to.
 ///

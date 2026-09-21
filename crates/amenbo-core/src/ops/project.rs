@@ -148,8 +148,9 @@ pub fn set_archived(tx: &WriteTx<'_>, id: i64, archived: bool) -> Result<Project
 }
 
 /// Physically delete a project, **subtree and all** — its tasks, decisions and dimensions, each with its
-/// own children (comments, dependency edges, links, attachments, dimension values, assignments) deleted
-/// first, and only then the project row itself. (Keeping a project around but out of the way, without
+/// own children (comments, dependency edges, links, attachments, dimension values, assignments), then
+/// its automations with the runs launched from them and its library of actions, and only then the
+/// project row itself. (Keeping a project around but out of the way, without
 /// destroying anything, is what archiving is for — [`set_archived`].) Children go first because the schema
 /// insists: `task` / `decision` / `dimension`.`project_id` are all `RESTRICT`, so deleting a project out
 /// from under a surviving child fails loudly rather than orphaning it quietly. This is the **row level**
@@ -172,10 +173,23 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for dimension_id in read::dimension_ids_in_project(tx.conn(), id)? {
         crate::ops::dimension::delete_subtree(tx, dimension_id)?;
     }
+    // The automations built in this project, what was launched from them, and the project's own library
+    // of actions. The runs go first: a definition with a run behind it refuses to be deleted, because
+    // the run is filed under it (`crate::ops::automation::delete`). The library goes last, since an
+    // action refuses while a step runs it and this project's steps have only just gone — no other
+    // project's can reach this library (a step reads its own project's and the device's, and no other).
+    for run_id in read::automation_run_ids_in_project(tx.conn(), id)? {
+        orphaned.extend(crate::ops::automation::run_delete(tx, run_id)?);
+    }
+    for automation_id in read::automation_ids_in_project(tx.conn(), id)? {
+        crate::ops::automation::delete(tx, automation_id)?;
+    }
+    for action_id in read::automation_action_ids_in_project(tx.conn(), id)? {
+        crate::ops::automation::action_delete(tx, action_id)?;
+    }
     // Nor has the project itself: a project is not one of the kinds `attachment.target_type` admits, so
-    // there is nothing polymorphic left here to sweep. The fifth of those kinds
-    // (`automation_run_step`, v50) hangs off a run rather than off anything reached above, and the
-    // automation subtree this project holds is swept by the layer that learns to build one.
+    // there is nothing polymorphic left here to sweep — the kind that arrived with the automation tables
+    // (`automation_run_step`) hangs off a step execution, and the sweep above took it with the run.
     tx.delete_record("project", project_before.id)?;
     Ok(orphaned)
 }
@@ -184,6 +198,70 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 mod tests {
     use super::*;
     use crate::ops::test_support::{mk_decision_in, mk_project, mk_task_in, with_tx};
+    use rusqlite::types::Value;
+
+    fn int(n: i64) -> Value {
+        Value::Integer(n)
+    }
+
+    fn text(s: &str) -> Value {
+        Value::Text(s.to_string())
+    }
+
+    /// One run, written straight at the five tables. Writing a run is the launch side's op, and this
+    /// fixture is not standing in for it: what the delete has to walk is rows, and these are the columns
+    /// the walk reads. Two step executions, because the reference that decides the order is between them
+    /// — the second's input says which execution produced it.
+    fn mk_run(tx: &WriteTx<'_>, automation_id: i64, project_id: i64) -> i64 {
+        let run = read::next_id(tx.conn(), "automation_run").unwrap();
+        tx.put_record(
+            "automation_run",
+            run,
+            &[
+                ("automation_id", int(automation_id)),
+                ("project_id", int(project_id)),
+                ("status", text("done")),
+            ],
+        )
+        .unwrap();
+        let def = read::next_id(tx.conn(), "automation_run_def").unwrap();
+        tx.put_record("automation_run_def", def, &[("run_id", int(run)), ("name", text("実装する"))])
+            .unwrap();
+        let run_task = read::next_id(tx.conn(), "automation_run_task").unwrap();
+        tx.put_record("automation_run_task", run_task, &[("run_id", int(run)), ("seq", int(1))])
+            .unwrap();
+        let mut steps = Vec::new();
+        for seq in 1..=2 {
+            let step = read::next_id(tx.conn(), "automation_run_step").unwrap();
+            tx.put_record(
+                "automation_run_step",
+                step,
+                &[
+                    ("run_id", int(run)),
+                    ("run_def_id", int(def)),
+                    ("run_task_id", int(run_task)),
+                    ("seq", int(seq)),
+                    ("status", text("done")),
+                ],
+            )
+            .unwrap();
+            steps.push(step);
+        }
+        let value = read::next_id(tx.conn(), "automation_run_value").unwrap();
+        tx.put_record(
+            "automation_run_value",
+            value,
+            &[
+                ("run_step_id", int(steps[1])),
+                ("direction", text("in")),
+                ("name", text("報告")),
+                ("kind", text("value")),
+                ("from_run_step_id", int(steps[0])),
+            ],
+        )
+        .unwrap();
+        run
+    }
 
     /// Deleting a project **physically deletes** its subtree — nothing is left orphaned. Its tasks, their
     /// dependency edges, and the project's decisions and dimensions all go; another project's tasks are
@@ -239,6 +317,82 @@ mod tests {
             assert!(read::decision(tx.conn(), k).unwrap().is_none());
             assert!(read::dimension(tx.conn(), axis.id).unwrap().is_none());
             assert!(read::dimension_value(tx.conn(), value.id).unwrap().is_none());
+        });
+    }
+
+    /// Deleting a project takes the automations built in it, the runs launched from them and its own
+    /// library of actions. Each of the three refuses to go in the wrong order — an automation with a run
+    /// behind it, an action a step still runs — so this is also the check that the sweep walks them the
+    /// way round it does.
+    #[test]
+    fn delete_takes_the_automations_the_runs_and_the_library_with_it() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "消えるPJ");
+            let action = crate::ops::automation::action_add(tx, Some(p), "点検する", "look at it")
+                .unwrap();
+            let automation = crate::ops::automation::add(
+                tx,
+                p,
+                crate::ops::automation::NewAutomation {
+                    name: "1件やりきる".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let step = crate::ops::automation::step_add(
+                tx,
+                automation.id,
+                crate::ops::automation::NewStep::with_action("点検", action.id, "claude"),
+            )
+            .unwrap();
+            crate::ops::automation::set_entry(tx, automation.id, Some(step.id)).unwrap();
+            mk_run(tx, automation.id, p);
+
+            delete(tx, p).unwrap();
+
+            assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
+            assert!(read::automation(tx.conn(), automation.id).unwrap().is_none());
+            assert!(read::automation_step(tx.conn(), step.id).unwrap().is_none());
+            assert!(read::automation_action(tx.conn(), action.id).unwrap().is_none());
+            assert!(read::automation_run_ids_in_project(tx.conn(), p).unwrap().is_empty());
+        });
+    }
+
+    /// A file a step produced hangs off the step execution, which no `REFERENCES` clause looks after
+    /// (`attachment` is polymorphic). The sweep takes the row and hands back the blob it pointed at, so
+    /// the bytes stop being a GC root.
+    #[test]
+    fn delete_sweeps_what_was_attached_to_a_step_execution() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "消えるPJ");
+            let automation = crate::ops::automation::add(
+                tx,
+                p,
+                crate::ops::automation::NewAutomation {
+                    name: "1件やりきる".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let run = mk_run(tx, automation.id, p);
+            let execution = read::automation_run_step_ids(tx.conn(), run).unwrap()[0];
+            let hash = "d".repeat(64);
+            let attachment = crate::ops::attachment::add_blob(
+                tx,
+                crate::model::AttachmentTarget::AutomationRunStep,
+                execution,
+                &hash,
+                "report.log",
+                Some("text/plain"),
+                12,
+                crate::model::ActorKind::Ai,
+            )
+            .unwrap();
+
+            let orphaned = delete(tx, p).unwrap();
+
+            assert!(read::attachment(tx.conn(), attachment.id).unwrap().is_none());
+            assert!(orphaned.contains(&hash), "the blob it pointed at comes back as a candidate");
         });
     }
 

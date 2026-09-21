@@ -193,7 +193,9 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
     // Attachments whose target is gone (orphan_attachments holds the statement and the reasoning).
     // Reported as the ref the target was known by, through the target type's own mapping
     // (`AttachmentTarget::target_ref`); a `target_type` the model does not know has no ref space to be
-    // quoted in, so it is reported as the raw pair — which is the whole of what is wrong with it.
+    // quoted in, so it is reported as the raw pair — which is the whole of what is wrong with it. A
+    // target the model knows but numbers in no ref space (a step execution) prints that same pair, from
+    // inside `target_ref`.
     issues.extend(orphan_attachments(conn)?.into_iter().map(|o| {
         let target = crate::model::AttachmentTarget::parse(&o.target_type)
             .map_or_else(|| format!("{}:{}", o.target_type, o.target_id), |t| t.target_ref(o.target_id));
@@ -408,7 +410,7 @@ pub fn dead_ref_issues(conn: &Connection, reach: Reach) -> StoreEngineResult<Vec
 #[derive(Clone, Debug)]
 pub struct OrphanAttachment {
     pub id: i64,
-    /// The raw `target_type` as stored. Kept as text rather than parsed: a value outside the model's four
+    /// The raw `target_type` as stored. Kept as text rather than parsed: a value the model does not know
     /// is itself a reason the row is being reported, and parsing it away would drop that.
     pub target_type: String,
     pub target_id: i64,
@@ -437,6 +439,7 @@ pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAtta
     const OD: col::decision::Cols = col::decision::of("od");
     const OTC: col::task_comment::Cols = col::task_comment::of("otc");
     const ODC: col::decision_comment::Cols = col::decision_comment::of("odc");
+    const ORS: col::automation_run_step::Cols = col::automation_run_step::of("ors");
 
     let mut sel = Select::new();
     let (att_id, att_type, att_target) =
@@ -450,6 +453,7 @@ pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAtta
         (Tgt::Decision, OD.table, same(OD.id, AT.target_id)),
         (Tgt::TaskComment, OTC.table, same(OTC.id, AT.target_id)),
         (Tgt::DecisionComment, ODC.table, same(ODC.id, AT.target_id)),
+        (Tgt::AutomationRunStep, ORS.table, same(ORS.id, AT.target_id)),
     ] {
         sql.left_join(table, Pred::eq(AT.target_type, kind.as_str()).and(on));
     }
@@ -459,6 +463,7 @@ pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAtta
             Pred::is_null(OD.id),
             Pred::is_null(OTC.id),
             Pred::is_null(ODC.id),
+            Pred::is_null(ORS.id),
         ])
         .as_ref(),
     )
@@ -698,6 +703,10 @@ mod tests {
             &[("decision_id", Value::Integer(5)), ("text", text("c"))],
         )
         .unwrap();
+        // The fifth target is one execution of one step of a run. The run it sits in is not written:
+        // foreign keys are off in this fixture, and what the check reads is the execution's own id.
+        e.put_record("automation_run_step", 50, &[("seq", Value::Integer(1)), ("status", text("done"))])
+            .unwrap();
         // Even ids hang off what is there; odd ids off a number nothing was ever issued under.
         for (id, target_type, target_id) in [
             (100, "task", 1),
@@ -708,6 +717,8 @@ mod tests {
             (105, "task_comment", 31),
             (106, "decision_comment", 40),
             (107, "decision_comment", 41),
+            (108, "automation_run_step", 50),
+            (109, "automation_run_step", 51),
         ] {
             e.put_record(
                 "attachment",
@@ -726,8 +737,8 @@ mod tests {
     }
 
     /// Every target type is checked against the table its name stands for — the reference no foreign key
-    /// holds, so the one that can dangle. An attachment on a live target is not raised, whichever of the
-    /// four it hangs off.
+    /// holds, so the one that can dangle. An attachment on a live target is not raised, whichever of them
+    /// it hangs off.
     #[test]
     fn an_attachment_whose_target_is_gone_is_raised_on_every_target_type() {
         let r = doctor(attached().conn(), Reach::All).unwrap();
@@ -736,14 +747,21 @@ mod tests {
             r.issues.iter().filter(|i| i.kind == DoctorIssueKind::OrphanAttachment).collect();
         assert_eq!(
             raised.iter().map(|i| i.target.as_str()).collect::<Vec<_>>(),
-            vec!["attachment:101", "attachment:103", "attachment:105", "attachment:107"],
+            vec![
+                "attachment:101",
+                "attachment:103",
+                "attachment:105",
+                "attachment:107",
+                "attachment:109"
+            ],
             "one per orphan and nothing else — an arm must not report the rows of a type it does not stand for"
         );
         // The sentence names both ends: which attachment, and the ref of what it hung off.
         assert_eq!(
             raised.iter().filter_map(|i| i.params.get("target").map(String::as_str)).collect::<Vec<_>>(),
-            vec!["AMB-T-2", "AMB-D-6", "AMB-TC-31", "AMB-DC-41"],
-            "each rendered in the ref space its target type is numbered in",
+            vec!["AMB-T-2", "AMB-D-6", "AMB-TC-31", "AMB-DC-41", "automation_run_step:51"],
+            "each rendered in the ref space its target type is numbered in — and as the raw pair where \
+             there is none",
         );
         assert_eq!(raised[0].params.get("attachment").map(String::as_str), Some("AMB-ATT-101"));
         assert!(!r.ok, "a row that outlived its referent is a broken store, not a misaligned environment");
@@ -761,7 +779,13 @@ mod tests {
                 .filter(|i| i.kind == DoctorIssueKind::OrphanAttachment)
                 .map(|i| i.target.as_str())
                 .collect::<Vec<_>>(),
-            vec!["attachment:101", "attachment:103", "attachment:105", "attachment:107"],
+            vec![
+                "attachment:101",
+                "attachment:103",
+                "attachment:105",
+                "attachment:107",
+                "attachment:109"
+            ],
             "including the ones whose target hung off the other project — the target is gone, so no \
              project claims them",
         );

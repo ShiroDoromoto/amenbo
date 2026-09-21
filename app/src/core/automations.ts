@@ -89,3 +89,22 @@ export function useLaunchCheck(
   );
   return data ?? null;
 }
+
+/**
+ * **How many lanes the automations are holding right now**, across every project.
+ *
+ * It is a query rather than a field of the snapshot because of when it moves: the snapshot is re-read
+ * after a write made on this screen, and a lane is taken and handed back by whatever step reported,
+ * from wherever it was running. So it hangs off the change feed instead (`./changes`), and the band
+ * drawing it follows a run that nobody in this window started.
+ */
+export async function fetchLanesHeld(): Promise<number> {
+  if (!inTauri()) return 0;
+  return invoke<number>("automation_lanes_held", {});
+}
+
+/** Subscribing read of how many lanes are held. `0` until the first answer lands. */
+export function useLanesHeld(): number {
+  const { data } = useQuery<number>(["automationLanesHeld"], fetchLanesHeld);
+  return data ?? 0;
+}

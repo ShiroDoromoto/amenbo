@@ -90,6 +90,18 @@ pub fn automation_launch_check(
     Ok(check(&detail, &agents, workspace_open))
 }
 
+/// **How many lanes are held right now** — the runs that are `running`, across every project.
+///
+/// It crosses projects because the lanes do: what a lane holds is a terminal on this machine and the
+/// attention of the person watching it, and neither is divided up per project. So this answers a bare
+/// number, and the band that draws it says nothing about which project each one is in — the "running"
+/// tab is where a reader goes to see that.
+#[tauri::command]
+pub fn automation_lanes_held() -> Result<i64, CmdError> {
+    let store = open_store_read()?;
+    Ok(read::automation_run_ids_running(store.read_model().conn())?.len() as i64)
+}
+
 // ───────────────────────────── shaping ─────────────────────────────
 
 /// One automation's ten tables, read and resolved into the one shape every part of the build screen

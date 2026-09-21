@@ -121,6 +121,12 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // putting it there would double the feed for a number a person glances at rather than watches.
       case "viewer-state": return touchesScope("viewer");
       case "viewer-pairing": return touchesScope("viewer");
+      // How many lanes the automations are holding, drawn on the band over the panes. A run taking a
+      // lane or handing one back is a row of `automation_run`, and that is the only thing that moves
+      // the number — which is why this is a query and not a field of the snapshot: the snapshot is
+      // re-read on a write of our own, and a lane is taken by whatever step reported, from wherever
+      // it was running.
+      case "automationLanesHeld": return touchesScope("automationLanes");
       default: return false;
     }
   });

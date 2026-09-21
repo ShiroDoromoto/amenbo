@@ -1737,13 +1737,19 @@ impl Store {
     ///
     /// The reach is the run's, not the automation's: what this writes are the run's own rows, and a
     /// run is filed under the project it was launched from.
+    ///
+    /// `lanes` is how many runs may be under way at once
+    /// ([`crate::config::Config::automation_lanes`]). It is handed in rather than read here because a
+    /// setting lives outside the store: a step that cannot be opened stops the run, and stopping one
+    /// hands its lane back to whatever was waiting for it.
     pub fn automation_step_open(
         &mut self,
         run_id: i64,
         run_def_id: i64,
+        lanes: i64,
     ) -> Result<crate::ops::automation_step::Opened> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_step::open(tx, run_id, run_def_id)
+            crate::ops::automation_step::open(tx, run_id, run_def_id, lanes)
         })
     }
 

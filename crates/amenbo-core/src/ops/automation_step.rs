@@ -709,7 +709,7 @@ mod tests {
             )
             .expect("point the step at it");
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
             assert_eq!(opening.folder.as_deref(), Some("/work/here"));
         });
     }
@@ -721,7 +721,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
             assert_eq!(opening.folder, None);
         });
     }

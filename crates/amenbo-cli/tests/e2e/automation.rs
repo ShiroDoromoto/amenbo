@@ -230,3 +230,42 @@ fn deleting_an_automation_is_confirmed() {
     let gone = cli.json(&["automation", "rm", &a, "--yes", "--json"]);
     assert_eq!(gone["automation"]["deleted"], serde_json::json!(true));
 }
+
+/// A run is reached from a record already in hand — the task it worked, or the automation it came
+/// from. Naming neither is the one mistake the flags leave open, and it is refused with both roads
+/// rather than with a listing of every run there has ever been.
+#[test]
+fn a_run_is_reached_from_a_task_or_from_an_automation_and_never_listed_whole() {
+    let cli = Cli::new();
+    let (a, _) = an_automation(&cli);
+
+    let (refused, code) = cli.run_err(&["automation", "run", "list", "--json"]);
+    assert_eq!(code, 2, "{refused}");
+    assert!(refused.contains("--task"), "the refusal names both roads: {refused}");
+    assert!(refused.contains("--automation"), "{refused}");
+
+    let none = cli.json(&["automation", "run", "list", "--automation", &a, "--json"]);
+    assert_eq!(none["count"], serde_json::json!(0));
+    assert_eq!(none["about"].as_str(), Some(format!("automation {a}").as_str()));
+}
+
+/// The task side of the same road: a task nothing has run reads as none, rather than as an error.
+#[test]
+fn a_task_no_run_has_worked_reads_as_none() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let task = id_str(&cli.json(&["task", "add", "--project", &p, "--title", "T", "--json"])["task"]["id"]);
+
+    let none = cli.json(&["automation", "run", "list", "--task", &task_ref(&task), "--json"]);
+    assert_eq!(none["count"], serde_json::json!(0));
+    assert_eq!(none["about"].as_str(), Some(task_ref(&task).as_str()));
+}
+
+/// A run that was never launched is not found, said as a refusal rather than as an empty account.
+#[test]
+fn a_run_that_does_not_exist_is_said_to_be_missing() {
+    let cli = Cli::new();
+    let (refused, code) = cli.run_err(&["automation", "run", "show", "404", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("404"), "{refused}");
+}

@@ -6780,6 +6780,40 @@ pub fn automation_run_task_last(
     .next())
 }
 
+/// The stretches of one run, in the order it walked them.
+pub fn automation_run_tasks_of(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Vec<crate::model::AutomationRunTask>> {
+    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
+    automation_rows(
+        conn,
+        T.table,
+        &Pred::eq(T.run_id, run_id),
+        &[Sort::by(T.seq), Sort::by(T.id)],
+        super::hydrate::automation_run_task_row,
+    )
+}
+
+/// **Every stretch of every run that worked one task** — the chain from a task back to what handled it.
+///
+/// A task is reached from a run rather than the other way round everywhere else, and this is the one
+/// read that goes the other way: what a later session asks of a task is how it was worked, and nothing
+/// on the task itself says so.
+pub fn automation_run_tasks_for_task(
+    conn: &Connection,
+    task_id: i64,
+) -> Result<Vec<crate::model::AutomationRunTask>> {
+    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
+    automation_rows(
+        conn,
+        T.table,
+        &Pred::eq(T.task_id, task_id),
+        &[Sort::by(T.id)],
+        super::hydrate::automation_run_task_row,
+    )
+}
+
 /// The step executions of one run, in the order they happened.
 pub fn automation_run_steps_of(
     conn: &Connection,

@@ -803,4 +803,85 @@ impl Store {
         }
         Ok(report)
     }
+
+    // ───────────────────────── automation: what ran ─────────────────────────
+    //
+    // A run is **reached, never searched for**: from the task it worked, or from the automation it came
+    // from. What a run did is the answer to "how was this handled", which is a question asked of a task
+    // or of an automation — never of a word.
+    /// One run, by id.
+    pub fn automation_run(&self, id: i64) -> Result<Option<crate::model::AutomationRun>> {
+        self.reachable(&format!("automation run #{id}"), |c| super::owner::automation_run(c, id))?;
+        Ok(crate::store_engine::read::automation_run(self.engine.conn(), id)?)
+    }
+
+    /// **The runs that worked one task**, newest first. A run reaches a task through the stretch it
+    /// spent on it, and a run that came back to the same task twice is listed once.
+    pub fn automation_runs_for_task(&self, task_id: i64) -> Result<Vec<crate::model::AutomationRun>> {
+        self.reachable_task(task_id)?;
+        let conn = self.engine.conn();
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        for stretch in crate::store_engine::read::automation_run_tasks_for_task(conn, task_id)? {
+            if !seen.insert(stretch.run_id) {
+                continue;
+            }
+            if let Some(run) = crate::store_engine::read::automation_run(conn, stretch.run_id)? {
+                out.push(run);
+            }
+        }
+        out.sort_by_key(|r| std::cmp::Reverse(r.id));
+        Ok(out)
+    }
+
+    /// **What one automation has run**, newest first.
+    pub fn automation_runs_of(&self, automation_id: i64) -> Result<Vec<crate::model::AutomationRun>> {
+        self.reachable(&format!("automation #{automation_id}"), |c| {
+            super::owner::automation(c, automation_id)
+        })?;
+        let conn = self.engine.conn();
+        let mut out = Vec::new();
+        for id in crate::store_engine::read::automation_run_ids(conn, automation_id)? {
+            if let Some(run) = crate::store_engine::read::automation_run(conn, id)? {
+                out.push(run);
+            }
+        }
+        out.sort_by_key(|r| std::cmp::Reverse(r.id));
+        Ok(out)
+    }
+
+    /// The stretches one run walked, in order — each one a task it worked.
+    pub fn automation_run_tasks(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunTask>> {
+        self.reachable(&format!("automation run #{run_id}"), |c| {
+            super::owner::automation_run(c, run_id)
+        })?;
+        Ok(crate::store_engine::read::automation_run_tasks_of(self.engine.conn(), run_id)?)
+    }
+
+    /// The step executions of one run, in the order they happened.
+    pub fn automation_run_steps(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunStep>> {
+        self.reachable(&format!("automation run #{run_id}"), |c| {
+            super::owner::automation_run(c, run_id)
+        })?;
+        Ok(crate::store_engine::read::automation_run_steps_of(self.engine.conn(), run_id)?)
+    }
+
+    /// The steps one run copied down at launch — what each execution was asked to do.
+    pub fn automation_run_defs(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunDef>> {
+        self.reachable(&format!("automation run #{run_id}"), |c| {
+            super::owner::automation_run(c, run_id)
+        })?;
+        Ok(crate::store_engine::read::automation_run_defs_of(self.engine.conn(), run_id)?)
+    }
+
+    /// The values one step execution received and produced.
+    pub fn automation_run_values(
+        &self,
+        run_step_id: i64,
+    ) -> Result<Vec<crate::model::AutomationRunValue>> {
+        self.reachable(&format!("automation run step #{run_step_id}"), |c| {
+            super::owner::automation_run_step(c, run_step_id)
+        })?;
+        Ok(crate::store_engine::read::automation_run_values_of(self.engine.conn(), run_step_id)?)
+    }
 }

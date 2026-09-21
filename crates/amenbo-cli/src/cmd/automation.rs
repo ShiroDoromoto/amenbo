@@ -15,13 +15,19 @@ use amenbo_core::model::{
     AutomationCfgKind, AutomationOwner, AutomationPortDirection, AutomationPortKind,
     DEFAULT_MAX_TIMES,
 };
+use amenbo_core::model::{
+    AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
+};
 use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep, StepSource};
+use amenbo_core::time::Timestamp;
 use amenbo_core::Store;
 
 use crate::cli::*;
 use crate::cmd::arg::{body_arg, body_arg_opt};
+use crate::cmd::labels::task_label;
 use crate::cmd::place::project_or_bound;
-use crate::output::{confirm, write_envelope, CliError, Flags};
+use crate::cmd::task::resolve_task;
+use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
 /// Where an edge or a wire leaves from, as one token: `<step>:<way out>`. `4` and `4:` are both the
 /// unnamed way out, `4:*` the error one.
@@ -239,6 +245,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         AutomationCmd::Edge { sub } => return edge(store, flags, sub),
         AutomationCmd::Wire { sub } => return wire(store, flags, sub),
         AutomationCmd::Note { sub } => return note(store, flags, sub),
+        AutomationCmd::Run { sub } => return run(store, flags, sub),
     }
     Ok(0)
 }
@@ -542,4 +549,212 @@ fn note(store: &mut Store, flags: &Flags, sub: AutomationNoteCmd) -> Result<i32,
         }
     }
     Ok(0)
+}
+
+// ───────────────────────── what ran ─────────────────────────
+
+/// **A run is reached, never searched for.** What a later session asks is how one task was handled, or
+/// what an automation has done — both of which start from a record that is already in hand. So there is
+/// no listing of every run, and the words a run wrote are not on the word index: the report of a step
+/// is reached from the task it was about (`AMB-T-5250`).
+fn run(store: &mut Store, flags: &Flags, sub: AutomationRunCmd) -> Result<i32, CliError> {
+    match sub {
+        AutomationRunCmd::List { task, automation, limit } => {
+            let (runs, about) = match (task, automation) {
+                (Some(task), None) => {
+                    let tid = resolve_task(store, &task).map_err(CliError::from)?;
+                    (store.automation_runs_for_task(tid).map_err(CliError::from)?, task_label(tid))
+                }
+                (None, Some(automation)) => (
+                    store.automation_runs_of(automation).map_err(CliError::from)?,
+                    format!("automation {automation}"),
+                ),
+                _ => {
+                    return Err(CliError {
+                        code: "invalid_value",
+                        message: "say which runs — one of --task <id> or --automation <id>.".to_string(),
+                        hint: Some("A run is reached from the task it worked or the automation it came from; there is no listing of all of them.".to_string()),
+                        exit: 2,
+                    })
+                }
+            };
+            let shown: Vec<&AutomationRun> =
+                runs.iter().take(limit.unwrap_or(runs.len())).collect();
+            if flags.json {
+                let mut out = Vec::with_capacity(shown.len());
+                for r in &shown {
+                    out.push(json!({
+                        "run": serde_json::to_value(r).unwrap(),
+                        "steps": store.automation_run_steps(r.id).map_err(CliError::from)?.len(),
+                    }));
+                }
+                print_json(&json!({ "count": out.len(), "about": about, "runs": out }));
+            } else {
+                human(flags, format!("{} run(s) — {about}", shown.len()));
+                for r in &shown {
+                    let moves = store.automation_run_steps(r.id).map_err(CliError::from)?.len();
+                    human(
+                        flags,
+                        format!(
+                            "  run {}  {}  {}  {moves} step(s)",
+                            r.id,
+                            r.status.as_str(),
+                            span(r.started_at, r.ended_at),
+                        ),
+                    );
+                }
+            }
+        }
+        AutomationRunCmd::Show { id } => {
+            let run = store
+                .automation_run(id)
+                .map_err(CliError::from)?
+                .ok_or_else(|| {
+                    CliError::from(amenbo_core::Error::not_found(format!("run '{id}' not found")))
+                })?;
+            let defs = store.automation_run_defs(id).map_err(CliError::from)?;
+            let stretches = store.automation_run_tasks(id).map_err(CliError::from)?;
+            let moves = store.automation_run_steps(id).map_err(CliError::from)?;
+            if flags.json {
+                let mut walked = Vec::with_capacity(moves.len());
+                for m in &moves {
+                    walked.push(json!({
+                        "step": serde_json::to_value(m).unwrap(),
+                        "name": named_step(&defs, m),
+                        "values": serde_json::to_value(
+                            store.automation_run_values(m.id).map_err(CliError::from)?,
+                        )
+                        .unwrap(),
+                    }));
+                }
+                print_json(&json!({
+                    "run": serde_json::to_value(&run).unwrap(),
+                    "tasks": serde_json::to_value(&stretches).unwrap(),
+                    "steps": walked,
+                }));
+            } else {
+                render_run(store, flags, &run, &defs, &stretches, &moves)?;
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// A run's whole story on the terminal: the run's own line, then each task it worked with the steps it
+/// spent on that task under it. The order is the order it happened in, which is the only order a run
+/// reads in.
+fn render_run(
+    store: &mut Store,
+    flags: &Flags,
+    run: &AutomationRun,
+    defs: &[AutomationRunDef],
+    stretches: &[AutomationRunTask],
+    moves: &[AutomationRunStep],
+) -> Result<(), CliError> {
+    human(flags, format!("Run {}  automation {}", run.id, run.automation_id));
+    let stopped = run
+        .stopped_reason
+        .map(|r| format!(" ({})", r.as_str()))
+        .unwrap_or_default();
+    human(
+        flags,
+        format!("status: {}{stopped}  {}", run.status.as_str(), span(run.started_at, run.ended_at)),
+    );
+    for stretch in stretches {
+        let about = match stretch.task_id {
+            Some(task_id) => task_label(task_id),
+            None => "no task".to_string(),
+        };
+        human(
+            flags,
+            format!("\ntask {} — {about}  {}", stretch.seq, span(stretch.started_at, stretch.ended_at)),
+        );
+        for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
+            render_move(store, flags, defs, m)?;
+        }
+    }
+    // A step that went looking for a task and found none belongs to no stretch, and is the whole of
+    // what the run did — so it is written out rather than left off the account.
+    let loose: Vec<&AutomationRunStep> = moves.iter().filter(|m| m.run_task_id.is_none()).collect();
+    if !loose.is_empty() {
+        human(flags, "\nno task");
+        for m in loose {
+            render_move(store, flags, defs, m)?;
+        }
+    }
+    Ok(())
+}
+
+/// One step execution: which step it was, how it left, how long it stood, what it carried, and the
+/// whole of what it said. The report is written out in full — a run read back months later is read for
+/// exactly this, and a snippet would send the reader somewhere else to finish the sentence.
+fn render_move(
+    store: &mut Store,
+    flags: &Flags,
+    defs: &[AutomationRunDef],
+    m: &AutomationRunStep,
+) -> Result<(), CliError> {
+    human(
+        flags,
+        format!(
+            "  {}. {}  left through {}  {}  [{}]",
+            m.seq,
+            named_step(defs, m),
+            named(m.exit_name.as_deref()),
+            span(m.started_at, m.ended_at),
+            m.status.as_str(),
+        ),
+    );
+    for v in store.automation_run_values(m.id).map_err(CliError::from)? {
+        human(flags, format!("      {}", one_run_value(&v)));
+    }
+    for line in m.report.lines().filter(|l| !l.trim().is_empty()) {
+        human(flags, format!("      | {line}"));
+    }
+    Ok(())
+}
+
+/// How a way out is spoken of in a sentence: by its name, or as the unnamed one. A step still running
+/// has taken none yet, which is a third thing and reads as such.
+fn named(exit: Option<&str>) -> String {
+    match exit {
+        Some(amenbo_core::model::ERROR_EXIT) => "the error way out".to_string(),
+        Some(name) => format!("\"{name}\""),
+        None => "the unnamed way out".to_string(),
+    }
+}
+
+/// The name the step was launched under, or that the step it ran is gone.
+fn named_step(defs: &[AutomationRunDef], m: &AutomationRunStep) -> String {
+    defs.iter()
+        .find(|d| d.id == m.run_def_id)
+        .map(|d| d.name.clone())
+        .unwrap_or_else(|| "a step".to_string())
+}
+
+/// One value on one line, said from the side it was on: what came in, and what went out.
+fn one_run_value(v: &AutomationRunValue) -> String {
+    let way = match v.direction {
+        amenbo_core::model::AutomationPortDirection::In => "in ",
+        amenbo_core::model::AutomationPortDirection::Out => "out",
+    };
+    let what = match (v.value.as_deref(), v.attachment_id, v.task_id) {
+        (Some(text), _, _) => text.to_string(),
+        (_, Some(id), _) => format!("AMB-ATT-{id}"),
+        (_, _, Some(id)) => task_label(id),
+        _ => String::new(),
+    };
+    let from = v.from_run_step_id.map(|_| " (handed on)").unwrap_or_default();
+    format!("{way} {} = {what}{from}", v.name)
+}
+
+/// How long something stood, as the two instants it stood between. An end that has not come reads as
+/// still standing rather than as a blank: a run under way and a run that ended are different facts, and
+/// an empty column says neither.
+fn span(from: Option<Timestamp>, to: Option<Timestamp>) -> String {
+    match (from, to) {
+        (Some(from), Some(to)) => format!("{} → {}", from.to_rfc3339_z(), to.to_rfc3339_z()),
+        (Some(from), None) => format!("{} → still going", from.to_rfc3339_z()),
+        (None, _) => "not started".to_string(),
+    }
 }

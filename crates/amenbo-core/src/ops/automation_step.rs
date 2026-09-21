@@ -44,6 +44,13 @@ pub struct Opening {
     /// The whole text handed to the agent, preamble first and the step's own prompt after the material
     /// it is to read.
     pub text: String,
+    /// **The folder the terminal is opened in**, or `None` where the step names none and the pane
+    /// opens wherever a pane of that project opens.
+    ///
+    /// It is resolved here rather than carried from where the automation was built, because what
+    /// `work_dir_ref` holds is a name and not a path ([`working_folder`]): the answer is given once,
+    /// on the setting or the input it names, and every step that reads it reads the same one.
+    pub folder: Option<String>,
 }
 
 /// The two ways opening a step can end.
@@ -124,7 +131,37 @@ pub fn open(tx: &WriteTx<'_>, run_id: i64, run_def_id: i64, lanes: i64) -> Resul
         write_in(tx, &run_step, found, now)?;
     }
     let text = compose(tx, &run, &def, &exits, &handed, stretch.as_ref())?;
-    Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text })))
+    let folder = working_folder(&def, &handed)?;
+    Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text, folder })))
+}
+
+/// **Where this step's terminal is opened.** `work_dir_ref` names a setting or an input rather than
+/// holding a path, so the answer is given once — while the automation was built, or by whatever step
+/// produced the value — and read here at the moment the terminal is started.
+///
+/// The settings are asked first, and the inputs after. A setting is the answer somebody wrote for this
+/// step, while an input is whatever the step before it handed over; where a name is both, what was
+/// written for the step is the more deliberate of the two.
+///
+/// A name that matches neither is `None` rather than a refusal: the pane opens where a pane of that
+/// project opens, and a step that could not be run at all is the launch check's to have refused
+/// ([`crate::ops::automation_run::check`]).
+fn working_folder(def: &AutomationRunDef, handed: &[Handed]) -> Result<Option<String>> {
+    let Some(name) = def.work_dir_ref.as_deref() else {
+        return Ok(None);
+    };
+    let cfg: Vec<crate::model::RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    if let Some(answer) = cfg.iter().find(|one| one.name == name) {
+        return Ok(answer.value.as_deref().map(written_as_a_path));
+    }
+    Ok(handed.iter().find(|one| one.port.name == name).and_then(|one| one.from.value.clone()))
+}
+
+/// One setting's answer as a path. A setting's value is JSON (`automation_cfg.value`), so a folder is
+/// written `"/work/here"` — quotes and all — and a value that is not a JSON string is taken as it
+/// stands rather than refused, a path being the one thing this field is ever asked for.
+fn written_as_a_path(value: &str) -> String {
+    serde_json::from_str::<String>(value).unwrap_or_else(|_| value.to_string())
 }
 
 /// One value standing ready for one input: the port it fills, and the row it is copied from.
@@ -634,6 +671,58 @@ mod tests {
             assert_eq!(stretch.seq, 1);
             assert_eq!(opening.run_step.run_task_id, Some(stretch.id));
             assert_eq!(stretch.task_id, None, "nothing has handed a task over yet");
+        });
+    }
+
+    /// Where a step's terminal is opened: the setting `work_dir_ref` names, and the input of that name
+    /// where no setting carries it.
+    ///
+    /// **The value is JSON, and the folder is not.** A setting's answer is written `"/work/here"` —
+    /// quotes and all — and a path handed to a terminal with its quotes still on it is a folder
+    /// nothing can find.
+    #[test]
+    fn the_terminal_opens_in_the_folder_the_step_names() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            automation::cfg_add(
+                tx,
+                AutomationOwner::Step,
+                p.first.id,
+                "作業フォルダ",
+                crate::model::AutomationCfgKind::Folder,
+                true,
+                None,
+            )
+            .expect("setting");
+            automation::cfg_set(tx, p.first.id, "作業フォルダ", Some("\"/work/here\"")).expect("answer");
+            automation::step_update(
+                tx,
+                p.first.id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Some("作業フォルダ")),
+                None,
+                None,
+            )
+            .expect("point the step at it");
+            let run = a_run(tx, &p.automation);
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            assert_eq!(opening.folder.as_deref(), Some("/work/here"));
+        });
+    }
+
+    /// A step that names no folder opens where a pane of its project opens — which is somebody else's
+    /// answer, and this one says nothing about it.
+    #[test]
+    fn a_step_that_names_no_folder_answers_none() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            assert_eq!(opening.folder, None);
         });
     }
 

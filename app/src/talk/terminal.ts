@@ -180,6 +180,23 @@ export type PaneStart = {
    * it against the frame and puts it on the launch line (`crate::pty`).
    */
   resume?: string | null;
+  /**
+   * What the agent is handed as its opening prompt, instead of the sentence that points it at
+   * `agent --json` (`AMB-T-5251`). It is a step of an automation and nothing else: the step's own
+   * text already carries the way in among everything else it says
+   * (`amenbo_core::ops::automation_step`).
+   */
+  say?: string | null;
+  /**
+   * Whether this opening starts a session of its own and leaves nothing of it on the frame
+   * (`crate::pty::pty_open`).
+   *
+   * **A step is one prompt carried out once.** The run keeps one place on the page and swaps the
+   * terminal in it at every step, so the place is reused and the conversation must not be: opened
+   * the ordinary way, the second step would come up inside the first one's session, and the next
+   * run of the app would come up inside a step that is over (`AMB-D-869`).
+   */
+  fresh?: boolean;
 };
 
 /**
@@ -628,6 +645,8 @@ async function draw(
     agent: start.agent ?? null,
     cols: term.cols,
     rows: term.rows,
+    say: start.say ?? null,
+    fresh: start.fresh ?? false,
   });
   // A terminal started here has said nothing yet, so there is nothing it could have missed.
   return { running: opened, named: null, made: [] };

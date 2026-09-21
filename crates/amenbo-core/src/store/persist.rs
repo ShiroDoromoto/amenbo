@@ -1732,6 +1732,21 @@ impl Store {
     }
 
     /// Add a step to an automation (one operation = one transaction).
+    /// **Open one step of a run** — write the execution down and build the text its terminal is
+    /// started on (one operation = one transaction).
+    ///
+    /// The reach is the run's, not the automation's: what this writes are the run's own rows, and a
+    /// run is filed under the project it was launched from.
+    pub fn automation_step_open(
+        &mut self,
+        run_id: i64,
+        run_def_id: i64,
+    ) -> Result<crate::ops::automation_step::Opened> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_step::open(tx, run_id, run_def_id)
+        })
+    }
+
     pub fn automation_step_add(
         &mut self,
         automation_id: i64,

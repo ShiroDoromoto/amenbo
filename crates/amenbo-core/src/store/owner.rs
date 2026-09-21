@@ -132,6 +132,13 @@ pub(super) fn automation_wire(conn: &Connection, id: i64) -> Result<Option<i64>>
     }
 }
 
+/// The project a run is filed under. A run carries it of its own, rather than being walked back to
+/// through the automation it was launched from — which is what keeps it readable after that
+/// automation is archived.
+pub(super) fn automation_run(conn: &Connection, id: i64) -> Result<Option<i64>> {
+    Ok(read::automation_run(conn, id).map_err(crate::error::engine_on(conn))?.map(|r| r.project_id))
+}
+
 /// The project a step execution is filed under — the run's, since a run is filed under a project of its
 /// own and not only under the automation it was launched from.
 /// The project a run was launched from. It is carried on the run's own row rather than walked back

@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use amenbo_scenario::{Args, Domain};
+use rusqlite::OptionalExtension;
 
 use crate::{opt_bool, path_str, req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 use crate::judge::judge_field;
@@ -126,6 +127,32 @@ impl Driver<'_> {
                      pointers they had put in folders with them)",
                     ids.len()
                 )))
+            }
+            // A device whose panes were still held at a split, which is the store a build before
+            // this one left. The reach is `worn-in`'s and `carried-in`'s — straight
+            // onto the store, because what would otherwise write it is an older build — and what it
+            // writes is what that build wrote: the arrangement in the shape with a count in it, and
+            // the generation stamp back at the one before the sizes. The app under test is what
+            // converts it, as it opens the store it is launched at.
+            "held-at-a-split" => {
+                let project = self.resolve_key(with, "project")?;
+                // The folder those panes worked in — the project's own, named the way every folder
+                // step names one. A row written without it is a pane that had not been told where it
+                // runs, which is a state a store really holds and not the one a project's own panes
+                // were left in.
+                let dir = match with.contains_key("dir") {
+                    true => Some(self.folder(with)?),
+                    false => None,
+                };
+                let held = hold_at_a_split(
+                    &self.session.home,
+                    project,
+                    req_i64(with, "count")?,
+                    with.get("orient").and_then(serde_yaml::Value::as_str),
+                    req_i64(with, "panes")?,
+                    dir.as_deref(),
+                )?;
+                Ok(Outcome::action(held))
             }
             "config-set" => {
                 let key = req_str(with, "key")?;
@@ -631,6 +658,147 @@ fn carry_in(
     ))
 }
 
+/// The `store_meta` keys an older build wrote the arrangement and its generation under. Frozen text
+/// on this side too (`amenbo_core::frames`, `amenbo_core::store_engine`), for the reason
+/// `CARRIED_IN_KEY` is: a row under another name is a store nothing converts, and the road standing
+/// on one would go green against a build that never read it.
+const LAYOUT_KEY: &str = "talk.layout";
+const FORMAT_VERSION_KEY: &str = "format_version";
+
+/// The generation a split was still a whole project's answer in. The step that converts it to a size
+/// on each pane is the one after, so this is the number that makes the build under test run it.
+const SPLIT_ERA: i64 = 48;
+
+/// Write the arrangement the way a build before the sizes wrote it, and stamp the store back to that
+/// generation.
+///
+/// One call is one project's answer: its split goes under `splits`, and `panes` rows are added for
+/// it. The face's own project is the one the first call names, which is where the app comes up. The
+/// panes carry an id, a project and the folder they work in — and no size, a row written then having
+/// had none, which is the whole of what the migration is for.
+///
+/// **A store already converted is refused rather than written over.** Every other premise op runs
+/// the shipped CLI, and a CLI that opens the store migrates it: a size on a pane here says something
+/// opened the store since the last call, and the older shape this wrote has already been converted
+/// away. The scenario validator keeps such a step out (`amenbo_scenario`), and this is the same
+/// answer given where the world is actually stood up.
+fn hold_at_a_split(
+    home: &Path,
+    project: i64,
+    count: i64,
+    orient: Option<&str>,
+    panes: i64,
+    dir: Option<&Path>,
+) -> Result<String, String> {
+    let db = home.join(STORE_FILE);
+    if !db.is_file() {
+        return Err(format!(
+            "there is no store at {} yet — `held-at-a-split` writes the arrangement of a project, so the project comes first",
+            db.display()
+        ));
+    }
+    if count < 1 {
+        return Err("`held-at-a-split` takes the split a project was held at, which is one pane to a page or more".to_string());
+    }
+    if panes < 1 {
+        return Err("`held-at-a-split` stands panes up, so it takes at least one — a project with none has no arrangement to convert".to_string());
+    }
+    if let Some(other) = orient.filter(|o| *o != "down") {
+        return Err(format!(
+            "`orient: {other}` is not one any build wrote — `down` is the two laid one above the other, and every other split had one way round"
+        ));
+    }
+
+    let conn = rusqlite::Connection::open(&db)
+        .map_err(|e| format!("could not open the store at {}: {e}", db.display()))?;
+    let sql = |e: rusqlite::Error| format!("could not write the arrangement an older build left: {e}");
+
+    let kept: Option<String> = conn
+        .query_row("SELECT value FROM store_meta WHERE key = ?1", [LAYOUT_KEY], |r| r.get(0))
+        .optional()
+        .map_err(sql)?;
+    let mut row: serde_json::Value = match kept {
+        Some(json) => serde_json::from_str(&json)
+            .map_err(|e| format!("the arrangement in the store is not JSON ({e}): {json}"))?,
+        None => serde_json::json!({}),
+    };
+    if row["panes"].as_array().is_some_and(|panes| panes.iter().any(|p| p.get("size").is_some())) {
+        return Err(
+            "the arrangement in the store already carries sizes — something opened the store since the last `held-at-a-split`, and the shape an older build wrote has been converted away"
+                .to_string(),
+        );
+    }
+    let row = row
+        .as_object_mut()
+        .ok_or_else(|| "the arrangement in the store is not an object".to_string())?;
+
+    // Which project the face was showing. The first call's, and left alone after that: a road that
+    // named several is reading them one at a time, and where it starts is where it wrote first.
+    row.entry("project").or_insert_with(|| serde_json::json!(project));
+
+    let mut split = serde_json::Map::new();
+    split.insert("count".to_string(), serde_json::json!(count));
+    if let Some(orient) = orient {
+        split.insert("orient".to_string(), serde_json::json!(orient));
+    }
+    row.entry("splits")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "the splits in the store are not an object".to_string())?
+        .insert(project.to_string(), serde_json::Value::Object(split));
+
+    let standing = row
+        .entry("panes")
+        .or_insert_with(|| serde_json::json!([]))
+        .as_array_mut()
+        .ok_or_else(|| "the panes in the store are not a list".to_string())?;
+    for _ in 0..panes {
+        let mut pane = serde_json::Map::new();
+        pane.insert("id".to_string(), serde_json::json!(drawn_id(&conn)?));
+        pane.insert("project".to_string(), serde_json::json!(project));
+        if let Some(dir) = dir {
+            pane.insert("folder".to_string(), serde_json::json!(dir.to_string_lossy()));
+        }
+        standing.push(serde_json::Value::Object(pane));
+    }
+
+    for (key, value) in [
+        (LAYOUT_KEY, serde_json::Value::Object(row.clone()).to_string()),
+        (FORMAT_VERSION_KEY, SPLIT_ERA.to_string()),
+    ] {
+        conn.execute(
+            "INSERT OR REPLACE INTO store_meta (key, value) VALUES (?1, ?2)",
+            rusqlite::params![key, value],
+        )
+        .map_err(sql)?;
+    }
+
+    Ok(format!(
+        "held project {project}'s {panes} pane(s) at a split of {count}{}, and took the store back to the generation before a pane carried its own size (v{SPLIT_ERA})",
+        match orient {
+            Some(orient) => format!(" ({orient})"),
+            None => String::new(),
+        }
+    ))
+}
+
+/// An id for a pane, in the shape the build under test draws them: a version 4 UUID, drawn rather
+/// than counted. The sixteen bytes come out of the store's own SQLite, which spares this crate a
+/// dependency for the one place it needs randomness.
+fn drawn_id(conn: &rusqlite::Connection) -> Result<String, String> {
+    let hex: String = conn
+        .query_row("SELECT lower(hex(randomblob(16)))", [], |r| r.get(0))
+        .map_err(|e| format!("could not draw an id for a pane: {e}"))?;
+    Ok(format!(
+        "{}-{}-4{}-a{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[13..16],
+        &hex[17..20],
+        &hex[20..32]
+    ))
+}
+
 /// Backdate every blob file two hours, comfortably past the hour a young blob is spared for.
 fn age_files_in(dir: &Path) -> Result<usize, String> {
     let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
@@ -780,6 +948,124 @@ mod carried_in_tests {
     fn a_home_with_no_store_yet_is_refused() {
         let session = crate::scratch::session("carried-in-test", false).expect("a throwaway home");
         let err = carry_in(&session.home, "mail", 0, 0, false).expect_err("there is nothing to write into");
+        assert!(err.contains("no store"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod held_at_a_split_tests {
+    use super::*;
+
+    /// A home with a store in it holding the one table this reaches into, for the reason
+    /// `carried-in`'s fixture leaves the rest of the schema alone.
+    fn a_store() -> crate::scratch::Session {
+        let session = crate::scratch::session("held-at-a-split-test", false).expect("a throwaway home");
+        let conn =
+            rusqlite::Connection::open(session.home.join(STORE_FILE)).expect("a store to open");
+        conn.execute_batch("CREATE TABLE store_meta (key TEXT PRIMARY KEY, value TEXT);")
+            .expect("the one table this reaches into");
+        session
+    }
+
+    fn meta(home: &Path, key: &str) -> Option<String> {
+        let conn = rusqlite::Connection::open(home.join(STORE_FILE)).expect("a store to open");
+        conn.query_row("SELECT value FROM store_meta WHERE key = ?1", [key], |r| r.get(0)).ok()
+    }
+
+    fn layout(home: &Path) -> serde_json::Value {
+        let raw = meta(home, LAYOUT_KEY).expect("the arrangement");
+        serde_json::from_str(&raw).expect("the shape an older build wrote")
+    }
+
+    /// The whole of what the premise claims: the split stands where a build before the sizes kept it,
+    /// the panes carry none, and the store is stamped at the generation whose migration converts it.
+    #[test]
+    fn the_arrangement_comes_out_in_the_shape_an_older_build_wrote() {
+        let session = a_store();
+        let home = &session.home;
+        hold_at_a_split(home, 1, 2, None, 2, None).expect("a project held at a split of two");
+
+        let row = layout(home);
+        assert_eq!(row["project"], 1, "the face comes up on the project that was named");
+        assert_eq!(row["splits"]["1"]["count"], 2);
+        assert!(row["splits"]["1"].get("orient").is_none(), "a two side by side says nothing further");
+        assert_eq!(row["panes"].as_array().expect("the panes").len(), 2);
+        for pane in row["panes"].as_array().expect("the panes") {
+            assert_eq!(pane["project"], 1);
+            assert!(pane.get("size").is_none(), "a size is what the migration puts here: {pane}");
+            assert_eq!(pane["id"].as_str().expect("an id").len(), 36, "drawn, not counted: {pane}");
+        }
+        assert_eq!(meta(home, FORMAT_VERSION_KEY).as_deref(), Some("48"));
+    }
+
+    /// Which way round a two was is kept, since the two are separate sizes on the other side of the
+    /// migration and a road about one would read the other's.
+    #[test]
+    fn a_two_laid_down_the_page_says_so() {
+        let session = a_store();
+        hold_at_a_split(&session.home, 3, 2, Some("down"), 1, None).expect("a two laid down the page");
+        assert_eq!(layout(&session.home)["splits"]["3"]["orient"], "down");
+    }
+
+    /// Several projects, one call each: the panes gather in one row, each project keeps its own
+    /// answer, and the face stays on the one that was named first.
+    #[test]
+    fn a_second_project_joins_the_first_without_moving_the_face() {
+        let session = a_store();
+        let home = &session.home;
+        hold_at_a_split(home, 1, 2, None, 2, None).expect("the first project");
+        hold_at_a_split(home, 2, 6, None, 3, None).expect("the second");
+
+        let row = layout(home);
+        assert_eq!(row["project"], 1, "the face is still where the first call put it");
+        assert_eq!(row["splits"]["1"]["count"], 2);
+        assert_eq!(row["splits"]["2"]["count"], 6);
+        let panes = row["panes"].as_array().expect("the panes");
+        assert_eq!(panes.len(), 5, "two on the first project and three on the second");
+        let ids: std::collections::HashSet<&str> =
+            panes.iter().map(|p| p["id"].as_str().expect("an id")).collect();
+        assert_eq!(ids.len(), 5, "and no two panes were drawn the same id");
+    }
+
+    /// A store something has opened since the last call is refused rather than written over: a size
+    /// on a pane says the migration has already run, and what this would write would be half of each
+    /// shape.
+    #[test]
+    fn an_arrangement_already_carrying_sizes_is_refused() {
+        let session = a_store();
+        let conn =
+            rusqlite::Connection::open(session.home.join(STORE_FILE)).expect("a store to open");
+        conn.execute(
+            "INSERT INTO store_meta (key, value) VALUES (?1, ?2)",
+            rusqlite::params![LAYOUT_KEY, r#"{"project":1,"panes":[{"id":"a","project":1,"size":"half"}]}"#],
+        )
+        .expect("an arrangement this build has already converted");
+
+        let err = hold_at_a_split(&session.home, 1, 2, None, 1, None)
+            .expect_err("the older shape cannot be written over a converted one");
+        assert!(err.contains("already carries sizes"), "{err}");
+    }
+
+    /// The three shapes of answer no build ever wrote.
+    #[test]
+    fn a_split_nobody_was_held_at_is_refused() {
+        let session = a_store();
+        let home = &session.home;
+        assert!(
+            hold_at_a_split(home, 1, 0, None, 1, None).expect_err("a page holds a pane or more").contains("one pane to a page"),
+        );
+        assert!(
+            hold_at_a_split(home, 1, 2, None, 0, None).expect_err("a project with no panes").contains("at least one"),
+        );
+        let err = hold_at_a_split(home, 1, 4, Some("across"), 1, None).expect_err("no build wrote that");
+        assert!(err.contains("`orient: across`"), "{err}");
+    }
+
+    /// And a home with no store in it yet, which is what a premise that put this first would meet.
+    #[test]
+    fn a_home_with_no_store_yet_is_refused() {
+        let session = crate::scratch::session("held-at-a-split-test", false).expect("a throwaway home");
+        let err = hold_at_a_split(&session.home, 1, 2, None, 1, None).expect_err("there is nothing to write into");
         assert!(err.contains("no store"), "{err}");
     }
 }

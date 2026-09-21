@@ -822,6 +822,25 @@ const REGISTRY: &[OpSpec] = &[
     // own. `project delete` is the same move on a road and is not this: a road that emptied the
     // device would be walking `retire-a-project` instead of its own.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nothing-raised", required: &[], refs: &[], strings: &[], binds: false },
+    // A device whose panes were held at a split — the shape a build before this one wrote. How much
+    // of a page a pane takes is the pane's own answer now, and what said it before was one count
+    // for a whole project; what converts the one into the other is a migration, run as a
+    // build opens a store it finds behind. No road reaches that world: a run makes its store with
+    // the build under test, so it is already in this build's shape before the app is launched at it.
+    // The premise writes the older shape, and the app is the thing that reads it.
+    //
+    // `project` is the project the split was set on, `count` the split it was held at, `orient`
+    // which way round a two is (`down` is one above the other, and no other count takes one), and
+    // `panes` how many panes stood on that project. `dir` is the folder those panes worked in, named
+    // the way every folder step names one — the project's own, so the places come back where they
+    // were. One call is one project's answer, and the face comes up on the project the first call
+    // names.
+    //
+    // **It stands last in a premise, and the validator holds it there.** Every other premise op is
+    // carried out with the shipped CLI, and a CLI that opens the store migrates it — so a step after
+    // this one would convert the older shape away before the app ever met it, and the road would go
+    // green having watched nothing.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "held-at-a-split", required: &["project", "count", "panes"], refs: &["project"], strings: &["orient", "dir"], binds: false },
     // The answer given to a nudge that came up on its own. A screen road alone: nothing in a terminal
     // puts one, so the CLI driver never meets it.
     //
@@ -4045,6 +4064,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // a project, so there is no other way to arrive at a store holding none — and no road reaches it
     // either, since a road that emptied the device would be walking `retire-a-project`.
     (Domain::Store, "nothing-raised"),
+    // And a device whose panes were still held at a split, which is the store a build before this one
+    // left. What stands between that shape and this one is a migration, and a migration runs on a
+    // store a build finds already written — so a run whose store this build made has no way to be
+    // holding one. The premise writes what the older build wrote; the road reads what this build
+    // makes of it.
+    (Domain::Store, "held-at-a-split"),
     // A folder already answering for a project — what a screen showing bindings has to be looking at.
     // Taking a pointer back off is here for the state it leaves rather than for the act: a project
     // with no folder left is what one whole notice is about, and creating a project links one, so
@@ -4148,6 +4173,13 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).
 fn may_stand(domain: Domain, op: &str) -> bool {
     PREMISE_OPS.iter().any(|(d, o)| *d == domain && *o == op)
+}
+
+/// Whether this premise step is the one that takes the store back to the shape an older build wrote
+/// — the step every other premise step has to stand in front of, for the reason its registry entry
+/// gives.
+fn holds_the_older_shape(step: &Step) -> bool {
+    step.domain() == Domain::Store && step.op() == "held-at-a-split"
 }
 
 /// The ops whose step carries a query — the words a reader types, or the number of a record they
@@ -4272,6 +4304,27 @@ impl Scenario {
         // was stood up with is the card a road then points at, and it is named the way any earlier
         // step is named.
         let standing = self.validate_list(None, &self.given, &HashSet::new(), &mut errs);
+
+        // And the one rule about where a premise step stands rather than about the step itself.
+        // `store held-at-a-split` leaves the store in the shape a build before this one wrote, and
+        // every other premise op is carried out with the shipped CLI — which migrates a store as it
+        // opens one. So a step after it converts the older shape away before the app is launched at
+        // it, and the road goes green having watched the migration run at a moment nobody is
+        // testing.
+        if let Some(first) = self.given.iter().position(holds_the_older_shape) {
+            for (i, step) in self.given.iter().enumerate().skip(first + 1) {
+                if !holds_the_older_shape(step) {
+                    errs.push(ValidationError {
+                        driver: None,
+                        step: Some(i),
+                        message: format!(
+                            "`{}` opens the store with the shipped CLI, which migrates it — and `store held-at-a-split` above has left it in the shape an older build wrote. Put the step that writes the older shape after the ones that stand the world up.",
+                            step.op()
+                        ),
+                    });
+                }
+            }
+        }
         for driver in Driver::ALL {
             self.validate_list(Some(driver), self.steps(driver), &standing, &mut errs);
         }
@@ -5367,6 +5420,63 @@ steps_gui:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("nothing stands up")));
+    }
+
+    /// The store taken back to the shape an older build wrote stands last in the premise. Every
+    /// other premise op is carried out with the shipped CLI, and a CLI that opens the store migrates
+    /// it — so a step after this one converts the older shape away before the app is ever launched
+    /// at it, and the road goes green having watched nothing.
+    #[test]
+    fn the_older_shape_is_written_after_the_world_it_belongs_to() {
+        let good = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+  - type: action
+    domain: store
+    op: held-at-a-split
+    with: { project: greenhouse, count: 2, panes: 2 }
+steps_gui:
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with: { size: half }
+"#;
+        load_str(good).unwrap().validate().expect("the older shape written last");
+
+        let bad = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+  - type: action
+    domain: store
+    op: held-at-a-split
+    with: { project: greenhouse, count: 2, panes: 2 }
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+steps_gui:
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with: { size: half }
+"#;
+        let errs = load_str(bad).unwrap().validate().unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.message.contains("held-at-a-split") && e.step == Some(2)),
+            "the step that would undo it is the one named: {errs:?}"
+        );
     }
 
     /// A premise is not a road. A file carrying a world and no way through it is walked by nobody,

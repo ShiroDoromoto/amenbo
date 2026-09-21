@@ -21,7 +21,9 @@ use chrono::NaiveDate;
 use rusqlite::types::Value;
 
 use crate::model::{
-    ActorKind, Attachment, Database, Decision, DecisionComment, DecisionDimensionValue,
+    ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
+    AutomationExit, AutomationNote, AutomationPort, AutomationStep, AutomationStepNote,
+    AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
     Project, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret,
@@ -489,6 +491,200 @@ pub fn attachment(a: &Attachment) -> Record {
             ],
             &a.created_at,
             &a.updated_at,
+        ),
+    )
+}
+
+// ───────────────────────── automation: what is built ─────────────────────────
+// The five tables of the run side have no projection: nothing writes them yet.
+
+pub fn automation_action(a: &AutomationAction) -> Record {
+    Record::new(
+        "automation_action",
+        a.id,
+        with_audit(
+            vec![
+                ("project_id", kv_opt(&a.project_id)),
+                ("name", tv(&a.name)),
+                ("prompt", tv(&a.prompt)),
+                ("order_key", tv(&a.order_key)),
+            ],
+            &a.created_at,
+            &a.updated_at,
+        ),
+    )
+}
+
+pub fn automation(a: &Automation) -> Record {
+    Record::new(
+        "automation",
+        a.id,
+        with_audit(
+            vec![
+                ("project_id", kv(a.project_id)),
+                ("name", tv(&a.name)),
+                ("notes", tv(&a.notes)),
+                ("preamble", tv(&a.preamble)),
+                ("entry_step_id", kv_opt(&a.entry_step_id)),
+                ("archived", bv(a.archived)),
+                ("order_key", tv(&a.order_key)),
+            ],
+            &a.created_at,
+            &a.updated_at,
+        ),
+    )
+}
+
+pub fn automation_note(n: &AutomationNote) -> Record {
+    Record::new(
+        "automation_note",
+        n.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(n.automation_id)),
+                ("name", tv(&n.name)),
+                ("body", tv(&n.body)),
+                ("order_key", tv(&n.order_key)),
+            ],
+            &n.created_at,
+            &n.updated_at,
+        ),
+    )
+}
+
+pub fn automation_step(s: &AutomationStep) -> Record {
+    Record::new(
+        "automation_step",
+        s.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(s.automation_id)),
+                ("name", tv(&s.name)),
+                ("action_id", kv_opt(&s.action_id)),
+                ("prompt", ov(&s.prompt)),
+                ("agent", tv(&s.agent)),
+                ("model", ov(&s.model)),
+                ("interactive", bv(s.interactive)),
+                ("work_dir_ref", ov(&s.work_dir_ref)),
+                ("report_to_task", bv(s.report_to_task)),
+                ("show_history", bv(s.show_history)),
+                ("order_key", tv(&s.order_key)),
+            ],
+            &s.created_at,
+            &s.updated_at,
+        ),
+    )
+}
+
+pub fn automation_cfg(c: &AutomationCfg) -> Record {
+    Record::new(
+        "automation_cfg",
+        c.id,
+        with_audit(
+            vec![
+                ("owner_kind", tv(c.owner_kind.as_str())),
+                ("owner_id", kv(c.owner_id)),
+                ("name", tv(&c.name)),
+                ("kind", tv(c.kind.as_str())),
+                ("required", bv(c.required)),
+                ("options", ov(&c.options)),
+                ("value", ov(&c.value)),
+                ("order_key", tv(&c.order_key)),
+            ],
+            &c.created_at,
+            &c.updated_at,
+        ),
+    )
+}
+
+pub fn automation_step_note(n: &AutomationStepNote) -> Record {
+    Record::new(
+        "automation_step_note",
+        n.id,
+        with_audit(
+            vec![
+                ("step_id", kv(n.step_id)),
+                ("note_id", kv(n.note_id)),
+                ("order_key", tv(&n.order_key)),
+            ],
+            &n.created_at,
+            &n.updated_at,
+        ),
+    )
+}
+
+pub fn automation_exit(e: &AutomationExit) -> Record {
+    Record::new(
+        "automation_exit",
+        e.id,
+        with_audit(
+            vec![
+                ("owner_kind", tv(e.owner_kind.as_str())),
+                ("owner_id", kv(e.owner_id)),
+                ("name", ov(&e.name)),
+                ("order_key", tv(&e.order_key)),
+            ],
+            &e.created_at,
+            &e.updated_at,
+        ),
+    )
+}
+
+pub fn automation_port(p: &AutomationPort) -> Record {
+    Record::new(
+        "automation_port",
+        p.id,
+        with_audit(
+            vec![
+                ("owner_kind", tv(p.owner_kind.as_str())),
+                ("owner_id", kv(p.owner_id)),
+                ("direction", tv(p.direction.as_str())),
+                ("name", tv(&p.name)),
+                ("kind", tv(p.kind.as_str())),
+                ("required", bv(p.required)),
+                ("order_key", tv(&p.order_key)),
+            ],
+            &p.created_at,
+            &p.updated_at,
+        ),
+    )
+}
+
+pub fn automation_edge(e: &AutomationEdge) -> Record {
+    Record::new(
+        "automation_edge",
+        e.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(e.automation_id)),
+                ("from_step_id", kv(e.from_step_id)),
+                ("exit_name", ov(&e.exit_name)),
+                ("to_step_id", kv_opt(&e.to_step_id)),
+                ("ends", tv(e.ends.as_str())),
+                ("max_times", e.max_times.map(iv).unwrap_or(Value::Null)),
+                ("order_key", tv(&e.order_key)),
+            ],
+            &e.created_at,
+            &e.updated_at,
+        ),
+    )
+}
+
+pub fn automation_wire(w: &AutomationWire) -> Record {
+    Record::new(
+        "automation_wire",
+        w.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(w.automation_id)),
+                ("from_step_id", kv(w.from_step_id)),
+                ("from_exit_name", ov(&w.from_exit_name)),
+                ("from_port_name", tv(&w.from_port_name)),
+                ("to_step_id", kv(w.to_step_id)),
+                ("to_port_name", tv(&w.to_port_name)),
+            ],
+            &w.created_at,
+            &w.updated_at,
         ),
     )
 }

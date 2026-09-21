@@ -86,6 +86,21 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   binding_project_dir: ["projects"],
   hook_optout: ["projects"],
   harness_consent: ["projects"],
+  // The ten tables an automation's definition is built in. Folded to nothing for `notify_target`'s
+  // reason: no pane draws an automation yet, so no query goes stale when one is built, and falling to
+  // gap would buy a full re-read for a change nobody can see. The screens that will draw them — the
+  // automation pane and its three tabs — name their scope here when they arrive. The five tables a run
+  // is written in are not listed: nothing writes them yet, so the feed cannot name them.
+  automation: [],
+  automation_action: [],
+  automation_note: [],
+  automation_step: [],
+  automation_step_note: [],
+  automation_cfg: [],
+  automation_exit: [],
+  automation_port: [],
+  automation_edge: [],
+  automation_wire: [],
 };
 
 /**

@@ -27,7 +27,10 @@ use super::schema::col;
 use super::sql::{Col, ColType, NotNull, Nullability, Nullable, Read, Text};
 use super::Result;
 use crate::model::{
-    ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
+    ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
+    AutomationCfg, AutomationCfgKind, AutomationEdge, AutomationEnds, AutomationExit,
+    AutomationNote, AutomationOwner, AutomationPort, AutomationPortDirection, AutomationPortKind,
+    AutomationPortOwner, AutomationStep, AutomationStepNote, AutomationWire, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -451,6 +454,171 @@ pub(super) fn attachment_row(r: &Row) -> rusqlite::Result<Attachment> {
         url: get(r, C.url)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
         order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+// ───────────────────────── automation: what is built ─────────────────────────
+// The run side's five tables have no reader: nothing writes them yet, so there is nothing to read back.
+
+pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationAction> {
+    const C: col::automation_action::Cols = col::automation_action::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationAction {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        name: get(r, C.name)?,
+        prompt: get(r, C.prompt)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
+    const C: col::automation::Cols = col::automation::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(Automation {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        name: get(r, C.name)?,
+        notes: get(r, C.notes)?,
+        preamble: get(r, C.preamble)?,
+        entry_step_id: get(r, C.entry_step_id)?,
+        archived: get(r, C.archived)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_note_row(r: &Row) -> rusqlite::Result<AutomationNote> {
+    const C: col::automation_note::Cols = col::automation_note::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationNote {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        name: get(r, C.name)?,
+        body: get(r, C.body)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_step_row(r: &Row) -> rusqlite::Result<AutomationStep> {
+    const C: col::automation_step::Cols = col::automation_step::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationStep {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        name: get(r, C.name)?,
+        action_id: get(r, C.action_id)?,
+        prompt: get(r, C.prompt)?,
+        agent: get(r, C.agent)?,
+        model: get(r, C.model)?,
+        interactive: get(r, C.interactive)?,
+        work_dir_ref: get(r, C.work_dir_ref)?,
+        report_to_task: get(r, C.report_to_task)?,
+        show_history: get(r, C.show_history)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_cfg_row(r: &Row) -> rusqlite::Result<AutomationCfg> {
+    const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationCfg {
+        id: get(r, C.id)?,
+        owner_kind: enum_req(r, C.owner_kind, AutomationOwner::parse)?,
+        // Polymorphic (an unconstrained key, not `fk!`): which table it names is `owner_kind`'s to say.
+        owner_id: get(r, C.owner_id)?,
+        name: get(r, C.name)?,
+        kind: enum_req(r, C.kind, AutomationCfgKind::parse)?,
+        required: get(r, C.required)?,
+        options: get(r, C.options)?,
+        value: get(r, C.value)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_step_note_row(r: &Row) -> rusqlite::Result<AutomationStepNote> {
+    const C: col::automation_step_note::Cols = col::automation_step_note::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationStepNote {
+        id: get(r, C.id)?,
+        step_id: get(r, C.step_id)?,
+        note_id: get(r, C.note_id)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_exit_row(r: &Row) -> rusqlite::Result<AutomationExit> {
+    const C: col::automation_exit::Cols = col::automation_exit::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationExit {
+        id: get(r, C.id)?,
+        owner_kind: enum_req(r, C.owner_kind, AutomationOwner::parse)?,
+        owner_id: get(r, C.owner_id)?,
+        name: get(r, C.name)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_port_row(r: &Row) -> rusqlite::Result<AutomationPort> {
+    const C: col::automation_port::Cols = col::automation_port::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationPort {
+        id: get(r, C.id)?,
+        owner_kind: enum_req(r, C.owner_kind, AutomationPortOwner::parse)?,
+        owner_id: get(r, C.owner_id)?,
+        direction: enum_req(r, C.direction, AutomationPortDirection::parse)?,
+        name: get(r, C.name)?,
+        kind: enum_req(r, C.kind, AutomationPortKind::parse)?,
+        required: get(r, C.required)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_edge_row(r: &Row) -> rusqlite::Result<AutomationEdge> {
+    const C: col::automation_edge::Cols = col::automation_edge::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationEdge {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        from_step_id: get(r, C.from_step_id)?,
+        exit_name: get(r, C.exit_name)?,
+        to_step_id: get(r, C.to_step_id)?,
+        ends: enum_req(r, C.ends, AutomationEnds::parse)?,
+        max_times: get(r, C.max_times)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_wire_row(r: &Row) -> rusqlite::Result<AutomationWire> {
+    const C: col::automation_wire::Cols = col::automation_wire::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationWire {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        from_step_id: get(r, C.from_step_id)?,
+        from_exit_name: get(r, C.from_exit_name)?,
+        from_port_name: get(r, C.from_port_name)?,
+        to_step_id: get(r, C.to_step_id)?,
+        to_port_name: get(r, C.to_port_name)?,
         created_at,
         updated_at,
     })

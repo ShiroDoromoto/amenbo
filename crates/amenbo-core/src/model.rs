@@ -1250,6 +1250,411 @@ pub struct Attachment {
     pub updated_at: Timestamp,
 }
 
+// ───────────────────────── automation: what is built ─────────────────────────
+//
+// Ten records for the definition, mirroring the ten definition tables the store_engine schema
+// declares. What ran is five more tables that no model shape covers yet — they are the launch side's,
+// and nothing here reads them.
+//
+// Two of them hang off either a step or a library action. A settings declaration (AutomationCfg) and a
+// way out (AutomationExit) are written the same whichever of the two declares them, so they carry an
+// AutomationOwner instead of two nullable keys.
+
+/// Which of the two an [`AutomationCfg`] or an [`AutomationExit`] hangs off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationOwner {
+    Step,
+    Action,
+}
+
+impl AutomationOwner {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationOwner::Step => "step",
+            AutomationOwner::Action => "action",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationOwner> {
+        match s {
+            "step" => Some(AutomationOwner::Step),
+            "action" => Some(AutomationOwner::Action),
+            _ => None,
+        }
+    }
+}
+
+/// Which of the three an [`AutomationPort`] hangs off. What a step takes in is declared by the step or
+/// by the action it points at; what it hands on is declared by the way out it left through, so the
+/// exit is a third owner here and nowhere else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationPortOwner {
+    Step,
+    Action,
+    Exit,
+}
+
+impl AutomationPortOwner {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationPortOwner::Step => "step",
+            AutomationPortOwner::Action => "action",
+            AutomationPortOwner::Exit => "exit",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationPortOwner> {
+        match s {
+            "step" => Some(AutomationPortOwner::Step),
+            "action" => Some(AutomationPortOwner::Action),
+            "exit" => Some(AutomationPortOwner::Exit),
+            _ => None,
+        }
+    }
+
+    /// The same owner read as an [`AutomationOwner`] — `None` for an exit, which that pair does not
+    /// admit. It is what lets one declaration carry both tables' owners without a second spelling of
+    /// step-or-action.
+    pub fn declarer(&self) -> Option<AutomationOwner> {
+        match self {
+            AutomationPortOwner::Step => Some(AutomationOwner::Step),
+            AutomationPortOwner::Action => Some(AutomationOwner::Action),
+            AutomationPortOwner::Exit => None,
+        }
+    }
+}
+
+/// What a setting is, which is what the build screen draws for it: a task filter, a folder, a choice
+/// out of a list, a number, or free text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationCfgKind {
+    TaskFilter,
+    Folder,
+    Choice,
+    Number,
+    Text,
+}
+
+impl AutomationCfgKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationCfgKind::TaskFilter => "taskfilter",
+            AutomationCfgKind::Folder => "folder",
+            AutomationCfgKind::Choice => "choice",
+            AutomationCfgKind::Number => "number",
+            AutomationCfgKind::Text => "text",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationCfgKind> {
+        match s {
+            "taskfilter" => Some(AutomationCfgKind::TaskFilter),
+            "folder" => Some(AutomationCfgKind::Folder),
+            "choice" => Some(AutomationCfgKind::Choice),
+            "number" => Some(AutomationCfgKind::Number),
+            "text" => Some(AutomationCfgKind::Text),
+            _ => None,
+        }
+    }
+}
+
+/// Which way a port faces: `In` is what a step takes, `Out` is what a way out of it hands on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationPortDirection {
+    In,
+    Out,
+}
+
+impl AutomationPortDirection {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationPortDirection::In => "in",
+            AutomationPortDirection::Out => "out",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationPortDirection> {
+        match s {
+            "in" => Some(AutomationPortDirection::In),
+            "out" => Some(AutomationPortDirection::Out),
+            _ => None,
+        }
+    }
+}
+
+/// What a port carries. `TaskTake` is the one that decides what the run is about — the task it comes
+/// out holding is the task every step after it works on — and `TaskMake` is a task a step raised along
+/// the way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationPortKind {
+    Value,
+    File,
+    TaskTake,
+    TaskMake,
+}
+
+impl AutomationPortKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationPortKind::Value => "value",
+            AutomationPortKind::File => "file",
+            AutomationPortKind::TaskTake => "task_take",
+            AutomationPortKind::TaskMake => "task_make",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationPortKind> {
+        match s {
+            "value" => Some(AutomationPortKind::Value),
+            "file" => Some(AutomationPortKind::File),
+            "task_take" => Some(AutomationPortKind::TaskTake),
+            "task_make" => Some(AutomationPortKind::TaskMake),
+            _ => None,
+        }
+    }
+}
+
+/// What happens once a way out is taken: go on to another step, close the run, or stop it and call a
+/// person.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationEnds {
+    #[default]
+    Go,
+    Done,
+    Halt,
+}
+
+impl AutomationEnds {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationEnds::Go => "go",
+            AutomationEnds::Done => "done",
+            AutomationEnds::Halt => "halt",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationEnds> {
+        match s {
+            "go" => Some(AutomationEnds::Go),
+            "done" => Some(AutomationEnds::Done),
+            "halt" => Some(AutomationEnds::Halt),
+            _ => None,
+        }
+    }
+}
+
+/// The name of the way out every step and every action carries and nobody writes: the one taken when
+/// the step fell over. It is spelled apart from every name a person can give
+/// ([`crate::ops::automation::exit_add`] refuses it as input), so an exit list can hold it without a
+/// flag column saying which row it is.
+pub const ERROR_EXIT: &str = "*";
+
+/// The number of times a way back may be taken for one task before the run is stopped
+/// ([`AutomationEdge::max_times`]). Ten, because the thing it guards against is a loop that never
+/// converges, not a review that goes round three times.
+pub const DEFAULT_MAX_TIMES: i64 = 10;
+
+/// **A prompt worth using twice** — one entry of the library. `project_id` `None` is one held by the
+/// device rather than by a project, and it is reachable from every project on it.
+///
+/// It names no agent and no model: who is asked to carry the prompt out is
+/// [`AutomationStep`]'s answer, so two automations can run the same action with different agents.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationAction {
+    pub id: i64,
+    /// The project whose library this is in, or `None` for the device's own.
+    #[serde(default)]
+    pub project_id: Option<i64>,
+    pub name: String,
+    pub prompt: String,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One automation** — its steps, what runs after what, and the preamble every step's launch carries.
+///
+/// `entry_step_id` is where a run starts; from it the edges are walked, and the place a step sits in
+/// the picture and the number it is drawn with both fall out of that walk rather than out of
+/// `order_key`, which records only the order the steps were added in.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Automation {
+    pub id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub notes: String,
+    /// Prepended to every step's launch. Kept short — the material a prompt would otherwise repeat
+    /// belongs in an [`AutomationNote`].
+    pub preamble: String,
+    /// The step a run opens its first terminal on. `None` while the automation is still being built;
+    /// launching without one is refused at the launch check, not here.
+    #[serde(default)]
+    pub entry_step_id: Option<i64>,
+    #[serde(default)]
+    pub archived: bool,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **A document the steps of one automation share.** Long is fine here; which steps are handed it is
+/// [`AutomationStepNote`]'s to say.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationNote {
+    pub id: i64,
+    pub automation_id: i64,
+    pub name: String,
+    pub body: String,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One step of one automation.** Either it points at a library action (`action_id`) or it carries its
+/// own `prompt`; exactly one of the two is set, and which it is decides where its ways out, its
+/// settings declarations and its inputs are read from.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationStep {
+    pub id: i64,
+    pub automation_id: i64,
+    pub name: String,
+    /// The library action this step runs, or `None` when it carries its own `prompt`.
+    #[serde(default)]
+    pub action_id: Option<i64>,
+    /// The prompt written for this step alone, or `None` when it points at an action.
+    #[serde(default)]
+    pub prompt: Option<String>,
+    pub agent: String,
+    /// `None` leaves the agent's own default model.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// May this step wait for a person? Only a step that says so holds a lane while nobody answers.
+    #[serde(default)]
+    pub interactive: bool,
+    /// The name of the setting or the input the working folder is taken from — a name, not a path.
+    #[serde(default)]
+    pub work_dir_ref: Option<String>,
+    /// Does this step's report also land as a comment on the task?
+    #[serde(default)]
+    pub report_to_task: bool,
+    /// Is the run's story so far handed to this step? On unless somebody turns it off.
+    #[serde(default)]
+    pub show_history: bool,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **A setting, declared by an action or a step and answered where it is used.** An action's row is the
+/// declaration alone, so its `value` is `None`; a step pointing at that action carries a row of its own
+/// under the same `name`, and that is where the answer written while building sits.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AutomationCfg {
+    pub id: i64,
+    pub owner_kind: AutomationOwner,
+    pub owner_id: i64,
+    pub name: String,
+    pub kind: AutomationCfgKind,
+    pub required: bool,
+    /// The choices, as JSON, for `kind = Choice`. `None` for every other kind.
+    #[serde(default)]
+    pub options: Option<String>,
+    /// The answer written while building, as JSON. `None` on an action's declaration row.
+    #[serde(default)]
+    pub value: Option<String>,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **Which shared documents a step is handed.**
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationStepNote {
+    pub id: i64,
+    pub step_id: i64,
+    pub note_id: i64,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **A way out of a step or an action**, named by whoever built it. Which one the agent took is the
+/// whole condition the next step is chosen by. `name` `None` is the unnamed way out, which is what a
+/// step with only one has; [`ERROR_EXIT`] is the one every owner carries from birth.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AutomationExit {
+    pub id: i64,
+    pub owner_kind: AutomationOwner,
+    pub owner_id: i64,
+    #[serde(default)]
+    pub name: Option<String>,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **What a step takes in, and what a way out of it hands on.** One record for both, told apart by
+/// `direction`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AutomationPort {
+    pub id: i64,
+    pub owner_kind: AutomationPortOwner,
+    pub owner_id: i64,
+    pub direction: AutomationPortDirection,
+    pub name: String,
+    pub kind: AutomationPortKind,
+    pub required: bool,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **What happens after a way out is taken.** The edge carries no condition of its own: the exit *is*
+/// the condition.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AutomationEdge {
+    pub id: i64,
+    pub automation_id: i64,
+    pub from_step_id: i64,
+    /// The way out this edge hangs on — `None` for the unnamed one, [`ERROR_EXIT`] for the error one.
+    #[serde(default)]
+    pub exit_name: Option<String>,
+    /// Where it goes, for `ends = Go`. `None` for `Done` and `Halt`, which go nowhere.
+    #[serde(default)]
+    pub to_step_id: Option<i64>,
+    pub ends: AutomationEnds,
+    /// How often this edge may be taken for one task. `None` is no limit, which is the right answer for
+    /// an edge into a step that takes a fresh task.
+    #[serde(default)]
+    pub max_times: Option<i64>,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **What is handed from one step to the next.** Both ends are named rather than keyed: the same action
+/// used at two places in one automation gives two steps whose ports carry the same names, so only
+/// `step_id` + `exit_name` + `port_name` says which of them is meant.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationWire {
+    pub id: i64,
+    pub automation_id: i64,
+    pub from_step_id: i64,
+    #[serde(default)]
+    pub from_exit_name: Option<String>,
+    pub from_port_name: String,
+    pub to_step_id: i64,
+    pub to_port_name: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// A serde-shaped vessel holding every record of one store at once. It is **not the store's contents**:
 /// the truth source is SQLite, and [`crate::store::Store`] does not hold one of these. The shape exists
 /// for the two places that need the records handed over **as a single lump**: verifying a backup or a

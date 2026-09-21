@@ -1127,6 +1127,10 @@ fn capabilities() -> Value {
             ],
         ),
         cap(
+            "Read what a run did — reached from the task it worked or the automation it came from, never searched for",
+            &["automation run list", "automation run show"],
+        ),
+        cap(
             "Draw the picture a run is walked along — where it starts, the ways out of each step, what happens after each one is taken, and what is handed along",
             &[
                 "automation entry set",
@@ -1978,6 +1982,16 @@ fn all_commands() -> Value {
             json!([{ "name": "<step>", "help": "step id", "required": true },
                    { "name": "<note>", "help": "document id", "required": true }]),
             json!(["amenbo automation note link 11 71"])),
+        cmd("automation run list", "The runs that worked one task (--task), or the runs one automation has behind it (--automation), newest first. THERE IS NO LISTING OF EVERY RUN and no word search over one: a run is reached from a record already in hand, because what is asked of it is how this task was handled or what this automation has done. A run that came back to the same task twice is listed once.",
+            json!([{ "name": "--task <id>", "help": "the task a run worked (AMB-T-n)" },
+                   { "name": "--automation <id>", "help": "the automation the runs came from" },
+                   { "name": "--limit <n>", "help": "max count (newest first)" },
+                   { "name": "--json", "help": "machine-readable output" }]),
+            json!(["amenbo automation run list --task AMB-T-123", "amenbo automation run list --automation 3 --limit 5"])),
+        cmd("automation run show", "One run in full: every step it ran in the order it ran them, grouped by the task each stretch of the run was about — which way out each step left through, how long it stood, what it was handed and what it handed on, and the whole of what it reported. The report is not cut short: a run read back months later is read for exactly that. A step that went looking for a task and found none belongs to no stretch and is written out on its own.",
+            json!([{ "name": "<id>", "help": "run id", "required": true },
+                   { "name": "--json", "help": "machine-readable output" }]),
+            json!(["amenbo automation run show 7"])),
         cmd("automation note unlink", "Stops handing a shared document to a step. The document itself stays where it is.",
             json!([{ "name": "<step>", "help": "step id", "required": true },
                    { "name": "<note>", "help": "document id", "required": true }]),

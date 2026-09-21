@@ -1898,6 +1898,33 @@ pub enum AutomationCmd {
         #[command(subcommand)]
         sub: AutomationNoteCmd,
     },
+    /// What a run did — reached from the task it worked, or from the automation it came from
+    Run {
+        #[command(subcommand)]
+        sub: AutomationRunCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationRunCmd {
+    /// The runs that worked one task, or the runs one automation has behind it (newest first)
+    List {
+        /// the task a run worked (AMB-T-n)
+        #[arg(long, value_name = "ID", conflicts_with = "automation")]
+        task: Option<String>,
+        /// the automation the runs came from
+        #[arg(long, value_name = "ID")]
+        automation: Option<i64>,
+        /// max count (newest first)
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// One run in full: every step it ran, the way out each took, how long it stood, what it handed on,
+    /// and the whole of what it reported
+    Show {
+        /// run id
+        id: i64,
+    },
 }
 
 #[derive(Subcommand, Debug)]

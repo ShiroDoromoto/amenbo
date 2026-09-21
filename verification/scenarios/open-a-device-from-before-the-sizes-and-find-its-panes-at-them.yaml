@@ -1,0 +1,200 @@
+# What a pane takes of a page is the pane's own answer now. It was a project's before — one split for
+# the whole of it — and a device that was left in that shape is opened by this build every time
+# somebody updates. What stands between the two shapes is a conversion the app runs as it opens a
+# store it finds already written, and this is the road that walks it: the store is left the way the
+# older build left it, and what the app draws is read off the page.
+#
+# ── Why this cannot be reached by pressing anything ─────────────────────────────────────────────
+# A run makes its store with the build under test, so the store is in this build's shape before the
+# app is ever launched at it. There is no press anywhere that puts a split back, and there should not
+# be: the shape is gone from the build, and the conversion only ever runs once, on the way in. So the
+# premise writes what the older build wrote — the split under the project, the panes with no size on
+# them, and the generation stamp back where the conversion is still owed — and the app is the thing
+# that reads it.
+#
+# ── What the app does on the way up, and what of it is this road's ─────────────────────────────
+# A build that meets a store behind its own generation converts it before it draws anything, and it
+# says so on a screen of its own while it does. That screen is another road's: this store holds three
+# projects and one step of conversion, so what an operator sees of it is a flicker at most. If it is
+# standing when the window comes up, wait for it to finish rather than pressing anything — the first
+# step below is the workspace, and the app goes there by itself once the store is converted.
+#
+# ── Why three projects ──────────────────────────────────────────────────────────────────────────
+# Because the conversion has three answers and one of them is a refusal. A project held at two draws
+# panes at half a page; one held at six draws them at a sixth; and one held at a split this build
+# offers no size for is not rounded to the nearest — the panes come back at the whole page, which is
+# what a pane nobody sized is drawn at. A road on one project alone could not tell a build that
+# converted from one that put every pane at the whole page and called it done.
+#
+# ── Why the reading is the page and not the number ──────────────────────────────────────────────
+# The conversion has unit tests of its own, and they read the row it writes. What they cannot say is
+# whether the reader sees it: a store converted perfectly and a face that laid the panes out from
+# something else are the same row on disk and two different screens. So every reading here is off the
+# page — how many panes are standing on it, what room is left beside them, and the share the pane
+# being worked in is taking.
+#
+# ── Why the room beside the panes is read every time ────────────────────────────────────────────
+# It is the half that separates the three answers from each other. Two panes filling a page and two
+# panes with room beside them are both two panes; what parts them is what is left over. At half there
+# is nothing left, at a sixth there is a page mostly empty, and at the whole page the second pane is
+# not on this page at all — which is read by turning to it.
+#
+# ── The screen road alone ───────────────────────────────────────────────────────────────────────
+# A layout is a thing on a screen. The binary is handed no page and has nothing to say here.
+id: open-a-device-from-before-the-sizes-and-find-its-panes-at-them
+title: A device left with its panes held at a split opens with every pane at the size that split comes to, and a split this build has no size for leaves them at the whole page
+description: >
+  Three projects, each with panes the last build left held at a split of its own: two, six, and one
+  this build draws no size for. Open the app on that device. The first project's two panes fill the
+  page between them at half each, with no room left over; the second project's two come back at a
+  sixth apiece, with the rest of the page standing empty beside them; and the third project's, whose
+  split this build cannot draw, are back at the whole page — one to a page, the second found by
+  turning to it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Coldframe
+      dir: coldframe
+    as: coldframe
+
+  # And the arrangement the build before this one left, which every step above has to stand in front
+  # of: what writes it reaches straight onto the store, and everything else in a premise opens that
+  # store with the shipped binary — which converts it.
+  - type: action
+    domain: store
+    op: held-at-a-split
+    with:
+      project: greenhouse
+      dir: greenhouse
+      count: 2
+      panes: 2
+
+  - type: action
+    domain: store
+    op: held-at-a-split
+    with:
+      project: boathouse
+      dir: boathouse
+      count: 6
+      panes: 2
+
+  # A split this build offers no size for. It was written by a build that drew some other one, and a
+  # pane put back at a guess would be the conversion inventing what the reader left.
+  - type: action
+    domain: store
+    op: held-at-a-split
+    with:
+      project: coldframe
+      dir: coldframe
+      count: 5
+      panes: 2
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means
+  # to read rather than reading whichever came up.
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # A split of two comes to half a page each, so the two places the reader left fill the page between
+  # them. Nothing is running in either of them — a run keeps the place and not the process — and a
+  # place is still a pane on the page.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # And the same answer read off the pane rather than off the room beside it. Both panes of this
+  # project were held at the one split, so which of them is being worked in does not change it.
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: half
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Boathouse
+
+  # A split of six comes to a sixth each, so the same two places leave most of the page standing
+  # empty — one way in at the first gap, and the rest bare. A build that converted nothing would draw
+  # this project exactly as it drew the last one.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+      empty: 1
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: sixth
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Coldframe
+
+  # The split this build has no size for. What comes back is the size a pane nobody sized is drawn at
+  # — the whole page — so the first place is alone on the page and there is no room beside it.
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  # And the second place, which is on the page after it rather than gone. A build that dropped the
+  # panes it could not size would leave nothing here to turn to.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 2
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 0

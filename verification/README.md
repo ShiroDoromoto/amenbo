@@ -1030,6 +1030,22 @@ shell in the place that came back and opens the one beside it. Both roads are ab
 **both sides look right**: a face that forgot and a face that remembered are each a working screen,
 and nothing goes red between them.
 
+The seam one step further out is the build itself. How much of a page a pane takes used to be one
+answer for a whole project — a split — and a device left in that shape is opened by this build every
+time somebody updates. What stands between the two shapes is a conversion the app runs as it opens a
+store it finds already written, and `open-a-device-from-before-the-sizes-and-find-its-panes-at-them`
+is the road that walks it. No press reaches that world: a run makes its store with the build under
+test, so it is in this build's shape before the app is launched at it, and the shape it would be
+converted from is gone from the build. So the premise writes what the older build wrote
+(`store held-at-a-split`) and the app is what reads it.
+Three projects, because the conversion has three answers and one of them is a refusal: held at two
+the panes come back at half a page, held at six at a sixth, and held at a split this build draws no
+size for they come back at the whole page rather than rounded to the nearest. A road on one project
+alone could not tell a build that converted from one that put every pane at the whole page and called
+it done. Every reading is off the page and none off the row — the conversion has unit tests that read
+the row, and what they cannot say is whether the reader sees it: a store converted perfectly and a
+face laid out from something else are the same bytes on disk and two different screens.
+
 Which folder a pane works in belongs to the same seam, because a pane belongs to a project and can
 work in no folder outside it. So the press that opens one does not open a picker: bound to a single
 folder the project is not a question and nothing is asked, and bound to several the press opens
@@ -1346,14 +1362,24 @@ the whole of what leads nowhere. They are the same idea as `repo write-file`: th
 scenario has to arrive at, and cannot reach by using Amenbo, the driver makes. Reach
 for one only when the line under test is what Amenbo does about that state.
 
-One of them puts nothing wrong — it puts time. `store worn-in` leaves the store reading as one
+One of them puts nothing wrong — it puts an older build. `store held-at-a-split` leaves the talk
+window's arrangement in the shape kept before a pane carried its own size, and the store's generation
+stamp back where the conversion to sizes is still owed. It writes straight onto the store, the way
+`store worn-in` below it does, and it carries one rule the others have no need of: **it stands last
+in a premise**, since every other premise op is carried out with the shipped CLI and a CLI that opens
+a store migrates it. A step after it would convert the world before the app ever met it, and the road
+would go green having watched nothing. The scenario validator holds it there, and the driver refuses
+again where the world is actually stood up.
+
+Another puts nothing wrong either — it puts time. `store worn-in` leaves the store reading as one
 somebody has been coming back to: the launches this device has tallied, and the days its records were
 written on. Both are what Amenbo holds an unasked offer behind, and neither is reachable by doing
 anything — a launch tally is raised by the app coming up, and days are days, so a run that tried to
-earn this would have to last a week. It is written straight onto the store, which is the one place a
+earn this would have to last a week. It is written straight onto the store, which is where a
 driver reaches past the binary's face: the two scalars Amenbo tallies into, and one record moved back
 per day asked for (the store has to hold at least that many). A store is a plain SQLite file — no
-shipped path keys one — so this crate carries `rusqlite` for that single op and for nothing else.
+shipped path keys one — so this crate carries `rusqlite` for the three premises that make that reach
+and for nothing else.
 
 `fixtures/` is for what a scenario cannot hold itself. This tree's prose rule keeps a bare Amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
@@ -1517,6 +1543,12 @@ the one world a road can only be given, every other premise being something some
 a moment before the run. `store worn-in` is how much Amenbo has been used on this device, which they
 could only have done over days; `tick deferred` is a day having passed — or not — since the band was
 put off, which no run can wait out, the band being judged once at launch.
+
+`store held-at-a-split` is on it for the same kind of reason one build further back: what it stands
+up is **the build before this one's own arrangement**. A pane's size was a project's split then, and
+the conversion between them runs as a build opens a store it finds already written — so a run whose
+store this build made can never be holding one, and there is no press anywhere that puts a split
+back. The premise writes the older shape, and the road reads what this build makes of it.
 
 `store carried-in` is on it for a reason of its own: what it stands up is **the build before this
 one**. The handover that took mail, slack, viewer and worktree into the body leaves an account of what

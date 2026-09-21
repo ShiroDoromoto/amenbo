@@ -16,6 +16,12 @@
 # `background-color` that reads one of the four colours must read that colour's slot as well. And
 # each slot has to be declared empty somewhere, or the declaration reading it is dropped whole.
 #
+# A name given to one of the four is asked the same thing. `--banner-ground: var(--c-surface)` is the
+# place under another word, and a rule that paints `var(--banner-ground)` is painting `c-surface`
+# through it — so the name needs a slot of its own beside it, and every block that redeclares the name
+# has to say what goes in that slot. One that says nothing keeps whatever it inherited, which is the
+# quiet band wearing the picture and the loud one wearing it too.
+#
 # The other half is the properties that **cannot** carry a picture at all — `box-shadow`, `border`,
 # `outline` and their kind draw a colour and nothing else. A rule that paints a place with one of
 # those is a place the picture stops at, and no pairing will fix it: the rule has to be written a
@@ -70,7 +76,7 @@ PAINTS = re.compile(r"\bbackground(-color)?\s*:\s*([^;}]*)")
 
 # The properties that draw a colour and can hold no picture. A custom property is left out on
 # purpose: `--x: var(--c-surface)` can be paired with a `--x-pic` of its own, so it belongs to the
-# check above rather than this one.
+# alias check rather than this one.
 FLAT = re.compile(
     r"\b(box-shadow|text-shadow|outline(-color)?|border(-top|-right|-bottom|-left)?(-color)?)"
     r"\s*:\s*([^;}]*)"
@@ -87,6 +93,21 @@ SETTLED = {
 }
 
 
+# A custom property declared anywhere, with what it was set to.
+SETS = re.compile(r"(--[a-z0-9-]+)\s*:\s*([^;}]*)")
+
+
+def blocks(text: str):
+    """Each `{ … }` in the sheet, as (start of the body, end of the body). Nested ones come out as
+    well as the ones around them, so an `@media` does not hide the rules inside it."""
+    opens: list[int] = []
+    for at, ch in enumerate(text):
+        if ch == "{":
+            opens.append(at)
+        elif ch == "}" and opens:
+            yield opens.pop() + 1, at
+
+
 def selector_before(text: str, at: int) -> str:
     """The selector of the rule a declaration is in — what stands between the last `}` or `*/` and
     the `{` that opens it."""
@@ -99,7 +120,51 @@ def selector_before(text: str, at: int) -> str:
     return " ".join(head[cut + width:].split()).strip().rstrip("{").strip()
 
 
+# The names given to one of the four places: `--banner-ground: var(--c-surface)` makes
+# `--banner-ground` another word for `c-surface`. A name is an alias once any one declaration of it
+# reads a place — the others are the same name standing on a colour of its own.
+aliases: dict[str, str] = {}
+for text in css.values():
+    for m in SETS.finditer(text):
+        name, value = m.group(1), m.group(2).strip()
+        for place in places:
+            if value == f"var(--{place})" and not name.endswith("-pic"):
+                aliases[name] = place
+
 failures = []
+
+# Every block that gives an alias a value has to give its slot one in the same breath. A block that
+# sets the name and says nothing about the slot keeps the slot it inherited, which is a picture drawn
+# behind a colour that was never the place.
+for f, text in css.items():
+    for start, end in blocks(text):
+        body = text[start:end]
+        set_here = {m.group(1) for m in SETS.finditer(body)}
+        for name in sorted(set_here & aliases.keys()):
+            if f"{name}-pic" in set_here:
+                continue
+            line = text.count("\n", 0, start) + 1
+            failures.append(
+                f"{f}:{line} sets {name} without saying what goes in {name}-pic.\n"
+                f"    {name} is another word for {aliases[name]}, so the block that moves it has to "
+                f"move the slot with it — `var(--{aliases[name]}-pic)` where it is still that place, "
+                f"`none` where it is not."
+            )
+
+# And a rule painting an alias has to read the alias's slot in front of it, the same pairing the
+# place's own colour is asked for below.
+for f, text in css.items():
+    for m in PAINTS.finditer(text):
+        value = m.group(2).strip()
+        for name, place in aliases.items():
+            if value != f"var({name})":
+                continue
+            line = text.count("\n", 0, m.start()) + 1
+            failures.append(
+                f"{f}:{line} paints {name} — another word for {place} — without its picture.\n"
+                f"    Write it `background: var({name}-pic) var({name})`."
+            )
+
 for f, text in css.items():
     for m in FLAT.finditer(text):
         painted = [p for p in places if f"var(--{p})" in m.group(5)]

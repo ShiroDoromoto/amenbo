@@ -118,7 +118,7 @@ pub fn declarer(step: &AutomationStep) -> (AutomationOwner, i64) {
 }
 
 /// The same pair as a port's owner, which admits a third kind this one does not.
-fn port_declarer(step: &AutomationStep) -> (AutomationPortOwner, i64) {
+pub(crate) fn port_declarer(step: &AutomationStep) -> (AutomationPortOwner, i64) {
     match step.action_id {
         Some(action_id) => (AutomationPortOwner::Action, action_id),
         None => (AutomationPortOwner::Step, step.id),

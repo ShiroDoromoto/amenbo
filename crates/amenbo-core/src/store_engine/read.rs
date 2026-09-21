@@ -6197,8 +6197,8 @@ pub fn live_task_titles(conn: &Connection, project: Option<i64>) -> Result<Vec<(
 // transaction (crate::ops::automation): placing an order_key, minting an id and checking that a name is
 // free are all read-then-write, and two writers that read the same answer both act on it.
 //
-// The run side's five tables are read further down, under a heading of their own: nothing hydrates a row
-// of them into a record, so what is asked of them here is ids and one project.
+// The run side's five tables are read further down, under a heading of their own. What is asked of them
+// from here is a count — an automation with a run behind it is one whose delete is refused.
 
 /// Every row of one definition table matching `pred`, in `order_key` then `id` order — the order a
 /// screen lists them in, and the order the ops walk a subtree to delete it.
@@ -6526,6 +6526,34 @@ pub fn automation_wire_between(
         .next())
 }
 
+/// The steps of one automation, in display order — what the launch check walks and what the launch
+/// copies into the run.
+pub fn automation_steps_of(
+    conn: &Connection,
+    automation_id: i64,
+) -> Result<Vec<crate::model::AutomationStep>> {
+    const S: col::automation_step::Cols = col::automation_step::ALL;
+    automation_rows(
+        conn,
+        S.table,
+        &Pred::eq(S.automation_id, automation_id),
+        &[Sort::by(S.order_key), Sort::by(S.id)],
+        super::hydrate::automation_step_row,
+    )
+}
+
+/// Every wire feeding one step's input — usually one, and more than one where the same input is fed
+/// from two ways out that cannot both be taken.
+pub fn automation_wires_to_port(
+    conn: &Connection,
+    to_step_id: i64,
+    to_port_name: &str,
+) -> Result<Vec<crate::model::AutomationWire>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let pred = Pred::eq(W.to_step_id, to_step_id).and(Pred::eq(W.to_port_name, to_port_name));
+    automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)
+}
+
 /// The steps of one automation, oldest key first — the subtree a delete walks.
 pub fn automation_step_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
     const S: col::automation_step::Cols = col::automation_step::ALL;
@@ -6638,9 +6666,57 @@ pub fn automation_action_ids_in_project(conn: &Connection, project_id: i64) -> R
 
 // ───────────────────────── automation: what ran ─────────────────────────
 //
-// The run side's five tables carry no model shape yet — the launch writes them, and nothing reads a row
-// of them back as a record. What is needed here is the walk a delete takes and the one column a reach
-// check asks for, so these answer ids and a project, and nothing else.
+// Two of the five carry a model shape — the two the launch writes — and the other three do not, so a
+// record comes back for those two alone. Beside that, what is needed here is the walk a delete takes
+// and the one column a reach check asks for, which answer ids and a project.
+
+/// The `automation_run` record with this id.
+pub fn automation_run(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRun>> {
+    super::hydrate::row_by_id(conn, "automation_run", id, super::hydrate::automation_run_row)
+}
+
+/// The `automation_run_def` record with this id.
+pub fn automation_run_def(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRunDef>> {
+    super::hydrate::row_by_id(conn, "automation_run_def", id, super::hydrate::automation_run_def_row)
+}
+
+/// **The runs holding a lane right now** — the ones that are `running`, across every project.
+///
+/// The count crosses projects because the lanes do: what a lane holds is a terminal on this machine and
+/// the reader's attention with it, and neither of those is divided up per project.
+pub fn automation_run_ids_running(conn: &Connection) -> Result<Vec<i64>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.status, crate::model::AutomationRunStatus::Running.as_str());
+    select_ids(conn, R.id, Some(&pred))
+}
+
+/// **The run that has waited longest for a lane**, or `None` when nothing is queued — what a lane coming
+/// free hands itself to.
+///
+/// Oldest id first, which is the order they were launched in: a queue anybody can jump is not a queue,
+/// and `created_at` has a second's resolution while an id does not repeat.
+pub fn automation_run_first_queued(conn: &Connection) -> Result<Option<crate::model::AutomationRun>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.status, crate::model::AutomationRunStatus::Queued.as_str());
+    Ok(automation_rows(conn, R.table, &pred, &[Sort::by(R.id)], super::hydrate::automation_run_row)?
+        .into_iter()
+        .next())
+}
+
+/// The steps copied into one run, oldest key first — the picture as it stood at launch.
+pub fn automation_run_defs_of(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Vec<crate::model::AutomationRunDef>> {
+    const D: col::automation_run_def::Cols = col::automation_run_def::ALL;
+    automation_rows(
+        conn,
+        D.table,
+        &Pred::eq(D.run_id, run_id),
+        &[Sort::by(D.id)],
+        super::hydrate::automation_run_def_row,
+    )
+}
 
 /// The runs filed under one project, for the project delete's walk.
 pub fn automation_run_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {

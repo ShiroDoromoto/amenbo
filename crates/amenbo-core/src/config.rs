@@ -790,6 +790,17 @@ pub struct Config {
     /// to type into with nothing under it is where this started.
     #[serde(default)]
     pub agent_model_history: std::collections::BTreeMap<String, Vec<AgentModel>>,
+    /// **How many automation runs may hold a lane at once** ([`crate::model::DEFAULT_LANES`]) — the one
+    /// number the whole app shares, read where a launch decides between `running` and `queued`.
+    ///
+    /// **It crosses projects**, because a lane is a terminal on this machine and the attention of the
+    /// person watching it: neither is divided up per project, so a number held per project would let
+    /// three projects open nine terminals on somebody who set it to three.
+    ///
+    /// A device-level setting; **never synced**, for the reason [`Config::installed_agents`] is not —
+    /// how many runs one machine can carry is a fact about that machine.
+    #[serde(default = "default_lanes")]
+    pub automation_lanes: i64,
 }
 
 /// One command the reader registered themselves — a row in [`Config::custom_agents`] (`AMB-D-794`).
@@ -925,12 +936,19 @@ fn default_true() -> bool {
     true
 }
 
+/// For `serde(default)`: the lane count an existing config gets when it predates the field
+/// ([`crate::model::DEFAULT_LANES`]).
+fn default_lanes() -> i64 {
+    crate::model::DEFAULT_LANES
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
             default_view: View::Board,
             language: None,
             date_locale: None,
+            automation_lanes: crate::model::DEFAULT_LANES,
             ai_allow_project_ops: false,
             startup_integrity_check: true,
             update_check: true,

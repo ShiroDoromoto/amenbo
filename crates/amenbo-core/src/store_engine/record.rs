@@ -22,7 +22,8 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
-    AutomationExit, AutomationNote, AutomationPort, AutomationStep, AutomationStepNote,
+    AutomationExit, AutomationNote, AutomationPort, AutomationRun, AutomationRunDef,
+    AutomationStep, AutomationStepNote,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -685,6 +686,57 @@ pub fn automation_wire(w: &AutomationWire) -> Record {
             ],
             &w.created_at,
             &w.updated_at,
+        ),
+    )
+}
+
+// ───────────────────────── automation: what ran ─────────────────────────
+// Two of the run side's five tables. A step execution, the values it carried and the task it was about
+// are written by the ops that run the steps, and have no projection until then.
+
+pub fn automation_run(r: &AutomationRun) -> Record {
+    Record::new(
+        "automation_run",
+        r.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(r.automation_id)),
+                ("project_id", kv(r.project_id)),
+                ("status", tv(r.status.as_str())),
+                ("pause_requested", bv(r.pause_requested)),
+                ("stopped_reason", r.stopped_reason.map(|s| tv(s.as_str())).unwrap_or(Value::Null)),
+                ("started_by_kind", kov(&r.started_by_kind)),
+                ("started_at", tsov(&r.started_at)),
+                ("ended_at", tsov(&r.ended_at)),
+            ],
+            &r.created_at,
+            &r.updated_at,
+        ),
+    )
+}
+
+pub fn automation_run_def(d: &AutomationRunDef) -> Record {
+    Record::new(
+        "automation_run_def",
+        d.id,
+        with_audit(
+            vec![
+                ("run_id", kv(d.run_id)),
+                ("step_id", kv_opt(&d.step_id)),
+                ("name", tv(&d.name)),
+                ("prompt", ov(&d.prompt)),
+                ("agent", tv(&d.agent)),
+                ("model", ov(&d.model)),
+                ("interactive", bv(d.interactive)),
+                ("work_dir_ref", ov(&d.work_dir_ref)),
+                ("report_to_task", bv(d.report_to_task)),
+                ("show_history", bv(d.show_history)),
+                ("exits", tv(&d.exits)),
+                ("ins", tv(&d.ins)),
+                ("cfg", tv(&d.cfg)),
+            ],
+            &d.created_at,
+            &d.updated_at,
         ),
     )
 }

@@ -199,12 +199,13 @@ steps_gui:
     with:
       shows: SCENARIO the first page
 
-  # And the sizes, which are the last of the three controls a window carrying one pane would have
-  # lost. The pane this window came up on goes first: at a quarter it no longer fills its page, and
-  # the panes behind it are laid down again around it.
+  # And the sizes, the last of the three things this window has to be able to do. It is a grip on the
+  # pane itself rather than a control in the header, so what it says here is that the panes came over
+  # and not a picture of them. The pane this window came up on goes first: at a quarter it no longer
+  # fills its page, and the panes behind it are laid down again around it.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     window: "Amenbo — "
     with:
       size: quarter
@@ -218,7 +219,7 @@ steps_gui:
 
   # The one before it, which comes back to the first page and takes this one with it. The page a
   # pane is on is worked out from the order every time, so a pane that shrank lets the ones behind it
-  # come up — and the screen follows the pane that was pressed for.
+  # come up — and the screen follows the pane that was pulled.
   - type: action
     domain: workspace
     op: go-page
@@ -233,7 +234,7 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     window: "Amenbo — "
     with:
       size: quarter
@@ -253,7 +254,7 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     window: "Amenbo — "
     with:
       size: quarter

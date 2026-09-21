@@ -143,11 +143,11 @@ steps_gui:
 
   # Room for the second beside it. A pane with nothing to be measured against takes the whole page,
   # and this road reads the two side by side at the end: left at the whole page the second would be
-  # on a page of its own and the first would be nowhere on the screen. The control is about a pane,
-  # so it is pressed once one is standing (`app/src/talk/layout.ts`).
+  # on a page of its own and the first would be nowhere on the screen. The grip is the pane's own
+  # corner, so it is pulled once one is standing (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

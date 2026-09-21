@@ -67,11 +67,11 @@ steps_gui:
     domain: workspace
     op: open-shell
 
-  # What the reader set, and the whole of what this road is about. It is one press because a size is
+  # What the reader set, and the whole of what this road is about. It is one pull because a size is
   # one pane's answer — there is nothing else standing for it to be about.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half-down
 

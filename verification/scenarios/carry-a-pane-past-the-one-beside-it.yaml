@@ -74,7 +74,7 @@ steps_gui:
   # measured against takes the whole of it, and a full page has nowhere to open anything.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

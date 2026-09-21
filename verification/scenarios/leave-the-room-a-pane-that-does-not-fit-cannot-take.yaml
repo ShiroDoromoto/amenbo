@@ -78,7 +78,7 @@ steps_gui:
   # takes the whole of it, and a full page has nowhere to open anything.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 
@@ -102,7 +102,7 @@ steps_gui:
   # this one in the list keeps the place it has.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: quarter
 
@@ -136,12 +136,12 @@ steps_gui:
       count: 3
       empty: 0
 
-  # And now it is asked for half the page, which is the press this road is named after. Half does not
+  # And now it is asked for half the page, which is the pull this road is named after. Half does not
   # go into the quarter it is standing in, and the search does not go back to look for somewhere
   # earlier — so it starts the next page, and the screen follows it there.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

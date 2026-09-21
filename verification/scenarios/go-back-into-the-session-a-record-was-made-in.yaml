@@ -149,11 +149,11 @@ steps_gui:
     op: open-shell
 
   # Room for the pane the record is opened again in. A pane with nothing to be measured against takes
-  # the whole page, and the control is about a pane — so it is pressed once one is standing rather
+  # the whole page, and the grip is the pane's own corner — so it is pulled once one is standing rather
   # than before (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 

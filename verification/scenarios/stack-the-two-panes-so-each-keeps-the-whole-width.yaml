@@ -100,7 +100,7 @@ steps_gui:
   # is what puts a second place on it for the press below to open.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 
@@ -123,7 +123,7 @@ steps_gui:
       count: 2
       empty: 0
 
-  # What the pane just opened came up at, read before anything is pressed so that the press has
+  # What the pane just opened came up at, read before anything is pulled so that the pull has
   # something to have changed. Half the width is the share this road is about moving away from.
   - type: assert
     domain: workspace
@@ -131,8 +131,9 @@ steps_gui:
     with:
       size: half
 
-  # The pane the line was typed into, which is the one the press below is about. A size is one pane's
-  # answer, so the control has to be pointed at the pane it is meant for.
+  # The pane the line was typed into, which is the one the pull below is about. A size is one pane's
+  # answer, and a pull that names none is about the pane being worked in — so this is what makes it
+  # that one.
   - type: action
     domain: workspace
     op: press-pane
@@ -141,11 +142,11 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half-down
 
-  # The point of the press, and the reading it is worth having: not that the box moved, but that it
+  # The point of the pull, and the reading it is worth having: not that the box moved, but that it
   # came out with the whole width instead of half of it.
   - type: assert
     domain: workspace
@@ -184,7 +185,7 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half-down
 

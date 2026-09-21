@@ -3000,22 +3000,12 @@ const REGISTRY: &[OpSpec] = &[
     // the count: room the page has not got must not be offered, and "at most one" cannot tell a full
     // page from a page still offering.
     OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
-    // How much of a page one pane takes: `whole`, `half`, `half-down`, `quarter`, `sixth` or
-    // `eighth`, and no other word. It is not a change of look. The panes are one list
-    // laid down in order and the pages fall out of that, so a pane that grew takes room the ones
-    // behind it were in and pushes the overflow onto the next page — which is why a road walks it at
-    // all: what has to survive the re-laying is the terminals running inside them.
+    // How much of a page one pane takes, read back off the pane itself — how much of the page between
+    // the columns it is actually taking. It is the whole of what `stretch-pane` is for: a build that
+    // drew the outline without laying the page out again under it would draw exactly the screen the
+    // reader pulled away from.
     //
-    // **It says no pane**, because the control does not: it is a row of six drawn shapes at the top
-    // of the face, and the pane it is about is the one being worked in on the page being read. A road
-    // that wanted another pane sized presses that pane first, which is a move of its own.
-    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "set-pane-size", required: &["size"], refs: &[], strings: &["size"], binds: false },
-    // And the size read back off the pane itself — how much of the page between the columns it is
-    // actually taking. It is the whole of what the press above is for: a build that lit the control
-    // without laying the page out again under it would draw exactly the screen the reader pressed
-    // away from.
-    //
-    // A road walks two sizes and never the asked-for one alone. A page read only after the press has
+    // A road walks two sizes and never the asked-for one alone. A page read only after the pull has
     // nothing to say about what it was before, so a face stuck at one size — the one a road happened
     // to ask for last — would come out green from end to end.
     OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "pane-size", required: &["size"], refs: &[], strings: &["size"], binds: false },
@@ -3049,14 +3039,22 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drag-pane", required: &["pane", "onto", "side"], refs: &[], strings: &["pane", "onto", "side"], binds: false },
     // And the other gesture the page itself offers: the corner of a pane pulled until it is the size
     // the reader wants. It is the grip at the bottom right and nowhere else, for the reason the row
-    // above is the handle — the rest of a pane belongs to what is running in it.
+    // above is the handle — the rest of a pane belongs to what is running in it. It is the only way
+    // to a size the face has: the row of six shapes that stood at the top of it is gone, a size being
+    // one pane's answer and that row having lit one of six for the whole page.
+    //
+    // It is not a change of look. The panes are one list laid down in order and the pages fall out of
+    // that, so a pane that grew takes room the ones behind it were in and pushes the overflow onto
+    // the next page — which is why a road walks it at all: what has to survive the re-laying is the
+    // terminals running inside them.
     //
     // `size` is the size it is pulled to, one of the six. They are not a continuous width: what the
     // pull lands on snaps to the nearest of them, so an operator is told the size to stop at rather
     // than a distance to pull.
     //
     // `shows` is which pane, named by the words a road typed into it, the way `press-pane` names one.
-    // Left out, it is the page's one pane.
+    // Left out, it is the pane being worked in — the last one opened or typed at — which is what a
+    // road that pressed a pane first has already pointed at.
     //
     // **Nothing changes size until it is let go**, for the reason nothing reorders until a carry is:
     // the terminal inside would be re-drawn at every step of the pull. What moves while the pointer

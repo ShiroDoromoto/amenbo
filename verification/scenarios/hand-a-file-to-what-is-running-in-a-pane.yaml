@@ -286,7 +286,7 @@ steps_gui:
   # room beside it for the other.
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: half
 
@@ -401,7 +401,7 @@ steps_gui:
   # and the screen follows it there (`app/src/talk/layout.ts`).
   - type: action
     domain: workspace
-    op: set-pane-size
+    op: stretch-pane
     with:
       size: whole
 

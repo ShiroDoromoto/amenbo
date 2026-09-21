@@ -16,6 +16,14 @@
 # `background-color` that reads one of the four colours must read that colour's slot as well. And
 # each slot has to be declared empty somewhere, or the declaration reading it is dropped whole.
 #
+# The other half is the properties that **cannot** carry a picture at all — `box-shadow`, `border`,
+# `outline` and their kind draw a colour and nothing else. A rule that paints a place with one of
+# those is a place the picture stops at, and no pairing will fix it: the rule has to be written a
+# different way, or the flat colour has to be the answer on purpose. Either is a judgement somebody
+# made, so what is asked here is that it was made: each such rule is named in SETTLED below with the
+# reason the flat colour stands. One that is not stops the build, which is the point — the person
+# writing the next one has no more reason to know than the person who wrote the last.
+#
 # Usage: guards/check-skin-backgrounds.sh   (no args; reads app/src and core's list)
 # Exit codes: 0 = every place is painted through its slot, 1 = one of them is not.
 set -euo pipefail
@@ -60,7 +68,54 @@ declared = {m for text in css.values() for m in re.findall(r"(--[a-z0-9-]+)\s*:"
 # those would be a picture behind a patch the author never named.
 PAINTS = re.compile(r"\bbackground(-color)?\s*:\s*([^;}]*)")
 
+# The properties that draw a colour and can hold no picture. A custom property is left out on
+# purpose: `--x: var(--c-surface)` can be paired with a `--x-pic` of its own, so it belongs to the
+# check above rather than this one.
+FLAT = re.compile(
+    r"\b(box-shadow|text-shadow|outline(-color)?|border(-top|-right|-bottom|-left)?(-color)?)"
+    r"\s*:\s*([^;}]*)"
+)
+
+# Every rule that paints a place with one of those, and what was decided about it. The key is the
+# selector as it is written, then the property; the value is why the flat colour stands.
+SETTLED = {
+    (".sidebar--compact .navitem__count", "box-shadow"):
+        "the ring round the folded column's count badge — a 2px box of picture would be a crop "
+        "blown up to fill it, and the ring is there for the digits to stay readable",
+    (".ptabs--compact .ptabs__count", "box-shadow"):
+        "the workspace's side of the same ring",
+}
+
+
+def selector_before(text: str, at: int) -> str:
+    """The selector of the rule a declaration is in — what stands between the last `}` or `*/` and
+    the `{` that opens it."""
+    open_at = text.rfind("{", 0, at)
+    if open_at < 0:
+        return ""
+    head = text[:open_at]
+    ends = [(head.rfind("}"), 1), (head.rfind("*/"), 2)]
+    cut, width = max(ends) if max(ends)[0] >= 0 else (-1, 1)
+    return " ".join(head[cut + width:].split()).strip().rstrip("{").strip()
+
+
 failures = []
+for f, text in css.items():
+    for m in FLAT.finditer(text):
+        painted = [p for p in places if f"var(--{p})" in m.group(5)]
+        if not painted:
+            continue
+        prop = m.group(1)
+        selector = selector_before(text, m.start())
+        if (selector, prop) in SETTLED:
+            continue
+        line = text.count("\n", 0, m.start()) + 1
+        failures.append(
+            f"{f}:{line} paints {', '.join(painted)} with `{prop}`, which can hold no picture.\n"
+            f"    Write the rule so the colour is a `background` that carries its slot, or add "
+            f"`({selector!r}, {prop!r})` to SETTLED in this guard with why the flat colour stands."
+        )
+
 for place in places:
     if f"--{place}-pic" not in declared:
         failures.append(

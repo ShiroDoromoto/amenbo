@@ -92,7 +92,15 @@ input[type="color"] {
   cursor: pointer;
 }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--c-edge); border-radius: 6px; border: 2px solid var(--c-bg); }
+/* The gap round the thumb is left open rather than painted: a transparent border with the ground
+   clipped to the padding box shows whatever the bar is over — the surface of the list it belongs to,
+   and the picture a skin laid there (`AMB-D-936`). Painted, it was the page's own ground wherever it
+   went, so a bar down a surface-coloured list drew a stripe of the wrong colour, and a skin's picture
+   stopped at it. */
+::-webkit-scrollbar-thumb {
+  background: var(--c-edge); background-clip: padding-box;
+  border-radius: 6px; border: 2px solid transparent;
+}
 
 /* ---------- app shell grid ---------- */
 /* Rows: topbar / the bands / body. Each child is given its row outright, because a child placed by
@@ -998,7 +1006,9 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    there is no beside left. Narrower than the badge beside a name and ringed in the column's own
    ground, the same way the sidebar does it at the same width. The text step is the badge step
    (`AMB-D-942`): 10px was below the four the faces have, and the shipped retro skin draws with
-   `font-smooth: none`, so on a 1x screen the strokes of the digits fell out. */
+   `font-smooth: none`, so on a 1x screen the strokes of the digits fell out.
+
+   The ring is the sidebar's in this too: a flat colour, and no picture behind it (`AMB-T-5232`). */
 .ptabs--compact .ptabs__count {
   position: absolute; top: 0; right: 0; margin-left: 0;
   min-width: 0; padding: 0 3px;
@@ -2513,7 +2523,14 @@ body.dragging-row { user-select: none; }
    project from another. The ring is the column's own ground, which is what keeps the number readable
    over whatever it lands on. The text step is the badge step (`AMB-D-942`): 10px was below the four
    the faces have, and the shipped retro skin draws with `font-smooth: none`, so on a 1x screen the
-   strokes of the digits fell out. */
+   strokes of the digits fell out.
+
+   **The ring stays a flat colour where a skin laid a picture** (`AMB-T-5232`). A `box-shadow` draws a
+   colour and nothing else, and the way to give it a picture is a box of its own behind the badge —
+   which at 2px would show a crop of the picture blown up to fill it, lined up with nothing around it.
+   What the ring is for is the digits staying readable over whatever they land on, and that crop is
+   the one thing that would take it away. `guards/check-skin-backgrounds.sh` holds this as settled, so
+   a third ring painted this way stops the build rather than arriving quietly. */
 .sidebar--compact .navitem__count {
   position: absolute; top: 0; right: 0; margin-left: 0;
   min-width: 0; padding: 0 3px;

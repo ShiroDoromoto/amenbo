@@ -1100,6 +1100,13 @@ pub struct TaskComment {
     /// reader has that the text is not the text they read a moment ago.
     #[serde(default)]
     pub edited_at: Option<Timestamp>,
+    /// Which step of which automation run carried this comment onto the task, where one did. `None` is
+    /// every comment a person wrote, and also the ones an AI typed itself while a step of a run had the
+    /// terminal — what this records is a step's own report being carried onto the task, not who was at
+    /// the keyboard. The run's id alone would not answer it: a run walks several tasks in turn, so the
+    /// step execution is the smallest thing that says which of them a report was about.
+    #[serde(default)]
+    pub automation_run_step_id: Option<i64>,
 }
 
 /// A durable comment on a decision record. Its own table, `decision_comment`, mirroring `TaskComment`

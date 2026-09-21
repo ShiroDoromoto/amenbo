@@ -29,6 +29,7 @@ pub mod automation;
 pub mod automation_report;
 pub mod automation_run;
 pub mod automation_step;
+pub mod automation_stop;
 pub mod commit;
 pub mod decision;
 pub mod dependency;

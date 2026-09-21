@@ -27,6 +27,7 @@ use crate::model::{
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, RunDefExit,
     RunDefPort, ERROR_EXIT,
 };
+use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -51,8 +52,9 @@ pub enum Opened {
     /// Open a terminal on this.
     Ready(Box<Opening>),
     /// A required input had nothing wired into it that has actually been produced, so no terminal was
-    /// opened and the run was stopped. `missing` names the inputs, for the sentence a person reads.
-    Stopped { run: AutomationRun, missing: Vec<String> },
+    /// opened and the run was stopped. `missing` names the inputs, for the sentence a person reads,
+    /// and `woke` is the run that took the lane this one gave up, where one was waiting.
+    Stopped { run: AutomationRun, missing: Vec<String>, woke: Option<AutomationRun> },
 }
 
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
@@ -70,7 +72,7 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **A step that takes a fresh task opens a new stretch of the run**; every other step joins the one
 /// under way. That is what bounds the story a step is told: a run that goes round three tasks tells
 /// each step about its own task and not about the two before it.
-pub fn open(tx: &WriteTx<'_>, run_id: i64, run_def_id: i64) -> Result<Opened> {
+pub fn open(tx: &WriteTx<'_>, run_id: i64, run_def_id: i64, lanes: i64) -> Result<Opened> {
     let conn = tx.conn();
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
     if run.status != AutomationRunStatus::Running {
@@ -107,7 +109,8 @@ pub fn open(tx: &WriteTx<'_>, run_id: i64, run_def_id: i64) -> Result<Opened> {
         }
     }
     if !missing.is_empty() {
-        return Ok(Opened::Stopped { run: stop(tx, run)?, missing });
+        let stopped = stop(tx, run, lanes)?;
+        return Ok(Opened::Stopped { run: stopped.run, missing, woke: stopped.woke });
     }
 
     let now = Timestamp::now();
@@ -179,19 +182,15 @@ fn latest_for(
     Ok(best.map(|(_, from)| Handed { port: port.clone(), from }))
 }
 
-/// Stop a run because a required input had nothing to fill it.
+/// Stop a run because a required input had nothing to fill it, through the one cleanup every ending
+/// goes through ([`super::automation_stop::ended`]) — so the lane goes back and the task is not left
+/// reserved by a run that is over.
 ///
 /// `stopped_reason` is left empty on purpose: the four it offers are a crash, a loop that ran out of
 /// turns, an agent that was not there and a person who said stop, and this is none of them. Writing the
 /// nearest one would make the record say something that did not happen.
-fn stop(tx: &WriteTx<'_>, before: AutomationRun) -> Result<AutomationRun> {
-    let now = Timestamp::now();
-    let mut after = before.clone();
-    after.status = AutomationRunStatus::Stopped;
-    after.ended_at = Some(now);
-    after.updated_at = now;
-    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
-    Ok(after)
+fn stop(tx: &WriteTx<'_>, before: AutomationRun, lanes: i64) -> Result<Ended> {
+    super::automation_stop::ended(tx, before, AutomationRunStatus::Stopped, None, lanes)
 }
 
 /// Begin the next stretch of a run, and close the one before it.
@@ -462,6 +461,10 @@ mod tests {
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::test_support::{mk_project, with_tx};
 
+    /// How many lanes the machine these tests run on has. Three, so that handing one back has
+    /// somewhere to put it and nothing here is testing a queue by accident.
+    const LANES: i64 = 3;
+
     /// The picture every test here starts from: a step that takes a task and hands a note on through
     /// "found", and a second step that is wired to read that note. Both ways out of both steps are
     /// decided, so it launches as it stands.
@@ -621,7 +624,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
 
             assert_eq!(opening.run_step.seq, 1, "the first move of the run");
             assert_eq!(opening.run_step.status, AutomationRunStepStatus::Running);
@@ -642,7 +645,7 @@ mod tests {
                 .expect("document");
             automation::note_link(tx, p.first.id, note.id).expect("link");
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open")).text;
 
             assert!(text.starts_with("You are one step of a run."), "{text}");
             assert!(text.contains("## House style\n\nShort lines."), "{text}");
@@ -662,10 +665,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.\nAnd more below.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open"));
             assert_eq!(second.run_step.seq, 2);
             assert_eq!(
                 second.run_step.run_task_id, first.run_step.run_task_id,
@@ -691,10 +694,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, false);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open"));
             assert!(
                 read::automation_run_values_of(tx.conn(), second.run_step.id)
                     .expect("values")
@@ -710,12 +713,12 @@ mod tests {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first);
-            let once = ready(open(tx, run.id, def.id).expect("open"));
+            let once = ready(open(tx, run.id, def.id, LANES).expect("open"));
             reported(tx, &once.run_step, "found", "First time.", "the first note");
-            let twice = ready(open(tx, run.id, def.id).expect("open again"));
+            let twice = ready(open(tx, run.id, def.id, LANES).expect("open again"));
             reported(tx, &twice.run_step, "found", "Second time.", "the second note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed[0].value.as_deref(), Some("the second note"));
@@ -729,9 +732,9 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let before = read::automation_run_steps_of(tx.conn(), run.id).expect("read").len();
 
-            match open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open") {
+            match open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open") {
                 Opened::Ready(_) => panic!("nothing has produced the note"),
-                Opened::Stopped { run: stopped, missing } => {
+                Opened::Stopped { run: stopped, missing, .. } => {
                     assert_eq!(missing, vec!["note".to_string()]);
                     assert_eq!(stopped.status, AutomationRunStatus::Stopped);
                     assert!(stopped.ended_at.is_some());
@@ -754,7 +757,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open"));
             assert!(!opening.text.contains("What you have been handed"), "{}", opening.text);
         });
     }
@@ -764,10 +767,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.\nAnd more below.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open"));
             assert!(
                 second.text.contains("1. 調べる — left through \"found\": Found one thing."),
                 "{}",
@@ -795,10 +798,10 @@ mod tests {
             )
             .expect("history off");
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, LANES).expect("open"));
             assert!(!second.text.contains("What has happened so far"), "{}", second.text);
             assert!(second.text.contains("- note: the note"), "the values still go: {}", second.text);
         });
@@ -810,8 +813,8 @@ mod tests {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first).id;
-            let stopped = stop(tx, run.clone()).expect("stop");
-            let refused = open(tx, stopped.id, def).expect_err("a stopped run opens nothing");
+            let stopped = stop(tx, run.clone(), LANES).expect("stop");
+            let refused = open(tx, stopped.run.id, def, LANES).expect_err("a stopped run opens nothing");
             assert!(refused.to_string().contains("stopped"), "{refused}");
         });
     }

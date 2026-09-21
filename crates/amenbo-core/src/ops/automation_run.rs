@@ -446,6 +446,24 @@ fn snapshot(
     })
 }
 
+/// **The step a run starts at** — the copy taken at launch of the automation's entry step, or `None`
+/// where the automation has since lost its entry or the run carries no copy of it.
+///
+/// It is read off the live definition's `entry_step_id` and matched against the copies by `step_id`,
+/// because the copy itself does not say which of them the entry was: the picture is walked from the
+/// entry along the edges, and a run that is under way has already walked past it.
+pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
+    let Some(run) = read::automation_run(conn, run_id)? else {
+        return Err(not_found("run", run_id));
+    };
+    let Some(entry) = read::automation(conn, run.automation_id)?.and_then(|a| a.entry_step_id) else {
+        return Ok(None);
+    };
+    Ok(read::automation_run_defs_of(conn, run_id)?
+        .into_iter()
+        .find(|def| def.step_id == Some(entry)))
+}
+
 /// **A lane came free: wake the run that has waited longest**, and answer which one it was.
 ///
 /// This is called by whatever handed a lane back — a run that finished, one that was paused, one that

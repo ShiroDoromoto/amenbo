@@ -844,6 +844,7 @@ fn started_as(
     agent: &str,
     pane_model: Option<&str>,
     handle: Option<Handle<'_>>,
+    say: Option<&str>,
 ) -> Result<Started, CmdError> {
     let cmd = amenbo_core::config::Paths::command_name();
     let config = amenbo_core::config::Paths::resolve()
@@ -857,7 +858,7 @@ fn started_as(
         let model = pane_model
             .map(str::to_owned)
             .or_else(|| config.model_for(agent).map(|one| one.id.clone()));
-        return Ok(opening_line(launch, model, handle));
+        return Ok(opening_line(launch, model, handle, say));
     }
     if let Some(own) = config.custom_agent(agent) {
         return Ok(Started {
@@ -918,12 +919,21 @@ fn opening_line(
     launch: &amenbo_core::harness::Launch,
     model: Option<String>,
     handle: Option<Handle<'_>>,
+    say: Option<&str>,
 ) -> Started {
     let cmd = amenbo_core::config::Paths::command_name();
+    let instruction;
+    let say = match say {
+        Some(say) => say,
+        None => {
+            instruction = amenbo_core::agents::pane_instruction(cmd);
+            &instruction
+        }
+    };
     Started {
         line: launch::command_line(
             launch.command,
-            &amenbo_core::harness::opening(launch, cmd, model.as_deref(), handle),
+            &amenbo_core::harness::opening_saying(launch, say, model.as_deref(), handle),
         ),
         hand_over: None,
         model,
@@ -1115,6 +1125,12 @@ fn gone(session: &str) -> CmdError {
 /// not is opened on a handle issued here, where the provider takes one
 /// ([`amenbo_core::harness::issue`]). Neither ever crosses to the window: both are read and written
 /// on this side, so a pane's way back is not something a webview could put there.
+///
+/// **`say` and `fresh` are the automation's two** (`AMB-T-5251`). `say` is what the agent is handed
+/// as its opening prompt in place of the sentence that points it at `agent --json` — a step's own
+/// text already carries the way in among everything else it says. `fresh` opens a session of its own
+/// and writes nothing of it on the frame, which is what lets one pane be reused at every step of a
+/// run without the run coming back into a step that is over.
 // Seven of these are what a window holds about a pane, one answer each. Gathered into a shape they
 // would be taken apart again on arrival.
 #[allow(clippy::too_many_arguments)]
@@ -1128,7 +1144,20 @@ pub fn pty_open(
     agent: Option<String>,
     cols: u16,
     rows: u16,
+    say: Option<String>,
+    fresh: Option<bool>,
 ) -> Result<PtySessionDto, CmdError> {
+    // A session of its own, every time, with nothing of it written on the frame — what an
+    // automation's step is opened on (`AMB-T-5251`). One step is one session: the frame is reused so
+    // the run keeps one place on the page, and reusing the place must not mean reusing the
+    // conversation, which is what `pty_open` does for every other pane (`AMB-D-869`).
+    //
+    // It is one answer and it turns off three things at once — the handle a frame came back holding,
+    // the handle this opening would write down, and the model that would go on the same row. Left on,
+    // each of them would leave a step's conversation standing as the place's own: the next run would
+    // come up inside a step that is over, and the reader's pane would have been put on the step's
+    // model.
+    let fresh = fresh.unwrap_or(false);
     let session = new_session();
     let started_at = amenbo_core::time::Timestamp::now().to_rfc3339_z();
     let opened_at = since_epoch_ms();
@@ -1163,9 +1192,11 @@ pub fn pty_open(
     // that was made in it (`AMB-D-897`). It is taken before this run's own answer is asked for, and
     // is asked for without a provider, because the row it came off names none
     // (`crate::frames::TalkFace::taken_from_a_record`).
-    let from_a_record = frame.as_deref().and_then(|frame| face.taken_from_a_record(frame));
+    let from_a_record =
+        frame.as_deref().filter(|_| !fresh).and_then(|frame| face.taken_from_a_record(frame));
     let back = frame
         .as_deref()
+        .filter(|_| !fresh)
         .zip(agent.as_deref())
         .and_then(|(frame, agent)| face.comes_back_on(frame, agent))
         .or_else(|| from_a_record.clone());
@@ -1190,11 +1221,11 @@ pub fn pty_open(
         .and_then(|(frame, agent)| face.model_on(frame, agent));
     let started = agent
         .as_deref()
-        .map(|id| started_as(id, was_on.as_deref(), handle))
+        .map(|id| started_as(id, was_on.as_deref(), handle, say.as_deref()))
         .transpose()?;
     // Written down before the program is started, so a quit that comes between the two still leaves
     // the pane a way back — the session is made under this handle whether or not anybody is watching.
-    if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
+    if let (Some(frame), Some(issued)) = (frame.as_deref().filter(|_| !fresh), issued.as_deref()) {
         face.resumed_from(frame, issued.to_string());
     }
     // A handle off a record goes down on the frame's own row too, so the place keeps its way back the
@@ -1206,7 +1237,7 @@ pub fn pty_open(
     // And the model that went on the line goes down on the same row, which is what the next run reads
     // back. A pane opened at a plain prompt, or on a line the reader registered, clears it: what was
     // written there names a model this place is no longer on.
-    if let Some(frame) = frame.as_deref() {
+    if let Some(frame) = frame.as_deref().filter(|_| !fresh) {
         face.opened_on(frame, started.as_ref().and_then(|s| s.model.clone()));
     }
     // Whether this pane was opened on a way back a record held — read while the value is still about
@@ -1245,7 +1276,9 @@ pub fn pty_open(
                 cmd.env(var, path);
             }
             let home = home.to_string_lossy().into_owned();
-            face.resumed_from(frame, home.clone());
+            if !fresh {
+                face.resumed_from(frame, home.clone());
+            }
             way_back = Some(home);
         }
     }
@@ -1310,7 +1343,7 @@ pub fn pty_open(
     // Only where a session is being made. A pane coming back into one already has its handle, and no
     // new row appears in that folder for the reading to find.
     if let (Some(frame), Some(folder), Some((command, ask))) = (
-        frame.filter(|_| back.is_none()),
+        frame.filter(|_| back.is_none() && !fresh),
         opened_in.clone(),
         launch.and_then(|launch| Some((launch.command, launch.resume.as_ref()?.ask?))),
     ) {

@@ -132,6 +132,10 @@ export type SavedLayout = {
     inserted?: string[];
     resumes?: boolean;
     composeOpen?: boolean;
+    /** The run this pane is drawing (`Frame.run`). It crosses to the window the workspace is split
+     *  out into, the way the draft does, and goes no further: the host keeps the places and not the
+     *  runs (`app/src-tauri/src/frames.rs`). */
+    run?: number;
   }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
@@ -235,6 +239,19 @@ export type Frame = {
    * pane would fold another, and each fold wakes the program in it to repaint (`AMB-D-864`).
    */
   readonly composeOpen: boolean;
+  /**
+   * The automation run this pane is drawing, or null for an ordinary pane (`AMB-T-5251`).
+   *
+   * **One run is one pane, and the terminal in it is what changes.** A run is a line of steps and
+   * each step is a terminal of its own, so a pane per step would have the page rearrange itself
+   * under a reader at every report — which is the one thing the arrangement promises does not
+   * happen (`AMB-D-939`). The place stands still and what is running in it is swapped.
+   *
+   * **It is not written down** (`laidOut`). A run does not outlive the app: one that was under way
+   * when the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it
+   * would come back holding a run that is over.
+   */
+  readonly run: number | null;
 };
 
 /** The arrangement of the workspace, as it stands. */
@@ -539,6 +556,8 @@ export function openedFrame(
     // — this module reads nothing of its own — and a caller that does not say opens the pane folded,
     // which is where `AMB-D-889` starts one.
     composeOpen,
+    // A pane a person opened. The one a run stands in is made by `stoodForRun` and nowhere else.
+    run: null,
   };
   // Where that place in this project's own list falls in the one list every project's frames share.
   const places = layout.frames.flatMap((one, i) => (one.project === project ? [i] : []));
@@ -553,6 +572,77 @@ export function openedFrame(
     adding: false,
   };
   return { layout: focusOn(next_, frame.id), frame };
+}
+
+/**
+ * The id of the pane a run is drawn in — worked out from the run rather than drawn fresh
+ * (`newFrameId`).
+ *
+ * **Because the step arrives from outside a render.** A step of a run is told to the window as an
+ * event (`crate::automation`), and what hears it has to know which place it is about without first
+ * reading the arrangement — an id minted on the way in would be a second place for the same run
+ * every time two steps landed close together.
+ *
+ * It is spelled so it can be a directory name: a pane's id is what a provider's own home is named
+ * after (`crate::pane_home`), and a colon is not a character a path takes on every machine.
+ */
+export function runFrameId(run: number): string {
+  return `run-${run}`;
+}
+
+/** The pane an automation run is drawn in, or null where it has none yet (`Frame.run`). */
+export function paneOfRun(layout: Layout, run: number): Frame | null {
+  return layout.frames.find((one) => one.run === run) ?? null;
+}
+
+/**
+ * **Stand a pane for a run**, or answer with the one it already has.
+ *
+ * It is the quiet half of `openedFrame`, and the two differ in exactly that. A person who opens a
+ * pane is looking at it, so that road moves the screen to it and makes it the pane being worked in.
+ * A run opens its pane by itself — it may be a run in another project, started from a screen the
+ * reader is not on — so this road moves neither: the pane appears where the run's own project keeps
+ * its panes, and what the reader was doing is left alone. What says a pane has arrived is the ring
+ * the face draws round it for a moment (`../shell/WorkspaceFace`).
+ *
+ * **It goes at the end of that project's panes and at the size of its last one**, the way a pane
+ * opened on a project the face is not showing does: where the reader is looking is not where this
+ * belongs, and a run's pane taking the page a person is working on would be the arrangement moving
+ * under them.
+ */
+export function stoodForRun(
+  layout: Layout,
+  project: number,
+  run: number,
+): { layout: Layout; frame: Frame } {
+  const already = paneOfRun(layout, run);
+  if (already) return { layout, frame: already };
+  const panes = panesOf(layout, project);
+  const frame: Frame = {
+    id: runFrameId(run),
+    project,
+    size: panes[panes.length - 1]?.size ?? DEFAULT_SIZE,
+    session: null,
+    folder: null,
+    agent: null,
+    resumes: false,
+    written: "",
+    inserted: [],
+    // A step is talked to through what it was handed, not through the box: what a person writes in a
+    // run's pane goes to the agent carrying out that step, and the box is open only where they asked
+    // for it (`AMB-D-890`). It starts closed, which is where `AMB-D-889` starts every pane.
+    composeOpen: false,
+    run,
+  };
+  const places = layout.frames.flatMap((one, i) => (one.project === project ? [i] : []));
+  const into = (places[places.length - 1] ?? layout.frames.length - 1) + 1;
+  return {
+    layout: {
+      ...layout,
+      frames: [...layout.frames.slice(0, into), frame, ...layout.frames.slice(into)],
+    },
+    frame,
+  };
 }
 
 /** A terminal has started in a frame. The folder and the agent are the ones the session says it was
@@ -826,6 +916,9 @@ export function laidOut(layout: Layout): SavedLayout {
       // the machine's habit, and would answer a folded pane with on the day the habit is to open
       // (`restored`).
       composeOpen: frame.composeOpen,
+      // The run this place is drawing, where it is drawing one. It goes to the other window and no
+      // further: a run is over by the time the app comes up again (`Frame.run`).
+      ...(frame.run === null ? {} : { run: frame.run }),
     })),
     // The pane being worked in, written down for the window the workspace is split out into: the
     // press says nothing, so where the reader was is theirs to read back out of the shape.
@@ -875,6 +968,10 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
       // The box as the reader left it (`AMB-D-890`). A row from before this was kept has no answer
       // of its own, so it opens on the machine's habit — which is what every pane did until then.
       composeOpen: frame.composeOpen ?? composeOpen,
+      // A run where the arrangement came from the other window, and none where it came from the
+      // store: what the store keeps is places, and a run that was under way is stopped on the way
+      // up (`Frame.run`, `AMB-T-5247`).
+      run: frame.run ?? null,
     });
   }
   const first = frames[0];

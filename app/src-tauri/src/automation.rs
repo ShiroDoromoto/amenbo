@@ -1,5 +1,5 @@
-//! **Reading an automation's definition, and saying whether it could be started** — the doors behind
-//! the automations screen and its build screen.
+//! **Reading an automation's definition, saying whether it could be started, and opening a step of a
+//! run** — the doors behind the automations screen, its build screen, and the pane a run is drawn in.
 //!
 //! Core owns the ten definition tables and the writes that build them
 //! ([`amenbo_core::ops::automation`]); nothing is built here. What this side does is resolve and
@@ -18,6 +18,11 @@
 //! holds the answer it asked for the empty frame ([`crate::wake`]). Nothing having been asked is
 //! `null` and not an empty list: an unanswered probe drawn as an answer would tell a reader with
 //! four agents installed that they have none (`AMB-D-792`).
+//!
+//! **A step that is ready to run is told to the window rather than answered back**, as an event.
+//! The press that starts a run is on the ledger and the pane it opens is in the workspace — the same
+//! window in one shape of the app and the other window in the other (`AMB-D-753`) — so an answer
+//! handed back to whoever pressed would reach a screen with no pane to stand it in.
 
 use amenbo_core::model::{
     Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
@@ -25,15 +30,17 @@ use amenbo_core::model::{
 };
 use amenbo_core::ops::automation::declarer;
 use amenbo_core::ops::automation_run::{self, Unmet};
+use amenbo_core::ops::automation_step::Opened;
 use amenbo_core::store_engine::{read, StoreEngine};
 
 use crate::commands::open_store_read;
 use crate::dto::{
     AutomationCardDto, AutomationCfgDto, AutomationDetailDto, AutomationEdgeDto, AutomationExitDto,
     AutomationLaunchBlockDto, AutomationLaunchCheckDto, AutomationPortDto, AutomationStepDto,
-    AutomationWireDto,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto,
 };
 use crate::error::CmdError;
+use tauri::Emitter;
 
 /// The automations of one project, in the order they were placed in.
 ///
@@ -118,6 +125,81 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
 pub fn automation_lanes_held() -> Result<i64, CmdError> {
     let store = open_store_read()?;
     Ok(read::automation_run_ids_running(store.read_model().conn())?.len() as i64)
+}
+
+/// The event the workspace hears when a step of a run is ready to be drawn.
+///
+/// It travels as an event rather than as an answer because of where the two ends are: the press that
+/// starts a run is on the ledger, and the pane it opens is in the workspace — which is the same
+/// window in one shape of the app and the other window in the other (`AMB-D-753`). An answer handed
+/// back to the presser would reach a screen that has no pane to stand it in.
+const STEP_EVENT: &str = "automation-step";
+
+/// **Open one step of a run**: write the execution down, build the text its terminal is started on,
+/// and tell the workspace to stand a terminal on it.
+///
+/// `run_def_id` names which step, and **`None` is the first one** — the copy of the automation's entry
+/// step ([`amenbo_core::ops::automation_run::entry_def`]). That is the whole of what a launch knows to
+/// ask for; which step comes after which is read from the way out the one before it took, and is the
+/// job of the op that receives a report (`AMB-T-5246`).
+///
+/// The answer and the event carry the same thing. The event is what the workspace acts on, and the
+/// answer is for the caller to know what happened — a run stopped for a missing input opens no
+/// terminal, and the press that started it is owed that sentence.
+#[tauri::command]
+pub fn automation_step_open(
+    app: tauri::AppHandle,
+    run_id: i64,
+    run_def_id: Option<i64>,
+) -> Result<AutomationStepOpenDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_step_open");
+    let def_id = match run_def_id {
+        Some(id) => id,
+        None => {
+            let store = open_store_read()?;
+            // Uncoded on purpose. An automation with no entry is refused at the launch check
+            // (`amenbo_core::ops::automation_run::Unmet::NoEntry`), so the only way to reach this is
+            // the entry being taken off while a run of it is under way — which no screen puts in
+            // front of anybody, and a code is split off a family where one does.
+            automation_run::entry_def(store.read_model().conn(), run_id)?
+                .ok_or_else(|| {
+                    CmdError::from(amenbo_core::error::Error::invalid(format!(
+                        "run '{run_id}' has no step to start at — its automation lost its entry"
+                    )))
+                })?
+                .id
+        }
+    };
+    let mut store = crate::commands::open_store()?;
+    let opened = store.automation_step_open(run_id, def_id)?;
+    let (project, step, missing) = match opened {
+        Opened::Ready(ready) => {
+            let def = &ready.run_def;
+            let run = read::automation_run(store.read_model().conn(), run_id)?
+                .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
+                    format!("run '{run_id}' not found"),
+                )))?;
+            (
+                run.project_id,
+                Some(AutomationStepRunDto {
+                    run_step: ready.run_step.id,
+                    name: def.name.clone(),
+                    say: ready.text.clone(),
+                    agent: def.agent.clone(),
+                    model: def.model.clone(),
+                    folder: ready.folder.clone(),
+                    interactive: def.interactive,
+                }),
+                Vec::new(),
+            )
+        }
+        Opened::Stopped { run, missing } => (run.project_id, None, missing),
+    };
+    let dto = AutomationStepOpenDto { run: run_id, project, step, missing };
+    if let Err(e) = app.emit(STEP_EVENT, dto.clone()) {
+        log::warn!("failed to emit {STEP_EVENT}: {e}");
+    }
+    Ok(dto)
 }
 
 // ───────────────────────────── shaping ─────────────────────────────

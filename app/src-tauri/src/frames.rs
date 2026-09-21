@@ -375,6 +375,10 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
                     // whether the last run left a way into what was running in it. The window opens
                     // those without being pressed (`AMB-T-4641`).
                     resumes: pane.resume.is_some(),
+                    // Nothing came back from the store drawing a run: a run that was under way when
+                    // the app ended is stopped on the way up, so what the store keeps is places
+                    // alone (`AMB-T-5247`).
+                    run: None,
                 })
                 .collect(),
             // Which pane was being worked in is this run's: it is where a reader is looking, and the
@@ -540,6 +544,7 @@ mod tests {
             written: Some("half a sentence".to_string()),
             resumes: false,
             compose_open: Some(true),
+            run: None,
         }
     }
 

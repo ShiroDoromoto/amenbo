@@ -359,6 +359,54 @@ workDirRef?: string, reportToTask: boolean, showHistory: boolean, exits: Array<A
 inputs: Array<AutomationPortDto>, settings: Array<AutomationCfgDto>, };
 
 /**
+ * **A step of a run, opened** — what the workspace stands a terminal on
+ * ([`amenbo_core::ops::automation_step::open`]).
+ *
+ * It carries two outcomes because opening a step has two: the step is ready, or a required input had
+ * nothing standing in it and the run was stopped instead. A run that was stopped has no terminal to
+ * open, so `step` is absent and `missing` names the inputs, for the sentence a person reads.
+ */
+export type AutomationStepOpenDto = { run: number, 
+/**
+ * The project the run was launched from — which project's pane the terminal stands in.
+ */
+project: number, 
+/**
+ * The step to open a terminal on, or absent where the run was stopped instead.
+ */
+step?: AutomationStepRunDto, 
+/**
+ * The required inputs nothing filled, where the run was stopped. Empty otherwise.
+ */
+missing: Array<string>, };
+
+/**
+ * **What one step's terminal is started with.**
+ *
+ * `say` is the whole text core composed — the preamble, the documents the step is handed, the story
+ * so far, the values it was given, its own prompt and how to report — and it goes in as the agent's
+ * opening prompt rather than being typed after the fact (`crate::pty::pty_open`'s `say`).
+ */
+export type AutomationStepRunDto = { 
+/**
+ * The execution row this terminal is running under — what a report or a value hangs off.
+ */
+runStep: number, 
+/**
+ * What the step is called, for the pane's own header (`AMB-T-5252`).
+ */
+name: string, say: string, agent: string, model?: string, 
+/**
+ * Where the terminal runs, resolved from the name the step holds. Absent where the step names
+ * none, and then the pane opens where a pane of that project opens.
+ */
+folder?: string, 
+/**
+ * Whether this step may stop and wait for a person (`automation_step.interactive`).
+ */
+interactive: boolean, };
+
+/**
  * **What is handed from one step to the next.**
  */
 export type AutomationWireDto = { id: number, fromStepId: number, fromExitName?: string, fromPortName: string, toStepId: number, toPortName: string, };
@@ -2891,7 +2939,17 @@ resumes?: boolean,
  * half-written sentence is the moment's, and which panes a reader writes in outlives the run
  * (`amenbo_core::frames::SavedPane::compose_open`).
  */
-composeOpen?: boolean, };
+composeOpen?: boolean, 
+/**
+ * The automation run this pane is drawing (`AMB-T-5251`), and absent for an ordinary pane.
+ *
+ * **It rides the arrangement for the draft's reason and stops where the draft stops.** The two
+ * windows hand the face over through this shape, so a run's pane has to cross with the rest —
+ * and nothing of it is written down, because a run does not outlive the app: one under way when
+ * the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it would
+ * come back holding a run that is over.
+ */
+run?: number, };
 
 /**
  * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).

@@ -15,9 +15,10 @@ import {
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
   gridAt, landingOn, laidOut, movedTo, movedWithin, openedFrame, openedIn, pageCount, paneIn,
-  panesOf, reordered, resized, restored, slotsOf, writing,
+  panesOf, reordered, resized, restored, runFrameId, slotsOf, stoodForRun, writing,
   type Layout, type Size,
 } from "../talk/layout";
+import { onStep, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import {
@@ -45,7 +46,7 @@ import type { PtySessionDto } from "../bindings/bindings";
 import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
 import { useLanesHeld } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
-import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
+import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
@@ -379,6 +380,24 @@ export function WorkspaceFace({
   // back. Nothing is remembered afterwards: what this is about is one act, and a pane that kept a
   // mark of it would be saying something about a file the reader has long since sent.
   const [landed, setLanded] = useState<string | null>(null);
+  /**
+   * **The step each run's pane is standing on**, by the pane's id (`../talk/automationStep`).
+   *
+   * It is state and not a ref, unlike `startNow` and `startWith`: what is in it decides what the pane
+   * draws — which terminal, opened on which text — so a step that arrived without a redraw would be a
+   * pane still running the step before it.
+   */
+  const [steps, setSteps] = useState<ReadonlyMap<string, StepRun>>(new Map());
+  /**
+   * The arrangement as it stands, read by what arrives from outside a render.
+   *
+   * A step of a run is told to the window as an event, and what hears it has to know what is already
+   * standing in that pane — the terminal of the step before it, which has to be given up before
+   * another is opened. A closure over `layout` would answer with the arrangement as it was when the
+   * listener was made.
+   */
+  const standing = useRef(layout);
+  standing.current = layout;
   // Whether the panes are being put in order (`./PaneOrder`). Nothing about the arrangement moves
   // while it is up: what the modal holds is a proposal until the reader presses for it.
   const [ordering, setOrdering] = useState(false);
@@ -593,6 +612,42 @@ export function WorkspaceFace({
       setLanded(null);
     }, LANDED_MS);
   }, []);
+
+  /**
+   * **A step of a run is ready**: stand the run's pane if it has none, give up the terminal of the
+   * step before it, and let the pane open one on this step (`../talk/automationStep`).
+   *
+   * **The pane is not made the pane being worked in, and the screen does not move to it**
+   * (`stoodForRun`). A run opens its pane by itself, and may be a run in a project the reader is not
+   * looking at; what says a pane has arrived is the ring, which is up for a moment and gone.
+   *
+   * **The terminal before it is ended, and the frame is emptied of it in the same move.** A step ends
+   * when its agent reports, and the process may still be standing there; left running it would go on
+   * writing into a pane that is now about another step, and left on the frame it would be adopted by
+   * the very opening that is meant to replace it.
+   *
+   * **A run stopped for a missing input is nothing for this face to do.** There is no terminal to put
+   * in the pane, and what is standing in it is the last step's own output — the whole of what a
+   * reader has to go on. Ending that belongs to whatever stopped the run (`AMB-T-5247`), taking the
+   * pane away belongs to the pane's own control (`AMB-T-5252`), and saying so belongs to the screen
+   * the run is read on. It rides this road at all because one answer carries both outcomes, and the
+   * press that started the run is owed the other one (`crate::automation`).
+   */
+  const stepArrived = useCallback((one: { run: number; project: number; step?: StepRun }) => {
+    if (one.step === undefined) return;
+    const id = runFrameId(one.run);
+    const before = standing.current.frames.find((frame) => frame.id === id)?.session ?? null;
+    if (before !== null) void endTerminal(before).catch(() => {});
+    const step = one.step;
+    setSteps((had) => new Map(had).set(id, step));
+    setLayout((was) => {
+      const cleared = before === null ? was : closedIn(was, before);
+      return stoodForRun(cleared, one.project, one.run).layout;
+    });
+    landOn(id);
+  }, [landOn]);
+
+  useEffect(() => onStep(stepArrived), [stepArrived]);
 
   /**
    * Hand a file the panel is showing to the pane the reader is working in — the reverse of
@@ -1542,9 +1597,16 @@ export function WorkspaceFace({
             ? null
             : (
               <>
-                {slots.map(({ frame, across, down }, slot) => (
+                {slots.map(({ frame, across, down }, slot) => {
+                  // The step this place is standing on, where it is a run's (`../talk/automationStep`).
+                  const step = steps.get(frame.id);
+                  return (
                   <TerminalPane
-                    key={frame.id}
+                    // A run's pane is keyed by the step as well as by the place, which is what swaps
+                    // the terminal: the place is the same one and what is drawn in it is taken down
+                    // and built again. Keyed by the place alone, the emulator would be handed a
+                    // second session to draw while still holding the first one's screen.
+                    key={step === undefined ? frame.id : `${frame.id}:${step.runStep}`}
                     frame={frame.id}
                     // Where this pane sits on the page's grid, worked out from the order rather than
                     // held against the pane (`../talk/layout`).
@@ -1557,12 +1619,19 @@ export function WorkspaceFace({
                     start={{
                       frame: frame.id,
                       session: frame.session,
+                      // A step's terminal is opened on a session of its own and says the step's own
+                      // text, not the sentence that points an agent at `agent --json` — that one is
+                      // already inside the text core composed (`crate::pty::pty_open`).
+                      say: step?.say ?? null,
+                      fresh: step !== undefined,
                       // Nothing on this face takes up a terminal it was not given: which session
                       // belongs where is answered once, as the face comes up, and a pane left to
                       // guess would take the one running terminal off whichever pane had it.
                       adopt: false,
-                      cwd: frame.folder,
-                      agent: startWith.current.get(frame.id) ?? null,
+                      // Where the step runs, and who carries it out: both are the step's own answer
+                      // and neither is asked of the reader (`amenbo_core::ops::automation_step`).
+                      cwd: step?.folder ?? frame.folder,
+                      agent: step?.agent ?? startWith.current.get(frame.id) ?? null,
                       // What this place comes back on, where it came back holding a way in
                       // (`../talk/layout`). It is the row's own agent and not a fresh choice: the
                       // reader answered this a run ago.
@@ -1570,7 +1639,9 @@ export function WorkspaceFace({
                     }}
                     // A place that came back holding a way into what was running in it is opened
                     // without being pressed — that press is what `AMB-D-869` is about.
-                    autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes}
+                    // A run's pane is never pressed to open: the step arrived by itself, and a way
+                    // in drawn on it would be a button nobody is there to press.
+                    autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes || step !== undefined}
                     focused={layout.focus === frame.id}
                     landed={landed === frame.id}
                     offered={overFrame === frame.id}
@@ -1604,7 +1675,8 @@ export function WorkspaceFace({
                     composeOpen={frame.composeOpen}
                     onFold={(id, open) => setLayout((was) => folding(was, id, open))}
                   />
-                ))}
+                  );
+                })}
                 {/* What the corner would leave this pane at, drawn from where the pane stands now.
                     The pane itself is untouched until the press ends: it holds a terminal, and one
                     that was resized on every report of the pointer would be telling the program in

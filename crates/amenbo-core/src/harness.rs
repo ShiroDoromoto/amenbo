@@ -892,6 +892,27 @@ pub fn opening(
     model: Option<&str>,
     handle: Option<Handle<'_>>,
 ) -> Vec<String> {
+    opening_saying(launch, &crate::agents::pane_instruction(cmd), model, handle)
+}
+
+/// The same line, with **something other than the launch instruction** as the opening prompt — what an
+/// automation's step is started on (`AMB-T-5251`).
+///
+/// A step is not a pane somebody opened and will go on talking in: it is one prompt, carried out once,
+/// and the terminal is taken down when it reports. So the sentence that points an agent at
+/// `agent --json` is not what it is owed — it is owed the step's own text, which already carries
+/// everything the step is about ([`crate::ops::automation_step`]), the way in among it.
+///
+/// Everything else is [`opening`]'s: the same flag, in the same place on the line, and the same
+/// silence where a conversation is being carried on rather than started. **A step never carries one
+/// on** — a run opens a session per step and comes back into none — so in practice `handle` is
+/// [`Handle::New`] or nothing, and the arm that would drop the prompt is not reached.
+pub fn opening_saying(
+    launch: &Launch,
+    say: &str,
+    model: Option<&str>,
+    handle: Option<Handle<'_>>,
+) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     let way_back = resuming(launch, handle);
     let carrying_on = way_back.is_some() && matches!(handle, Some(Handle::Back(_)));
@@ -913,7 +934,7 @@ pub fn opening(
     }
     if !carrying_on {
         args.extend(launch.prompt_flag.map(str::to_string));
-        args.push(crate::agents::pane_instruction(cmd));
+        args.push(say.to_string());
     }
     args
 }
@@ -1438,6 +1459,33 @@ mod tests {
                 assert_eq!(opening(launch, "amenbo", empty, None), bare, "{}: {empty:?}", launch.id);
             }
             assert!(!bare.contains(&launch.model_flag.to_string()), "{}", launch.id);
+        }
+    }
+
+    /// A step of an automation is started on the step's own text, and everything else about the line
+    /// is the same.
+    ///
+    /// **The flag is the point.** A step's text is prose — headings, a prompt somebody wrote, the
+    /// story of the run so far — and the one thing the six providers spell differently is where a
+    /// first thing to say goes on the line. A step typed into the terminal after it opened would be
+    /// racing the program coming up (`AMB-T-5251`).
+    #[test]
+    fn a_step_is_started_on_its_own_text_and_not_on_the_launch_instruction() {
+        let said = crate::agents::pane_instruction("amenbo");
+        let step = "take one, and report with `amenbo automation done`";
+        for launch in LAUNCHES {
+            let ordinary = opening(launch, "amenbo", None, None);
+            let mine = opening_saying(launch, step, None, None);
+            assert_eq!(
+                mine,
+                ordinary
+                    .iter()
+                    .map(|word| if word == &said { step.to_string() } else { word.clone() })
+                    .collect::<Vec<_>>(),
+                "{}: the step stands exactly where the instruction did",
+                launch.id
+            );
+            assert!(!mine.contains(&said), "{}", launch.id);
         }
     }
 

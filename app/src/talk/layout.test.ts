@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACROSS, addPane, BOXES, closedFrame, closedIn, DEFAULT_SIZE, DOWN, EMPTY_LAYOUT, focusOn, goPage,
   goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, openedFrame, openedIn, pageCount,
-  pageOfFrame, paneIn, panesOf, placing, reordered, resized, restored, roomOnPage, SIZES,
-  slotsOf, writing, folding, type Layout, type Size,
+  pageOfFrame, paneIn, paneOfRun, panesOf, placing, reordered, resized, restored, roomOnPage,
+  runFrameId, SIZES, slotsOf, stoodForRun, writing, folding, type Layout, type Size,
 } from "./layout";
 
 /** The ids of the panes drawn on one page, in the order they were laid down. */
@@ -310,6 +310,7 @@ describe("where a pane works", () => {
         written: "",
         inserted: [],
         composeOpen: false,
+        run: null,
       },
     ] }, "1", "s1", null, "claude");
     // What is running comes off the session as well, and by the same reasoning: a pane that adopted
@@ -888,5 +889,39 @@ describe("what Amenbo put into the box under a pane", () => {
     const { frames: _put, ...rest } = laidOut(layout);
     const { frames: _empty, ...was } = laidOut(writing(layout, layout.frames[0]!.id, ""));
     expect(rest).toEqual(was);
+  });
+});
+
+// The pane an automation run is drawn in (`AMB-T-5251`). Two things are pinned, and neither shows in
+// code that looks right either way: one run is one pane however many steps it takes, and the pane
+// arrives without moving the reader.
+describe("the pane a run stands in", () => {
+  it("is made once and answered again after that", () => {
+    const first = stoodForRun({ ...EMPTY_LAYOUT, project: 1 }, 1, 7);
+    expect(first.frame.run).toBe(7);
+    expect(first.frame.id).toBe(runFrameId(7));
+
+    const again = stoodForRun(first.layout, 1, 7);
+    expect(again.layout.frames).toHaveLength(1);
+    expect(again.frame.id).toBe(first.frame.id);
+    expect(paneOfRun(again.layout, 7)!.id).toBe(first.frame.id);
+  });
+
+  it("moves neither the pane being worked in nor the page", () => {
+    const { layout: one } = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/a");
+    const { layout: after } = stoodForRun(one, 1, 7);
+    expect(after.focus).toBe(one.focus);
+    expect(after.page).toBe(one.page);
+  });
+
+  it("crosses to the other window and is not kept by the store", () => {
+    const { layout } = stoodForRun({ ...EMPTY_LAYOUT, project: 1 }, 1, 7);
+    // The shape the two windows hand the face over in carries it…
+    const written = laidOut(layout);
+    expect(written.frames[0]!.run).toBe(7);
+    expect(restored(written, 1).frames[0]!.run).toBe(7);
+    // …and a row that came back from the store carries none, because a run that was under way when
+    // the app ended is stopped on the way up (`AMB-T-5247`).
+    expect(restored({ project: 1, frames: [{ id: "1", project: 1 }] }, 1).frames[0]!.run).toBe(null);
   });
 });

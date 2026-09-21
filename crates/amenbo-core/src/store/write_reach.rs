@@ -75,6 +75,10 @@ pub(super) enum AutomationPart {
     Cfg,
     Edge,
     Wire,
+    /// One launch of an automation. It is on this list rather than beside the ten because a run walks
+    /// up to a project by a road of its own: it carries the project it was launched from, and so
+    /// stays readable after the automation it came from is archived.
+    Run,
 }
 
 impl AutomationPart {
@@ -91,6 +95,7 @@ impl AutomationPart {
             AutomationPart::Cfg => owner::automation_cfg(conn, id),
             AutomationPart::Edge => owner::automation_edge(conn, id),
             AutomationPart::Wire => owner::automation_wire(conn, id),
+            AutomationPart::Run => owner::automation_run(conn, id),
         }
     }
 
@@ -107,6 +112,7 @@ impl AutomationPart {
             AutomationPart::Cfg => "automation setting",
             AutomationPart::Edge => "automation edge",
             AutomationPart::Wire => "automation wire",
+            AutomationPart::Run => "automation run",
         };
         format!("{en} '{id}'")
     }

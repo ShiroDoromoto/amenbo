@@ -469,6 +469,7 @@ pub fn run() {
       automation::automation_detail,
       automation::automation_launch_check,
       automation::automation_lanes_held,
+      automation::automation_step_open,
       commands::store_signature,
       commands::version_status,
       commands::check_updates_fresh,

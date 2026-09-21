@@ -2912,6 +2912,16 @@ pub struct TalkFrameDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) compose_open: Option<bool>,
+    /// The automation run this pane is drawing (`AMB-T-5251`), and absent for an ordinary pane.
+    ///
+    /// **It rides the arrangement for the draft's reason and stops where the draft stops.** The two
+    /// windows hand the face over through this shape, so a run's pane has to cross with the rest —
+    /// and nothing of it is written down, because a run does not outlive the app: one under way when
+    /// the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it would
+    /// come back holding a run that is over.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) run: Option<i64>,
 }
 
 /// **The store's identity, in the parts a reader has to tell apart** (`AMB-D-856`). It was one string
@@ -3389,6 +3399,57 @@ pub struct AutomationWireDto {
 pub struct AutomationLaunchCheckDto {
     pub(crate) ready: bool,
     pub(crate) blocks: Vec<AutomationLaunchBlockDto>,
+}
+
+/// **A step of a run, opened** — what the workspace stands a terminal on
+/// ([`amenbo_core::ops::automation_step::open`]).
+///
+/// It carries two outcomes because opening a step has two: the step is ready, or a required input had
+/// nothing standing in it and the run was stopped instead. A run that was stopped has no terminal to
+/// open, so `step` is absent and `missing` names the inputs, for the sentence a person reads.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationStepOpenDto {
+    #[ts(type = "number")]
+    pub(crate) run: i64,
+    /// The project the run was launched from — which project's pane the terminal stands in.
+    #[ts(type = "number")]
+    pub(crate) project: i64,
+    /// The step to open a terminal on, or absent where the run was stopped instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) step: Option<AutomationStepRunDto>,
+    /// The required inputs nothing filled, where the run was stopped. Empty otherwise.
+    pub(crate) missing: Vec<String>,
+}
+
+/// **What one step's terminal is started with.**
+///
+/// `say` is the whole text core composed — the preamble, the documents the step is handed, the story
+/// so far, the values it was given, its own prompt and how to report — and it goes in as the agent's
+/// opening prompt rather than being typed after the fact (`crate::pty::pty_open`'s `say`).
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationStepRunDto {
+    /// The execution row this terminal is running under — what a report or a value hangs off.
+    #[ts(type = "number")]
+    pub(crate) run_step: i64,
+    /// What the step is called, for the pane's own header (`AMB-T-5252`).
+    pub(crate) name: String,
+    pub(crate) say: String,
+    pub(crate) agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) model: Option<String>,
+    /// Where the terminal runs, resolved from the name the step holds. Absent where the step names
+    /// none, and then the pane opens where a pane of that project opens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) folder: Option<String>,
+    /// Whether this step may stop and wait for a person (`automation_step.interactive`).
+    pub(crate) interactive: bool,
 }
 
 /// **One thing standing in the way of a launch**, as core named it

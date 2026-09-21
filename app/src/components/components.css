@@ -774,10 +774,15 @@ button.feed__target:hover { color: var(--c-accent); }
    word the shelf uses: a chip is read one at a time and carries the target's own name, so what is left for
    the kind to say is which of them this is. */
 .chip--dest { background: var(--c-surface-pic) var(--c-surface); border-color: var(--c-edge); color: var(--c-text); padding-left: var(--s-1); }
+/* The glyph is on the smallest step the faces have (`AMB-D-842`), and the square is the size that step
+   needs — 9px was a size of its own, below every step and readable only because the two glyphs it
+   carries are simple. 16px leaves the 12px glyph 2px on each side, and stays inside the chip's own
+   line box (12px on a line-height of 1.5, so 18px): the chip keeps its height, and its rule keeps a
+   hair of ground between itself and the square. */
 .dot {
-  width: 14px; height: 14px; border-radius: 3px; flex: none;
+  width: 16px; height: 16px; border-radius: 3px; flex: none;
   display: inline-grid; place-items: center;
-  color: #fff; font-size: 9px; font-weight: var(--fw-bold); line-height: 1;
+  color: #fff; font-size: var(--fs-xs); font-weight: var(--fw-bold); line-height: 1;
 }
 .k-slack.dot { background: var(--k-slack); }
 .k-mail.dot { background: var(--k-mail); }

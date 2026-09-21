@@ -423,6 +423,7 @@ pub(super) fn task_comment_row(r: &Row) -> rusqlite::Result<TaskComment> {
         created_at,
         updated_at,
         edited_at: ts_opt(r, C.edited_at)?,
+        automation_run_step_id: get(r, C.automation_run_step_id)?,
     })
 }
 
@@ -971,6 +972,9 @@ mod tests {
                 // The fact that it was edited round-trips too — a column the projection never wrote
                 // would fail right here.
                 edited_at: Some(now),
+                // A line a person typed, which is what every comment is until a step of a run carries
+                // its report onto the task.
+                automation_run_step_id: None,
             }],
             decision_comments: vec![DecisionComment {
                 id: 1,

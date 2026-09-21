@@ -252,6 +252,7 @@ pub fn seed(bulk: usize) -> Seeded {
             created_at: now,
             updated_at: now,
             edited_at: None,
+            automation_run_step_id: None,
         });
     }
 

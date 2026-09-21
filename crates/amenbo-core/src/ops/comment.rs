@@ -35,6 +35,35 @@ pub fn add_comment(
     author_kind: ActorKind,
     text: &str,
 ) -> Result<TaskComment> {
+    write_comment(tx, task_id, author_kind, text, None)
+}
+
+/// [`add_comment`] for a line a step of an automation run carried onto the task — its report, where the
+/// step was built to report to the task. What is added is the provenance: which step execution wrote
+/// it, so a reader of the task can walk back to the run, and a reader of the run can see what it left
+/// on the board.
+///
+/// It is a second door rather than an argument on the first, because every other caller would then be
+/// passing `None` to say "a person typed this", which is not a thing a person's comment should have to
+/// declare.
+pub fn add_report_comment(
+    tx: &WriteTx<'_>,
+    task_id: i64,
+    author_kind: ActorKind,
+    text: &str,
+    run_step_id: i64,
+) -> Result<TaskComment> {
+    write_comment(tx, task_id, author_kind, text, Some(run_step_id))
+}
+
+/// The one place a `task_comment` row is built, whichever door asked for it.
+fn write_comment(
+    tx: &WriteTx<'_>,
+    task_id: i64,
+    author_kind: ActorKind,
+    text: &str,
+    automation_run_step_id: Option<i64>,
+) -> Result<TaskComment> {
     let now = prepare_comment(text)?;
     let comment = TaskComment {
         id: read::next_activity_id(tx.conn())?,
@@ -44,6 +73,7 @@ pub fn add_comment(
         created_at: now,
         updated_at: now,
         edited_at: None,
+        automation_run_step_id,
     };
     emit_create(tx, record::task_comment(&comment))?;
     Ok(comment)

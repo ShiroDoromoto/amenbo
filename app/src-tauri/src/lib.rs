@@ -6,6 +6,10 @@
 /// Start at login: the per-user registration each OS reads when the user signs in, and the one door
 /// that writes or removes it (`AMB-D-541`).
 mod autostart;
+/// Reading an automation's definition, and saying whether it could be started — what the automations
+/// screen and its build screen draw from. The building itself is core's
+/// (`amenbo_core::ops::automation`).
+mod automation;
 mod blobproto;
 /// The machine's own clipboard, holding files rather than words — what `⌘C` and `⌘V` mean in the
 /// file panel (`AMB-D-796`).
@@ -461,6 +465,9 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       commands::snapshot,
+      automation::automation_page,
+      automation::automation_detail,
+      automation::automation_launch_check,
       commands::store_signature,
       commands::version_status,
       commands::check_updates_fresh,

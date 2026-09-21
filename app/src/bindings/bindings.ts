@@ -240,6 +240,127 @@ export type AttachmentDto = { id: number, kind: "blob" | "url", blobHash: string
 present: boolean, createdByKind: "human" | "ai" | null, };
 
 /**
+ * **One automation in the list** — what the "automations" tab draws a row from.
+ */
+export type AutomationCardDto = { id: number, name: string, 
+/**
+ * How many steps it is built out of. The row says it because "what is this" and "is it built
+ * yet" are the two things a list is read for.
+ */
+steps: number, archived: boolean, };
+
+/**
+ * **A setting, and the answer written for it while building.** An action declares and the step
+ * answers, so both are folded into one row here.
+ */
+export type AutomationCfgDto = { name: string, kind: "taskfilter" | "folder" | "choice" | "number" | "text", required: boolean, 
+/**
+ * The choices, as JSON, for `choice`. Absent for every other kind.
+ */
+options?: string, 
+/**
+ * The answer written while building, as JSON. Absent where nobody has answered.
+ */
+value?: string, };
+
+/**
+ * **One automation's whole definition** — every step, every way out of each, and what joins them.
+ *
+ * It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
+ * picture, its launch check and its step panel all read the same walk from the entry step.
+ */
+export type AutomationDetailDto = { id: number, projectId: number, name: string, notes: string, preamble: string, 
+/**
+ * The step a run opens its first terminal on. Absent while the automation is still being built.
+ */
+entryStepId?: number, archived: boolean, steps: Array<AutomationStepDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, };
+
+/**
+ * **What happens after a way out is taken.**
+ */
+export type AutomationEdgeDto = { id: number, fromStepId: number, exitName?: string, 
+/**
+ * Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
+ */
+toStepId?: number, ends: "go" | "done" | "halt", 
+/**
+ * How often this edge may be taken for one task. Absent is no limit.
+ */
+maxTimes?: number, };
+
+/**
+ * **A way out of a step**, and what leaving through it hands on.
+ */
+export type AutomationExitDto = { id: number, 
+/**
+ * Absent is the unnamed way out, which is all a step with a single one needs.
+ * `*` is the error one, which every owner carries from birth.
+ */
+name?: string, outputs: Array<AutomationPortDto>, };
+
+/**
+ * **One thing standing in the way of a launch.**
+ *
+ * `reason` is what it is, and `stepName` / `at` say where — the way out with nothing after it, the
+ * input nothing feeds, the agent this machine cannot start. A reason about the automation as a
+ * whole carries neither.
+ */
+export type AutomationLaunchBlockDto = { reason: "no_steps" | "exit_without_next" | "input_unfed" | "agent_not_here" | "task_undecided" | "workspace_closed", stepId?: number, stepName?: string, 
+/**
+ * What on that step — a way out's name, an input's name, an agent's id.
+ */
+at?: string, };
+
+/**
+ * **Whether this automation can be started, and what is in the way** — what the build screen's
+ * launch place draws before anybody presses.
+ *
+ * It is the picture and not the ruling: what refuses a launch is the launch itself, which writes a
+ * run. A definition that passes here can still be refused there, by a machine that changed between
+ * the reading and the press.
+ */
+export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<AutomationLaunchBlockDto>, };
+
+/**
+ * **What a step takes, or what a way out of it hands on.**
+ */
+export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_take" | "task_make", required: boolean, };
+
+/**
+ * **One step**, with the declarations it runs under already resolved.
+ */
+export type AutomationStepDto = { id: number, name: string, 
+/**
+ * The library action this step runs. Absent when it carries its own prompt.
+ */
+actionId?: number, 
+/**
+ * What that action is called, so a row can name it without a second read.
+ */
+actionName?: string, 
+/**
+ * The prompt this step carries, or the one it reads off the action — whichever it runs on.
+ */
+prompt: string, agent: string, 
+/**
+ * Absent leaves the agent's own default model.
+ */
+model?: string, interactive: boolean, 
+/**
+ * The name of the setting or the input the working folder is taken from — a name, not a path.
+ */
+workDirRef?: string, reportToTask: boolean, showHistory: boolean, exits: Array<AutomationExitDto>, 
+/**
+ * What this step takes in, in declaration order.
+ */
+inputs: Array<AutomationPortDto>, settings: Array<AutomationCfgDto>, };
+
+/**
+ * **What is handed from one step to the next.**
+ */
+export type AutomationWireDto = { id: number, fromStepId: number, fromExitName?: string, fromPortName: string, toStepId: number, toPortName: string, };
+
+/**
  * What [`run_backup`](crate::commands::run_backup) returns: the camelCase DTO of core's
  * [`amenbo_core::archive::BackupReport`].
  */

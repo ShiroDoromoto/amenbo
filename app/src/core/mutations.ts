@@ -1298,6 +1298,18 @@ export async function setUpdateCheck(enabled: boolean): Promise<void> {
 }
 
 /**
+ * Set how many automation runs may hold a lane at once (`config.automation_lanes`). Core refuses
+ * anything outside 1..=32, and the refusal comes back as it does from any other setting.
+ *
+ * **It reaches no run already going.** Lowering the number stops nothing: a lane is handed back when
+ * its run ends or is paused, and the next launch simply waits longer for one.
+ */
+export async function setAutomationLanes(lanes: number): Promise<void> {
+  if (inTauri()) return invokeAck("config_set_automation_lanes", { lanes });
+  mockMutate((s) => ({ ...s, automationLanes: lanes }));
+}
+
+/**
  * Change the view a new project opens in (`config.default_view`). `config.json` lives outside the
  * store, so it is the `loadSnapshot` at the tail of the ack that re-reads the snapshot's
  * `defaultView` and brings the pull-down into step **without a restart**. Nothing else on screen

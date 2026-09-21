@@ -102,7 +102,12 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_port: [],
   automation_edge: [],
   automation_wire: [],
-  automation_run: [],
+  // A run taking a lane, handing one back or ending moves the number the workspace band draws, so
+  // this one names a scope of its own. The snapshot carries the other half — how many lanes there
+  // are — and that is a setting, written from one screen rather than arriving on the feed.
+  automation_run: ["automationLanes"],
+  // The steps a run copied at launch. Written once, in the same transaction as the run, and read only
+  // by what reads that run — so it is folded to nothing rather than made to re-read the band.
   automation_run_def: [],
   automation_run_task: [],
   automation_run_step: [],

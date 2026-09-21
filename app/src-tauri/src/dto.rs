@@ -658,6 +658,15 @@ pub struct Snapshot {
     /// gave: a project already carries its own `view`, and this never repaints one.
     #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
     pub(crate) default_view: String,
+    /// How many automation runs may hold a lane at once (`config.automation_lanes`, default 3).
+    /// Exposed so the settings screen can show and change it, and so the workspace band can draw it
+    /// as the second half of `2/3`.
+    ///
+    /// It crosses projects, so the band's number and the panes of the project being looked at are not
+    /// one to one — which is why the band draws the number alone and says nothing about which project
+    /// is holding a lane.
+    #[ts(type = "number")]
+    pub(crate) automation_lanes: i64,
 }
 
 /// The startup integrity check, shaped for the GUI: it feeds a read-only warning banner. Empty means

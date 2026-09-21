@@ -414,6 +414,29 @@ impl RefSpace {
     }
 }
 
+/// The board's own event for "put the settings screen up", raised by [`show_settings`]. It carries
+/// nothing: there is one settings screen, and which part of it a reader wants is not a thing the
+/// workspace knows.
+const SHOW_SETTINGS_EVENT: &str = "settings-asked";
+
+/// Show the settings screen on the board, asked for from the band over the panes.
+///
+/// The band draws how many lanes are held out of how many there are, and the second number is one
+/// setting — so the band is also the way to it. This is the same seam [`show_ref`] is: settings are
+/// read on the board, a window cannot raise its sibling, and where the board goes once it is in front
+/// is the front end's routing rather than a second copy of it out here.
+#[tauri::command]
+pub fn show_settings(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window(BOARD) {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+    if let Err(e) = app.emit(SHOW_SETTINGS_EVENT, ()) {
+        log::warn!("failed to emit {SHOW_SETTINGS_EVENT}: {e}");
+    }
+}
+
 /// Show a task or a decision on the board, asked for from inside a pane.
 ///
 /// A ref clicked in a terminal names a record, and records are read on the board — so the answer

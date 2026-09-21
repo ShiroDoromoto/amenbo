@@ -493,6 +493,30 @@ export function AppShell() {
     };
   }, [selectTask, selectDecision]);
 
+  // The settings screen asked for from the band over the panes (`crate::windows::show_settings`). The
+  // host has already brought this window forward; what is left is the routing, which is the same move
+  // the sidebar's own gear makes. **The ledger is put up with it**, for the reason the ref above is:
+  // in one window the panes and the ledger are two faces of it, and a screen opened behind the
+  // workspace is a press that showed nothing.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen("settings-asked", () => {
+        navTo({ type: "view", id: "settings" });
+        setFace("tasks");
+      }))
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [navTo]);
+
   // The app menu's "check for updates" click arrives as a Tauri event (menu.rs → lib.rs). Run the fresh check and let
   // the outcome drive the feedback note; `available` clears the note because the UpdateBanner shows the offer instead.
   useEffect(() => {
@@ -625,6 +649,9 @@ export function AppShell() {
             note={windowError}
             projectId={cameFromProject}
             onOpenLedger={() => setFace("tasks")}
+            // In one window the settings are a face of this window, so the move is made here rather
+            // than asked of the host — and the ledger goes up with it, the panes being the other face.
+            onSettings={() => { navTo({ type: "view", id: "settings" }); setFace("tasks"); }}
             openIn={openIn}
           />
         </div>

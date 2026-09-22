@@ -13,7 +13,8 @@ description: >
   Each half is read on the picture, because the panel alone could say a thing the picture never
   drew.
 given:
-  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — draft and review, prompt: write the draft }, as: act }
+  # An action is born empty, which is the state the road opens on: no step inside it, and no line.
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — draft and review }, as: act }
 
 steps_gui:
   - type: action
@@ -64,7 +65,7 @@ steps_gui:
   # wrote the answer and drew nothing, or drew a line nobody asked for.
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: draft
 
@@ -117,7 +118,7 @@ steps_gui:
   # what the first step says is left as it was.
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: review
 

@@ -725,19 +725,22 @@ settings, the identity it answers `whoami` with, the build in place, and the sto
 (`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
 `.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
 
-One domain reads the same thing two ways. **`automation`'s definition is read back whole at the
-terminal** (`step-read` / `edge-read`, off `automation show`): every step with the library already
-read in, and what joins them — which is how a road that built one at the terminal proves what it
-built. **The picture is the screen's** (`pictured`,
-`line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half): boxes,
-the lines between them and the marks along them are drawn nowhere else, and neither face is a gap in
-the other. The two listings — a row per definition, a row per library action — are read on both
-(`listed`, `action-listed`).
+One domain reads the same thing two ways. **`automation`'s definition is read back at the
+terminal in the three layers it is built in**: the placements on an automation off
+`automation show` (`placement-read`), the steps inside a library action off `automation action-show`
+(`step-read`), and what joins the boxes on either picture (`edge-read`, with `in_action` for an
+action's) — which is how a road that built one at the terminal proves what it built. **The pictures
+are the screen's** (`pictured`, `line-pictured`, `lap-pictured`, `panel-shows`, `launch`, and the
+rest of the screen half): an automation's build screen draws its placements and an action's its
+steps, the ops are named for the box and the panel so one set reads either, and boxes, the lines
+between them and the marks along them are drawn nowhere else — neither face is a gap in the other.
+The two listings — a row per definition, a row per library action — are read on both (`listed`,
+`action-listed`).
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
-about an automation opens on a definition that is already there, there being no way in on screen for
-the first step of the first one. Answering a setting is not among them, and neither is declaring one:
-both are moves a reader makes, on the rows the panel takes them on or behind the flags the command
-does.
+about an automation opens on a definition that is already there, so a premise builds all three
+layers — the action, the steps inside it, and the placement on the picture. Answering a setting is
+not among them, and neither is declaring one: both are moves a reader makes, on the rows the panel
+takes them on or behind the flags the command does.
 **What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 three are refused anywhere else — and a run started at the terminal opens no pane to type them in.

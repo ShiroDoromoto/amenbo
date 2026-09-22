@@ -12,26 +12,39 @@ description: >
   drew the list once and never read it again would pass the first half of each and fail the second,
   which is the failure this road is written against.
 given:
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two holes to close" }, as: auto }
-
-  # The step that takes the task. Its named way out hands on a value, which is what the step after it
-  # is left waiting for.
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action that takes the task. Its named way out hands on a value, which is what the placement
+  # after it is left waiting for. The step inside declares the same, and the lines inside the action
+  # carry the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: wire-add, with: { in_action: true, target: claim, exit: got one, from_port: note, to_port: note } }
+  # The hole a person answers: a required setting, declared on the action and left unanswered on its
+  # placement. A task filter is the kind worth walking, being the one the screen refuses to let
+  # anybody write as an expression.
+  - { type: action, domain: automation, op: cfg-add, with: { action: take, name: which, kind: taskfilter, required: true } }
 
-  # The hole a person answers: a required setting, declared and left unanswered. A task filter is the
-  # kind worth walking, being the one the screen refuses to let anybody write as an expression.
-  - { type: action, domain: automation, op: cfg-add, with: { step: take, name: which, kind: taskfilter, required: true } }
+  # The hole a wire closes: a required input on the action after it, with nothing joined to it.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, agent: claude-code, prompt: do the work }, as: do }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
+  - { type: action, domain: automation, op: port-add, with: { action: work, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
 
-  # The hole a wire closes: a required input on the step after it, with nothing joined to it.
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: work, agent: claude-code, prompt: do the work }, as: work }
-  - { type: action, domain: automation, op: port-add, with: { step: work, name: note, kind: value, required: true } }
-
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: work } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two holes to close" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -53,7 +66,7 @@ steps_gui:
     with:
       ready: false
       reason: unanswered_cfg
-      step: take
+      box: take
       at: which
       present: true
 
@@ -63,11 +76,11 @@ steps_gui:
     with:
       ready: false
       reason: unwired_input
-      step: work
+      box: work
       at: note
       present: true
 
-  # And on the picture as well, where the step wears it.
+  # And on the picture as well, where the placement wears it.
   - type: assert
     domain: automation
     op: pictured
@@ -79,7 +92,7 @@ steps_gui:
   # reader's words; what a filter expression would look like never appears on this screen.
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: take
 
@@ -97,7 +110,7 @@ steps_gui:
     with:
       ready: false
       reason: unanswered_cfg
-      step: take
+      box: take
       at: which
       present: false
 
@@ -105,7 +118,7 @@ steps_gui:
   # the way out that hands a value on is the only thing this list can hold.
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: work
 
@@ -122,11 +135,11 @@ steps_gui:
     with:
       ready: false
       reason: unwired_input
-      step: work
+      box: work
       at: note
       present: false
 
-  # And the mark the step wore for it comes off, which is the same fact read on the other half of the
+  # And the mark the placement wore for it comes off, which is the same fact read on the other half of the
   # screen: the picture and the launch place are two readings of one definition, and a build where
   # only one of them moved would be answering from a definition it had already read.
   - type: assert

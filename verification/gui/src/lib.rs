@@ -597,7 +597,7 @@ impl Instructor {
     /// that writes rather than the step that makes.
     ///
     /// **Only the writes that rename their own target.** A step whose `name` belongs to something it
-    /// is adding (`step-add`, which names the step and targets the automation) is naming a new
+    /// is adding (`step-add`, which names the step and targets the action) is naming a new
     /// thing, so the pair is read off the op rather than off the keys.
     fn relabel(&mut self, domain: Domain, op: &str, with: &Args) {
         if !matches!((domain, op), (Domain::Automation, "update")) {
@@ -1173,15 +1173,11 @@ impl Instructor {
             (Domain::Automation, "listed") | (Domain::Automation, "action-listed") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
-            // A step's box, where the road is asking about the box and not about a mark on it. Both
-            // marks are colour — an edge down one side, an outline round the whole — and a reading
-            // answers which words are on a shot, so a step naming one would pass on a build that had
-            // lost the mark and kept the name. Those are an eye's.
-            (Domain::Automation, "pictured")
-                if with.contains_key("from_action") || with.contains_key("unfed") =>
-            {
-                None
-            }
+            // A box, where the road is asking about the box and not about the mark on it. The mark is
+            // colour — an outline round the whole — and a reading answers which words are on a shot,
+            // so a step naming it would pass on a build that had lost the mark and kept the name. That
+            // is an eye's.
+            (Domain::Automation, "pictured") if with.contains_key("unfed") => None,
             (Domain::Automation, "pictured") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
@@ -1194,9 +1190,9 @@ impl Instructor {
             (Domain::Automation, "line-pictured") => {
                 Some(Expectation { text: arg_str(with, "exit")?.to_string(), present: true })
             }
-            // What one row of the step panel reads, where the road named a value. It is the road's
-            // own word — a name it gave, a prompt it wrote — so a reading finds it in that row.
-            (Domain::Automation, "step-shows") => {
+            // What one row of the panel reads, where the road named a value. It is the road's own
+            // word — a name it gave, a prompt it wrote — so a reading finds it in that row.
+            (Domain::Automation, "panel-shows") => {
                 Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
             }
             // What the launch place names as being in the way. The reason itself is the interface's
@@ -3853,16 +3849,17 @@ impl Instructor {
                 "On the actions tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
                 self.target_label(with)
             ),
-            // The rewrite that reaches every step pointed at this action, which is what the library
-            // is for. The prompt is the step's, so it is written on the panel the picture opens, and
+            // The rewrite that reaches every automation placing this action, which is what the library
+            // is for. The prompt is one step's, so it is written on the panel the picture opens, and
             // it is written as the caret leaves the box — there is no Save on that screen.
             (Domain::Automation, "action-rewrite") => format!(
-                "On the action build screen, press the step in the picture, rewrite its prompt so it reads \"{}\", and move the caret out of the box.",
+                "On the action build screen, press the step \"{}\" in the picture, rewrite its prompt so it reads \"{}\", and move the caret out of the box.",
+                req(with, "step")?,
                 req(with, "prompt")?
             ),
             // The three fields the definition itself holds, written in the place at the foot of the
             // build screen. There is no Save there: a box of text writes as the caret leaves it, the
-            // way the step panel's do, and the tick writes on the press — which is the difference
+            // way the panel's do, and the tick writes on the press — which is the difference
             // the last clause of the instruction turns on.
             (Domain::Automation, "update") => {
                 let mut said: Vec<String> = Vec::new();
@@ -3900,29 +3897,36 @@ impl Instructor {
             // question stands between it and the write. The road names both halves: a step that
             // stopped at the press would file a shot of a question nobody answered.
             (Domain::Automation, "remove") => "In the build screen, press the button that deletes this automation, and answer the question the machine asks with the answer that goes ahead.".to_string(),
-            // Pressing a box is what puts that step's contents in the panel beside the picture.
-            (Domain::Automation, "pick-step") => format!(
-                "In the build screen's picture, press the box for the step \"{}\".",
+            // Pressing a box is what puts what it holds in the panel beside the picture. On an
+            // automation's picture the box is named by the action standing on it; inside an action,
+            // by the step.
+            (Domain::Automation, "pick-box") => format!(
+                "In the build screen's picture, press the box \"{}\".",
                 req(with, "name")?
             ),
-            // The `+` on a line. The step goes in **in front of** that line, so the road names the
-            // step the line leaves and the way out it leaves by — the pair a line hangs on.
-            (Domain::Automation, "insert-step") => format!(
-                "In the build screen's picture, press the `+` on the line leaving the step \"{}\" by {}. In the dialog, write the name \"{}\"{}{}{}, then press the button that puts it in.",
+            // The `+` on a line. The box goes in **in front of** that line, so the road names the box
+            // the line leaves and the way out it leaves by — the pair a line hangs on.
+            //
+            // A prompt is written the same way on either picture: on an automation's, the pulldown of
+            // what stands here starts on writing one, so the instruction need not touch it — and inside
+            // an action there is no such pulldown to touch. Only an action picked off the library
+            // names it, which is the automation's picture's alone.
+            (Domain::Automation, "insert-box") => format!(
+                "In the build screen's picture, press the `+` on the line leaving the box \"{}\" by {}. In the dialog, write the name \"{}\"{}{}{}, then press the button that puts it in.",
                 req(with, "after")?,
                 way_out(with),
                 req(with, "name")?,
                 match (arg_str(with, "prompt"), with.get("action")) {
-                    (Some(prompt), None) => format!(", leave it on the setting that writes a prompt here and write \"{prompt}\" as that prompt"),
+                    (Some(prompt), None) => format!(" and write \"{prompt}\" as its prompt"),
                     (None, Some(_)) => format!(
-                        ", and pick the library action \"{}\" as what it runs",
+                        ", and pick the library action \"{}\" as what stands here",
                         self.labels
                             .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
                             .cloned()
                             .unwrap_or_else(|| "<the action>".to_string())
                     ),
                     _ => return Err(
-                        "a step put in writes a prompt here or names a library action, never both and never neither"
+                        "a box put in writes a prompt here or names a library action, never both and never neither"
                             .to_string(),
                     ),
                 },
@@ -3939,7 +3943,7 @@ impl Instructor {
             ),
             // What a way out hands on, declared from the way out it belongs to.
             (Domain::Automation, "add-output") => format!(
-                "In the step panel, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
+                "In the panel showing what the pressed box holds, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
                 way_out(with),
                 // **The name the box starts on is the one thing this dialog does for a reader.** A
                 // way out that hands one thing on is named for what it hands on nine times out of
@@ -3980,7 +3984,7 @@ impl Instructor {
             // Picking the first line of it takes what was said away, which is the road's `to` and
             // `ends` both left out — a state of its own, and not a way out that ends anything.
             (Domain::Automation, "set-next") => format!(
-                "In the step panel, on the line for {}, open the pulldown of what happens next and {}{}.",
+                "In the panel showing what the pressed box holds, on the line for {}, open the pulldown of what happens next and {}{}.",
                 way_out(with),
                 match (arg_str(with, "to"), arg_str(with, "ends")) {
                     (Some(to), None) => format!("choose the line that opens \"{to}\""),
@@ -3989,7 +3993,7 @@ impl Instructor {
                     (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt")),
                     (None, None) => "choose the line saying nothing is said yet".to_string(),
                     (Some(_), Some(_)) => return Err(
-                        "a way out goes on to a step (`to`) or ends the task or the run (`ends`), never both"
+                        "a way out goes on to a box (`to`) or ends the task or the run (`ends`), never both"
                             .to_string(),
                     ),
                 },
@@ -3998,7 +4002,7 @@ impl Instructor {
                 match (with.get("max_times"), arg_str(with, "to")) {
                     (None, _) => String::new(),
                     (Some(_), None) => return Err(
-                        "`max_times` is the limit on a way out that goes on to a step — name the step in `to`"
+                        "`max_times` is the limit on a way out that goes on to a box — name the box in `to`"
                             .to_string(),
                     ),
                     (Some(v), Some(_)) if v.is_null() => ", then empty the box beside it that caps how many times it is taken, and move off it".to_string(),
@@ -4008,20 +4012,20 @@ impl Instructor {
                     },
                 }
             ),
-            // **The one press on the step panel that cannot be taken back**, so the machine's own
-            // question stands between it and the write, the way it does for deleting an automation.
-            (Domain::Automation, "remove-step") => "In the step panel, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
-            // One row of the step panel, written. Every control there writes on the spot, and a box
-            // of text writes as the caret leaves it — so the instruction says to leave the box.
-            (Domain::Automation, "step-set") => format!(
-                "In the step panel, set {} to \"{}\", then move off the control so what you wrote is taken.",
+            // **The one press on the action's step panel that cannot be taken back**, so the machine's
+            // own question stands between it and the write, the way it does for deleting an automation.
+            (Domain::Automation, "remove-step") => "In the panel showing what the pressed step holds, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
+            // One row of the panel, written. Every control there writes on the spot, and a box of
+            // text writes as the caret leaves it — so the instruction says to leave the box.
+            (Domain::Automation, "panel-set") => format!(
+                "In the panel showing what the pressed box holds, set {} to \"{}\", then move off the control so what you wrote is taken.",
                 step_field(req(with, "field")?)?,
                 req(with, "value")?
             ),
             // A task filter is answered on rows, never as an expression: the row is the part and what
             // is pressed on it is the value.
             (Domain::Automation, "answer-filter") => format!(
-                "In the step panel, under the setting \"{}\", press \"{}\" on the \"{}\" row.",
+                "In the panel showing what the pressed box holds, under the setting \"{}\", press \"{}\" on the \"{}\" row.",
                 req(with, "setting")?,
                 req(with, "value")?,
                 req(with, "row")?
@@ -4030,7 +4034,7 @@ impl Instructor {
             // under the row and nothing else. So the line names the words rather than a place in the
             // list: a road that said "the first one" would pass on a build offering anything at all.
             (Domain::Automation, "answer-choice") => format!(
-                "In the step panel, under the setting \"{}\", open the pulldown of what it offers and choose \"{}\".",
+                "In the panel showing what the pressed box holds, under the setting \"{}\", open the pulldown of what it offers and choose \"{}\".",
                 req(with, "setting")?,
                 req(with, "value")?
             ),
@@ -4041,7 +4045,7 @@ impl Instructor {
             (Domain::Automation, "declare") => {
                 let (list, one) = declared_family(req(with, "what")?)?;
                 format!(
-                    "In the step panel, under {list}, write \"{}\" in the row that declares a new {one}{}, and press the button that adds it.",
+                    "In the panel showing what the pressed box holds, under {list}, write \"{}\" in the row that declares a new {one}{}, and press the button that adds it.",
                     req(with, "name")?,
                     match arg_str(with, "kind") {
                         Some(kind) => format!(", set what it carries to {}", declared_kind(req(with, "what")?, kind)?),
@@ -4086,7 +4090,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "In the step panel, under {list}, on the {one} \"{}\", {}.",
+                    "In the panel showing what the pressed box holds, under {list}, on the {one} \"{}\", {}.",
                     req(with, "name")?,
                     listed(&moves)
                 )
@@ -4094,13 +4098,13 @@ impl Instructor {
             (Domain::Automation, "undeclare") => {
                 let (list, one) = declared_family(req(with, "what")?)?;
                 format!(
-                    "In the step panel, under {list}, on the {one} \"{}\", press the button that takes it away.",
+                    "In the panel showing what the pressed box holds, under {list}, on the {one} \"{}\", press the button that takes it away.",
                     req(with, "name")?
                 )
             }
             // A wire is picked from what fits rather than drawn between two points.
             (Domain::Automation, "pick-wire") => format!(
-                "In the step panel, under the inputs, set \"{}\" to what comes from \"{}\".",
+                "In the panel showing what the pressed box holds, under the inputs, set \"{}\" to what comes from \"{}\".",
                 req(with, "input")?,
                 req(with, "from")?
             ),
@@ -5875,16 +5879,16 @@ impl Instructor {
                 )),
             },
             // ---- automation on screen ----------------------------------------------------------
-            // A definition on the list. `steps` is the second half of what a row is read for — what
-            // this is, and whether it is built yet.
+            // A definition on the list. `placements` is the second half of what a row is read for —
+            // what this is, and whether anything is built onto it yet.
             (Domain::Automation, "listed") => match present(with) {
                 true => format!(
                     "On the automations tab, confirm a row for \"{}\" is listed{}{}.",
                     // A road that has just renamed one says what it wrote, and that is what the row
                     // now reads — so it wins over the name the binding was made under.
                     arg_str(with, "name").map(str::to_string).unwrap_or_else(|| self.target_label(with)),
-                    match with.get("steps") {
-                        Some(_) => format!(", saying it is built out of {} steps", count(with, "steps")?),
+                    match with.get("placements") {
+                        Some(_) => format!(", saying {} actions are placed on it", count(with, "placements")?),
                         None => String::new(),
                     },
                     match with.get("archived").and_then(|v| v.as_bool()) {
@@ -5899,12 +5903,20 @@ impl Instructor {
                 ),
             },
             // A library action's row. The number beside it is counted in automations and not in
-            // steps, which is the whole reason a road reads it: it says how far a rewrite carries.
+            // placements, which is the whole reason a road reads it: it says how far a rewrite
+            // carries.
             (Domain::Automation, "action-listed") => format!(
-                "On the actions tab, confirm a row for \"{}\" is listed{}{}.",
+                "On the actions tab, confirm a row for \"{}\" is listed{}{}{}.",
                 self.target_label(with),
                 match with.get("used_by") {
                     Some(_) => format!(", saying {} automations use it", count(with, "used_by")?),
+                    None => String::new(),
+                },
+                match with.get("steps") {
+                    Some(_) => match count(with, "steps")? {
+                        1 => ", holding 1 step".to_string(),
+                        n => format!(", holding {n} steps"),
+                    },
                     None => String::new(),
                 },
                 match arg_str(with, "reach") {
@@ -5914,18 +5926,12 @@ impl Instructor {
                     None => "",
                 }
             ),
-            // One step's box, and the two marks it may wear. Both marks are drawn as colour — an
-            // edge down one side, an outline round the whole — so a road naming either is asking an
-            // eye rather than a reading.
+            // One box, and the mark it may wear. The mark is drawn as colour — an outline round the
+            // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
                 true => format!(
-                    "In the build screen's picture, confirm a box for the step \"{}\" is drawn{}{}.",
+                    "In the build screen's picture, confirm a box \"{}\" is drawn{}.",
                     req(with, "name")?,
-                    match step_mark(with, "from_action")? {
-                        Some(true) => ", with the coloured edge down its left that says its prompt came from the library",
-                        Some(false) => ", and that it carries no coloured edge down its left — its prompt is its own",
-                        None => "",
-                    },
                     match step_mark(with, "unfed")? {
                         Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
                         Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and names no input under its name",
@@ -5933,16 +5939,16 @@ impl Instructor {
                     }
                 ),
                 false => format!(
-                    "In the build screen's picture, confirm no box for a step \"{}\" is drawn.",
+                    "In the build screen's picture, confirm no box \"{}\" is drawn.",
                     req(with, "name")?
                 ),
             },
-            // A line leaving one step, and what is written along it: the way out's own name, and
+            // A line leaving one box, and what is written along it: the way out's own name, and
             // where leaving by it goes. `present: false` is the line taken away — nothing said about
             // where that way out goes, which names no end because there is none.
             (Domain::Automation, "line-pictured") if !present(with) => match (arg_str(with, "to"), arg_str(with, "ends")) {
                 (None, None) => format!(
-                    "In the build screen's picture, confirm no line leaves the step \"{}\" by {}.",
+                    "In the build screen's picture, confirm no line leaves the box \"{}\" by {}.",
                     req(with, "from")?,
                     way_out(with)
                 ),
@@ -5951,34 +5957,34 @@ impl Instructor {
                 ),
             },
             (Domain::Automation, "line-pictured") => format!(
-                "In the build screen's picture, confirm a line leaves the step \"{}\" by {}, {}.",
+                "In the build screen's picture, confirm a line leaves the box \"{}\" by {}, {}.",
                 req(with, "from")?,
                 way_out(with),
                 match (arg_str(with, "to"), arg_str(with, "ends")) {
-                    (Some(to), None) => format!("going on to the step \"{to}\""),
+                    (Some(to), None) => format!("going on to the box \"{to}\""),
                     (None, Some("done")) => "and that what is written at its foot says the task is finished".to_string(),
                     (None, Some("halt")) => "and that what is written at its foot says the run stops and calls a person".to_string(),
                     (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt")),
                     _ => return Err(
-                        "a line goes on to a step (`to`) or ends the task or the run (`ends`), never both and never neither"
+                        "a line goes on to a box (`to`) or ends the task or the run (`ends`), never both and never neither"
                             .to_string(),
                     ),
                 }
             ),
-            // The dashed outline around the steps one task is worked by. What it is drawn with is a
+            // The dashed outline around the boxes one task is worked by. What it is drawn with is a
             // broken line and nothing else — no fill, no colour — so it is an eye's.
             (Domain::Automation, "lap-pictured") => format!(
-                "In the build screen's picture, confirm a dashed outline is drawn around the steps reached from \"{}\", with the word for one task's span written over it.",
+                "In the build screen's picture, confirm a dashed outline is drawn around the boxes reached from \"{}\", with the word for one task's span written over it.",
                 req(with, "head")?
             ),
-            // One row of the step panel, read.
-            (Domain::Automation, "step-shows") => match arg_str(with, "value") {
+            // One row of the panel, read.
+            (Domain::Automation, "panel-shows") => match arg_str(with, "value") {
                 Some(value) => format!(
-                    "In the step panel, confirm {} reads \"{value}\".",
+                    "In the panel showing what the pressed box holds, confirm {} reads \"{value}\".",
                     step_field(req(with, "field")?)?
                 ),
                 None => format!(
-                    "In the step panel, confirm {} is drawn.",
+                    "In the panel showing what the pressed box holds, confirm {} is drawn.",
                     step_field(req(with, "field")?)?
                 ),
             },
@@ -6002,8 +6008,8 @@ impl Instructor {
                         false => "none",
                     },
                     launch_reason(reason)?,
-                    match arg_str(with, "step") {
-                        Some(step) => format!(", naming the step \"{step}\""),
+                    match arg_str(with, "box") {
+                        Some(named) => format!(", naming \"{named}\""),
                         None => String::new(),
                     },
                     match arg_str(with, "at") {
@@ -6017,9 +6023,14 @@ impl Instructor {
             (Domain::Automation, "run-pane") => match present(with) {
                 true => format!(
                     "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands beside its name, and that the line over it carries four things: which step it is on{}, how many tasks in it is{}, the run's own number and the number of the task it is working{}.",
-                    match arg_str(with, "step") {
-                        Some(step) => format!(" (\"{step}\")"),
-                        None => String::new(),
+                    // The step and the action it was opened from are one value on the screen, in the
+                    // order the reader's language puts them — so the line names both and leaves the
+                    // order to the eye.
+                    match (arg_str(with, "step"), arg_str(with, "action")) {
+                        (Some(step), Some(action)) => format!(" (\"{step}\", said with the action \"{action}\" it belongs to)"),
+                        (Some(step), None) => format!(" (\"{step}\")"),
+                        (None, Some(action)) => format!(" (said with the action \"{action}\" it belongs to)"),
+                        (None, None) => String::new(),
                     },
                     match with.get("nth") {
                         Some(_) => format!(" ({})", count(with, "nth")?),
@@ -6155,10 +6166,9 @@ fn listed(items: &[String]) -> String {
     }
 }
 
-/// A mark a road named on a step's box, either way round, or nothing where it named none. Both
-/// marks are worth saying the absence of: a mark that never comes off is a build reading a
-/// definition it had already read, and a road that could only ask for one to be there could not
-/// catch it.
+/// A mark a road named, either way round, or nothing where it named none. A mark is worth saying the
+/// absence of: one that never comes off is a build reading a definition it had already read, and a
+/// road that could only ask for one to be there could not catch it.
 fn step_mark(with: &Args, key: &str) -> Result<Option<bool>, String> {
     match with.contains_key(key) {
         true => Ok(Some(flag(with, key)?)),
@@ -6172,14 +6182,14 @@ fn automation_tab(tab: &str) -> Result<&'static str, String> {
     Ok(match tab {
         "running" => "the tab holding the runs that are under way",
         "automations" => "the tab holding this project's automations",
-        "actions" => "the tab holding the library of prompts",
+        "actions" => "the tab holding the library of actions",
         other => return Err(format!("`tab` does not know `{other}` — it is running / automations / actions")),
     })
 }
 
-/// The way out a step leaves by, said the way the step panel and the picture both say it. The
-/// unnamed one is the one a step with a single way out has, and the error one is the name core
-/// fixes; neither is quoted, having no name a road gave it.
+/// The way out a box leaves by, said the way the panel and the picture both say it. The unnamed one
+/// is the one a box with a single way out has, and the error one is the name core fixes; neither is
+/// quoted, having no name a road gave it.
 fn way_out(with: &Args) -> String {
     match arg_str(with, "exit") {
         None => "its only way out".to_string(),
@@ -6188,13 +6198,16 @@ fn way_out(with: &Args) -> String {
     }
 }
 
-/// One row of the step panel, named the way the panel names it. A road reads a screen, so what it
-/// says is the row and not the column underneath.
+/// One row of the panel, named the way the panel names it. A road reads a screen, so what it says is
+/// the row and not the column underneath.
+///
+/// **The rows that are a step's are drawn on both panels.** Inside an action they are the pressed
+/// step's own; on an automation's picture they are the step the placed action opens first — so a
+/// road reads them on either, and the name is the pressed box's.
 fn step_field(field: &str) -> Result<&'static str, String> {
     Ok(match field {
-        "name" => "the step's name",
-        "task" => "the line saying which task the step is about",
-        "content" => "the control saying where the step's prompt comes from",
+        "name" => "the name",
+        "task" => "the line saying which task it is about",
         "prompt" => "the prompt",
         "agent" => "the control saying who carries the step out",
         "model" => "the control saying which model it runs on",
@@ -6204,7 +6217,7 @@ fn step_field(field: &str) -> Result<&'static str, String> {
         "history" => "the box saying the step is handed the run's story so far",
         other => {
             return Err(format!(
-                "`field` does not know `{other}` — it is name / task / content / prompt / agent / model / folder / interactive / report / history"
+                "`field` does not know `{other}` — it is name / task / prompt / agent / model / folder / interactive / report / history"
             ))
         }
     })
@@ -6225,9 +6238,9 @@ fn port_kind(kind: &str) -> Result<&'static str, String> {
     })
 }
 
-/// Which of the three lists on the step panel a declaration is in — what the list is called, and what
-/// one row of it is. They are three families of one thing: the step says what it declares, and the
-/// panel draws each of them the same way.
+/// Which of the three lists on the panel a declaration is in — what the list is called, and what one
+/// row of it is. They are three families of one thing: a box says what it declares, and the panel
+/// draws each of them the same way.
 fn declared_family(what: &str) -> Result<(&'static str, &'static str), String> {
     Ok(match what {
         "exit" => ("the ways out", "way out"),
@@ -6286,12 +6299,13 @@ fn declared_choices(with: &Args) -> Result<Vec<String>, String> {
 /// sentence the interface owns.
 fn launch_reason(reason: &str) -> Result<&'static str, String> {
     Ok(match reason {
-        "no_steps" => "that it has no steps",
-        "no_entry" => "that no step is named as the one a run starts on",
-        "entry_takes_no_task" => "that the step a run starts on takes no task",
-        "open_exit" => "that nothing is set to happen after one of a step's ways out",
-        "unwired_input" => "that nothing reaches one of a step's required inputs",
-        "unanswered_cfg" => "that one of a step's required settings is unanswered",
+        "no_steps" => "that no action is placed on it",
+        "no_entry" => "that no placement is named as the one a run starts on",
+        "action_empty" => "that an action placed on it has no step to start at",
+        "entry_takes_no_task" => "that the action a run starts on takes no task",
+        "open_exit" => "that nothing is set to happen after one of a box's ways out",
+        "unwired_input" => "that nothing reaches one of a box's required inputs",
+        "unanswered_cfg" => "that one of a placement's required settings is unanswered",
         "agent_missing" => "that this machine cannot start what a step is carried out by",
         "model_missing" => "that this machine's agent does not offer the model a step names",
         other => {
@@ -7900,7 +7914,7 @@ id: x
 title: y
 given:
   - { type: action, domain: automation, op: create, with: { name: Morning round }, as: auto }
-  - { type: action, domain: automation, op: action-add, with: { name: Review, prompt: look at it }, as: act }
+  - { type: action, domain: automation, op: action-add, with: { name: Review }, as: act }
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
 steps_gui:
   - type: action
@@ -7910,7 +7924,7 @@ steps_gui:
   - type: assert
     domain: automation
     op: listed
-    with: { target: auto, steps: 3, present: true }
+    with: { target: auto, placements: 3, present: true }
   - type: action
     domain: automation
     op: open
@@ -7933,15 +7947,15 @@ steps_gui:
     with: { from: work, ends: done }
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with: { name: work }
   - type: assert
     domain: automation
-    op: step-shows
+    op: panel-shows
     with: { field: prompt, value: do it }
   - type: action
     domain: automation
-    op: step-set
+    op: panel-set
     with: { field: name, value: implement }
   - type: action
     domain: automation
@@ -7957,7 +7971,7 @@ steps_gui:
     with: { input: note, from: take }
   - type: action
     domain: automation
-    op: insert-step
+    op: insert-box
     with: { after: work, exit: got one, name: review, prompt: read it back }
   - type: action
     domain: automation
@@ -7966,7 +7980,7 @@ steps_gui:
   - type: assert
     domain: automation
     op: launch
-    with: { ready: false, reason: unwired_input, step: work, at: note }
+    with: { ready: false, reason: unwired_input, box: work, at: note }
   - type: assert
     domain: automation
     op: launch
@@ -7979,7 +7993,7 @@ steps_gui:
   - type: assert
     domain: automation
     op: run-pane
-    with: { target: run, step: work, nth: 1, task: seed, present: true }
+    with: { target: run, step: work, action: build, nth: 1, task: seed, present: true }
   - type: assert
     domain: automation
     op: run-row
@@ -8007,7 +8021,7 @@ steps_gui:
   - type: action
     domain: automation
     op: action-rewrite
-    with: { prompt: look at it twice }
+    with: { step: look, prompt: look at it twice }
   - type: action
     domain: automation
     op: start-from-task
@@ -8027,25 +8041,26 @@ steps_gui:
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("automations"), "{}", lines[0]);
-        assert!(lines[1].contains("Morning round") && lines[1].contains("3 steps"), "{}", lines[1]);
+        assert!(lines[1].contains("Morning round") && lines[1].contains("3 actions"), "{}", lines[1]);
         assert!(lines[5].contains("\"got one\"") && lines[5].contains("\"work\""), "{}", lines[5]);
         assert!(lines[6].contains("the task is finished"), "{}", lines[6]);
         assert!(lines[14].contains("output artefact") && lines[14].contains("a value"), "{}", lines[14]);
-        assert!(lines[15].contains("nothing reaches one of a step's required inputs"), "{}", lines[15]);
+        assert!(lines[15].contains("nothing reaches one of a box's required inputs"), "{}", lines[15]);
+        assert!(lines[18].contains("\"work\"") && lines[18].contains("\"build\""), "{}", lines[18]);
     }
 
-    /// What the dialog that puts a step in is told to declare on it. One of a thing and several read
+    /// What the dialog that puts a box in is told to declare on it. One of a thing and several read
     /// differently, and a road that wrote one way out should not be handed a sentence written for a
     /// list.
     #[test]
-    fn a_step_put_in_is_told_what_to_declare_on_it() {
+    fn a_box_put_in_is_told_what_to_declare_on_it() {
         let s = load(r#"
 id: x
 title: y
 steps_gui:
   - type: action
     domain: automation
-    op: insert-step
+    op: insert-box
     with:
       after: take
       name: work
@@ -8107,11 +8122,11 @@ steps_gui:
         assert!(lines[2].contains("nothing is said yet"), "{}", lines[2]);
         assert!(lines[3].contains("stops and calls a person"), "{}", lines[3]);
         assert!(lines[4].contains("deletes this step") && lines[4].contains("goes ahead"), "{}", lines[4]);
-        assert!(lines[5].contains("no line leaves the step \"draft\""), "{}", lines[5]);
+        assert!(lines[5].contains("no line leaves the box \"draft\""), "{}", lines[5]);
         assert!(ins.expectation(&steps[5]).is_none(), "a line gone is an eye's");
     }
 
-    /// A limit belongs to a way out going on to a step, so a road writing one on an end is refused
+    /// A limit belongs to a way out going on to a box, so a road writing one on an end is refused
     /// rather than handed a box the panel never draws.
     #[test]
     fn a_limit_on_a_way_out_that_ends_is_refused() {

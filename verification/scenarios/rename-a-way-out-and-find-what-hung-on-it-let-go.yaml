@@ -8,7 +8,7 @@
 # The two halves of what comes off are drawn in different places. The line that hung on the old name
 # is in the picture, still written with the name it always carried — a name nobody declares any more.
 # What the parting costs is on the launch place: the renamed way out now has nothing set to happen
-# after it, and the step the wire fed is left with a required input nothing reaches. A build that
+# after it, and the placement the wire fed is left with a required input nothing reaches. A build that
 # rewrote the graph on the quiet would keep the launch place green and draw a line under the new
 # name, and both readings here would go red on it.
 #
@@ -21,35 +21,50 @@
 id: rename-a-way-out-and-find-what-hung-on-it-let-go
 title: Renaming a way out parts the line and the wire that named it, and writing the name back brings them home
 description: >
-  Open a definition that is ready to start, and rename one step's named way out on its panel. The
-  line that left by the old name is still drawn under that name, the renamed way out is named on the
-  launch place as having nothing after it, and the step the wire fed wears the mark for a required
-  input nothing reaches. Then write the old name back, and every one of those goes.
+  Open a definition that is ready to start, and rename one placed action's named way out on the
+  panel. The line that left by the old name is still drawn under that name, the renamed way out is
+  named on the launch place as having nothing after it, and the placement the wire fed wears the
+  mark for a required input nothing reaches. Then write the old name back, and every one of those
+  goes.
 given:
   # One agent this machine can start, so nothing on the launch place is ever about who carries a step
   # out.
   - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
 
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a way out to rename" }, as: auto }
-
-  # The step that takes the task. Its named way out is the one being renamed: it carries the task the
-  # run works on, and the value the step after it is wired to.
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action that takes the task. Its named way out is the one being renamed: it carries the task
+  # the run works on, and the value the placement after it is wired to. The step inside it declares
+  # the same way out, and the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: wire-add, with: { in_action: true, target: claim, exit: got one, from_port: note, to_port: note } }
 
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: work, agent: claude-code, prompt: do the work }, as: work }
-  - { type: action, domain: automation, op: port-add, with: { step: work, name: note, kind: value, required: true } }
-  - { type: action, domain: automation, op: wire-add, with: { target: take, exit: got one, from_port: note, to: work, to_port: note } }
+  # The action the wire feeds.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, agent: claude-code, prompt: do the work }, as: do }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
+  - { type: action, domain: automation, op: port-add, with: { action: work, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
 
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a way out to rename" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
   # Both of `take`'s ways out go on to `work`. The unnamed one is what keeps `work` on the run's road
-  # while the named one is being renamed — a step a run cannot reach is judged for nothing, so the
+  # while the named one is being renamed — a placement a run cannot reach is judged for nothing, so the
   # mark this road reads on `work` would go with it.
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take, to: work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: work } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -65,7 +80,7 @@ steps_gui:
       target: auto
 
   # Where it opens: nothing in the way, a line leaving by the name that is about to change, and the
-  # step the wire feeds wearing no mark.
+  # placement the wire feeds wearing no mark.
   - type: assert
     domain: automation
     op: launch
@@ -89,7 +104,7 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: take
 
@@ -109,11 +124,24 @@ steps_gui:
     with:
       ready: false
       reason: open_exit
-      step: take
+      box: take
       at: found one
       present: true
 
-  # And the other half of the parting, a step away: the wire left by a way out under the old name, so
+  # And one layer down: the line inside the action that carried the step's way out by the action's
+  # named the old name as well, so the step is left with nothing after its "got one" — the parting
+  # reaches every line that named the way out, whichever picture it is drawn on.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: open_exit
+      box: claim
+      at: got one
+      present: true
+
+  # And the other half of the parting, one placement along: the wire left by a way out under the old name, so
   # nothing reaches the input it was filling.
   - type: assert
     domain: automation
@@ -121,7 +149,7 @@ steps_gui:
     with:
       ready: false
       reason: unwired_input
-      step: work
+      box: work
       at: note
       present: true
 
@@ -160,7 +188,7 @@ steps_gui:
     with:
       ready: true
       reason: open_exit
-      step: take
+      box: take
       at: found one
       present: false
 

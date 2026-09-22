@@ -17,24 +17,33 @@
 id: answer-a-setting-from-the-list-written-under-it
 title: What is written out under a choice setting is what its pulldown offers, and choosing from it answers the setting
 description: >
-  Declare a setting on a step's panel as the kind that is answered off a list, write two choices out
-  under it a line apiece, and say the step is refused without an answer — which puts the setting on
-  the launch place. Then answer it by choosing the second of the two on the pulldown, and the launch
-  place lets the definition go.
+  Declare a setting on a placement's panel as the kind that is answered off a list, write two
+  choices out under it a line apiece, and say the step is refused without an answer — which puts the
+  setting on the launch place. Then answer it by choosing the second of the two on the pulldown, and
+  the launch place lets the definition go.
 given:
   # One agent this machine can start, so nothing on the launch place is ever about who carries the
   # step out.
   - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
 
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a setting to answer off its list" }, as: auto }
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action the panel is read on, holding the one step it runs. The way out that takes the task
+  # is declared on both layers, and the line inside the action carries the step's out by the action's.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a setting to answer off its list" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   # Both ways out say what happens after them, so the definition opens with nothing in its way and
   # the one line the launch place carries below is the one this road put there.
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -57,7 +66,7 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: take
 
@@ -95,7 +104,7 @@ steps_gui:
     with:
       ready: false
       reason: unanswered_cfg
-      step: take
+      box: take
       at: which way
       present: true
 

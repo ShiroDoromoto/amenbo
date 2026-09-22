@@ -1,0 +1,123 @@
+# A picture already drawn is added to on a line as well as under it. The row under the picture puts
+# an action down on its own, with nothing pointing at it; the `+` on a line is the road that leaves
+# nothing running past a box — the way out pressed comes to point at the new placement, and the new
+# placement goes on to what that way out named. A build that made the placement and left the line
+# running past it would leave a picture nobody asked for, and one that made the placement and dropped
+# what the line used to reach would quietly throw away a decision somebody had made.
+#
+# ── Why the prompt is written in the dialog ─────────────────────────────────────────────────────
+# What stands on an automation's picture is always a placement of a library action, so
+# a prompt written on the line becomes an action of its own and is placed in the same press. It is the
+# arm of the dialog that makes the most — an action, the step inside it, the ways out it declares and
+# the placement — which is why it is the one walked here.
+id: put-an-action-into-a-picture-on-a-line
+title: An action put in on a line takes over where that line went, and says what leaving it hands on
+description: >
+  Stand a definition of one placed action up from the terminal, write a second action in on the line
+  that closes the task, and read both halves of what that press did: the pressed way out now points
+  at the new placement, and the new placement now closes the task. Then declare what the new
+  action's named way out hands on, and read the one thing that dialog does for a reader — the name
+  starts on the way out's own, that way out having handed on nothing yet.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one action, then two" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  # The line the `+` is pressed on. It closes the task, which is the half of this road worth walking:
+  # a way out that ends something carries no limit, and turning it into one that goes on to a box
+  # needs one — so this is the arm where the press has the most to put right.
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # What the line says before the press, so that what it says afterwards is a change and not a
+  # reading taken once.
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: got one
+      ends: done
+
+  - type: action
+    domain: automation
+    op: insert-box
+    with:
+      after: take
+      exit: got one
+      name: work
+      prompt: do the work
+      exits:
+        - drafted
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      present: true
+
+  # The two halves of the press, each read on its own line. Either one alone would pass on a build
+  # that had lost the other: a box pointed at with nothing after it, or a box after a line that still
+  # runs past it.
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: got one
+      to: work
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: work
+      ends: done
+
+  # And the placement the press made is a placement like any other: pressing its box puts what it
+  # holds in the panel, with the prompt the dialog took on the step inside the new action.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: work
+
+  - type: assert
+    domain: automation
+    op: panel-shows
+    with:
+      field: prompt
+      value: do the work
+
+  # And the way out the dialog declared is on it, with a control for saying what leaving by it hands
+  # on. The name the box starts on is that way out's own — it has handed nothing on yet, and a name
+  # for what a way out produces is nine times out of ten the way out's own name.
+  - type: action
+    domain: automation
+    op: add-output
+    with:
+      exit: drafted
+      name: drafted
+      kind: file
+      required: true

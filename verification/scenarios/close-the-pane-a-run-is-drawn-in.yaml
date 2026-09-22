@@ -12,13 +12,23 @@ description: >
   let a reader close it without ever being told what closing it does.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to close" }, as: auto }
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action the run opens, holding the one step it runs. The way out that takes the task is
+  # declared on both layers: the step's is what the step reports, and the action's is what the
+  # automation's picture goes on from — the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to close" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -63,7 +73,8 @@ steps_gui:
     op: run-pane
     with:
       target: run
-      step: take
+      step: claim
+      action: take
       present: true
 
   # The press, and the question it puts. What is being confirmed is the run's own question and not

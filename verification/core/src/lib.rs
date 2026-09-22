@@ -4126,6 +4126,22 @@ const REGISTRY: &[OpSpec] = &[
     // What fills one of a step's inputs, picked from what fits rather than drawn.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-wire", required: &["input", "from"], refs: &[], strings: &["input", "from"], binds: false },
     //
+    // **The three families a step declares**, put in and taken away on the panel. Ways out, settings
+    // and inputs are declared the same way — a name written in a row, a kind chosen where the family
+    // has one, and a press — so `what` says which family rather than there being nine ops for one
+    // shape. It is the reading the screen offers: three lists, each with the same control under it.
+    //
+    // **Only a step carrying its own prompt declares any of them.** One made of a library action
+    // reads the action's, and the panel draws those without the controls — so a road naming one of
+    // these on such a step would be naming a press that is not on the screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "declare", required: &["what", "name"], refs: &[], strings: &["what", "name", "kind"], binds: false },
+    // One already there, changed on its own row: `to` renames it, `kind` is what it carries,
+    // `required` the box beside it, and `choices` the lines a `choice` setting offers. A road names
+    // whichever of them it is moving and leaves the rest alone, the row being read as a whole.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "redeclare", required: &["what", "name"], refs: &[], strings: &["what", "name", "to", "kind"], binds: false },
+    // And taken away, which is the press at the end of the same row.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "undeclare", required: &["what", "name"], refs: &[], strings: &["what", "name"], binds: false },
+    //
     // The launch place, which is where a half-built definition is named as such. `ready` is the whole
     // answer and `reason` one line of what stands in the way, spelled as core names it
     // (`unwired_input`, `unanswered_cfg`, …) so a road says which refusal it is walking rather than
@@ -4368,7 +4384,8 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // `build-an-automation-from-the-terminal`'s to be.
     //
     // The screen's own moves over a definition are **not** here — putting a step in on a line,
-    // answering a setting, picking what fills an input. Those are what a screen road watches.
+    // declaring what a step needs, answering a setting, picking what fills an input. Those are what
+    // a screen road watches.
     (Domain::Automation, "create"),
     (Domain::Automation, "step-add"),
     (Domain::Automation, "exit-add"),

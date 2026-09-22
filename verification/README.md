@@ -733,8 +733,9 @@ and the search — while the picture, the step panel and the launch place are as
 (`pictured`, `line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half).
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation opens on a definition that is already there, there being no way in on screen for
-the first step of the first one. Answering a setting is not among them — that is a move a reader
-makes, on the rows the screen takes one on or behind the flags the command does.
+the first step of the first one. Answering a setting is not among them, and neither is declaring one:
+both are moves a reader makes, on the rows the panel takes them on or behind the flags the command
+does.
 **What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 three are refused anywhere else — and a run started at the terminal opens no pane to type them in.

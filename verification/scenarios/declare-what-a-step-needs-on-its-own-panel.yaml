@@ -1,0 +1,199 @@
+# A step's ways out, its settings and what it takes in are what the rest of an automation is built
+# against: a line hangs on a way out, a wire ends at an input, and a launch is refused for a setting
+# nobody answered. All three are declarations, and a reader who can read them on the panel and not
+# put one there is a reader sent back to the terminal to finish what the screen just showed them.
+#
+# ── Why the launch place is the reading ─────────────────────────────────────────────────────────
+# A declaration is not visible as itself: a way out with nothing after it, a required setting with
+# no answer and a required input with nothing reaching it are all rows the panel simply draws. What
+# says the definition moved is the list beside it — each declaration puts a reason there, and taking
+# it away takes the reason with it. So every one is read twice, there and gone. A build that drew
+# that list once and answered from it afterwards would pass the first half of each and fail the
+# second.
+#
+# ── Why required is a second press ──────────────────────────────────────────────────────────────
+# The row that declares a new one takes a name and a kind. Whether the step is refused without it is
+# on the row it becomes, which is the panel saying that declaring a thing and insisting on it are two
+# moves — so the road makes them as two, rather than describing a control that is not under the box.
+#
+# ── Why each one goes whole ─────────────────────────────────────────────────────────────────────
+# What a reason on the launch place names is the declaration's own name, and the reading that says
+# the reason has gone is that name being off the screen. A row left standing with the insisting
+# cleared off it is that name still drawn — so a road that took a setting off the list by its box
+# would go red on a screen doing exactly what it was asked. The box is pressed on the way in, where
+# what is being read is the reason arriving.
+id: declare-what-a-step-needs-on-its-own-panel
+title: What a step declares is put in and taken away on its panel, and the launch place follows each one
+description: >
+  Open a definition that is short of nothing and declare three things on one step's panel — a second
+  way out, a required setting, and a required input. Each puts its own reason on the launch place.
+  Then take all three back, one by one, by the press at the end of each row. Each reason goes as its
+  declaration does, and the definition ends where it started, ready to be started.
+given:
+  # One agent this machine can start, so nothing on the launch place is ever about who carries the
+  # step out.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a step to declare on" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  # Both ways out say what happens after them, so the definition opens with nothing in its way and
+  # every reason below is one the road put there.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: take
+
+  # A second way out, with nothing set to happen after it. It is the one declaration that is enough
+  # on its own: a way out is in the way from the moment it exists.
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: exit
+      name: needs a fix
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: open_exit
+      step: take
+      at: needs a fix
+      present: true
+
+  # A setting, and then the box that says the step is refused without it. Declared and left optional
+  # it stands in nobody's way, which is what the second press is for.
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: setting
+      name: which
+      kind: taskfilter
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: setting
+      name: which
+      required: true
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      step: take
+      at: which
+      present: true
+
+  # An input, the same way. Nothing is wired to it, there being one step and nothing before it.
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: input
+      name: note
+      kind: value
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: input
+      name: note
+      required: true
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unwired_input
+      step: take
+      at: note
+      present: true
+
+  # And back, one at a time. Two are still in the way after each of the first two, so the list is
+  # read as a list losing one line rather than as a list emptying.
+  - type: action
+    domain: automation
+    op: undeclare
+    with:
+      what: exit
+      name: needs a fix
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: open_exit
+      step: take
+      at: needs a fix
+      present: false
+
+  - type: action
+    domain: automation
+    op: undeclare
+    with:
+      what: setting
+      name: which
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      step: take
+      at: which
+      present: false
+
+  - type: action
+    domain: automation
+    op: undeclare
+    with:
+      what: input
+      name: note
+
+  # The last one off the list and the definition ready again, which is where it opened — read as one
+  # step, because "ready" is the launch place saying there is no list left to name anything on.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+      reason: unwired_input
+      step: take
+      at: note
+      present: false

@@ -3909,6 +3909,70 @@ impl Instructor {
                 req(with, "value")?,
                 req(with, "row")?
             ),
+            // **Declaring on the panel.** The three families are one shape on the screen — a row to
+            // write a name in, a kind to choose where the family has one, and a press — so the line
+            // names the list it is under and what one of them is called, and the rest is the same
+            // sentence three times over.
+            (Domain::Automation, "declare") => {
+                let (list, one) = declared_family(req(with, "what")?)?;
+                format!(
+                    "In the step panel, under {list}, write \"{}\" in the row that declares a new {one}{}, and press the button that adds it.",
+                    req(with, "name")?,
+                    match arg_str(with, "kind") {
+                        Some(kind) => format!(", set what it carries to {}", declared_kind(req(with, "what")?, kind)?),
+                        None => String::new(),
+                    }
+                )
+            }
+            // The row of one already there. A road names whichever part of it is moving; the parts it
+            // leaves out are the ones it is not about, and a line that walked all four every time
+            // would have the operator touching controls the road never asked for.
+            (Domain::Automation, "redeclare") => {
+                let (list, one) = declared_family(req(with, "what")?)?;
+                let mut moves: Vec<String> = Vec::new();
+                if let Some(to) = arg_str(with, "to") {
+                    moves.push(format!("write \"{to}\" in its name box and move off it"));
+                }
+                if let Some(kind) = arg_str(with, "kind") {
+                    moves.push(format!(
+                        "set what it carries to {}",
+                        declared_kind(req(with, "what")?, kind)?
+                    ));
+                }
+                if let Some(required) = step_mark(with, "required")? {
+                    moves.push(match required {
+                        true => "tick the box saying the step is refused without it".to_string(),
+                        false => "clear the box saying the step is refused without it".to_string(),
+                    });
+                }
+                if let Some(choices) = declared_choices(with)?.as_slice().split_first() {
+                    let (first, rest) = choices;
+                    let mut all = vec![first.clone()];
+                    all.extend_from_slice(rest);
+                    moves.push(format!(
+                        "write {} into the box under it that takes its choices, one to a line",
+                        listed(&all)
+                    ));
+                }
+                if moves.is_empty() {
+                    return Err(
+                        "`redeclare` changes something — name the new name, what it carries, whether the step is refused without it, or its choices"
+                            .to_string(),
+                    );
+                }
+                format!(
+                    "In the step panel, under {list}, on the {one} \"{}\", {}.",
+                    req(with, "name")?,
+                    listed(&moves)
+                )
+            }
+            (Domain::Automation, "undeclare") => {
+                let (list, one) = declared_family(req(with, "what")?)?;
+                format!(
+                    "In the step panel, under {list}, on the {one} \"{}\", press the button that takes it away.",
+                    req(with, "name")?
+                )
+            }
             // A wire is picked from what fits rather than drawn between two points.
             (Domain::Automation, "pick-wire") => format!(
                 "In the step panel, under the inputs, set \"{}\" to what comes from \"{}\".",
@@ -5991,6 +6055,62 @@ fn port_kind(kind: &str) -> Result<&'static str, String> {
             ))
         }
     })
+}
+
+/// Which of the three lists on the step panel a declaration is in — what the list is called, and what
+/// one row of it is. They are three families of one thing: the step says what it declares, and the
+/// panel draws each of them the same way.
+fn declared_family(what: &str) -> Result<(&'static str, &'static str), String> {
+    Ok(match what {
+        "exit" => ("the ways out", "way out"),
+        "setting" => ("the settings", "setting"),
+        "input" => ("the inputs", "input"),
+        other => {
+            return Err(format!("`what` does not know `{other}` — it is exit / setting / input"))
+        }
+    })
+}
+
+/// What a declaration of that family carries, in the words the control offers it by. A way out
+/// carries nothing chosen on the row — what leaves by one is declared on the way out itself — so
+/// naming a kind there is a road describing a control that is not drawn.
+fn declared_kind(what: &str, kind: &str) -> Result<&'static str, String> {
+    match what {
+        "input" => port_kind(kind),
+        "setting" => cfg_kind(kind),
+        _ => Err("a way out has no kind on its row — what leaves by one is declared on it".to_string()),
+    }
+}
+
+/// What a setting holds, in the words its control offers it by.
+fn cfg_kind(kind: &str) -> Result<&'static str, String> {
+    Ok(match kind {
+        "taskfilter" => "a filter over tasks",
+        "folder" => "a folder",
+        "choice" => "one of a list written out below it",
+        "number" => "a number",
+        "text" => "words",
+        other => {
+            return Err(format!(
+                "`kind` does not know `{other}` — it is taskfilter / folder / choice / number / text"
+            ))
+        }
+    })
+}
+
+/// The choices a `choice` setting is to offer, a line apiece in the box under it.
+fn declared_choices(with: &Args) -> Result<Vec<String>, String> {
+    let Some(value) = with.get("choices") else { return Ok(Vec::new()) };
+    let Some(seq) = value.as_sequence() else {
+        return Err("`choices` is a list of what the setting offers".to_string());
+    };
+    seq.iter()
+        .map(|v| {
+            v.as_str()
+                .map(|one| format!("\"{one}\""))
+                .ok_or_else(|| "`choices` is a list of what the setting offers".to_string())
+        })
+        .collect()
 }
 
 /// One thing standing between an automation and a launch, said as a reader meets it rather than as

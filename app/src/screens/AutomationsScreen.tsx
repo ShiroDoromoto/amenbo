@@ -5,14 +5,15 @@
 // the library and takes effect in every automation using it. Three sidebar entries would make three
 // places out of one subject, and each of them would have to carry the way back to the other two.
 //
-// The tabs are "running" (`AMB-T-5259`), "automations" — this one — and "actions" (`AMB-T-5258`).
-// The two that are not built yet draw nothing rather than a line saying so: a placeholder is a
-// sentence in nineteen languages that exists to be deleted.
+// The tabs are "running" (`AMB-T-5259`), "automations" and "actions" — the library
+// (`./AutomationActionsTab`). The one that is not built yet draws nothing rather than a line saying
+// so: a placeholder is a sentence in nineteen languages that exists to be deleted.
 //
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
 // picture needs (`./AutomationBuildScreen`).
 import { useState } from "react";
+import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { useAutomations } from "../core/automations";
 import { t, tf } from "../core/i18n";
@@ -63,6 +64,8 @@ export function AutomationsScreen({ projectId }: { projectId: number | null }) {
               </button>
             ))}
           </div>
+
+          {tab === "actions" && <AutomationActionsTab projectId={projectId} />}
 
           {tab === "automations" && automations.length === 0 && (
             <div className="auto__empty">{t("auto.empty")}</div>

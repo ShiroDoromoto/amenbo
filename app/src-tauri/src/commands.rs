@@ -51,7 +51,9 @@ pub(crate) fn open_store_read() -> Result<Store, CmdError> {
 /// open ([`crate::delivery`]). It drains from the store's own cursor, shared with the CLI
 /// (`AMB-D-380`), so there is nothing to start first. A command that errored rolled its mutation back and
 /// has nothing to dispatch.
-fn with_store_mut<T>(f: impl FnOnce(&mut Store) -> Result<T, CmdError>) -> Result<T, CmdError> {
+pub(crate) fn with_store_mut<T>(
+    f: impl FnOnce(&mut Store) -> Result<T, CmdError>,
+) -> Result<T, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("store.write");
     let mut store = open_store()?;
     let out = f(&mut store);
@@ -498,7 +500,7 @@ pub fn snapshot() -> Result<Snapshot, CmdError> {
 }
 
 impl WriteAck {
-    fn new(scopes: &[&'static str]) -> WriteAck {
+    pub(crate) fn new(scopes: &[&'static str]) -> WriteAck {
         WriteAck { scopes: scopes.to_vec(), ..Default::default() }
     }
     fn task(mut self, id: i64) -> WriteAck {

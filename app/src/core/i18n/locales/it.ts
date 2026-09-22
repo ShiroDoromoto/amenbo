@@ -953,6 +953,23 @@ export const it: Translation = {
     "auto.actions.save": "Salva",
     "auto.actions.cancel": "Annulla",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Non è in corso nulla.",
+    "auto.run.pause": "Metti in pausa",
+    "auto.run.resume": "Riprendi",
+    "auto.run.stop": "Ferma",
+    "auto.run.queued": "In attesa di una corsia",
+    "auto.run.running": "In corso",
+    "auto.run.paused": "In pausa",
+    "auto.run.pausing": "Si mette in pausa alla fine di questo passo",
+    "auto.run.stopped": "Fermata",
+    "auto.run.crashed": "l'app è stata riavviata",
+    "auto.run.maxTimes": "ha fatto troppi giri",
+    "auto.run.noAgent": "non è stato possibile avviare il suo agente",
+    "auto.run.byHuman": "fermata a mano",
+    "auto.run.step": "Passo {n} · {step}",
+
     "mcp.title": "Collegare via MCP",
     "mcp.setupTitle": "Usare i tuoi progetti da un'IA",
     "mcp.open": "Connetti tramite MCP (se la tua IA non può aprire una cartella)",

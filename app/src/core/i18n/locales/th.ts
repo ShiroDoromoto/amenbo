@@ -942,6 +942,23 @@ export const th: Translation = {
     "auto.actions.save": "บันทึก",
     "auto.actions.cancel": "ยกเลิก",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "ไม่มีอะไรกำลังทำงาน",
+    "auto.run.pause": "หยุดชั่วคราว",
+    "auto.run.resume": "ทำต่อ",
+    "auto.run.stop": "หยุด",
+    "auto.run.queued": "รอเลนว่าง",
+    "auto.run.running": "กำลังทำงาน",
+    "auto.run.paused": "หยุดชั่วคราว",
+    "auto.run.pausing": "จะหยุดเมื่อจบขั้นตอนนี้",
+    "auto.run.stopped": "หยุดแล้ว",
+    "auto.run.crashed": "แอปเริ่มทำงานใหม่",
+    "auto.run.maxTimes": "วนซ้ำเกินจำนวนที่กำหนด",
+    "auto.run.noAgent": "เริ่มเอเจนต์ไม่ได้",
+    "auto.run.byHuman": "หยุดด้วยมือ",
+    "auto.run.step": "ขั้นตอน {n} · {step}",
+
     "mcp.title": "เชื่อมต่อผ่าน MCP",
     "mcp.setupTitle": "ใช้โปรเจกต์ของคุณจาก AI",
     "mcp.open": "เชื่อมต่อผ่าน MCP (เมื่อ AI ของคุณเปิดโฟลเดอร์ไม่ได้)",

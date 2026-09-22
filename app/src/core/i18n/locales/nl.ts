@@ -941,6 +941,23 @@ export const nl: Translation = {
     "auto.actions.save": "Opslaan",
     "auto.actions.cancel": "Annuleren",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Er loopt niets.",
+    "auto.run.pause": "Pauzeren",
+    "auto.run.resume": "Hervatten",
+    "auto.run.stop": "Stoppen",
+    "auto.run.queued": "Wacht op een baan",
+    "auto.run.running": "Loopt",
+    "auto.run.paused": "Gepauzeerd",
+    "auto.run.pausing": "Pauzeert na deze stap",
+    "auto.run.stopped": "Gestopt",
+    "auto.run.crashed": "de app is opnieuw gestart",
+    "auto.run.maxTimes": "te vaak rondgegaan",
+    "auto.run.noAgent": "de agent kon niet worden gestart",
+    "auto.run.byHuman": "met de hand gestopt",
+    "auto.run.step": "Stap {n} · {step}",
+
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",
     "mcp.open": "Verbinden via MCP (als je AI geen map kan openen)",

@@ -4,6 +4,7 @@ import type { RefTargetDto } from "../bindings/bindings";
 import { TopBar } from "./TopBar";
 import { WorkspaceFace } from "./WorkspaceFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
+import { runFrameId } from "../talk/layout";
 import { isBlankSpaceClose } from "./outsideClose";
 import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
@@ -190,7 +191,7 @@ export function AppShell() {
    * whose project it is, handed on to the window that has the face. Raising without it would put the
    * reader in front of the workspace with nothing opened, which is not what they pressed.
    */
-  const goToTalkWindow = useCallback((instead: () => void, openIn?: { project: number; dir?: string; pane?: string }) => {
+  const goToTalkWindow = useCallback((instead: () => void, openIn?: { project: number; dir?: string; pane?: string; run?: number }) => {
     void invoke<boolean>("talk_raise", { openIn: openIn ?? null })
       .then((there) => { if (!there) instead(); })
       .catch(instead);
@@ -258,7 +259,7 @@ export function AppShell() {
   // The folder the ledger has asked the workspace to work in, whose project it is, and a count of the
   // asking: the face is a component, so what it is handed is where to work rather than a call to make
   // (`./WorkspaceFace`).
-  const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; nth: number } | null>(null);
+  const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; run?: number; nth: number } | null>(null);
   /**
    * "Start in the workspace" — the one move the first loop offers (`../components/FirstLoop`).
    *
@@ -291,30 +292,52 @@ export function AppShell() {
   }, [shape, goToTalkWindow, foldBackToWorkspace]);
 
   /**
-   * Go to the pane a task or a decision was made in (`AMB-D-897`, `../components/MadeIn`).
+   * **Go to a place in the workspace, by its id** — the pane a record was made in
+   * (`AMB-D-897`, `../components/MadeIn`), or the one a run is drawn in.
    *
    * It travels the road "start in the workspace" travels, and for the same reason: the press is made
    * on the ledger and the face that answers it may be in the other window. What is different is what
    * it names — a pane rather than a folder — and the face does with it what only it can: go to that
-   * place where it is on the screen, and open it again under the same id where it is not
+   * place where it is on the screen, and stand it again under the same id where it is not
    * (`./WorkspaceFace`).
    *
    * **The way back into the conversation is not carried here.** It is already on that frame by the
    * time this runs — put there by the press, host-side, off the record itself
    * (`crate::commands::task_pane_opens_again`).
    */
-  const goToPane = useCallback((project: number, pane: string) => {
+  const goToPlace = useCallback((project: number, pane: string, run?: number) => {
     const here = () => {
-      setOpenIn((asked) => ({ project, pane, nth: (asked?.nth ?? 0) + 1 }));
+      setOpenIn((asked) => ({ project, pane, run, nth: (asked?.nth ?? 0) + 1 }));
       setWorkspaceAsked(true);
       setFace("workspace");
     };
     if (shape === "two") {
-      goToTalkWindow(() => { foldBackToWorkspace(null); here(); }, { project, pane });
+      goToTalkWindow(() => { foldBackToWorkspace(null); here(); }, { project, pane, run });
       return;
     }
     here();
   }, [shape, goToTalkWindow, foldBackToWorkspace]);
+
+  /** Go to the pane a task or a decision was made in (`AMB-D-897`, `../components/MadeIn`). */
+  const goToPane = useCallback(
+    (project: number, pane: string) => goToPlace(project, pane),
+    [goToPlace],
+  );
+
+  /**
+   * **Go to the pane a run is drawn in**, pressed on a row of the "running" tab
+   * (`../screens/RunningTab`).
+   *
+   * It is the same road, and what it adds is the run: a run's place is worked out from the run
+   * rather than drawn fresh (`../talk/layout`), and where nothing stands under that id yet — a run
+   * still waiting for a lane has no pane — the face stands one **for the run**. Opened as an
+   * ordinary empty pane it would carry the right id and not the run, and the step that opened next
+   * would stand a second pane under the same id.
+   */
+  const goToRun = useCallback(
+    (project: number, run: number) => goToPlace(project, runFrameId(run), run),
+    [goToPlace],
+  );
 
 
   // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
@@ -697,6 +720,7 @@ export function AppShell() {
               onComposeTask={openCompose}
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
               onStartTerminal={startTerminalIn}
+              onGoToRun={goToRun}
             />
           )}
           {nav.type === "projectSettings" && (

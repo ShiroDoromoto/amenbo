@@ -6800,6 +6800,54 @@ pub fn automation_run_first_queued(conn: &Connection) -> Result<Option<crate::mo
         .next())
 }
 
+/// **The runs a reader has to be able to see right now**, newest first — everything that is still
+/// going, and the ones that stopped most recently.
+///
+/// It crosses projects because the lanes do: what a lane holds is a terminal on this machine and the
+/// attention of whoever is watching it, and neither of those is divided up per project. The under-way
+/// runs come first and are all of them — there are at most as many as there are lanes, plus whatever is
+/// queued behind them. The stopped ones follow and are capped at `stopped`, because a stop is kept so
+/// that a failure nobody was watching is still seen, not so that every failure since the store was made
+/// is listed. **A run that is `done` is not here at all**: what it did is read from the task it worked
+/// or the automation it came from ([`automation_run_ids`]).
+pub fn automation_runs_live(
+    conn: &Connection,
+    stopped: usize,
+) -> Result<Vec<crate::model::AutomationRun>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let under_way =
+        Pred::is_in(R.status, [S::Running.as_str(), S::Queued.as_str(), S::Paused.as_str()]);
+    let mut out = automation_run_rows(conn, &under_way, None)?;
+    out.extend(automation_run_rows(
+        conn,
+        &Pred::eq(R.status, S::Stopped.as_str()),
+        Some(stopped as i64),
+    )?);
+    Ok(out)
+}
+
+/// The `automation_run` rows matching `pred`, newest first and at most `limit` of them.
+fn automation_run_rows(
+    conn: &Connection,
+    pred: &Pred,
+    limit: Option<i64>,
+) -> Result<Vec<crate::model::AutomationRun>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let mut sql = Sql::new(format!("SELECT * FROM {}", R.table.name()));
+    sql.push_where(Some(pred)).order_by([Sort::by(R.id).desc()]);
+    if let Some(n) = limit {
+        sql.limit(n);
+    }
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), super::hydrate::automation_run_row)
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// The steps copied into one run, oldest key first — the picture as it stood at launch.
 pub fn automation_run_defs_of(
     conn: &Connection,

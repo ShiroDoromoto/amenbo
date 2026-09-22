@@ -943,6 +943,23 @@ export const zhHant: Translation = {
     "auto.actions.save": "儲存",
     "auto.actions.cancel": "取消",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "沒有正在執行的項目。",
+    "auto.run.pause": "暫停",
+    "auto.run.resume": "繼續",
+    "auto.run.stop": "停止",
+    "auto.run.queued": "等待通道",
+    "auto.run.running": "執行中",
+    "auto.run.paused": "已暫停",
+    "auto.run.pausing": "將在這一步結束後暫停",
+    "auto.run.stopped": "已停止",
+    "auto.run.crashed": "應用程式被重新啟動",
+    "auto.run.maxTimes": "循環次數超出上限",
+    "auto.run.noAgent": "無法啟動它的代理",
+    "auto.run.byHuman": "手動停止",
+    "auto.run.step": "步驟 {n} · {step}",
+
     "mcp.title": "透過 MCP 連線",
     "mcp.setupTitle": "讓 AI 可以使用你的專案",
     "mcp.open": "透過 MCP 連線（當你的 AI 無法開啟資料夾時）",

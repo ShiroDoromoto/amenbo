@@ -1,44 +1,44 @@
 # An automation is built from the terminal and read on the screen. The terminal prints a definition
-# back as text (`automation show`), but the picture is the screen's alone — which steps there are,
-# what leaving each one by which way out does, and which of them is not finished yet, laid out so a
-# person sees it at once. A build that drew the boxes and lost the lines, or drew the lines and lost
-# what is written along them, would leave somebody building blind while every command they typed
-# still answered.
+# back as text (`automation show`), but the picture is the screen's alone — which actions are placed
+# on it, what leaving each one by which way out does, and which of them is not finished yet, laid out
+# so a person sees it at once. A build that drew the boxes and lost the lines, or drew the lines and
+# lost what is written along them, would leave somebody building blind while every command they
+# typed still answered.
 id: read-the-picture-an-automation-is-built-into
-title: The build screen draws the steps, the lines between them and the marks that say a step is not finished
+title: The build screen draws the placed actions, the lines between them and the marks that say one is not finished
 description: >
-  Stand a three-step definition up from the terminal, open it on the screen, and read the picture
-  back. Every claim is made against what the terminal put there: the step that takes the task, the
-  step whose required input nothing reaches, the step whose prompt came from the library, and the two
-  lines — one going on to a step by a named way out, one closing the task. A step nobody built is
-  asked for too, because a picture that drew every name it was given would read as green from the
-  present half alone.
+  Stand a definition of three placed actions up from the terminal, open it on the screen, and read
+  the picture back. Every claim is made against what the terminal put there: the action that takes
+  the task, the action whose required input nothing reaches, and the two lines — one going on by a
+  named way out, one closing the task. A box nobody placed is asked for too, because a picture that
+  drew every name it was given would read as green from the present half alone.
 given:
-  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — read it back, prompt: read what was written }, as: library }
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one task, three steps" }, as: auto }
-
-  # The step that takes the task. What makes it one is a `task_take` output on a way out, which is
-  # also what makes the picture draw the dashed outline for that task's span.
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action that takes the task. What makes it one is a `task_take` output on a way out it
+  # declares, which is also what makes the picture draw the dashed outline for that task's span. What
+  # is inside it is not what this picture is about, so it holds no step.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
 
-  # The step in the middle. Two required inputs are declared on it and only one is ever wired, which
+  # The action in the middle. Two required inputs are declared on it and only one is ever wired, which
   # is the state the picture marks.
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: work, agent: claude-code, prompt: do the work }, as: work }
-  - { type: action, domain: automation, op: port-add, with: { step: work, name: note, kind: value, required: true } }
-  - { type: action, domain: automation, op: port-add, with: { step: work, name: draft, kind: file, required: true } }
-  - { type: action, domain: automation, op: wire-add, with: { target: take, exit: got one, from_port: note, to: work, to_port: note } }
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: port-add, with: { action: work, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { action: work, name: draft, kind: file, required: true } }
 
-  # The step made of a library action. It declares nothing of its own — its ways out and its inputs
-  # are the action's — and the picture says where its prompt came from.
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: review, agent: claude-code, action: library }, as: review }
+  - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
 
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: work, to: review } }
-  - { type: action, domain: automation, op: edge-add, with: { target: review } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one task, three actions" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
+
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_review } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_review } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -47,14 +47,14 @@ steps_gui:
     with:
       tab: automations
 
-  # The row before the picture: what this is, and that it is built out of three steps. A definition
-  # that had lost its steps would still be listed, so the count is the half worth asking for.
+  # The row before the picture: what this is, and that three actions are placed on it. A definition
+  # that had lost its placements would still be listed, so the count is the half worth asking for.
   - type: assert
     domain: automation
     op: listed
     with:
       target: auto
-      steps: 3
+      placements: 3
       present: true
 
   - type: action
@@ -63,7 +63,7 @@ steps_gui:
     with:
       target: auto
 
-  # The dashed outline around the steps one task is worked by, named by the step that takes it. The
+  # The dashed outline around the boxes one task is worked by, named by the box that takes it. The
   # picture divides by that before it divides by anything else, so a build that had lost the division
   # would draw three boxes in a row and say nothing about what they have in common.
   - type: assert
@@ -79,9 +79,9 @@ steps_gui:
       name: take
       present: true
 
-  # The step a required input does not reach. What says so is the outline round the box and the line
-  # under its name naming the input — `draft` is declared on this step and nothing is ever wired to
-  # it, while `note` beside it is.
+  # The box a required input does not reach. What says so is the outline round it and the line under
+  # its name naming the input — `draft` is declared on this action and nothing is ever wired to it on
+  # this placement, while `note` beside it is.
   - type: assert
     domain: automation
     op: pictured
@@ -89,17 +89,16 @@ steps_gui:
       name: work
       unfed: true
 
-  # And the step whose prompt is the library's, which the picture says with an edge down its left.
   - type: assert
     domain: automation
     op: pictured
     with:
       name: review
-      from_action: true
+      present: true
 
   # The lines, and what is written along each. The first carries the name of the way out it leaves
-  # by — a picture that drew the line and lost the name would leave a reader unable to say which of a
-  # step's ways out goes where.
+  # by — a picture that drew the line and lost the name would leave a reader unable to say which of an
+  # action's ways out goes where.
   - type: assert
     domain: automation
     op: line-pictured
@@ -115,7 +114,7 @@ steps_gui:
       from: review
       ends: done
 
-  # A step nobody built. A picture drawing every name it is handed would pass every assert above, and
+  # A box nobody placed. A picture drawing every name it is handed would pass every assert above, and
   # this is the one that says it is drawing what the definition holds.
   - type: assert
     domain: automation

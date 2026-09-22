@@ -10,10 +10,11 @@
 id: walk-a-run-from-one-step-to-the-next
 title: A step reporting swaps the terminal in the run's own pane for the next step
 description: >
-  Start a run of a two-step automation, work the first step the way its agent would — take a task,
-  hand a value on, report the way out taken — and read what the press did: the pane is still the
-  run's, and the line over it now names the second step.
-  The value is handed along a wire so that the second step has a reason to open at all.
+  Start a run of an automation of two placed actions, one step inside each. Work the first step the
+  way its agent would — take a task, hand a value on, report the way out taken — and read what the
+  press did: the pane is still the run's, and the line over it now names the second step, with the
+  action it belongs to. The value is handed along the wires out of the first action and into the
+  second, so that the second step has a reason to open at all.
 given:
   # One agent this machine can start, so no step is refused for who carries it out. `reads` keeps the
   # stand-in standing, which is what leaves a pane on screen to walk.
@@ -23,23 +24,43 @@ given:
   # command takes is a ref and a road cannot know the number in advance.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task this run walks }, as: seed }
 
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two steps in a row" }, as: auto }
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task and say what it is about }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: review, agent: claude-code, prompt: read what the step before handed on }, as: review }
-
-  # What leaving the first step by "got one" hands on: the task the run is now about, and a line of
-  # text for the second step to read.
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The first action: one step that takes the task and hands a line of text on. What leaving it by
+  # "got one" hands on is declared on both layers — the step's way out is what the step reports, and
+  # the action's is what the next placement is fed from — and the lines inside the action carry the
+  # one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task and say what it is about }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
-  - { type: action, domain: automation, op: port-add, with: { step: review, name: note, kind: value, required: true } }
-  - { type: action, domain: automation, op: wire-add, with: { target: take, exit: got one, from_port: note, to: review, to_port: note } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: wire-add, with: { in_action: true, target: claim, exit: got one, from_port: note, to_port: note } }
+
+  # The second action: one step that reads what the first handed on. The input is the action's, so a
+  # placement of it can be fed, and the step's, so the step is handed it.
+  - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, agent: claude-code, prompt: read what the step before handed on }, as: read }
+  - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
+  - { type: action, domain: automation, op: port-add, with: { action: review, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { step: read, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: wire-add, with: { in_action: true, from_port: note, to: read, to_port: note } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two actions in a row" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_review, to_port: note } }
 
   # Every way out says what happens after it, or the launch check stops the road before it starts.
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: review } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: review } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_review } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_review } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -86,7 +107,8 @@ steps_gui:
     op: run-pane
     with:
       target: run
-      step: take
+      step: claim
+      action: take
       present: true
 
 
@@ -113,7 +135,8 @@ steps_gui:
     op: run-pane
     with:
       target: run
-      step: take
+      step: claim
+      action: take
       task: seed
       present: true
 
@@ -141,7 +164,8 @@ steps_gui:
     op: run-pane
     with:
       target: run
-      step: review
+      step: read
+      action: review
       task: seed
       present: true
 

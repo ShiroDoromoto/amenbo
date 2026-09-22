@@ -3,31 +3,33 @@
 # a name corrected, a definition put out of the way, and a definition gone. The middle one is the
 # one worth walking — archiving takes nothing away and stops nothing already running, so what a
 # reader has to be able to see is the row still standing with the mark on it. The last one takes
-# every step with it and cannot be taken back, which is why the screen asks before it writes.
+# every placement with it and cannot be taken back, which is why the screen asks before it writes.
 id: clear-out-an-automation-you-are-done-with
 title: An automation can be renamed, put out of the way, and finally deleted with everything built into it
 description: >
-  Build a definition with a step in it, correct its name, put it out of the way and read the row
-  back — still listed, and marked — then delete it and read the list back with nothing in it. The
-  archived reading is the half worth walking twice: a build that dropped the row instead of marking
-  it would leave a reader unable to tell what they shelved from what they threw away, and both
-  would look the same from the list.
+  Build a definition with an action placed on it, correct its name, put it out of the way and read
+  the row back — still listed, and marked — then delete it and read the list back with nothing in
+  it. The archived reading is the half worth walking twice: a build that dropped the row instead of
+  marking it would leave a reader unable to tell what they shelved from what they threw away, and
+  both would look the same from the list.
 given:
   # The misspelling is the premise, not a slip: the road corrects it, and a name already right would
   # leave the rename with nothing a reader could see it had done.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the moring sweep" }, as: sweep }
-  - { type: action, domain: automation, op: step-add, with: { target: sweep, name: sweep, agent: claude-code, prompt: read what came in overnight } }
+  - { type: action, domain: automation, op: action-add, with: { name: sweep }, as: sweep_action }
+  - { type: action, domain: automation, op: step-add, with: { target: sweep_action, name: read, agent: claude-code, prompt: read what came in overnight } }
+  - { type: action, domain: automation, op: place-add, with: { target: sweep, action: sweep_action } }
 
 steps_cli:
   # What the row says before anything is written on it: the name it was built under, misspelling and
-  # all, and the one step it is built out of.
+  # all, and the one action placed on it.
   - type: assert
     domain: automation
     op: listed
     with:
       target: sweep
       name: "SCENARIO SEED — the moring sweep"
-      steps: 1
+      placements: 1
       archived: false
 
   - type: action
@@ -52,7 +54,7 @@ steps_cli:
     with:
       target: sweep
       name: "SCENARIO SEED — the morning sweep"
-      steps: 1
+      placements: 1
       archived: true
 
   - type: action
@@ -61,7 +63,7 @@ steps_cli:
     with:
       target: sweep
 
-  # And now it has gone, step and all. This is the reading the mark above is not: the row is not
+  # And now it has gone, placement and all. This is the reading the mark above is not: the row is not
   # there to carry anything.
   - type: assert
     domain: automation
@@ -82,7 +84,7 @@ steps_gui:
     op: listed
     with:
       target: sweep
-      steps: 1
+      placements: 1
       archived: false
 
   # The three fields are written on the build screen, which is where the definition is opened to.
@@ -127,7 +129,7 @@ steps_gui:
     op: listed
     with:
       target: sweep
-      steps: 1
+      placements: 1
       archived: true
 
   # The delete is on the build screen rather than on the row, so the road goes back in for it — and

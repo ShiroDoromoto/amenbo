@@ -1,7 +1,13 @@
-# A step's ways out, its settings and what it takes in are what the rest of an automation is built
+# An action's ways out, its settings and what it takes in are what the rest of an automation is built
 # against: a line hangs on a way out, a wire ends at an input, and a launch is refused for a setting
 # nobody answered. All three are declarations, and a reader who can read them on the panel and not
 # put one there is a reader sent back to the terminal to finish what the screen just showed them.
+#
+# ── Why they are declared from a placement ──────────────────────────────────────────────────────
+# The panel a placement opens draws what the action standing there declares, with the controls that
+# change it — so a reader building an automation declares what an action needs without
+# leaving the picture they are building. What is written is the action's, and reaches every other
+# placement of it; only the answer to a setting and the wire into an input are the placement's own.
 #
 # ── Why the launch place is the reading ─────────────────────────────────────────────────────────
 # A declaration is not visible as itself: a way out with nothing after it, a required setting with
@@ -12,7 +18,7 @@
 # second.
 #
 # ── Why required is a second press ──────────────────────────────────────────────────────────────
-# The row that declares a new one takes a name and a kind. Whether the step is refused without it is
+# The row that declares a new one takes a name and a kind. Whether a step is refused without it is
 # on the row it becomes, which is the panel saying that declaring a thing and insisting on it are two
 # moves — so the road makes them as two, rather than describing a control that is not under the box.
 #
@@ -22,27 +28,37 @@
 # cleared off it is that name still drawn — so a road that took a setting off the list by its box
 # would go red on a screen doing exactly what it was asked. The box is pressed on the way in, where
 # what is being read is the reason arriving.
-id: declare-what-a-step-needs-on-its-own-panel
-title: What a step declares is put in and taken away on its panel, and the launch place follows each one
+id: declare-what-an-action-needs-from-a-placement
+title: What an action declares is put in and taken away from a placement's panel, and the launch place follows each one
 description: >
-  Open a definition that is short of nothing and declare three things on one step's panel — a second
-  way out, a required setting, and a required input. Each puts its own reason on the launch place.
-  Then take all three back, one by one, by the press at the end of each row. Each reason goes as its
-  declaration does, and the definition ends where it started, ready to be started.
+  Open a definition that is short of nothing and declare three things on the panel of one placed
+  action — a second way out, a required setting, and a required input. Each puts its own reason on
+  the launch place. Then take all three back, one by one, by the press at the end of each row. Each
+  reason goes as its declaration does, and the definition ends where it started, ready to be
+  started.
 given:
   # One agent this machine can start, so nothing on the launch place is ever about who carries the
   # step out.
   - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
 
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a step to declare on" }, as: auto }
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action the panel is read on, holding the one step it runs. The way out that takes the task
+  # is declared on both layers, and the line inside the action carries the step's out by the action's.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an action to declare on" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   # Both ways out say what happens after them, so the definition opens with nothing in its way and
   # every reason below is one the road put there.
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -65,7 +81,7 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: take
 
@@ -84,7 +100,7 @@ steps_gui:
     with:
       ready: false
       reason: open_exit
-      step: take
+      box: take
       at: needs a fix
       present: true
 
@@ -112,11 +128,11 @@ steps_gui:
     with:
       ready: false
       reason: unanswered_cfg
-      step: take
+      box: take
       at: which
       present: true
 
-  # An input, the same way. Nothing is wired to it, there being one step and nothing before it.
+  # An input, the same way. Nothing is wired to it, there being one placement and nothing before it.
   - type: action
     domain: automation
     op: declare
@@ -139,7 +155,7 @@ steps_gui:
     with:
       ready: false
       reason: unwired_input
-      step: take
+      box: take
       at: note
       present: true
 
@@ -158,7 +174,7 @@ steps_gui:
     with:
       ready: false
       reason: open_exit
-      step: take
+      box: take
       at: needs a fix
       present: false
 
@@ -175,7 +191,7 @@ steps_gui:
     with:
       ready: false
       reason: unanswered_cfg
-      step: take
+      box: take
       at: which
       present: false
 
@@ -194,6 +210,6 @@ steps_gui:
     with:
       ready: true
       reason: unwired_input
-      step: take
+      box: take
       at: note
       present: false

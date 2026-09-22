@@ -1,26 +1,28 @@
-# The library is what makes a prompt worth writing once. A step points at an action rather than
-# copying it, so rewriting the action is how every step running it changes at the same time — and the
-# number the row carries is what tells a reader how far that reaches before they open the box. It is
-# counted in automations and not in steps, because what changes when the prompt changes is the runs
-# of those automations: two steps of one automation pointing at the same action is one automation
-# whose runs move.
+# The library is what makes a prompt worth writing once. An automation places an action rather than
+# copying it, so rewriting a step inside the action is how every placement of it changes at the same
+# time — and the number the row carries is what tells a reader how far that reaches before they open
+# the box. It is counted in automations and not in placements, because what changes when the prompt
+# changes is the runs of those automations: one automation placing the same action twice is one
+# automation whose runs move.
 id: rewrite-a-prompt-the-whole-library-uses
-title: Rewriting a library action reaches every step pointed at it, and the row says how far that is beforehand
+title: Rewriting a step inside a library action reaches every placement of it, and the row says how far that is beforehand
 description: >
-  Put one action in the library and point three steps at it — two in one automation and one in
-  another — then read the row that says how many automations use it, rewrite the prompt on that row,
-  and read the new prompt back off a step in each automation. The count is the half worth walking
-  twice: a build counting steps would say three where the answer is two, and a reader would judge a
-  rewrite by a number about the wrong thing.
+  Put one action in the library and place it three times — twice on one automation and once on
+  another — then read the row that says how many automations use it, rewrite the prompt of the step
+  inside it on the action's own screen, and read the new prompt back off a placement on each
+  automation. The count is the half worth walking twice: a build counting placements would say three
+  where the answer is two, and a reader would judge a rewrite by a number about the wrong thing.
 given:
-  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — review, prompt: read what was written }, as: library }
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — review }, as: library }
+  - { type: action, domain: automation, op: step-add, with: { target: library, name: read, agent: claude-code, prompt: read what was written }, as: read }
+  - { type: action, domain: automation, op: action-entry, with: { target: library, step: read } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews twice" }, as: first }
-  - { type: action, domain: automation, op: step-add, with: { target: first, name: check, agent: claude-code, action: library } }
-  - { type: action, domain: automation, op: step-add, with: { target: first, name: check again, agent: claude-code, action: library } }
+  - { type: action, domain: automation, op: place-add, with: { target: first, action: library } }
+  - { type: action, domain: automation, op: place-add, with: { target: first, action: library } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews once" }, as: second }
-  - { type: action, domain: automation, op: step-add, with: { target: second, name: check, agent: claude-code, action: library } }
+  - { type: action, domain: automation, op: place-add, with: { target: second, action: library } }
 
 steps_gui:
   - type: action
@@ -29,7 +31,7 @@ steps_gui:
     with:
       tab: actions
 
-  # Two, not three. Three steps point at this action and two automations run it, and what the number
+  # Two, not three. The action is placed three times and two automations run it, and what the number
   # is read for is how far a rewrite carries — which is measured in automations whose runs change.
   - type: assert
     domain: automation
@@ -37,6 +39,7 @@ steps_gui:
     with:
       target: library
       used_by: 2
+      steps: 1
       reach: project
 
   - type: action
@@ -49,11 +52,12 @@ steps_gui:
     domain: automation
     op: action-rewrite
     with:
+      step: read
       prompt: read what was written, then say what is wrong with it
 
-  # The rewrite, read back on a spot of the first automation. A spot carries no prompt of its own, so
-  # what the panel draws here is the library's — written on the step inside the action, on the screen
-  # this road just left.
+  # The rewrite, read back on a placement of the first automation. A placement carries no prompt of
+  # its own, so what the panel draws here is the step inside the action — written on the screen this
+  # road just left. Either of the two boxes is that placement's action, so either is the one to press.
   - type: action
     domain: automation
     op: screen
@@ -68,19 +72,19 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
-      name: check
+      name: SCENARIO SEED — review
 
   - type: assert
     domain: automation
-    op: step-shows
+    op: panel-shows
     with:
       field: prompt
       value: read what was written, then say what is wrong with it
 
-  # And on a step of the other automation, which is the whole claim: one rewrite, every step pointed
-  # at it, across the definitions they sit in.
+  # And on the placement on the other automation, which is the whole claim: one rewrite, every
+  # placement of the action, across the definitions they sit on.
   - type: action
     domain: automation
     op: screen
@@ -95,13 +99,13 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
-      name: check
+      name: SCENARIO SEED — review
 
   - type: assert
     domain: automation
-    op: step-shows
+    op: panel-shows
     with:
       field: prompt
       value: read what was written, then say what is wrong with it

@@ -13,11 +13,11 @@
 #
 # ── What puts the question ──────────────────────────────────────────────────────────────────────
 # Three places ask, and all three are a reader looking at what an agent can be started on: the row
-# under an empty frame, the row under a running pane, and the step panel — which asks for the agent
-# the step it is drawn for is carried out by (`app/src/screens/AutomationStepPanel.tsx`). This road
-# walks the third, because it is the one that happens where the answer is read: a reader on the build
-# screen presses a step to look at it, and the launch place beside it has something to say it did not
-# have a moment ago.
+# under an empty frame, the row under a running pane, and the panel a placement opens — which asks
+# for the agent carrying out the step the placed action opens first
+# (`app/src/screens/AutomationStepPanel.tsx`). This road walks the third, because it is the one that
+# happens where the answer is read: a reader on the build screen presses a box to look at it, and the
+# launch place beside it has something to say it did not have a moment ago.
 #
 # ── Why the screen is left and come back to ─────────────────────────────────────────────────────
 # The launch place is read when the build screen opens. The ask the panel makes lands after that, so
@@ -36,24 +36,33 @@ title: A step's model is judged only once its agent has been asked, and then the
 description: >
   Stand a definition up that is short of nothing except that one of its steps names a model the agent
   on this machine does not answer with. Open the build screen: the launch place says it is ready,
-  because nobody has asked that agent anything yet. Press the step, which is one of the three places
-  that puts the question, and open the build screen again: the same definition now lists one reason,
-  naming the step and the model it asks for.
+  because nobody has asked that agent anything yet. Press the box of the action holding that step,
+  which is one of the three places that puts the question, and open the build screen again: the same
+  definition now lists one reason, naming the step and the model it asks for.
 given:
   # One agent, answering with two models it can be started on. The names are the harness's own — a
   # road never writes a real model name — and the step below names a third of that family, which is
   # a name this machine has not answered with and never will.
   - { type: action, domain: workspace, op: can-start, with: { count: 1, models: 2 } }
 
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a model that is not here" }, as: auto }
-  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task, model: scenario-model-09 }, as: take }
-  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  # The action the panel is read on, holding the one step it runs. The way out that takes the task
+  # is declared on both layers, and the line inside the action carries the step's out by the action's.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task, model: scenario-model-09 }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a model that is not here" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   # Both ways out say what happens after them, so nothing about the definition itself is in the way
   # and the one reason below is the only one there can be.
-  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
-  - { type: action, domain: automation, op: edge-add, with: { target: take } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action
@@ -80,7 +89,7 @@ steps_gui:
   # way is ask the agent this step is carried out by what it can be started on.
   - type: action
     domain: automation
-    op: pick-step
+    op: pick-box
     with:
       name: take
 
@@ -89,7 +98,7 @@ steps_gui:
   # row of it quietly missing.
   - type: assert
     domain: automation
-    op: step-shows
+    op: panel-shows
     with:
       field: model
       value: scenario-model-09
@@ -113,6 +122,6 @@ steps_gui:
     with:
       ready: false
       reason: model_missing
-      step: take
+      box: claim
       at: scenario-model-09
       present: true

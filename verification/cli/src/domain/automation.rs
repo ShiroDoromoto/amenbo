@@ -1,9 +1,10 @@
 //! The `automation` domain: the picture agents are walked along, and a run of it.
 //!
 //! **Most of what is here is a road's premise.** A road about a run needs a definition to start, and
-//! a definition is six kinds of row that mean nothing apart — so the build verbs are mapped whole and
-//! a road takes as many as its own goal asks for. What each of them answers with is the id the next
-//! one names, which is why nearly all of them bind.
+//! a definition is three layers of rows that mean nothing apart: the automation places
+//! library actions, an action holds steps, and a step is one terminal. So the build verbs are mapped
+//! whole and a road takes as many as its own goal asks for. What each of them answers with is the id
+//! the next one names, which is why nearly all of them bind.
 //!
 //! **What a step of a run types is not here** (`automation step-take` / `step-out` / `step-done`). Those are refused
 //! outside the terminal a run opened for a step, and a run started at the terminal opens none — there
@@ -11,10 +12,11 @@
 //! The same door is what the other side waits on: the build and drive verbs refuse *inside* a step
 //! (`automation_outside_only`), and there is no step here to type them in.
 //!
-//! **A definition is read back here whole** (`automation show`), with the declarations each step runs
-//! under already resolved — so a road that built one at the terminal proves it by reading it at the
-//! terminal, rather than by the build commands not having refused it. What the picture draws is still
-//! the screen's: boxes, lines and the marks along them have no terminal.
+//! **A definition is read back here in the two layers it is built in** — the placements on an
+//! automation (`automation show`) and the steps inside an action (`automation action-show`) — so a
+//! road that built one at the terminal proves it by reading it at the terminal, rather than by the
+//! build commands not having refused it. What the picture draws is still the screen's: boxes, lines
+//! and the marks along them have no terminal.
 
 use amenbo_scenario::{Args, Domain};
 
@@ -89,25 +91,56 @@ impl Driver<'_> {
                     "deleted automation {automation} with everything built into it"
                 )))
             }
-            "step-add" => {
-                let automation = self.resolve(with)?;
+            // **The library.** An action is born empty; what it holds is written with `step-add`.
+            "action-add" => {
                 let name = req_str(with, "name")?;
-                let mut args: Vec<String> =
-                    vec!["automation".into(),
-                    "step-add".into(), automation.to_string()];
+                let mut args: Vec<String> = vec!["automation".into(), "action-add".into()];
+                if with.contains_key("project") {
+                    args.push("--project".into());
+                    args.push(self.resolve_key(with, "project")?.to_string());
+                }
                 args.push("--name".into());
                 args.push(name.into());
-                args.push("--agent".into());
-                args.push(req_str(with, "agent")?.into());
-                // A step is made of its own prompt or of a library action, and the command takes one
-                // of the two. Which it is, is what the road named.
-                if with.contains_key("action") {
-                    args.push("--action".into());
-                    args.push(self.resolve_key(with, "action")?.to_string());
-                } else {
-                    args.push("--prompt".into());
-                    args.push(req_str(with, "prompt")?.into());
+                args.push("--json".into());
+                let id = self.bound_id(&args, "automation_action", bind)?;
+                Ok(Outcome::action(format!("put `{name}` ({id}) in the library")))
+            }
+            // Only what a step names is written, the way the command reads it.
+            "action-update" => {
+                let action = self.resolve(with)?;
+                let mut args: Vec<String> =
+                    vec!["automation".into(), "action-update".into(), action.to_string()];
+                for key in ["name", "note"] {
+                    if let Some(v) = with.get(key).and_then(|v| v.as_str()) {
+                        args.push(format!("--{key}"));
+                        args.push(v.to_string());
+                    }
                 }
+                if args.len() == 3 {
+                    return Err(
+                        "`action-update` writes a name or a note — a step naming neither would write nothing"
+                            .to_string(),
+                    );
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("rewrote library action {action}")))
+            }
+            // A step inside an action, carrying its own prompt — the one layer that is a terminal.
+            "step-add" => {
+                let action = self.resolve(with)?;
+                let name = req_str(with, "name")?;
+                let mut args: Vec<String> = vec![
+                    "automation".into(),
+                    "step-add".into(),
+                    action.to_string(),
+                    "--name".into(),
+                    name.into(),
+                    "--agent".into(),
+                    req_str(with, "agent")?.into(),
+                    "--prompt".into(),
+                    req_str(with, "prompt")?.into(),
+                ];
                 for (key, flag) in [("model", "--model"), ("work_dir_ref", "--work-dir")] {
                     if let Some(v) = with.get(key).and_then(|v| v.as_str()) {
                         args.push(flag.into());
@@ -116,7 +149,50 @@ impl Driver<'_> {
                 }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_step", bind)?;
-                Ok(Outcome::action(format!("added step {id} `{name}` to automation {automation}")))
+                Ok(Outcome::action(format!("added step {id} `{name}` to library action {action}")))
+            }
+            "action-entry" => {
+                let action = self.resolve(with)?;
+                let step = self.resolve_key(with, "step")?;
+                self.run_json(&[
+                    "automation",
+                    "action-entry-set",
+                    &action.to_string(),
+                    "--step",
+                    &step.to_string(),
+                    "--json",
+                ])?;
+                Ok(Outcome::action(format!("a placement of library action {action} opens step {step} first")))
+            }
+            // **The picture.** What stands on it is a placement of an action, never a prompt.
+            "place-add" => {
+                let automation = self.resolve(with)?;
+                let action = self.resolve_key(with, "action")?;
+                let args = [
+                    "automation".into(),
+                    "place-add".into(),
+                    automation.to_string(),
+                    "--action".into(),
+                    action.to_string(),
+                    "--json".into(),
+                ];
+                let id = self.bound_id(&args, "automation_placement", bind)?;
+                Ok(Outcome::action(format!(
+                    "placed library action {action} on automation {automation} (placement {id})"
+                )))
+            }
+            "entry" => {
+                let automation = self.resolve(with)?;
+                let placement = self.resolve_key(with, "placement")?;
+                self.run_json(&[
+                    "automation",
+                    "entry-set",
+                    &automation.to_string(),
+                    "--placement",
+                    &placement.to_string(),
+                    "--json",
+                ])?;
+                Ok(Outcome::action(format!("automation {automation} starts at placement {placement}")))
             }
             "exit-add" => {
                 let (flag, owner, what) = self.declarer(with)?;
@@ -135,7 +211,7 @@ impl Driver<'_> {
             }
             "port-add" => {
                 // What it hangs off says which direction it is: a way out hands on, while a step or
-                // the action it runs is handed.
+                // an action takes in.
                 let (owner_flag, owner, what) = match with.contains_key("step") || with.contains_key("action") {
                     true => self.declarer(with)?,
                     false => ("--exit", self.resolve(with)?, "way out"),
@@ -160,24 +236,55 @@ impl Driver<'_> {
                 Ok(Outcome::action(format!("declared {kind} `{name}` ({id}) on {what} {owner}")))
             }
             "edge-add" => {
+                let inside = opt_bool(with, "in_action").unwrap_or(false);
                 let from = self.way_out(with)?;
-                let mut args: Vec<String> =
-                    vec!["automation".into(),
-                    "edge-add".into(), "--from".into(), from.clone()];
-                let goes = match (with.contains_key("to"), opt_bool(with, "halt").unwrap_or(false)) {
-                    (true, _) => {
+                let mut args: Vec<String> = vec!["automation".into(), "edge-add".into()];
+                if inside {
+                    args.push("--in-action".into());
+                }
+                args.push("--from".into());
+                args.push(from.clone());
+                let halt = opt_bool(with, "halt").unwrap_or(false);
+                let exit_to = with.get("exit_to").and_then(|v| v.as_str());
+                let goes = match (with.contains_key("to"), exit_to, halt) {
+                    (true, None, false) => {
                         args.push("--to".into());
-                        let step = self.resolve_key(with, "to")?;
-                        args.push(step.to_string());
-                        format!("on to step {step}")
+                        let to = self.resolve_key(with, "to")?;
+                        args.push(to.to_string());
+                        format!("on to box {to}")
                     }
-                    (false, true) => {
+                    // Carried out to the action's own way out. The flag's value is optional on the
+                    // command — bare, the unnamed one — so the empty name is left off rather than
+                    // passed as an empty word.
+                    (false, Some(name), false) => {
+                        if !inside {
+                            return Err(
+                                "`exit_to` leaves an action by its own way out — an automation's picture has nothing outside it, so it goes with `in_action: true`"
+                                    .to_string(),
+                            );
+                        }
+                        args.push("--exit-to".into());
+                        if !name.is_empty() {
+                            args.push(name.into());
+                        }
+                        match name {
+                            "" => "out by the action's unnamed way out".to_string(),
+                            named => format!("out by the action's way out `{named}`"),
+                        }
+                    }
+                    (false, None, true) => {
                         args.push("--halt".into());
                         "stopping the run for a person".to_string()
                     }
-                    (false, false) => {
+                    (false, None, false) => {
                         args.push("--done".into());
                         "closing the run".to_string()
+                    }
+                    _ => {
+                        return Err(
+                            "an edge goes on to a box (`to`), out of the action (`exit_to`), or stops the run (`halt`) — name one of them, or none to close the run"
+                                .to_string(),
+                        )
                     }
                 };
                 if let Some(n) = with.get("max_times").and_then(serde_yaml::Value::as_i64) {
@@ -188,51 +295,57 @@ impl Driver<'_> {
                 let id = self.bound_id(&args, "automation_edge", bind)?;
                 Ok(Outcome::action(format!("after `{from}`, {goes} (edge {id})")))
             }
+            // **Inside an action, either end may be the action itself** — the box `0` on the command.
+            // A road says so by leaving that end out, there being no binding to name it by.
             "wire-add" => {
-                let from = self.way_out(with)?;
-                let to = self.resolve_key(with, "to")?;
+                let inside = opt_bool(with, "in_action").unwrap_or(false);
+                let both_named = with.contains_key("target") && with.contains_key("to");
+                if !(inside || both_named) {
+                    return Err(
+                        "a wire on an automation joins two placements, and both are named — only inside an action (`in_action: true`) is an end left out, for the action itself"
+                            .to_string(),
+                    );
+                }
+                let from = match with.contains_key("target") {
+                    true => self.way_out(with)?,
+                    false => "0".to_string(),
+                };
+                let to = match with.contains_key("to") {
+                    true => self.resolve_key(with, "to")?.to_string(),
+                    false => "0".to_string(),
+                };
                 let from_port = req_str(with, "from_port")?;
                 let to_port = req_str(with, "to_port")?;
-                let args = [
-                    "automation".into(),
-                    "wire-add".into(),
+                let mut args: Vec<String> = vec!["automation".into(), "wire-add".into()];
+                if inside {
+                    args.push("--in-action".into());
+                }
+                args.extend([
                     "--from".into(),
                     from.clone(),
                     "--from-port".into(),
                     from_port.to_string(),
                     "--to".into(),
-                    to.to_string(),
+                    to.clone(),
                     "--to-port".into(),
                     to_port.to_string(),
                     "--json".into(),
-                ];
+                ]);
                 let id = self.bound_id(&args, "automation_wire", bind)?;
                 Ok(Outcome::action(format!(
-                    "`{from}` hands `{from_port}` to step {to} as `{to_port}` (wire {id})"
+                    "`{from}` hands `{from_port}` to box {to} as `{to_port}` (wire {id})"
                 )))
             }
-            "entry" => {
-                let automation = self.resolve(with)?;
-                let step = self.resolve_key(with, "step")?;
-                self.run_json(&[
-                    "automation",
-                    "entry-set",
-                    &automation.to_string(),
-                    "--step",
-                    &step.to_string(),
-                    "--json",
-                ])?;
-                Ok(Outcome::action(format!("automation {automation} starts at step {step}")))
-            }
+            // A setting is only ever the action's to declare.
             "cfg-add" => {
-                let (flag, owner, what) = self.declarer(with)?;
+                let action = self.resolve_key(with, "action")?;
                 let name = req_str(with, "name")?;
                 let kind = req_str(with, "kind")?;
                 let mut args: Vec<String> = vec![
                     "automation".into(),
                     "cfg-add".into(),
-                    flag.into(),
-                    owner.to_string(),
+                    "--action".into(),
+                    action.to_string(),
                     "--name".into(),
                     name.into(),
                     "--kind".into(),
@@ -247,15 +360,18 @@ impl Driver<'_> {
                 }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_cfg", bind)?;
-                Ok(Outcome::action(format!("declared setting {id} `{name}` ({kind}) on {what} {owner}")))
+                Ok(Outcome::action(format!(
+                    "declared setting {id} `{name}` ({kind}) on library action {action}"
+                )))
             }
+            // And answered on one placement of it.
             "cfg-set" => {
-                let step = self.resolve(with)?;
+                let placement = self.resolve(with)?;
                 let name = req_str(with, "name")?;
                 let mut args: Vec<String> = vec![
                     "automation".into(),
                     "cfg-set".into(),
-                    step.to_string(),
+                    placement.to_string(),
                     "--name".into(),
                     name.into(),
                 ];
@@ -268,35 +384,7 @@ impl Driver<'_> {
                 };
                 args.push("--json".into());
                 self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
-                Ok(Outcome::action(format!("setting `{name}` on step {step} {said}")))
-            }
-            "action-add" => {
-                let name = req_str(with, "name")?;
-                let mut args: Vec<String> = vec!["automation".into(), "action-add".into()];
-                if with.contains_key("project") {
-                    args.push("--project".into());
-                    args.push(self.resolve_key(with, "project")?.to_string());
-                }
-                args.push("--name".into());
-                args.push(name.into());
-                args.push("--prompt".into());
-                args.push(req_str(with, "prompt")?.into());
-                args.push("--json".into());
-                let id = self.bound_id(&args, "automation_action", bind)?;
-                Ok(Outcome::action(format!("put `{name}` ({id}) in the library")))
-            }
-            "action-update" => {
-                let action = self.resolve(with)?;
-                let args = [
-                    "automation".into(),
-                    "action-update".into(),
-                    action.to_string(),
-                    "--prompt".into(),
-                    req_str(with, "prompt")?.to_string(),
-                    "--json".into(),
-                ];
-                let id = self.bound_id(&args, "automation_action", bind)?;
-                Ok(Outcome::action(format!("rewrote the prompt of library action {id}")))
+                Ok(Outcome::action(format!("setting `{name}` on placement {placement} {said}")))
             }
             "start" => {
                 let automation = self.resolve(with)?;
@@ -367,8 +455,8 @@ impl Driver<'_> {
                 ))
             }
             // The two listings, which the automations screen draws as rows and the terminal prints as
-            // lines. `steps` is the second half of what a row is read for — what this is, and whether
-            // it is built yet.
+            // lines. `placements` is the second half of what a row is read for — what this is, and
+            // whether anything is built onto it yet.
             "listed" => {
                 let target = self.resolve(with)?;
                 let present = opt_bool(with, "present").unwrap_or(true);
@@ -382,12 +470,12 @@ impl Driver<'_> {
                     rows.len(),
                     if present { "listed" } else { "left out" },
                 );
-                if with.contains_key("steps") {
-                    let want = req_i64(with, "steps")?;
-                    let got = row.and_then(|one| one["steps"].as_i64());
+                if with.contains_key("placements") {
+                    let want = req_i64(with, "placements")?;
+                    let got = row.and_then(|one| one["placements"].as_i64());
                     pass = pass && got == Some(want);
                     said.push_str(&format!(
-                        ", built out of {} steps, expected {want}",
+                        ", with {} actions placed on it, expected {want}",
                         match got {
                             Some(n) => n.to_string(),
                             None => "no".to_string(),
@@ -424,9 +512,10 @@ impl Driver<'_> {
                 said.push_str(if pass { ", as expected)" } else { ", MISMATCH)" });
                 Ok(Outcome::assert(pass, said))
             }
-            // A library action's row. `used_by` counts automations rather than steps — what it is read
-            // for is how far a rewrite of the prompt carries — and `reach` says which of the two
-            // shelves it sits on, which is the column the listing carries rather than a second list.
+            // A library action's row. `used_by` counts automations rather than placements — what it is
+            // read for is how far a rewrite of what it holds carries — `steps` how many steps it holds,
+            // and `reach` says which of the two shelves it sits on, which is the column the listing
+            // carries rather than a second list.
             "action-listed" => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["automation",
@@ -456,6 +545,18 @@ impl Driver<'_> {
                         }
                     ));
                 }
+                if with.contains_key("steps") {
+                    let want = req_i64(with, "steps")?;
+                    let got = row["steps"].as_i64();
+                    pass = pass && got == Some(want);
+                    said.push_str(&format!(
+                        ", holding {} steps (expected {want})",
+                        match got {
+                            Some(n) => n.to_string(),
+                            None => "(none reported)".to_string(),
+                        }
+                    ));
+                }
                 if let Some(want) = with.get("reach").and_then(|v| v.as_str()) {
                     if !matches!(want, "device" | "project") {
                         return Err(format!(
@@ -474,35 +575,48 @@ impl Driver<'_> {
                 said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
                 Ok(Outcome::assert(pass, said))
             }
-            // One step of a definition, read back off `automation show` with the library already read
-            // in. What a road may ask for is the prompt it runs on, where that prompt came from, and
-            // the three families it declares — and the three are asked for whole, so a build that grew
-            // a way out nobody declared is a mismatch rather than something nobody looked at.
-            "step-read" => {
+            // One placement on an automation, read back off `automation show`: what it runs under,
+            // with the answers written on this placement. The families are asked for whole, so a
+            // build that grew a way out nobody declared is a mismatch rather than something nobody
+            // looked at.
+            "placement-read" => {
                 let automation = self.resolve(with)?;
-                judge_step(automation, &self.definition(automation)?, with)
+                judge_placement(automation, &self.definition(automation)?, with)
             }
-            // Where leaving one way out takes the run. The pair an edge hangs on is the step and the
-            // name it carries, which is the pair `edge-add` writes it under.
+            // One step inside a library action, read back off `automation action-show`.
+            "step-read" => {
+                let action = self.resolve(with)?;
+                judge_step(action, &self.action_definition(action)?, with)
+            }
+            // Where leaving one way out takes the run, on either picture. The pair an edge hangs on is
+            // the box and the name it carries, which is the pair `edge-add` writes it under.
             "edge-read" => {
-                let automation = self.resolve(with)?;
-                judge_edge(automation, &self.definition(automation)?, with)
+                let target = self.resolve(with)?;
+                let view = match opt_bool(with, "in_action").unwrap_or(false) {
+                    true => Picture::Action(self.action_definition(target)?),
+                    false => Picture::Automation(self.definition(target)?),
+                };
+                judge_edge(target, &view, with)
             }
             _ => Err(unmapped(Domain::Automation, op)),
         }
     }
 
-    /// One automation's definition, resolved — the one read every `*-read` assert stands on.
+    /// One automation's definition, resolved — the placements on it and what joins them.
     fn definition(&self, automation: i64) -> Result<serde_json::Value, String> {
         self.run_json(&["automation", "show", &automation.to_string(), "--json"])
     }
 
-    /// **Which of the two declares it** — the step, or the library action the step runs.
+    /// One library action's definition — the steps inside it and what joins them.
+    fn action_definition(&self, action: i64) -> Result<serde_json::Value, String> {
+        self.run_json(&["automation", "action-show", &action.to_string(), "--json"])
+    }
+
+    /// **Which of the two declares it** — a step, or a library action.
     ///
-    /// A step made of an action declares nothing of its own: its ways out, its settings and its
-    /// inputs are the action's, so that two automations running the same action are running the same
-    /// thing. The binary refuses the other spelling by name, and a road says which it means by naming
-    /// `step:` or `action:`.
+    /// Both declare their own ways out and inputs: a step's are what a line inside the
+    /// action leaves from and what a wire inside it fills, and an action's are what its placements
+    /// leave by and take in. A road says which it means by naming `step:` or `action:`.
     fn declarer(&self, with: &Args) -> Result<(&'static str, i64, &'static str), String> {
         match with.contains_key("action") {
             true => Ok(("--action", self.resolve_key(with, "action")?, "library action")),
@@ -511,7 +625,8 @@ impl Driver<'_> {
     }
 
     /// The way out an edge or a wire leaves by, written the one way the command takes it:
-    /// `<step>:<way out>`, where the bare `<step>:` is the unnamed one and `<step>:*` the error one.
+    /// `<box>:<way out>`, where the bare `<box>:` is the unnamed one and `<box>:*` the error one. The
+    /// box is a placement, or inside an action a step — the command reads which off `--in-action`.
     ///
     /// It is built here rather than in each caller because both of them name the same pair, and a
     /// road that spelled it itself would be writing an id no scenario can know.
@@ -583,20 +698,73 @@ fn answer(with: &Args, args: &mut Vec<String>) -> Result<String, String> {
     Ok(format!("answered {}", said.join(", ")))
 }
 
-/// One step of a definition, judged against what a road said it was built as.
+/// One placement on an automation, judged against what a road said it runs under.
 ///
 /// **The three families are read whole.** `exits`, `inputs` and `settings` each name all of what the
-/// step declares rather than a sample of it: a build that grew a way out nobody wrote would pass
-/// every question asked one at a time, and the whole point of reading a definition back is that what
-/// is there is what was built.
-fn judge_step(automation: i64, view: &serde_json::Value, with: &Args) -> Result<Outcome, String> {
+/// placement runs under rather than a sample of it: a build that grew a way out nobody wrote would
+/// pass every question asked one at a time, and the whole point of reading a definition back is that
+/// what is there is what was built. The first two are the action's, the answers in the third this
+/// placement's own.
+fn judge_placement(automation: i64, view: &serde_json::Value, with: &Args) -> Result<Outcome, String> {
+    let name = req_str(with, "name")?;
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let placed = placements_named(view, name);
+    let one = match (placed.as_slice(), present) {
+        ([], _) => {
+            return Ok(Outcome::assert(
+                !present,
+                format!(
+                    "automation {automation} has no placement of `{name}` (expected {}, {})",
+                    if present { "one" } else { "none" },
+                    if present { "MISMATCH" } else { "as expected" }
+                ),
+            ))
+        }
+        (_, false) => {
+            return Ok(Outcome::assert(
+                false,
+                format!("automation {automation} still has a placement of `{name}` (MISMATCH)"),
+            ))
+        }
+        ([one], true) => *one,
+        (many, true) => {
+            return Err(format!(
+                "automation {automation} places `{name}` {} times — a road reading one of them gives its actions names that tell them apart",
+                many.len()
+            ))
+        }
+    };
+    let mut pass = true;
+    let mut said = format!("the placement of `{name}` on automation {automation} is there");
+    if with.contains_key("exits") {
+        let (ok, note) = judge_names(with, "exits", &exit_names(one), "leaving by")?;
+        pass = pass && ok;
+        said.push_str(&note);
+    }
+    if with.contains_key("inputs") {
+        let (ok, note) = judge_names(with, "inputs", &port_names(one), "taking in")?;
+        pass = pass && ok;
+        said.push_str(&note);
+    }
+    if with.contains_key("settings") {
+        let (ok, note) = judge_settings(with, rows_of(one, "settings"))?;
+        pass = pass && ok;
+        said.push_str(&note);
+    }
+    said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
+    Ok(Outcome::assert(pass, said))
+}
+
+/// One step inside a library action, judged against what a road said it was built as — the prompt it
+/// runs on, and its ways out and inputs read whole, for the reason a placement's are.
+fn judge_step(action: i64, view: &serde_json::Value, with: &Args) -> Result<Outcome, String> {
     let name = req_str(with, "name")?;
     let present = opt_bool(with, "present").unwrap_or(true);
     let Some(step) = step_named(view, name) else {
         return Ok(Outcome::assert(
             !present,
             format!(
-                "automation {automation} has no step `{name}` (expected {}, {})",
+                "library action {action} has no step `{name}` (expected {}, {})",
                 if present { "one" } else { "none" },
                 if present { "MISMATCH" } else { "as expected" }
             ),
@@ -605,45 +773,23 @@ fn judge_step(automation: i64, view: &serde_json::Value, with: &Args) -> Result<
     if !present {
         return Ok(Outcome::assert(
             false,
-            format!("automation {automation} still has a step `{name}` (MISMATCH)"),
+            format!("library action {action} still has a step `{name}` (MISMATCH)"),
         ));
     }
     let mut pass = true;
-    let mut said = format!("step `{name}` of automation {automation} is defined");
+    let mut said = format!("step `{name}` of library action {action} is defined");
     if let Some(want) = with.get("prompt").and_then(|v| v.as_str()) {
-        let got = step["prompt"].as_str().unwrap_or("(none reported)");
+        let got = step["step"]["prompt"].as_str().unwrap_or("(none reported)");
         pass = pass && got == want;
         said.push_str(&format!(", running on `{got}` (expected `{want}`)"));
     }
-    // The half the picture cannot say. It draws that a prompt came from the library; the terminal
-    // names which action it was read off.
-    if let Some(want) = with.get("from_action").and_then(|v| v.as_str()) {
-        let got = step["action"]["name"].as_str().unwrap_or("(its own prompt)");
-        pass = pass && got == want;
-        said.push_str(&format!(", read off library action `{got}` (expected `{want}`)"));
-    }
     if with.contains_key("exits") {
-        let want = word_list(with, "exits")?;
-        // A way out is named the way an edge names one: the unnamed one it is born with is the empty
-        // name, and the error one is `*`.
-        let got: Vec<String> = rows_of(step, "exits")
-            .iter()
-            .map(|one| one["exit"]["name"].as_str().unwrap_or("").to_string())
-            .collect();
-        pass = pass && got == want;
-        said.push_str(&format!(", leaving by {got:?} (expected {want:?})"));
+        let (ok, note) = judge_names(with, "exits", &exit_names(step), "leaving by")?;
+        pass = pass && ok;
+        said.push_str(&note);
     }
     if with.contains_key("inputs") {
-        let want = word_list(with, "inputs")?;
-        let got: Vec<String> = rows_of(step, "inputs")
-            .iter()
-            .map(|one| one["name"].as_str().unwrap_or("").to_string())
-            .collect();
-        pass = pass && got == want;
-        said.push_str(&format!(", taking in {got:?} (expected {want:?})"));
-    }
-    if with.contains_key("settings") {
-        let (ok, note) = judge_settings(with, rows_of(step, "settings"))?;
+        let (ok, note) = judge_names(with, "inputs", &port_names(step), "taking in")?;
         pass = pass && ok;
         said.push_str(&note);
     }
@@ -651,54 +797,106 @@ fn judge_step(automation: i64, view: &serde_json::Value, with: &Args) -> Result<
     Ok(Outcome::assert(pass, said))
 }
 
-/// Where leaving one way out takes the run — on to a step (`to`), or to an end of its own (`ends`).
-fn judge_edge(automation: i64, view: &serde_json::Value, with: &Args) -> Result<Outcome, String> {
+/// The picture an edge is read off: an automation's, whose boxes are placements named by the action
+/// standing on each, or an action's, whose boxes are its steps.
+enum Picture {
+    Automation(serde_json::Value),
+    Action(serde_json::Value),
+}
+
+impl Picture {
+    fn view(&self) -> &serde_json::Value {
+        match self {
+            Picture::Automation(view) | Picture::Action(view) => view,
+        }
+    }
+
+    /// The id of the box a road names. On an automation's picture that is the placement the named
+    /// action stands on — refused where it stands on two, since which of them the road meant is not
+    /// something a name can say.
+    fn box_named(&self, name: &str) -> Result<Option<i64>, String> {
+        match self {
+            Picture::Action(view) => Ok(step_named(view, name).and_then(|one| one["step"]["id"].as_i64())),
+            Picture::Automation(view) => match placements_named(view, name).as_slice() {
+                [] => Ok(None),
+                [one] => Ok(one["placement"]["id"].as_i64()),
+                many => Err(format!(
+                    "`{name}` is placed {} times — a road reading an edge gives its actions names that tell them apart",
+                    many.len()
+                )),
+            },
+        }
+    }
+
+    /// The name a box id carries on this picture — what turns the ids an edge holds back into the
+    /// words a road wrote.
+    fn name_of(&self, id: Option<i64>) -> Option<String> {
+        let id = id?;
+        let (key, rows, name) = match self {
+            Picture::Action(view) => ("step", rows_of(view, "steps"), "step"),
+            Picture::Automation(view) => ("placement", rows_of(view, "placements"), "action"),
+        };
+        rows.iter()
+            .find(|one| one[key]["id"].as_i64() == Some(id))
+            .and_then(|one| one[name]["name"].as_str())
+            .map(str::to_string)
+    }
+}
+
+/// Where leaving one way out takes the run — on to a box (`to`), out by one of the action's own ways
+/// out (`exit_to`), or to an end of its own (`ends`).
+fn judge_edge(owner: i64, picture: &Picture, with: &Args) -> Result<Outcome, String> {
     let from = req_str(with, "from")?;
     let exit = with.get("exit").and_then(|v| v.as_str()).unwrap_or("");
     let named = match exit {
         "" => "the unnamed way out".to_string(),
         other => format!("`{other}`"),
     };
-    let Some(from_step) = step_named(view, from) else {
-        return Ok(Outcome::assert(
-            false,
-            format!("automation {automation} has no step `{from}` to leave (MISMATCH)"),
-        ));
+    let Some(from_id) = picture.box_named(from)? else {
+        return Ok(Outcome::assert(false, format!("{owner} has no box `{from}` to leave (MISMATCH)")));
     };
-    let from_id = from_step["step"]["id"].as_i64();
-    let Some(edge) = rows_of(view, "edges").iter().find(|one| {
-        one["from_step_id"].as_i64() == from_id && one["exit_name"].as_str().unwrap_or("") == exit
+    let Some(edge) = rows_of(picture.view(), "edges").iter().find(|one| {
+        one["from_id"].as_i64() == Some(from_id) && one["exit_name"].as_str().unwrap_or("") == exit
     }) else {
-        return Ok(Outcome::assert(
-            false,
-            format!("nothing happens after {named} of step `{from}` (MISMATCH)"),
-        ));
+        return Ok(Outcome::assert(false, format!("nothing happens after {named} of `{from}` (MISMATCH)")));
     };
     let ends = edge["ends"].as_str().unwrap_or("(none reported)");
     let pass;
-    let mut said = format!("after {named} of step `{from}`, the run ");
-    match (with.get("to").and_then(|v| v.as_str()), with.get("ends").and_then(|v| v.as_str())) {
-        (Some(_), Some(_)) => {
-            return Err(
-                "`to` names the step an edge goes on to and `ends` says it goes nowhere — name one of them"
-                    .to_string(),
-            )
-        }
-        (Some(want), None) => {
-            let got = step_name_of(view, edge["to_step_id"].as_i64());
+    let mut said = format!("after {named} of `{from}`, the run ");
+    let asked = (
+        with.get("to").and_then(|v| v.as_str()),
+        with.get("exit_to").and_then(|v| v.as_str()),
+        with.get("ends").and_then(|v| v.as_str()),
+    );
+    match asked {
+        (Some(want), None, None) => {
+            let got = picture.name_of(edge["to_id"].as_i64());
             pass = ends == "go" && got.as_deref() == Some(want);
             said.push_str(&format!(
-                "goes to `{}` (`{ends}`, expected step `{want}`)",
+                "goes to `{}` (`{ends}`, expected `{want}`)",
                 got.unwrap_or_else(|| "nowhere".to_string())
             ));
         }
-        (None, Some(want)) => {
+        (None, Some(want), None) => {
+            let got = edge["exit_to"].as_str().unwrap_or("");
+            pass = ends == "exit" && got == want;
+            said.push_str(&format!(
+                "leaves the action by `{got}` (`{ends}`, expected the action's way out `{want}`)"
+            ));
+        }
+        (None, None, Some(want)) => {
             pass = ends == want;
             said.push_str(&format!("ends `{ends}` (expected `{want}`)"));
         }
-        (None, None) => {
+        (None, None, None) => {
             pass = true;
             said.push_str(&format!("ends `{ends}`"));
+        }
+        _ => {
+            return Err(
+                "an edge goes on to a box (`to`), out of the action (`exit_to`) or to an end (`ends`) — name one of them"
+                    .to_string(),
+            )
         }
     }
     said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
@@ -713,20 +911,41 @@ fn rows_of<'a>(shown: &'a serde_json::Value, key: &str) -> &'a [serde_json::Valu
     shown[key].as_array().map(Vec::as_slice).unwrap_or(&[])
 }
 
-/// One step of a definition, found by the name it was built under.
+/// One step of an action, found by the name it was built under.
 fn step_named<'a>(view: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
     rows_of(view, "steps").iter().find(|one| one["step"]["name"].as_str() == Some(name))
 }
 
-/// The name a step id carries in this definition — what turns the ids an edge holds back into the
-/// words a road wrote.
-fn step_name_of(view: &serde_json::Value, id: Option<i64>) -> Option<String> {
-    let id = id?;
-    rows_of(view, "steps")
+/// The placements on an automation of the action carrying this name — the name its box is drawn
+/// under. Usually one; an action placed twice is two.
+fn placements_named<'a>(view: &'a serde_json::Value, name: &str) -> Vec<&'a serde_json::Value> {
+    rows_of(view, "placements")
         .iter()
-        .find(|one| one["step"]["id"].as_i64() == Some(id))
-        .and_then(|one| one["step"]["name"].as_str())
-        .map(str::to_string)
+        .filter(|one| one["action"]["name"].as_str() == Some(name))
+        .collect()
+}
+
+/// The ways out a box declares, named the way an edge names one: the unnamed one it is born with is
+/// the empty name, and the error one is `*`.
+fn exit_names(declarer: &serde_json::Value) -> Vec<String> {
+    rows_of(declarer, "exits")
+        .iter()
+        .map(|one| one["exit"]["name"].as_str().unwrap_or("").to_string())
+        .collect()
+}
+
+/// The inputs a box declares, by name.
+fn port_names(declarer: &serde_json::Value) -> Vec<String> {
+    rows_of(declarer, "inputs")
+        .iter()
+        .map(|one| one["name"].as_str().unwrap_or("").to_string())
+        .collect()
+}
+
+/// One family of names, compared whole against the list a road wrote.
+fn judge_names(with: &Args, key: &str, got: &[String], reading: &str) -> Result<(bool, String), String> {
+    let want = word_list(with, key)?;
+    Ok((got == want.as_slice(), format!(", {reading} {got:?} (expected {want:?})")))
 }
 
 /// A list of names as a road writes one. Written as anything else it is refused here rather than read
@@ -855,76 +1074,89 @@ mod tests {
         assert!(answer(&with("{}"), &mut args).is_err());
     }
 
-    /// One definition as `automation show --json` prints it, cut down to what the read-back asserts
-    /// look at: two steps, one carrying its own prompt and one made of a library action, the edges
-    /// between them and the document they share.
-    fn definition() -> serde_json::Value {
+    /// One automation as `automation show --json` prints it, cut down to what the read-back asserts
+    /// look at: two placements, the first answering one of the two settings its action declares, and
+    /// the edges between them.
+    fn automation() -> serde_json::Value {
         serde_json::json!({
-            "automation": { "id": 1, "name": "one task, three steps" },
-            "steps": [
+            "automation": { "id": 1, "name": "one task, two actions" },
+            "placements": [
                 {
-                    "step": { "id": 1, "name": "take", "prompt": "take the next task" },
-                    "action": null,
-                    "prompt": "take the next task",
+                    "placement": { "id": 1, "action_id": 1 },
+                    "action": { "id": 1, "name": "take" },
                     "exits": [
-                        { "exit": { "id": 3, "name": null }, "outputs": [] },
-                        { "exit": { "id": 4, "name": "*" }, "outputs": [] },
+                        { "exit": { "id": 1, "name": null }, "outputs": [] },
+                        { "exit": { "id": 2, "name": "*" }, "outputs": [] },
                         { "exit": { "id": 5, "name": "got one" }, "outputs": [] },
                     ],
-                    "inputs": [{ "id": 2, "name": "brief", "kind": "value", "required": true }],
+                    "inputs": [{ "id": 1, "name": "brief", "kind": "value", "required": true }],
                     "settings": [
                         { "id": 1, "name": "how many", "kind": "number", "value": "3" },
                         { "id": 2, "name": "where to work", "kind": "folder", "value": null },
                     ],
                 },
                 {
-                    "step": { "id": 2, "name": "review", "prompt": null },
-                    "action": { "id": 1, "name": "read it back", "prompt": "read what was written" },
-                    "prompt": "read what was written",
+                    "placement": { "id": 2, "action_id": 2 },
+                    "action": { "id": 2, "name": "review" },
                     "exits": [
-                        { "exit": { "id": 1, "name": null }, "outputs": [] },
-                        { "exit": { "id": 2, "name": "*" }, "outputs": [] },
+                        { "exit": { "id": 3, "name": null }, "outputs": [] },
+                        { "exit": { "id": 4, "name": "*" }, "outputs": [] },
                     ],
                     "inputs": [],
                     "settings": [],
                 },
             ],
             "edges": [
-                { "id": 1, "from_step_id": 1, "exit_name": "got one", "to_step_id": 2, "ends": "go" },
-                { "id": 2, "from_step_id": 2, "exit_name": null, "to_step_id": null, "ends": "done" },
+                { "id": 1, "from_id": 1, "exit_name": "got one", "to_id": 2, "exit_to": null, "ends": "go" },
+                { "id": 2, "from_id": 2, "exit_name": null, "to_id": null, "exit_to": null, "ends": "done" },
             ],
             "wires": [],
         })
     }
 
-    /// A step read back as it was built: the prompt it runs on, the ways out it can leave by — the two
-    /// it is born with and the one that was declared — what it takes in, and its settings with the
-    /// answer written for one of them.
-    #[test]
-    fn a_step_is_read_back_as_it_was_built() {
-        let read = judge_step(
-            1,
-            &definition(),
-            &with(
-                r#"{ name: take, prompt: take the next task, exits: ["", "*", got one],
-                     inputs: [brief], settings: { how many: 3, where to work: ~ } }"#,
-            ),
-        )
-        .expect("a verdict");
-        assert!(read.pass, "{}", read.note);
+    /// One library action as `automation action-show --json` prints it, cut the same way: two steps,
+    /// the line between them, and the line that carries the second out by the action's own way out.
+    fn action() -> serde_json::Value {
+        serde_json::json!({
+            "action": { "id": 1, "name": "take" },
+            "steps": [
+                {
+                    "step": { "id": 1, "name": "look", "prompt": "look for the next task" },
+                    "exits": [
+                        { "exit": { "id": 6, "name": null }, "outputs": [] },
+                        { "exit": { "id": 7, "name": "*" }, "outputs": [] },
+                        { "exit": { "id": 8, "name": "found" }, "outputs": [] },
+                    ],
+                    "inputs": [{ "id": 2, "name": "brief", "kind": "value", "required": false }],
+                },
+                {
+                    "step": { "id": 2, "name": "claim", "prompt": "take it" },
+                    "exits": [
+                        { "exit": { "id": 9, "name": null }, "outputs": [] },
+                        { "exit": { "id": 10, "name": "*" }, "outputs": [] },
+                    ],
+                    "inputs": [],
+                },
+            ],
+            "edges": [
+                { "id": 3, "from_id": 1, "exit_name": "found", "to_id": 2, "exit_to": null, "ends": "go" },
+                { "id": 4, "from_id": 2, "exit_name": null, "to_id": null, "exit_to": "got one", "ends": "exit" },
+            ],
+            "wires": [],
+        })
     }
 
-    /// And the step made of a library action reads its prompt and its ways out off the action, which
-    /// is the half the picture cannot say: it draws that a prompt came from the library, never which
-    /// action it came from.
+    /// A placement read back as it was built: the ways out its action declares — the two it is born
+    /// with and the one that was declared — what it takes in, and its settings with the answer this
+    /// placement wrote for one of them.
     #[test]
-    fn a_step_made_of_a_library_action_names_the_action_it_reads() {
-        let read = judge_step(
+    fn a_placement_is_read_back_as_it_was_built() {
+        let read = judge_placement(
             1,
-            &definition(),
+            &automation(),
             &with(
-                r#"{ name: review, prompt: read what was written, from_action: read it back,
-                     exits: ["", "*"], inputs: [], settings: {} }"#,
+                r#"{ name: take, exits: ["", "*", got one], inputs: [brief],
+                     settings: { how many: 3, where to work: ~ } }"#,
             ),
         )
         .expect("a verdict");
@@ -940,9 +1172,12 @@ mod tests {
             r#"{ name: take, inputs: [] }"#,
             r#"{ name: take, settings: { how many: 3 } }"#,
         ] {
-            let read = judge_step(1, &definition(), &with(asked)).expect("a verdict");
+            let read = judge_placement(1, &automation(), &with(asked)).expect("a verdict");
             assert!(!read.pass, "asking `{asked}` should have caught the rest: {}", read.note);
         }
+        let read = judge_step(1, &action(), &with(r#"{ name: look, exits: ["", "*"] }"#))
+            .expect("a verdict");
+        assert!(!read.pass, "a step's ways out are read whole too: {}", read.note);
     }
 
     /// A setting nobody answered is a state of its own rather than an empty answer, and a road says so
@@ -950,49 +1185,89 @@ mod tests {
     /// the JSON the column holds it in.
     #[test]
     fn an_unanswered_setting_is_not_an_empty_answer() {
-        let wrong = judge_step(
+        let wrong = judge_placement(
             1,
-            &definition(),
+            &automation(),
             &with(r#"{ name: take, settings: { how many: 3, where to work: "" } }"#),
         )
         .expect("a verdict");
         assert!(!wrong.pass, "an empty answer is not the same as none: {}", wrong.note);
 
-        let also_wrong = judge_step(
+        let also_wrong = judge_placement(
             1,
-            &definition(),
+            &automation(),
             &with(r#"{ name: take, settings: { how many: "3", where to work: ~ } }"#),
         )
         .expect("a verdict");
         assert!(!also_wrong.pass, "the number was answered as a number: {}", also_wrong.note);
     }
 
-    /// A step nobody built. Every read above would pass against a build that answered with whatever
+    /// A step inside the action, read back with the prompt it carries and what it declares of its own
+    /// — which is not what the action declares to the automations placing it.
+    #[test]
+    fn a_step_is_read_back_as_it_was_built() {
+        let read = judge_step(
+            1,
+            &action(),
+            &with(r#"{ name: look, prompt: look for the next task, exits: ["", "*", found], inputs: [brief] }"#),
+        )
+        .expect("a verdict");
+        assert!(read.pass, "{}", read.note);
+    }
+
+    /// A box nobody built. Every read above would pass against a build that answered with whatever
     /// name it was handed, and this is the one that says they were answers.
     #[test]
-    fn a_step_nobody_built_is_read_back_as_absent() {
-        let absent =
-            judge_step(1, &definition(), &with("{ name: publish, present: false }")).expect("a verdict");
+    fn a_box_nobody_built_is_read_back_as_absent() {
+        let absent = judge_placement(1, &automation(), &with("{ name: publish, present: false }"))
+            .expect("a verdict");
         assert!(absent.pass, "{}", absent.note);
+        let claimed = judge_placement(1, &automation(), &with("{ name: take, present: false }"))
+            .expect("a verdict");
+        assert!(!claimed.pass, "a placement that is there is not absent: {}", claimed.note);
 
-        let claimed =
-            judge_step(1, &definition(), &with("{ name: take, present: false }")).expect("a verdict");
+        let absent = judge_step(1, &action(), &with("{ name: publish, present: false }")).expect("a verdict");
+        assert!(absent.pass, "{}", absent.note);
+        let claimed = judge_step(1, &action(), &with("{ name: look, present: false }")).expect("a verdict");
         assert!(!claimed.pass, "a step that is there is not absent: {}", claimed.note);
     }
 
-    /// Where leaving one way out takes the run: on to a step by the name written along it, or to an
-    /// end of the run's own.
+    /// Where leaving one way out takes the run on an automation's picture: on to a box named by the
+    /// action standing on it, or to an end of the run's own.
     #[test]
     fn a_way_out_is_read_back_with_where_it_goes() {
+        let picture = Picture::Automation(automation());
         for asked in ["{ from: take, exit: got one, to: review }", "{ from: review, ends: done }"] {
-            let read = judge_edge(1, &definition(), &with(asked)).expect("a verdict");
+            let read = judge_edge(1, &picture, &with(asked)).expect("a verdict");
             assert!(read.pass, "{}", read.note);
         }
 
-        // The way out is half of what an edge hangs on, so the unnamed one of a step whose edge leaves
+        // The way out is half of what an edge hangs on, so the unnamed one of a box whose edge leaves
         // by a named one is nothing at all.
-        let elsewhere =
-            judge_edge(1, &definition(), &with("{ from: take, to: review }")).expect("a verdict");
+        let elsewhere = judge_edge(1, &picture, &with("{ from: take, to: review }")).expect("a verdict");
         assert!(!elsewhere.pass, "{}", elsewhere.note);
+    }
+
+    /// And inside an action, where a step's way out may be carried out by one of the action's own —
+    /// the line that makes what a step does reach the placement around it.
+    #[test]
+    fn a_way_out_inside_an_action_is_read_back_with_where_it_goes() {
+        let picture = Picture::Action(action());
+        for asked in ["{ from: look, exit: found, to: claim }", "{ from: claim, exit_to: got one }"] {
+            let read = judge_edge(1, &picture, &with(asked)).expect("a verdict");
+            assert!(read.pass, "{}", read.note);
+        }
+        let other = judge_edge(1, &picture, &with("{ from: claim, exit_to: '' }")).expect("a verdict");
+        assert!(!other.pass, "carried out by a different way out of the action: {}", other.note);
+    }
+
+    /// An action placed twice is two boxes under one name, and a read naming it cannot say which it
+    /// meant — so it is refused rather than answered off whichever came first.
+    #[test]
+    fn a_name_placed_twice_is_refused_rather_than_guessed() {
+        let mut twice = automation();
+        twice["placements"][1]["action"]["name"] = serde_json::json!("take");
+        assert!(judge_placement(1, &twice, &with("{ name: take }")).is_err());
+        assert!(judge_edge(1, &Picture::Automation(twice), &with("{ from: take, to: take }")).is_err());
     }
 }

@@ -98,7 +98,7 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_action: ["automationActions"],
   automation_placement: ["automationActions", "automations"],
   automation_note: ["automations"],
-  automation_step: ["automationActions", "automations"],
+  automation_action_step: ["automationActions", "automations"],
   automation_placement_note: ["automations"],
   automation_cfg: ["automationActions", "automations"],
   automation_exit: ["automationActions", "automations"],

@@ -577,7 +577,7 @@ task?: AutomationRunTaskDto, say: string, agent: string, model?: string,
  */
 folder?: string, 
 /**
- * Whether this step may stop and wait for a person (`automation_step.interactive`).
+ * Whether this step may stop and wait for a person (`automation_action_step.interactive`).
  */
 interactive: boolean, };
 

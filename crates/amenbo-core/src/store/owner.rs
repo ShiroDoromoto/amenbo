@@ -73,7 +73,7 @@ pub(super) fn automation_action(conn: &Connection, id: i64) -> Result<Option<i64
 /// The project a step is in: the library action holding it says, the same way the action's own reach
 /// does — so a step of a device-held action is nobody's project's.
 pub(super) fn automation_step(conn: &Connection, id: i64) -> Result<Option<i64>> {
-    match read::automation_step(conn, id).map_err(crate::error::engine_on(conn))? {
+    match read::automation_action_step(conn, id).map_err(crate::error::engine_on(conn))? {
         Some(s) => automation_action(conn, s.action_id),
         None => Ok(None),
     }

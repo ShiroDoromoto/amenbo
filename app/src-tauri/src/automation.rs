@@ -315,7 +315,7 @@ pub fn automation_step_add(
         show_history: true,
     };
     with_store_mut(|store| {
-        let first = read::automation_step_ids(store.read_model().conn(), action_id)?.is_empty();
+        let first = read::automation_action_step_ids(store.read_model().conn(), action_id)?.is_empty();
         let step = store.automation_step_add(action_id, new)?;
         for name in &exits {
             store.automation_exit_add(AutomationOwner::Step, step.id, Some(name))?;

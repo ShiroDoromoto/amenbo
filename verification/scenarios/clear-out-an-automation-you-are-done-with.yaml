@@ -1,0 +1,154 @@
+# A definition is built to be run, and what a reader does with one they have stopped running is the
+# other half of owning it. Three writes make up that half and they are not the same kind of thing:
+# a name corrected, a definition put out of the way, and a definition gone. The middle one is the
+# one worth walking — archiving takes nothing away and stops nothing already running, so what a
+# reader has to be able to see is the row still standing with the mark on it. The last one takes
+# every step with it and cannot be taken back, which is why the screen asks before it writes.
+id: clear-out-an-automation-you-are-done-with
+title: An automation can be renamed, put out of the way, and finally deleted with everything built into it
+description: >
+  Build a definition with a step in it, correct its name, put it out of the way and read the row
+  back — still listed, and marked — then delete it and read the list back with nothing in it. The
+  archived reading is the half worth walking twice: a build that dropped the row instead of marking
+  it would leave a reader unable to tell what they shelved from what they threw away, and both
+  would look the same from the list.
+given:
+  # The misspelling is the premise, not a slip: the road corrects it, and a name already right would
+  # leave the rename with nothing a reader could see it had done.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the moring sweep" }, as: sweep }
+  - { type: action, domain: automation, op: step-add, with: { target: sweep, name: sweep, agent: claude-code, prompt: read what came in overnight } }
+
+steps_cli:
+  # What the row says before anything is written on it: the name it was built under, misspelling and
+  # all, and the one step it is built out of.
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: sweep
+      name: "SCENARIO SEED — the moring sweep"
+      steps: 1
+      archived: false
+
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: sweep
+      name: "SCENARIO SEED — the morning sweep"
+
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: sweep
+      archived: true
+
+  # Still listed, under the corrected name, and marked. An archived definition is one kept out of a
+  # reader's way rather than one that has gone, and the row is where that difference is readable.
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: sweep
+      name: "SCENARIO SEED — the morning sweep"
+      steps: 1
+      archived: true
+
+  - type: action
+    domain: automation
+    op: remove
+    with:
+      target: sweep
+
+  # And now it has gone, step and all. This is the reading the mark above is not: the row is not
+  # there to carry anything.
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: sweep
+      present: false
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: sweep
+      steps: 1
+      archived: false
+
+  # The three fields are written on the build screen, which is where the definition is opened to.
+  # There is no Save there: each box writes as the caret leaves it.
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: sweep
+
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: sweep
+      name: "SCENARIO SEED — the morning sweep"
+
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: sweep
+      notes: what the overnight post is swept into
+
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: sweep
+      archived: true
+
+  # Back on the list, the row is drawn under the name just written on it and wears the mark. Both
+  # halves are read in one shot, because what the road is about is that they are read together.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: sweep
+      steps: 1
+      archived: true
+
+  # The delete is on the build screen rather than on the row, so the road goes back in for it — and
+  # what is pressed there is answered at the machine's own question before anything is written.
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: sweep
+
+  - type: action
+    domain: automation
+    op: remove
+    with:
+      target: sweep
+
+  # The press puts the reader back on the list, there being no definition left to draw a screen
+  # from, and the row has gone with it.
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: sweep
+      present: false

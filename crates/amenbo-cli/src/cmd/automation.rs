@@ -838,24 +838,13 @@ fn speaking_for() -> Result<i64, CliError> {
 }
 
 /// **The agent ids this machine was last seen able to start**, or `None` where it has never been
-/// asked (`AMB-D-792`).
+/// asked (`AMB-D-792`) — [`amenbo_core::wake::startable_ids`], which every launching surface asks
+/// rather than each deriving it from the remembered commands.
 ///
-/// It is the remembered answer and not a fresh probe: probing starts a login shell and reads a
-/// profile, which is arbitrary code that can wait on a network, and a launch is not the moment to pay
-/// that. `None` reaches the launch check as "not asked", which leaves the agent check unmade rather
-/// than failing every step on a machine nobody has probed.
+/// `None` reaches the launch check as "not asked", which leaves the agent check unmade rather than
+/// failing every step on a machine nobody has probed.
 fn startable(store: &Store) -> Option<Vec<String>> {
-    let config = &store.config;
-    let known = config.installed_agents()?;
-    let candidates = amenbo_core::wake::candidates(&[], &config.custom_agents, |command| {
-        known.iter().any(|one| one == command)
-    });
-    Some(
-        amenbo_core::wake::startable(&candidates)
-            .into_iter()
-            .map(|one| one.id.clone())
-            .collect(),
-    )
+    amenbo_core::wake::startable_ids(&store.config)
 }
 
 /// `<name>=<value>`, as `out` and `done --out` take it.

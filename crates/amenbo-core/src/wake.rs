@@ -193,6 +193,30 @@ pub fn startable(candidates: &[Candidate]) -> Vec<&Candidate> {
     candidates.iter().filter(|one| one.installed).collect()
 }
 
+/// **The agent ids this machine was last seen able to start**, or `None` where nobody has been asked
+/// (`AMB-D-792`) — what a launch and a step being opened are judged against
+/// ([`crate::ops::automation_run::Launcher::startable`]).
+///
+/// **The remembered answer names commands and a definition names ids** — `claude` against
+/// `claude-code` — so what a probe left behind ([`crate::config::Config::installed_agents`]) has to
+/// go through the catalog before the two can be compared at all.
+///
+/// It is one function because every surface that launches asks this one question, and each of them
+/// working it out again is how the two vocabularies came apart: the app handed the remembered
+/// commands straight down, so a run the launch check had just called ready was stopped `no_agent` on
+/// its first step, every time.
+///
+/// **It is the remembered answer and never a fresh probe.** Probing starts a login shell and reads a
+/// profile, which is arbitrary code that can wait on a network, and a launch is not the moment to pay
+/// that.
+pub fn startable_ids(config: &crate::config::Config) -> Option<Vec<String>> {
+    let known = config.installed_agents()?;
+    let here = candidates(&[], &config.custom_agents, |command| {
+        known.iter().any(|one| one == command)
+    });
+    Some(startable(&here).into_iter().map(|one| one.id.clone()).collect())
+}
+
 /// The answer: the project's if it still holds, else the person's, else the folder's trace, else
 /// nothing — the four ranks the module docs set out, in that order.
 ///
@@ -251,6 +275,35 @@ pub fn started_as(id: &str) -> Option<&'static Launch> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The remembered answer is commands and what it is compared against is ids**, so the two are
+    /// put through the catalog rather than against each other. Handing the commands down as they were
+    /// stopped every run `no_agent` on its first step, on a launch the check had just called ready.
+    #[test]
+    fn what_a_launch_is_judged_against_is_ids_and_not_the_commands_a_probe_remembered() {
+        let config = crate::config::Config {
+            installed_agents: Some(vec!["claude".to_string()]),
+            ..Default::default()
+        };
+
+        let ids = startable_ids(&config).expect("this machine has been asked");
+
+        assert!(
+            ids.contains(&"claude-code".to_string()),
+            "the command the probe remembered reaches a step as the id the step names: {ids:?}",
+        );
+        assert!(
+            !ids.contains(&"claude".to_string()),
+            "and the command itself is not among them — nothing names a step by it: {ids:?}",
+        );
+    }
+
+    /// A machine nobody has probed is not a machine with nothing installed (`AMB-D-792`). `None`
+    /// leaves the agent check unmade; an empty list would fail every step.
+    #[test]
+    fn a_machine_nobody_has_asked_answers_nothing_rather_than_an_empty_list() {
+        assert_eq!(startable_ids(&crate::config::Config::default()), None);
+    }
 
     /// Candidates built from a trace list and a set of installed commands, for asserting on.
     fn built(traced: &[&str], installed: &[&str]) -> Vec<Candidate> {

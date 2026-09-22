@@ -1,0 +1,179 @@
+# A run is a thing somebody can put a hand on. Holding one lets the step that is open finish and
+# stops the next from opening; letting it go picks it up where it was; stopping it hands the lane
+# back and is final. The three are one road because they are read against each other: a build where
+# holding stopped, or where letting go started a second run, would answer every one of them on its
+# own and still be wrong about the pair.
+id: hold-a-run-and-let-it-go-again
+title: A run is held, picked up again and stopped, and says which of the three it is at each turn
+description: >
+  Start a run, then hold it, let it go and stop it, reading what it says it is doing after each. The
+  terminal reads the run itself; the screen reads the row the running tab draws for it, which is
+  where a person meets the same three controls. Stopping is asserted last on both roads because it
+  is the one that cannot be taken back.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_cli:
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
+
+  - type: action
+    domain: automation
+    op: pause
+    with:
+      target: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: paused
+
+  - type: action
+    domain: automation
+    op: resume
+    with:
+      target: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
+
+  - type: action
+    domain: automation
+    op: stop
+    with:
+      target: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: stopped
+
+  # And it is reachable afterwards from the automation it came from, which is one of the two doors a
+  # run is ever found by — a run that ended is still a run that happened.
+  - type: assert
+    domain: automation
+    op: runs-listed
+    with:
+      target: run
+      automation: auto
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # The tab that draws every run this device is carrying. It is where the three controls are, so the
+  # road moves there rather than staying on the definition that made this one.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: pause
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: paused
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: resume
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: stop
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: stopped

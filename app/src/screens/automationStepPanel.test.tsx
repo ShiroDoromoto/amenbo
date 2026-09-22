@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// What the step panel draws and what each control writes (`AMB-T-5256`). The reads and the write door
-// are stubbed; every field, its control and what it sends run for real.
+// What the step panel draws and what each control writes (`AMB-T-5256`, `AMB-T-5282`). The reads and
+// the write doors are stubbed; every field, its control and what it sends run for real.
 //
 // What these guard: **nothing pressed says so** rather than drawing an empty form; **where the prompt
 // comes from is one control**, and a prompt that came from the library is read here and not written;
@@ -8,6 +8,11 @@
 // filter expression; **an input is filled from a list of what fits**; **the error way out is always
 // the last line of the ways out**; and **an agent this machine cannot start is listed and cannot be
 // picked**, which is what keeps the list from being shorter on one machine than on another.
+//
+// And what a step **declares**, not only what it answers: a way out is written from the line under
+// the list; moving a setting off `choice` takes its list of choices with it, in the one call core
+// will accept; a step running a library action is drawn without any of it, reading the action's; and
+// a refusal lands on the panel rather than in the console.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +23,16 @@ const hoisted = vi.hoisted(() => ({
   answerCfg: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
+  raise: vi.fn(),
+  declareExit: vi.fn(),
+  renameExit: vi.fn(),
+  removeExit: vi.fn(),
+  declareCfg: vi.fn(),
+  editCfg: vi.fn(),
+  removeCfg: vi.fn(),
+  declareInput: vi.fn(),
+  editInput: vi.fn(),
+  removeInput: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -26,6 +41,16 @@ vi.mock("../core/automations", () => ({
   answerAutomationCfg: hoisted.answerCfg,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
+  raiseStepToLibrary: hoisted.raise,
+  declareAutomationExit: hoisted.declareExit,
+  renameAutomationExit: hoisted.renameExit,
+  removeAutomationExit: hoisted.removeExit,
+  declareAutomationCfg: hoisted.declareCfg,
+  editAutomationCfg: hoisted.editCfg,
+  removeAutomationCfg: hoisted.removeCfg,
+  declareAutomationInput: hoisted.declareInput,
+  editAutomationInput: hoisted.editInput,
+  removeAutomationInput: hoisted.removeInput,
 }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
@@ -92,14 +117,18 @@ async function typeInto(box: HTMLInputElement, value: string) {
 }
 const boxes = () => [...container.querySelectorAll<HTMLInputElement>("input")];
 
+/** The line that declares one more of a family, found by what its empty box asks for. */
+const declareLine = (what: string) =>
+  [...container.querySelectorAll<HTMLDivElement>(".autostep__declare")].find(
+    (one) => one.querySelector("input")!.placeholder === what,
+  )!;
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  hoisted.editStep.mockReset();
-  hoisted.answerCfg.mockReset();
-  hoisted.setWire.mockReset();
-  hoisted.clearWire.mockReset();
+  for (const one of Object.values(hoisted)) one.mockReset();
+  hoisted.raise.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -123,6 +152,43 @@ describe("the step panel", () => {
       box.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     expect(hoisted.editStep).toHaveBeenCalledWith(1, { name: "Take one" });
+  });
+
+  /// **The one road from the build screen into the library** (`AMB-T-5277`). Until it was here, the
+  /// only way to put a prompt in the library was the CLI, while the tab that lists them was on screen.
+  it("raises a step's own prompt into a library the reader picks", async () => {
+    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    const press = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === t("auto.step.raise"))!;
+
+    // The name starts as the step's, and is the reader's to change: a step is named for its place in
+    // one automation, an action for what it is.
+    const named = boxes().find((b) => b.getAttribute("aria-label") === t("auto.step.raiseName"))!;
+    expect(named.value).toBe("Take the next task");
+    await typeInto(named, "Take one");
+
+    await act(async () => { press().click(); });
+    expect(hoisted.raise).toHaveBeenCalledWith(1, "Take one", 1);
+
+    // The device's library is the wider reach, and is asked for rather than defaulted to.
+    const reach = selects().find((one) => one.value === "project")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(reach, "device");
+      reach.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { press().click(); });
+    expect(hoisted.raise).toHaveBeenLastCalledWith(1, "Take one", null);
+  });
+
+  it("offers no raise to a step that already runs a library action", async () => {
+    // There is nothing of its own left to raise, and what it carries is the library's already.
+    await render({
+      automation: detail({ steps: [step({ actionId: 4, actionName: "Review", prompt: "review it" })] }),
+      stepId: 1,
+      projectId: 1,
+    });
+    expect(container.textContent).not.toContain(t("auto.step.raiseWhat"));
   });
 
   it("puts where the prompt comes from on one control, the library beside the step's own", async () => {
@@ -180,9 +246,15 @@ describe("the step panel", () => {
     expect(hoisted.clearWire).toHaveBeenCalledWith(3);
   });
 
-  it("draws the error way out last, and always", async () => {
+  it("draws the error way out last, and always, on a step that reads the library's", async () => {
     const one = detail({
-      steps: [step({ exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }] })],
+      steps: [
+        step({
+          actionId: 4,
+          actionName: "Review",
+          exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }],
+        }),
+      ],
     });
     await render({ automation: one, stepId: 1, projectId: 1 });
     const named = [...container.querySelectorAll(".autostep__exitname")].map((one) => one.textContent);
@@ -190,6 +262,72 @@ describe("the step panel", () => {
     const last = [...container.querySelectorAll(".autostep__exits li")].pop()!;
     expect(last.className).toContain("autostep__exiterr");
     expect(last.textContent).toBe(t("auto.pic.errorExit"));
+    // And nothing to declare with: the ways out, the settings and the inputs are the action's.
+    expect(container.querySelectorAll(".autostep__declare")).toHaveLength(0);
+  });
+
+  it("draws the error way out last among the rows a step's own ways out are written on", async () => {
+    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    const ways = [...container.querySelectorAll(".autostep__exits li")];
+    expect(ways).toHaveLength(2);
+    expect(ways[0]!.querySelector("input")!.placeholder).toBe(t("auto.step.exitUnnamed"));
+    // The error one is drawn and not offered: no box to rename it in, no press to take it away.
+    expect(ways[1]!.className).toContain("autostep__exiterr");
+    expect(ways[1]!.querySelectorAll("input, button")).toHaveLength(0);
+  });
+
+  it("declares a way out under the name that was typed, and empties the box once it is written",
+    async () => {
+      await render({ automation: detail(), stepId: 1, projectId: 1 });
+      const line = declareLine(t("auto.step.exitName"));
+      const box = line.querySelector<HTMLInputElement>("input")!;
+      await typeInto(box, "something to fix");
+      await act(async () => {
+        line.querySelector<HTMLButtonElement>("button")!.click();
+      });
+      expect(hoisted.declareExit).toHaveBeenCalledWith(1, "something to fix");
+      expect(box.value).toBe("");
+    });
+
+  it("takes a setting off choice and its list of choices in the one call", async () => {
+    const one = detail({
+      steps: [step({ settings: [{ name: "depth", kind: "choice", required: false, options: '["quick"]' }] })],
+    });
+    await render({ automation: one, stepId: 1, projectId: 1 });
+    const kind = selects().find((s) => s.value === "choice")!;
+    await act(async () => {
+      kind.value = "text";
+      kind.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(hoisted.editCfg).toHaveBeenCalledWith(1, "depth", { kind: "text", options: null });
+  });
+
+  it("declares an input as what it carries", async () => {
+    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    const line = declareLine(t("auto.step.inputName"));
+    await typeInto(line.querySelector<HTMLInputElement>("input")!, "report");
+    await act(async () => {
+      const kind = line.querySelector<HTMLSelectElement>("select")!;
+      kind.value = "file";
+      kind.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      line.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    expect(hoisted.declareInput).toHaveBeenCalledWith(1, { name: "report", kind: "file" });
+  });
+
+  it("draws what core refused, and leaves the typed name where it can be fixed", async () => {
+    hoisted.declareExit.mockRejectedValue("a way out called 'done' is already declared here");
+    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    const line = declareLine(t("auto.step.exitName"));
+    const box = line.querySelector<HTMLInputElement>("input")!;
+    await typeInto(box, "done");
+    await act(async () => {
+      line.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain("already declared");
+    expect(box.value).toBe("done");
   });
 
   it("takes a flag on the spot", async () => {

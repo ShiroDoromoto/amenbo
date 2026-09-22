@@ -24,12 +24,17 @@ import { invokeAck } from "./mutations";
 import type {
   AutomationActionCardDto,
   AutomationCardDto,
+  AutomationCfgDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
+  AutomationPortDto,
   AutomationRunCardDto,
   AutomationRunStartedDto,
   WakeDto,
 } from "../bindings/bindings";
+
+/** What kind of answer a setting takes, as the definition declares it. */
+export type CfgKind = AutomationCfgDto["kind"];
 
 /** A project's automations, in the order they were placed in. */
 export async function fetchAutomations(projectId: number): Promise<AutomationCardDto[]> {
@@ -84,6 +89,26 @@ export async function editAutomationAction(
     name: patch.name ?? null,
     prompt: patch.prompt ?? null,
   });
+}
+
+/**
+ * **Raise a step's own prompt into the library**: make an action of it, move the step's declarations
+ * onto that action, and point the step at it.
+ *
+ * It is the one road from the build screen into the library. The declarations **move** rather than
+ * being copied — a step running an action declares nothing of its own — and the picture around the
+ * step goes on reading, because an edge and a wire name a way out by its name.
+ *
+ * `project` is which library it lands in: the project's own, or `null` for the device's, which every
+ * project on this machine reaches.
+ */
+export async function raiseStepToLibrary(
+  step: number,
+  name: string,
+  project: number | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_from_step", { step, project, name });
 }
 
 /** One automation's whole definition, or nothing where that id names none. */
@@ -157,6 +182,136 @@ export async function answerAutomationCfg(
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_cfg_answer", { stepId, name, value });
+}
+
+/**
+ * **Declare another way out of this step.**
+ *
+ * Every step is born carrying the unnamed way out and the error one, so this is the second and every
+ * one after it. `*` is refused as a name — every step is read as carrying that one already.
+ *
+ * The three declaration families below name a row by **the step and the name**, the way the panel
+ * holds it: a setting and an input have no id on screen, an action-backed step's declaration and its
+ * answer being folded into the one row a screen draws. Only a step carrying its own prompt may be
+ * written on; one that runs a library action reads the action's, and the door refuses rather than
+ * rewriting the row that holds its answer.
+ */
+export async function declareAutomationExit(stepId: number, name: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_exit_declare", { stepId, name });
+}
+
+/**
+ * **Rename one way out**, `null` being the unnamed one at either end.
+ *
+ * **Every edge and every wire that named the old name is parted from it.** Core leaves them pointing
+ * at a name nobody declares rather than rewriting the graph around them, so the parting is visible in
+ * the picture — which is where a reader can act on it.
+ */
+export async function renameAutomationExit(
+  stepId: number,
+  from: string | null,
+  to: string | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_exit_rename", { stepId, from, to });
+}
+
+/** **Take one way out away**, with the outputs declared on it. The error one is refused. */
+export async function removeAutomationExit(stepId: number, name: string | null): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_exit_remove", { stepId, name });
+}
+
+/**
+ * **Declare a setting on this step** — the name it is answered under, the kind of answer it takes,
+ * and whether it has to be answered. `options` is the choice list and belongs to `choice` alone.
+ */
+export async function declareAutomationCfg(
+  stepId: number,
+  decl: { name: string; kind: CfgKind; required?: boolean; options?: string },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_cfg_declare", {
+    stepId,
+    name: decl.name,
+    kind: decl.kind,
+    required: decl.required ?? false,
+    options: decl.options ?? null,
+  });
+}
+
+/**
+ * **Change a setting's declaration.** `name` names the row and `patch.name` is what it becomes; only
+ * what is passed is written.
+ *
+ * `options` takes `null` to mean "no choice list", as against not being passed, which leaves it
+ * alone. **Moving a `choice` to another kind has to clear it in the same call**: a choice list on a
+ * kind that would never show it is refused.
+ */
+export async function editAutomationCfg(
+  stepId: number,
+  name: string,
+  patch: { name?: string; kind?: CfgKind; required?: boolean; options?: string | null },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_cfg_edit", {
+    stepId,
+    name,
+    rename: patch.name ?? null,
+    kind: patch.kind ?? null,
+    required: patch.required ?? null,
+    options: patch.options ?? null,
+    clearOptions: patch.options === null,
+  });
+}
+
+/** **Take a setting away**, with the answer written on it. */
+export async function removeAutomationCfg(stepId: number, name: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_cfg_remove", { stepId, name });
+}
+
+/**
+ * **Declare an input on this step** — what it takes in, and whether a run may open it with nothing
+ * reaching that input. An output belongs to the way out that produced it and is not declared here.
+ */
+export async function declareAutomationInput(
+  stepId: number,
+  decl: { name: string; kind: AutomationPortDto["kind"]; required?: boolean },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_input_declare", {
+    stepId,
+    name: decl.name,
+    kind: decl.kind,
+    required: decl.required ?? false,
+  });
+}
+
+/**
+ * **Change an input's declaration.** Renaming parts every wire that named the old name, for
+ * `renameAutomationExit`'s reason.
+ */
+export async function editAutomationInput(
+  stepId: number,
+  name: string,
+  patch: { name?: string; kind?: AutomationPortDto["kind"]; required?: boolean },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_input_edit", {
+    stepId,
+    name,
+    rename: patch.name ?? null,
+    kind: patch.kind ?? null,
+    required: patch.required ?? null,
+  });
+}
+
+/** **Take an input away.** The wires that fed it are left where they are, parted. */
+export async function removeAutomationInput(stepId: number, name: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_input_remove", { stepId, name });
 }
 
 /**

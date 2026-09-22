@@ -129,9 +129,9 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // refusal over the launch check's list, and the reasons under it arrive as its `parts` the way a
   // reservation's do — how many there are is known only at the moment of refusing.
   //
-  // The build screen draws the same list before anybody presses (`auto.block.*`), and these are still
-  // owed: that list is a read, and this is what the press answers with when the machine changed between
-  // the two — a step's agent uninstalled, a required setting cleared on another device.
+  // The build screen draws the same list before anybody presses, and writes it from these very codes:
+  // the check hands each reason over as one of them (`AutomationLaunchBlockDto`), so the list and the
+  // refusal are one set of sentences rather than two to keep in step.
   "invalid_automation_archived",
   "invalid_automation_workspace_closed",
   "not_ready_automation",

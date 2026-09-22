@@ -1489,3 +1489,9 @@ button.feed__target:hover { color: var(--c-accent); }
    one. */
 .autodlg__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .autodlg__row input { flex: 1 1 8rem; min-width: 0; }
+/* A declaration being written rather than answered: the name it goes under, what it takes, whether
+   it has to be answered, and the press that ends it. One line, wrapping where the panel is narrow —
+   the name is what everything else on the row is about, so it takes whatever width is left. */
+.autostep__decl, .autostep__declare { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autostep__declare { padding-block: var(--s-1); }
+.autostep__declname { flex: 1 1 8rem; min-width: 0; }

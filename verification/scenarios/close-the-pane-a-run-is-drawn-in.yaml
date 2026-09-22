@@ -1,0 +1,106 @@
+# Closing the pane a run is drawn in is a way of stopping the run, and the question put before it
+# closes says so. It has to: a pane is an ordinary thing to take away, and a reader who took this one
+# away expecting the run to carry on would leave a task reserved by a run that no longer exists. So
+# the press is answered by the run's own question, the run is stopped, and the task it had taken goes
+# back to where anybody can pick it up.
+id: close-the-pane-a-run-is-drawn-in
+title: Taking away the pane a run is drawn in stops the run and hands its task back
+description: >
+  Start a run, take away the pane it is drawn in, and read the three things that press did: the run
+  is stopped, its row on the running tab says so, and the lane it held is back. The question the
+  press puts is walked rather than clicked past — a build that put the ordinary question there would
+  let a reader close it without ever being told what closing it does.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to close" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: take
+      present: true
+
+  # The press, and the question it puts. What is being confirmed is the run's own question and not
+  # the one every other pane puts — a reader is told that closing this pane ends what is running in
+  # it before they are asked to.
+  - type: action
+    domain: automation
+    op: close-run-pane
+    with:
+      target: run
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      present: false
+
+  # The run itself, read on the tab that draws every one this device is carrying.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: stopped
+
+  # And the lane it held, back. A run that was stopped and kept its lane would leave the next one
+  # waiting on something that had already finished.
+  - type: assert
+    domain: automation
+    op: lanes
+    with:
+      held: 0
+      of: 3

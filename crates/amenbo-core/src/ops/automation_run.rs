@@ -127,7 +127,11 @@ impl Unmet {
 
     /// This reason as a sentence that carries its values apart from its words: the code above, the
     /// English underneath, and every name the template interpolates as a field of its own.
-    fn msg(&self) -> Msg {
+    ///
+    /// Public because both doors hand the same thing over — the refusal raises these as its parts, and
+    /// the check's own list is drawn from them (`app/src-tauri/src/automation.rs`). Read twice, the two
+    /// lists came apart (`AMB-T-5287`).
+    pub fn msg(&self) -> Msg {
         let msg = Msg::new(self.say()).coded(self.code());
         match self {
             Unmet::NoSteps | Unmet::NoEntry => msg,

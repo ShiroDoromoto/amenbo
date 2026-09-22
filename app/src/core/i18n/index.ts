@@ -103,11 +103,7 @@ export interface CmdError {
 }
 
 /** One of a refusal's composed sentences (`CmdErrorPart` in src-tauri/error.rs). */
-export interface CmdErrorPart {
-  code: string;
-  message_en: string;
-  fields?: Record<string, unknown> | null;
-}
+export type CmdErrorPart = CodedSentence;
 
 function isCmdError(e: unknown): e is CmdError {
   if (typeof e !== "object" || e === null) return false;
@@ -144,13 +140,31 @@ export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
   if (!tmpl) return err.message_en;
   const parts = err.parts ?? [];
   if (parts.length === 0) return fillFields(tmpl, err.fields);
-  const reasons = parts
-    .map((p) => {
-      const sub = errTemplate(p.code, lang);
-      return sub ? fillFields(sub, p.fields) : p.message_en;
-    })
-    .join(t("err.reasonSep", lang));
+  const reasons = parts.map((p) => errSentence(p, lang)).join(t("err.reasonSep", lang));
   return fillFields(tmpl, { ...(err.fields ?? {}), reasons });
+}
+
+/**
+ * One coded sentence in the reader's language, else the English it carries.
+ *
+ * It is what a refusal's parts are written from above — and what the **launch check** is written from,
+ * which is why it is exported. That list is drawn before anybody presses and comes back as a refusal's
+ * parts where the machine changed in between, so the two are the same sentences; written from two sets
+ * of dictionary entries they drifted, in nineteen languages at once (`AMB-T-5287`).
+ */
+export function errSentence(one: CodedSentence, lang: Lang = currentLang()): string {
+  const tmpl = errTemplate(one.code, lang);
+  return tmpl ? fillFields(tmpl, one.fields) : one.message_en;
+}
+
+/**
+ * A sentence that names itself: a refusal's part, or one reason a launch is not ready
+ * (`AutomationLaunchBlockDto`). The two are one shape on the wire, so they are one type here.
+ */
+export interface CodedSentence {
+  code: string;
+  message_en: string;
+  fields?: Record<string, unknown> | null;
 }
 
 /**

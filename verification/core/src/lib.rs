@@ -4154,6 +4154,11 @@ const REGISTRY: &[OpSpec] = &[
     // them, which is the whole of how that setting is answered — there is no filter expression to
     // write, and no road here may write one.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-filter", required: &["setting", "row", "value"], refs: &[], strings: &["setting", "row", "value"], binds: false },
+    // One of the lines a `choice` setting offers, taken off the pulldown under it. What that
+    // pulldown holds is what somebody wrote out under the row (`redeclare`'s `choices`) and nothing
+    // else, so a road naming a line by its words is reading that writing back — which is the only
+    // reading the panel gives of it, there being no control that shows the list as a list.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-choice", required: &["setting", "value"], refs: &[], strings: &["setting", "value"], binds: false },
     // What fills one of a step's inputs, picked from what fits rather than drawn.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-wire", required: &["input", "from"], refs: &[], strings: &["input", "from"], binds: false },
     //

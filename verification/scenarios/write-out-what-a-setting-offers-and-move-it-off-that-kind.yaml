@@ -12,11 +12,11 @@
 # under the same name, and pressing one of them takes the setting off the launch place. Neither would
 # happen to a row whose move was refused.
 #
-# ── What this road does not read ───────────────────────────────────────────────────────────────
-# That the lines written into the box are the lines the pulldown then offers. Answering a `choice`
-# setting on the panel is a press no op in the registry names, and a line needing an op the registry
-# does not have is not written here at all — so the road stops at the kind it can be answered on, and
-# closing it is that op's own work.
+# ── What this road leaves to its sibling ───────────────────────────────────────────────────────
+# That the lines written into the box are the lines the pulldown then offers.
+# `answer-a-setting-from-the-list-written-under-it` walks that, by answering the setting off the list
+# rather than moving it away from one. This road is about the move, so it writes the list and leaves
+# it unanswered — which is what keeps the launch place free to say something about the move itself.
 id: write-out-what-a-setting-offers-and-move-it-off-that-kind
 title: What a choice setting offers is written out under it, and moving the setting off that kind takes the list with it
 description: >

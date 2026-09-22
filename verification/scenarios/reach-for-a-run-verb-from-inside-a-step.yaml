@@ -1,0 +1,127 @@
+# The terminal a run opens for a step has the same `amenbo` on its PATH as any other, so the agent
+# working that step can type `automation start` and set a second run going, or `automation stop` and
+# put its own down. Neither is the agent's to do: the work came with the text the step starts on, and
+# what the run does next is the run's. So the binary asks where it is standing before it reads or
+# writes anything, and turns those verbs away there.
+#
+# The refusal is the whole of this road. What reaches from inside a step — `step-take`, `step-out`,
+# `step-done` — is walked by `walk-a-run-from-one-step-to-the-next`, and the four reading verbs that
+# also reach are held by the CLI's own tests. What no test can stand in for is this: a shipped binary
+# in a terminal a shipped window opened, with the environment that window set on it.
+id: reach-for-a-run-verb-from-inside-a-step
+title: A verb that drives a run is turned away in the pane that run is drawn in
+description: >
+  Start a run, and in the pane it is drawn in reach for the two verbs that would put it down — pause
+  and stop — as the agent working the step could. Each is turned away, and the running tab still says
+  the run is under way. Both are walked because they are two ways to the same end: a build where only
+  one arm of the guard was written would turn the first away and let the second through.
+given:
+  # One agent this machine can start, so the step is not refused for who carries it out. `reads` keeps
+  # the stand-in standing, which is what leaves a pane on the screen to type in.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to reach out of" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # The pane the step was opened in. It is the terminal the verbs below are typed at, and the line
+  # over it is where the run's own number is read off.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: take
+      present: true
+
+  # The first reach: the verb that would hold the run the step is part of.
+  - type: action
+    domain: automation
+    op: verb-in-pane
+    with:
+      target: run
+      verb: pause <run>
+      refused: automation_outside_only
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  # Nothing moved. A build that let the verb through would draw this row as held.
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The second reach: the verb that would put the run down for good.
+  - type: action
+    domain: automation
+    op: verb-in-pane
+    with:
+      target: run
+      verb: stop <run>
+      refused: automation_outside_only
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running

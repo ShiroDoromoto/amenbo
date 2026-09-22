@@ -741,6 +741,10 @@ does.
 **What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 three are refused anywhere else — and a run started at the terminal opens no pane to type them in.
+`verb-in-pane` is the other side of the same seam: any other `automation` verb, typed at that same
+terminal, where building a definition and driving a run are turned away (`automation_outside_only`).
+A road writes `refused:` on it, and the words after `automation` are the road's to spell — a `<run>`
+among them is a gap the operator fills off the line over the pane.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

@@ -4017,6 +4017,20 @@ impl Instructor {
                     None => String::new(),
                 }
             ),
+            // The other side of those three: a verb that builds or drives, reached for from inside a
+            // step. What the line says is spelled out rather than left at "it was refused", because
+            // this road is about which refusal — a mistyped number is turned away too, and on a shot
+            // the two would read the same.
+            (Domain::Automation, "verb-in-pane") => {
+                let verb = req(with, "verb")?;
+                let standing_in = match verb.contains("<run>") {
+                    true => ", putting the number of this run — the one the line over the pane carries — where the command says `<run>`",
+                    false => "",
+                };
+                format!(
+                    "In the pane this run is drawn in, type `amenbo automation {verb}` and run it{standing_in}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
+                )
+            }
             (Domain::Automation, "press-run") => format!(
                 "On the running tab, on the row for this run, {}.",
                 run_press(req(with, "press")?)?

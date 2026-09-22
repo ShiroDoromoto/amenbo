@@ -4206,6 +4206,13 @@ const REGISTRY: &[OpSpec] = &[
     // The step finished: which way out it took — left out, the unnamed one — and the report it owes
     // whichever it took.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
+    // **Any other `automation` verb, typed in that same terminal.** Building a definition and driving
+    // a run belong outside a step, and the binary turns them away there (`automation_outside_only`)
+    // — so a road writes `refused:` on this one. `verb` is the words after `automation`,
+    // spelled by the road because which verb is being reached for is the whole of the step. A `<run>`
+    // in them is a gap the operator fills from the line over the pane, the way `<ref>` is elsewhere:
+    // the store issues the number.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "verb-in-pane", required: &["verb"], refs: &["target"], strings: &["verb"], binds: false },
     //
     // A row of the "running" tab. It draws every run this device is carrying, across projects, so the
     // row names the project as well as the state.

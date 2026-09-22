@@ -142,7 +142,7 @@ pub fn action_cards(conn: &Connection, project_id: Option<i64>) -> Result<Vec<Ac
             let Some(action) = read::automation_action(conn, id)? else { continue };
             out.push(ActionCard {
                 action,
-                steps: read::automation_step_ids(conn, id)?.len(),
+                steps: read::automation_action_step_ids(conn, id)?.len(),
                 used_by: used_by(conn, id)?,
             });
         }
@@ -197,7 +197,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
 pub fn action_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
     let Some(action) = read::automation_action(conn, id)? else { return Ok(None) };
     let mut steps = Vec::new();
-    for step in read::automation_steps_of(conn, id)? {
+    for step in read::automation_action_steps_of(conn, id)? {
         steps.push(step_view(conn, step)?);
     }
     let edges = read::automation_edges_of(conn, AutomationPictureOwner::Action, id)?;
@@ -222,7 +222,7 @@ pub fn action_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
 fn placement_view(conn: &Connection, placement: AutomationPlacement) -> Result<PlacementView> {
     let action = read::automation_action(conn, placement.action_id)?;
     let entry_step = match action.as_ref().and_then(|one| one.entry_step_id) {
-        Some(step_id) => read::automation_step(conn, step_id)?,
+        Some(step_id) => read::automation_action_step(conn, step_id)?,
         None => None,
     };
     let exits = exit_views(conn, AutomationOwner::Action, placement.action_id)?;

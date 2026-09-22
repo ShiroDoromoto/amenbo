@@ -3517,7 +3517,7 @@ pub struct AutomationStepRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) folder: Option<String>,
-    /// Whether this step may stop and wait for a person (`automation_step.interactive`).
+    /// Whether this step may stop and wait for a person (`automation_action_step.interactive`).
     pub(crate) interactive: bool,
 }
 

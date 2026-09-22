@@ -339,7 +339,7 @@ fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model
     let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
         return Ok(Vec::new());
     };
-    let steps = read::automation_steps_of(conn, action_id)?;
+    let steps = read::automation_action_steps_of(conn, action_id)?;
     let ids: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry];

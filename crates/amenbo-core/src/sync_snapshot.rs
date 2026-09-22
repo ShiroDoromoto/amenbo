@@ -246,7 +246,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_placement" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
         }
-        "automation_step" => {
+        "automation_action_step" => {
             "action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)"
         }
         "automation_run_def" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
@@ -281,19 +281,19 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
             " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
         ),
         "automation_exit" => concat!(
-            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_action_step",
             " WHERE action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
         ),
         // The same two owners and one more: a port may hang on the way out of either of them.
         "automation_port" => concat!(
-            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_action_step",
             " WHERE action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
             " OR (owner_kind = 'exit' AND owner_id IN (SELECT id FROM automation_exit",
-            " WHERE (owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
+            " WHERE (owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_action_step",
             " WHERE action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))))",
@@ -1059,7 +1059,7 @@ mod tests {
             rusqlite::params![automation, at],
         );
         let step = put(
-            "INSERT INTO automation_step \
+            "INSERT INTO automation_action_step \
                  (action_id, name, prompt, agent, model, interactive, work_dir_ref, \
                   report_to_task, show_history, order_key, created_at, updated_at) \
              VALUES (?1, 'worktree を切る', 'あなたは…', 'claude-code', 'opus', 0, 'リポジトリの場所', \

@@ -524,8 +524,8 @@ pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPl
     })
 }
 
-pub(super) fn automation_step_row(r: &Row) -> rusqlite::Result<AutomationStep> {
-    const C: col::automation_step::Cols = col::automation_step::ALL;
+pub(super) fn automation_action_step_row(r: &Row) -> rusqlite::Result<AutomationStep> {
+    const C: col::automation_action_step::Cols = col::automation_action_step::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
     Ok(AutomationStep {
         id: get(r, C.id)?,

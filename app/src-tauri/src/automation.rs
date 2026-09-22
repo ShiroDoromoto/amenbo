@@ -180,7 +180,7 @@ pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCar
         // more than one, and the row then names the first — the whole list is the action's own
         // screen's (`AMB-T-5315`).
         let opens = match card.action.entry_step_id {
-            Some(id) => read::automation_step(conn, id)?,
+            Some(id) => read::automation_action_step(conn, id)?,
             None => None,
         };
         out.push(AutomationActionCardDto {

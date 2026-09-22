@@ -3237,6 +3237,31 @@ pub struct AutomationCardDto {
     pub(crate) archived: bool,
 }
 
+/// **One library action in the list** — what the "actions" tab draws a row from.
+///
+/// `global` is the reach it is held at: an action in the device's own library is one every project on
+/// this machine points steps at, and one in a project's library is that project's alone. It travels as
+/// that fact rather than as the project id, because the screen drawing it is inside one project and
+/// would only ever read an id back as "mine" or "the device's".
+///
+/// `used_by` is **how many automations run it**, not how many steps do. Two steps of one automation
+/// pointing at the same action is one automation whose runs change when the prompt is rewritten, and
+/// that is the number the warning beside the prompt is about.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationActionCardDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    /// The prompt every step pointing at this action carries. It comes with the row rather than being
+    /// fetched when one is opened: a library is tens of rows, and the edit box is opened in place.
+    pub(crate) prompt: String,
+    pub(crate) global: bool,
+    #[ts(type = "number")]
+    pub(crate) used_by: usize,
+}
+
 /// **One automation's whole definition** — every step, every way out of each, and what joins them.
 ///
 /// It is fetched whole rather than paged: an automation is tens of rows, and the build screen's

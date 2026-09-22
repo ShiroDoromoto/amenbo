@@ -33,13 +33,15 @@ use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_step::Opened;
 use amenbo_core::store_engine::{read, StoreEngine};
 
-use crate::commands::open_store_read;
+use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
-    AutomationCardDto, AutomationCfgDto, AutomationDetailDto, AutomationEdgeDto, AutomationExitDto,
-    AutomationLaunchBlockDto, AutomationLaunchCheckDto, AutomationPortDto, AutomationRunTaskDto,
-    AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto,
+    AutomationActionCardDto, AutomationCardDto, AutomationCfgDto, AutomationDetailDto,
+    AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto, AutomationLaunchCheckDto,
+    AutomationPortDto, AutomationRunTaskDto, AutomationStepDto, AutomationStepOpenDto,
+    AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
+use std::collections::BTreeSet;
 use tauri::Emitter;
 
 /// The automations of one project, in the order they were placed in.
@@ -63,6 +65,68 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
         });
     }
     Ok(cards)
+}
+
+/// **The library this project reaches** — the device's own actions first, then the project's own.
+///
+/// The two libraries answer as one list because they are one list on screen: what a reader is
+/// choosing between is every prompt a step here could be pointed at, and which of the two holds one
+/// is a column of that list rather than a second list to go and look in.
+#[tauri::command]
+pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_action_page");
+    let store = open_store_read()?;
+    let engine = store.read_model();
+    let conn = engine.conn();
+    let mut cards = Vec::new();
+    for (reach, global) in [(None, true), (Some(project_id), false)] {
+        for (id, _) in read::automation_action_siblings(conn, reach, None)? {
+            let Some(row) = read::automation_action(conn, id)? else { continue };
+            cards.push(AutomationActionCardDto {
+                id: row.id,
+                name: row.name,
+                prompt: row.prompt,
+                global,
+                used_by: automations_using(engine, id)?,
+            });
+        }
+    }
+    Ok(cards)
+}
+
+/// **Rename a library action, or rewrite its prompt.** Only what is `Some` is written.
+///
+/// The rewrite reaches every step pointing at this action, which is what the library is for — and
+/// what the screen says before the box is opened. It does not reach a run already under way: a run
+/// resolves each step's prompt as it opens the step, off the action as it stands at that moment
+/// ([`amenbo_core::ops::automation_run`]), so what a running step carries is settled and this cannot
+/// reach back into it.
+#[tauri::command]
+pub fn automation_action_edit(
+    id: i64,
+    name: Option<String>,
+    prompt: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_update(id, name.as_deref(), prompt.as_deref())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
+}
+
+/// **How many automations run this action**, counted by the automation each step is in.
+///
+/// Two steps of one automation pointing at the same action is one automation: what the number is
+/// read for is how far a rewrite of the prompt carries, and that is measured in automations whose
+/// runs change, not in places the pointer occurs.
+fn automations_using(engine: &StoreEngine, action_id: i64) -> Result<usize, CmdError> {
+    let conn = engine.conn();
+    let mut seen = BTreeSet::new();
+    for step_id in read::automation_step_ids_using_action(conn, action_id)? {
+        let Some(step) = read::automation_step(conn, step_id)? else { continue };
+        seen.insert(step.automation_id);
+    }
+    Ok(seen.len())
 }
 
 /// One automation's whole definition, or nothing where that id names none.

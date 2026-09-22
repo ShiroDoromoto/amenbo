@@ -148,6 +148,7 @@ describe("the launch place", () => {
         { reason: "unwired_input", stepName: "Write", at: "folder" },
         { reason: "unanswered_cfg", stepName: "Write", at: "filter" },
         { reason: "agent_missing", stepName: "Write", at: "codex-cli" },
+        { reason: "model_missing", stepName: "Write", at: "opus-9" },
       ],
     });
     expect(blocks()).toEqual([
@@ -158,6 +159,7 @@ describe("the launch place", () => {
       tf("auto.block.unwiredInput", { step: "Write", at: "folder" }),
       tf("auto.block.unansweredCfg", { step: "Write", at: "filter" }),
       tf("auto.block.agentMissing", { step: "Write", at: "codex-cli" }),
+      tf("auto.block.modelMissing", { step: "Write", at: "opus-9" }),
     ]);
     // Nothing is left standing as a bare reason code: a line nobody wrote words for would ship as
     // `input_unfed` on the screen.

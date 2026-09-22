@@ -100,6 +100,32 @@ pub fn agent_default_model(agent: String) -> Option<AgentModelDto> {
     )
 }
 
+/// **What each provider has already offered**, by agent id — nothing run, nothing asked.
+///
+/// The launch check reads it to say that a step names a model its agent does not have here
+/// ([`amenbo_core::ops::automation_run::ModelsHere`]). It is a read of what is remembered and never a
+/// question put: a build screen is drawn whenever somebody opens an automation, and an ask is a login
+/// shell plus a provider starting up (`AMB-D-865`), so a check that asked would charge seconds for
+/// looking at a picture.
+///
+/// **A provider that answered emptily is left out**, and that is the same silence as one nobody has
+/// asked. An empty answer here is every way of failing — not signed in, no such flag, an answer in a
+/// shape nothing reads — and never "this provider has no models", so reading it as a list to judge
+/// against would turn a provider the reader is simply not signed into a screenful of reasons not to
+/// launch.
+pub fn offered_here() -> amenbo_core::ops::automation_run::ModelsHere {
+    let Some(asked) = ASKED.get().and_then(|asked| asked.lock().ok()) else {
+        return Default::default();
+    };
+    asked
+        .iter()
+        .filter(|(_, answer)| !answer.models.is_empty())
+        .map(|(agent, answer)| {
+            (agent.clone(), answer.models.iter().map(|one| one.id.clone()).collect())
+        })
+        .collect()
+}
+
 /// The row itself, on whichever thread asked for it — [`agent_models()`] without the door.
 fn rows(agent: &str) -> AgentModelListDto {
     let Some(launch) = amenbo_core::harness::find_launch(agent) else {

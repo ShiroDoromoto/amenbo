@@ -934,6 +934,7 @@ export const ptBR: Translation = {
     "auto.block.unwiredInput": "{step}: nada chega à entrada obrigatória {at}.",
     "auto.block.unansweredCfg": "{step}: a configuração obrigatória {at} está sem resposta.",
     "auto.block.agentMissing": "{step}: esta máquina não consegue iniciar {at}.",
+    "auto.block.modelMissing": "{step}: o agente aqui não oferece o modelo {at}.",
     "auto.pic.empty": "Esta automação ainda não tem etapas.",
     "auto.pic.lap": "Uma tarefa",
     "auto.pic.insert": "Inserir uma etapa aqui",

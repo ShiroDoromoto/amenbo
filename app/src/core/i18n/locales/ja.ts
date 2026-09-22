@@ -927,6 +927,7 @@ export const ja: Translation = {
     "auto.block.unwiredInput": "{step}：必須の入力パラメータ {at} に何も届かない",
     "auto.block.unansweredCfg": "{step}：必須の設定 {at} に答えが無い",
     "auto.block.agentMissing": "{step}：{at} は手元に無い",
+    "auto.block.modelMissing": "{step}：ここのエージェントはモデル {at} を持っていない",
     "auto.pic.empty": "ステップがまだありません",
     "auto.pic.lap": "1件ぶん",
     "auto.pic.insert": "ここへステップを挟む",

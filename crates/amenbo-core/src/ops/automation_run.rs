@@ -17,11 +17,11 @@
 //! puts the refusal in front of a person (`app/src/core/errorCodes.ts`), and the screen that will draw
 //! these is not built.
 //!
-//! **Two things the store cannot answer are handed in** ([`Launcher`]): which agents this machine can
-//! actually start, and whether the workspace is open. The first is a probe of the reader's own login
-//! shell ([`crate::wake`]) and the second is a window on their screen. Read here, they would be read
-//! from whatever process happened to be running — which is the reason [`crate::ops::MadeIn`] is handed
-//! in too.
+//! **Three things the store cannot answer are handed in** ([`Launcher`]): which agents this machine can
+//! actually start, which models each of them offers, and whether the workspace is open. The first two
+//! are the reader's own login shell ([`crate::wake`], [`crate::agent_models`]) and the third a window on
+//! their screen. Read here, they would be read from whatever process happened to be running — which is
+//! the reason [`crate::ops::MadeIn`] is handed in too.
 //!
 //! **A run stops reading the definition the moment it starts.** Every step is copied into
 //! `automation_run_def` at launch, so editing the automation afterwards cannot change what a run
@@ -43,10 +43,10 @@ use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// **One thing the launch check found missing.** Seven of them, and every one is something a person can
+/// **One thing the launch check found missing.** Eight of them, and every one is something a person can
 /// go and fix in the build screen — which is why each names where it is rather than only what it is.
 ///
-/// They are a type rather than seven sentences because both doors need them: the refusal writes them out
+/// They are a type rather than eight sentences because both doors need them: the refusal writes them out
 /// as English, and the build screen draws them as a list beside the step each belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unmet {
@@ -68,6 +68,12 @@ pub enum Unmet {
     /// A step asking for an agent this machine cannot start. A pane opened on it would come up on
     /// `command not found`.
     AgentMissing { step: String, agent: String },
+    /// A step naming a model its agent does not offer here. The pane would come up, and the agent would
+    /// turn the model down inside it — which is a refusal the reader only meets once the run is away.
+    ///
+    /// Only raised for an agent that has already been asked what it offers, and that answered with a
+    /// list ([`ModelsHere`]).
+    ModelMissing { step: String, agent: String, model: String },
 }
 
 impl Unmet {
@@ -92,6 +98,9 @@ impl Unmet {
             Unmet::AgentMissing { step, agent } => {
                 format!("'{step}' asks for '{agent}', which this machine cannot start")
             }
+            Unmet::ModelMissing { step, agent, model } => {
+                format!("'{step}' asks for the model '{model}', which '{agent}' here does not offer")
+            }
         }
     }
 }
@@ -114,6 +123,9 @@ pub struct Launcher<'a> {
     /// a reader with four agents installed that they have none. Where it is `None` the agent check is
     /// not made, rather than made and failed.
     pub startable: Option<&'a [String]>,
+    /// The models each agent offers on this machine ([`ModelsHere`]) — empty from a caller that has
+    /// asked nobody, which is every caller outside the app.
+    pub models: &'a ModelsHere,
     /// How many runs may hold a lane at once ([`crate::config::Config::automation_lanes`]).
     pub lanes: i64,
     /// Whether the talk window is open — `Some(false)` refuses, and **`None` is a caller that cannot
@@ -129,6 +141,31 @@ pub struct Launcher<'a> {
     pub by: Option<ActorKind>,
 }
 
+/// **The models each agent offers here**, by agent id ([`crate::agent_models`]) — and only the agents
+/// that have already been asked and answered with a list.
+///
+/// An agent **absent from the map is one this machine has nothing to say about**, and its steps' models
+/// are left unjudged rather than judged and failed — the discipline [`Launcher::startable`] takes for the
+/// same reason (`AMB-D-792`). Absent covers two cases that a screen cannot tell apart and need not:
+/// nobody has asked it yet, and it was asked and could offer nothing (not signed in, no such flag, an
+/// answer in a shape nothing reads). Both are "no list", never "no models".
+///
+/// Asking is what keeps it out of the map by default: one ask is a login shell plus a provider starting
+/// up, and a check that put that behind every draw of a build screen would charge a reader seconds for
+/// opening a picture (`AMB-D-865`).
+pub type ModelsHere = BTreeMap<String, Vec<String>>;
+
+/// **A caller that has asked no provider anything** — the map every [`ModelsHere`] slot takes where the
+/// question cannot be put at all.
+///
+/// Handed back by reference rather than made at each call so a `Launcher` can hold it: a terminal is
+/// outside the process that keeps the answers ([`crate::agent_models`]), and putting the question there
+/// would start a provider per launch for a check the app has already made.
+pub fn nothing_asked() -> &'static ModelsHere {
+    static EMPTY: std::sync::OnceLock<ModelsHere> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(ModelsHere::new)
+}
+
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
 /// ([`crate::ops::automation`] says why).
 fn not_found(what: &str, id: i64) -> Error {
@@ -137,13 +174,19 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. Two of the seven
+/// The list is walked in display order, so a person reading it walks their own picture. Two of the eight
 /// answer alone: an automation with no steps has nothing else to say about it, and one with no entry has
 /// nothing reachable to say it about — every other check is asked of the steps a run would actually
 /// walk, and with no entry that is none of them.
 ///
-/// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade.
-pub fn check(conn: &Connection, automation_id: i64, startable: Option<&[String]>) -> Result<Vec<Unmet>> {
+/// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
+/// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
+pub fn check(
+    conn: &Connection,
+    automation_id: i64,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<Vec<Unmet>> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
     let steps = read::automation_steps_of(conn, automation_id)?;
@@ -192,6 +235,18 @@ pub fn check(conn: &Connection, automation_id: i64, startable: Option<&[String]>
                 unmet.push(Unmet::AgentMissing {
                     step: step.name.clone(),
                     agent: step.agent.clone(),
+                });
+            }
+        }
+        // Asked of the step's own model, and only where the agent offered a list (`ModelsHere`). A
+        // step naming no model is on whatever the provider's own settings have, which is not a name
+        // this could judge.
+        if let (Some(model), Some(offered)) = (step.model.as_deref(), models.get(&step.agent)) {
+            if !offered.iter().any(|id| id == model) {
+                unmet.push(Unmet::ModelMissing {
+                    step: step.name.clone(),
+                    agent: step.agent.clone(),
+                    model: model.to_string(),
                 });
             }
         }
@@ -341,7 +396,7 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
             automation.name
         )));
     }
-    let unmet = check(tx.conn(), automation_id, by.startable)?;
+    let unmet = check(tx.conn(), automation_id, by.startable, by.models)?;
     if !unmet.is_empty() {
         return Err(not_ready(&automation.name, &unmet));
     }
@@ -557,7 +612,13 @@ mod tests {
     /// The machine every test launches on: one that can start `claude`, with three lanes and a window
     /// open.
     fn here<'a>(startable: &'a [String]) -> Launcher<'a> {
-        Launcher { startable: Some(startable), lanes: 3, workspace_open: Some(true), by: Some(ActorKind::Ai) }
+        Launcher {
+            startable: Some(startable),
+            models: nothing_asked(),
+            lanes: 3,
+            workspace_open: Some(true),
+            by: Some(ActorKind::Ai),
+        }
     }
 
     fn claude() -> Vec<String> {
@@ -569,7 +630,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _) = launchable(tx);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
             );
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
@@ -590,7 +651,7 @@ mod tests {
             )
             .expect("add");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::NoSteps],
                 "nothing else is worth saying about it",
             );
@@ -603,7 +664,7 @@ mod tests {
             let (automation, _) = launchable(tx);
             automation::set_entry(tx, automation.id, None).expect("clear entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::NoEntry],
                 "with no entry nothing is reachable, so every other check is asked of nothing",
             );
@@ -629,7 +690,7 @@ mod tests {
             automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
             automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::EntryTakesNoTask { step: "取る".into() }],
             );
         });
@@ -642,7 +703,7 @@ mod tests {
             let exit = automation::exit_add(tx, AutomationOwner::Step, step.id, Some("直すところがある"))
                 .expect("exit");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::OpenExit { step: "取る".into(), exit: exit.name.clone() }],
                 "it saves while building, and is refused at launch",
             );
@@ -655,7 +716,7 @@ mod tests {
             // `launchable` writes no edge on the error way out, so a check that asked for one would
             // refuse the automation every other test here launches.
             let (automation, _) = launchable(tx);
-            let unmet = check(tx.conn(), automation.id, Some(&claude())).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert_eq!(unmet, vec![], "the error way out is carried from birth, not written");
         });
     }
@@ -675,7 +736,7 @@ mod tests {
             )
             .expect("port");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
             );
         });
@@ -723,7 +784,7 @@ mod tests {
             .expect("in");
             automation::wire_add(tx, orphan.id, None, "下書き", entry.id, "下書き").expect("wire");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
                 "and the orphan's own ways out are not checked either — no run reaches them",
             );
@@ -745,11 +806,11 @@ mod tests {
             )
             .expect("cfg");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "作業フォルダ".into() }],
             );
             automation::cfg_set(tx, step.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude())).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
         });
     }
 
@@ -784,12 +845,12 @@ mod tests {
             automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
             automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude())).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "絞り込み".into() }],
                 "the declaration is the action's and the answer is the step's",
             );
             automation::cfg_set(tx, step.id, "絞り込み", Some("{}")).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude())).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
         });
     }
 
@@ -798,13 +859,115 @@ mod tests {
         with_tx(|tx| {
             let (automation, _) = launchable(tx);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&[])).expect("check"),
+                check(tx.conn(), automation.id, Some(&[]), nothing_asked()).expect("check"),
                 vec![Unmet::AgentMissing { step: "取る".into(), agent: "claude".into() }],
             );
             assert_eq!(
-                check(tx.conn(), automation.id, None).expect("check"),
+                check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
                 vec![],
                 "a machine nobody asked is not a machine with nothing on it (AMB-D-792)",
+            );
+        });
+    }
+
+    /// The models an agent said it can be started on, as the app remembers them.
+    fn offering(agent: &str, models: &[&str]) -> ModelsHere {
+        ModelsHere::from([(
+            agent.to_string(),
+            models.iter().map(|one| (*one).to_string()).collect::<Vec<String>>(),
+        )])
+    }
+
+    #[test]
+    fn a_model_the_agent_does_not_offer_here_is_refused() {
+        with_tx(|tx| {
+            let (automation, step) = launchable(tx);
+            automation::step_update(
+                tx,
+                step.id,
+                None,
+                None,
+                None,
+                Some(Some("opus-9")),
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("name a model");
+            assert_eq!(
+                check(
+                    tx.conn(),
+                    automation.id,
+                    Some(&claude()),
+                    &offering("claude", &["sonnet", "haiku"]),
+                )
+                .expect("check"),
+                vec![Unmet::ModelMissing {
+                    step: "取る".into(),
+                    agent: "claude".into(),
+                    model: "opus-9".into(),
+                }],
+            );
+            assert_eq!(
+                check(
+                    tx.conn(),
+                    automation.id,
+                    Some(&claude()),
+                    &offering("claude", &["sonnet", "opus-9"]),
+                )
+                .expect("check"),
+                vec![],
+                "a model the agent does offer is no reason at all",
+            );
+        });
+    }
+
+    #[test]
+    fn a_model_is_judged_only_against_an_agent_that_answered() {
+        with_tx(|tx| {
+            let (automation, step) = launchable(tx);
+            automation::step_update(
+                tx,
+                step.id,
+                None,
+                None,
+                None,
+                Some(Some("opus-9")),
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("name a model");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
+                "an agent nobody has asked says nothing about its models (AMB-D-865)",
+            );
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), &offering("codex-cli", &["gpt"]))
+                    .expect("check"),
+                vec![],
+                "another agent's list is not this one's",
+            );
+        });
+    }
+
+    #[test]
+    fn a_step_naming_no_model_is_not_judged_on_one() {
+        with_tx(|tx| {
+            let (automation, _) = launchable(tx);
+            assert_eq!(
+                check(
+                    tx.conn(),
+                    automation.id,
+                    Some(&claude()),
+                    &offering("claude", &["sonnet"]),
+                )
+                .expect("check"),
+                vec![],
+                "no model named is the provider's own settings, which this cannot judge",
             );
         });
     }

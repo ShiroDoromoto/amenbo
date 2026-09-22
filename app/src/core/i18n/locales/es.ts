@@ -933,6 +933,7 @@ export const es: Translation = {
     "auto.block.unwiredInput": "{step}: nada llega a la entrada obligatoria {at}.",
     "auto.block.unansweredCfg": "{step}: el ajuste obligatorio {at} está sin responder.",
     "auto.block.agentMissing": "{step}: esta máquina no puede iniciar {at}.",
+    "auto.block.modelMissing": "{step}: su agente aquí no ofrece el modelo {at}.",
     "auto.pic.empty": "Esta automatización aún no tiene pasos.",
     "auto.pic.lap": "Una tarea",
     "auto.pic.insert": "Insertar un paso aquí",

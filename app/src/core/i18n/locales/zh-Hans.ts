@@ -923,6 +923,7 @@ export const zhHans: Translation = {
     "auto.block.unwiredInput": "{step}：没有东西到达必填输入 {at}。",
     "auto.block.unansweredCfg": "{step}：必填设置 {at} 还没有填。",
     "auto.block.agentMissing": "{step}：这台机器启动不了 {at}。",
+    "auto.block.modelMissing": "{step}：这里的智能体不提供 {at} 模型。",
     "auto.pic.empty": "这个自动化还没有步骤。",
     "auto.pic.lap": "一件任务",
     "auto.pic.insert": "在这里插入一个步骤",

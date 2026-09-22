@@ -923,6 +923,7 @@ export const zhHant: Translation = {
     "auto.block.unwiredInput": "{step}：沒有東西到達必填輸入 {at}。",
     "auto.block.unansweredCfg": "{step}：必填設定 {at} 還沒有填。",
     "auto.block.agentMissing": "{step}：這台機器啟動不了 {at}。",
+    "auto.block.modelMissing": "{step}：這裡的代理不提供 {at} 模型。",
     "auto.pic.empty": "這個自動化還沒有步驟。",
     "auto.pic.lap": "一件任務",
     "auto.pic.insert": "在這裡插入一個步驟",

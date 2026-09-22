@@ -938,6 +938,7 @@ export const uk: Translation = {
     "auto.block.unwiredInput": "{step}: до обов’язкового входу {at} нічого не доходить.",
     "auto.block.unansweredCfg": "{step}: обов’язкове налаштування {at} лишилося без відповіді.",
     "auto.block.agentMissing": "{step}: ця машина не може запустити {at}.",
+    "auto.block.modelMissing": "{step}: тутешній агент не пропонує модель {at}.",
     "auto.pic.empty": "У цієї автоматизації ще немає кроків.",
     "auto.pic.lap": "Одне завдання",
     "auto.pic.insert": "Вставити сюди крок",

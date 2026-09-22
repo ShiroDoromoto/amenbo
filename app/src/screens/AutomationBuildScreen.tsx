@@ -53,6 +53,10 @@ function blockText(block: AutomationLaunchBlockDto): string {
       return tf("auto.block.unansweredCfg", { step, at });
     case "agent_missing":
       return tf("auto.block.agentMissing", { step, at });
+    // The model, where the agent it belongs to has already said what it offers. The sentence names
+    // the model alone: the step names one agent, and the picture beside this list already says which.
+    case "model_missing":
+      return tf("auto.block.modelMissing", { step, at });
     default:
       return block.reason;
   }

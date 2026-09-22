@@ -918,6 +918,7 @@ export const ko: Translation = {
     "auto.block.unwiredInput": "{step}: 필수 입력 {at}에 아무것도 닿지 않습니다.",
     "auto.block.unansweredCfg": "{step}: 필수 설정 {at}에 답이 없습니다.",
     "auto.block.agentMissing": "{step}: 이 컴퓨터에서 {at}을 시작할 수 없습니다.",
+    "auto.block.modelMissing": "{step}: 여기의 에이전트는 {at} 모델을 제공하지 않습니다.",
     "auto.pic.empty": "이 자동화에는 아직 단계가 없습니다.",
     "auto.pic.lap": "작업 하나",
     "auto.pic.insert": "여기에 단계 넣기",

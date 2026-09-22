@@ -922,6 +922,7 @@ export const id: Translation = {
     "auto.block.unwiredInput": "{step}: tidak ada yang sampai ke masukan wajib {at}.",
     "auto.block.unansweredCfg": "{step}: setelan wajib {at} belum dijawab.",
     "auto.block.agentMissing": "{step}: mesin ini tidak bisa menjalankan {at}.",
+    "auto.block.modelMissing": "{step}: agennya di sini tidak menyediakan model {at}.",
     "auto.pic.empty": "Otomatisasi ini belum punya langkah.",
     "auto.pic.lap": "Satu tugas",
     "auto.pic.insert": "Sisipkan langkah di sini",

@@ -136,6 +136,7 @@ describe("the running tab", () => {
       ["max_times", "auto.run.maxTimes"],
       ["no_agent", "auto.run.noAgent"],
       ["by_human", "auto.run.byHuman"],
+      ["no_way_on", "auto.run.noWayOn"],
     ] as const) {
       await render([run({ status: "stopped", stoppedReason: reason })]);
       expect(container.querySelector(".autorun__why")?.textContent).toBe(t(key));

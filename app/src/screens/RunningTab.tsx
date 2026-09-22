@@ -45,6 +45,7 @@ function reasonText(run: AutomationRunCardDto): string | null {
     case "max_times": return t("auto.run.maxTimes");
     case "no_agent": return t("auto.run.noAgent");
     case "by_human": return t("auto.run.byHuman");
+    case "no_way_on": return t("auto.run.noWayOn");
     default: return null;
   }
 }

@@ -1020,6 +1020,7 @@ export const ja: Translation = {
     "auto.run.maxTimes": "繰り返しの上限を超えた",
     "auto.run.noAgent": "エージェントを起動できなかった",
     "auto.run.byHuman": "手で止めた",
+    "auto.run.noWayOn": "開けるステップが無くなった",
     "auto.run.step": "ステップ {n} · {step}",
 
     "mcp.title": "MCP でつなぐ",

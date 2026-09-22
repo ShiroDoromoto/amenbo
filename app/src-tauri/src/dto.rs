@@ -3588,7 +3588,7 @@ pub struct AutomationRunCardDto {
     /// still `running` — this is the gap between the button and the pause
     /// ([`amenbo_core::ops::automation_stop::pause`]).
     pub(crate) pause_requested: bool,
-    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"by_human\" | null")]
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"by_human\" | \"no_way_on\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,

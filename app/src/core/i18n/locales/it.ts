@@ -1026,6 +1026,7 @@ export const it: Translation = {
     "auto.run.maxTimes": "ha fatto troppi giri",
     "auto.run.noAgent": "non è stato possibile avviare il suo agente",
     "auto.run.byHuman": "fermata a mano",
+    "auto.run.noWayOn": "non restava nulla da aprire",
     "auto.run.step": "Passo {n} · {step}",
 
     "mcp.title": "Collegare via MCP",

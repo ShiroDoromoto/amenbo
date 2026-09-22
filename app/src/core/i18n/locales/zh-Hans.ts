@@ -1016,6 +1016,7 @@ export const zhHans: Translation = {
     "auto.run.maxTimes": "循环次数超出上限",
     "auto.run.noAgent": "无法启动它的代理",
     "auto.run.byHuman": "手动停止",
+    "auto.run.noWayOn": "没有可打开的步骤了",
     "auto.run.step": "步骤 {n} · {step}",
 
     "mcp.title": "通过 MCP 连接",

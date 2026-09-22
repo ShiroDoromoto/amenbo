@@ -1015,6 +1015,7 @@ export const id: Translation = {
     "auto.run.maxTimes": "terlalu banyak putaran",
     "auto.run.noAgent": "agennya tidak bisa dijalankan",
     "auto.run.byHuman": "dihentikan secara manual",
+    "auto.run.noWayOn": "tidak ada lagi yang bisa dibuka",
     "auto.run.step": "Langkah {n} · {step}",
 
     "mcp.title": "Hubungkan lewat MCP",

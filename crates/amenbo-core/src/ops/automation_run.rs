@@ -576,7 +576,25 @@ pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunD
         .find(|def| def.step_id == Some(entry)))
 }
 
-/// **The step this run is waiting to have opened**, or `None` where it is waiting for nothing.
+/// **What a run is waiting for**, in the three shapes a watcher has to tell apart.
+///
+/// The two that are not a step were one answer once, and a watcher that cannot tell them apart reads
+/// a run it must leave alone and a run nobody will ever move again as the same thing — so the second
+/// sits `running` for good, holding a lane and a task nobody is working.
+#[derive(Debug, Clone)]
+pub enum Waiting {
+    /// This step is waiting to be opened. Boxed because the other two carry nothing, and a copy of a
+    /// step is the whole of what one is.
+    Step(Box<AutomationRunDef>),
+    /// Nothing for anybody to do: a step is under way, or the run is not running at all.
+    Nothing,
+    /// **The run cannot go on.** Nothing is under way and nothing leads anywhere — the picture it was
+    /// copied from has been changed under it, or the step it would start at is no longer in it. It
+    /// will never move again on its own, so it is ended rather than looked at every second.
+    NoWayOn,
+}
+
+/// **The step this run is waiting to have opened**, or why there is none ([`Waiting`]).
 ///
 /// A run that is `running` is either carrying a step out or standing between two of them, and only the
 /// second is anybody's to act on. So this answers a step in exactly two cases — a run that has just
@@ -588,33 +606,44 @@ pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunD
 /// ([`crate::ops::automation_report::done`] resolved the same edge to decide whether the run goes on
 /// at all). A second copy kept for the watcher's benefit would be a second thing to keep true.
 ///
-/// `None` covers every other shape: a step still running, a run whose last way out closed or stopped
-/// it, and an edge that names a step this run carries no copy of.
-pub fn next_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
+/// **Deriving is also what puts a run in the way of `NoWayOn`.** A definition goes on being edited
+/// while runs of it are out: a way out loses its edge, an entry is taken off, a step is deleted. The
+/// report that walked the same edge a moment earlier found one; the read after it does not, and the
+/// run standing between two steps has nowhere to stand towards.
+pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     let Some(run) = read::automation_run(conn, run_id)? else {
         return Err(not_found("run", run_id));
     };
     if run.status != AutomationRunStatus::Running {
-        return Ok(None);
+        return Ok(Waiting::Nothing);
     }
     let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else {
-        // Nothing has run yet, so what is waiting to be opened is where the run starts.
-        return entry_def(conn, run_id);
+        // Nothing has run yet, so what is waiting to be opened is where the run starts. A run that
+        // carries no copy of its entry cannot start at all — the entry was taken off the definition
+        // while this one waited for a lane — and that is the whole of `NoWayOn`'s narrow case today.
+        return Ok(entry_def(conn, run_id)?
+            .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
     };
     if last.status == AutomationRunStepStatus::Running {
-        return Ok(None);
+        return Ok(Waiting::Nothing);
     }
+    // Everything below is a run standing between two steps with nothing to stand towards. A way out
+    // that closed or halted the run would have done so in the report that took it, so a run still
+    // `running` here is one whose picture stopped leading anywhere after it had already left.
     let Some(from) = read::automation_run_def(conn, last.run_def_id)?.and_then(|def| def.step_id)
     else {
-        return Ok(None);
+        return Ok(Waiting::NoWayOn);
     };
     let Some(edge) = read::automation_edge_for_exit(conn, from, last.exit_name.as_deref())? else {
-        return Ok(None);
+        return Ok(Waiting::NoWayOn);
     };
     let Some(to) = edge.to_step_id.filter(|_| edge.ends == AutomationEnds::Go) else {
-        return Ok(None);
+        return Ok(Waiting::NoWayOn);
     };
-    Ok(read::automation_run_defs_of(conn, run_id)?.into_iter().find(|def| def.step_id == Some(to)))
+    Ok(read::automation_run_defs_of(conn, run_id)?
+        .into_iter()
+        .find(|def| def.step_id == Some(to))
+        .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))))
 }
 
 /// **A lane came free: wake the run that has waited longest**, and answer which one it was.
@@ -1167,7 +1196,9 @@ mod tests {
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
 
             // Nothing has run yet, so what is waiting is where the run starts.
-            let first = next_def(tx.conn(), run.id).expect("next").expect("the entry");
+            let Waiting::Step(first) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the entry is what a fresh run waits for")
+            };
             assert_eq!(first.step_id, Some(step.id));
 
             // A step under way is nobody's to open a second time.
@@ -1179,7 +1210,7 @@ mod tests {
                     panic!("stopped for {missing:?}")
                 }
             };
-            assert!(next_def(tx.conn(), run.id).expect("next").is_none());
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
             // The entry hands a task on through that way out, so the task is taken before it can
             // report — the refusal that guards a step saying it is done with nothing to show.
@@ -1190,10 +1221,36 @@ mod tests {
             // one, which closes the run, so there is nothing waiting and the run is no longer running.
             crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it", 3)
                 .expect("report");
-            assert!(next_def(tx.conn(), run.id).expect("next").is_none());
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
                 AutomationRunStatus::Done,
+            );
+        });
+    }
+
+    /// **A run with nowhere to go says so**, rather than reading as a run somebody is about to move.
+    ///
+    /// The two are one answer to look at — nothing is open either way — and telling them apart is the
+    /// whole of why there are three. A definition goes on being edited while runs of it are out, so a
+    /// run that has lost the step it would start at is a shape that happens rather than one that
+    /// cannot; left as "nothing to do" it holds a lane for the rest of the session.
+    #[test]
+    fn a_run_that_has_lost_the_step_it_would_start_at_says_it_cannot_go_on() {
+        with_tx(|tx| {
+            let (automation, _) = launchable(tx);
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Step(_)));
+
+            // Taken off the definition while the run is out. The run's own copies are still there —
+            // what it has lost is the one saying where to start.
+            crate::ops::automation::set_entry(tx, automation.id, None).expect("entry off");
+
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
+            assert_eq!(
+                read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
+                AutomationRunStatus::Running,
+                "reading it says nothing about it — ending it is the watch's",
             );
         });
     }

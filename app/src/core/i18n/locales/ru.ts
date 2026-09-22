@@ -1031,6 +1031,7 @@ export const ru: Translation = {
     "auto.run.maxTimes": "слишком много кругов",
     "auto.run.noAgent": "не удалось запустить агента",
     "auto.run.byHuman": "остановлен вручную",
+    "auto.run.noWayOn": "открывать было больше нечего",
     "auto.run.step": "Шаг {n} · {step}",
 
     "mcp.title": "Подключение по MCP",

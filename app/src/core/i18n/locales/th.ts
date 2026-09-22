@@ -1015,6 +1015,7 @@ export const th: Translation = {
     "auto.run.maxTimes": "วนซ้ำเกินจำนวนที่กำหนด",
     "auto.run.noAgent": "เริ่มเอเจนต์ไม่ได้",
     "auto.run.byHuman": "หยุดด้วยมือ",
+    "auto.run.noWayOn": "ไม่มีขั้นตอนให้เปิดต่อแล้ว",
     "auto.run.step": "ขั้นตอน {n} · {step}",
 
     "mcp.title": "เชื่อมต่อผ่าน MCP",

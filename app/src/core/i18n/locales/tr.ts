@@ -1014,6 +1014,7 @@ export const tr: Translation = {
     "auto.run.maxTimes": "çok fazla tur attı",
     "auto.run.noAgent": "aracısı başlatılamadı",
     "auto.run.byHuman": "elle durduruldu",
+    "auto.run.noWayOn": "açılacak bir şey kalmamıştı",
     "auto.run.step": "Adım {n} · {step}",
 
     "mcp.title": "MCP ile bağlan",

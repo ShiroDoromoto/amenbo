@@ -4055,7 +4055,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // Asserts. What a run is doing, read the way a person reads it back — from the run itself.
     // `stopped_reason` is asked only of a run that is stopped, and a road that names it is saying
-    // which of the four stops this was.
+    // which kind of stop this was.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run", required: &["status"], refs: &["target"], strings: &["status", "stopped_reason"], binds: false },
     // The runs one automation has behind it, or the ones that worked one task — the two doors a run
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).

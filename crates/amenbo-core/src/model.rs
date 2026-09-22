@@ -1756,6 +1756,9 @@ pub enum AutomationStoppedReason {
     MaxTimes,
     NoAgent,
     ByHuman,
+    /// Nothing was left for it to open: the picture it was copied from stopped leading anywhere while
+    /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]).
+    NoWayOn,
 }
 
 impl AutomationStoppedReason {
@@ -1765,6 +1768,7 @@ impl AutomationStoppedReason {
             AutomationStoppedReason::MaxTimes => "max_times",
             AutomationStoppedReason::NoAgent => "no_agent",
             AutomationStoppedReason::ByHuman => "by_human",
+            AutomationStoppedReason::NoWayOn => "no_way_on",
         }
     }
 
@@ -1774,6 +1778,7 @@ impl AutomationStoppedReason {
             "max_times" => Some(AutomationStoppedReason::MaxTimes),
             "no_agent" => Some(AutomationStoppedReason::NoAgent),
             "by_human" => Some(AutomationStoppedReason::ByHuman),
+            "no_way_on" => Some(AutomationStoppedReason::NoWayOn),
             _ => None,
         }
     }

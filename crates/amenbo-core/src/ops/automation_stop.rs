@@ -95,9 +95,9 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// **End a run and hand back everything it was holding.** Every way a run can end comes through here.
 ///
 /// `status` is [`AutomationRunStatus::Done`] where the picture ran out and
-/// [`AutomationRunStatus::Stopped`] everywhere else, and `reason` says which of the four stops it was —
-/// left `None` for a run that simply reached the end, and for one stopped by something the four do not
-/// name.
+/// [`AutomationRunStatus::Stopped`] everywhere else, and `reason` says which kind of stop it was —
+/// left `None` for a run that simply reached the end, and for one stopped by something
+/// [`AutomationStoppedReason`] does not name.
 ///
 /// **The task goes back to `todo` only on a stop.** A run that finished left its task wherever its steps
 /// put it, which is the outcome somebody asked for; a run that was cut off left it reserved by nobody,
@@ -197,7 +197,7 @@ fn said(
     Ok(format!("{} {reached} (run {})", why(reason), run.id))
 }
 
-/// The first sentence of that line: what stopped the run, in the words each of the four is worth.
+/// The first sentence of that line: what stopped the run, in the words each reason is worth.
 fn why(reason: Option<AutomationStoppedReason>) -> &'static str {
     match reason {
         Some(AutomationStoppedReason::Crashed) => {
@@ -210,6 +210,9 @@ fn why(reason: Option<AutomationStoppedReason>) -> &'static str {
             "An automation run stopped: the agent a step asked for could not be started."
         }
         Some(AutomationStoppedReason::ByHuman) => "An automation run was stopped.",
+        Some(AutomationStoppedReason::NoWayOn) => {
+            "An automation run stopped: nothing was left for it to open."
+        }
         None => "An automation run stopped.",
     }
 }
@@ -522,10 +525,12 @@ mod tests {
                 "nothing was opened for it here",
             );
             assert_eq!(
-                crate::ops::automation_run::next_def(tx.conn(), waiting.id)
+                match crate::ops::automation_run::next_def(tx.conn(), waiting.id)
                     .expect("what it is waiting for")
-                    .expect("the entry")
-                    .step_id,
+                {
+                    crate::ops::automation_run::Waiting::Step(def) => def.step_id,
+                    other => panic!("a promoted run waits for its entry, not {other:?}"),
+                },
                 Some(p.first.id),
                 "and what it is waiting for is readable without anybody having been told",
             );

@@ -1903,6 +1903,62 @@ pub enum AutomationCmd {
         #[command(subcommand)]
         sub: AutomationRunCmd,
     },
+
+    /// Start an automation: check it, copy its steps into a run, and take a lane if one is free.
+    /// It takes nothing else — the tasks a step works on and the folder it runs in are the
+    /// automation's own answers, given while it was built
+    Start {
+        /// automation id
+        id: i64,
+    },
+    /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it; one
+    /// with nothing under way pauses now. Either way the lane goes back
+    Pause {
+        /// run id
+        run: i64,
+    },
+    /// Pick a paused run up again, from the way out the step before it left through. With every lane
+    /// held it waits for one
+    Resume {
+        /// run id
+        run: i64,
+    },
+    /// Stop a run: hand the task it was working back, give up the lane, and leave a comment on the
+    /// task saying how far it got
+    Stop {
+        /// run id
+        run: i64,
+    },
+
+    /// **Take the task this stretch of the run is about** — reserve it and declare it in one act.
+    /// Typed by the agent carrying a step out; which step that is comes from the environment the
+    /// window opened its terminal with
+    Take {
+        /// the task to take (AMB-T-n)
+        task: String,
+    },
+    /// **Put down one thing this step produced**, under the name its port was declared with. Written
+    /// `<name>=<value>`, or `<name> --file <path>` for a file
+    Out {
+        /// `<name>=<value>`, or just `<name>` beside --file
+        value: String,
+        /// a file to hand on, instead of a value
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+    },
+    /// **This step is finished**: say which way out it took and what it did. The run reads the way out
+    /// to decide what happens next
+    Done {
+        /// what this step did, for the record and for the steps after it (`-` reads stdin)
+        #[arg(long, value_name = "TEXT")]
+        report: String,
+        /// the way out taken, as the step declared it. Left out is the unnamed one
+        #[arg(long, value_name = "NAME")]
+        exit: Option<String>,
+        /// one more thing produced, `<name>=<value>` — repeat for several
+        #[arg(long = "out", value_name = "NAME=VALUE")]
+        outs: Vec<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

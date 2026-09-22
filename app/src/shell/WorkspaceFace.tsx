@@ -1624,6 +1624,7 @@ export function WorkspaceFace({
                       // already inside the text core composed (`crate::pty::pty_open`).
                       say: step?.say ?? null,
                       fresh: step !== undefined,
+                      runStep: step?.runStep ?? null,
                       // Nothing on this face takes up a terminal it was not given: which session
                       // belongs where is answered once, as the face comes up, and a pane left to
                       // guess would take the one running terminal off whichever pane had it.

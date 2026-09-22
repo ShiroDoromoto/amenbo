@@ -223,9 +223,10 @@ fn latest_for(
 /// goes through ([`super::automation_stop::ended`]) — so the task is not left reserved by a run that
 /// is over.
 ///
-/// `stopped_reason` is left empty on purpose: the four it offers are a crash, a loop that ran out of
-/// turns, an agent that was not there and a person who said stop, and this is none of them. Writing the
-/// nearest one would make the record say something that did not happen.
+/// `stopped_reason` is left empty on purpose: the five it offers are a crash, a loop that ran out of
+/// turns, an agent that was not there, a person who said stop and a picture with nothing left to open,
+/// and this is none of them. Writing the nearest one would make the record say something that did not
+/// happen.
 fn stop(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
     super::automation_stop::ended(tx, before, AutomationRunStatus::Stopped, None)
 }
@@ -887,7 +888,7 @@ mod tests {
                     assert!(stopped.ended_at.is_some());
                     assert_eq!(
                         stopped.stopped_reason, None,
-                        "none of the four it offers is what happened",
+                        "none of the five it offers is what happened",
                     );
                 }
             }

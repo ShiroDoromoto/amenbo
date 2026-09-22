@@ -880,7 +880,70 @@ pub const STEPS: &[Step] = &[
         name: "take the queue out of automation_run.status",
         apply: Apply::Custom(take_the_run_queue_away),
     },
+    Step {
+        to: 52,
+        name: "admit no_way_on as a reason a run stopped",
+        apply: Apply::Custom(admit_the_run_with_nowhere_to_go),
+    },
 ];
+
+/// v52: `automation_run.stopped_reason` admits `no_way_on`.
+///
+/// The value reached the model with the watch that writes it
+/// ([`crate::model::AutomationStoppedReason::NoWayOn`], `AMB-T-5296`) and never reached the column, so
+/// every store refused the write: a run the watch found nowhere to open for stayed `running`, holding
+/// the task it had taken, and the watch said so in the log once a second. The set is widened rather
+/// than the write being softened, because the reason is what tells that ending apart from the three
+/// the reader could have caused.
+///
+/// **This is v9's procedure met a seventh time, copied rather than called** — the reasons
+/// [`admit_rejected_task_status`] gives at length. Nothing is written to the rows: no row can be
+/// carrying a value the column never accepted.
+fn admit_the_run_with_nowhere_to_go(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from v50 on declares it — frozen text, like every step's.
+    const NARROW: &str =
+        "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'by_human'))";
+    /// The same set with the ending the watch writes.
+    const WIDE: &str =
+        "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'by_human', 'no_way_on'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_run'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(WIDE) {
+        // Already wide: a store born from a registry that carries the value, stamped back to an
+        // earlier version. Nothing to widen, and nothing wrong.
+        return Ok(());
+    }
+    if !declared.contains(NARROW) {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation_run",
+            expected: NARROW,
+        });
+    }
+    let widened = declared.replace(NARROW, WIDE);
+
+    let before = column_names(ctx.tx, "automation_run")?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_run'",
+        [&widened],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+    // statement sees the widened `CHECK` instead of the one this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(ctx.tx, "automation_run")?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation_run",
+            expected: NARROW,
+        });
+    }
+    Ok(())
+}
 
 /// v51: `automation_run.status` loses `queued` (`AMB-D-947`).
 ///
@@ -5214,6 +5277,47 @@ mod tests {
                 )
                 .is_err(),
             "and the retired value is refused on the way in, not merely absent"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v52 in full: the reason set admits `no_way_on`, and the rows are left alone — no store can be
+    /// carrying a value its column never accepted (`AMB-T-5296` wrote the variant and not the
+    /// `CHECK`, so the write was refused wherever it was tried).
+    #[test]
+    fn the_run_with_nowhere_to_go_gets_a_reason_the_column_accepts() {
+        let dir = scratch("run-no-way-on");
+        let engine = store_at(&dir, 51);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, stopped_reason) VALUES
+                     (1, 1, 1, 'stopped', 'by_human');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let declared = declared_sql(&engine, "automation_run");
+        assert!(
+            declared.contains(
+                "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'by_human', 'no_way_on'))"
+            ),
+            "the set is the new one: {declared}"
+        );
+        engine
+            .conn()
+            .execute("UPDATE automation_run SET stopped_reason = 'no_way_on' WHERE id = 1", [])
+            .expect("the ending the watch writes goes in");
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE automation_run SET stopped_reason = 'gave_up' WHERE id = 1", [])
+                .is_err(),
+            "and the set is still closed",
         );
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -82,9 +82,10 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
 /// **Make an automation**, born with no steps and no entry
 /// ([`amenbo_core::ops::automation::add`]).
 ///
-/// A name is all it takes. Notes and a preamble are written on the build screen, once there is a
-/// picture to write them about — asking for them at the press would put a form in front of the one
-/// road into the screen where the work actually happens.
+/// A name is all it takes. The notes are written on the build screen, once there is a picture to
+/// write them about — asking for them at the press would put a form in front of the one road into
+/// the screen where the work actually happens. The preamble is written nowhere: it is Amenbo's own
+/// fixed sentence at the head of every launch, and the column goes with it (`AMB-T-5325`).
 ///
 /// The ack names the new automation, which is what the screen opens the build screen on: a creation
 /// that answered with the scope alone would leave the press having to go and find the row that was
@@ -95,6 +96,47 @@ pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdErro
         Ok(store.automation_add(project_id, NewAutomation { name, ..Default::default() })?)
     })?;
     Ok(WriteAck::new(&["automations"]).automation(made.id))
+}
+
+/// **Rename an automation, rewrite its notes, or put it out of the way.** Only what is `Some` is
+/// written.
+///
+/// Archiving takes nothing away and stops nothing already running
+/// ([`amenbo_core::ops::automation::update`]). It is what keeps a definition nobody launches any
+/// more out of a reader's way, so the row stays in the list carrying the mark rather than leaving
+/// it — which is why `automation_page` goes on answering with archived ones in it.
+///
+/// The preamble is not one of the three. It is the fixed sentence Amenbo puts at the head of every
+/// launch rather than anything this automation holds, and the column goes with it (`AMB-T-5325`).
+#[tauri::command]
+pub fn automation_edit(
+    id: i64,
+    name: Option<String>,
+    notes: Option<String>,
+    archived: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_update(id, name.as_deref(), notes.as_deref(), None, archived)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Delete an automation and everything built into it** — its steps with their declarations, the
+/// edges and wires between them, and the documents they share
+/// ([`amenbo_core::ops::automation::delete`]).
+///
+/// **Core refuses it while a run stands behind it**, naming how many. A run carries its own copy of
+/// the steps and would go on reading correctly, but it is filed under the automation it was
+/// launched from — so the refusal is what keeps the record able to say what was run. It reaches the
+/// screen as the sentence core wrote, which is why nothing is re-asked here before the write.
+#[tauri::command]
+pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
 }
 
 /// **The library this project reaches** — the device's own actions first, then the project's own.

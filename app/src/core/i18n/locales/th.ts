@@ -911,6 +911,7 @@ export const th: Translation = {
     "auto.build.launch": "เริ่มทำงาน",
     "auto.build.picture": "ประกอบ",
     "auto.build.step": "ขั้นตอน",
+    "auto.build.about": "ออโตเมชันนี้",
     "auto.start": "เริ่ม",
     "auto.ready": "เริ่มได้",
     "auto.notReady": "ยังเริ่มไม่ได้:",
@@ -1000,6 +1001,13 @@ export const th: Translation = {
     "auto.actions.reaches": "สิ่งที่บันทึกที่นี่ ทุกขั้นตอนที่ชี้มาที่แอ็กชันนี้จะนำไปใช้",
     "auto.actions.save": "บันทึก",
     "auto.actions.cancel": "ยกเลิก",
+    "auto.about.name": "ชื่อ",
+    "auto.about.notes": "บันทึก",
+    "auto.about.notesWhat": "แสดงบนหน้าจอนี้เท่านั้น ไม่มีอะไรจากตรงนี้เข้าไปในการทำงาน",
+    "auto.about.archive": "เก็บเข้าคลัง",
+    "auto.about.archiveWhat": "ออโตเมชันที่เก็บเข้าคลังยังคงเก็บทุกอย่างที่ประกอบขึ้นมาไว้ และงานที่กำลังทำงานอยู่ก็ทำงานต่อไป",
+    "auto.about.remove": "ลบออโตเมชันนี้",
+    "auto.about.removeConfirm": "ลบออโตเมชันนี้หรือไม่ ขั้นตอน ทางออกของขั้นตอน และทุกสายที่ต่อระหว่างกันจะหายไปด้วย และย้อนกลับไม่ได้",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

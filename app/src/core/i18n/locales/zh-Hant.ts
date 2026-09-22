@@ -912,6 +912,7 @@ export const zhHant: Translation = {
     "auto.build.launch": "啟動",
     "auto.build.picture": "組建",
     "auto.build.step": "步驟",
+    "auto.build.about": "此自動化",
     "auto.start": "啟動",
     "auto.ready": "可以啟動。",
     "auto.notReady": "還不能啟動：",
@@ -1001,6 +1002,13 @@ export const zhHant: Translation = {
     "auto.actions.reaches": "在這裡儲存的內容，指向此動作的每個步驟都會讀到。",
     "auto.actions.save": "儲存",
     "auto.actions.cancel": "取消",
+    "auto.about.name": "名稱",
+    "auto.about.notes": "備註",
+    "auto.about.notesWhat": "只顯示在這個畫面上。這裡的內容不會進入執行。",
+    "auto.about.archive": "已封存",
+    "auto.about.archiveWhat": "封存之後，搭好的內容原樣保留，正在執行的項目也照常繼續。",
+    "auto.about.remove": "刪除此自動化",
+    "auto.about.removeConfirm": "要刪除此自動化嗎？其中的步驟、它們的出口，以及它們之間接好的連線都會一併消失，且無法復原。",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

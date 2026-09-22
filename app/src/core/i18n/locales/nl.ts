@@ -910,6 +910,7 @@ export const nl: Translation = {
     "auto.build.launch": "Starten",
     "auto.build.picture": "Opbouw",
     "auto.build.step": "Stap",
+    "auto.build.about": "Deze automatisering",
     "auto.start": "Start",
     "auto.ready": "Kan gestart worden.",
     "auto.notReady": "Kan nog niet gestart worden:",
@@ -999,6 +1000,13 @@ export const nl: Translation = {
     "auto.actions.reaches": "Wat hier wordt opgeslagen, draagt elke stap die naar deze actie wijst.",
     "auto.actions.save": "Opslaan",
     "auto.actions.cancel": "Annuleren",
+    "auto.about.name": "Naam",
+    "auto.about.notes": "Notities",
+    "auto.about.notesWhat": "Alleen op dit scherm te zien. Niets hiervan bereikt een uitvoering.",
+    "auto.about.archive": "Gearchiveerd",
+    "auto.about.archiveWhat": "Een gearchiveerde automatisering houdt alles waaruit ze is opgebouwd, en een lopende uitvoering gaat door.",
+    "auto.about.remove": "Deze automatisering verwijderen",
+    "auto.about.removeConfirm": "Deze automatisering verwijderen? De stappen, hun uitgangen en alles wat ertussen bedraad is gaan mee. Dit kan niet ongedaan worden gemaakt.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

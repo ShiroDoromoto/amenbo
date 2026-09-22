@@ -911,6 +911,7 @@ export const vi: Translation = {
     "auto.build.launch": "Khởi chạy",
     "auto.build.picture": "Dựng",
     "auto.build.step": "Bước",
+    "auto.build.about": "Tự động hoá này",
     "auto.start": "Chạy",
     "auto.ready": "Có thể chạy.",
     "auto.notReady": "Chưa thể chạy:",
@@ -1000,6 +1001,13 @@ export const vi: Translation = {
     "auto.actions.reaches": "Nội dung lưu ở đây được mọi bước trỏ tới hành động này mang theo.",
     "auto.actions.save": "Lưu",
     "auto.actions.cancel": "Huỷ",
+    "auto.about.name": "Tên",
+    "auto.about.notes": "Ghi chú",
+    "auto.about.notesWhat": "Chỉ hiện trên màn hình này. Không có gì ở đây đi vào một lần chạy.",
+    "auto.about.archive": "Đã lưu trữ",
+    "auto.about.archiveWhat": "Tự động hoá đã lưu trữ vẫn giữ mọi thứ đã dựng nên nó, và lần chạy đang diễn ra vẫn chạy tiếp.",
+    "auto.about.remove": "Xoá tự động hoá này",
+    "auto.about.removeConfirm": "Xoá tự động hoá này? Các bước, lối ra của chúng và mọi dây nối giữa chúng sẽ mất theo. Không thể hoàn tác.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -927,6 +927,7 @@ export const ru: Translation = {
     "auto.build.launch": "Запуск",
     "auto.build.picture": "Сборка",
     "auto.build.step": "Шаг",
+    "auto.build.about": "Эта автоматизация",
     "auto.start": "Запустить",
     "auto.ready": "Можно запустить.",
     "auto.notReady": "Пока запустить нельзя:",
@@ -1016,6 +1017,13 @@ export const ru: Translation = {
     "auto.actions.reaches": "То, что сохранено здесь, несёт каждый шаг, указывающий на это действие.",
     "auto.actions.save": "Сохранить",
     "auto.actions.cancel": "Отмена",
+    "auto.about.name": "Название",
+    "auto.about.notes": "Заметки",
+    "auto.about.notesWhat": "Видны только на этом экране. Ничто отсюда не попадает в выполнение.",
+    "auto.about.archive": "В архиве",
+    "auto.about.archiveWhat": "Автоматизация в архиве сохраняет всё, из чего она собрана, а уже идущее выполнение продолжается.",
+    "auto.about.remove": "Удалить эту автоматизацию",
+    "auto.about.removeConfirm": "Удалить эту автоматизацию? Её шаги, их выходы и все связи между ними уйдут вместе с ней. Отменить это нельзя.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

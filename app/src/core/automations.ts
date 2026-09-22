@@ -70,6 +70,40 @@ export async function addAutomation(projectId: number, name: string): Promise<nu
 }
 
 /**
+ * **Rename an automation, rewrite its notes, or put it out of the way.** Only what is passed is
+ * written.
+ *
+ * Archiving takes nothing away and stops nothing already running. It keeps a definition nobody
+ * launches any more out of a reader's way, and the row stays in the list with the mark on it —
+ * which is what the list draws, rather than dropping the row.
+ */
+export async function editAutomation(
+  id: number,
+  patch: { name?: string; notes?: string; archived?: boolean },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_edit", {
+    id,
+    name: patch.name ?? null,
+    notes: patch.notes ?? null,
+    archived: patch.archived ?? null,
+  });
+}
+
+/**
+ * **Delete an automation and everything built into it** — its steps with their declarations, the
+ * lines between them, and the documents they share.
+ *
+ * **Refused while a run stands behind it**, naming how many: a run is filed under the automation it
+ * was launched from, so core will not let that record lose what was run. The refusal reaches the
+ * caller as core's own sentence, which is what the screen draws.
+ */
+export async function deleteAutomation(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_remove", { id });
+}
+
+/**
  * The library this project reaches — the device's own actions and the project's own, in one list.
  *
  * Both reaches come in one answer because both are one list on screen: what a reader is choosing

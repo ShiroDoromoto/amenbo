@@ -1151,6 +1151,7 @@ const ui = {
   "auto.build.launch": "Launch",
   "auto.build.picture": "Build",
   "auto.build.step": "Step",
+  "auto.build.about": "This automation",
   "auto.start": "Start",
   "auto.ready": "Ready to start.",
   "auto.notReady": "Not ready to start:",
@@ -1248,6 +1249,13 @@ const ui = {
   "auto.actions.reaches": "What is saved here is carried by every step pointing at this action.",
   "auto.actions.save": "Save",
   "auto.actions.cancel": "Cancel",
+  "auto.about.name": "Name",
+  "auto.about.notes": "Notes",
+  "auto.about.notesWhat": "Drawn on this screen. Nothing here reaches a run.",
+  "auto.about.archive": "Archived",
+  "auto.about.archiveWhat": "An archived automation keeps everything it was built from, and a run already under way goes on.",
+  "auto.about.remove": "Delete this automation",
+  "auto.about.removeConfirm": "Delete this automation? Its steps, their ways out and everything wired between them go with it. This cannot be undone.",
 
   // The "running" tab: what is under way, what each run is on, and the three presses that
   // move it (`app/src/screens/RunningTab.tsx`).

@@ -916,6 +916,7 @@ export const ja: Translation = {
     "auto.build.launch": "起動",
     "auto.build.picture": "組み立て",
     "auto.build.step": "ステップの中身",
+    "auto.build.about": "このオートメーション",
     "auto.start": "起動する",
     "auto.ready": "起動できます",
     "auto.notReady": "起動できません",
@@ -1005,6 +1006,13 @@ export const ja: Translation = {
     "auto.actions.reaches": "ここで保存すると、このアクションを指しているステップすべてに効きます",
     "auto.actions.save": "保存",
     "auto.actions.cancel": "取消",
+    "auto.about.name": "名前",
+    "auto.about.notes": "メモ",
+    "auto.about.notesWhat": "この画面に出るだけ。実行には入らない",
+    "auto.about.archive": "アーカイブ済みにする",
+    "auto.about.archiveWhat": "アーカイブしても、組んだものはそのまま残る。走っている実行も止まらない",
+    "auto.about.remove": "このオートメーションを消す",
+    "auto.about.removeConfirm": "このオートメーションを消します。中のステップ・終了条件・次にすること・ワイヤも一緒に消えます。戻せません",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

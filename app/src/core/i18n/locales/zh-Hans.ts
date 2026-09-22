@@ -912,6 +912,7 @@ export const zhHans: Translation = {
     "auto.build.launch": "启动",
     "auto.build.picture": "搭建",
     "auto.build.step": "步骤",
+    "auto.build.about": "此自动化",
     "auto.start": "启动",
     "auto.ready": "可以启动。",
     "auto.notReady": "还不能启动：",
@@ -1001,6 +1002,13 @@ export const zhHans: Translation = {
     "auto.actions.reaches": "在这里保存的内容，指向该动作的每个步骤都会读到。",
     "auto.actions.save": "保存",
     "auto.actions.cancel": "取消",
+    "auto.about.name": "名称",
+    "auto.about.notes": "备注",
+    "auto.about.notesWhat": "只显示在这个画面上。这里的内容不会进入执行。",
+    "auto.about.archive": "已归档",
+    "auto.about.archiveWhat": "归档后，搭好的内容原样保留，正在运行的执行也照常继续。",
+    "auto.about.remove": "删除此自动化",
+    "auto.about.removeConfirm": "要删除此自动化吗？其中的步骤、它们的出口，以及它们之间接好的连线都会一并消失，且无法撤销。",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

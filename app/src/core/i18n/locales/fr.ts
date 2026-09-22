@@ -922,6 +922,7 @@ export const fr: Translation = {
     "auto.build.launch": "Lancement",
     "auto.build.picture": "Construction",
     "auto.build.step": "Étape",
+    "auto.build.about": "Cette automatisation",
     "auto.start": "Lancer",
     "auto.ready": "Prête à être lancée.",
     "auto.notReady": "Pas encore prête à être lancée :",
@@ -1011,6 +1012,13 @@ export const fr: Translation = {
     "auto.actions.reaches": "Ce qui est enregistré ici est porté par chaque étape qui pointe vers cette action.",
     "auto.actions.save": "Enregistrer",
     "auto.actions.cancel": "Annuler",
+    "auto.about.name": "Nom",
+    "auto.about.notes": "Notes",
+    "auto.about.notesWhat": "Affichées sur cet écran uniquement. Rien ici n'atteint une exécution.",
+    "auto.about.archive": "Archivée",
+    "auto.about.archiveWhat": "Une automatisation archivée garde tout ce avec quoi elle a été construite, et une exécution en cours continue.",
+    "auto.about.remove": "Supprimer cette automatisation",
+    "auto.about.removeConfirm": "Supprimer cette automatisation ? Ses étapes, leurs sorties et tout ce qui est câblé entre elles disparaissent avec elle. C'est irréversible.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

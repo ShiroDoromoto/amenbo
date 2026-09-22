@@ -910,6 +910,7 @@ export const tr: Translation = {
     "auto.build.launch": "Başlatma",
     "auto.build.picture": "Kurulum",
     "auto.build.step": "Adım",
+    "auto.build.about": "Bu otomasyon",
     "auto.start": "Başlat",
     "auto.ready": "Başlatılabilir.",
     "auto.notReady": "Henüz başlatılamaz:",
@@ -999,6 +1000,13 @@ export const tr: Translation = {
     "auto.actions.reaches": "Burada kaydedilen, bu eylemi gösteren her adımın taşıdığı şeydir.",
     "auto.actions.save": "Kaydet",
     "auto.actions.cancel": "Vazgeç",
+    "auto.about.name": "Ad",
+    "auto.about.notes": "Notlar",
+    "auto.about.notesWhat": "Yalnızca bu ekranda görünür. Buradaki hiçbir şey bir çalışmaya girmez.",
+    "auto.about.archive": "Arşivlenmiş",
+    "auto.about.archiveWhat": "Arşivlenmiş bir otomasyon kurulduğu her şeyi korur, süren bir çalışma da devam eder.",
+    "auto.about.remove": "Bu otomasyonu sil",
+    "auto.about.removeConfirm": "Bu otomasyon silinsin mi? Adımları, çıkışları ve aralarında kurulan her bağlantı onunla gider. Bu geri alınamaz.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

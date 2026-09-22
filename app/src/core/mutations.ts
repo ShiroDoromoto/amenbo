@@ -112,8 +112,10 @@ function applyAck(ack: WriteAck): Promise<void> {
       // count beside it is read off the steps pointing at it.
       case "automationActions": return scopes.has("automationActions");
       // The definitions of one project, as the "automations" tab lists them. A write reaches it for
-      // two reasons: the list gains or loses a row, and the step count drawn on each row is read off
-      // the steps the build screen is adding and removing.
+      // three reasons: the list gains or loses a row, a row it keeps is renamed or put out of the
+      // way, and the step count drawn on each row is read off the steps the build screen is adding
+      // and removing. None of the three is one definition's own read, which is why this is watched
+      // apart from `automation` below.
       case "automations": return scopes.has("automations");
       // One automation's whole definition, and whether it could be started. Every write the build
       // screen makes lands in one of the definition's tables, and what goes stale is the whole

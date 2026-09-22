@@ -1015,9 +1015,13 @@ datasets! {
     // It names no agent and no model: who is asked to carry a prompt out is each step's own answer,
     // so the same action can be run by different agents in two automations (the columns are on
     // `automation_action_step`).
+    //
+    // `note` is what the action is for, written for whoever builds with it. It is drawn on the build
+    // screen and never prepended to a launch — `automation.notes`' twin one layer down.
     automation_action {
         project_id: fk_opt("project", "RESTRICT"),
         name: col(REQ),
+        note: col(REQ),
         entry_step_id: fk_opt("automation_action_step", "RESTRICT"),
         order_key: col(ORDER_KEY),
     }
@@ -1047,17 +1051,6 @@ datasets! {
     automation_placement {
         automation_id: fk("automation", "RESTRICT"),
         action_id: fk("automation_action", "RESTRICT"),
-        order_key: col(ORDER_KEY),
-    }
-
-    // **A document the placements of one automation share.** Long is fine here — this is where the
-    // material a prompt would otherwise repeat is written once, and `automation_placement_note` says
-    // which placements are handed it. `body` is the one automation face the word index carries
-    // (`store_engine::search::FACES`).
-    automation_note {
-        automation_id: fk("automation", "RESTRICT"),
-        name: col(REQ),
-        body: col(REQ),
         order_key: col(ORDER_KEY),
     }
 
@@ -1111,14 +1104,6 @@ datasets! {
         required: bool_col,
         options: col(OPT),
         value: col(OPT),
-        order_key: col(ORDER_KEY),
-    }
-
-    // **Which shared documents a placement is handed**, and with it every step opened under that
-    // placement. A join row and nothing else; both ends are inside one automation.
-    automation_placement_note {
-        placement_id: fk("automation_placement", "RESTRICT"),
-        note_id: fk("automation_note", "RESTRICT"),
         order_key: col(ORDER_KEY),
     }
 

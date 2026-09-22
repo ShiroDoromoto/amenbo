@@ -726,9 +726,9 @@ settings, the identity it answers `whoami` with, the build in place, and the sto
 `.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
 
 One domain reads the same thing two ways. **`automation`'s definition is read back whole at the
-terminal** (`step-read` / `edge-read` / `note-read`, off `automation show`): every step with the
-library already read in, what joins them, and the documents they share — which is how a road that
-built one at the terminal proves what it built. **The picture is the screen's** (`pictured`,
+terminal** (`step-read` / `edge-read`, off `automation show`): every step with the library already
+read in, and what joins them — which is how a road that built one at the terminal proves what it
+built. **The picture is the screen's** (`pictured`,
 `line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half): boxes,
 the lines between them and the marks along them are drawn nowhere else, and neither face is a gap in
 the other. The two listings — a row per definition, a row per library action — are read on both

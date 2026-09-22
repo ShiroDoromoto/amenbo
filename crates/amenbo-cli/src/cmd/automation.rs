@@ -275,11 +275,6 @@ fn typed_in(sub: &AutomationCmd) -> Where {
         | AutomationCmd::EdgeRm { .. }
         | AutomationCmd::WireAdd { .. }
         | AutomationCmd::WireRm { .. }
-        | AutomationCmd::NoteAdd { .. }
-        | AutomationCmd::NoteUpdate { .. }
-        | AutomationCmd::NoteRm { .. }
-        | AutomationCmd::NoteLink { .. }
-        | AutomationCmd::NoteUnlink { .. }
         | AutomationCmd::Start { .. }
         | AutomationCmd::Pause { .. }
         | AutomationCmd::Resume { .. }
@@ -395,7 +390,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.place-rm", "automation_placement", json!({ "id": id, "deleted": true }), None, false, format!("✓ Took placement off: {id}"));
         }
 
-        AutomationCmd::ActionAdd { project, global, name } => {
+        AutomationCmd::ActionAdd { project, global, name, note } => {
             // The device's library is reached by every project on this machine, so it is nobody's
             // project to put something in: `None` is what core reads as that shelf, and an AI bound to
             // a project is turned away from it there.
@@ -403,7 +398,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 true => None,
                 false => Some(project_or_bound(store, project)?),
             };
-            let a = store.automation_action_add(pid, &name).map_err(CliError::from)?;
+            let note = body_arg(note)?;
+            let a = store.automation_action_add(pid, &name, &note).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-add", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Added action: {} ({})", a.name, a.id));
         }
         AutomationCmd::ActionList { project, global } => {
@@ -449,8 +445,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 render_action(flags, &view);
             }
         }
-        AutomationCmd::ActionUpdate { id, name } => {
-            let a = store.automation_action_update(id, name.as_deref()).map_err(CliError::from)?;
+        AutomationCmd::ActionUpdate { id, name, note } => {
+            let note = body_arg_opt(note)?;
+            let a =
+                store.automation_action_update(id, name.as_deref(), note.as_deref()).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-update", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated action: {} ({})", a.name, a.id));
         }
         AutomationCmd::ActionEntrySet { id, step, clear } => {
@@ -659,31 +657,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             store.automation_wire_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.wire-rm", "automation_wire", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted wire: {id}"));
-        }
-        AutomationCmd::NoteAdd { automation, name, body } => {
-            let body = body_arg(body)?;
-            let n = store.automation_note_add(automation, &name, &body).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-add", "automation_note", serde_json::to_value(&n).unwrap(), None, false, format!("✓ Added shared document: {} ({})", n.name, n.id));
-        }
-        AutomationCmd::NoteUpdate { id, name, body } => {
-            let body = body_arg_opt(body)?;
-            let n = store.automation_note_update(id, name.as_deref(), body.as_deref()).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-update", "automation_note", serde_json::to_value(&n).unwrap(), None, false, format!("✓ Updated shared document: {} ({})", n.name, n.id));
-        }
-        AutomationCmd::NoteRm { id } => {
-            if !confirm(flags, "delete shared document")? {
-                return Ok(0);
-            }
-            store.automation_note_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-rm", "automation_note", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted shared document: {id}"));
-        }
-        AutomationCmd::NoteLink { placement, note } => {
-            let l = store.automation_note_link(placement, note).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-link", "automation_placement_note", serde_json::to_value(&l).unwrap(), None, false, format!("✓ Placement {placement} is handed document {note}"));
-        }
-        AutomationCmd::NoteUnlink { placement, note } => {
-            let took = store.automation_note_unlink(placement, note).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-unlink", "automation_placement_note", json!({ "placement_id": placement, "note_id": note, "unlinked": took }), None, !took, format!("✓ Placement {placement} is no longer handed document {note}"));
         }
         AutomationCmd::RunList { task, automation, limit } => {
             let (runs, about) = match (task, automation) {
@@ -964,7 +937,7 @@ fn next_line(next: &Next) -> String {
 
 // ───────────────────────── what was built ─────────────────────────
 
-/// One automation in full: the placements on it, what each runs under, and the documents they share.
+/// One automation in full: the placements on it, and what each runs under.
 fn render_automation(flags: &Flags, view: &AutomationView) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
@@ -986,22 +959,6 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     write_body(flags, "preamble", &a.preamble);
     for placement in &view.placements {
         render_placement(flags, view, placement);
-    }
-    if !view.notes.is_empty() {
-        human(flags, format!("\ndocuments ({})", view.notes.len()));
-        for note in &view.notes {
-            let handed = match note.placement_ids.is_empty() {
-                true => "handed to no placement".to_string(),
-                false => format!(
-                    "handed to placement {}",
-                    note.placement_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
-                ),
-            };
-            human(flags, format!("  {} — {}  ({handed})", note.note.id, note.note.name));
-            for line in note.note.body.lines() {
-                human(flags, format!("      | {line}"));
-            }
-        }
     }
 }
 
@@ -1076,6 +1033,7 @@ fn render_action(flags: &Flags, view: &ActionView) {
         flags,
         format!("{shelf}  {entry}  used by {} automation(s)", view.used_by),
     );
+    write_body(flags, "note", &a.note);
     for port in &view.inputs {
         human(flags, format!("takes  {}", one_port(port)));
     }

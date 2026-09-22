@@ -1243,7 +1243,7 @@ mod tests {
             assert_eq!(exits.len(), 2, "the unnamed way out and the error one");
             assert_eq!(exits[0].outs[0].kind, AutomationPortKind::TaskTake);
 
-            automation::action_update(tx, action.id, Some("取り直す"))
+            automation::action_update(tx, action.id, Some("取り直す"), None)
                 .expect("edit the definition under the run");
             automation::step_update(
                 tx,

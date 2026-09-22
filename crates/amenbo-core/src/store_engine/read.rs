@@ -479,22 +479,6 @@ fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
     [own, in_comment, on_value, on_axis, attached, attached_to_comment]
 }
 
-/// The automation's columns as the automation-side word query names them: `FROM automation aut`, and the
-/// documents its steps share as `FROM automation_note an`.
-const AUT: col::automation::Cols = col::automation::of("aut");
-const AN: col::automation_note::Cols = col::automation_note::of("an");
-
-/// The one way a term reaches an automation (`AMB-D-944`): a document its steps share carries it. One set
-/// rather than six, because this side has one face — an automation's own name, notes and preamble are not
-/// in [`search::FACES`] — and still a set, because an automation holds any number of documents and the
-/// record-level AND is what lets two words land in two different ones and come back as one answer.
-fn automation_word_sets(term: search::Term<'_>) -> [IdSet; 1] {
-    let in_document = IdSet::of(AN.table, AN.automation_id)
-        .join(SD.table, on_face(search::DATASET_AUTOMATION_NOTE, AN.id))
-        .filter(term.pred(SD));
-    [in_document]
-}
-
 /// What is attached, as the arms above alias it.
 const A: col::attachment::Cols = col::attachment::of("a");
 
@@ -1931,10 +1915,9 @@ pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Ve
 /// and in two of its comments is three rows.
 pub struct SearchHitRow {
     pub face: HitFace,
-    /// Which side the owner is: [`search::DATASET_TASK`], [`search::DATASET_DECISION`] or
-    /// [`search::OWNER_AUTOMATION`]. Every hit belongs to one of the three, including the faces that are
-    /// not held on the record itself — a label is the task's by the placement, an attachment by what it
-    /// hangs off, a shared document the automation's by the steps that are handed it.
+    /// Which side the owner is: [`search::DATASET_TASK`] or [`search::DATASET_DECISION`]. Every hit
+    /// belongs to one of the two, including the faces that are not held on the record itself — a label
+    /// is the task's by the placement, an attachment by what it hangs off.
     pub owner_kind: String,
     pub owner_id: i64,
     pub owner_title: String,
@@ -1958,7 +1941,7 @@ pub struct SearchPage {
 type HitSlots =
     (Slot<i64>, Slot<String>, Slot<i64>, Slot<String>, Slot<Option<i64>>, Slot<String>, Slot<String>);
 
-/// Project one arm's row — the seam that keeps fifteen arms saying the same thing in the same order.
+/// Project one arm's row — the seam that keeps fourteen arms saying the same thing in the same order.
 ///
 /// The face travels as its rank ([`HitFace::tier`]) rather than as a name, because the rank is what the
 /// compound query orders by and the mapping back is total. `text` arrives as an **expression** rather
@@ -2041,7 +2024,7 @@ fn hit_where(face: Pred, side: &Option<Pred>, gate: &Option<Pred>) -> Option<Pre
 /// Is this arm one the caller's two axes keep (`AMB-D-562`)? `kind` says **which record** the words are
 /// on and `face` **which face of it**, and they are judged apart and ANDed — an axis left unnamed keeps
 /// everything on it. Because they are a product rather than one mixed narrowing, "the remarks on
-/// decisions" is a thing a caller can ask for; a single four-valued `--kind` could not express it.
+/// decisions" is a thing a caller can ask for; a single mixed `--kind` could not express it.
 fn kept_by_axes(
     kind: Option<crate::query::SearchKind>,
     want: Option<HitFace>,
@@ -2052,7 +2035,6 @@ fn kept_by_axes(
         None => true,
         Some(crate::query::SearchKind::Task) => owner_kind == search::DATASET_TASK,
         Some(crate::query::SearchKind::Decision) => owner_kind == search::DATASET_DECISION,
-        Some(crate::query::SearchKind::Automation) => owner_kind == search::OWNER_AUTOMATION,
     };
     by_kind && want.is_none_or(|w| w == face)
 }
@@ -2135,9 +2117,8 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 
     let head = search_head(terms, record_level, sides);
     let asked: Vec<search::Term<'_>> = (0..terms.len()).map(search::Term::Named).collect();
-    let (task_side, decision_side, automation_side) =
-        search_sides(q, project_id, record_level, sides);
-    let arms = HitArms { q, asked: asked.as_slice(), task_side, decision_side, automation_side };
+    let (task_side, decision_side) = search_sides(q, project_id, record_level, sides);
+    let arms = HitArms { q, asked: asked.as_slice(), task_side, decision_side };
     let (slots, mut sql) = hit_union(&arms);
 
     let total = count_hits(conn, &sql, head.as_ref())?;
@@ -2162,9 +2143,8 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 /// With several words the record-level set is still needed, and then it goes to the head for the same
 /// reason the lookups do: "this record carries the word somewhere" is a union over six ways in — its own
 /// copy, its comments, its labels, the axis behind them, what is attached to it and to those comments —
-/// on either record side, and written into the arms it is built by each of the fifteen, twice over. The
-/// automations' set is one way in rather than six, and goes to the head for the same reason. Named here,
-/// each is built once.
+/// on either record side, and written into the arms it is built by each of the fourteen, twice over.
+/// Named here, each is built once.
 /// Only for a side that still has an arm standing, which is the gate [`search_sides`] asks it under too.
 fn search_head(terms: &[String], record_level: bool, sides: Sides) -> Option<Sql> {
     let mut head = search::terms_head(terms);
@@ -2182,14 +2162,6 @@ fn search_head(terms: &[String], record_level: bool, sides: Sides) -> Option<Sql
                         decision_word_sets(search::Term::Named(i)),
                     );
                 }
-                if sides.automation {
-                    push_words_cte(
-                        head,
-                        search::OWNER_AUTOMATION,
-                        i,
-                        automation_word_sets(search::Term::Named(i)),
-                    );
-                }
             }
         }
     }
@@ -2203,7 +2175,6 @@ fn search_head(terms: &[String], record_level: bool, sides: Sides) -> Option<Sql
 struct Sides {
     task: bool,
     decision: bool,
-    automation: bool,
 }
 
 impl Sides {
@@ -2213,7 +2184,6 @@ impl Sides {
         Self {
             task: kind.is_none_or(|k| k == K::Task),
             decision: kind.is_none_or(|k| k == K::Decision),
-            automation: kind.is_none_or(|k| k == K::Automation),
         }
     }
 }
@@ -2227,7 +2197,7 @@ fn search_sides(
     project_id: Option<i64>,
     record_level: bool,
     sides: Sides,
-) -> (Option<Pred>, Option<Pred>, Option<Pred>) {
+) -> (Option<Pred>, Option<Pred>) {
     // Named only where it was built. A side the caller narrowed away has no set at the head, so nothing
     // may name one: the arms of that side are all gated off and never answer, but the reference stands in
     // the statement all the same, and a `WITH` name that was never pushed is a table SQLite cannot find —
@@ -2275,20 +2245,7 @@ fn search_sides(
         .flatten(),
     );
 
-    // The automation side carries no structural narrowing: `--filter` is written in the vocabulary of a
-    // listing (`AMB-D-563`), and an automation has none to take one from — which the entry point refuses
-    // rather than reads as no narrowing (`crate::query::search`). What is left is the scope and the
-    // record-level AND, both read exactly as the two sides above read them.
-    let automation_side = Pred::all(
-        [
-            side_words(sides.automation, AUT.id.to_sql(), search::OWNER_AUTOMATION).flatten(),
-            project_id.map(|pid| Pred::eq(AUT.project_id, pid)),
-        ]
-        .into_iter()
-        .flatten(),
-    );
-
-    (task_side, decision_side, automation_side)
+    (task_side, decision_side)
 }
 
 /// What every arm of the hit query is handed: the words as a face is asked about them, and the predicate
@@ -2299,7 +2256,6 @@ struct HitArms<'a> {
     asked: &'a [search::Term<'a>],
     task_side: Option<Pred>,
     decision_side: Option<Pred>,
-    automation_side: Option<Pred>,
 }
 
 impl HitArms<'_> {
@@ -2309,7 +2265,6 @@ impl HitArms<'_> {
     fn r#where(&self, face_carries: Pred, face: HitFace, owner_kind: &str) -> Option<Pred> {
         let side = match owner_kind {
             search::DATASET_DECISION => &self.decision_side,
-            search::OWNER_AUTOMATION => &self.automation_side,
             _ => &self.task_side,
         };
         let gate = (!kept_by_axes(self.q.kind, self.q.face, owner_kind, face)).then(Pred::never);
@@ -2317,7 +2272,7 @@ impl HitArms<'_> {
     }
 }
 
-/// The fifteen arms, in the order their faces are projected. The first names the row shape the rest are
+/// The fourteen arms, in the order their faces are projected. The first names the row shape the rest are
 /// held to ([`HitSlots`]), and the groups are the families of face: a record's own copy, a comment on it,
 /// a label it was placed on, and what is attached — to the record, or to one of its comments.
 fn hit_union(a: &HitArms) -> (HitSlots, Sql) {
@@ -2328,8 +2283,7 @@ fn hit_union(a: &HitArms) -> (HitSlots, Sql) {
     comment_attachment_arms(a, union).into_parts()
 }
 
-/// A record's own copy: a task's title and notes, a decision's title and body, and the body of a document
-/// an automation's steps share — the automation's own long text, there being no other face on that side.
+/// A record's own copy: a task's title and notes, and a decision's title and body.
 fn own_face_arms(a: &HitArms) -> Union<HitSlots> {
     const TASK: &str = search::DATASET_TASK;
     const DECISION: &str = search::DATASET_DECISION;
@@ -2389,35 +2343,6 @@ fn own_face_arms(a: &HitArms) -> Union<HitSlots> {
         tail.push_where(
             a.r#where(face_hit(DECISION, DEC.id, &["body"], a.asked), HitFace::Body, DECISION)
                 .as_ref(),
-        );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // The body of a document an automation's steps share (`AMB-D-944`). The record is the automation,
-        // because that is what a reader opens to read the document — the same reading that makes a comment
-        // the task's. It is dated by the document rather than by the automation: the hit's own instant is
-        // when the text it sits in was last written, and an automation renamed since is not a newer hit.
-        //
-        // One automation may hold several documents, so two of them carrying a word are two rows with the
-        // same ref and the same face — as a value and the axis behind it already are on the label face.
-        let slots = hit_slots(
-            sel,
-            HitFace::Body,
-            search::OWNER_AUTOMATION,
-            AUT.id,
-            AUT.name,
-            None,
-            AN.updated_at,
-            AN.body.to_sql(),
-        );
-        let mut tail = Sql::from_table(AN.table);
-        tail.join(AUT.table, same(AUT.id, AN.automation_id)).push_where(
-            a.r#where(
-                face_hit(search::DATASET_AUTOMATION_NOTE, AN.id, &["body"], a.asked),
-                HitFace::Body,
-                search::OWNER_AUTOMATION,
-            )
-            .as_ref(),
         );
         (slots, tail)
     })
@@ -6326,11 +6251,6 @@ pub fn automation(conn: &Connection, id: i64) -> Result<Option<crate::model::Aut
     super::hydrate::row_by_id(conn, "automation", id, super::hydrate::automation_row)
 }
 
-/// The `automation_note` record with this id.
-pub fn automation_note(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationNote>> {
-    super::hydrate::row_by_id(conn, "automation_note", id, super::hydrate::automation_note_row)
-}
-
 /// The `automation_placement` record with this id.
 pub fn automation_placement(
     conn: &Connection,
@@ -6355,19 +6275,6 @@ pub fn automation_action_step(
 /// The `automation_cfg` record with this id.
 pub fn automation_cfg(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationCfg>> {
     super::hydrate::row_by_id(conn, "automation_cfg", id, super::hydrate::automation_cfg_row)
-}
-
-/// The `automation_placement_note` record with this id.
-pub fn automation_placement_note(
-    conn: &Connection,
-    id: i64,
-) -> Result<Option<crate::model::AutomationPlacementNote>> {
-    super::hydrate::row_by_id(
-        conn,
-        "automation_placement_note",
-        id,
-        super::hydrate::automation_placement_note_row,
-    )
 }
 
 /// The `automation_exit` record with this id.
@@ -6434,16 +6341,6 @@ pub fn automation_placement_siblings(
     order_siblings(conn, P.id, P.order_key, Some(Pred::eq(P.automation_id, automation_id)), exclude)
 }
 
-/// Live shared-document siblings within one automation.
-pub fn automation_note_siblings(
-    conn: &Connection,
-    automation_id: i64,
-    exclude: Option<i64>,
-) -> Result<Vec<(i64, String)>> {
-    const N: col::automation_note::Cols = col::automation_note::ALL;
-    order_siblings(conn, N.id, N.order_key, Some(Pred::eq(N.automation_id, automation_id)), exclude)
-}
-
 /// Live edge siblings within one picture.
 pub fn automation_edge_siblings(
     conn: &Connection,
@@ -6454,16 +6351,6 @@ pub fn automation_edge_siblings(
     const E: col::automation_edge::Cols = col::automation_edge::ALL;
     let scope = Pred::eq(E.owner_kind, owner_kind.as_str()).and(Pred::eq(E.owner_id, owner_id));
     order_siblings(conn, E.id, E.order_key, Some(scope), exclude)
-}
-
-/// Live document-link siblings on one placement.
-pub fn automation_placement_note_siblings(
-    conn: &Connection,
-    placement_id: i64,
-    exclude: Option<i64>,
-) -> Result<Vec<(i64, String)>> {
-    const L: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
-    order_siblings(conn, L.id, L.order_key, Some(Pred::eq(L.placement_id, placement_id)), exclude)
 }
 
 /// Live way-out siblings on one owner (a step or a library action).
@@ -6754,12 +6641,6 @@ pub fn automation_placement_ids(conn: &Connection, automation_id: i64) -> Result
     select_ids(conn, P.id, Some(&Pred::eq(P.automation_id, automation_id)))
 }
 
-/// The shared documents of one automation.
-pub fn automation_note_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
-    const N: col::automation_note::Cols = col::automation_note::ALL;
-    select_ids(conn, N.id, Some(&Pred::eq(N.automation_id, automation_id)))
-}
-
 /// The edges of one picture.
 pub fn automation_edge_ids(
     conn: &Connection,
@@ -6805,18 +6686,6 @@ pub fn automation_wire_ids_naming_box(
     let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
         .and(Pred::eq(W.from_id, box_id).or(Pred::eq(W.to_id, box_id)));
     select_ids(conn, W.id, Some(&pred))
-}
-
-/// The document links on one placement.
-pub fn automation_placement_note_ids(conn: &Connection, placement_id: i64) -> Result<Vec<i64>> {
-    const L: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
-    select_ids(conn, L.id, Some(&Pred::eq(L.placement_id, placement_id)))
-}
-
-/// The document links naming one shared document.
-pub fn automation_placement_note_ids_of_note(conn: &Connection, note_id: i64) -> Result<Vec<i64>> {
-    const L: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
-    select_ids(conn, L.id, Some(&Pred::eq(L.note_id, note_id)))
 }
 
 /// The ways out one owner declares.

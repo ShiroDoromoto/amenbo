@@ -1,4 +1,4 @@
-//! Building an automation's definition — the eleven tables of the definition side. Of the run side
+//! Building an automation's definition — the nine tables of the definition side. Of the run side
 //! there is one op here, [`run_delete`], and it is a sweep rather than a launch: the definition and what
 //! was launched from it go down together when the project does.
 //!
@@ -34,8 +34,8 @@
 use crate::error::{Error, Result};
 use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind,
-    AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit, AutomationNote,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementNote,
+    AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
     AutomationWire, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
@@ -91,10 +91,6 @@ fn live_placement(tx: &WriteTx<'_>, id: i64) -> Result<AutomationPlacement> {
 
 fn live_step(tx: &WriteTx<'_>, id: i64) -> Result<AutomationStep> {
     read::automation_action_step(tx.conn(), id)?.ok_or_else(|| not_found("step", id))
-}
-
-fn live_note(tx: &WriteTx<'_>, id: i64) -> Result<AutomationNote> {
-    read::automation_note(tx.conn(), id)?.ok_or_else(|| not_found("shared document", id))
 }
 
 fn live_exit(tx: &WriteTx<'_>, id: i64) -> Result<AutomationExit> {
@@ -266,10 +262,14 @@ fn delete_lines_naming_box(
 /// It is born empty — no steps, no entry — and carrying the two ways out every declarer has
 /// ([`born_with_exits`]), so a placement of it can be drawn into a picture before its insides are
 /// written. It names no agent and no model: who is asked to carry a prompt out is each step's answer.
+///
+/// `note` is what the action is for, for whoever builds with it. It is drawn on the build screen and
+/// never carried into a launch, which is `automation.notes`' reading one layer up.
 pub fn action_add(
     tx: &WriteTx<'_>,
     project_id: Option<i64>,
     name: &str,
+    note: &str,
 ) -> Result<AutomationAction> {
     let name = checked_name("action", name)?;
     if let Some(project_id) = project_id {
@@ -285,6 +285,7 @@ pub fn action_add(
         id,
         project_id,
         name,
+        note: note.to_string(),
         entry_step_id: None,
         order_key,
         created_at: now,
@@ -295,16 +296,24 @@ pub fn action_add(
     Ok(action)
 }
 
-/// Rename a library action.
+/// Rename a library action, or rewrite what it is for. Only the `Some` fields are written.
 ///
 /// **Renaming the action is safe; renaming what it declares is not.** A placement points at the action
 /// by key (`automation_placement.action_id`), so nothing parts here — while renaming one of its ways out
 /// or its ports parts every edge and wire that named the old one ([`exit_rename`], [`port_update`]).
-pub fn action_update(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<AutomationAction> {
+pub fn action_update(
+    tx: &WriteTx<'_>,
+    id: i64,
+    name: Option<&str>,
+    note: Option<&str>,
+) -> Result<AutomationAction> {
     let before = live_action(tx, id)?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("action", name)?;
+    }
+    if let Some(note) = note {
+        after.note = note.to_string();
     }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
@@ -348,7 +357,7 @@ pub fn action_from_prompt(
     exits: &[String],
     inputs: &[(String, AutomationPortKind, bool)],
 ) -> Result<AutomationAction> {
-    let action = action_add(tx, project_id, &new.name)?;
+    let action = action_add(tx, project_id, &new.name, "")?;
     let step = step_add(tx, action.id, new)?;
     for name in exits {
         exit_add(tx, AutomationOwner::Action, action.id, Some(name))?;
@@ -424,8 +433,7 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 
 // ───────────────────────────── the automation itself ─────────────────────────────
 
-/// What a new automation is made of. `preamble` is prepended to every step's launch, so it is kept
-/// short — the material a prompt would otherwise repeat belongs in a shared document ([`note_add`]).
+/// What a new automation is made of. `preamble` is prepended to every step's launch.
 #[derive(Clone, Debug, Default)]
 pub struct NewAutomation {
     pub name: String,
@@ -529,9 +537,9 @@ pub fn set_entry(
     Ok(after)
 }
 
-/// Delete an automation and everything built onto it — wires, edges, document links, the placements with
-/// the answers written on them, and the shared documents themselves. The library actions those
-/// placements stood on are left where they are: the library outlives any one picture.
+/// Delete an automation and everything built onto it — wires, edges, and the placements with the
+/// answers written on them. The library actions those placements stood on are left where they are:
+/// the library outlives any one picture.
 ///
 /// **Refused while a run stands behind it**, naming how many. A run carries its own copy of the steps
 /// and would go on reading correctly, but it is filed under the automation it was launched from, and
@@ -558,9 +566,6 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     for placement in read::automation_placement_ids(tx.conn(), id)? {
         delete_placement_row(tx, placement)?;
-    }
-    for note in read::automation_note_ids(tx.conn(), id)? {
-        tx.delete_record("automation_note", note)?;
     }
     tx.delete_record("automation", id)?;
     Ok(())
@@ -690,8 +695,8 @@ pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automa
     Ok(after)
 }
 
-/// Take a placement off its automation, with the answers written on it, its document links, and every
-/// edge and wire naming it at either end. The action it stood on is untouched.
+/// Take a placement off its automation, with the answers written on it and every edge and wire
+/// naming it at either end. The action it stood on is untouched.
 ///
 /// **Taking the entry off clears it.** An automation under construction has to be able to lose any
 /// placement, and refusing here would strand whichever one was named the entry first.
@@ -710,123 +715,9 @@ pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// where the entry has already been dropped and the automation itself is going anyway.
 fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     delete_lines_naming_box(tx, AutomationPictureOwner::Automation, id)?;
-    for link in read::automation_placement_note_ids(tx.conn(), id)? {
-        tx.delete_record("automation_placement_note", link)?;
-    }
     delete_cfgs(tx, AutomationCfgOwner::Placement, id)?;
     tx.delete_record("automation_placement", id)?;
     Ok(())
-}
-
-// ───────────────────────────── shared documents ─────────────────────────────
-
-/// Write a shared document for one automation. Long is fine here: this is where the material a prompt
-/// would otherwise repeat is written once, and [`note_link`] says which placements are handed it.
-pub fn note_add(tx: &WriteTx<'_>, automation_id: i64, name: &str, body: &str) -> Result<AutomationNote> {
-    live_automation(tx, automation_id)?;
-    let name = checked_name("shared document", name)?;
-    let sibs = read::automation_note_siblings(tx.conn(), automation_id, None)?;
-    let order_key = place(&sibs, &Position::Bottom)?;
-    let now = Timestamp::now();
-    let id = read::next_id(tx.conn(), "automation_note")?;
-    let note = AutomationNote {
-        id,
-        automation_id,
-        name,
-        body: body.to_string(),
-        order_key,
-        created_at: now,
-        updated_at: now,
-    };
-    emit_create(tx, record::automation_note(&note))?;
-    Ok(note)
-}
-
-/// Rename a shared document, or rewrite it. Only the `Some` fields are written.
-pub fn note_update(
-    tx: &WriteTx<'_>,
-    id: i64,
-    name: Option<&str>,
-    body: Option<&str>,
-) -> Result<AutomationNote> {
-    let before = live_note(tx, id)?;
-    let mut after = before.clone();
-    if let Some(name) = name {
-        after.name = checked_name("shared document", name)?;
-    }
-    if let Some(body) = body {
-        after.body = body.to_string();
-    }
-    after.updated_at = Timestamp::now();
-    emit_update(tx, record::automation_note(&before), record::automation_note(&after))?;
-    Ok(after)
-}
-
-/// Reorder a shared document within its automation.
-pub fn note_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationNote> {
-    let before = live_note(tx, id)?;
-    let sibs = read::automation_note_siblings(tx.conn(), before.automation_id, Some(id))?;
-    let mut after = before.clone();
-    after.order_key = place(&sibs, &pos)?;
-    after.updated_at = Timestamp::now();
-    emit_update(tx, record::automation_note(&before), record::automation_note(&after))?;
-    Ok(after)
-}
-
-/// Delete a shared document, taking the links that hand it to placements.
-pub fn note_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
-    live_note(tx, id)?;
-    for link in read::automation_placement_note_ids_of_note(tx.conn(), id)? {
-        tx.delete_record("automation_placement_note", link)?;
-    }
-    tx.delete_record("automation_note", id)?;
-    Ok(())
-}
-
-/// Hand a shared document to a placement, and with it to every step opened under that placement. Both
-/// ends have to sit in the same automation, and handing the same document to the same placement twice
-/// answers the link already there rather than writing a second one.
-pub fn note_link(
-    tx: &WriteTx<'_>,
-    placement_id: i64,
-    note_id: i64,
-) -> Result<AutomationPlacementNote> {
-    let placement = live_placement(tx, placement_id)?;
-    let note = live_note(tx, note_id)?;
-    if placement.automation_id != note.automation_id {
-        return Err(Error::invalid(
-            "a placement is handed the shared documents of its own automation, not another's",
-        ));
-    }
-    for id in read::automation_placement_note_ids(tx.conn(), placement_id)? {
-        let link = read::automation_placement_note(tx.conn(), id)?;
-        if let Some(link) = link {
-            if link.note_id == note_id {
-                return Ok(link);
-            }
-        }
-    }
-    let sibs = read::automation_placement_note_siblings(tx.conn(), placement_id, None)?;
-    let order_key = place(&sibs, &Position::Bottom)?;
-    let now = Timestamp::now();
-    let id = read::next_id(tx.conn(), "automation_placement_note")?;
-    let link =
-        AutomationPlacementNote { id, placement_id, note_id, order_key, created_at: now, updated_at: now };
-    emit_create(tx, record::automation_placement_note(&link))?;
-    Ok(link)
-}
-
-/// Stop handing a shared document to a placement. Answers whether there was a link to take.
-pub fn note_unlink(tx: &WriteTx<'_>, placement_id: i64, note_id: i64) -> Result<bool> {
-    for id in read::automation_placement_note_ids(tx.conn(), placement_id)? {
-        if let Some(link) = read::automation_placement_note(tx.conn(), id)? {
-            if link.note_id == note_id {
-                tx.delete_record("automation_placement_note", id)?;
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
 }
 
 // ───────────────────────────── steps ─────────────────────────────
@@ -2313,10 +2204,10 @@ mod tests {
     fn an_automation_reaches_its_own_projects_library_and_the_devices() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let mine = action_add(tx, Some(automation.project_id), "自前").expect("add action");
-            let shared = action_add(tx, None, "共有").expect("add action");
+            let mine = action_add(tx, Some(automation.project_id), "自前", "").expect("add action");
+            let shared = action_add(tx, None, "共有", "").expect("add action");
             let other_project = mk_project(tx, "別の企画");
-            let theirs = action_add(tx, Some(other_project), "他所").expect("add action");
+            let theirs = action_add(tx, Some(other_project), "他所", "").expect("add action");
             placement_add(tx, automation.id, mine.id).expect("mine");
             placement_add(tx, automation.id, shared.id).expect("shared");
             assert!(
@@ -2401,15 +2292,11 @@ mod tests {
                 None,
             )
             .expect("add edge");
-            let note = note_add(tx, automation.id, "運転規約", "…").expect("add note");
-            note_link(tx, one.id, note.id).expect("hand it over");
             delete(tx, automation.id).expect("delete the automation");
             assert!(read::automation(tx.conn(), automation.id).expect("read").is_none());
             assert!(read::automation_placement_ids(tx.conn(), automation.id)
                 .expect("read")
                 .is_empty());
-            assert!(read::automation_note_ids(tx.conn(), automation.id).expect("read").is_empty());
-            assert!(read::automation_placement_note_ids(tx.conn(), one.id).expect("read").is_empty());
             assert!(
                 read::automation_action(tx.conn(), action.id).expect("read").is_some(),
                 "the library outlives any one picture",
@@ -2435,33 +2322,6 @@ mod tests {
                 read::automation_action_step_ids(tx.conn(), action.id).expect("read").is_empty(),
                 "and so did the steps inside it",
             );
-        });
-    }
-
-    #[test]
-    fn a_shared_document_is_handed_to_a_placement_of_its_own_automation() {
-        with_tx(|tx| {
-            let here = mk_automation(tx);
-            let there =
-                add(tx, here.project_id, NewAutomation { name: "別".into(), ..Default::default() })
-                    .expect("add automation");
-            let (_, placement) = mk_placed(tx, &there, "実装する");
-            let note = note_add(tx, here.id, "運転規約", "…").expect("add note");
-            assert!(note_link(tx, placement.id, note.id).is_err());
-        });
-    }
-
-    #[test]
-    fn handing_the_same_document_twice_is_the_one_link() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let (_, placement) = mk_placed(tx, &automation, "実装する");
-            let note = note_add(tx, automation.id, "運転規約", "…").expect("add note");
-            let first = note_link(tx, placement.id, note.id).expect("hand it over");
-            let second = note_link(tx, placement.id, note.id).expect("hand it over again");
-            assert_eq!(first.id, second.id);
-            assert!(note_unlink(tx, placement.id, note.id).expect("take it back"));
-            assert!(!note_unlink(tx, placement.id, note.id).expect("nothing left to take"));
         });
     }
 

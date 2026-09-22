@@ -19,7 +19,7 @@ use serde::Serialize;
 
 use crate::model::{
     Automation, AutomationAction, AutomationCfg, AutomationCfgOwner, AutomationEdge, AutomationExit,
-    AutomationNote, AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPort,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPort,
     AutomationPortDirection, AutomationPortOwner, AutomationStep, AutomationWire,
 };
 use crate::store_engine::read;
@@ -47,15 +47,14 @@ pub struct ActionCard {
     pub used_by: usize,
 }
 
-/// **One automation's whole definition** — every placement with what it runs under, what joins them,
-/// and the documents they share.
+/// **One automation's whole definition** — every placement with what it runs under, and what joins
+/// them.
 #[derive(Clone, Debug, Serialize)]
 pub struct AutomationView {
     pub automation: Automation,
     pub placements: Vec<PlacementView>,
     pub edges: Vec<AutomationEdge>,
     pub wires: Vec<AutomationWire>,
-    pub notes: Vec<NoteView>,
 }
 
 /// **One placement**, with the action standing on it read in and the declarations it runs under
@@ -81,13 +80,6 @@ pub struct PlacementView {
 pub struct ExitView {
     pub exit: AutomationExit,
     pub outputs: Vec<AutomationPort>,
-}
-
-/// **A shared document**, and the placements it is handed to.
-#[derive(Clone, Debug, Serialize)]
-pub struct NoteView {
-    pub note: AutomationNote,
-    pub placement_ids: Vec<i64>,
 }
 
 /// **One library action in full**: the picture inside it, what it declares to the outside, and how many
@@ -179,18 +171,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
     }
     let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, id)?;
     let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, id)?;
-    let mut notes = Vec::new();
-    for (note_id, _) in read::automation_note_siblings(conn, id, None)? {
-        let Some(note) = read::automation_note(conn, note_id)? else { continue };
-        let mut placement_ids = Vec::new();
-        for link_id in read::automation_placement_note_ids_of_note(conn, note_id)? {
-            if let Some(link) = read::automation_placement_note(conn, link_id)? {
-                placement_ids.push(link.placement_id);
-            }
-        }
-        notes.push(NoteView { note, placement_ids });
-    }
-    Ok(Some(AutomationView { automation, placements, edges, wires, notes }))
+    Ok(Some(AutomationView { automation, placements, edges, wires }))
 }
 
 /// One library action in full, or `None` where that id names none.

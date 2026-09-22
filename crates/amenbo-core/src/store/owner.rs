@@ -87,13 +87,6 @@ pub(super) fn automation_placement(conn: &Connection, id: i64) -> Result<Option<
     }
 }
 
-pub(super) fn automation_note(conn: &Connection, id: i64) -> Result<Option<i64>> {
-    match read::automation_note(conn, id).map_err(crate::error::engine_on(conn))? {
-        Some(n) => automation(conn, n.automation_id),
-        None => Ok(None),
-    }
-}
-
 /// The project behind whichever of the two declared a way out or a port.
 fn automation_declarer(
     conn: &Connection,

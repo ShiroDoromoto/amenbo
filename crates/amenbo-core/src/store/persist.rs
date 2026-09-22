@@ -1568,9 +1568,10 @@ impl Store {
         &mut self,
         project_id: Option<i64>,
         name: &str,
+        note: &str,
     ) -> Result<crate::model::AutomationAction> {
         self.write_one(&[WriteTarget::NewIn(project_id)], |tx| {
-            crate::ops::automation::action_add(tx, project_id, name)
+            crate::ops::automation::action_add(tx, project_id, name, note)
         })
     }
 
@@ -1590,14 +1591,15 @@ impl Store {
         })
     }
 
-    /// Rename a library action (one operation = one transaction).
+    /// Rename a library action, or rewrite what it is for (one operation = one transaction).
     pub fn automation_action_update(
         &mut self,
         id: i64,
         name: Option<&str>,
+        note: Option<&str>,
     ) -> Result<crate::model::AutomationAction> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
-            crate::ops::automation::action_update(tx, id, name)
+            crate::ops::automation::action_update(tx, id, name, note)
         })
     }
 
@@ -1743,77 +1745,6 @@ impl Store {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
             crate::ops::automation::delete(tx, id)
         })
-    }
-
-    /// Write a shared document for one automation (one operation = one transaction).
-    pub fn automation_note_add(
-        &mut self,
-        automation_id: i64,
-        name: &str,
-        body: &str,
-    ) -> Result<crate::model::AutomationNote> {
-        self.write_one(
-            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation::note_add(tx, automation_id, name, body),
-        )
-    }
-
-    /// Rename a shared document, or rewrite it (one operation = one transaction).
-    pub fn automation_note_update(
-        &mut self,
-        id: i64,
-        name: Option<&str>,
-        body: Option<&str>,
-    ) -> Result<crate::model::AutomationNote> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Note, id)], |tx| {
-            crate::ops::automation::note_update(tx, id, name, body)
-        })
-    }
-
-    /// Reorder a shared document within its automation (one operation = one transaction).
-    pub fn automation_note_move(
-        &mut self,
-        id: i64,
-        pos: crate::ops::Position,
-    ) -> Result<crate::model::AutomationNote> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Note, id)], |tx| {
-            crate::ops::automation::note_move(tx, id, pos)
-        })
-    }
-
-    /// Delete a shared document with the links that hand it to placements (one operation = one
-    /// transaction).
-    pub fn automation_note_delete(&mut self, id: i64) -> Result<()> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Note, id)], |tx| {
-            crate::ops::automation::note_delete(tx, id)
-        })
-    }
-
-    /// Hand a shared document to a placement (one operation = one transaction).
-    pub fn automation_note_link(
-        &mut self,
-        placement_id: i64,
-        note_id: i64,
-    ) -> Result<crate::model::AutomationPlacementNote> {
-        self.write_one(
-            &[
-                WriteTarget::AutomationPart(AutomationPart::Placement, placement_id),
-                WriteTarget::AutomationPart(AutomationPart::Note, note_id),
-            ],
-            |tx| crate::ops::automation::note_link(tx, placement_id, note_id),
-        )
-    }
-
-    /// Stop handing a shared document to a placement (one operation = one transaction). Answers
-    /// whether there was a link to take.
-    pub fn automation_note_unlink(&mut self, placement_id: i64, note_id: i64) -> Result<bool> {
-        self.write_one(
-            &[
-                WriteTarget::AutomationPart(AutomationPart::Placement, placement_id),
-                WriteTarget::AutomationPart(AutomationPart::Note, note_id),
-            ],
-            |tx| crate::ops::automation::note_unlink(tx, placement_id, note_id),
-        )
     }
 
     /// **Stop every run a previous launch left standing** — the ones that are `running`

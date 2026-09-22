@@ -97,9 +97,7 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // action a spot on some picture stands on (`AMB-D-949`).
   automation_action: ["automationActions"],
   automation_placement: ["automationActions", "automations"],
-  automation_note: ["automations"],
   automation_action_step: ["automationActions", "automations"],
-  automation_placement_note: ["automations"],
   automation_cfg: ["automationActions", "automations"],
   automation_exit: ["automationActions", "automations"],
   automation_port: ["automationActions", "automations"],

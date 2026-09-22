@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
-    AutomationExit, AutomationNote, AutomationPlacement, AutomationPlacementNote, AutomationPort,
+    AutomationExit, AutomationPlacement, AutomationPort,
     AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep,
@@ -510,6 +510,7 @@ pub fn automation_action(a: &AutomationAction) -> Record {
             vec![
                 ("project_id", kv_opt(&a.project_id)),
                 ("name", tv(&a.name)),
+                ("note", tv(&a.note)),
                 ("entry_step_id", kv_opt(&a.entry_step_id)),
                 ("order_key", tv(&a.order_key)),
             ],
@@ -535,23 +536,6 @@ pub fn automation(a: &Automation) -> Record {
             ],
             &a.created_at,
             &a.updated_at,
-        ),
-    )
-}
-
-pub fn automation_note(n: &AutomationNote) -> Record {
-    Record::new(
-        "automation_note",
-        n.id,
-        with_audit(
-            vec![
-                ("automation_id", kv(n.automation_id)),
-                ("name", tv(&n.name)),
-                ("body", tv(&n.body)),
-                ("order_key", tv(&n.order_key)),
-            ],
-            &n.created_at,
-            &n.updated_at,
         ),
     )
 }
@@ -612,22 +596,6 @@ pub fn automation_cfg(c: &AutomationCfg) -> Record {
             ],
             &c.created_at,
             &c.updated_at,
-        ),
-    )
-}
-
-pub fn automation_placement_note(n: &AutomationPlacementNote) -> Record {
-    Record::new(
-        "automation_placement_note",
-        n.id,
-        with_audit(
-            vec![
-                ("placement_id", kv(n.placement_id)),
-                ("note_id", kv(n.note_id)),
-                ("order_key", tv(&n.order_key)),
-            ],
-            &n.created_at,
-            &n.updated_at,
         ),
     )
 }

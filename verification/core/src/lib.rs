@@ -358,7 +358,7 @@ pub enum Domain {
     /// shelf, the selection, and the check that reads the settings without a message leaving.
     Notify,
     /// An automation: the picture agents are walked along, the library of prompts its steps are made
-    /// of, the documents they share — and a run of it.
+    /// of — and a run of it.
     ///
     /// **One domain and not two**, though a definition and a run are different rows. What a road
     /// walks is one subject: a definition is built so that it can be started, and a run is read to
@@ -4038,9 +4038,6 @@ const REGISTRY: &[OpSpec] = &[
     // Where a run starts. It is the one field of the automation that names a step, and a definition
     // without it is refused at the launch check rather than here.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry", required: &[], refs: &["target", "step"], strings: &[], binds: false },
-    // A document the steps of one automation share, and the link that hands it to one of them.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-add", required: &["name", "body"], refs: &["target"], strings: &["name", "body"], binds: true },
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-link", required: &[], refs: &["target", "step"], strings: &[], binds: false },
     // A setting: what a step or a library action declares, and what one step answers for it. The two
     // are apart because the declaring and the answering are: an action declares once and every step
     // running it answers on a row of its own, so a road standing up "a required setting nobody has
@@ -4069,11 +4066,6 @@ const REGISTRY: &[OpSpec] = &[
     // The runs one automation has behind it, or the ones that worked one task — the two doors a run
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
-    // A word written in a document the steps share, found from the terminal. The record a hit names is
-    // the automation and the face is `body`: a document carries no reference of its own, one automation
-    // holding several of them, so what a reader opens next is the automation.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "found", required: &["target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
-    //
     // ---- reading a definition back --------------------------------------------------------------
     // **The two listings are read on both faces**, which is why they stand here rather than under the
     // screen's heading below: the automations tab draws a row per definition and the actions tab one
@@ -4111,11 +4103,6 @@ const REGISTRY: &[OpSpec] = &[
     // it under, and both name steps by name rather than by binding — what the terminal prints back is
     // a definition, and a road reading one knows the names it wrote.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "edge-read", required: &["from"], refs: &["target"], strings: &["from", "exit", "to", "ends"], binds: false },
-    // A document the steps share, and which of them it was handed to. `handed_to` is the whole of
-    // that list: a document nobody was handed and a document everybody was are two different
-    // definitions, and a road naming one step would read the same against both.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "note-read", required: &["name"], refs: &["target"], strings: &["name", "body"], binds: false },
-    //
     // ---- automation on screen -------------------------------------------------------------------
     // **What these asserts read is the picture**, so they are here rather than beside the verbs
     // above: the boxes, the lines between them and the marks a build screen draws are the screen's
@@ -4243,9 +4230,6 @@ const REGISTRY: &[OpSpec] = &[
     // definition's — so both make the same run the build screen would.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-task", required: &[], refs: &["target", "task"], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-frame", required: &[], refs: &["target"], strings: &[], binds: true },
-    // The reference on a search hit, pressed. What it opens is the build screen of the automation the
-    // document belongs to, in that automation's own project.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-found", required: &[], refs: &["target"], strings: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {
@@ -4445,8 +4429,6 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Automation, "wire-add"),
     (Domain::Automation, "entry"),
     (Domain::Automation, "cfg-add"),
-    (Domain::Automation, "note-add"),
-    (Domain::Automation, "note-link"),
     (Domain::Automation, "action-add"),
 ];
 

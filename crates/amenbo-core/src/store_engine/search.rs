@@ -70,19 +70,6 @@ pub const DATASET_DIMENSION_VALUE: &str = "dimension_value";
 /// See [`DATASET_TASK`]. An attachment names itself — by the file it came from, or by the address it
 /// points at — and hangs off a record or off a comment on one.
 pub const DATASET_ATTACHMENT: &str = "attachment";
-/// See [`DATASET_TASK`]. The shared documents of an automation: written by a person, long by design,
-/// and the one thing on the automation side a word can land on. What a run *did* is not indexed — that
-/// is reached from the task it worked on, never searched for.
-pub const DATASET_AUTOMATION_NOTE: &str = "automation_note";
-
-/// The record a hit on one of those documents belongs to (`AMB-D-944`), stamped into a hit row's
-/// `owner_kind` exactly as the two sides above are — which is why it is named here beside them.
-///
-/// It is **not** a dataset the index carries: an automation's own name, notes and preamble are not in
-/// [`FACES`], so no doc row ever wears this. What it names is the thing a reader opens to read the
-/// document, the way a task is what a reader opens to read a comment on it.
-pub const OWNER_AUTOMATION: &str = "automation";
-
 /// One text face the index carries: the dataset it belongs to, and the column that holds the text.
 /// The pair is the doc row's key, alongside the record's id.
 pub struct Face {
@@ -95,8 +82,7 @@ pub struct Face {
 
 /// Every face the index carries (`AMB-D-450`'s "what a word lands on"): a task's title and notes, a
 /// decision's title and body, the body of a comment on either, the names a person gave an axis and its
-/// values, what an attachment is called — its filename, or the address a link points at — and the body
-/// of a document the steps of an automation share. What is
+/// values, and what an attachment is called — its filename, or the address a link points at. What is
 /// deliberately absent is everything `--filter` already narrows exactly — `status`, `priority`, `due`,
 /// `assignee`, a commit SHA — which would only blur the word face if a word could reach it.
 ///
@@ -117,7 +103,6 @@ pub const FACES: &[Face] = &[
     Face { dataset: DATASET_DIMENSION_VALUE, column: "name" },
     Face { dataset: DATASET_ATTACHMENT, column: "filename" },
     Face { dataset: DATASET_ATTACHMENT, column: "url" },
-    Face { dataset: DATASET_AUTOMATION_NOTE, column: "body" },
 ];
 
 /// Is this `(dataset, column)` a face the index carries — the question

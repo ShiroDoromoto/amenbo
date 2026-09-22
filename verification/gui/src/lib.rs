@@ -995,7 +995,7 @@ impl Instructor {
             // which words are on the shot, and every one of them is on it whichever line it took. A
             // step asking for the top is left for an eye rather than passed on its presence, which
             // would read green off a build that had stopped pinning anything.
-            (Domain::Task, "found") | (Domain::Decision, "found") | (Domain::Automation, "found")
+            (Domain::Task, "found") | (Domain::Decision, "found")
                 if first(with) =>
             {
                 None
@@ -1005,8 +1005,7 @@ impl Instructor {
             | (Domain::Task, "view-lists")
             | (Domain::Task, "found")
             | (Domain::Decision, "narrowed")
-            | (Domain::Decision, "found")
-            | (Domain::Automation, "found") => {
+            | (Domain::Decision, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Task, "opened") => {
@@ -4115,12 +4114,6 @@ impl Instructor {
                 "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\".",
                 self.target_label(with)
             ),
-            // The reference on a search hit. What it opens is the build screen of the automation the
-            // document belongs to, in that automation's own project.
-            (Domain::Automation, "open-found") => format!(
-                "On the search results, press the reference on the hit for \"{}\".",
-                self.target_label(with)
-            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -4339,14 +4332,10 @@ impl Instructor {
             // The asking is inside the confirming, the way `listed`'s filter is: the cross-cutting search
             // answers one question per question put to it, so there is no standing screen for a separate
             // move to arrive at — the words, the narrowing and the reading are one thing a reader does.
-            // An automation is the third kind of record the box narrows to. Its hits are read the same
-            // way the other two are, and what the row points at is the automation — a shared document
-            // carries no reference of its own, one automation holding several of them.
-            (Domain::Task, "found") | (Domain::Decision, "found") | (Domain::Automation, "found") => {
+            (Domain::Task, "found") | (Domain::Decision, "found") => {
                 let side = match domain {
                     Domain::Task => "task",
-                    Domain::Decision => "decision",
-                    _ => "automation",
+                    _ => "decision",
                 };
                 let mut line = format!("Ask the cross-cutting search for {}", self.typed(with)?);
                 if let Some(kind) = arg_str(with, "kind") {
@@ -7960,10 +7949,6 @@ steps_gui:
     op: start-from-frame
     with: { target: auto }
     as: from_frame
-  - type: action
-    domain: automation
-    op: open-found
-    with: { target: auto }
 "#);
         let mut ins = Instructor::new();
         // What the premise made is what the road then points at, so its labels are learnt without a

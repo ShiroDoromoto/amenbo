@@ -4029,6 +4029,12 @@ const REGISTRY: &[OpSpec] = &[
     // Where a run starts. It is the one field of the automation that names a step, and a definition
     // without it is refused at the launch check rather than here.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry", required: &[], refs: &["target", "step"], strings: &[], binds: false },
+    // **The same field emptied, mid-road.** Taking the entry off is the one edit that leaves a run
+    // with nowhere to start, so *when* it happens is the whole of the question — before a road begins
+    // it refuses every launch, and a road that could not reach the state would have nothing to walk.
+    // So it is a step and not a premise, in the shape a step outside Amenbo takes: the build screen
+    // draws no control over this field, and the terminal is its only face.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry-off", required: &[], refs: &["target"], strings: &[], binds: false },
     // A document the steps of one automation share, and the link that hands it to one of them.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-add", required: &["name", "body"], refs: &["target"], strings: &["name", "body"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-link", required: &[], refs: &["target", "step"], strings: &[], binds: false },
@@ -4218,7 +4224,12 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A row of the "running" tab. It draws every run this device is carrying, across projects, so the
     // row names the project as well as the state.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-row", required: &["state"], refs: &["target", "project"], strings: &["state"], binds: false },
+    //
+    // `reason` is the line a stopped row carries under its state, spelled as core names it
+    // (`no_way_on`, `by_human`, …) so a road says which ending it is reading rather than quoting a
+    // sentence the interface owns. It belongs to `stopped` alone — every other state is its own whole
+    // answer — and a row read without it is a road asking about the state and nothing more.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-row", required: &["state"], refs: &["target", "project"], strings: &["state", "reason"], binds: false },
     // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again, or
     // stop it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press"], binds: false },

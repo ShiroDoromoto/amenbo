@@ -6,7 +6,7 @@
 // comes from is one control**, and a prompt that came from the library is read here and not written;
 // **a setting is answered by the control its kind takes**, a task filter on rows rather than in a
 // filter expression; **an input is filled from a list of what fits**; **the error way out is always
-// the last of the ways out**; and **an agent this machine cannot start is listed and cannot be
+// the last line of the ways out**; and **an agent this machine cannot start is listed and cannot be
 // picked**, which is what keeps the list from being shorter on one machine than on another.
 //
 // And what a step **declares**, not only what it answers: a way out is written from the line under
@@ -23,6 +23,7 @@ const hoisted = vi.hoisted(() => ({
   answerCfg: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
+  raise: vi.fn(),
   declareExit: vi.fn(),
   renameExit: vi.fn(),
   removeExit: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("../core/automations", () => ({
   answerAutomationCfg: hoisted.answerCfg,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
+  raiseStepToLibrary: hoisted.raise,
   declareAutomationExit: hoisted.declareExit,
   renameAutomationExit: hoisted.renameExit,
   removeAutomationExit: hoisted.removeExit,
@@ -126,6 +128,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   for (const one of Object.values(hoisted)) one.mockReset();
+  hoisted.raise.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -151,6 +154,43 @@ describe("the step panel", () => {
     expect(hoisted.editStep).toHaveBeenCalledWith(1, { name: "Take one" });
   });
 
+  /// **The one road from the build screen into the library** (`AMB-T-5277`). Until it was here, the
+  /// only way to put a prompt in the library was the CLI, while the tab that lists them was on screen.
+  it("raises a step's own prompt into a library the reader picks", async () => {
+    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    const press = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === t("auto.step.raise"))!;
+
+    // The name starts as the step's, and is the reader's to change: a step is named for its place in
+    // one automation, an action for what it is.
+    const named = boxes().find((b) => b.getAttribute("aria-label") === t("auto.step.raiseName"))!;
+    expect(named.value).toBe("Take the next task");
+    await typeInto(named, "Take one");
+
+    await act(async () => { press().click(); });
+    expect(hoisted.raise).toHaveBeenCalledWith(1, "Take one", 1);
+
+    // The device's library is the wider reach, and is asked for rather than defaulted to.
+    const reach = selects().find((one) => one.value === "project")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(reach, "device");
+      reach.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { press().click(); });
+    expect(hoisted.raise).toHaveBeenLastCalledWith(1, "Take one", null);
+  });
+
+  it("offers no raise to a step that already runs a library action", async () => {
+    // There is nothing of its own left to raise, and what it carries is the library's already.
+    await render({
+      automation: detail({ steps: [step({ actionId: 4, actionName: "Review", prompt: "review it" })] }),
+      stepId: 1,
+      projectId: 1,
+    });
+    expect(container.textContent).not.toContain(t("auto.step.raiseWhat"));
+  });
+
   it("puts where the prompt comes from on one control, the library beside the step's own", async () => {
     await render({ automation: detail(), stepId: 1, projectId: 1 });
     const source = selects()[0]!;
@@ -171,6 +211,8 @@ describe("the step panel", () => {
     const prompt = container.querySelector<HTMLTextAreaElement>("textarea")!;
     expect(prompt.readOnly).toBe(true);
     expect(container.textContent).toContain("Review");
+    // And what its ways out hand on is the library's too, so this step is not offered the control.
+    expect(container.textContent).not.toContain(t("auto.step.outputAdd"));
   });
 
   it("answers a task filter on rows, and writes the object naming each part", async () => {
@@ -215,19 +257,23 @@ describe("the step panel", () => {
       ],
     });
     await render({ automation: one, stepId: 1, projectId: 1 });
-    const ways = [...container.querySelectorAll(".autostep__exits li")].map((li) => li.textContent);
-    expect(ways).toEqual([t("auto.step.exitUnnamed"), t("auto.pic.errorExit")]);
-    // Nothing to declare with: the ways out, the settings and the inputs are the action's.
+    const named = [...container.querySelectorAll(".autostep__exitname")].map((one) => one.textContent);
+    expect(named).toEqual([t("auto.step.exitUnnamed")]);
+    const last = [...container.querySelectorAll(".autostep__exits li")].pop()!;
+    expect(last.className).toContain("autostep__exiterr");
+    expect(last.textContent).toBe(t("auto.pic.errorExit"));
+    // And nothing to declare with: the ways out, the settings and the inputs are the action's.
     expect(container.querySelectorAll(".autostep__declare")).toHaveLength(0);
   });
 
   it("draws the error way out last among the rows a step's own ways out are written on", async () => {
     await render({ automation: detail(), stepId: 1, projectId: 1 });
-    const rows = [...container.querySelectorAll(".autostep__decl, .autostep__exiterr")];
-    expect(rows).toHaveLength(2);
-    expect(rows[1]!.textContent).toBe(t("auto.pic.errorExit"));
+    const ways = [...container.querySelectorAll(".autostep__exits li")];
+    expect(ways).toHaveLength(2);
+    expect(ways[0]!.querySelector("input")!.placeholder).toBe(t("auto.step.exitUnnamed"));
     // The error one is drawn and not offered: no box to rename it in, no press to take it away.
-    expect(rows[1]!.querySelectorAll("input, button")).toHaveLength(0);
+    expect(ways[1]!.className).toContain("autostep__exiterr");
+    expect(ways[1]!.querySelectorAll("input, button")).toHaveLength(0);
   });
 
   it("declares a way out under the name that was typed, and empties the box once it is written",
@@ -280,7 +326,7 @@ describe("the step panel", () => {
     await act(async () => {
       line.querySelector<HTMLButtonElement>("button")!.click();
     });
-    expect(container.querySelector(".autostep__refused")!.textContent).toContain("already declared");
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain("already declared");
     expect(box.value).toBe("done");
   });
 

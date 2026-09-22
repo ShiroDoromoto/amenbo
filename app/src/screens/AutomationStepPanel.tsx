@@ -35,7 +35,7 @@
 //
 // **A refusal is drawn, once, at the top.** Answering a setting cannot be refused for anything a
 // reader can see coming, but declaring one can — a name already taken, a blank one, the error way out
-// — so the panel keeps one line for whatever core last said no to.
+// — so every write this panel makes goes through one runner and the last refusal stands at the top.
 import { useEffect, useState } from "react";
 import {
   answerAutomationCfg,
@@ -46,6 +46,7 @@ import {
   editAutomationCfg,
   editAutomationInput,
   editAutomationStep,
+  raiseStepToLibrary,
   removeAutomationCfg,
   removeAutomationExit,
   removeAutomationInput,
@@ -53,12 +54,12 @@ import {
   setAutomationWire,
   useAutomationActions,
   type CfgKind,
-  type PortKind,
 } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
 import { ERROR_EXIT } from "./automationLayout";
 import {
   FILTER_ROWS,
@@ -72,6 +73,8 @@ import {
   type TaskFilter,
 } from "./automationCfg";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
+import { AutomationOutputAdd } from "./AutomationOutputAdd";
+import { kindLabel, PORT_KINDS } from "./automationPortKinds";
 import type {
   AgentModelListDto,
   AutomationCfgDto,
@@ -89,6 +92,9 @@ import type {
  * something to do afterwards (emptying the box it was typed in) can wait for the answer.
  */
 type Run = (write: Promise<void> | void) => Promise<boolean>;
+
+/** A name and what it is called, as the two pulldowns that pick a kind take them. */
+type Choice = { id: string; label: string };
 
 /** What one value of a task filter row is called. */
 function rowValueLabel(key: string, value: string): string {
@@ -114,27 +120,22 @@ function exitLabel(name: string | undefined): string {
   return name === ERROR_EXIT ? t("auto.pic.errorExit") : name;
 }
 
-/** The kinds of answer a setting may be declared to take, in the order the control offers them. */
-const CFG_KINDS: readonly CfgKind[] = ["taskfilter", "folder", "choice", "number", "text"];
+/**
+ * The kinds of answer a setting may be declared to take, in the order they are offered — core's own
+ * (`amenbo_core::model::AutomationCfgKind`). Spelled out rather than built from the id, so the key
+ * gate can see every label a reader can be shown (`core/i18n/sourceKeys.test.ts`).
+ */
+const CFG_KINDS: readonly { id: CfgKind; label: () => string }[] = [
+  { id: "taskfilter", label: () => t("auto.step.cfgKind.taskfilter") },
+  { id: "folder", label: () => t("auto.step.cfgKind.folder") },
+  { id: "choice", label: () => t("auto.step.cfgKind.choice") },
+  { id: "number", label: () => t("auto.step.cfgKind.number") },
+  { id: "text", label: () => t("auto.step.cfgKind.text") },
+];
 
-/** What a setting of this kind is called. */
-function cfgKindLabel(kind: CfgKind): string {
-  if (kind === "taskfilter") return t("auto.step.cfgKind.taskfilter");
-  if (kind === "folder") return t("auto.step.cfgKind.folder");
-  if (kind === "choice") return t("auto.step.cfgKind.choice");
-  if (kind === "number") return t("auto.step.cfgKind.number");
-  return t("auto.step.cfgKind.text");
-}
-
-/** What an input may be declared to carry, in the order the control offers them. */
-const PORT_KINDS: readonly PortKind[] = ["value", "file", "task_take", "task_make"];
-
-/** What an input of this kind is called. */
-function portKindLabel(kind: PortKind): string {
-  if (kind === "value") return t("auto.step.portKind.value");
-  if (kind === "file") return t("auto.step.portKind.file");
-  if (kind === "task_take") return t("auto.step.portKind.taskTake");
-  return t("auto.step.portKind.taskMake");
+/** The kinds to choose between, in the language the panel is being drawn in. */
+function choicesOfKinds(kinds: readonly { id: string; label: () => string }[]): Choice[] {
+  return kinds.map((one) => ({ id: one.id, label: one.label() }));
 }
 
 /** A box of text that writes when the caret leaves it rather than a letter at a time. */
@@ -221,7 +222,7 @@ function DeclareRow({
   /** What the empty box says it wants. */
   what: string;
   /** The kinds to choose between, or nothing where the family has none (a way out). */
-  kinds: { id: string; label: string }[] | null;
+  kinds: Choice[] | null;
   onAdd: (name: string, kind: string) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
@@ -250,32 +251,8 @@ function DeclareRow({
           ))}
         </select>
       )}
-      <button type="button" disabled={name.trim() === ""} onClick={press}>
+      <button type="button" className="btn" disabled={name.trim() === ""} onClick={press}>
         {t("auto.step.add")}
-      </button>
-    </div>
-  );
-}
-
-/** One way out, as a step carrying its own prompt may write it. */
-function ExitRow({ step, exit, run }: { step: AutomationStepDto; exit: AutomationExitDto; run: Run }) {
-  const [name, setName] = useDraft(exit.name ?? "");
-  const was = exit.name ?? null;
-  return (
-    <div className="autostep__decl">
-      <input
-        className="autostep__declname"
-        placeholder={t("auto.step.exitUnnamed")}
-        aria-label={t("auto.step.exits")}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => {
-          const now = name.trim() === "" ? null : name.trim();
-          if (now !== was) void run(renameAutomationExit(step.id, was, now));
-        }}
-      />
-      <button type="button" onClick={() => void run(removeAutomationExit(step.id, was))}>
-        {t("auto.step.remove")}
       </button>
     </div>
   );
@@ -295,7 +272,7 @@ function DeclEdit({
 }: {
   name: string;
   kind: string;
-  kinds: { id: string; label: string }[];
+  kinds: Choice[];
   required: boolean;
   onRename: (to: string) => void;
   onKind: (to: string) => void;
@@ -325,10 +302,69 @@ function DeclEdit({
         <input type="checkbox" checked={required} onChange={(e) => onRequired(e.target.checked)} />
         {t("auto.step.required")}
       </label>
-      <button type="button" onClick={onRemove}>
+      <button type="button" className="btn" onClick={onRemove}>
         {t("auto.step.remove")}
       </button>
     </div>
+  );
+}
+
+/** One way out: what it is called, what leaving by it hands on, and the presses that change either. */
+function ExitRow({
+  step,
+  exit,
+  own,
+  onAddOutput,
+  run,
+}: {
+  step: AutomationStepDto;
+  exit: AutomationExitDto;
+  /** Whether this step declares its own — a step running a library action reads the action's. */
+  own: boolean;
+  onAddOutput: () => void;
+  run: Run;
+}) {
+  const [name, setName] = useDraft(exit.name ?? "");
+  const was = exit.name ?? null;
+  return (
+    <li className="autostep__exit">
+      {own ? (
+        <input
+          className="autostep__declname"
+          placeholder={t("auto.step.exitUnnamed")}
+          aria-label={t("auto.step.exits")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            const now = name.trim() === "" ? null : name.trim();
+            if (now !== was) void run(renameAutomationExit(step.id, was, now));
+          }}
+        />
+      ) : (
+        <span className="autostep__exitname">{exitLabel(exit.name)}</span>
+      )}
+      {/* What leaving by this way out hands on. It hangs off the way out and not off the step,
+          because a step with three ways out hands on three different things. */}
+      {exit.outputs.map((port) => (
+        <span key={port.name} className="autostep__out">
+          {port.name}
+          <span className="autostep__outkind">{kindLabel(port.kind)}</span>
+        </span>
+      ))}
+      {/* Only for a step that declares its own. A step running a library action reads the action's
+          ways out, and an output declared on one of those is declared for every step running that
+          action — which is the library's to change, not this step's. */}
+      {own && (
+        <>
+          <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
+            {t("auto.step.outputAdd")}
+          </button>
+          <button type="button" className="btn" onClick={() => void run(removeAutomationExit(step.id, was))}>
+            {t("auto.step.remove")}
+          </button>
+        </>
+      )}
+    </li>
   );
 }
 
@@ -341,7 +377,6 @@ function CfgRow({
 }: {
   step: AutomationStepDto;
   cfg: AutomationCfgDto;
-  /** Whether this step declares its own — a step running a library action reads the action's. */
   own: boolean;
   run: Run;
 }) {
@@ -359,7 +394,7 @@ function CfgRow({
           label={t("auto.step.cfg")}
           name={cfg.name}
           kind={cfg.kind}
-          kinds={CFG_KINDS.map((one) => ({ id: one, label: cfgKindLabel(one) }))}
+          kinds={choicesOfKinds(CFG_KINDS)}
           required={cfg.required}
           onRename={(to) => void run(editAutomationCfg(step.id, cfg.name, { name: to }))}
           // A choice list belongs to a choice and to nothing else, so leaving one behind on another
@@ -476,10 +511,12 @@ function InputRow({
           label={t("auto.step.inputs")}
           name={input.name}
           kind={input.kind}
-          kinds={PORT_KINDS.map((one) => ({ id: one, label: portKindLabel(one) }))}
+          kinds={choicesOfKinds(PORT_KINDS)}
           required={input.required}
           onRename={(to) => void run(editAutomationInput(step.id, input.name, { name: to }))}
-          onKind={(to) => void run(editAutomationInput(step.id, input.name, { kind: to as PortKind }))}
+          onKind={(to) =>
+            void run(editAutomationInput(step.id, input.name, { kind: to as AutomationPortDto["kind"] }))
+          }
           onRequired={(to) => void run(editAutomationInput(step.id, input.name, { required: to }))}
           onRemove={() => void run(removeAutomationInput(step.id, input.name))}
         />
@@ -517,6 +554,72 @@ function InputRow({
   );
 }
 
+/**
+ * **Put this step's prompt in the library**, so other automations can run the same one
+ * (`../core/automations`).
+ *
+ * **It is offered only while the step carries a prompt of its own.** A step running an action has
+ * nothing of its own left to raise, and the control above is where it goes back to one.
+ *
+ * **The name is asked for, and starts as the step's.** The two are different things — a step is named
+ * for its place in one automation ("review what was just written"), an action for what it is ("review")
+ * — and a library of names borrowed from whichever automation raised them first reads as one nobody
+ * chose.
+ *
+ * **Which library is asked for too.** The device's is reached by every project on this machine and the
+ * project's by one, and a wrong answer is not undone from this panel — so the reach is a choice rather
+ * than a default the reader finds out about later.
+ */
+function RaiseToLibrary({
+  step,
+  projectId,
+}: {
+  step: AutomationStepDto;
+  projectId: number | null;
+}) {
+  const [name, setName] = useDraft(step.name);
+  const [wide, setWide] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [raising, setRaising] = useState(false);
+
+  const raise = async () => {
+    setError(null);
+    setRaising(true);
+    try {
+      await raiseStepToLibrary(step.id, name.trim(), wide ? null : projectId);
+    } catch (err) {
+      setError(errText(err));
+    } finally {
+      setRaising(false);
+    }
+  };
+
+  return (
+    <div className="autostep__field">
+      <span className="autostep__label">{t("auto.step.raise")}</span>
+      <span className="autostep__note">{t("auto.step.raiseWhat")}</span>
+      <input
+        aria-label={t("auto.step.raiseName")}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <select value={wide ? "device" : "project"} onChange={(e) => setWide(e.target.value === "device")}>
+        <option value="project">{t("auto.step.raiseHere")}</option>
+        <option value="device">{t("auto.step.raiseEverywhere")}</option>
+      </select>
+      <button
+        type="button"
+        className="btn"
+        disabled={raising || name.trim() === "" || (!wide && projectId === null)}
+        onClick={() => void raise()}
+      >
+        {t("auto.step.raise")}
+      </button>
+      {error !== null && <ErrorNote tone="quiet">{error}</ErrorNote>}
+    </div>
+  );
+}
+
 export function AutomationStepPanel({
   automation,
   stepId,
@@ -532,6 +635,9 @@ export function AutomationStepPanel({
   const agents = useAgents(projectId);
   const models = useModels(step?.agent ?? "");
   const [name, setName] = useDraft(step?.name ?? "");
+  // The way out an output artefact is being declared on, while that dialog is open
+  // (`AMB-T-5257`).
+  const [adding, setAdding] = useState<number | null>(null);
   const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
   const [refused, setRefused] = useState<string | null>(null);
 
@@ -561,7 +667,7 @@ export function AutomationStepPanel({
 
   return (
     <div className="autostep">
-      {refused !== null && <div className="autostep__refused">{refused}</div>}
+      {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
       <label className="autostep__field">
         <span className="autostep__label">{t("auto.step.name")}</span>
@@ -625,6 +731,8 @@ export function AutomationStepPanel({
         )}
       </label>
 
+      {own && <RaiseToLibrary step={step} projectId={projectId} />}
+
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.cfg")}</span>
         {step.settings.length === 0 && <span className="autostep__said">{t("auto.step.declaresNone")}</span>}
@@ -634,7 +742,7 @@ export function AutomationStepPanel({
         {own && (
           <DeclareRow
             what={t("auto.step.cfgName")}
-            kinds={CFG_KINDS.map((one) => ({ id: one, label: cfgKindLabel(one) }))}
+            kinds={choicesOfKinds(CFG_KINDS)}
             onAdd={(declared, kind) =>
               run(declareAutomationCfg(step.id, { name: declared, kind: kind as CfgKind }))
             }
@@ -658,9 +766,14 @@ export function AutomationStepPanel({
         {own && (
           <DeclareRow
             what={t("auto.step.inputName")}
-            kinds={PORT_KINDS.map((one) => ({ id: one, label: portKindLabel(one) }))}
+            kinds={choicesOfKinds(PORT_KINDS)}
             onAdd={(declared, kind) =>
-              run(declareAutomationInput(step.id, { name: declared, kind: kind as PortKind }))
+              run(
+                declareAutomationInput(step.id, {
+                  name: declared,
+                  kind: kind as AutomationPortDto["kind"],
+                }),
+              )
             }
           />
         )}
@@ -668,31 +781,31 @@ export function AutomationStepPanel({
 
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.exits")}</span>
-        {own ? (
-          <>
-            {step.exits
-              .filter((one) => one.name !== ERROR_EXIT)
-              .map((one) => (
-                <ExitRow key={one.id} step={step} exit={one} run={run} />
-              ))}
-            {/* The error way out, always drawn and always last, and never a row a press can reach:
-                every step carries one whether or not anything says so. */}
-            <div className="autostep__exiterr">{t("auto.pic.errorExit")}</div>
-            <DeclareRow
-              what={t("auto.step.exitName")}
-              kinds={null}
-              onAdd={(declared) => run(declareAutomationExit(step.id, declared))}
-            />
-          </>
-        ) : (
-          <ul className="autostep__exits">
-            {step.exits
-              .filter((one) => one.name !== ERROR_EXIT)
-              .map((one) => (
-                <li key={one.id}>{exitLabel(one.name)}</li>
-              ))}
-            <li className="autostep__exiterr">{t("auto.pic.errorExit")}</li>
-          </ul>
+        <ul className="autostep__exits">
+          {step.exits
+            .filter((one) => one.name !== ERROR_EXIT)
+            .map((one) => (
+              <ExitRow
+                key={one.id}
+                step={step}
+                exit={one}
+                own={own}
+                onAddOutput={() => setAdding(one.id)}
+                run={run}
+              />
+            ))}
+          {/* The error way out, always drawn and always last: every step carries one, and a list that
+              left it off where nobody had said anything about it would read as a step that cannot
+              fail. It hands nothing on — what a step that fell over has to say is its report — and
+              nothing here renames or removes it, which core refuses either way. */}
+          <li className="autostep__exiterr">{t("auto.pic.errorExit")}</li>
+        </ul>
+        {own && (
+          <DeclareRow
+            what={t("auto.step.exitName")}
+            kinds={null}
+            onAdd={(declared) => run(declareAutomationExit(step.id, declared))}
+          />
         )}
       </div>
 
@@ -779,6 +892,13 @@ export function AutomationStepPanel({
         />
         {t("auto.step.history")}
       </label>
+
+      {adding !== null && (
+        <AutomationOutputAdd
+          exit={step.exits.find((one) => one.id === adding)!}
+          onClose={() => setAdding(null)}
+        />
+      )}
     </div>
   );
 }

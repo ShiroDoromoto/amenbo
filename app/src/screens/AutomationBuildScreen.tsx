@@ -27,15 +27,16 @@
 // moment a window opens, so the launch raises it at the press rather than the build screen drawing it
 // among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`). Whether it is
 // standing is handed down from the shell, which is the one place that knows which window holds it.
-import { AutomationPicture } from "./AutomationPicture";
 import { useState } from "react";
+import { AutomationPicture } from "./AutomationPicture";
+import { AutomationStepAdd } from "./AutomationStepAdd";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
-import type { AutomationLaunchBlockDto } from "../bindings/bindings";
+import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
 
 /**
  * One reason, in words. The unnamed way out has no name to put in the sentence — it is the one a
@@ -71,6 +72,16 @@ function blockText(block: AutomationLaunchBlockDto): string {
   }
 }
 
+/**
+ * What carries out the step a line leaves — the likeliest answer for the step being put in front of
+ * it, and what the dialog starts on. A definition that names none falls back to the first agent the
+ * catalog lists, which is what `automation step add` asks for and never guesses.
+ */
+function agentOn(automation: AutomationDetailDto | null, edgeId: number): string {
+  const edge = automation?.edges.find((one) => one.id === edgeId);
+  return automation?.steps.find((one) => one.id === edge?.fromStepId)?.agent ?? "claude-code";
+}
+
 export function AutomationBuildScreen({
   id, projectId, workspaceOpen, onBack,
 }: {
@@ -89,6 +100,9 @@ export function AutomationBuildScreen({
   // Which step the panel is showing. Nothing until a box is pressed — a definition opens on the
   // picture, and a step picked for the reader would be one they did not choose.
   const [step, setStep] = useState<number | null>(null);
+  // The line a `+` was pressed on, while the dialog that puts a step in front of it is open. It is
+  // the edge and not the step, because what the new step takes over is where that one line went.
+  const [inserting, setInserting] = useState<number | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -150,6 +164,7 @@ export function AutomationBuildScreen({
             automation={automation}
             selectedStepId={step ?? undefined}
             onPickStep={setStep}
+            onInsertStep={setInserting}
           />
         </div>
       </div>
@@ -160,6 +175,15 @@ export function AutomationBuildScreen({
           <AutomationStepPanel automation={automation} stepId={step} projectId={projectId} />
         </div>
       </div>
+
+      {inserting !== null && (
+        <AutomationStepAdd
+          edgeId={inserting}
+          projectId={projectId}
+          agent={agentOn(automation, inserting)}
+          onClose={() => setInserting(null)}
+        />
+      )}
     </div>
   );
 }

@@ -44,7 +44,7 @@ vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
 
-import { t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { AutomationsScreen } from "./AutomationsScreen";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -271,13 +271,53 @@ describe("the press that starts a run", () => {
     expect(container.textContent).not.toContain(t("auto.queued"));
   });
 
-  it("puts a refusal in front of the reader, in the words core refused with", async () => {
-    hoisted.launch.mockRejectedValue({
-      code: "invalid",
-      message_en: "the workspace is closed — a run draws its steps in its panes",
-    });
+  /** Press start, with the launch rejecting with this. */
+  async function refusedWith(err: unknown) {
+    hoisted.launch.mockRejectedValue(err);
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
-    expect(container.textContent).toContain("the workspace is closed");
+  }
+
+  it("puts a refusal in front of the reader in their own language, not core's English", async () => {
+    // The one a person pressing start meets most: the window the run would draw its steps in is not
+    // open. It names itself, so the line is written from the dictionary (`AMB-D-413`).
+    const refusal = {
+      code: "invalid_automation_workspace_closed",
+      message_en: "the workspace is closed — a run draws its steps in its panes, so open it and launch again",
+    };
+    await refusedWith(refusal);
+    // The pair is what makes this a test: with no template `errText` hands back the English, and the
+    // second half would then be asserting that the English is both on the screen and not.
+    expect(container.textContent).toContain(errText(refusal));
+    expect(container.textContent).not.toContain(refusal.message_en);
+  });
+
+  it("writes the whole of a refusal over a list — the line and every reason under it", async () => {
+    // A launch check that passed when the screen drew it and failed at the press: the machine changed
+    // in between. Each reason names itself as well, so none of them arrives as English inside the
+    // reader's sentence.
+    await refusedWith({
+      code: "not_ready_automation",
+      message_en: "cannot launch 'Morning round': it has no steps",
+      fields: { automation: "Morning round" },
+      parts: [
+        { code: "not_ready_automation_agent_missing", message_en: "x", fields: { step: "Write", agent: "codex-cli" } },
+        { code: "not_ready_automation_unanswered_cfg", message_en: "y", fields: { step: "Write", cfg: "filter" } },
+      ],
+    });
+    const line = container.textContent ?? "";
+    expect(line).toContain("Morning round");
+    expect(line).toContain("codex-cli");
+    expect(line).toContain("filter");
+    // Nothing is left standing as a bare code: a reason nobody wrote a sentence for would ship as
+    // `not_ready_automation_agent_missing` at the reader.
+    expect(line).not.toContain("not_ready_automation");
+  });
+
+  it("falls back to core's English where the refusal names no sentence of its own", async () => {
+    // The family code, which covers dozens of sentences and so holds no template. The reader gets what
+    // core said rather than a blank — this is the road every uncoded refusal still takes.
+    await refusedWith({ code: "invalid", message_en: "something core has no code for" });
+    expect(container.textContent).toContain("something core has no code for");
   });
 });

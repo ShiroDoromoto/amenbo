@@ -125,6 +125,25 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_migration_no_space",
   "invalid_migration_rolled_back",
   "invalid_migration_rollback_failed",
+  // Pressing launch on an automation. The two that refuse alone name the automation; the third is one
+  // refusal over the launch check's list, and the reasons under it arrive as its `parts` the way a
+  // reservation's do — how many there are is known only at the moment of refusing.
+  //
+  // The build screen draws the same list before anybody presses (`auto.block.*`), and these are still
+  // owed: that list is a read, and this is what the press answers with when the machine changed between
+  // the two — a step's agent uninstalled, a required setting cleared on another device.
+  "invalid_automation_archived",
+  "invalid_automation_workspace_closed",
+  "not_ready_automation",
+  "not_ready_automation_no_steps",
+  "not_ready_automation_no_entry",
+  "not_ready_automation_entry_takes_no_task",
+  "not_ready_automation_open_exit",
+  "not_ready_automation_open_exit_unnamed",
+  "not_ready_automation_unwired_input",
+  "not_ready_automation_unanswered_cfg",
+  "not_ready_automation_agent_missing",
+  "not_ready_automation_model_missing",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

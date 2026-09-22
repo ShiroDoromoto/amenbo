@@ -960,13 +960,18 @@ impl Instructor {
             // which words are on the shot, and every one of them is on it whichever line it took. A
             // step asking for the top is left for an eye rather than passed on its presence, which
             // would read green off a build that had stopped pinning anything.
-            (Domain::Task, "found") | (Domain::Decision, "found") if first(with) => None,
+            (Domain::Task, "found") | (Domain::Decision, "found") | (Domain::Automation, "found")
+                if first(with) =>
+            {
+                None
+            }
             (Domain::Task, "listed")
             | (Domain::Task, "narrowed")
             | (Domain::Task, "view-lists")
             | (Domain::Task, "found")
             | (Domain::Decision, "narrowed")
-            | (Domain::Decision, "found") => {
+            | (Domain::Decision, "found")
+            | (Domain::Automation, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Task, "opened") => {
@@ -1127,6 +1132,50 @@ impl Instructor {
             (Domain::Files, "reading") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
+            // ---- automation on screen ----------------------------------------------------------
+            // A definition's own name and a library action's, off the row each is listed on. Both
+            // are names the road gave, so a reading finds them on that list and nowhere in the
+            // interface around it — which is what lets the absent half be read as well.
+            (Domain::Automation, "listed") | (Domain::Automation, "action-listed") => {
+                Some(Expectation { text: self.target_label(with), present: present(with) })
+            }
+            // A step's box, where the road is asking about the box and not about a mark on it. Both
+            // marks are colour — an edge down one side, an outline round the whole — and a reading
+            // answers which words are on a shot, so a step naming one would pass on a build that had
+            // lost the mark and kept the name. Those are an eye's.
+            (Domain::Automation, "pictured")
+                if with.contains_key("from_action") || with.contains_key("unfed") =>
+            {
+                None
+            }
+            (Domain::Automation, "pictured") => {
+                Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
+            }
+            // The way out's name, written along the line that leaves by it. It is the name the road
+            // gave that way out, so the picture is where it stands. A line leaving by the unnamed way
+            // out carries no name at all, and where it ends is the interface's own wording — an eye
+            // closes both of those.
+            (Domain::Automation, "line-pictured") => {
+                Some(Expectation { text: arg_str(with, "exit")?.to_string(), present: true })
+            }
+            // What one row of the step panel reads, where the road named a value. It is the road's
+            // own word — a name it gave, a prompt it wrote — so a reading finds it in that row.
+            (Domain::Automation, "step-shows") => {
+                Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
+            }
+            // What the launch place names as being in the way. The reason itself is the interface's
+            // sentence, but what it names is the road's: the input, the setting, the agent. So the
+            // reading is taken on that name, and a road that named no `at` leaves the whole line to
+            // an eye.
+            (Domain::Automation, "launch") => {
+                Some(Expectation { text: arg_str(with, "at")?.to_string(), present: present(with) })
+            }
+            // The two numbers the band carries, read together: half of that pair is not a state the
+            // band is ever in, and the pair is drawn as one word.
+            (Domain::Automation, "lanes") => Some(Expectation {
+                text: format!("{}/{}", count(with, "held").ok()?, count(with, "of").ok()?),
+                present: true,
+            }),
             _ => None,
         }
     }
@@ -3755,6 +3804,128 @@ impl Instructor {
                 req(with, "name")?,
                 landing(with)?
             ),
+            // ---- automation on screen ----------------------------------------------------------
+            // Standing on the automations screen. It is one place with three tabs, and a road says
+            // which it is standing on rather than naming three screens.
+            (Domain::Automation, "screen") => format!(
+                "Open the automations screen of the project on the ledger and stand on {}.",
+                automation_tab(req(with, "tab")?)?
+            ),
+            // A definition opens into the build screen, which replaces the list rather than standing
+            // beside it — what is being looked at is one automation's whole picture.
+            (Domain::Automation, "open") => format!(
+                "On the automations tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
+                self.target_label(with)
+            ),
+            (Domain::Automation, "action-open") => format!(
+                "On the actions tab, press the row for \"{}\".",
+                self.target_label(with)
+            ),
+            // The rewrite that reaches every step pointed at this action, which is what the library
+            // is for and what the screen says before the box is opened.
+            (Domain::Automation, "action-rewrite") => format!(
+                "Rewrite the prompt of the library action that is open so it reads \"{}\", and press the button that saves it.",
+                req(with, "prompt")?
+            ),
+            // Pressing a box is what puts that step's contents in the panel beside the picture.
+            (Domain::Automation, "pick-step") => format!(
+                "In the build screen's picture, press the box for the step \"{}\".",
+                req(with, "name")?
+            ),
+            // The `+` on a line. The step goes in **in front of** that line, so the road names the
+            // step the line leaves and the way out it leaves by — the pair a line hangs on.
+            (Domain::Automation, "insert-step") => format!(
+                "In the build screen's picture, press the `+` on the line leaving the step \"{}\" by {}. In the dialog, write the name \"{}\"{}, then press the button that puts it in.",
+                req(with, "after")?,
+                way_out(with),
+                req(with, "name")?,
+                match (arg_str(with, "prompt"), with.get("action")) {
+                    (Some(prompt), None) => format!(", leave it on the setting that writes a prompt here and write \"{prompt}\" as that prompt"),
+                    (None, Some(_)) => format!(
+                        ", and pick the library action \"{}\" as what it runs",
+                        self.labels
+                            .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
+                            .cloned()
+                            .unwrap_or_else(|| "<the action>".to_string())
+                    ),
+                    _ => return Err(
+                        "a step put in writes a prompt here or names a library action, never both and never neither"
+                            .to_string(),
+                    ),
+                }
+            ),
+            // What a way out hands on, declared from the way out it belongs to.
+            (Domain::Automation, "add-output") => format!(
+                "In the step panel, on the line for {}, press the control that adds an output artefact. Write the name \"{}\", pick {} as what it carries{}, then press the button that adds it.",
+                way_out(with),
+                req(with, "name")?,
+                port_kind(req(with, "kind")?)?,
+                match flagged(with, "required") {
+                    true => "",
+                    false => ", and set it to optional",
+                }
+            ),
+            // One row of the step panel, written. Every control there writes on the spot, and a box
+            // of text writes as the caret leaves it — so the instruction says to leave the box.
+            (Domain::Automation, "step-set") => format!(
+                "In the step panel, set {} to \"{}\", then move off the control so what you wrote is taken.",
+                step_field(req(with, "field")?)?,
+                req(with, "value")?
+            ),
+            // A task filter is answered on rows, never as an expression: the row is the part and what
+            // is pressed on it is the value.
+            (Domain::Automation, "answer-filter") => format!(
+                "In the step panel, under the setting \"{}\", press \"{}\" on the \"{}\" row.",
+                req(with, "setting")?,
+                req(with, "value")?,
+                req(with, "row")?
+            ),
+            // A wire is picked from what fits rather than drawn between two points.
+            (Domain::Automation, "pick-wire") => format!(
+                "In the step panel, under the inputs, set \"{}\" to what comes from \"{}\".",
+                req(with, "input")?,
+                req(with, "from")?
+            ),
+            // The press that makes a run. It is the build screen's, and the two other ways in below
+            // make the same run without handing anything over either.
+            (Domain::Automation, "start") => {
+                "On the build screen's launch place, press the button that starts a run.".to_string()
+            }
+            // Closing the pane a run is drawn in, which is a way of stopping the run — and the
+            // question put before it closes says so.
+            (Domain::Automation, "close-run-pane") => {
+                "In the workspace, press the control that takes away the pane this run is drawn in, and confirm the question it puts."
+                    .to_string()
+            }
+            // The band over the panes is itself the way to the setting that holds its second number.
+            (Domain::Automation, "open-lanes") => {
+                "Press the band over the workspace's panes that reads how many lanes the runs are holding."
+                    .to_string()
+            }
+            (Domain::Automation, "press-run") => format!(
+                "On the running tab, on the row for this run, {}.",
+                run_press(req(with, "press")?)?
+            ),
+            // The two ways in that are not the build screen. Neither hands anything over at the
+            // press: which task and which folder are the definition's.
+            (Domain::Automation, "start-from-task") => format!(
+                "Open the task \"{}\" and press the control that starts an automation, then pick \"{}\".",
+                self.labels
+                    .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
+                    .cloned()
+                    .unwrap_or_else(|| "<the task>".to_string()),
+                self.target_label(with)
+            ),
+            (Domain::Automation, "start-from-frame") => format!(
+                "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\".",
+                self.target_label(with)
+            ),
+            // The reference on a search hit. What it opens is the build screen of the automation the
+            // document belongs to, in that automation's own project.
+            (Domain::Automation, "open-found") => format!(
+                "On the search results, press the reference on the hit for \"{}\".",
+                self.target_label(with)
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -3973,8 +4144,15 @@ impl Instructor {
             // The asking is inside the confirming, the way `listed`'s filter is: the cross-cutting search
             // answers one question per question put to it, so there is no standing screen for a separate
             // move to arrive at — the words, the narrowing and the reading are one thing a reader does.
-            (Domain::Task, "found") | (Domain::Decision, "found") => {
-                let side = if domain == Domain::Task { "task" } else { "decision" };
+            // An automation is the third kind of record the box narrows to. Its hits are read the same
+            // way the other two are, and what the row points at is the automation — a shared document
+            // carries no reference of its own, one automation holding several of them.
+            (Domain::Task, "found") | (Domain::Decision, "found") | (Domain::Automation, "found") => {
+                let side = match domain {
+                    Domain::Task => "task",
+                    Domain::Decision => "decision",
+                    _ => "automation",
+                };
                 let mut line = format!("Ask the cross-cutting search for {}", self.typed(with)?);
                 if let Some(kind) = arg_str(with, "kind") {
                     line.push_str(&format!(", narrowed to {kind}"));
@@ -5416,6 +5594,186 @@ impl Instructor {
                     "`skin-list` reads `{other}` off a listing, and a screen has no such listing to read: this face answers for `on` alone"
                 )),
             },
+            // ---- automation on screen ----------------------------------------------------------
+            // A definition on the list. `steps` is the second half of what a row is read for — what
+            // this is, and whether it is built yet.
+            (Domain::Automation, "listed") => match present(with) {
+                true => format!(
+                    "On the automations tab, confirm a row for \"{}\" is listed{}.",
+                    self.target_label(with),
+                    match with.get("steps") {
+                        Some(_) => format!(", saying it is built out of {} steps", count(with, "steps")?),
+                        None => String::new(),
+                    }
+                ),
+                false => format!(
+                    "On the automations tab, confirm no row for \"{}\" is listed.",
+                    self.target_label(with)
+                ),
+            },
+            // A library action's row. The number beside it is counted in automations and not in
+            // steps, which is the whole reason a road reads it: it says how far a rewrite carries.
+            (Domain::Automation, "action-listed") => format!(
+                "On the actions tab, confirm a row for \"{}\" is listed{}{}.",
+                self.target_label(with),
+                match with.get("used_by") {
+                    Some(_) => format!(", saying {} automations use it", count(with, "used_by")?),
+                    None => String::new(),
+                },
+                match arg_str(with, "reach") {
+                    Some("device") => ", and that it is marked as the device's own",
+                    Some("project") => ", and that it is marked as this project's",
+                    Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
+                    None => "",
+                }
+            ),
+            // One step's box, and the two marks it may wear. Both marks are drawn as colour — an
+            // edge down one side, an outline round the whole — so a road naming either is asking an
+            // eye rather than a reading.
+            (Domain::Automation, "pictured") => match present(with) {
+                true => format!(
+                    "In the build screen's picture, confirm a box for the step \"{}\" is drawn{}{}.",
+                    req(with, "name")?,
+                    match step_mark(with, "from_action")? {
+                        Some(true) => ", with the coloured edge down its left that says its prompt came from the library",
+                        Some(false) => ", and that it carries no coloured edge down its left — its prompt is its own",
+                        None => "",
+                    },
+                    match step_mark(with, "unfed")? {
+                        Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
+                        Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and names no input under its name",
+                        None => "",
+                    }
+                ),
+                false => format!(
+                    "In the build screen's picture, confirm no box for a step \"{}\" is drawn.",
+                    req(with, "name")?
+                ),
+            },
+            // A line leaving one step, and what is written along it: the way out's own name, and
+            // where leaving by it goes.
+            (Domain::Automation, "line-pictured") => format!(
+                "In the build screen's picture, confirm a line leaves the step \"{}\" by {}, {}.",
+                req(with, "from")?,
+                way_out(with),
+                match (arg_str(with, "to"), arg_str(with, "ends")) {
+                    (Some(to), None) => format!("going on to the step \"{to}\""),
+                    (None, Some("done")) => "and that what is written at its foot says the task is finished".to_string(),
+                    (None, Some("halt")) => "and that what is written at its foot says the run stops and calls a person".to_string(),
+                    (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt")),
+                    _ => return Err(
+                        "a line goes on to a step (`to`) or ends the task or the run (`ends`), never both and never neither"
+                            .to_string(),
+                    ),
+                }
+            ),
+            // The dashed outline around the steps one task is worked by. What it is drawn with is a
+            // broken line and nothing else — no fill, no colour — so it is an eye's.
+            (Domain::Automation, "lap-pictured") => format!(
+                "In the build screen's picture, confirm a dashed outline is drawn around the steps reached from \"{}\", with the word for one task's span written over it.",
+                req(with, "head")?
+            ),
+            // One row of the step panel, read.
+            (Domain::Automation, "step-shows") => match arg_str(with, "value") {
+                Some(value) => format!(
+                    "In the step panel, confirm {} reads \"{value}\".",
+                    step_field(req(with, "field")?)?
+                ),
+                None => format!(
+                    "In the step panel, confirm {} is drawn.",
+                    step_field(req(with, "field")?)?
+                ),
+            },
+            // What the launch place says, which is where a half-built definition is named as such.
+            // A road names core's own code for the reason, so what it walks is the refusal rather
+            // than a sentence the interface owns.
+            (Domain::Automation, "launch") => match (req_bool(with, "ready")?, arg_str(with, "reason")) {
+                (true, _) => "On the build screen's launch place, confirm it says the automation is ready to be started, and that the button that starts one can be pressed."
+                    .to_string(),
+                (false, None) => "On the build screen's launch place, confirm it says the automation cannot be started yet, and that the button that starts one cannot be pressed."
+                    .to_string(),
+                // A reason named, either way round. **The absent half is the one a road walks after
+                // fixing something**: the list is read once and drawn from what core answers, so a
+                // build that had kept the first answer would still be listing what is no longer in
+                // the way — and a road that only ever asked for a reason to be there could not
+                // catch it.
+                (false, Some(reason)) => format!(
+                    "On the build screen's launch place, confirm it says the automation cannot be started yet, and that {} of the reasons it lists is {}{}{}.",
+                    match present(with) {
+                        true => "one",
+                        false => "none",
+                    },
+                    launch_reason(reason)?,
+                    match arg_str(with, "step") {
+                        Some(step) => format!(", naming the step \"{step}\""),
+                        None => String::new(),
+                    },
+                    match arg_str(with, "at") {
+                        Some(at) => format!(" and \"{at}\" on it"),
+                        None => String::new(),
+                    }
+                ),
+            },
+            // The press that found no lane free. The run is made either way; what is different is
+            // that no terminal stands for it yet.
+            (Domain::Automation, "queued") => {
+                "Confirm the press answered that the run is waiting for a lane, and that no new pane stood up for it."
+                    .to_string()
+            }
+            // The pane a run is drawn in, and the four things the line over it carries. `label`
+            // reads a pane's name and nothing else, which is why this one is here.
+            (Domain::Automation, "run-pane") => match present(with) {
+                true => format!(
+                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands beside its name, and that the line over it carries four things: which step it is on{}, how many tasks in it is{}, the run's own number and the number of the task it is working{}.",
+                    match arg_str(with, "step") {
+                        Some(step) => format!(" (\"{step}\")"),
+                        None => String::new(),
+                    },
+                    match with.get("nth") {
+                        Some(_) => format!(" ({})", count(with, "nth")?),
+                        None => String::new(),
+                    },
+                    match with.get("task") {
+                        Some(_) => format!(" (\"{}\")", self.labels
+                            .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
+                            .cloned()
+                            .unwrap_or_else(|| "<the task>".to_string())),
+                        None => String::new(),
+                    }
+                ),
+                // Where the road bound no run, there is none to speak of: what it is saying is that
+                // the press it just made stood nothing up.
+                false => match with.contains_key("target") {
+                    true => "In the workspace, confirm no pane is standing for this run.".to_string(),
+                    false => "In the workspace, confirm the press stood no new pane up.".to_string(),
+                },
+            },
+            // The band over the panes, and the setting that holds its second number.
+            (Domain::Automation, "lanes") => format!(
+                "Confirm the band over the workspace's panes reads {} of {}.",
+                count(with, "held")?,
+                count(with, "of")?
+            ),
+            (Domain::Automation, "lanes-setting") => format!(
+                "In Amenbo's own settings, under the automations section, confirm the row saying how many lanes there are reads {}.",
+                count(with, "of")?
+            ),
+            // A row of the running tab. It draws every run this device is carrying, across projects,
+            // so the row names the project as well as where the run has got to.
+            (Domain::Automation, "run-row") => match present(with) {
+                true => format!(
+                    "On the running tab, confirm a row for this run is drawn, saying it is {}{}.",
+                    run_state(req(with, "state")?)?,
+                    match with.get("project") {
+                        Some(_) => format!(", and naming the project \"{}\"", self.labels
+                            .get(with.get("project").and_then(|v| v.as_str()).unwrap_or(""))
+                            .cloned()
+                            .unwrap_or_else(|| "<the project>".to_string())),
+                        None => String::new(),
+                    }
+                ),
+                false => "On the running tab, confirm no row for this run is drawn.".to_string(),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -5451,6 +5809,124 @@ fn decision_filter_pair(axis: &str, value: &str) -> String {
         ("status", "superseded") => "superseded:yes".to_string(),
         _ => filter_pair(axis, value),
     }
+}
+
+/// A mark a road named on a step's box, either way round, or nothing where it named none. Both
+/// marks are worth saying the absence of: a mark that never comes off is a build reading a
+/// definition it had already read, and a road that could only ask for one to be there could not
+/// catch it.
+fn step_mark(with: &Args, key: &str) -> Result<Option<bool>, String> {
+    match with.contains_key(key) {
+        true => Ok(Some(flag(with, key)?)),
+        false => Ok(None),
+    }
+}
+
+/// Which of the automations screen's three tabs a road means. The screen is one place and the tabs
+/// are what is on it, so an instruction names the tab and never a screen of its own.
+fn automation_tab(tab: &str) -> Result<&'static str, String> {
+    Ok(match tab {
+        "running" => "the tab holding the runs that are under way",
+        "automations" => "the tab holding this project's automations",
+        "actions" => "the tab holding the library of prompts",
+        other => return Err(format!("`tab` does not know `{other}` — it is running / automations / actions")),
+    })
+}
+
+/// The way out a step leaves by, said the way the step panel and the picture both say it. The
+/// unnamed one is the one a step with a single way out has, and the error one is the name core
+/// fixes; neither is quoted, having no name a road gave it.
+fn way_out(with: &Args) -> String {
+    match arg_str(with, "exit") {
+        None => "its only way out".to_string(),
+        Some("*") => "its error way out".to_string(),
+        Some(name) => format!("its way out \"{name}\""),
+    }
+}
+
+/// One row of the step panel, named the way the panel names it. A road reads a screen, so what it
+/// says is the row and not the column underneath.
+fn step_field(field: &str) -> Result<&'static str, String> {
+    Ok(match field {
+        "name" => "the step's name",
+        "task" => "the line saying which task the step is about",
+        "content" => "the control saying where the step's prompt comes from",
+        "prompt" => "the prompt",
+        "agent" => "the control saying who carries the step out",
+        "model" => "the control saying which model it runs on",
+        "folder" => "the control saying where the step runs",
+        "interactive" => "the box saying the step may stop and wait for a person",
+        "report" => "the box saying the step's report also lands on the task",
+        "history" => "the box saying the step is handed the run's story so far",
+        other => {
+            return Err(format!(
+                "`field` does not know `{other}` — it is name / task / content / prompt / agent / model / folder / interactive / report / history"
+            ))
+        }
+    })
+}
+
+/// What a port carries, in the words the two dialogs offer it by.
+fn port_kind(kind: &str) -> Result<&'static str, String> {
+    Ok(match kind {
+        "value" => "a value",
+        "file" => "a file",
+        "task_take" => "a task it goes and takes",
+        "task_make" => "a task it makes",
+        other => {
+            return Err(format!(
+                "`kind` does not know `{other}` — it is value / file / task_take / task_make"
+            ))
+        }
+    })
+}
+
+/// One thing standing between an automation and a launch, said as a reader meets it rather than as
+/// core codes it. A road names the code, so that what it is walking is the refusal and not a
+/// sentence the interface owns.
+fn launch_reason(reason: &str) -> Result<&'static str, String> {
+    Ok(match reason {
+        "no_steps" => "that it has no steps",
+        "no_entry" => "that no step is named as the one a run starts on",
+        "entry_takes_no_task" => "that the step a run starts on takes no task",
+        "open_exit" => "that nothing is set to happen after one of a step's ways out",
+        "unwired_input" => "that nothing reaches one of a step's required inputs",
+        "unanswered_cfg" => "that one of a step's required settings is unanswered",
+        "agent_missing" => "that this machine cannot start what a step is carried out by",
+        "model_missing" => "that this machine's agent does not offer the model a step names",
+        other => {
+            return Err(format!(
+                "`reason` does not know `{other}` — it is one of the codes the launch check answers with"
+            ))
+        }
+    })
+}
+
+/// What a row of the "running" tab is pressed for.
+fn run_press(press: &str) -> Result<&'static str, String> {
+    Ok(match press {
+        "open" => "press the row itself — the workspace comes forward with that run's pane picked out",
+        "pause" => "press the control that holds the run",
+        "resume" => "press the control that picks it up again",
+        "stop" => "press the control that stops it",
+        other => return Err(format!("`press` does not know `{other}` — it is open / pause / resume / stop")),
+    })
+}
+
+/// Where a run has got to, said as the row says it.
+fn run_state(state: &str) -> Result<&'static str, String> {
+    Ok(match state {
+        "running" => "under way",
+        "queued" => "waiting for a lane",
+        "paused" => "held",
+        "stopped" => "stopped",
+        "done" => "finished",
+        other => {
+            return Err(format!(
+                "`state` does not know `{other}` — it is running / queued / paused / stopped / done"
+            ))
+        }
+    })
 }
 
 fn unmapped(domain: Domain, op: &str) -> String {
@@ -6823,6 +7299,7 @@ pub fn domain_str(d: Domain) -> &'static str {
         Domain::Store => "store",
         Domain::Folder => "folder",
         Domain::Attachment => "attachment",
+        Domain::Automation => "automation",
         Domain::Repo => "repo",
         Domain::Mcp => "mcp",
         Domain::Tick => "tick",
@@ -6979,6 +7456,194 @@ steps_gui:
     /// refusing to be called: these walks shoot one fixture over and over, so every action after the
     /// first is a screen that did not move and the walk is right to say so.
     fn unheard(_: &str) {}
+
+    /// Every screen op the automation domain carries, rendered. What this guards is that the
+    /// mapping is there at all: an op in the registry with no arm here fails closed
+    /// ([`unmapped`]), which is exactly what a road written against it would meet, and the roads
+    /// this vocabulary was grown for are all still to be written.
+    #[test]
+    fn every_automation_screen_op_renders_an_instruction() {
+        let s = load(r#"
+id: x
+title: y
+given:
+  - { type: action, domain: automation, op: create, with: { name: Morning round }, as: auto }
+  - { type: action, domain: automation, op: action-add, with: { name: Review, prompt: look at it }, as: act }
+  - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with: { tab: automations }
+  - type: assert
+    domain: automation
+    op: listed
+    with: { target: auto, steps: 3, present: true }
+  - type: action
+    domain: automation
+    op: open
+    with: { target: auto }
+  - type: assert
+    domain: automation
+    op: lap-pictured
+    with: { head: take }
+  - type: assert
+    domain: automation
+    op: pictured
+    with: { name: work, unfed: true }
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with: { from: take, exit: got one, to: work }
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with: { from: work, ends: done }
+  - type: action
+    domain: automation
+    op: pick-step
+    with: { name: work }
+  - type: assert
+    domain: automation
+    op: step-shows
+    with: { field: prompt, value: do it }
+  - type: action
+    domain: automation
+    op: step-set
+    with: { field: name, value: implement }
+  - type: action
+    domain: automation
+    op: answer-filter
+    with: { setting: which, row: assignee, value: My AI }
+  - type: action
+    domain: automation
+    op: pick-wire
+    with: { input: note, from: take }
+  - type: action
+    domain: automation
+    op: insert-step
+    with: { after: work, exit: got one, name: review, prompt: read it back }
+  - type: action
+    domain: automation
+    op: add-output
+    with: { exit: got one, name: note, kind: value, required: true }
+  - type: assert
+    domain: automation
+    op: launch
+    with: { ready: false, reason: unwired_input, step: work, at: note }
+  - type: assert
+    domain: automation
+    op: launch
+    with: { ready: true }
+  - type: action
+    domain: automation
+    op: start
+    with: { target: auto }
+    as: run
+  - type: assert
+    domain: automation
+    op: queued
+    with: { target: run }
+  - type: assert
+    domain: automation
+    op: run-pane
+    with: { target: run, step: work, nth: 1, task: seed, present: true }
+  - type: assert
+    domain: automation
+    op: lanes
+    with: { held: 1, of: 3 }
+  - type: action
+    domain: automation
+    op: open-lanes
+    with: {}
+  - type: assert
+    domain: automation
+    op: lanes-setting
+    with: { of: 3 }
+  - type: assert
+    domain: automation
+    op: run-row
+    with: { target: run, state: running }
+  - type: action
+    domain: automation
+    op: press-run
+    with: { target: run, press: pause }
+  - type: action
+    domain: automation
+    op: close-run-pane
+    with: { target: run }
+  - type: assert
+    domain: automation
+    op: action-listed
+    with: { target: act, used_by: 2, reach: project }
+  - type: action
+    domain: automation
+    op: action-open
+    with: { target: act }
+  - type: action
+    domain: automation
+    op: action-rewrite
+    with: { prompt: look at it twice }
+  - type: action
+    domain: automation
+    op: start-from-task
+    with: { target: auto, task: seed }
+    as: from_task
+  - type: action
+    domain: automation
+    op: start-from-frame
+    with: { target: auto }
+    as: from_frame
+  - type: action
+    domain: automation
+    op: open-found
+    with: { target: auto }
+"#);
+        let mut ins = Instructor::new();
+        // What the premise made is what the road then points at, so its labels are learnt without a
+        // word of it being rendered.
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> =
+            steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("automations"), "{}", lines[0]);
+        assert!(lines[1].contains("Morning round") && lines[1].contains("3 steps"), "{}", lines[1]);
+        assert!(lines[5].contains("\"got one\"") && lines[5].contains("\"work\""), "{}", lines[5]);
+        assert!(lines[6].contains("the task is finished"), "{}", lines[6]);
+        assert!(lines[13].contains("output artefact") && lines[13].contains("a value"), "{}", lines[13]);
+        assert!(lines[14].contains("nothing reaches one of a step's required inputs"), "{}", lines[14]);
+        assert!(lines[19].contains("1 of 3"), "{}", lines[19]);
+    }
+
+    /// The marks on a step's box are colour, and a reading answers which words are on a shot — so a
+    /// road naming one is an eye's, while the same box named without one is read.
+    #[test]
+    fn a_mark_on_a_step_is_left_to_an_eye_and_the_box_itself_is_read() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: automation
+    op: pictured
+    with: { name: work, present: true }
+  - type: assert
+    domain: automation
+    op: pictured
+    with: { name: work, unfed: true }
+"#);
+        let ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        assert_eq!(
+            ins.expectation(&steps[0]).map(|e| e.text),
+            Some("work".to_string()),
+            "the box's own name is on the shot",
+        );
+        assert!(
+            ins.expectation(&steps[1]).is_none(),
+            "the outline saying an input is unfed is a colour, which no reading answers",
+        );
+    }
 
     #[test]
     fn instructions_read_a_bound_target_by_its_title() {

@@ -1,0 +1,117 @@
+# A run has to have somewhere to stand. Every step of one opens a terminal, and terminals live in the
+# workspace — so a press made while no workspace is open is a press with nowhere to put what it
+# starts, and it is turned away at the press rather than listed among the things a definition is
+# short of. That is the line this road walks: the one refusal that is about the window and not about
+# the definition, and the press right after it, which stands a pane up.
+id: start-an-automation-from-the-build-screen
+title: The press that starts a run is turned away while no workspace is open, and stands a pane up once one is
+description: >
+  Stand a definition up that has nothing missing, and press the button that starts a run twice: once
+  with the ledger on the screen and no workspace open, and once with the workspace standing. The
+  first is refused and says why, the second takes a lane and draws the run's own pane. The launch
+  place is read first, so that the refusal is known to be about the window — a definition still short
+  of something would refuse for its own reasons and the road would prove nothing.
+given:
+  # One agent this machine can start, so the launch check has nothing to say about who carries the
+  # step out. `reads` keeps the stand-in standing, which is what leaves a pane on the screen to read.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — nothing missing" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  # Both ways out say what happens after them. A way out with nothing after it is the one thing a
+  # launch check will not let past, and this road is about the other refusal.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Nothing is in the way of this definition, which is what makes the refusal below about the window.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  # The press with nowhere to put what it would start. A closed workspace is not on the list above —
+  # it is not about the definition, and it stops being true the moment a window opens — so it is
+  # raised here, at the press.
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      refused: workspace_closed
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      present: false
+
+  # A workspace, and the same press again.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # A lane taken, which is the band's half of the same fact, and the pane the run is drawn in.
+  - type: assert
+    domain: automation
+    op: lanes
+    with:
+      held: 1
+      of: 3
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: take
+      present: true

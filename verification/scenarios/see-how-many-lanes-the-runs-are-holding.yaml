@@ -1,0 +1,85 @@
+# How many runs may be under way at once is a number a person sets, and how many are under way now is
+# a number they read. Both are drawn on the band over the workspace's panes, as one pair, and the
+# band is itself the way to the setting that holds the second of them — a reader who wonders why a
+# run is waiting should not have to go looking for where that is decided.
+id: see-how-many-lanes-the-runs-are-holding
+title: The band over the panes says how many lanes are held out of how many there are, and is the way to the setting
+description: >
+  Read the band with nothing running, start one run and read it again, then press the band and read
+  the same second number off the setting it lands on. Reading it before and after is what makes the
+  first number a count of what is running rather than a number the band was drawn with.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one lane taken" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  # Nothing of Amenbo's is running yet: the pane the folder opened is a reader's own, and a lane is
+  # something a run takes.
+  - type: assert
+    domain: automation
+    op: lanes
+    with:
+      held: 0
+      of: 3
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: lanes
+    with:
+      held: 1
+      of: 3
+
+  # The band is the way to where the second number is decided. What lands is Amenbo's own settings,
+  # on the row that holds it — and the number on that row is the one the band was drawing.
+  - type: action
+    domain: automation
+    op: open-lanes
+
+  - type: assert
+    domain: automation
+    op: lanes-setting
+    with:
+      of: 3

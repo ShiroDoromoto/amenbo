@@ -41,7 +41,7 @@ use amenbo_core::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner,
     AutomationRunStatus, AutomationStep, AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::{declarer, StepSource};
+use amenbo_core::ops::automation::{declarer, NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::{Ended, Paused, Resumed, TookALane};
 use amenbo_core::ops::automation_step::Opened;
@@ -126,6 +126,34 @@ pub fn automation_action_edit(
         Ok(())
     })?;
     Ok(WriteAck::new(&["automationActions"]))
+}
+
+/// **Raise a step's own prompt into the library**: make an action of it, move the step's declarations
+/// onto that action, and point the step at it
+/// ([`amenbo_core::ops::automation::action_from_step`]).
+///
+/// It is the one road from the build screen into the library, which until now could only be filled
+/// from the CLI. The declarations **move** rather than being copied — a step that runs an action
+/// declares nothing of its own — and the picture around the step goes on reading because an edge and
+/// a wire name a way out by its name.
+///
+/// `project` is which library it lands in: the project's own, or the device's where every project on
+/// this machine reaches it. The device's is the wider reach, and the panel says which is which rather
+/// than picking for the reader.
+///
+/// The ack names both: the definition, whose step now points somewhere else, and the library, which
+/// has one more action in it.
+#[tauri::command]
+pub fn automation_action_from_step(
+    step: i64,
+    project: Option<i64>,
+    name: String,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_from_step(step, project, &name)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Change one step of an automation.** Only what is `Some` is written.
@@ -286,11 +314,13 @@ fn cfg_kind(word: &str) -> Result<AutomationCfgKind, CmdError> {
     })
 }
 
-/// What an input carries, refused here for [`cfg_kind`]'s reason.
+/// What a port carries, refused here for [`cfg_kind`]'s reason. Asked by every door that takes one
+/// from a screen — an input declared on a step, an output declared on a way out, and the inputs a
+/// step arrives with — so all three refuse in the same words.
 fn port_kind(word: &str) -> Result<AutomationPortKind, CmdError> {
     AutomationPortKind::parse(word).ok_or_else(|| {
         amenbo_core::Error::invalid(format!(
-            "'{word}' is not a kind an input can be (value, file, task_take, task_make)"
+            "'{word}' is not something a port carries — value, file, task_take or task_make"
         ))
         .into()
     })
@@ -491,6 +521,87 @@ pub fn automation_cfg_answer(
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Put a step in on a line** — the one road by which a step joins a picture already drawn.
+///
+/// `inputs` is a flat list of triples the screen sends as `[name, kind, required]`, because a struct
+/// per row would be one more shape to keep in step across the boundary for three fields. An unknown
+/// kind is refused here rather than stored: the four are the port kinds core knows
+/// ([`amenbo_core::model::AutomationPortKind`]).
+///
+/// The whole press is one transaction, edges and all
+/// ([`amenbo_core::ops::automation::step_insert`]): a step left behind with the line still running
+/// past it is a picture nobody asked for.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_step_insert(
+    edge_id: i64,
+    name: String,
+    action: Option<i64>,
+    prompt: Option<String>,
+    agent: String,
+    model: Option<String>,
+    interactive: bool,
+    exits: Vec<String>,
+    inputs: Vec<(String, String, bool)>,
+) -> Result<WriteAck, CmdError> {
+    let source = match (action, prompt.as_deref()) {
+        (Some(_), Some(_)) | (None, None) => {
+            return Err(amenbo_core::Error::invalid(
+                "a step runs a library action or carries a prompt of its own",
+            )
+            .into())
+        }
+        (Some(action), None) => StepSource::Action(action),
+        (None, Some(prompt)) => StepSource::Prompt(prompt.to_string()),
+    };
+    let mut ports = Vec::with_capacity(inputs.len());
+    for (name, kind, required) in inputs {
+        ports.push((name, port_kind(&kind)?, required));
+    }
+    let new = NewStep {
+        name,
+        source,
+        agent,
+        model,
+        interactive,
+        work_dir_ref: None,
+        report_to_task: false,
+        show_history: true,
+    };
+    with_store_mut(|store| {
+        store.automation_step_insert(edge_id, new, &exits, &ports)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Declare what a way out hands on.**
+///
+/// It belongs to the way out and not to the step, because what is handed on is produced by leaving
+/// through that particular way out — a step with three ways out hands on three different things
+/// ([`amenbo_core::ops::automation::port_add`]).
+#[tauri::command]
+pub fn automation_output_add(
+    exit_id: i64,
+    name: String,
+    kind: String,
+    required: bool,
+) -> Result<WriteAck, CmdError> {
+    let kind = port_kind(&kind)?;
+    with_store_mut(|store| {
+        store.automation_port_add(
+            AutomationPortOwner::Exit,
+            exit_id,
+            AutomationPortDirection::Out,
+            &name,
+            kind,
+            required,
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **Say what fills one of a step's inputs**, by naming the way out and the output it comes from.
 ///
 /// Drawing the same wire twice answers the one already drawn rather than writing a second row
@@ -634,13 +745,14 @@ pub fn automation_lanes_held() -> Result<i64, CmdError> {
 /// the closed workspace in that order, each with a sentence the screen can put in front of a person
 /// ([`amenbo_core::ops::automation_run::launch`]) — so nothing is judged twice here.
 ///
-/// **A run that took a lane is opened on its first step before this answers.** The pane the run is
-/// drawn in is stood by the workspace when it hears that step, so a launch that stopped short of it
-/// would be a press that wrote a row and left the screen unchanged. A queued run opens nothing: what
-/// wakes it is a lane being handed back (`AMB-T-5246`, `AMB-T-5247`).
+/// **A run that took a lane is opened by the watch, not here.** What opens a step is the one thread
+/// looking at what is running (`AMB-D-945`), so no entrance into a run carries its own copy of "and
+/// then open the next one". This press only nudges that thread
+/// ([`crate::automation_watch::wake`]), so the pane is stood at once rather than at the end of its
+/// wait. A queued run is not nudged: what wakes it is a lane being handed back (`AMB-T-5246`,
+/// `AMB-T-5247`).
 #[tauri::command]
 pub fn automation_launch(
-    app: tauri::AppHandle,
     id: i64,
     agents: Option<Vec<String>>,
     workspace_open: bool,
@@ -662,7 +774,7 @@ pub fn automation_launch(
     let run = with_store_mut(|store| Ok(store.automation_launch(id, &by)?))?;
     let queued = !run.status.holds_a_lane();
     if !queued {
-        automation_step_open(app, run.id, None)?;
+        crate::automation_watch::wake();
     }
     Ok(AutomationRunStartedDto { run: run.id, queued })
 }

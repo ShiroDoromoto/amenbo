@@ -106,6 +106,44 @@ impl Unmet {
     }
 }
 
+impl Unmet {
+    /// The code naming **this** reason, so a screen can write it in the reader's language
+    /// ([`crate::ErrorCode`], `AMB-D-413`). [`Unmet::say`] is the English the CLI prints and the
+    /// fallback for a surface holding no dictionary; this is the other half of the same sentence.
+    pub fn code(&self) -> ErrorCode {
+        match self {
+            Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
+            Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
+            Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
+            // The unnamed way out is a sentence of its own: there is no name to put in one.
+            Unmet::OpenExit { exit: None, .. } => ErrorCode::NotReadyAutomationOpenExitUnnamed,
+            Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
+            Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
+            Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
+            Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
+            Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
+        }
+    }
+
+    /// This reason as a sentence that carries its values apart from its words: the code above, the
+    /// English underneath, and every name the template interpolates as a field of its own.
+    fn msg(&self) -> Msg {
+        let msg = Msg::new(self.say()).coded(self.code());
+        match self {
+            Unmet::NoSteps | Unmet::NoEntry => msg,
+            Unmet::EntryTakesNoTask { step } => msg.with("step", step),
+            Unmet::OpenExit { step, exit } => match exit {
+                Some(exit) => msg.with("step", step).with("exit", exit),
+                None => msg.with("step", step),
+            },
+            Unmet::UnwiredInput { step, port } => msg.with("step", step).with("port", port),
+            Unmet::UnansweredCfg { step, cfg } => msg.with("step", step).with("cfg", cfg),
+            Unmet::AgentMissing { step, agent } => msg.with("step", step).with("agent", agent),
+            Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
+        }
+    }
+}
+
 /// How a way out is spoken of in a sentence: by its name, or as the unnamed one.
 fn named(exit: Option<&str>) -> String {
     match exit {
@@ -392,10 +430,14 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
     let automation: Automation = read::automation(tx.conn(), automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
     if automation.archived {
-        return Err(Error::invalid(format!(
-            "automation '{}' is archived — bring it back before launching it",
-            automation.name
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "automation '{}' is archived — bring it back before launching it",
+                automation.name
+            ))
+            .coded(ErrorCode::InvalidAutomationArchived)
+            .with("automation", &automation.name),
+        ));
     }
     let unmet = check(tx.conn(), automation_id, by.startable, by.models)?;
     if !unmet.is_empty() {
@@ -404,8 +446,11 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
     // Only where somebody answered. A caller that cannot see the window says nothing rather than
     // `false`, and the run is made — a launch from a terminal is not a claim about what is on screen.
     if by.workspace_open == Some(false) {
-        return Err(Error::invalid(
-            "the workspace is closed — a run draws its steps in its panes, so open it and launch again",
+        return Err(Error::Invalid(
+            Msg::new(
+                "the workspace is closed — a run draws its steps in its panes, so open it and launch again",
+            )
+            .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
     }
     let now = Timestamp::now();
@@ -442,8 +487,8 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
         unmet.iter().map(Unmet::say).collect::<Vec<_>>().join("; ")
     );
     let msg = unmet.iter().fold(
-        Msg::new(sentence).coded(ErrorCode::NotReady).with("automation", name),
-        |msg, one| msg.part(Msg::new(one.say())),
+        Msg::new(sentence).coded(ErrorCode::NotReadyAutomation).with("automation", name),
+        |msg, one| msg.part(one.msg()),
     );
     Error::NotReady(msg)
 }
@@ -1035,6 +1080,42 @@ mod tests {
             let err = launch(tx, automation.id, &here(&[])).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
             assert_eq!(msg.parts().len(), 2, "one open way out and one agent this machine has not");
+            // Every sentence names itself, so a screen writes the whole refusal in the reader's own
+            // language rather than the outer line in theirs and the reasons in English (`AMB-D-413`).
+            assert_eq!(msg.code(), Some(ErrorCode::NotReadyAutomation));
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![
+                    Some(ErrorCode::NotReadyAutomationOpenExit),
+                    Some(ErrorCode::NotReadyAutomationAgentMissing),
+                ],
+            );
+            // And carries the values those sentences are built from, under the names the templates
+            // interpolate them by — a part with a hole where the step's name goes reads as `{step}`.
+            let named: Vec<&str> = msg.parts()[1].fields().iter().map(|(key, _)| key).collect();
+            assert_eq!(named, vec!["step", "agent"]);
+        });
+    }
+
+    #[test]
+    fn the_two_refusals_that_stand_alone_name_themselves_too() {
+        with_tx(|tx| {
+            let startable = claude();
+            let (automation, _) = launchable(tx);
+            automation::update(tx, automation.id, None, None, None, Some(true)).expect("archive");
+            let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
+            let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
+            assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationArchived));
+            assert_eq!(
+                msg.fields().iter().map(|(key, _)| key).collect::<Vec<_>>(),
+                vec!["automation"],
+            );
+
+            automation::update(tx, automation.id, None, None, None, Some(false)).expect("bring back");
+            let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
+            let err = launch(tx, automation.id, &closed).expect_err("closed");
+            let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
+            assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationWorkspaceClosed));
         });
     }
 

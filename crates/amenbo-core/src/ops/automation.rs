@@ -31,7 +31,7 @@ use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind, AutomationEdge,
     AutomationEnds, AutomationExit, AutomationNote, AutomationOwner, AutomationPort,
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationStepNote, AutomationWire, ERROR_EXIT,
+    AutomationStepNote, AutomationWire, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
 use crate::ops::{emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -242,6 +242,137 @@ pub fn action_update(
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
     Ok(after)
+}
+
+/// **Raise a step's own prompt into the library**: make an action of it, move the step's declarations
+/// onto that action, and point the step at it. One act, because half of it is an automation that has
+/// lost its wiring.
+///
+/// **The declarations move; they are not copied.** A step that runs an action declares nothing of its
+/// own ([`declarer`]), so leaving the step's rows where they are would put the same ways out in two
+/// places with nothing keeping them in step. Edges and wires name a way out by its **name**, not by its
+/// id (the specification's, so that one action used twice in an automation is still unambiguous), so
+/// the picture around the step goes on reading once the action declares the same names.
+///
+/// **A setting's answer stays on the step.** What moves is the declaration — the name, the kind,
+/// whether it is required, the choices — and the answer somebody gave is the step's own business, which
+/// is exactly the pair [`cfg_set`] keeps for a step that already runs an action. An answer dropped here
+/// would be a launch check that starts refusing a definition nobody edited.
+///
+/// `project_id` is which library it lands in: `None` the device's, where every project on this machine
+/// reaches it, and `Some` one project's. The device's is the wider reach, and a step in any project can
+/// point at it.
+///
+/// Refused for a step that already runs an action — there is nothing of its own left to raise.
+pub fn action_from_step(
+    tx: &WriteTx<'_>,
+    step_id: i64,
+    project_id: Option<i64>,
+    name: &str,
+) -> Result<AutomationAction> {
+    let before = live_step(tx, step_id)?;
+    if before.action_id.is_some() {
+        return Err(Error::invalid(format!(
+            "step '{}' already runs a library action — what it carries is the action's, and there is \
+             nothing of its own to raise",
+            before.name
+        )));
+    }
+    let automation = live_automation(tx, before.automation_id)?;
+    // The library it lands in has to be one this step can point at afterwards, which is the same reach
+    // the pull-down offers: this project's, or the device's.
+    if let Some(project_id) = project_id {
+        if project_id != automation.project_id {
+            return Err(Error::invalid(
+                "a step reaches its own project's library and the device's, and no other".to_string(),
+            ));
+        }
+    }
+    let action = action_add(tx, project_id, name, before.prompt.as_deref().unwrap_or_default())?;
+
+    // The two born ways out are already on the action, so only the named ones are added — and each
+    // one's outputs go onto whichever row of the action carries that name.
+    for exit in read::automation_exits_of(tx.conn(), AutomationOwner::Step, step_id)? {
+        let onto = match read::automation_exit_by_name(
+            tx.conn(),
+            AutomationOwner::Action,
+            action.id,
+            exit.name.as_deref(),
+        )? {
+            Some(already) => already,
+            None => add_exit_row(tx, AutomationOwner::Action, action.id, exit.name.clone())?,
+        };
+        for port in read::automation_ports_of(
+            tx.conn(),
+            AutomationPortOwner::Exit,
+            exit.id,
+            AutomationPortDirection::Out,
+        )? {
+            port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                onto.id,
+                AutomationPortDirection::Out,
+                &port.name,
+                port.kind,
+                port.required,
+            )?;
+        }
+    }
+    for port in read::automation_ports_of(
+        tx.conn(),
+        AutomationPortOwner::Step,
+        step_id,
+        AutomationPortDirection::In,
+    )? {
+        port_add(
+            tx,
+            AutomationPortOwner::Action,
+            action.id,
+            AutomationPortDirection::In,
+            &port.name,
+            port.kind,
+            port.required,
+        )?;
+    }
+    // Read before the step's rows go, because each one is both the declaration and the answer until it
+    // is split in two.
+    let answered = read::automation_cfgs_of(tx.conn(), AutomationOwner::Step, step_id)?;
+    for cfg in &answered {
+        cfg_add(
+            tx,
+            AutomationOwner::Action,
+            action.id,
+            &cfg.name,
+            cfg.kind,
+            cfg.required,
+            cfg.options.as_deref(),
+        )?;
+    }
+
+    let mut after = before.clone();
+    after.action_id = Some(action.id);
+    after.prompt = None;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_step(&before), record::automation_step(&after))?;
+    delete_declarations(tx, AutomationOwner::Step, AutomationPortOwner::Step, step_id)?;
+
+    // And the answers back, on rows that now carry nothing else.
+    for cfg in answered {
+        if cfg.value.is_some() {
+            write_cfg_row(
+                tx,
+                AutomationOwner::Step,
+                step_id,
+                cfg.name,
+                cfg.kind,
+                cfg.required,
+                cfg.options,
+                cfg.value,
+            )?;
+        }
+    }
+    Ok(action)
 }
 
 /// Reorder a library action within its own library.
@@ -660,6 +791,68 @@ pub fn step_add(tx: &WriteTx<'_>, automation_id: i64, new: NewStep) -> Result<Au
     if step.action_id.is_none() {
         born_with_exits(tx, AutomationOwner::Step, id)?;
     }
+    Ok(step)
+}
+
+/// **Put a step in on a line**, which is the one road by which a step joins a picture already drawn.
+///
+/// The way out that was pressed comes to point at the new step, and the new step goes on to the
+/// target that way out names — so nothing that was decided is lost, and the new step is never left
+/// with nothing pointing at it. A step nothing points at is a step no run reaches, which is why there
+/// is no "add at the end".
+///
+/// **It is one transaction.** The step, the ways out and the inputs it is written with, and the two
+/// edges are one act as far as a reader is concerned: a press that leaves a step behind with the line
+/// running past it is a picture nobody asked for.
+///
+/// `exits` and `inputs` are what the dialog took. A step running a library action declares neither —
+/// those are the action's — and passing any is refused where that holds ([`exit_add`], [`port_add`]).
+///
+/// The limit on how often an edge may be taken follows the pressed edge where that one carries a
+/// limit. A way out that closes or stops the run carries none, so both edges take the standing limit
+/// ([`crate::model::DEFAULT_MAX_TIMES`]) — a step to go on to is what makes a limit mean anything.
+pub fn step_insert(
+    tx: &WriteTx<'_>,
+    edge_id: i64,
+    new: NewStep,
+    exits: &[String],
+    inputs: &[(String, AutomationPortKind, bool)],
+) -> Result<AutomationStep> {
+    let edge = live_edge(tx, edge_id)?;
+    let from = live_step(tx, edge.from_step_id)?;
+    let step = step_add(tx, from.automation_id, new)?;
+    for name in exits {
+        exit_add(tx, AutomationOwner::Step, step.id, Some(name))?;
+    }
+    for (name, kind, required) in inputs {
+        port_add(
+            tx,
+            AutomationPortOwner::Step,
+            step.id,
+            AutomationPortDirection::In,
+            name,
+            *kind,
+            *required,
+        )?;
+    }
+    let onward = match edge.ends {
+        AutomationEnds::Go => EdgeTarget::Go(
+            edge.to_step_id
+                .ok_or_else(|| Error::invalid("the way out goes on to no step"))?,
+        ),
+        AutomationEnds::Done => EdgeTarget::Done,
+        AutomationEnds::Halt => EdgeTarget::Halt,
+    };
+    let carried = match edge.ends {
+        AutomationEnds::Go => edge.max_times,
+        _ => Some(DEFAULT_MAX_TIMES),
+    };
+    edge_update(tx, edge_id, Some(EdgeTarget::Go(step.id)), Some(carried))?;
+    let onward_limit = match onward {
+        EdgeTarget::Go(_) => Some(DEFAULT_MAX_TIMES),
+        _ => None,
+    };
+    edge_add(tx, step.id, None, onward, onward_limit)?;
     Ok(step)
 }
 
@@ -1445,6 +1638,93 @@ mod tests {
         });
     }
 
+    /// What an edge says, as a pair a test can read at a glance.
+    fn edge_of(tx: &WriteTx<'_>, step_id: i64, exit: Option<&str>) -> (AutomationEnds, Option<i64>) {
+        let edge = read::automation_edge_for_exit(tx.conn(), step_id, exit)
+            .expect("read edge")
+            .expect("an edge on that way out");
+        (edge.ends, edge.to_step_id)
+    }
+
+    #[test]
+    fn a_step_put_in_on_a_line_takes_over_where_that_line_went() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let first = mk_step(tx, automation.id, "取る");
+            let last = mk_step(tx, automation.id, "見直す");
+            let edge = edge_add(tx, first.id, None, EdgeTarget::Go(last.id), Some(3)).expect("edge");
+
+            let put = step_insert(
+                tx,
+                edge.id,
+                NewStep::with_prompt("実装する", "やる", "claude"),
+                &["直すところがある".to_string()],
+                &[("要件".to_string(), AutomationPortKind::Value, true)],
+            )
+            .expect("insert");
+
+            assert_eq!(
+                edge_of(tx, first.id, None),
+                (AutomationEnds::Go, Some(put.id)),
+                "the way out that was pressed now points at the new step",
+            );
+            assert_eq!(
+                edge_of(tx, put.id, None),
+                (AutomationEnds::Go, Some(last.id)),
+                "and the new step goes on to where that way out used to reach",
+            );
+            assert_eq!(
+                read::automation_edge_for_exit(tx.conn(), first.id, None).unwrap().unwrap().max_times,
+                Some(3),
+                "the limit the pressed edge carried is the pressed edge's still",
+            );
+            assert_eq!(
+                exit_names(tx, AutomationOwner::Step, put.id),
+                vec![None, Some(ERROR_EXIT.to_string()), Some("直すところがある".to_string())],
+                "what the dialog wrote is declared on the step it made",
+            );
+            let inputs = read::automation_ports_of(
+                tx.conn(),
+                AutomationPortOwner::Step,
+                put.id,
+                AutomationPortDirection::In,
+            )
+            .expect("read inputs");
+            assert_eq!(inputs.len(), 1);
+            assert_eq!(inputs[0].name, "要件");
+        });
+    }
+
+    #[test]
+    fn a_step_put_in_on_a_line_that_closed_the_run_closes_it_from_there_instead() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let first = mk_step(tx, automation.id, "取る");
+            let edge = edge_add(tx, first.id, None, EdgeTarget::Done, None).expect("edge");
+
+            let put = step_insert(
+                tx,
+                edge.id,
+                NewStep::with_prompt("実装する", "やる", "claude"),
+                &[],
+                &[],
+            )
+            .expect("insert");
+
+            assert_eq!(edge_of(tx, first.id, None), (AutomationEnds::Go, Some(put.id)));
+            assert_eq!(
+                edge_of(tx, put.id, None),
+                (AutomationEnds::Done, None),
+                "closing the task is what the new step goes on to do",
+            );
+            assert_eq!(
+                read::automation_edge_for_exit(tx.conn(), first.id, None).unwrap().unwrap().max_times,
+                Some(DEFAULT_MAX_TIMES),
+                "a way out that closed the run carried no limit, and now it needs one",
+            );
+        });
+    }
+
     #[test]
     fn a_step_running_an_action_declares_nothing_of_its_own() {
         with_tx(|tx| {
@@ -1743,6 +2023,128 @@ mod tests {
                 exit_names(tx, AutomationOwner::Step, step.id),
                 vec![None, Some(ERROR_EXIT.to_string())],
                 "it is born with the two again, exactly as a new step is",
+            );
+        });
+    }
+
+    /// **Raising a step moves what it declared, and leaves the answers where they were** (`AMB-T-5277`).
+    ///
+    /// The ways out have to arrive under the same names, because an edge and a wire name one by its
+    /// name: a raise that dropped them would take the picture around the step apart. The answers stay on
+    /// the step, which is where a step running an action keeps them anyway.
+    #[test]
+    fn raising_a_step_moves_its_declarations_and_keeps_its_answers() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let step = mk_step(tx, automation.id, "点検する");
+            exit_add(tx, AutomationOwner::Step, step.id, Some("直すところがある")).expect("way out");
+            let exit = read::automation_exit_by_name(
+                tx.conn(),
+                AutomationOwner::Step,
+                step.id,
+                Some("直すところがある"),
+            )
+            .expect("read")
+            .expect("the way out");
+            port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "指摘",
+                AutomationPortKind::File,
+                true,
+            )
+            .expect("output");
+            port_add(
+                tx,
+                AutomationPortOwner::Step,
+                step.id,
+                AutomationPortDirection::In,
+                "差分",
+                AutomationPortKind::File,
+                true,
+            )
+            .expect("input");
+            cfg_add(
+                tx,
+                AutomationOwner::Step,
+                step.id,
+                "どこまで見るか",
+                AutomationCfgKind::Text,
+                false,
+                None,
+            )
+            .expect("setting");
+            cfg_set(tx, step.id, "どこまで見るか", Some("\"全部\"")).expect("answer it");
+
+            let action = action_from_step(tx, step.id, Some(automation.project_id), "点検").expect("raise");
+
+            assert_eq!(action.prompt, "do it", "the prompt went with it");
+            let after = read::automation_step(tx.conn(), step.id).expect("read").expect("the step");
+            assert_eq!(after.action_id, Some(action.id));
+            assert_eq!(after.prompt, None, "two copies of one prompt is what this avoids");
+
+            // The names an edge or a wire would be pointing at.
+            assert_eq!(
+                exit_names(tx, AutomationOwner::Action, action.id),
+                vec![None, Some(ERROR_EXIT.to_string()), Some("直すところがある".to_string())],
+            );
+            assert!(
+                exit_names(tx, AutomationOwner::Step, step.id).is_empty(),
+                "the step declares nothing of its own now",
+            );
+            let raised = read::automation_exit_by_name(
+                tx.conn(),
+                AutomationOwner::Action,
+                action.id,
+                Some("直すところがある"),
+            )
+            .expect("read")
+            .expect("the way out");
+            let outs = read::automation_ports_of(
+                tx.conn(),
+                AutomationPortOwner::Exit,
+                raised.id,
+                AutomationPortDirection::Out,
+            )
+            .expect("read");
+            assert_eq!(outs.len(), 1);
+            assert_eq!(outs[0].name, "指摘");
+            assert!(outs[0].required);
+            let ins = read::automation_ports_of(
+                tx.conn(),
+                AutomationPortOwner::Action,
+                action.id,
+                AutomationPortDirection::In,
+            )
+            .expect("read");
+            assert_eq!(ins.len(), 1, "the input reads on the action now");
+            assert_eq!(ins[0].name, "差分");
+
+            // The declaration is the action's and the answer is still the step's.
+            let declared = read::automation_cfg_by_name(
+                tx.conn(),
+                AutomationOwner::Action,
+                action.id,
+                "どこまで見るか",
+            )
+            .expect("read")
+            .expect("the declaration");
+            assert_eq!(declared.value, None);
+            let answer = read::automation_cfg_by_name(
+                tx.conn(),
+                AutomationOwner::Step,
+                step.id,
+                "どこまで見るか",
+            )
+            .expect("read")
+            .expect("the answer");
+            assert_eq!(answer.value.as_deref(), Some("\"全部\""));
+
+            assert!(
+                action_from_step(tx, step.id, None, "もう一度").is_err(),
+                "there is nothing of its own left to raise",
             );
         });
     }

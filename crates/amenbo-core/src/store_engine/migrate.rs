@@ -924,6 +924,11 @@ pub const STEPS: &[Step] = &[
         name: "take the preamble off an automation — the build writes it now",
         apply: Apply::Custom(take_the_preamble_off_the_definition),
     },
+    Step {
+        to: 58,
+        name: "wire what a lone step hands on out to the action it is inside",
+        apply: Apply::Custom(wire_the_step_s_outputs_out_to_the_action),
+    },
 ];
 
 /// v52: `automation_run.stopped_reason` admits `no_way_on`.
@@ -3969,6 +3974,10 @@ fn mirror_declarations(
 ///
 /// An action with two steps or more is skipped whole: which of them leaves by which way out is a
 /// picture only its author can draw, and guessing it would draw a wrong one that looks deliberate.
+///
+/// **The third line came later.** What the step hands *on* is wired out to the action by
+/// [`wire_the_step_s_outputs_out_to_the_action`] (v58) — this step drew the other two only, which left
+/// a run leaving such an action carrying nothing.
 fn join_the_action_to_its_step(ctx: &Ctx<'_>) -> Result<()> {
     /// The closed set as every store from v50 on declares it — frozen text, like every step's.
     const NARROW: &str = "CHECK(ends IN ('', 'go', 'done', 'halt'))";
@@ -4089,6 +4098,86 @@ fn join_the_action_to_its_step(ctx: &Ctx<'_>) -> Result<()> {
                      from_port_name, to_id, to_port_name, created_at, updated_at) \
                  VALUES (?1, 'action', ?2, 0, NULL, ?3, ?4, ?3, ?5, ?5)",
                 rusqlite::params![wire_id, action_id, name, step_id, now],
+            )?;
+            wire_id += 1;
+        }
+    }
+    Ok(())
+}
+
+/// v58: what a lone step hands on is **wired out to the action** around it (`AMB-T-5341`).
+///
+/// [`join_the_action_to_its_step`] drew two of the three lines an action of one step needs: the way out
+/// of the step returns to the way out of the action, and what the action takes in reaches the step.
+/// What the step hands *on* was left where it was. So a run walking such an action reached the step,
+/// took its way out, and arrived at the next placement with nothing to fill its inputs with — and where
+/// one of those was required, the run stopped there ([`crate::ops::automation_step`]).
+///
+/// The line runs from the step's way out into the boundary (`0` — [`crate::model::ACTION_BOUNDARY`]),
+/// which is where a placement of the action is read from. What is joined is what the mirror left
+/// behind: an output on a way out of the step is wired out where the action carries a way out of the
+/// same name with an output of the same name on it. From here the line is the truth and the names may
+/// part, exactly as v55 says of the other two.
+///
+/// **An action of two steps or more is skipped whole**, for v55's reason: which of them hands the
+/// action's output on is a picture only its author can draw.
+///
+/// **Only where nothing is drawn yet.** A wire already joining those same two ends is left alone, so a
+/// store stamped back and run forward again lands on what it had rather than a second copy of it.
+///
+/// **No shape moves here** — the step writes rows and no DDL — so this version's frozen file
+/// (`super::schema_frozen`, test-only) is byte-identical to v57's, the way v6's is to v5's.
+fn wire_the_step_s_outputs_out_to_the_action(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let lone_steps: Vec<(i64, i64)> = {
+        let mut stmt = tx.prepare(
+            "SELECT action_id, MIN(id) FROM automation_action_step GROUP BY action_id \
+             HAVING COUNT(*) = 1",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    if lone_steps.is_empty() {
+        return Ok(());
+    }
+    let mut wire_id: i64 =
+        tx.query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM automation_wire", [], |r| r.get(0))?;
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+
+    for (action_id, step_id) in lone_steps {
+        // An `out` hangs on the way out rather than on the step, so both halves of the match are a
+        // pair: the way out's name and the port's. `IS` is what compares the unnamed way out, whose
+        // name is NULL on both sides.
+        let shared_outputs: Vec<(Option<String>, String)> = {
+            let mut stmt = tx.prepare(
+                "SELECT se.name, sp.name FROM automation_exit se \
+                 JOIN automation_port sp \
+                   ON sp.owner_kind = 'exit' AND sp.owner_id = se.id AND sp.direction = 'out' \
+                 WHERE se.owner_kind = 'step' AND se.owner_id = ?1 \
+                   AND EXISTS (SELECT 1 FROM automation_exit ae \
+                               JOIN automation_port ap \
+                                 ON ap.owner_kind = 'exit' AND ap.owner_id = ae.id \
+                                    AND ap.direction = 'out' \
+                               WHERE ae.owner_kind = 'action' AND ae.owner_id = ?2 \
+                                 AND ae.name IS se.name AND ap.name = sp.name) \
+                   AND NOT EXISTS (SELECT 1 FROM automation_wire w \
+                                   WHERE w.owner_kind = 'action' AND w.owner_id = ?2 \
+                                     AND w.from_id = ?1 AND w.from_exit_name IS se.name \
+                                     AND w.from_port_name = sp.name \
+                                     AND w.to_id = 0 AND w.to_port_name = sp.name) \
+                 ORDER BY se.order_key, se.id, sp.order_key, sp.id",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![step_id, action_id], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        for (exit_name, port_name) in shared_outputs {
+            tx.execute(
+                "INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_name, \
+                     from_port_name, to_id, to_port_name, created_at, updated_at) \
+                 VALUES (?1, 'action', ?2, ?3, ?4, ?5, 0, ?5, ?6, ?6)",
+                rusqlite::params![wire_id, action_id, step_id, exit_name, port_name, now],
             )?;
             wire_id += 1;
         }
@@ -6490,6 +6579,91 @@ mod tests {
             one("SELECT COUNT(*) FROM automation_wire WHERE from_port_name = '誰も読まない'"),
             0,
             "and the one the step does not take in reaches nothing",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **v58 wires what the lone step hands on out to the action** (`AMB-T-5341`).
+    ///
+    /// The store is written in v53's shape, with an output on two of the step's ways out: one the
+    /// action carries a way out and an output of the same name for, and one it does not. Only the
+    /// first is wired out. A wire the author had already drawn between those same two ends is not
+    /// drawn twice, and an action of two steps is left alone.
+    #[test]
+    fn the_chain_wires_what_a_lone_step_hands_on_out_to_its_action() {
+        const STAMP: &str = "'2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z'";
+        let dir = scratch("wire-the-outputs-v53");
+        let engine = store_at(&dir, 53);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name, notes, order_key, created_at, updated_at) \
+                   VALUES (1, 'amenbo', '', 'a0', {STAMP});
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, order_key, created_at, updated_at) \
+                   VALUES (7, 1, '点検する', NULL, 'a0', {STAMP});
+                 INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                   VALUES (11, 7, '点検する', 'look', 'claude', NULL, 0, NULL, 0, 1, 'a0', {STAMP});
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, order_key, created_at, updated_at) \
+                   VALUES (8, 1, '二手で直す', NULL, 'a1', {STAMP});
+                 INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) VALUES \
+                   (12, 8, '直す', 'fix', 'claude', NULL, 0, NULL, 0, 1, 'a0', {STAMP}), \
+                   (13, 8, '確かめる', 'check', 'claude', NULL, 0, NULL, 0, 1, 'a1', {STAMP});
+                 UPDATE automation_action SET entry_step_id = 11 WHERE id = 7;
+                 UPDATE automation_action SET entry_step_id = 12 WHERE id = 8;
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at) VALUES \
+                   (21, 'step', 11, NULL, 'a0', {STAMP}), \
+                   (23, 'step', 11, '直すところがある', 'a2', {STAMP}), \
+                   (24, 'step', 11, '中だけの終わり', 'a3', {STAMP}), \
+                   (25, 'action', 7, NULL, 'a0', {STAMP}), \
+                   (27, 'action', 7, '直すところがある', 'a2', {STAMP}), \
+                   (28, 'step', 12, NULL, 'a0', {STAMP}), \
+                   (29, 'action', 8, NULL, 'a0', {STAMP});
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind, required, order_key, created_at, updated_at) VALUES \
+                   (41, 'exit', 21, 'out', '報告', 'file', 1, 'a0', {STAMP}), \
+                   (42, 'exit', 25, 'out', '報告', 'file', 1, 'a0', {STAMP}), \
+                   (43, 'exit', 23, 'out', '直すところ', 'value', 1, 'a0', {STAMP}), \
+                   (44, 'exit', 27, 'out', '直すところ', 'value', 1, 'a0', {STAMP}), \
+                   (45, 'exit', 24, 'out', '中だけの値', 'value', 0, 'a0', {STAMP}), \
+                   (46, 'exit', 28, 'out', '報告', 'file', 1, 'a0', {STAMP}), \
+                   (47, 'exit', 29, 'out', '報告', 'file', 1, 'a0', {STAMP});
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_name, from_port_name, to_id, to_port_name, created_at, updated_at) \
+                   VALUES (51, 'action', 7, 11, NULL, '報告', 0, '報告', {STAMP});",
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let drawn = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT from_exit_name, from_port_name FROM automation_wire \
+                     WHERE owner_kind = 'action' AND owner_id = 7 AND to_id = 0 ORDER BY id",
+                )
+                .unwrap();
+            let rows = stmt
+                .query_map([], |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, String>(1)?)))
+                .unwrap();
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            drawn,
+            vec![
+                (None, "報告".to_string()),
+                (Some("直すところがある".to_string()), "直すところ".to_string()),
+            ],
+            "the output both carry is wired out once, and the wire already there is not doubled; \
+             the output only the step carries reaches nothing",
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM automation_wire WHERE owner_kind = 'action' AND owner_id = 8",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap(),
+            0,
+            "an action of two steps is left to its author",
         );
         std::fs::remove_dir_all(&dir).ok();
     }

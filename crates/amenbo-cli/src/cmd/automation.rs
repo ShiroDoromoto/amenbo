@@ -336,10 +336,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     )?;
                     store.automation_out(step, value.trim(), Produced::File(a.id)).map_err(CliError::from)?
                 }
-                None => {
-                    let (name, text) = parse_produced(&value)?;
-                    store.automation_out(step, &name, Produced::Value(&text)).map_err(CliError::from)?
-                }
+                None => hand_on(store, step, &value)?,
             };
             write_envelope(flags, "automation.out", "automation_run_value", serde_json::to_value(&v).unwrap(), None, false, format!("✓ Handed on: {}", v.name));
         }
@@ -349,8 +346,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             // required output, and a value written after that refusal would arrive at a step that has
             // already been told it is not finished.
             for one in &outs {
-                let (name, text) = parse_produced(one)?;
-                store.automation_out(step, &name, Produced::Value(&text)).map_err(CliError::from)?;
+                hand_on(store, step, one)?;
             }
             let report = body_arg(report)?;
             let next = store
@@ -404,6 +400,39 @@ fn startable(store: &Store) -> Option<Vec<String>> {
 }
 
 /// `<name>=<value>`, as `out` and `done --out` take it.
+/// **Put one `<name>=<what>` down**, in whatever shape the name was declared to take.
+///
+/// The declaration is read first because the same words mean two things: on a `value` port the text is
+/// the answer, and on a `task_make` port it names a task this step raised, which is written as the task
+/// rather than as its spelling ([`amenbo_core::ops::automation_report::out_kind`]).
+///
+/// **The task the run is about does not come this way and is refused here**, with the command that does
+/// take it. Reserving it and declaring it are one act, because two would leave a task `in_progress`
+/// that nothing can hand back where the agent died in between — so there is no way to say it with
+/// `out`, and being told that by the kind check would not say what to type instead.
+fn hand_on(store: &mut Store, step: i64, one: &str) -> Result<AutomationRunValue, CliError> {
+    let (name, text) = parse_produced(one)?;
+    match store.automation_out_kind(step, &name).map_err(CliError::from)? {
+        Some(AutomationPortKind::TaskTake) => Err(CliError {
+            code: "invalid_value",
+            message: format!(
+                "'{name}' is the task this step takes, which is reserved and handed on in one act"
+            ),
+            hint: Some(format!(
+                "take it with `{} automation take <task>`",
+                amenbo_core::config::Paths::command_name()
+            )),
+            exit: 2,
+        }),
+        Some(AutomationPortKind::TaskMake) => {
+            let task = resolve_task(store, text.trim()).map_err(CliError::from)?;
+            store.automation_out(step, &name, Produced::Task(task)).map_err(CliError::from)
+        }
+        // A name the step declares nothing under is refused by core, in the sentence it has for it.
+        _ => store.automation_out(step, &name, Produced::Value(&text)).map_err(CliError::from),
+    }
+}
+
 fn parse_produced(one: &str) -> Result<(String, String), CliError> {
     match one.split_once('=') {
         Some((name, value)) if !name.trim().is_empty() => {

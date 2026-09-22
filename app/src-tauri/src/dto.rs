@@ -658,12 +658,6 @@ pub struct Snapshot {
     /// gave: a project already carries its own `view`, and this never repaints one.
     #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
     pub(crate) default_view: String,
-    /// The lane count the settings row and the workspace band still draw. There is no such setting
-    /// any more (`AMB-D-947`) — nothing caps how many runs may be under way — so what goes out is a
-    /// fixed figure ([`crate::commands`]) and it stops moving. It goes when those two places do
-    /// (`AMB-T-5302`).
-    #[ts(type = "number")]
-    pub(crate) automation_lanes: i64,
 }
 
 /// The startup integrity check, shaped for the GUI: it feeds a read-only warning banner. Empty means
@@ -3436,17 +3430,15 @@ pub struct AutomationLaunchCheckDto {
 
 /// **A run, just launched** — what the press is answered with.
 ///
-/// `queued` is always `false`: a launch starts on the spot, nothing being in line ahead of it
-/// (`AMB-D-947`). It is still here because the screen still reads it, and goes when that does
-/// (`AMB-T-5302`). A run says nothing beyond its id — the pane arriving is what it looks like, and
-/// that comes as an event ([`AutomationStepOpenDto`]).
+/// A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
+/// (`AMB-D-947`), and the pane arriving is what it looks like — that comes as an event
+/// ([`AutomationStepOpenDto`]).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRunStartedDto {
     #[ts(type = "number")]
     pub(crate) run: i64,
-    pub(crate) queued: bool,
 }
 
 /// **A step of a run, opened** — what the workspace stands a terminal on
@@ -3557,9 +3549,8 @@ pub struct AutomationLaunchBlockDto {
 /// **One run in the "running" tab** — what is going on right now, on one line.
 ///
 /// It crosses projects, so it names the project each run is in: a run holds a terminal on this
-/// machine, and this machine is not divided up per project. The band over the panes draws the count
-/// and says nothing more, and this is where a reader comes to see what the count is made of
-/// ([`crate::automation::automation_lanes_held`]).
+/// machine, and this machine is not divided up per project. This tab is the one place a reader sees
+/// everything that is under way at once.
 ///
 /// **The name each row is read by is the automation's, not the run's.** A run has no name — what a
 /// person recognises is the automation they started and the task it is on.
@@ -3579,7 +3570,7 @@ pub struct AutomationRunCardDto {
     /// What the automation was called at launch. Read from the run's own copy of the entry step's
     /// automation where the definition has since been deleted, and empty where neither is left.
     pub(crate) automation_name: String,
-    #[ts(type = "\"queued\" | \"running\" | \"paused\" | \"stopped\"")]
+    #[ts(type = "\"running\" | \"paused\" | \"stopped\"")]
     pub(crate) status: &'static str,
     /// Whether a pause has been asked for and the step under way has not reported yet. The run is
     /// still `running` — this is the gap between the button and the pause

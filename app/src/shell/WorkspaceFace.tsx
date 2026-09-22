@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { EmptySlot } from "./EmptySlot";
 import { FolderChoice } from "./FolderChoice";
@@ -43,8 +43,7 @@ import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mu
 import { dataAdapter } from "../mock/adapter";
 import { invoke } from "../core/ipc";
 import type { PtySessionDto } from "../bindings/bindings";
-import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
-import { useLanesHeld } from "../core/automations";
+import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
@@ -181,7 +180,6 @@ export function WorkspaceFace({
   note,
   projectId,
   onOpenLedger,
-  onSettings,
   openIn,
 }: {
   /** The one button that changes how many windows the app is: on the board it takes the workspace
@@ -209,12 +207,6 @@ export function WorkspaceFace({
    *  the workspace was split out into: the ledger is the other window there, and raising it is the
    *  host's (`crate::windows::show_ref`, `../core/refNav`). */
   onOpenLedger?: () => void;
-  /** Put the settings screen up, for the lane count on the band. Where the settings are is the other
-   *  side of the app, so the two windows answer this differently: on the board it is a move this
-   *  shell makes, and in the window the workspace was split out into it is the host's
-   *  (`crate::windows::show_settings`). Nothing where neither can be done, and then the band draws
-   *  the number without a way in. */
-  onSettings?: () => void;
   /**
    * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
    * the count being what makes pressing the button twice two asks rather than a state that has not
@@ -234,11 +226,6 @@ export function WorkspaceFace({
   openIn?: { project: number; dir?: string; pane?: string; run?: number; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  // The two halves of the lane count on the band. They come from different places on purpose: how
-  // many lanes there are is a setting and rides in the snapshot, while how many are held moves when a
-  // run somebody else started takes one, and so hangs off the change feed (`../core/automations`).
-  const lanesHeld = useLanesHeld();
-  const lanes = useSyncExternalStore(subscribe, () => getSnapshot().automationLanes);
   // The reading column itself, so a press can be told apart from one inside it (`isBlankSpaceClose`).
   const sideRef = useRef<HTMLDivElement>(null);
   // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
@@ -1512,24 +1499,6 @@ export function WorkspaceFace({
             ))}
           </nav>
         )}
-        {/* **How many lanes the automations are holding, out of how many there are.** The band over
-            the panes is the screen that is up longest in a day, so the number is read here rather
-            than looked for — and the press goes to the one setting the second half of it is
-            (`../core/automations`, `../screens/SettingsScreen`).
-
-            **What it does not say is which lane is waiting for what.** The lanes cross projects, so
-            the number and the panes of the project being looked at are not one to one, and a band
-            that tried to explain the difference would be the "running" tab written twice. */}
-        <button
-          className="workspace__lanes"
-          onClick={() => onSettings?.()}
-          disabled={onSettings === undefined}
-          aria-label={tf("face.lanesHeld", { held: lanesHeld, lanes })}
-          title={tf("face.lanesHeld", { held: lanesHeld, lanes })}
-        >
-          <Icon name="rocket" />
-          <span className="workspace__lanesCount">{lanesHeld}/{lanes}</span>
-        </button>
         {note !== null && <span className="workspace__note">{note}</span>}
         {/* The way to the reading column, at the far end because it is about the other side of the
             screen. It opens the column and closes it again, and what comes up is the face the

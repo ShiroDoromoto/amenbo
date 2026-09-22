@@ -14,7 +14,7 @@ import type { AutomationCardDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   automations: [] as AutomationCardDto[],
-  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1, queued: false })),
+  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -56,7 +56,7 @@ beforeEach(() => {
   root = createRoot(container);
   hoisted.automations = [];
   hoisted.launch.mockClear();
-  hoisted.launch.mockResolvedValue({ run: 1, queued: false });
+  hoisted.launch.mockResolvedValue({ run: 1 });
 });
 
 afterEach(() => {
@@ -99,14 +99,6 @@ describe("the press", () => {
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], false);
   });
 
-  it("says a run took no lane", async () => {
-    hoisted.launch.mockResolvedValue({ run: 3, queued: true });
-    hoisted.automations = [card()];
-    await render();
-    await act(async () => { button("Morning round").click(); });
-    expect(container.textContent).toContain(t("auto.queued"));
-  });
-
   it("puts a refusal in front of the reader, in the words core refused with", async () => {
     hoisted.launch.mockRejectedValue({
       code: "invalid",
@@ -118,14 +110,14 @@ describe("the press", () => {
     expect(container.textContent).toContain("the workspace is closed");
   });
 
-  it("clears the last answer when the next press is made", async () => {
-    hoisted.launch.mockResolvedValue({ run: 3, queued: true });
+  it("clears the last refusal when the next press is made", async () => {
+    hoisted.launch.mockRejectedValue({ code: "invalid", message_en: "the workspace is closed" });
     hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
-    expect(container.textContent).toContain(t("auto.queued"));
-    hoisted.launch.mockResolvedValue({ run: 4, queued: false });
+    expect(container.textContent).toContain("the workspace is closed");
+    hoisted.launch.mockResolvedValue({ run: 4 });
     await act(async () => { button("Morning round").click(); });
-    expect(container.textContent).not.toContain(t("auto.queued"));
+    expect(container.textContent).not.toContain("the workspace is closed");
   });
 });

@@ -22,7 +22,7 @@ const hoisted = vi.hoisted(() => ({
   automations: [] as AutomationCardDto[],
   detail: null as AutomationDetailDto | null,
   check: null as AutomationLaunchCheckDto | null,
-  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1, queued: false })),
+  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -106,7 +106,7 @@ beforeEach(() => {
   hoisted.detail = null;
   hoisted.check = null;
   hoisted.launch.mockClear();
-  hoisted.launch.mockResolvedValue({ run: 1, queued: false });
+  hoisted.launch.mockResolvedValue({ run: 1 });
 });
 
 afterEach(() => {
@@ -259,19 +259,12 @@ describe("the press that starts a run", () => {
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false);
   });
 
-  it("says a run took no lane, rather than leaving the press unanswered", async () => {
-    hoisted.launch.mockResolvedValue({ run: 3, queued: true });
+  it("says nothing of its own once the launch lands", async () => {
+    // What a launch looks like is the pane arriving, which is the workspace's and not this screen's
+    // (`../talk/automationStep`). Nothing here stands in for it.
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
-    expect(container.textContent).toContain(t("auto.queued"));
-  });
-
-  it("says nothing about a queue where the run took a lane", async () => {
-    // What it looks like is the pane arriving, which is the workspace's and not this screen's
-    // (`../talk/automationStep`).
-    await open({ ready: true, blocks: [] });
-    await act(async () => { button(t("auto.start")).click(); });
-    expect(container.textContent).not.toContain(t("auto.queued"));
+    expect(container.querySelector(".auto__notready")).toBeNull();
   });
 
   /** Press start, with the launch rejecting with this. */

@@ -33,8 +33,6 @@ const hoisted = vi.hoisted(() => ({
   devBadge: null as string | null,
   /** Every view `setDefaultView` was asked to write, in the order the pull-down asked for them. */
   defaultViews: [] as string[],
-  /** Every lane count `setAutomationLanes` was asked to write, in order. */
-  lanes: [] as number[],
   /** Every answer the tick row wrote, in order (`true` is a yes). */
   tickAnswers: [] as boolean[],
   /** What `answerTick` should refuse with, or null to let it land. */
@@ -82,7 +80,6 @@ vi.mock("../core/mutations", () => {
     setFacetNames: noop, setFacetAvatar: noop, setLanguage: noop, setPerfLog: noop, setUpdateCheck: noop,
     setAutostart: noop,
     setDefaultView: (view: string) => { hoisted.defaultViews.push(view); return Promise.resolve(); },
-    setAutomationLanes: (lanes: number) => { hoisted.lanes.push(lanes); return Promise.resolve(); },
     answerTick: (yes: boolean) => {
       if (hoisted.tickFails) return Promise.reject(new Error(hoisted.tickFails));
       hoisted.tickAnswers.push(yes);
@@ -179,7 +176,6 @@ beforeEach(() => {
   hoisted.restoreReport = restored();
   hoisted.devBadge = null;
   hoisted.defaultViews = [];
-  hoisted.lanes = [];
   hoisted.tickAnswers = [];
   hoisted.tickFails = null;
   setAsksBeforeTrash(true);
@@ -442,26 +438,6 @@ describe("Settings > Appearance (the view a project created without one opens in
       pick.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(hoisted.defaultViews).toEqual(["calendar"]);
-  });
-});
-
-// How many automation runs may be under way at once (`AMB-T-5244`). The row is a list rather than a
-// box to type in, so what is pinned is that every value it offers is one core will take — a list
-// running past the ceiling would offer a press that is only going to be refused.
-describe("Settings > Automations (how many lanes there are)", () => {
-  it("stands at the value config holds, and writes the one that is chosen", async () => {
-    await render();
-    expect(rowLabels()).toContain(t("settings.lanes"));
-    const pick = selectInRow(t("settings.lanes"));
-    // Core's own default, as the empty snapshot carries it.
-    expect(pick.value).toBe("3");
-    expect([...pick.options].map((o) => o.value)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
-
-    await act(async () => {
-      pick.value = "5";
-      pick.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(hoisted.lanes).toEqual([5]);
   });
 });
 

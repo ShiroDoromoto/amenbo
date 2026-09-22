@@ -5,7 +5,7 @@ import {
   answerTick,
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
-  runExport, runRestore, setAutomationLanes, setAutostart, setDefaultView, setFacetNames, setLanguage,
+  runExport, runRestore, setAutostart, setDefaultView, setFacetNames, setLanguage,
   setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
 import { AppearanceSettings } from "../components/AppearanceSettings";
@@ -101,14 +101,6 @@ export function SettingsScreen() {
           <UpdateCheckSetting />
         </Category>
       )}
-
-      {/* The one number the automations share (`AMB-T-5244`). It is the device's and not a project's:
-          a lane is a terminal on this machine and the attention of the person watching it, and
-          neither is divided up per project — a number held per project would let three projects open
-          nine terminals on somebody who asked for three. */}
-      <Category title={t("settings.automation")}>
-        <LanesSetting />
-      </Category>
 
       <Category title={t("settings.developer")}>
         <PerfLogSetting />
@@ -820,45 +812,6 @@ function TickSetting() {
     </div>
   );
 }
-
-/** How many automation runs may hold a lane at once (`config.automation_lanes`). A whole number from 1
- *  to `LANES_MAX`, drawn as a list rather than a box to type in: every value is reachable in one press,
- *  and a box would let a reader write a number core is only going to refuse.
- *
- *  **Lowering it stops nothing already running.** A lane is handed back when its run ends or is
- *  paused, so the number a reader sees on the band can stand above this one until then — which is what
- *  the note under the control says, rather than leaving it to be discovered. */
-function LanesSetting() {
-  const lanes = useSyncExternalStore(subscribe, () => getSnapshot().automationLanes);
-  const [error, setError] = useState<string | null>(null);
-  const change = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setError(null);
-    try {
-      await setAutomationLanes(Number(e.target.value));
-    } catch (err) {
-      setError(errText(err));
-    }
-  };
-  return (
-    <div className="settings__row">
-      <span className="settings__k">{t("settings.lanes")}</span>
-      <span>
-        <select className="btn" value={lanes} onChange={(e) => void change(e)}>
-          {Array.from({ length: LANES_OFFERED }, (_, i) => i + 1).map((n) => (
-            <option key={n} value={n}>{n}</option>
-          ))}
-        </select>
-        <div className="meta">{t("settings.lanesNote")}</div>
-        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
-      </span>
-    </div>
-  );
-}
-
-/** How many lanes the list offers. Core takes up to 32 (`amenbo_core::config::LANES_MAX`), and what is
- *  offered here stops well short of it: a lane is a terminal somebody watches, and a list running to
- *  thirty-two would be scrolled past rather than read. The rest is reachable from `config set`. */
-const LANES_OFFERED = 8;
 
 function Category({ title, children }: { title: string; children: React.ReactNode }) {
   return (

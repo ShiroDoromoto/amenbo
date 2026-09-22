@@ -26,12 +26,11 @@ import { errText, t } from "../core/i18n";
 /**
  * The press behind either entrance: launch, and hold what came back.
  *
- * `refused` is core's sentence and `queued` is a run that took no lane. Both are cleared by the next
- * press, because what a reader is owed is the outcome of the press they just made.
+ * `refused` is core's sentence, cleared by the next press: what a reader is owed is the outcome of
+ * the press they just made.
  */
 export function useAutomationStart(projectId: number | null, workspaceOpen: boolean) {
   const [refused, setRefused] = useState<string | null>(null);
-  const [queued, setQueued] = useState(false);
   // A press already out. The answer carries the pane the run opens in, so a second press before the
   // first lands would be a second run nobody asked for.
   const [starting, setStarting] = useState(false);
@@ -39,11 +38,9 @@ export function useAutomationStart(projectId: number | null, workspaceOpen: bool
   const start = useCallback(async (id: number, folders: readonly string[]) => {
     if (projectId === null) return;
     setRefused(null);
-    setQueued(false);
     setStarting(true);
     try {
-      const started = await launchAutomation(id, projectId, folders, workspaceOpen);
-      setQueued(started?.queued ?? false);
+      await launchAutomation(id, projectId, folders, workspaceOpen);
     } catch (e) {
       setRefused(errText(e));
     } finally {
@@ -51,7 +48,7 @@ export function useAutomationStart(projectId: number | null, workspaceOpen: bool
     }
   }, [projectId, workspaceOpen]);
 
-  return { start, refused, queued, starting };
+  return { start, refused, starting };
 }
 
 export function StartAutomation({
@@ -70,7 +67,7 @@ export function StartAutomation({
   workspaceOpen: boolean;
 }) {
   const automations = useAutomations(projectId);
-  const { start, refused, queued, starting } = useAutomationStart(projectId, workspaceOpen);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
   const live = automations.filter((one) => !one.archived);
 
   if (live.length === 0) return null;
@@ -91,7 +88,6 @@ export function StartAutomation({
           </button>
         ))}
       </div>
-      {queued && <p className="autostart__note">{t("auto.queued")}</p>}
       {refused !== null && <p className="autostart__refused">{refused}</p>}
     </div>
   );

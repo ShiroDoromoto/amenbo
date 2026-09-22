@@ -4213,12 +4213,6 @@ const REGISTRY: &[OpSpec] = &[
     // whichever it took.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
     //
-    // The band over the workspace's panes: how many lanes the runs are holding, out of how many there
-    // are. Pressing it lands on the setting that holds the second number.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lanes", required: &["held", "of"], refs: &[], strings: &[], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-lanes", required: &[], refs: &[], strings: &[], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lanes-setting", required: &["of"], refs: &[], strings: &[], binds: false },
-    //
     // A row of the "running" tab. It draws every run this device is carrying, across projects, so the
     // row names the project as well as the state.
     //

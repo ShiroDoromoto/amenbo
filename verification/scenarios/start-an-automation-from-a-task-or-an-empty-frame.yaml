@@ -9,8 +9,8 @@ title: A run is started from a task's own pane and from an empty frame, and is t
 description: >
   Stand one definition up and start it twice, from the two ways in that are not the build screen: the
   control on a task's pane, and the one an empty frame of the workspace carries. Each is read by the
-  pane it stands up and by the lane it took. Both are walked in one road because what is under test
-  is that they agree — a single way in proves only itself.
+  pane it stands up and by its row on the running tab. Both are walked in one road because what is
+  under test is that they agree — a single way in proves only itself.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the one a run is started from }, as: seed }
@@ -62,12 +62,6 @@ steps_gui:
       step: take
       present: true
 
-  - type: assert
-    domain: automation
-    op: lanes
-    with:
-      held: 1
-      of: 3
 
   # The second way in: the box a page with room on it draws where the next pane would land.
   - type: action
@@ -85,14 +79,6 @@ steps_gui:
       step: take
       present: true
 
-  # Two runs, two lanes. A build where the second press found the first run and came back with it
-  # would draw one pane and hold one lane, and both of the asserts above would still be green.
-  - type: assert
-    domain: automation
-    op: lanes
-    with:
-      held: 2
-      of: 3
 
   # And both are on the tab that draws every run this device is carrying.
   - type: action

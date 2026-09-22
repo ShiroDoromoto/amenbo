@@ -5,8 +5,9 @@
 // What these guard: **the steps inside the action are the boxes of the picture** (`AMB-D-949`), so a
 // reader presses a step rather than reading a list; **the press that writes the first one says so
 // while the picture is empty**, that being where there is no line to press and nowhere else to
-// start; and **an action nothing opens says so**, that being what the launch check would refuse a
-// placement of it for.
+// start; **an action nothing opens says so**, that being what the launch check would refuse a
+// placement of it for; and **what the action is for is written when the caret leaves it**, the way the
+// automation's notes are (`AMB-D-952`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,6 +76,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
   return {
     id: 4,
     name: "Take one",
+    note: "",
     global: false,
     usedBy: 1,
     entryStepId: 11,
@@ -103,6 +105,26 @@ async function render() {
 const nodes = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__node")];
 const buttons = () => [...container.querySelectorAll<HTMLButtonElement>("button")];
 const has = (label: string) => buttons().some((one) => one.textContent === label);
+const textareas = () => [...container.querySelectorAll("textarea")];
+
+/** The note's box — the field labelled with it, on the part of the screen that is the action's own. */
+function noteBox(): HTMLTextAreaElement {
+  const field = [...container.querySelectorAll("label")].find(
+    (one) => one.querySelector(".autostep__label")?.textContent === t("auto.actions.note"),
+  );
+  return field!.querySelector("textarea")!;
+}
+
+/** Typing into a controlled field: React listens for `input`, not for the value being assigned. */
+function type(field: HTMLTextAreaElement, text: string) {
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, text);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/** The caret leaving a field, which is what React's `onBlur` listens for. */
+function leave(field: HTMLElement) {
+  field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+}
 
 beforeEach(() => {
   container = document.createElement("div");
@@ -135,7 +157,7 @@ describe("the action build screen", () => {
     await render();
     expect(container.textContent).toContain(t("auto.act.stepNone"));
     await act(async () => nodes()[0]!.click());
-    expect(container.querySelector("textarea")!.value).toBe("take one");
+    expect(textareas().map((one) => one.value)).toContain("take one");
   });
 
   it("offers the first step while the picture is empty, and not once there is one", async () => {
@@ -147,6 +169,26 @@ describe("the action build screen", () => {
     hoisted.action = action();
     await render();
     expect(has(t("auto.act.firstStep"))).toBe(false);
+  });
+
+  it("shows what the action is for, and writes it when the caret leaves the box", async () => {
+    hoisted.action = action({ note: "Takes the next task off the queue" });
+    await render();
+    expect(noteBox().value).toBe("Takes the next task off the queue");
+    expect(container.textContent).toContain(t("auto.actions.noteWhat"));
+
+    await act(async () => {
+      type(noteBox(), "Takes one task");
+      leave(noteBox());
+    });
+    expect(hoisted.editAction).toHaveBeenCalledWith(4, { note: "Takes one task" });
+  });
+
+  it("writes nothing when the caret leaves a note it did not change", async () => {
+    hoisted.action = action({ note: "Takes one task" });
+    await render();
+    await act(async () => leave(noteBox()));
+    expect(hoisted.editAction).not.toHaveBeenCalled();
   });
 
   it("says when no step is opened first", async () => {

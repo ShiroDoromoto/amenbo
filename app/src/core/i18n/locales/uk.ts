@@ -1019,6 +1019,8 @@ export const uk: Translation = {
     "auto.actions.unused": "Жодна автоматизація її не виконує",
     "auto.actions.usedBy.one": "Її виконує {n} автоматизація", "auto.actions.usedBy.few": "Її виконують {n} автоматизації", "auto.actions.usedBy.many": "Її виконують {n} автоматизацій", "auto.actions.usedBy.other": "Її виконують {n} автоматизації",
     "auto.actions.name": "Назва",
+    "auto.actions.note": "Нотатки",
+    "auto.actions.noteWhat": "Видно лише тут і в списку дій. Ніщо звідси не потрапляє до виконання.",
     "auto.actions.cancel": "Скасувати",
     "auto.act.about": "Ця дія",
     "auto.act.step": "Що містить крок",

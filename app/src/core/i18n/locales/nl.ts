@@ -1002,6 +1002,8 @@ export const nl: Translation = {
     "auto.actions.unused": "Geen automatisering gebruikt hem",
     "auto.actions.usedBy.one": "{n} automatisering gebruikt hem", "auto.actions.usedBy.other": "{n} automatiseringen gebruiken hem",
     "auto.actions.name": "Naam",
+    "auto.actions.note": "Notities",
+    "auto.actions.noteWhat": "Alleen hier en in de lijst met acties te zien. Niets hiervan bereikt een uitvoering.",
     "auto.actions.cancel": "Annuleren",
     "auto.act.about": "Deze actie",
     "auto.act.step": "Wat de stap bevat",

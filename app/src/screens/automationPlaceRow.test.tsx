@@ -38,7 +38,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function card(over: Partial<AutomationActionCardDto> & { id: number; name: string }) {
-  return { prompt: "", steps: 1, global: false, usedBy: 0, ...over };
+  return { note: "", steps: 1, global: false, usedBy: 0, ...over };
 }
 
 async function render() {

@@ -1304,6 +1304,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .auto__row:hover { background: var(--c-hover); }
 .auto__name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .auto__mark { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* What a library action is for, under its name on the row — one line, cut where it runs out. */
+.auto__note {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
 .auto__steps { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The way back to the list, and the name of the automation that is open, on one line. */
 .auto__head { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); font-weight: var(--fw-bold); }

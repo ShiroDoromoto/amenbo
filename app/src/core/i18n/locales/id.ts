@@ -1003,6 +1003,8 @@ export const id: Translation = {
     "auto.actions.unused": "Belum ada otomasi yang memakainya",
     "auto.actions.usedBy.other": "Dipakai {n} otomasi",
     "auto.actions.name": "Nama",
+    "auto.actions.note": "Catatan",
+    "auto.actions.noteWhat": "Hanya tampil di sini dan di daftar aksi. Tidak ada yang sampai ke sebuah jalannya.",
     "auto.actions.cancel": "Batal",
     "auto.act.about": "Aksi ini",
     "auto.act.step": "Isi langkah",

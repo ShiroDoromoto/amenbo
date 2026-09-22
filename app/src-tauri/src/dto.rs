@@ -3266,6 +3266,9 @@ pub struct AutomationActionCardDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
+    /// What it is for, as its author wrote it. It is on the row because it is what a reader tells two
+    /// actions of like names apart by, and it never reaches a launch (`AMB-D-952`).
+    pub(crate) note: String,
     /// How many steps it holds. One is the shape every action folded out of a v52 step has.
     #[ts(type = "number")]
     pub(crate) steps: usize,
@@ -3355,6 +3358,9 @@ pub struct AutomationActionDetailDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
+    /// What it is for — drawn where it is built and on the library's row, never carried into a launch
+    /// (`AMB-D-952`).
+    pub(crate) note: String,
     /// Held by the device rather than by one project — the reach, as the library list draws it.
     pub(crate) global: bool,
     /// How many automations place it: what a rewrite here reaches.

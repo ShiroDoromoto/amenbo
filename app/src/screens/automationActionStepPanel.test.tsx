@@ -85,6 +85,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
   return {
     id: 4,
     name: "Take one",
+    note: "",
     global: false,
     usedBy: 1,
     entryStepId: 11,

@@ -1004,6 +1004,8 @@ export const zhHant: Translation = {
     "auto.actions.unused": "沒有自動化在用",
     "auto.actions.usedBy.other": "{n} 個自動化在用",
     "auto.actions.name": "名稱",
+    "auto.actions.note": "備註",
+    "auto.actions.noteWhat": "只顯示在這裡和動作列表中。這裡的內容不會進入執行。",
     "auto.actions.cancel": "取消",
     "auto.act.about": "這個動作",
     "auto.act.step": "步驟裡有什麼",

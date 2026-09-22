@@ -1003,6 +1003,8 @@ export const th: Translation = {
     "auto.actions.unused": "ยังไม่มีออโตเมชันใดใช้",
     "auto.actions.usedBy.other": "ออโตเมชัน {n} รายการใช้อยู่",
     "auto.actions.name": "ชื่อ",
+    "auto.actions.note": "บันทึก",
+    "auto.actions.noteWhat": "แสดงที่นี่และในรายการแอ็กชันเท่านั้น ไม่มีอะไรจากตรงนี้เข้าไปในการทำงาน",
     "auto.actions.cancel": "ยกเลิก",
     "auto.act.about": "แอ็กชันนี้",
     "auto.act.step": "สิ่งที่อยู่ในขั้นตอน",

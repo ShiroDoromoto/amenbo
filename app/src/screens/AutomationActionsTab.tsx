@@ -11,6 +11,9 @@
 // automations rather than steps: two steps of one automation is one automation whose runs change,
 // and what a reader weighs is how far the rewrite carries, not how often the pointer occurs.
 //
+// **Under the name, the row carries the first line of what the action is for** (`AMB-D-952`) — the
+// note written on the build screen, which is what tells two actions of like names apart.
+//
 // **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
 // prompts written. Making one here asks for a name and a reach and no prompt: an action is born
 // empty, and the screen the press lands on is where the words go.
@@ -19,6 +22,14 @@ import { addAutomationAction, useAutomationActions } from "../core/automations";
 import { asTyped } from "../core/keys";
 import { errText, t, tn } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
+
+/**
+ * **The row carries the note's first line, and no more.** It is what tells two actions of like names
+ * apart, which one line does; the whole of it is on the build screen a press on the row opens.
+ */
+function firstLine(note: string): string {
+  return note.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+}
 
 export function AutomationActionsTab({
   projectId,
@@ -61,7 +72,12 @@ export function AutomationActionsTab({
           {actions.map((one) => (
             <li key={one.id}>
               <button type="button" className="auto__row" onClick={() => onOpen(one.id)}>
-                <span className="auto__name">{one.name}</span>
+                <span className="auto__name">
+                  {one.name}
+                  {firstLine(one.note) !== "" && (
+                    <span className="auto__note">{firstLine(one.note)}</span>
+                  )}
+                </span>
                 <span className="auto__mark">
                   {one.global ? t("auto.actions.reachDevice") : t("auto.actions.reachProject")}
                 </span>

@@ -1006,6 +1006,8 @@ export const de: Translation = {
     "auto.actions.unused": "Keine Automation führt sie aus",
     "auto.actions.usedBy.one": "{n} Automation führt sie aus", "auto.actions.usedBy.other": "{n} Automationen führen sie aus",
     "auto.actions.name": "Name",
+    "auto.actions.note": "Notizen",
+    "auto.actions.noteWhat": "Nur hier und in der Aktionsliste zu sehen. Nichts davon erreicht einen Lauf.",
     "auto.actions.cancel": "Abbrechen",
     "auto.act.about": "Diese Aktion",
     "auto.act.step": "Was der Schritt enthält",

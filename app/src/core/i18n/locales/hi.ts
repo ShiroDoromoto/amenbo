@@ -1002,6 +1002,8 @@ export const hi: Translation = {
     "auto.actions.unused": "कोई ऑटोमेशन इसे नहीं चलाता",
     "auto.actions.usedBy.one": "{n} ऑटोमेशन इसे चलाता है", "auto.actions.usedBy.other": "{n} ऑटोमेशन इसे चलाते हैं",
     "auto.actions.name": "नाम",
+    "auto.actions.note": "नोट",
+    "auto.actions.noteWhat": "सिर्फ़ यहाँ और ऐक्शन की सूची में दिखते हैं। यहाँ से कुछ भी किसी रन तक नहीं पहुँचता।",
     "auto.actions.cancel": "रद्द करें",
     "auto.act.about": "यह ऐक्शन",
     "auto.act.step": "चरण में क्या है",

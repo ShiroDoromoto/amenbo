@@ -1015,6 +1015,8 @@ export const ptBR: Translation = {
     "auto.actions.unused": "Nenhuma automação a executa",
     "auto.actions.usedBy.one": "{n} automação a executa", "auto.actions.usedBy.many": "{n} de automações a executam", "auto.actions.usedBy.other": "{n} automações a executam",
     "auto.actions.name": "Nome",
+    "auto.actions.note": "Notas",
+    "auto.actions.noteWhat": "Aparecem apenas aqui e na lista de ações. Nada daqui chega a uma execução.",
     "auto.actions.cancel": "Cancelar",
     "auto.act.about": "Esta ação",
     "auto.act.step": "O que o passo contém",

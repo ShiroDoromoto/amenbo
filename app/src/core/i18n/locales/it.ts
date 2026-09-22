@@ -1014,6 +1014,8 @@ export const it: Translation = {
     "auto.actions.unused": "Nessuna automazione la esegue",
     "auto.actions.usedBy.one": "{n} automazione la esegue", "auto.actions.usedBy.many": "{n} di automazioni la eseguono", "auto.actions.usedBy.other": "{n} automazioni la eseguono",
     "auto.actions.name": "Nome",
+    "auto.actions.note": "Note",
+    "auto.actions.noteWhat": "Compaiono solo qui e nell'elenco delle azioni. Niente di ciò arriva a un'esecuzione.",
     "auto.actions.cancel": "Annulla",
     "auto.act.about": "Questa azione",
     "auto.act.step": "Che cosa contiene il passo",

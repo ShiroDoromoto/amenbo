@@ -39,6 +39,7 @@ function action(over: Partial<AutomationActionCardDto> = {}): AutomationActionCa
   return {
     id: 3,
     name: "Take one",
+    note: "",
     steps: 1,
     global: false,
     usedBy: 2,
@@ -110,6 +111,18 @@ describe("the library", () => {
     hoisted.actions = [action({ usedBy: 4 })];
     await render();
     expect(rows()[0]).toContain(tn("auto.actions.usedBy", 4));
+  });
+
+  it("carries the first line of what an action is for, and nothing where none is written", async () => {
+    hoisted.actions = [
+      action({ id: 1, name: "Report", note: "\nSays what the run did\nand where it stopped" }),
+      action({ id: 2, name: "Take one", note: "" }),
+    ];
+    await render();
+    const notes = [...container.querySelectorAll(".auto__row")].map(
+      (one) => one.querySelector(".auto__note")?.textContent ?? null,
+    );
+    expect(notes).toEqual(["Says what the run did", null]);
   });
 
   it("says in words that nobody runs one, rather than counting to zero", async () => {

@@ -1251,6 +1251,8 @@ const ui = {
   "auto.actions.unused": "No automation runs it",
   "auto.actions.usedBy.one": "Run by {n} automation", "auto.actions.usedBy.other": "Run by {n} automations",
   "auto.actions.name": "Name",
+  "auto.actions.note": "Notes",
+  "auto.actions.noteWhat": "Drawn here and on the library's row. Nothing here reaches a run.",
   "auto.actions.cancel": "Cancel",
   "auto.act.about": "This action",
   "auto.act.step": "What the step holds",

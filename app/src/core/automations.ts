@@ -143,18 +143,22 @@ export async function addAutomationAction(name: string, project: number | null):
 }
 
 /**
- * Rename a library action. The name is all that is the action's own: the prompt, the agent and the
- * flags belong to its steps (`editAutomationStep`).
+ * Rename a library action, or rewrite what it is for. The name and the note are all that is the
+ * action's own: the prompt, the agent and the flags belong to its steps (`editAutomationStep`).
  *
  * **Every picture standing on this action reads the new name at once**, a placement pointing at it
- * by key — which is what a library is for.
+ * by key — which is what a library is for. The note reaches no launch (`AMB-D-952`).
  */
 export async function editAutomationAction(
   id: number,
-  patch: { name?: string },
+  patch: { name?: string; note?: string },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_edit", { id, name: patch.name ?? null });
+  return invokeAck("automation_action_edit", {
+    id,
+    name: patch.name ?? null,
+    note: patch.note ?? null,
+  });
 }
 
 /**

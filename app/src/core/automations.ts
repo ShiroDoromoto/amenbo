@@ -90,6 +90,18 @@ export function useAutomationActions(projectId: number | null): AutomationAction
 }
 
 /**
+ * **Make a library action** — its name, and which library it lands in.
+ *
+ * `project` is `null` for the device's library, which every project on this machine reaches, and the
+ * project's id for its own. There is no prompt: it is written afterwards in the box the list opens
+ * on the new row (`editAutomationAction`), which is the only place a prompt is written.
+ */
+export async function addAutomationAction(name: string, project: number | null): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_add", { name, project });
+}
+
+/**
  * Rename a library action, or rewrite its prompt. Only what is passed is written.
  *
  * **The rewrite reaches every step pointing at this action**, which is what a library is for — and

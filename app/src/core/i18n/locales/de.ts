@@ -992,6 +992,8 @@ export const de: Translation = {
     "auto.step.cfgKind.text": "Text",
     "auto.step.declaresFromAction": "Ausgänge, Einstellungen und Eingaben kommen ebenfalls aus {action}. Deklariert werden sie im Tab „Aktionen“.",
     "auto.actions.empty": "Die Bibliothek enthält noch keine Aktionen.",
+    "auto.actions.add": "Aktion anlegen",
+    "auto.actions.reach": "Reichweite",
     "auto.actions.reachDevice": "Dieses Gerät",
     "auto.actions.reachProject": "Dieses Projekt",
     "auto.actions.unused": "Keine Automation führt sie aus",

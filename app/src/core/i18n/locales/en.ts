@@ -1237,6 +1237,8 @@ const ui = {
   "auto.step.cfgKind.text": "Text",
   "auto.step.declaresFromAction": "Its ways out, settings and inputs come from {action} too. Declare them in the actions tab.",
   "auto.actions.empty": "The library has no actions yet.",
+  "auto.actions.add": "Add an action",
+  "auto.actions.reach": "Reach",
   "auto.actions.reachDevice": "This device",
   "auto.actions.reachProject": "This project",
   "auto.actions.unused": "No automation runs it",

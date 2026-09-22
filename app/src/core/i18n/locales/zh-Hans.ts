@@ -990,6 +990,8 @@ export const zhHans: Translation = {
     "auto.step.cfgKind.text": "文本",
     "auto.step.declaresFromAction": "出口、设置和输入参数也来自 {action}。要加请去「动作」标签页。",
     "auto.actions.empty": "库中还没有动作。",
+    "auto.actions.add": "新建动作",
+    "auto.actions.reach": "适用范围",
     "auto.actions.reachDevice": "本设备",
     "auto.actions.reachProject": "本项目",
     "auto.actions.unused": "没有自动化在用",

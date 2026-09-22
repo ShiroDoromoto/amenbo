@@ -1001,6 +1001,8 @@ export const ptBR: Translation = {
     "auto.step.cfgKind.text": "Texto",
     "auto.step.declaresFromAction": "Saídas, ajustes e entradas também vêm de {action}. Declare-os na aba de ações.",
     "auto.actions.empty": "A biblioteca ainda não tem ações.",
+    "auto.actions.add": "Criar ação",
+    "auto.actions.reach": "Alcance",
     "auto.actions.reachDevice": "Este dispositivo",
     "auto.actions.reachProject": "Este projeto",
     "auto.actions.unused": "Nenhuma automação a executa",

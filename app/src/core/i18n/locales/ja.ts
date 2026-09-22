@@ -994,6 +994,8 @@ export const ja: Translation = {
     "auto.step.cfgKind.text": "文字列",
     "auto.step.declaresFromAction": "終了条件・設定・入力パラメータも {action} のもの。足すのは「アクション」タブ",
     "auto.actions.empty": "ライブラリにアクションはまだありません",
+    "auto.actions.add": "アクションを作る",
+    "auto.actions.reach": "届く範囲",
     "auto.actions.reachDevice": "この端末",
     "auto.actions.reachProject": "このプロジェクト",
     "auto.actions.unused": "使っているオートメーションは無い",

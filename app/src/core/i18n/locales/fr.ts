@@ -1000,6 +1000,8 @@ export const fr: Translation = {
     "auto.step.cfgKind.text": "Texte",
     "auto.step.declaresFromAction": "Les sorties, les réglages et les entrées viennent aussi de {action}. Déclarez-les dans l'onglet des actions.",
     "auto.actions.empty": "La bibliothèque ne contient encore aucune action.",
+    "auto.actions.add": "Créer une action",
+    "auto.actions.reach": "Portée",
     "auto.actions.reachDevice": "Cet appareil",
     "auto.actions.reachProject": "Ce projet",
     "auto.actions.unused": "Aucune automatisation ne l’exécute",

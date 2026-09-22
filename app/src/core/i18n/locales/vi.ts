@@ -989,6 +989,8 @@ export const vi: Translation = {
     "auto.step.cfgKind.text": "Văn bản",
     "auto.step.declaresFromAction": "Lối ra, thiết lập và đầu vào cũng đến từ {action}. Khai báo chúng ở thẻ hành động.",
     "auto.actions.empty": "Thư viện chưa có hành động nào.",
+    "auto.actions.add": "Tạo hành động",
+    "auto.actions.reach": "Phạm vi",
     "auto.actions.reachDevice": "Thiết bị này",
     "auto.actions.reachProject": "Dự án này",
     "auto.actions.unused": "Chưa có tự động hoá nào chạy nó",

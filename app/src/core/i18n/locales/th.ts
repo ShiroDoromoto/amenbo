@@ -989,6 +989,8 @@ export const th: Translation = {
     "auto.step.cfgKind.text": "ข้อความ",
     "auto.step.declaresFromAction": "ทางออก การตั้งค่า และอินพุต ก็มาจาก {action} เช่นกัน ประกาศได้ที่แท็บแอ็กชัน",
     "auto.actions.empty": "คลังยังไม่มีแอ็กชัน",
+    "auto.actions.add": "สร้างแอ็กชัน",
+    "auto.actions.reach": "ขอบเขต",
     "auto.actions.reachDevice": "อุปกรณ์นี้",
     "auto.actions.reachProject": "โปรเจกต์นี้",
     "auto.actions.unused": "ยังไม่มีออโตเมชันใดใช้",

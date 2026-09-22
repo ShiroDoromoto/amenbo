@@ -99,7 +99,6 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     projectId: 1,
     name: "Morning round",
     notes: "",
-    preamble: "",
     entryPlacementId: 1,
     archived: false,
     placements: [spot()],

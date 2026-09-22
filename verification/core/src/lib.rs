@@ -4004,9 +4004,9 @@ const REGISTRY: &[OpSpec] = &[
     // definition to start, and what a definition is built out of is six rows that only mean anything
     // together — so the verbs are here whole, and a road uses as many of them as its own goal needs.
     //
-    // The automation itself. `notes` and `preamble` are the two free-text fields; left out, the
-    // preamble is the standing operating rules, which is what a reader building one by hand gets.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes", "preamble"], binds: true },
+    // The automation itself. `notes` is its one free-text field — what every step is told before its
+    // own prompt is Amenbo's own, the same on every automation, so no road writes it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes"], binds: true },
     // The three fields the definition itself holds, written after it is built: its name, its notes,
     // and whether it is kept out of a reader's way. Archiving takes nothing away and stops nothing
     // already running, which is why it is one of the three rather than a verb of its own — and why

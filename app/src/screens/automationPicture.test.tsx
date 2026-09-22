@@ -44,7 +44,6 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     projectId: 1,
     name: "Morning round",
     notes: "",
-    preamble: "",
     entryPlacementId: 1,
     archived: false,
     placements: [step({ id: 1, name: "Take the next task" })],

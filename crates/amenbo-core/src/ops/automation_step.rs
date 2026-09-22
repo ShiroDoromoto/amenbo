@@ -5,12 +5,14 @@
 //! what the run has done so far, and the values wired into it. An agent that had to fetch would need a
 //! vocabulary for fetching, and every step would spend its first turns on it.
 //!
-//! **What is read from the snapshot, and what is read live.** The step's own declarations — its ways
-//! out, its inputs, its settings — come from [`crate::model::AutomationRunDef`], the copy taken at
-//! launch, so editing an automation cannot change what a run under way is doing. Three things are read
-//! live because there is no copy of them: the preamble, the shared documents, and the wires. A wire is
-//! the picture rather than the step, and the picture is walked afresh at every move; the other two are
-//! the words a person writes for the run and would be worth correcting mid-run rather than frozen.
+//! **What is read from the snapshot, what is read live, and what is neither.** The step's own
+//! declarations — its ways out, its inputs, its settings — come from
+//! [`crate::model::AutomationRunDef`], the copy taken at launch, so editing an automation cannot
+//! change what a run under way is doing. Two things are read live because there is no copy of them:
+//! the shared documents, which are the words a person writes for the run and would be worth
+//! correcting mid-run rather than frozen, and the wires, a wire being the picture rather than the
+//! step and the picture being walked afresh at every move. The preamble is neither: no row holds it,
+//! so it is composed from the build ([`crate::agents::preamble`]) at every launch.
 //!
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
@@ -155,7 +157,7 @@ pub fn open(
     for found in &handed {
         write_in(tx, &run_step, found, now)?;
     }
-    let text = compose(tx, &run, &def, &exits, &handed, stretch.as_ref())?;
+    let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
     let folder = working_folder(&def, &handed)?;
     Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text, folder })))
 }
@@ -442,21 +444,17 @@ fn write_in(
 /// holds for this one, then what it is being asked to do, and last how to hand the work back.
 ///
 /// **English, like every other sentence this crate writes.** The words that carry the work — the
-/// preamble, the shared documents, the prompt — are the person's own and arrive in whatever language
-/// they were written in; what is added around them is the frame.
+/// shared documents, the prompt — are the person's own and arrive in whatever language they were
+/// written in; what is added around them, the preamble included, is the frame.
 fn compose(
     tx: &WriteTx<'_>,
-    run: &AutomationRun,
     def: &AutomationRunDef,
     exits: &[RunDefExit],
     handed: &[Handed],
     stretch: Option<&AutomationRunTask>,
 ) -> Result<String> {
-    let conn = tx.conn();
     let mut out = String::new();
-    if let Some(automation) = read::automation(conn, run.automation_id)? {
-        push_block(&mut out, automation.preamble.trim());
-    }
+    push_block(&mut out, &crate::agents::preamble(crate::config::Paths::command_name()));
     for (name, body) in shared_documents(tx, def)? {
         push_block(&mut out, &format!("## {name}\n\n{}", body.trim()));
     }
@@ -475,8 +473,8 @@ fn compose(
 }
 
 /// Add one block, with a blank line between it and whatever came before. An empty one is left out
-/// rather than left as a gap: an automation with no preamble should read as one that has nothing to say
-/// first, not as one that opens on white space.
+/// rather than left as a gap: a step handed no documents and no values should read as one with
+/// nothing to say about them, not as one with white space where they would have gone.
 fn push_block(out: &mut String, block: &str) {
     if block.trim().is_empty() {
         return;
@@ -662,11 +660,7 @@ mod tests {
         let automation = automation::add(
             tx,
             project,
-            NewAutomation {
-                name: "1件やりきる".into(),
-                notes: String::new(),
-                preamble: "You are one step of a run.".into(),
-            },
+            NewAutomation { name: "1件やりきる".into(), notes: String::new() },
         )
         .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");
@@ -850,16 +844,32 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
-            assert!(text.starts_with("You are one step of a run."), "{text}");
+            assert!(text.starts_with("You are one step of an automation run"), "{text}");
             assert!(text.contains("## House style\n\nShort lines."), "{text}");
             assert!(text.contains("## What to do\n\nlook at it"), "{text}");
             assert!(text.contains("\"found\" — `note` (value)"), "{text}");
             assert!(text.contains("the unnamed way out — `タスク` (task_take, required)"), "{text}");
             assert!(text.contains("the error way out — nothing to hand on"), "{text}");
             assert!(
-                !text.contains("What you have been handed"),
+                !text.contains("## What you have been handed"),
                 "the first step is handed nothing: {text}"
             );
+        });
+    }
+
+    /// **The preamble is Amenbo's, not the automation's** (`AMB-D-952`). No row carries it, so every
+    /// run of every automation opens on the same sentences — and since nobody types them any more,
+    /// they may name the commands a step reads its run back with (`AMB-T-5325`).
+    #[test]
+    fn every_step_opens_on_the_standing_sentences_and_is_told_how_to_read_what_came_before() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+
+            assert!(text.starts_with(&crate::agents::preamble("amenbo")), "{text}");
+            assert!(text.contains("`amenbo automation run-show <run>`"), "{text}");
+            assert!(text.contains("`amenbo attach show`"), "{text}");
         });
     }
 
@@ -1040,7 +1050,7 @@ mod tests {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
             let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
-            assert!(!opening.text.contains("What you have been handed"), "{}", opening.text);
+            assert!(!opening.text.contains("## What you have been handed"), "{}", opening.text);
         });
     }
 
@@ -1084,7 +1094,7 @@ mod tests {
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
             let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
-            assert!(!second.text.contains("What has happened so far"), "{}", second.text);
+            assert!(!second.text.contains("## What has happened so far"), "{}", second.text);
             assert!(second.text.contains("- note: the note"), "the values still go: {}", second.text);
         });
     }

@@ -485,7 +485,7 @@ const AUT: col::automation::Cols = col::automation::of("aut");
 const AN: col::automation_note::Cols = col::automation_note::of("an");
 
 /// The one way a term reaches an automation (`AMB-D-944`): a document its steps share carries it. One set
-/// rather than six, because this side has one face — an automation's own name, notes and preamble are not
+/// rather than six, because this side has one face — an automation's own name and notes are not
 /// in [`search::FACES`] — and still a set, because an automation holds any number of documents and the
 /// record-level AND is what lets two words land in two different ones and come back as one answer.
 fn automation_word_sets(term: search::Term<'_>) -> [IdSet; 1] {

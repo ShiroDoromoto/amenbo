@@ -304,17 +304,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         Where::EitherSide => {}
     }
     match sub {
-        AutomationCmd::Add { project, name, notes, preamble } => {
+        AutomationCmd::Add { project, name, notes } => {
             let pid = project_or_bound(store, project)?;
-            let new = NewAutomation {
-                name,
-                notes: body_arg(notes)?,
-                // Left out, the standing operating rules go in: what every step is told before its own
-                // prompt is the same for every automation until somebody writes otherwise, and an empty
-                // one is a thing to pass rather than a thing to fall into.
-                preamble: body_arg_opt(preamble)?
-                    .unwrap_or_else(|| amenbo_core::agents::DEFAULT_PREAMBLE.to_string()),
-            };
+            let new = NewAutomation { name, notes: body_arg(notes)? };
             let a = store.automation_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.add", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Created automation: {} ({})", a.name, a.id));
         }
@@ -353,11 +345,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 render_automation(flags, &view);
             }
         }
-        AutomationCmd::Update { id, name, notes, preamble, archived } => {
+        AutomationCmd::Update { id, name, notes, archived } => {
             let notes = body_arg_opt(notes)?;
-            let preamble = body_arg_opt(preamble)?;
             let a = store
-                .automation_update(id, name.as_deref(), notes.as_deref(), preamble.as_deref(), archived)
+                .automation_update(id, name.as_deref(), notes.as_deref(), archived)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
@@ -984,7 +975,6 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
         ),
     );
     write_body(flags, "notes", &a.notes);
-    write_body(flags, "preamble", &a.preamble);
     for placement in &view.placements {
         render_placement(flags, view, placement);
     }

@@ -76,7 +76,6 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     projectId: 1,
     name: "Morning round",
     notes: "",
-    preamble: "",
     archived: false,
     placements: [],
     edges: [],

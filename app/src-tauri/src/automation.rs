@@ -92,7 +92,7 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
 /// A name is all it takes. The notes are written on the build screen, once there is a picture to
 /// write them about — asking for them at the press would put a form in front of the one road into
 /// the screen where the work actually happens. The preamble is written nowhere: it is Amenbo's own
-/// fixed sentence at the head of every launch, and the column goes with it (`AMB-T-5325`).
+/// fixed sentences at the head of every launch ([`amenbo_core::agents::preamble`]).
 ///
 /// The ack names the new automation, which is what the screen opens the build screen on: a creation
 /// that answered with the scope alone would leave the press having to go and find the row that was
@@ -113,8 +113,8 @@ pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdErro
 /// more out of a reader's way, so the row stays in the list carrying the mark rather than leaving
 /// it — which is why `automation_page` goes on answering with archived ones in it.
 ///
-/// The preamble is not one of the three. It is the fixed sentence Amenbo puts at the head of every
-/// launch rather than anything this automation holds, and the column goes with it (`AMB-T-5325`).
+/// The preamble is not one of the three. It is what Amenbo puts at the head of every launch rather
+/// than anything this automation holds ([`amenbo_core::agents::preamble`]).
 #[tauri::command]
 pub fn automation_edit(
     id: i64,
@@ -123,7 +123,7 @@ pub fn automation_edit(
     archived: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), None, archived)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -1378,7 +1378,6 @@ fn detail_dto(view: automation_view::AutomationView) -> AutomationDetailDto {
         project_id: a.project_id,
         name: a.name,
         notes: a.notes,
-        preamble: a.preamble,
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
         placements: view.placements.into_iter().map(placement_dto).collect(),

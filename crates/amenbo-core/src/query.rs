@@ -2206,7 +2206,7 @@ pub enum SearchKind {
     /// The words on a decision, the same way.
     Decision,
     /// The words in the documents an automation's steps share (`AMB-D-944`). The one face on this side:
-    /// an automation's own name, notes and preamble are not indexed, and what a run *did* is reached from
+    /// an automation's own name and notes are not indexed, and what a run *did* is reached from
     /// the task it worked on rather than searched for.
     Automation,
 }

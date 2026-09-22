@@ -1048,8 +1048,8 @@ mod tests {
         );
         let automation = put(
             "INSERT INTO automation \
-                 (project_id, name, notes, preamble, archived, order_key, created_at, updated_at) \
-             VALUES (?1, '1件やる', '', '運転規約', 0, 'a0', ?2, ?2)",
+                 (project_id, name, notes, archived, order_key, created_at, updated_at) \
+             VALUES (?1, '1件やる', '', 0, 'a0', ?2, ?2)",
             rusqlite::params![project, at],
         );
         let note = put(

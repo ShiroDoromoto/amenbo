@@ -551,7 +551,7 @@ mod tests {
         let automation = automation::add(
             tx,
             project,
-            NewAutomation { name: "1件やりきる".into(), notes: String::new(), preamble: String::new() },
+            NewAutomation { name: "1件やりきる".into(), notes: String::new() },
         )
         .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");

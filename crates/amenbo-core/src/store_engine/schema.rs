@@ -1022,8 +1022,9 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // **One automation** — the actions placed on it, what runs after what, and the preamble every
-    // step's launch carries.
+    // **One automation** — the actions placed on it and what runs after what. What a step is told
+    // before its own prompt is Amenbo's own and is written in the build (`crate::agents::preamble`),
+    // so no column here carries it.
     //
     // `entry_placement_id` is where a run starts, and from it the edges are walked: the place a
     // placement sits in the picture and the number it is drawn with both fall out of that walk, never
@@ -1033,7 +1034,6 @@ datasets! {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
         notes: col(REQ),
-        preamble: col(REQ),
         entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
         archived: bool_col,
         order_key: col(ORDER_KEY),

@@ -1643,17 +1643,16 @@ impl Store {
         })
     }
 
-    /// Change an automation's name, notes, preamble or archived flag (one operation = one transaction).
+    /// Change an automation's name, notes or archived flag (one operation = one transaction).
     pub fn automation_update(
         &mut self,
         id: i64,
         name: Option<&str>,
         notes: Option<&str>,
-        preamble: Option<&str>,
         archived: Option<bool>,
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::update(tx, id, name, notes, preamble, archived)
+            crate::ops::automation::update(tx, id, name, notes, archived)
         })
     }
 

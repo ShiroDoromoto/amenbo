@@ -78,7 +78,7 @@ pub const DATASET_AUTOMATION_NOTE: &str = "automation_note";
 /// The record a hit on one of those documents belongs to (`AMB-D-944`), stamped into a hit row's
 /// `owner_kind` exactly as the two sides above are — which is why it is named here beside them.
 ///
-/// It is **not** a dataset the index carries: an automation's own name, notes and preamble are not in
+/// It is **not** a dataset the index carries: an automation's own name and notes are not in
 /// [`FACES`], so no doc row ever wears this. What it names is the thing a reader opens to read the
 /// document, the way a task is what a reader opens to read a comment on it.
 pub const OWNER_AUTOMATION: &str = "automation";

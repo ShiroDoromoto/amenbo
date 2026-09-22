@@ -424,13 +424,12 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 
 // ───────────────────────────── the automation itself ─────────────────────────────
 
-/// What a new automation is made of. `preamble` is prepended to every step's launch, so it is kept
-/// short — the material a prompt would otherwise repeat belongs in a shared document ([`note_add`]).
+/// What a new automation is made of. What its steps are told before their own prompts is not part of
+/// it: that is Amenbo's own ([`crate::agents::preamble`]).
 #[derive(Clone, Debug, Default)]
 pub struct NewAutomation {
     pub name: String,
     pub notes: String,
-    pub preamble: String,
 }
 
 /// Create an automation. It is born with nothing placed on it and no entry; what refuses to launch it is
@@ -449,7 +448,6 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         project_id,
         name,
         notes: new.notes,
-        preamble: new.preamble,
         entry_placement_id: None,
         archived: false,
         order_key,
@@ -460,7 +458,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
     Ok(automation)
 }
 
-/// Change an automation's name, notes, preamble, or whether it is archived. Only the `Some` fields are
+/// Change an automation's name, notes, or whether it is archived. Only the `Some` fields are
 /// written. Archiving takes nothing away and stops nothing already running: it is what keeps an
 /// automation nobody launches any more out of the lists.
 pub fn update(
@@ -468,7 +466,6 @@ pub fn update(
     id: i64,
     name: Option<&str>,
     notes: Option<&str>,
-    preamble: Option<&str>,
     archived: Option<bool>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
@@ -478,9 +475,6 @@ pub fn update(
     }
     if let Some(notes) = notes {
         after.notes = notes.to_string();
-    }
-    if let Some(preamble) = preamble {
-        after.preamble = preamble.to_string();
     }
     if let Some(archived) = archived {
         after.archived = archived;

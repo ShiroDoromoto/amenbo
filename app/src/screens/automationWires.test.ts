@@ -42,7 +42,6 @@ function detail(steps: AutomationPlacementDto[], wires: AutomationDetailDto["wir
     projectId: 1,
     name: "Morning round",
     notes: "",
-    preamble: "",
     archived: false,
     placements: steps,
     edges: [],

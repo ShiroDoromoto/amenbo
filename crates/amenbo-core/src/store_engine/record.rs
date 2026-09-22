@@ -528,7 +528,6 @@ pub fn automation(a: &Automation) -> Record {
                 ("project_id", kv(a.project_id)),
                 ("name", tv(&a.name)),
                 ("notes", tv(&a.notes)),
-                ("preamble", tv(&a.preamble)),
                 ("entry_placement_id", kv_opt(&a.entry_placement_id)),
                 ("archived", bv(a.archived)),
                 ("order_key", tv(&a.order_key)),

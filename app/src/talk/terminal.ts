@@ -197,6 +197,12 @@ export type PaneStart = {
    * run of the app would come up inside a step that is over (`AMB-D-869`).
    */
   fresh?: boolean;
+  /**
+   * The step execution this terminal is carrying out (`crate::session::STEP_VAR`), for a pane a run
+   * opened. The agent reads it out of the environment, which is how `amenbo automation done` knows
+   * which step it is speaking for without the step's prompt having to carry a number.
+   */
+  runStep?: number | null;
 };
 
 /**
@@ -647,6 +653,7 @@ async function draw(
     rows: term.rows,
     say: start.say ?? null,
     fresh: start.fresh ?? false,
+    runStep: start.runStep ?? null,
   });
   // A terminal started here has said nothing yet, so there is nothing it could have missed.
   return { running: opened, named: null, made: [] };

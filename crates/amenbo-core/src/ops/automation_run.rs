@@ -116,10 +116,15 @@ pub struct Launcher<'a> {
     pub startable: Option<&'a [String]>,
     /// How many runs may hold a lane at once ([`crate::config::Config::automation_lanes`]).
     pub lanes: i64,
-    /// Whether the talk window is open. A run's steps are drawn in its panes, so a launch with the
-    /// window closed has nowhere to put them — and opening it is the workspace's own act, not this
-    /// one's.
-    pub workspace_open: bool,
+    /// Whether the talk window is open — `Some(false)` refuses, and **`None` is a caller that cannot
+    /// see** (`AMB-D-792`'s discipline, the same one [`Launcher::startable`] takes).
+    ///
+    /// A run's steps are drawn in the window's panes, so a launch made with it closed has nowhere to
+    /// put them, and opening it is the workspace's own act rather than this one's. But only a caller
+    /// inside the app can answer: a terminal somewhere else knows nothing about what is on screen, and
+    /// a `false` written there would refuse a launch the reader could see perfectly well. So it says
+    /// nothing instead, and the run waits for whatever opens its first step.
+    pub workspace_open: Option<bool>,
     /// Who pressed launch, or `None` from a caller that says nothing about itself.
     pub by: Option<ActorKind>,
 }
@@ -340,7 +345,9 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
     if !unmet.is_empty() {
         return Err(not_ready(&automation.name, &unmet));
     }
-    if !by.workspace_open {
+    // Only where somebody answered. A caller that cannot see the window says nothing rather than
+    // `false`, and the run is made — a launch from a terminal is not a claim about what is on screen.
+    if by.workspace_open == Some(false) {
         return Err(Error::invalid(
             "the workspace is closed — a run draws its steps in its panes, so open it and launch again",
         ));
@@ -550,7 +557,7 @@ mod tests {
     /// The machine every test launches on: one that can start `claude`, with three lanes and a window
     /// open.
     fn here<'a>(startable: &'a [String]) -> Launcher<'a> {
-        Launcher { startable: Some(startable), lanes: 3, workspace_open: true, by: Some(ActorKind::Ai) }
+        Launcher { startable: Some(startable), lanes: 3, workspace_open: Some(true), by: Some(ActorKind::Ai) }
     }
 
     fn claude() -> Vec<String> {
@@ -807,7 +814,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _) = launchable(tx);
             let startable = claude();
-            let closed = Launcher { workspace_open: false, ..here(&startable) };
+            let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
             automation::update(tx, automation.id, None, None, None, Some(true)).expect("archive");
             assert!(launch(tx, automation.id, &here(&claude())).is_err());

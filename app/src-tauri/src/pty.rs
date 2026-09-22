@@ -95,6 +95,10 @@ const DIR_ENV: &str = amenbo_core::session::DIR_VAR;
 /// (`AMB-D-897`).
 const PANE_ENV: &str = amenbo_core::session::PANE_VAR;
 
+/// The variable naming the step execution a terminal was opened for, set beside [`PANE_ENV`] on the
+/// terminals an automation opens and on no other. Core's name, for the reason [`SESSION_ENV`] gives.
+const STEP_ENV: &str = amenbo_core::session::STEP_VAR;
+
 /// The variable carrying the way back into the conversation this pane is on, set beside
 /// [`PANE_ENV`] where there is one. Core's name, for the reason [`SESSION_ENV`] gives.
 const PANE_RESUME_ENV: &str = amenbo_core::session::PANE_RESUME_VAR;
@@ -1146,6 +1150,7 @@ pub fn pty_open(
     rows: u16,
     say: Option<String>,
     fresh: Option<bool>,
+    run_step: Option<i64>,
 ) -> Result<PtySessionDto, CmdError> {
     // A session of its own, every time, with nothing of it written on the frame — what an
     // automation's step is opened on (`AMB-T-5251`). One step is one session: the frame is reused so
@@ -1296,6 +1301,13 @@ pub fn pty_open(
     }
     if let Some(way_back) = way_back.as_deref() {
         cmd.env(PANE_RESUME_ENV, way_back);
+    }
+    // Which step of which run this terminal is carrying out, where it is carrying one out
+    // (`AMB-T-5249`). The agent is told what to do and nothing about where it sits, so the answer to
+    // "which step am I" has to arrive some other way than through the prompt — and the environment is
+    // the one road that reaches an `amenbo` several processes deep (`STEP_ENV`).
+    if let Some(run_step) = run_step {
+        cmd.env(STEP_ENV, run_step.to_string());
     }
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,

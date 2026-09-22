@@ -58,6 +58,28 @@ pub(crate) fn attach_add(
         store.attach_url(target_type, target_id, source, name.as_deref(), flags.facet()?)
             .map_err(CliError::from)?
     } else {
+        attach_file(store, flags, target_type, target_id, source, name)?
+    };
+    let what = if url { "link" } else { "file" };
+    write_envelope(flags, "attach.add", "attachment", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Attached {what}: {}", attach_label(&a)));
+    Ok(0)
+}
+
+/// Ingest one file and hang it on `target_type`/`target_id`, answering with the row.
+///
+/// It is split off [`attach_add`] because two callers want different halves of it: the `attach` verb
+/// prints the row and is done, while a step handing a file on needs the id to put the row's name
+/// down under (`crate::cmd::automation`). The order inside is the invariant [`attach_add`] documents
+/// — metadata, then the size limit, then the ingest — so a failure leaves no blob behind.
+pub(crate) fn attach_file(
+    store: &mut Store,
+    flags: &Flags,
+    target_type: AttachmentTarget,
+    target_id: i64,
+    source: &str,
+    name: Option<String>,
+) -> Result<amenbo_core::model::Attachment, CliError> {
+    let a = {
         let path = std::path::Path::new(source);
         let meta = std::fs::metadata(path).map_err(|e| CliError {
             code: "not_found",
@@ -82,9 +104,7 @@ pub(crate) fn attach_add(
         store.attach_blob(target_type, target_id, &blob.hash, &filename, mime, blob.size_bytes as i64, flags.facet()?)
             .map_err(CliError::from)?
     };
-    let what = if url { "link" } else { "file" };
-    write_envelope(flags, "attach.add", "attachment", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Attached {what}: {}", attach_label(&a)));
-    Ok(0)
+    Ok(a)
 }
 
 /// The `attach` group (ls/show/open/rm). Adding lives on `task attach` / `decision attach`.

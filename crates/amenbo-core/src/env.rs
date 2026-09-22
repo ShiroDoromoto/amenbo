@@ -129,6 +129,17 @@ pub fn pane_resume() -> Option<String> {
     var(crate::session::PANE_RESUME_VAR)
 }
 
+/// `AMENBO_AUTOMATION_STEP` — the step execution this terminal was opened for
+/// ([`crate::session::STEP_VAR`]). `None` is a terminal that is not a step of a run, which is every
+/// terminal but the ones an automation opens.
+///
+/// A value that is not a number reads as `None`: what is set there is the window's own writing, so a
+/// terminal carrying anything else is one this build did not open, and taking it for a row id would
+/// aim a write at whatever that number happened to be.
+pub fn automation_step() -> Option<i64> {
+    var(crate::session::STEP_VAR)?.trim().parse().ok()
+}
+
 /// `AMENBO_HW_ID` — override the machine UUID, to pose as a different machine during development.
 pub fn hw_id() -> Option<OsString> {
     var_os("AMENBO_HW_ID")

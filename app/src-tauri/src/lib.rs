@@ -466,6 +466,8 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       commands::snapshot,
       automation::automation_page,
+      automation::automation_action_page,
+      automation::automation_action_edit,
       automation::automation_detail,
       automation::automation_launch_check,
       automation::automation_lanes_held,

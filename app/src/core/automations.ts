@@ -1,10 +1,14 @@
-// The read side of the automations screen: a project's definitions, one definition whole, and
-// whether that one could be started.
+// The automations screen's own seam: a project's definitions, one definition whole, whether that one
+// could be started, and the library its steps are pointed at.
 //
 // It sits beside `core/reads.ts` rather than in it because what it reads is a different shape of
 // thing: a task list is paged and an automation is not. An automation is tens of rows, and the build
 // screen's picture, its step panel and its launch check all walk the same definition — so it is
 // fetched whole, once, and every part of the screen reads that one answer.
+//
+// **The one write here sits beside its reads** rather than in `core/mutations`, because what it is
+// about is this screen and nothing else. What it does not do for itself is the invalidation — the
+// ack goes through `mutations.invokeAck`, the same road every other write takes.
 //
 // **The launch check is read, not worked out here.** The rules live in core, where the launch itself
 // reads them (`amenbo_core::ops::automation_run::check`), so what a screen says is in the way and
@@ -13,7 +17,9 @@
 import { useQuery } from "./query";
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
+import { invokeAck } from "./mutations";
 import type {
+  AutomationActionCardDto,
   AutomationCardDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
@@ -33,6 +39,46 @@ export function useAutomations(projectId: number | null): AutomationCardDto[] {
     () => (projectId === null ? Promise.resolve([]) : fetchAutomations(projectId)),
   );
   return data ?? [];
+}
+
+/**
+ * The library this project reaches — the device's own actions and the project's own, in one list.
+ *
+ * Both reaches come in one answer because both are one list on screen: what a reader is choosing
+ * between is every prompt a step here could be pointed at, and which library holds one is a column.
+ */
+export async function fetchAutomationActions(projectId: number): Promise<AutomationActionCardDto[]> {
+  if (!inTauri()) return [];
+  return invoke<AutomationActionCardDto[]>("automation_action_page", { projectId });
+}
+
+/** Subscribing read of the library this project reaches. */
+export function useAutomationActions(projectId: number | null): AutomationActionCardDto[] {
+  const { data } = useQuery<AutomationActionCardDto[]>(
+    ["automationActions", projectId ?? null],
+    () => (projectId === null ? Promise.resolve([]) : fetchAutomationActions(projectId)),
+  );
+  return data ?? [];
+}
+
+/**
+ * Rename a library action, or rewrite its prompt. Only what is passed is written.
+ *
+ * **The rewrite reaches every step pointing at this action**, which is what a library is for — and
+ * why the screen says how many automations that is before the box is opened. A run already under way
+ * is not reached: a step's prompt is resolved as the step opens, and what an open step carries is
+ * settled.
+ */
+export async function editAutomationAction(
+  id: number,
+  patch: { name?: string; prompt?: string },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_edit", {
+    id,
+    name: patch.name ?? null,
+    prompt: patch.prompt ?? null,
+  });
 }
 
 /** One automation's whole definition, or nothing where that id names none. */

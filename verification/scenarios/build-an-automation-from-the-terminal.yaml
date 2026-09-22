@@ -1,0 +1,215 @@
+# A definition is built at the terminal and read back at the terminal. Building one is ten kinds of
+# row that mean nothing apart, handed over an id at a time, and a reader who could only see what they
+# had built by opening the build screen would be building blind — and an AI would carry what it built
+# in the conversation alone, with nothing for the next session to pick up. So the road that builds one
+# is the road that reads it, and every claim is made against `automation show`: the prompt each step
+# runs on with the library already read in, the ways out, the inputs, the settings and their answers,
+# where each way out takes the run, and the documents the steps share.
+id: build-an-automation-from-the-terminal
+title: An automation built at the terminal is read back whole at the terminal
+description: >
+  Put a prompt in the library, build a three-step definition on top of it, and read the definition
+  back. The two listings come first — what is there, and how far a rewrite of a library prompt would
+  carry — and then the definition itself: the step carrying its own prompt with the two born-with ways
+  out and the one it declared, the step made of the library action, which reads its prompt and its ways
+  out off the action and declares none of its own, and the setting left unanswered beside the one that
+  was answered. A step nobody built is asked for as well, since a read that answered every name it was
+  given would read as green off the present half alone.
+
+steps_cli:
+  # The library first: the step that is made of it is what says a prompt worth using twice is read in
+  # rather than copied.
+  - type: action
+    domain: automation
+    op: action-add
+    with: { name: SCENARIO SEED — read it back, prompt: read what was written }
+    as: library
+
+  - type: action
+    domain: automation
+    op: create
+    with: { name: "SCENARIO SEED — one task, three steps" }
+    as: auto
+
+  # Listed before it is built, which is the state the count is read for: a row says what this is, and
+  # whether there is anything in it yet.
+  - type: assert
+    domain: automation
+    op: listed
+    with: { target: auto, steps: 0, present: true }
+
+  # The step that takes the task. A way out of its own, what leaving by it hands on, what it takes in,
+  # and two settings — one answered while building, one left for whoever starts a run.
+  - type: action
+    domain: automation
+    op: step-add
+    with: { target: auto, name: take, agent: claude-code, prompt: take the next task }
+    as: take
+  - type: action
+    domain: automation
+    op: exit-add
+    with: { step: take, name: got one }
+    as: got_one
+  - type: action
+    domain: automation
+    op: port-add
+    with: { target: got_one, name: task, kind: task_take, required: true }
+  - type: action
+    domain: automation
+    op: port-add
+    with: { target: got_one, name: note, kind: value, required: true }
+  - type: action
+    domain: automation
+    op: port-add
+    with: { step: take, name: brief, kind: value, required: true }
+  - type: action
+    domain: automation
+    op: cfg-add
+    with: { step: take, name: how many, kind: number, required: true }
+  - type: action
+    domain: automation
+    op: cfg-set
+    with: { target: take, name: how many, number: 3 }
+  - type: action
+    domain: automation
+    op: cfg-add
+    with: { step: take, name: where to work, kind: folder }
+
+  # The step in the middle, and the one wire on the road: what the first step hands on reaches this
+  # one's input under the name this one declares.
+  - type: action
+    domain: automation
+    op: step-add
+    with: { target: auto, name: work, agent: claude-code, prompt: do the work }
+    as: work
+  - type: action
+    domain: automation
+    op: port-add
+    with: { step: work, name: note, kind: value, required: true }
+  - type: action
+    domain: automation
+    op: wire-add
+    with: { target: take, exit: got one, from_port: note, to: work, to_port: note }
+
+  # The step made of the library action. It declares nothing of its own — its prompt and its ways out
+  # are the action's — which is what the read below is asked to say.
+  - type: action
+    domain: automation
+    op: step-add
+    with: { target: auto, name: review, agent: claude-code, action: library }
+    as: review
+
+  - type: action
+    domain: automation
+    op: edge-add
+    with: { target: take, exit: got one, to: work }
+  - type: action
+    domain: automation
+    op: edge-add
+    with: { target: work, to: review }
+  - type: action
+    domain: automation
+    op: edge-add
+    with: { target: review }
+  - type: action
+    domain: automation
+    op: entry
+    with: { target: auto, step: take }
+
+  # A document the steps share, handed to one of them.
+  - type: action
+    domain: automation
+    op: note-add
+    with: { target: auto, name: house style, body: SCENARIOWORD is how it is written here }
+    as: house_style
+  - type: action
+    domain: automation
+    op: note-link
+    with: { target: house_style, step: take }
+
+  # Built, and the row says so. A definition that had lost its steps would still be listed, so the
+  # count is the half worth asking for.
+  - type: assert
+    domain: automation
+    op: listed
+    with: { target: auto, steps: 3, present: true }
+
+  # The library row, and the number a rewrite of its prompt would carry to. It is counted in
+  # automations and not in steps, and this project's shelf is where it was put.
+  - type: assert
+    domain: automation
+    op: action-listed
+    with: { target: library, used_by: 1, reach: project }
+
+  # The step carrying its own prompt, read back whole. The ways out are the two it is born with — the
+  # unnamed one and the error one — and the one that was declared on it; the setting answered while
+  # building reads back as the number that was written, and the one nobody answered reads back as
+  # unanswered, which is a state of its own rather than an empty answer.
+  - type: assert
+    domain: automation
+    op: step-read
+    with:
+      target: auto
+      name: take
+      prompt: take the next task
+      exits: ["", "*", got one]
+      inputs: [brief]
+      settings: { how many: 3, where to work: ~ }
+
+  # The step in the middle. What it takes in is its own, and nothing about the wire that fills it
+  # changes what it declares.
+  - type: assert
+    domain: automation
+    op: step-read
+    with:
+      target: auto
+      name: work
+      prompt: do the work
+      inputs: [note]
+
+  # And the step made of the library action: the prompt is read in off the action rather than copied,
+  # the ways out are the action's two, and it declares no setting and takes nothing in of its own.
+  - type: assert
+    domain: automation
+    op: step-read
+    with:
+      target: auto
+      name: review
+      prompt: read what was written
+      from_action: SCENARIO SEED — read it back
+      exits: ["", "*"]
+      inputs: []
+      settings: {}
+
+  # A step nobody built. Every read above would pass against a build that answered with whatever name
+  # it was handed, and this is the one that says they were answers.
+  - type: assert
+    domain: automation
+    op: step-read
+    with: { target: auto, name: publish, present: false }
+
+  # Where each way out takes the run. The first is named, which is what says a reader can tell one of a
+  # step's ways out from another; the last closes the run rather than going anywhere.
+  - type: assert
+    domain: automation
+    op: edge-read
+    with: { target: auto, from: take, exit: got one, to: work }
+  - type: assert
+    domain: automation
+    op: edge-read
+    with: { target: auto, from: work, to: review }
+  - type: assert
+    domain: automation
+    op: edge-read
+    with: { target: auto, from: review, ends: done }
+
+  # The shared document, and which of the steps was handed it. Handed to nobody and handed to
+  # everybody are two different definitions, so the list is read whole.
+  - type: assert
+    domain: automation
+    op: note-read
+    with:
+      target: auto
+      name: house style
+      body: SCENARIOWORD is how it is written here
+      handed_to: [take]

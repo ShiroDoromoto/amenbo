@@ -4065,26 +4065,56 @@ const REGISTRY: &[OpSpec] = &[
     // holding several of them, so what a reader opens next is the automation.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "found", required: &["target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
     //
-    // ---- automation on screen -------------------------------------------------------------------
-    // **What these asserts read is the picture**, so they are here rather than beside the verbs
-    // above: the boxes, the lines between them and the marks a build screen draws are the screen's
-    // own, and no terminal has them. A definition read back as text is the terminal's
-    // (`automation show`) and is not mapped here yet.
+    // ---- reading a definition back --------------------------------------------------------------
+    // **The two listings are read on both faces**, which is why they stand here rather than under the
+    // screen's heading below: the automations tab draws a row per definition and the actions tab one
+    // per library action, and `automation list` / `automation action list` print the same two rows.
+    // A road asking either face whether a row is there is asking the one question.
     //
-    // Which of the automations screen's three tabs the reader is standing on. The screen is one place
-    // and the tabs are what is on it, so a road says which rather than naming three screens.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "screen", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
     // A definition on the list, and how many steps the row says it is built out of. `steps` is asked
     // for where the count is the point — a row says "what is this" and "is it built yet", and the
     // second is that number.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "listed", required: &[], refs: &["target"], strings: &[], binds: false },
+    // A library action's row. `used_by` is counted in automations and not in steps — what the number
+    // is read for is how far a rewrite of the prompt carries — and `reach` says which of the two
+    // libraries the row is from.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach"], binds: false },
+    //
+    // **And one whole definition, read back as text — the terminal's alone.** `automation show`
+    // prints every step with what it runs under already resolved, which no screen puts in one place:
+    // the build screen draws the picture and opens one step at a time in the panel beside it. So the
+    // three below are `steps_cli`'s and the picture ops under the next heading are the screen's, and
+    // neither is a gap in the other.
+    //
+    // One step, named the way the definition names it. `prompt` is the one it runs on with the
+    // library already read in, and `from_action` the name of the action it was read off — which is
+    // the half the picture cannot say, drawing only that it came from somewhere. `exits`, `inputs`
+    // and `settings` are **the whole of what the step declares**, not a sample of it: the first two
+    // in the order the definition holds them, the third as a name → answer mapping, where a road
+    // writes `~` for one nobody has answered. A way out is named the way `edge-add` names one —
+    // `""` is the unnamed one it is born with, `*` the error one.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "step-read", required: &["name"], refs: &["target"], strings: &["name", "prompt", "from_action"], binds: false },
+    // Where leaving by one way out takes the run: on to a step (`to`), or to the end of the run
+    // (`ends`). The pair the edge hangs on is `from` and `exit`, which is the pair `edge-add` writes
+    // it under, and both name steps by name rather than by binding — what the terminal prints back is
+    // a definition, and a road reading one knows the names it wrote.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "edge-read", required: &["from"], refs: &["target"], strings: &["from", "exit", "to", "ends"], binds: false },
+    // A document the steps share, and which of them it was handed to. `handed_to` is the whole of
+    // that list: a document nobody was handed and a document everybody was are two different
+    // definitions, and a road naming one step would read the same against both.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "note-read", required: &["name"], refs: &["target"], strings: &["name", "body"], binds: false },
+    //
+    // ---- automation on screen -------------------------------------------------------------------
+    // **What these asserts read is the picture**, so they are here rather than beside the verbs
+    // above: the boxes, the lines between them and the marks a build screen draws are the screen's
+    // own, and no terminal has them.
+    //
+    // Which of the automations screen's three tabs the reader is standing on. The screen is one place
+    // and the tabs are what is on it, so a road says which rather than naming three screens.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "screen", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
     // Opening one: the row is the press, and what it opens is the build screen rather than a pane
     // beside the list.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open", required: &[], refs: &["target"], strings: &[], binds: false },
-    // A library action on the "actions" tab. `used_by` is counted in automations and not in steps —
-    // what the number is read for is how far a rewrite of the prompt carries — and `reach` says which
-    // of the two libraries the row is from.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach"], binds: false },
     // Opening a library action, and rewriting the prompt it holds. The rewrite reaches every step
     // pointing at it, which is what the road that walks this is about.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-open", required: &[], refs: &["target"], strings: &[], binds: false },

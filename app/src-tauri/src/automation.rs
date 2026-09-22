@@ -79,6 +79,47 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
         .collect())
 }
 
+/// **Rename an automation, rewrite its notes, or put it out of the way.** Only what is `Some` is
+/// written.
+///
+/// Archiving takes nothing away and stops nothing already running
+/// ([`amenbo_core::ops::automation::update`]). It is what keeps a definition nobody launches any
+/// more out of a reader's way, so the row stays in the list carrying the mark rather than leaving
+/// it — which is why `automation_page` goes on answering with archived ones in it.
+///
+/// The preamble is not one of the three. It is the fixed sentence Amenbo puts at the head of every
+/// launch rather than anything this automation holds, and the column goes with it (`AMB-T-5325`).
+#[tauri::command]
+pub fn automation_edit(
+    id: i64,
+    name: Option<String>,
+    notes: Option<String>,
+    archived: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_update(id, name.as_deref(), notes.as_deref(), None, archived)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Delete an automation and everything built into it** — its steps with their declarations, the
+/// edges and wires between them, and the documents they share
+/// ([`amenbo_core::ops::automation::delete`]).
+///
+/// **Core refuses it while a run stands behind it**, naming how many. A run carries its own copy of
+/// the steps and would go on reading correctly, but it is filed under the automation it was
+/// launched from — so the refusal is what keeps the record able to say what was run. It reaches the
+/// screen as the sentence core wrote, which is why nothing is re-asked here before the write.
+#[tauri::command]
+pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **The library this project reaches** — the device's own actions first, then the project's own.
 ///
 /// The two libraries answer as one list because they are one list on screen: what a reader is

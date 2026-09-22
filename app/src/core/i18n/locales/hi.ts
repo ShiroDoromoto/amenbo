@@ -906,6 +906,7 @@ export const hi: Translation = {
     "auto.build.launch": "शुरुआत",
     "auto.build.picture": "बनावट",
     "auto.build.step": "चरण",
+    "auto.build.about": "यह ऑटोमेशन",
     "auto.start": "शुरू करें",
     "auto.ready": "शुरू किया जा सकता है।",
     "auto.notReady": "अभी शुरू नहीं किया जा सकता:",
@@ -993,6 +994,13 @@ export const hi: Translation = {
     "auto.actions.reaches": "यहाँ सहेजा गया वही हर उस स्टेप तक जाता है जो इस ऐक्शन की ओर इशारा करता है।",
     "auto.actions.save": "सहेजें",
     "auto.actions.cancel": "रद्द करें",
+    "auto.about.name": "नाम",
+    "auto.about.notes": "नोट",
+    "auto.about.notesWhat": "सिर्फ़ इसी स्क्रीन पर दिखते हैं। यहाँ से कुछ भी किसी रन तक नहीं पहुँचता।",
+    "auto.about.archive": "संग्रहित",
+    "auto.about.archiveWhat": "संग्रहित ऑटोमेशन में जो कुछ बनाया गया था वह सब बना रहता है, और जो रन पहले से चल रहा है वह चलता रहता है।",
+    "auto.about.remove": "यह ऑटोमेशन हटाएँ",
+    "auto.about.removeConfirm": "यह ऑटोमेशन हटाएँ? इसके चरण, उनके निकास और उनके बीच जुड़ी हर चीज़ साथ चली जाएगी। इसे वापस नहीं लाया जा सकता।",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

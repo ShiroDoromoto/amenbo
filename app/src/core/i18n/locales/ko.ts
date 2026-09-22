@@ -903,6 +903,7 @@ export const ko: Translation = {
     "auto.build.launch": "시작",
     "auto.build.picture": "조립",
     "auto.build.step": "스텝",
+    "auto.build.about": "이 오토메이션",
     "auto.start": "시작하기",
     "auto.ready": "시작할 수 있습니다.",
     "auto.notReady": "아직 시작할 수 없습니다:",
@@ -990,6 +991,13 @@ export const ko: Translation = {
     "auto.actions.reaches": "여기서 저장한 내용은 이 액션을 가리키는 모든 단계가 읽습니다.",
     "auto.actions.save": "저장",
     "auto.actions.cancel": "취소",
+    "auto.about.name": "이름",
+    "auto.about.notes": "메모",
+    "auto.about.notesWhat": "이 화면에만 나옵니다. 여기 있는 것은 실행에 들어가지 않습니다.",
+    "auto.about.archive": "보관함",
+    "auto.about.archiveWhat": "보관한 오토메이션도 짜 놓은 것은 그대로 남고, 이미 돌고 있는 실행도 계속됩니다.",
+    "auto.about.remove": "이 오토메이션 삭제",
+    "auto.about.removeConfirm": "이 오토메이션을 삭제할까요? 안의 스텝, 그 출구, 사이에 이어 둔 것까지 함께 사라집니다. 되돌릴 수 없습니다.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

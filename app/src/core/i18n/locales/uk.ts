@@ -923,6 +923,7 @@ export const uk: Translation = {
     "auto.build.launch": "Запуск",
     "auto.build.picture": "Збірка",
     "auto.build.step": "Крок",
+    "auto.build.about": "Ця автоматизація",
     "auto.start": "Запустити",
     "auto.ready": "Можна запустити.",
     "auto.notReady": "Поки запустити не можна:",
@@ -1010,6 +1011,13 @@ export const uk: Translation = {
     "auto.actions.reaches": "Те, що збережено тут, несе кожен крок, який вказує на цю дію.",
     "auto.actions.save": "Зберегти",
     "auto.actions.cancel": "Скасувати",
+    "auto.about.name": "Назва",
+    "auto.about.notes": "Нотатки",
+    "auto.about.notesWhat": "Видно лише на цьому екрані. Ніщо звідси не потрапляє до виконання.",
+    "auto.about.archive": "В архіві",
+    "auto.about.archiveWhat": "Автоматизація в архіві зберігає все, з чого її зібрано, а вже розпочате виконання триває далі.",
+    "auto.about.remove": "Вилучити цю автоматизацію",
+    "auto.about.removeConfirm": "Вилучити цю автоматизацію? Її кроки, їхні виходи й усі зв'язки між ними зникнуть разом із нею. Це не скасувати.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

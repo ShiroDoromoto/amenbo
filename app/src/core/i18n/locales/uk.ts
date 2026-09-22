@@ -1001,6 +1001,8 @@ export const uk: Translation = {
     "auto.step.cfgKind.text": "Текст",
     "auto.step.declaresFromAction": "Виходи, налаштування та входи теж надходять із {action}. Оголосіть їх на вкладці дій.",
     "auto.actions.empty": "У бібліотеці ще немає дій.",
+    "auto.actions.add": "Створити дію",
+    "auto.actions.reach": "Область",
     "auto.actions.reachDevice": "Цей пристрій",
     "auto.actions.reachProject": "Цей проєкт",
     "auto.actions.unused": "Жодна автоматизація її не виконує",

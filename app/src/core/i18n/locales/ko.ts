@@ -981,6 +981,8 @@ export const ko: Translation = {
     "auto.step.cfgKind.text": "문자열",
     "auto.step.declaresFromAction": "출구·설정·입력 파라미터도 {action}의 것입니다. 추가하려면 '액션' 탭에서.",
     "auto.actions.empty": "라이브러리에 아직 액션이 없습니다.",
+    "auto.actions.add": "액션 만들기",
+    "auto.actions.reach": "적용 범위",
     "auto.actions.reachDevice": "이 기기",
     "auto.actions.reachProject": "이 프로젝트",
     "auto.actions.unused": "쓰는 자동화 없음",

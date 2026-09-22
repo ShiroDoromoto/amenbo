@@ -1001,6 +1001,8 @@ export const ru: Translation = {
     "auto.step.cfgKind.text": "Текст",
     "auto.step.declaresFromAction": "Выходы, настройки и входы тоже приходят из {action}. Объявите их на вкладке действий.",
     "auto.actions.empty": "В библиотеке пока нет действий.",
+    "auto.actions.add": "Создать действие",
+    "auto.actions.reach": "Область",
     "auto.actions.reachDevice": "Это устройство",
     "auto.actions.reachProject": "Этот проект",
     "auto.actions.unused": "Ни одна автоматизация его не выполняет",

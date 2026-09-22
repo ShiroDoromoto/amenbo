@@ -477,6 +477,7 @@ pub fn run() {
       commands::snapshot,
       automation::automation_page,
       automation::automation_action_page,
+      automation::automation_action_add,
       automation::automation_action_edit,
       automation::automation_action_from_step,
       automation::automation_step_edit,

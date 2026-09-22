@@ -986,6 +986,8 @@ export const zhHant: Translation = {
     "auto.step.cfgKind.text": "文字",
     "auto.step.declaresFromAction": "出口、設定和輸入參數也來自 {action}。要加請去「動作」分頁。",
     "auto.actions.empty": "程式庫中還沒有動作。",
+    "auto.actions.add": "新增動作",
+    "auto.actions.reach": "適用範圍",
     "auto.actions.reachDevice": "本裝置",
     "auto.actions.reachProject": "本專案",
     "auto.actions.unused": "沒有自動化在用",

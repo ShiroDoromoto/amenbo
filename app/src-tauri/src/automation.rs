@@ -103,6 +103,24 @@ pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCar
         .collect())
 }
 
+/// **Make a library action** — a name, and which library it lands in.
+///
+/// **The prompt is not asked for here.** It is written in the box the list opens on the row
+/// ([`automation_action_edit`]), which is the one place a prompt is written: a second field writing
+/// the same column would be a second place to keep in step. The row is born carrying an empty
+/// prompt, and the screen opens that box on it straight away.
+///
+/// `project` is which library it lands in — the project's own, or the device's where every project
+/// on this machine reaches it ([`automation_action_from_step`]).
+#[tauri::command]
+pub fn automation_action_add(project: Option<i64>, name: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_add(project, &name, "")?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
+}
+
 /// **Rename a library action, or rewrite its prompt.** Only what is `Some` is written.
 ///
 /// The rewrite reaches every step pointing at this action, which is what the library is for — and

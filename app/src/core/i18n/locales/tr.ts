@@ -984,6 +984,8 @@ export const tr: Translation = {
     "auto.step.cfgKind.text": "Metin",
     "auto.step.declaresFromAction": "Çıkışlar, ayarlar ve girdiler de {action} kaynaklı. Bunları eylemler sekmesinde tanımlayın.",
     "auto.actions.empty": "Kitaplıkta henüz eylem yok.",
+    "auto.actions.add": "Eylem oluştur",
+    "auto.actions.reach": "Kapsam",
     "auto.actions.reachDevice": "Bu cihaz",
     "auto.actions.reachProject": "Bu proje",
     "auto.actions.unused": "Hiçbir otomasyon çalıştırmıyor",

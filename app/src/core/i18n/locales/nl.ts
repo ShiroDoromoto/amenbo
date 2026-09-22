@@ -984,6 +984,8 @@ export const nl: Translation = {
     "auto.step.cfgKind.text": "Tekst",
     "auto.step.declaresFromAction": "Uitgangen, instellingen en invoer komen ook uit {action}. Declareer ze op het tabblad acties.",
     "auto.actions.empty": "De bibliotheek heeft nog geen acties.",
+    "auto.actions.add": "Actie maken",
+    "auto.actions.reach": "Bereik",
     "auto.actions.reachDevice": "Dit apparaat",
     "auto.actions.reachProject": "Dit project",
     "auto.actions.unused": "Geen automatisering gebruikt hem",

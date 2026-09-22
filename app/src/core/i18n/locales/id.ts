@@ -985,6 +985,8 @@ export const id: Translation = {
     "auto.step.cfgKind.text": "Teks",
     "auto.step.declaresFromAction": "Keluaran, pengaturan, dan masukan juga berasal dari {action}. Deklarasikan di tab aksi.",
     "auto.actions.empty": "Pustaka belum punya aksi.",
+    "auto.actions.add": "Buat aksi",
+    "auto.actions.reach": "Jangkauan",
     "auto.actions.reachDevice": "Perangkat ini",
     "auto.actions.reachProject": "Proyek ini",
     "auto.actions.unused": "Belum ada otomasi yang memakainya",

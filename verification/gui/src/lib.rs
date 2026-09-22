@@ -4301,6 +4301,44 @@ impl Instructor {
                     if present(with) { there } else { gone }
                 )
             }
+            // A task's own timeline, on the face the task opens in. The line is looked for by the
+            // words a road wrote rather than whole: what stands around them on the row is the
+            // interface's — who said it, when — and is drawn in whatever language the run is in, so a
+            // step holding the whole line would be held to that language too.
+            //
+            // It is the screen's assert and not the store's: the words are drawn, and a build asked
+            // for its own records instead would be checked against itself.
+            (Domain::Task, "commented") => match present(with) {
+                true => format!(
+                    "Open the task \"{}\" and confirm its timeline carries a line saying \"{}\".",
+                    self.target_label(with),
+                    req(with, "text")?
+                ),
+                false => format!(
+                    "Open the task \"{}\" and confirm nothing on its timeline says \"{}\".",
+                    self.target_label(with),
+                    req(with, "text")?
+                ),
+            },
+            // The task's entries on the one view that runs everything that has happened. The stream is
+            // not scoped to a task on this side — the view is the whole history, across projects — so
+            // what is read is a row naming that task, on the narrowing the road asked for.
+            //
+            // The narrowing is said by what it leaves rather than by the word on the chip, for
+            // `view_row`'s reason: the labels are the interface's own.
+            (Domain::Task, "activity") => format!(
+                "On the smart view that runs everything that has happened{}, confirm it carries {} for the task \"{}\"{}.",
+                match arg_str(with, "kind") {
+                    Some(kind) => format!(", narrowed by {}", activity_kind(kind)?),
+                    None => String::new(),
+                },
+                if present(with) { "a row" } else { "no row" },
+                self.target_label(with),
+                match arg_str(with, "text") {
+                    Some(text) => format!(" saying \"{text}\""),
+                    None => String::new(),
+                }
+            ),
             // The same reading on the record the other side of the store keeps. A `Review` like the
             // task's own, and for the same reason once more: what a decision's pane says of its state is
             // a word of the interface's, so an eye closes it. It is also the one thing a road can say
@@ -6208,6 +6246,21 @@ fn view_row(id: &str) -> Result<&'static str, String> {
         "activity" => "the smart view that runs everything that has happened",
         other => {
             return Err(format!("`view: {other}` is not a smart view the sidebar draws"))
+        }
+    })
+}
+
+/// Which side of the activity stream a road narrowed to, said by what the chip leaves rather than by
+/// the word on it: the labels are the interface's own and are drawn in whatever language the run is
+/// in ([`view_row`]'s reason).
+fn activity_kind(kind: &str) -> Result<&'static str, String> {
+    Ok(match kind {
+        "system" => "the chip that leaves only what the store wrote by itself",
+        "comment" => "the chip that leaves only what somebody wrote",
+        other => {
+            return Err(format!(
+                "`kind: {other}` is not a side of the stream the view narrows to — it is `system` or `comment`"
+            ))
         }
     })
 }

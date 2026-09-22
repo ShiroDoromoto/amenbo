@@ -1460,3 +1460,13 @@ button.feed__target:hover { color: var(--c-accent); }
    step that says nothing about it stops the run and calls a person, which is already the answer. */
 .autostep__exiterr { color: var(--c-text-muted); }
 .autostep__check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }
+/* A declaration being written rather than answered: the name it goes under, what it takes, whether
+   it has to be answered, and the press that ends it. One line, wrapping where the panel is narrow —
+   the name is what everything else on the row is about, so it takes whatever width is left. */
+.autostep__decl, .autostep__declare { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autostep__declare { padding-block: var(--s-1); }
+.autostep__declname { flex: 1 1 8rem; min-width: 0; }
+/* What core last refused. It sits at the top of the panel rather than beside the control that was
+   pressed: a reader who changed one thing and is told no has one place to look, and the refusal
+   outlives the row a rename has already taken away. */
+.autostep__refused { color: var(--c-stop); font-size: var(--fs-xs); }

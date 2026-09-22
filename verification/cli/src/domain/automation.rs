@@ -8,6 +8,8 @@
 //! **What a step of a run types is not here** (`automation step-take` / `step-out` / `step-done`). Those are refused
 //! outside the terminal a run opened for a step, and a run started at the terminal opens none — there
 //! is no window to draw one in. The road for them waits on a door that opens a step without a screen.
+//! The same door is what the other side waits on: the build and drive verbs refuse *inside* a step
+//! (`automation_outside_only`), and there is no step here to type them in.
 //!
 //! **A definition is read back here whole** (`automation show`), with the declarations each step runs
 //! under already resolved — so a road that built one at the terminal proves it by reading it at the

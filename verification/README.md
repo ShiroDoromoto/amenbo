@@ -737,8 +737,9 @@ between them and the marks along them are drawn nowhere else — neither face is
 The two listings — a row per definition, a row per library action — are read on both (`listed`,
 `action-listed`).
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
-about an automation opens on a definition that is already there, so a premise builds all three
-layers — the action, the steps inside it, and the placement on the picture. Answering a setting is
+about an automation but the one that makes one from the list opens on a definition that is already
+there, so a premise builds all three layers — the action, the steps inside it, and the placement on
+the picture. Answering a setting is
 not among them, and neither is declaring one: both are moves a reader makes, on the rows the panel
 takes them on or behind the flags the command does.
 **What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):

@@ -364,13 +364,14 @@ pub fn automation_lanes_held() -> Result<i64, CmdError> {
 /// the closed workspace in that order, each with a sentence the screen can put in front of a person
 /// ([`amenbo_core::ops::automation_run::launch`]) — so nothing is judged twice here.
 ///
-/// **A run that took a lane is opened on its first step before this answers.** The pane the run is
-/// drawn in is stood by the workspace when it hears that step, so a launch that stopped short of it
-/// would be a press that wrote a row and left the screen unchanged. A queued run opens nothing: what
-/// wakes it is a lane being handed back (`AMB-T-5246`, `AMB-T-5247`).
+/// **A run that took a lane is opened by the watch, not here.** What opens a step is the one thread
+/// looking at what is running (`AMB-D-945`), so no entrance into a run carries its own copy of "and
+/// then open the next one". This press only nudges that thread
+/// ([`crate::automation_watch::wake`]), so the pane is stood at once rather than at the end of its
+/// wait. A queued run is not nudged: what wakes it is a lane being handed back (`AMB-T-5246`,
+/// `AMB-T-5247`).
 #[tauri::command]
 pub fn automation_launch(
-    app: tauri::AppHandle,
     id: i64,
     agents: Option<Vec<String>>,
     workspace_open: bool,
@@ -392,7 +393,7 @@ pub fn automation_launch(
     let run = with_store_mut(|store| Ok(store.automation_launch(id, &by)?))?;
     let queued = !run.status.holds_a_lane();
     if !queued {
-        automation_step_open(app, run.id, None)?;
+        crate::automation_watch::wake();
     }
     Ok(AutomationRunStartedDto { run: run.id, queued })
 }

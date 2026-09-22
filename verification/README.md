@@ -725,12 +725,14 @@ settings, the identity it answers `whoami` with, the build in place, and the sto
 (`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
 `.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
 
-One domain is read on one face and written on the other. **`automation`'s asserts about a definition
-are the screen's**, because the binary has no read of one: what reads an automation whole is the build
-screen, through a door of the host's. So the terminal's half of the domain is the verbs that build a
-definition up and the run that walks it — what it asserts is the run, the listing a run is reached by,
-and the search — while the picture, the step panel and the launch place are asserted on the screen
-(`pictured`, `line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half).
+One domain reads the same thing two ways. **`automation`'s definition is read back whole at the
+terminal** (`step-read` / `edge-read` / `note-read`, off `automation show`): every step with the
+library already read in, what joins them, and the documents they share — which is how a road that
+built one at the terminal proves what it built. **The picture is the screen's** (`pictured`,
+`line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half): boxes,
+the lines between them and the marks along them are drawn nowhere else, and neither face is a gap in
+the other. The two listings — a row per definition, a row per library action — are read on both
+(`listed`, `action-listed`).
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation opens on a definition that is already there, there being no way in on screen for
 the first step of the first one. Answering a setting is not among them, and neither is declaring one:

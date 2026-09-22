@@ -105,16 +105,17 @@ fn declarer_from_flags(step: Option<i64>, action: Option<i64>) -> Result<(Automa
     }
 }
 
-/// Where an edge goes, from the three flags that say so. `--to` names the next box; the other two end
-/// the picture it is drawn on.
-fn edge_target(to: Option<i64>, done: bool, halt: bool) -> Result<EdgeTarget, CliError> {
-    match (to, done, halt) {
-        (Some(to), false, false) => Ok(EdgeTarget::Go(to)),
-        (None, true, false) => Ok(EdgeTarget::Done),
-        (None, false, true) => Ok(EdgeTarget::Halt),
+/// Where an edge goes, from the four flags that say so. `--to` names the next box; `--exit-to` leaves
+/// the action the picture is inside, bare for its unnamed way out; the other two end the run.
+fn edge_target(to: Option<i64>, exit_to: Option<String>, done: bool, halt: bool) -> Result<EdgeTarget, CliError> {
+    match (to, exit_to, done, halt) {
+        (Some(to), None, false, false) => Ok(EdgeTarget::Go(to)),
+        (None, Some(name), false, false) => Ok(EdgeTarget::Exit((!name.is_empty()).then_some(name))),
+        (None, None, true, false) => Ok(EdgeTarget::Done),
+        (None, None, false, true) => Ok(EdgeTarget::Halt),
         _ => Err(CliError {
             code: "invalid_value",
-            message: "say what happens after this way out — one of --to <box>, --done or --halt.".to_string(),
+            message: "say what happens after this way out — one of --to <box>, --exit-to [name], --done or --halt.".to_string(),
             hint: None,
             exit: 2,
         }),
@@ -609,13 +610,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_cfg_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.cfg-rm", "automation_cfg", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted setting: {id}"));
         }
-        AutomationCmd::EdgeAdd { in_action, from, to, done, halt, max_times, no_max } => {
+        AutomationCmd::EdgeAdd { in_action, from, to, exit_to, done, halt, max_times, no_max } => {
             let (from_id, exit_name) = parse_point(&from)?;
-            let target = edge_target(to, done, halt)?;
+            let target = edge_target(to, exit_to, done, halt)?;
             // An edge into a box is capped unless somebody says otherwise: what the limit guards
             // against is a loop that never converges, and a caller who never thought about it is the
-            // one that loop happens to. An edge that closes or stops the run is taken once, so it
-            // carries no limit at all — core refuses one there.
+            // one that loop happens to. An edge that leaves the action, closes or stops the run is taken
+            // once, so it carries no limit at all — core refuses one there.
             let max_times = match target {
                 EdgeTarget::Go(_) if no_max => None,
                 EdgeTarget::Go(_) => Some(max_times.unwrap_or(DEFAULT_MAX_TIMES)),
@@ -626,10 +627,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.edge-add", "automation_edge", serde_json::to_value(&e).unwrap(), None, false, format!("✓ Added edge: {} ({})", from, e.id));
         }
-        AutomationCmd::EdgeUpdate { id, to, done, halt, max_times, no_max } => {
-            let target = match (to, done, halt) {
-                (None, false, false) => None,
-                _ => Some(edge_target(to, done, halt)?),
+        AutomationCmd::EdgeUpdate { id, to, exit_to, done, halt, max_times, no_max } => {
+            let target = match (to, &exit_to, done, halt) {
+                (None, None, false, false) => None,
+                _ => Some(edge_target(to, exit_to, done, halt)?),
             };
             let max_times = match (max_times, no_max) {
                 (_, true) => Some(None),
@@ -1078,6 +1079,15 @@ fn render_action(flags: &Flags, view: &ActionView) {
     );
     for port in &view.inputs {
         human(flags, format!("takes  {}", one_port(port)));
+        // What the action takes in is handed on from the boundary, so the wires out of it sit here
+        // rather than under a step.
+        for wire in view
+            .wires
+            .iter()
+            .filter(|w| w.from_id == amenbo_core::model::ACTION_BOUNDARY && w.from_port_name == port.name)
+        {
+            human(flags, format!("    wire  {} → step {} . {}", wire.from_port_name, wire.to_id, wire.to_port_name));
+        }
     }
     for cfg in &view.settings {
         human(flags, format!("declares  {}", one_cfg(cfg)));
@@ -1132,12 +1142,13 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
         for wire in
             view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_name == exit.exit.name)
         {
+            let into = match wire.to_id {
+                amenbo_core::model::ACTION_BOUNDARY => "the action".to_string(),
+                step => format!("step {step}"),
+            };
             human(
                 flags,
-                format!(
-                    "        wire  {} → step {} . {}",
-                    wire.from_port_name, wire.to_id, wire.to_port_name
-                ),
+                format!("        wire  {} → {into} . {}", wire.from_port_name, wire.to_port_name),
             );
         }
     }

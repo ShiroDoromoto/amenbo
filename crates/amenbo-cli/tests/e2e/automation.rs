@@ -174,6 +174,61 @@ fn a_line_is_drawn_on_an_automation_or_inside_an_action() {
     assert_eq!(outside["automation_edge"]["owner_id"], serde_json::json!(a.parse::<i64>().unwrap()));
 }
 
+/// Inside an action, a step's way out can leave the action by one the action declares (`--exit-to`,
+/// bare for its unnamed one), and `0` on a wire is the action itself: what it takes in is handed to a
+/// step, and what a step hands on fills the way out of the action it returns to. Driven as the AI in its
+/// bound project, since the boundary is no step and must not be read as one outside its reach.
+#[test]
+fn inside_an_action_a_step_returns_to_the_action_and_wires_reach_the_action_itself() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let p = cli.bound_project();
+    let ai = |args: &[&str]| {
+        let mut with = args.to_vec();
+        with.extend(["--actor", "ai", "--json"]);
+        cli.json(&with)
+    };
+    let action = id_of(&ai(&["automation", "action-add", "--project", &p, "--name", "Review"]), "automation_action");
+    let step = id_of(
+        &ai(&["automation", "step-add", &action, "--name", "check", "--prompt", "check it", "--agent", "claude"]),
+        "automation_step",
+    );
+    let step_exit = id_of(&ai(&["automation", "exit-add", "--step", &step, "--name", "approved"]), "automation_exit");
+    let action_exit = id_of(&ai(&["automation", "exit-add", "--action", &action, "--name", "approved"]), "automation_exit");
+    ai(&["automation", "port-add", "--action", &action, "--name", "task", "--kind", "value"]);
+    ai(&["automation", "port-add", "--step", &step, "--name", "task", "--kind", "value"]);
+    ai(&["automation", "port-add", "--exit", &step_exit, "--name", "report", "--kind", "file"]);
+    ai(&["automation", "port-add", "--exit", &action_exit, "--name", "report", "--kind", "file"]);
+
+    let named = ai(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:approved"), "--exit-to", "approved"]);
+    assert_eq!(named["automation_edge"]["ends"].as_str(), Some("exit"));
+    assert_eq!(named["automation_edge"]["exit_to"].as_str(), Some("approved"));
+    assert_eq!(named["automation_edge"]["max_times"], Value::Null, "leaving the action counts nothing");
+
+    let bare = ai(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to"]);
+    assert_eq!(bare["automation_edge"]["ends"].as_str(), Some("exit"));
+    assert_eq!(bare["automation_edge"]["exit_to"], Value::Null, "bare is the action's unnamed way out");
+    let edge = id_of(&bare, "automation_edge");
+    let moved = ai(&["automation", "edge-update", &edge, "--exit-to", "approved"]);
+    assert_eq!(moved["automation_edge"]["exit_to"].as_str(), Some("approved"));
+
+    let into = ai(&[
+        "automation", "wire-add", "--in-action", "--from", "0", "--from-port", "task", "--to", &step,
+        "--to-port", "task",
+    ]);
+    assert_eq!(into["automation_wire"]["from_id"], serde_json::json!(0));
+    let out = ai(&[
+        "automation", "wire-add", "--in-action", "--from", &format!("{step}:approved"), "--from-port",
+        "report", "--to", "0", "--to-port", "report",
+    ]);
+    assert_eq!(out["automation_wire"]["to_id"], serde_json::json!(0));
+
+    let (refused, code) = cli.run_err(&[
+        "automation", "edge-add", "--in-action", "--from", &format!("{step}:*"), "--exit-to", "--done",
+    ]);
+    assert_eq!(code, 2, "one edge says one thing: {refused}");
+}
+
 /// The cap guards a loop that never converges, and a caller who never thought about it is the one that
 /// loop happens to — so an edge into a box carries it unless somebody takes it off. An edge that
 /// closes or stops the run is taken once and carries none at all.

@@ -54,8 +54,8 @@ pub(super) enum WriteTarget {
     /// An attachment's target (the polymorphic `target_type` + id).
     AttachTo(AttachmentTarget, i64),
     /// One row of an automation's definition, named by the table it sits in. Which table it is decides
-    /// the walk up to the project, and that walk is the whole difference between them — so the ten ride
-    /// one variant rather than ten.
+    /// the walk up to the project, and that walk is the whole difference between them — so the eleven
+    /// ride one variant rather than eleven.
     AutomationPart(AutomationPart, i64),
     /// Where an entity about to be created would go (`None` = in no project at all).
     NewIn(Option<i64>),
@@ -63,11 +63,12 @@ pub(super) enum WriteTarget {
     NewProject,
 }
 
-/// Which of the ten definition tables a [`WriteTarget::AutomationPart`] names.
+/// Which of the eleven definition tables a [`WriteTarget::AutomationPart`] names.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum AutomationPart {
     Automation,
     Action,
+    Placement,
     Step,
     Note,
     Exit,
@@ -75,7 +76,7 @@ pub(super) enum AutomationPart {
     Cfg,
     Edge,
     Wire,
-    /// One launch of an automation. It is on this list rather than beside the ten because a run walks
+    /// One launch of an automation. It is on this list rather than beside the eleven because a run walks
     /// up to a project by a road of its own: it carries the project it was launched from, and so
     /// stays readable after the automation it came from is archived.
     Run,
@@ -88,6 +89,7 @@ impl AutomationPart {
         match self {
             AutomationPart::Automation => owner::automation(conn, id),
             AutomationPart::Action => owner::automation_action(conn, id),
+            AutomationPart::Placement => owner::automation_placement(conn, id),
             AutomationPart::Step => owner::automation_step(conn, id),
             AutomationPart::Note => owner::automation_note(conn, id),
             AutomationPart::Exit => owner::automation_exit(conn, id),
@@ -105,6 +107,7 @@ impl AutomationPart {
         let en = match self {
             AutomationPart::Automation => "automation",
             AutomationPart::Action => "action",
+            AutomationPart::Placement => "automation placement",
             AutomationPart::Step => "automation step",
             AutomationPart::Note => "automation document",
             AutomationPart::Exit => "automation way out",

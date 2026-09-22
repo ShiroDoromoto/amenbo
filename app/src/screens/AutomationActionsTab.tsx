@@ -191,7 +191,7 @@ function ActionEdit({
   const [prompt, setPrompt] = useState(action.prompt);
 
   async function save() {
-    await editAutomationAction(action.id, { name, prompt });
+    await editAutomationAction(action.id, { name, step: action.entryStepId ?? undefined, prompt });
     onDone();
   }
 

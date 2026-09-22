@@ -161,6 +161,9 @@ const COUNT: &str = "BIGINT NOT NULL DEFAULT 0";
 /// sweep these rows by hand. An integer because every key is one; a TEXT affinity here would
 /// coerce the boundary's `i64` back into a decimal string on the way in.
 const KEY_REF: &str = "BIGINT NOT NULL DEFAULT 0";
+/// The nullable half of [`KEY_REF`]: a polymorphic reference that may be unset — `automation_edge.to_id`,
+/// where a line that closes or stops the picture goes nowhere.
+const KEY_REF_OPT: &str = "BIGINT";
 /// Fractional index: ordered by string comparison, never parsed as a number.
 const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
 const ORDER_KEY_OPT: &str = "TEXT"; // an unplaced (inbox) task carries no order key
@@ -341,6 +344,7 @@ macro_rules! column_type {
     ($name:ident : col(ORDER_KEY_OPT))  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : col(INT_OPT))        => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
     ($name:ident : col(KEY_REF))        => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
+    ($name:ident : col(KEY_REF_OPT))    => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
     ($name:ident : col(COUNT))          => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : ts)                  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts_opt)              => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
@@ -981,53 +985,74 @@ datasets! {
 
     // ───────────────────────── automation: what is built ─────────────────────────
     //
-    // Ten tables for the definition and five for the run, and the line between them is that a run
+    // Eleven tables for the definition and five for the run, and the line between them is that a run
     // never reads a definition again once it has started: `automation_run_def` is the copy taken at
     // the moment of launch, so editing an automation cannot change what a run already under way is
     // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
     // `crate::ops::automation_run`, which writes the first two of the five; the three a step execution
     // is written in are `crate::ops::automation_step`'s, as each step of a run is opened and reports.
     //
-    // **Two tables are polymorphic on the same pair of owners.** A step and a library action both
-    // declare settings (`automation_cfg`) and both declare the ways out of themselves
-    // (`automation_exit`), so those two carry `owner_kind` + `owner_id` rather than one nullable key
-    // each. No `REFERENCES` can branch on a sibling column, so the ops sweep them by hand, as they do
-    // `attachment`'s.
-
-    // **A prompt worth using twice** — the library. `project_id` NULL is one held by the device
-    // rather than by a project, which is a shape `secret` already has here.
+    // **Three layers, and each word names exactly one of them** (`AMB-D-949`). An automation places
+    // actions; an action holds steps; one step is one terminal. It stops there — an action places no
+    // action — so "step" never means "a call of something else".
     //
-    // It names no agent and no model: who is asked to carry a prompt out is the step's answer, so the
-    // same action can be run by different agents in two automations (the columns are on
+    // **Four tables are polymorphic.** A step and a library action both declare the ways out of
+    // themselves (`automation_exit`) and what goes in and out of them (`automation_port`). An action
+    // and a placement of it are the two halves of a setting (`automation_cfg`): declared on the one,
+    // answered on the other. And the picture — `automation_edge` with `automation_wire` — is drawn
+    // twice over: on an automation, where the boxes are placements, and inside an action, where they
+    // are steps. No `REFERENCES` can branch on a sibling column, so the ops sweep those rows by hand,
+    // as they do `attachment`'s.
+
+    // **A unit worth using twice** — the library. `project_id` NULL is one held by the device rather
+    // than by a project, which is a shape `secret` already has here.
+    //
+    // It is a picture in its own right: the `automation_step` rows hang off it, the edges and wires
+    // between them are drawn on it, and `entry_step_id` is the step a placement of it opens first.
+    // Nullable because an action under construction has no entry yet, and `RESTRICT` because deleting
+    // the step it starts at is a thing the op has to be told to do.
+    //
+    // It names no agent and no model: who is asked to carry a prompt out is each step's own answer,
+    // so the same action can be run by different agents in two automations (the columns are on
     // `automation_step`).
     automation_action {
         project_id: fk_opt("project", "RESTRICT"),
         name: col(REQ),
-        prompt: col(REQ),
+        entry_step_id: fk_opt("automation_step", "RESTRICT"),
         order_key: col(ORDER_KEY),
     }
 
-    // **One automation** — the steps, what runs after what, and the preamble every step's launch
-    // carries.
+    // **One automation** — the actions placed on it, what runs after what, and the preamble every
+    // step's launch carries.
     //
-    // `entry_step_id` is where a run starts, and from it the edges are walked: the place a step sits
-    // in the picture and the number it is drawn with both fall out of that walk, never out of
-    // `order_key`, which records only the order the steps were added in. Nullable because an
-    // automation under construction has no entry yet, and `RESTRICT` because deleting the step a run
-    // would start at is a thing the op has to be told to do.
+    // `entry_placement_id` is where a run starts, and from it the edges are walked: the place a
+    // placement sits in the picture and the number it is drawn with both fall out of that walk, never
+    // out of `order_key`, which records only the order things were added in. Nullable and `RESTRICT`
+    // for the reasons `automation_action.entry_step_id` is.
     automation {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
         notes: col(REQ),
         preamble: col(REQ),
-        entry_step_id: fk_opt("automation_step", "RESTRICT"),
+        entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
         archived: bool_col,
         order_key: col(ORDER_KEY),
     }
 
-    // **A document the steps of one automation share.** Long is fine here — this is where the
-    // material a prompt would otherwise repeat is written once, and `automation_step_note` says which
-    // steps are handed it. `body` is the one automation face the word index carries
+    // **One action, placed on one automation.** It carries no prompt, no agent and no way out of its
+    // own — those are the action's. What is this row's is which action stands here and, through
+    // `automation_cfg` and the wires and edges drawn onto it, the answers and the joins that belong
+    // to this spot rather than to the library. The same action placed twice gives two rows, which is
+    // what lets one prompt be run twice in one automation under two different answers.
+    automation_placement {
+        automation_id: fk("automation", "RESTRICT"),
+        action_id: fk("automation_action", "RESTRICT"),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **A document the placements of one automation share.** Long is fine here — this is where the
+    // material a prompt would otherwise repeat is written once, and `automation_placement_note` says
+    // which placements are handed it. `body` is the one automation face the word index carries
     // (`store_engine::search::FACES`).
     automation_note {
         automation_id: fk("automation", "RESTRICT"),
@@ -1036,11 +1061,13 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // **One step of one automation.** Either it points at a library action (`action_id`) or it
-    // carries its own `prompt`; the two are exclusive and exactly one is set.
+    // **One step of one action**, and one terminal when it is opened. Its `prompt` is its own: an
+    // action holds the prompts rather than being one.
     //
     // `agent` is required and `model` is not: a step has to say who is asked, while the model is the
-    // agent's own default unless someone names one.
+    // agent's own default unless someone names one. They sit here and not on the placement because an
+    // action holds several steps, and one answer given where it is placed could not decide them all
+    // (`AMB-D-950`).
     //
     // The three flags' product defaults are **not** the `0` in their declarations — that is the
     // not-yet-written sentinel every required column carries, and the create writes the real answer
@@ -1049,12 +1076,11 @@ datasets! {
     // far unless told not to be (`show_history`, which starts on).
     //
     // `work_dir_ref` names the setting or the input the folder is taken from — a name, not a path, so
-    // the answer is given once where the automation is built rather than baked into every step.
+    // the answer is given once where the action is placed rather than baked into every step.
     automation_step {
-        automation_id: fk("automation", "RESTRICT"),
+        action_id: fk("automation_action", "RESTRICT"),
         name: col(REQ),
-        action_id: fk_opt("automation_action", "RESTRICT"),
-        prompt: col(OPT),
+        prompt: col(REQ),
         agent: col(REQ),
         model: col(OPT),
         interactive: bool_col,
@@ -1064,9 +1090,11 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // **A setting, declared by an action or a step and answered where it is used.** An action's row
-    // is the declaration alone, so its `value` is NULL; a step that points at that action carries a
-    // row of its own under the same `name`, and that is where the answer written while building sits.
+    // **A setting, declared by an action and answered where it is placed.** The action's row is the
+    // declaration alone, so its `value` is NULL; each placement of that action carries a row of its
+    // own under the same `name`, and that is where the answer written while building sits. A step
+    // declares none — it reaches one by the name the action gave it (`work_dir_ref`, and a prompt
+    // that names it).
     //
     // `kind` decides what the build screen draws for it, and the five are a closed set that does not
     // overlap `automation_port.kind`: a setting is written once while building and does not move
@@ -1075,7 +1103,7 @@ datasets! {
     // `options` and `value` are JSON, because a task filter and a choice list are not one scalar. The
     // `''` both default to is the not-yet-written sentinel, not an empty document.
     automation_cfg {
-        owner_kind: enum_col("step", "action"),
+        owner_kind: enum_col("action", "placement"),
         // Polymorphic — `owner_kind` says which table, and no `REFERENCES` can branch on it.
         owner_id: col(KEY_REF),
         name: col(REQ),
@@ -1086,18 +1114,19 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // **Which shared documents a step is handed.** A join row and nothing else; both ends are inside
-    // one automation.
-    automation_step_note {
-        step_id: fk("automation_step", "RESTRICT"),
+    // **Which shared documents a placement is handed**, and with it every step opened under that
+    // placement. A join row and nothing else; both ends are inside one automation.
+    automation_placement_note {
+        placement_id: fk("automation_placement", "RESTRICT"),
         note_id: fk("automation_note", "RESTRICT"),
         order_key: col(ORDER_KEY),
     }
 
     // **A way out of a step or an action**, named by the person who built it: a review step has one
     // way out for "nothing to fix" and another for "something to fix", and which of them the agent
-    // took is the whole condition the next step is chosen by. `name` NULL is the unnamed way out,
-    // which is what a step with only one has.
+    // took is the whole condition the next box is chosen by. An action declares the ways out a
+    // placement of it is left by; a step declares the ways out it ends on inside that action. `name`
+    // NULL is the unnamed way out, which is what an owner with only one has.
     automation_exit {
         owner_kind: enum_col("step", "action"),
         owner_id: col(KEY_REF),
@@ -1105,9 +1134,9 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // **What a step takes in, and what a way out of it hands on.** One table for both, told apart by
-    // `direction`: an `in` hangs on the step or the action, an `out` hangs on the exit, which is why
-    // `owner_kind` admits all three.
+    // **What a step or an action takes in, and what a way out of it hands on.** One table for both,
+    // told apart by `direction`: an `in` hangs on the step or the action, an `out` hangs on the exit,
+    // which is why `owner_kind` admits all three.
     //
     // `kind` is what the thing carried *is*. `task_take` is the one that decides the run's subject —
     // the task it comes out holding is the task the run is about from there on — and `task_make` is a
@@ -1125,35 +1154,45 @@ datasets! {
     // **What happens after a way out is taken.** The edge carries no condition of its own: the exit
     // *is* the condition.
     //
-    // `exit_name` NULL is the unnamed exit; `'*'` is the error one, which every step has and nobody
-    // can delete. A step with no `'*'` row of its own stops the run rather than guessing, which is
-    // what `ends = 'halt'` says — and `'go'` moves to `to_step_id`, `'done'` closes the run.
+    // `owner_kind` is which picture the line is drawn on, and it decides what `from_id` and `to_id`
+    // name: an automation's boxes are placements, an action's are steps. The two live in one table
+    // because they are one thing — a line from a way out to what follows it — which keeps reading a
+    // picture one piece of code instead of two that drift apart.
+    //
+    // `exit_name` NULL is the unnamed exit; `'*'` is the error one, which every step and every action
+    // has and nobody can delete. A box with no `'*'` row of its own stops the run rather than
+    // guessing, which is what `ends = 'halt'` says — and `'go'` moves to `to_id`, while `'done'`
+    // closes the picture the line is drawn on.
     //
     // `max_times` is how often this edge may be taken **for one task**: the count is kept per
     // `automation_run_task` row and starts again at the next task, so a loop that goes back to fix
     // something cannot spin forever on the same one. NULL is no limit, which is the right answer for
-    // an edge into a step that takes a fresh task.
+    // an edge into a box that takes a fresh task.
     automation_edge {
-        automation_id: fk("automation", "RESTRICT"),
-        from_step_id: fk("automation_step", "RESTRICT"),
+        owner_kind: enum_col("automation", "action"),
+        // Polymorphic, all three of them — see `automation_cfg`'s note.
+        owner_id: col(KEY_REF),
+        from_id: col(KEY_REF),
         exit_name: col(OPT),
-        to_step_id: fk_opt("automation_step", "RESTRICT"),
+        to_id: col(KEY_REF_OPT),
         ends: enum_col("go", "done", "halt"),
         max_times: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
-    // **What is handed from one step to the next.** Both ends are named rather than keyed: the same
-    // action used at two places in one automation gives two steps whose ports have the same ids, so
-    // only `step_id` + `exit_name` + `port_name` says which of them is meant. The names are also what
-    // survives the library action's ports being re-declared underneath, where an id would be left
-    // pointing at a row that is gone.
+    // **What is handed from one box to the next**, on either of the two pictures `automation_edge` is
+    // drawn on. Both ends are named rather than keyed: one action placed twice on an automation gives
+    // two placements whose ports carry the same names, so only `from_id` + `from_exit_name` +
+    // `from_port_name` says which of them is meant. The names are also what survives a library
+    // action's ports being re-declared underneath, where an id would be left pointing at a row that
+    // is gone.
     automation_wire {
-        automation_id: fk("automation", "RESTRICT"),
-        from_step_id: fk("automation_step", "RESTRICT"),
+        owner_kind: enum_col("automation", "action"),
+        owner_id: col(KEY_REF),
+        from_id: col(KEY_REF),
         from_exit_name: col(OPT),
         from_port_name: col(REQ),
-        to_step_id: fk("automation_step", "RESTRICT"),
+        to_id: col(KEY_REF),
         to_port_name: col(REQ),
     }
 
@@ -1187,10 +1226,13 @@ datasets! {
     // the step's inputs, and the settings' answers. They are read back as a whole, never queried
     // into, which is what a snapshot is for.
     //
-    // `step_id` is the only way back to the live definition, and it is `SET NULL`: a step deleted
-    // while building must not take the record of a run that used it, nor be held undeletable by one.
+    // `placement_id` and `step_id` are the two ways back to the live definition — which spot of the
+    // picture this copy was opened from, and which step of that spot's action it is a copy of. Both
+    // are `SET NULL`: a placement taken off, or a step deleted, while building must not take the
+    // record of a run that used it, nor be held undeletable by one.
     automation_run_def {
         run_id: fk("automation_run", "RESTRICT"),
+        placement_id: fk_opt("automation_placement", "SET NULL"),
         step_id: fk_opt("automation_step", "SET NULL"),
         name: col(REQ),
         prompt: col(OPT),

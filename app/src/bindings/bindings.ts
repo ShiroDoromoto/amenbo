@@ -243,33 +243,43 @@ present: boolean, createdByKind: "human" | "ai" | null, };
  * **One library action in the list** — what the "actions" tab draws a row from.
  *
  * `global` is the reach it is held at: an action in the device's own library is one every project on
- * this machine points steps at, and one in a project's library is that project's alone. It travels as
- * that fact rather than as the project id, because the screen drawing it is inside one project and
- * would only ever read an id back as "mine" or "the device's".
+ * this machine can place, and one in a project's library is that project's alone. It travels as that
+ * fact rather than as the project id, because the screen drawing it is inside one project and would
+ * only ever read an id back as "mine" or "the device's".
  *
- * `used_by` is **how many automations run it**, not how many steps do. Two steps of one automation
- * pointing at the same action is one automation whose runs change when the prompt is rewritten, and
- * that is the number the warning beside the prompt is about.
+ * `used_by` is **how many automations place it**, not how many placements there are. One action
+ * placed twice on one automation is one automation whose runs change when the prompt is rewritten,
+ * and that is the number the warning beside the prompt is about.
  */
 export type AutomationActionCardDto = { id: number, name: string, 
 /**
- * The prompt every step pointing at this action carries. It comes with the row rather than being
- * fetched when one is opened: a library is tens of rows, and the edit box is opened in place.
+ * The prompt the step this action opens first runs on — empty where it holds no step yet. It
+ * comes with the row rather than being fetched when one is opened: a library is tens of rows,
+ * and the edit box is opened in place.
  */
-prompt: string, global: boolean, usedBy: number, };
+prompt: string, 
+/**
+ * The step that prompt is written on, so the edit box can name the row it is rewriting. Absent
+ * where the action holds no step yet.
+ */
+entryStepId?: number, 
+/**
+ * How many steps it holds. One is the shape every action folded out of a v52 step has.
+ */
+steps: number, global: boolean, usedBy: number, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.
  */
 export type AutomationCardDto = { id: number, name: string, 
 /**
- * How many steps it is built out of. The row says it because "what is this" and "is it built
+ * How many actions are placed on it. The row says it because "what is this" and "is it built
  * yet" are the two things a list is read for.
  */
-steps: number, archived: boolean, };
+placements: number, archived: boolean, };
 
 /**
- * **A setting, and the answer written for it while building.** An action declares and the step
+ * **A setting, and the answer written for it while building.** An action declares and the placement
  * answers, so both are folded into one row here.
  */
 export type AutomationCfgDto = { name: string, kind: "taskfilter" | "folder" | "choice" | "number" | "text", required: boolean, 
@@ -283,32 +293,33 @@ options?: string,
 value?: string, };
 
 /**
- * **One automation's whole definition** — every step, every way out of each, and what joins them.
+ * **One automation's whole definition** — every placement, every way out of each, and what joins
+ * them.
  *
  * It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
- * picture, its launch check and its step panel all read the same walk from the entry step.
+ * picture, its launch check and its panel all read the same walk from the entry.
  */
 export type AutomationDetailDto = { id: number, projectId: number, name: string, notes: string, preamble: string, 
 /**
- * The step a run opens its first terminal on. Absent while the automation is still being built.
+ * The placement a run opens first. Absent while the automation is still being built.
  */
-entryStepId?: number, archived: boolean, steps: Array<AutomationStepDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, };
+entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, };
 
 /**
  * **What happens after a way out is taken.**
  */
-export type AutomationEdgeDto = { id: number, fromStepId: number, exitName?: string, 
+export type AutomationEdgeDto = { id: number, fromPlacementId: number, exitName?: string, 
 /**
  * Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
  */
-toStepId?: number, ends: "go" | "done" | "halt", 
+toPlacementId?: number, ends: "go" | "done" | "halt", 
 /**
  * How often this edge may be taken for one task. Absent is no limit.
  */
 maxTimes?: number, };
 
 /**
- * **A way out of a step**, and what leaving through it hands on.
+ * **A way out of a spot**, and what leaving through it hands on.
  */
 export type AutomationExitDto = { id: number, 
 /**
@@ -362,7 +373,41 @@ fields: { [key in string]: string }, };
 export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<AutomationLaunchBlockDto>, };
 
 /**
- * **What a step takes, or what a way out of it hands on.**
+ * **One spot on the picture**: the library action standing there, with everything it is read under
+ * already resolved.
+ *
+ * `id` is the placement's, which is what an edge and a wire name; `action_id` and `step_id` are what
+ * the panel writes through — a declaration is the action's, and a prompt is its step's.
+ */
+export type AutomationPlacementDto = { id: number, 
+/**
+ * What the action standing here is called — the name the box is drawn with.
+ */
+name: string, actionId: number, 
+/**
+ * The step this spot opens first. Absent where the action holds no step yet, which the launch
+ * check names.
+ */
+stepId?: number, 
+/**
+ * The prompt that step runs on — empty where there is no step.
+ */
+prompt: string, agent: string, 
+/**
+ * Absent leaves the agent's own default model.
+ */
+model?: string, interactive: boolean, 
+/**
+ * The name of the setting or the input the working folder is taken from — a name, not a path.
+ */
+workDirRef?: string, reportToTask: boolean, showHistory: boolean, exits: Array<AutomationExitDto>, 
+/**
+ * What this spot takes in, in declaration order.
+ */
+inputs: Array<AutomationPortDto>, settings: Array<AutomationCfgDto>, };
+
+/**
+ * **What a spot takes, or what a way out of it hands on.**
  */
 export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_take" | "task_make", required: boolean, };
 
@@ -428,35 +473,6 @@ export type AutomationRunStartedDto = { run: number, };
 export type AutomationRunTaskDto = { id: number, ref: string, title: string, };
 
 /**
- * **One step**, with the declarations it runs under already resolved.
- */
-export type AutomationStepDto = { id: number, name: string, 
-/**
- * The library action this step runs. Absent when it carries its own prompt.
- */
-actionId?: number, 
-/**
- * What that action is called, so a row can name it without a second read.
- */
-actionName?: string, 
-/**
- * The prompt this step carries, or the one it reads off the action — whichever it runs on.
- */
-prompt: string, agent: string, 
-/**
- * Absent leaves the agent's own default model.
- */
-model?: string, interactive: boolean, 
-/**
- * The name of the setting or the input the working folder is taken from — a name, not a path.
- */
-workDirRef?: string, reportToTask: boolean, showHistory: boolean, exits: Array<AutomationExitDto>, 
-/**
- * What this step takes in, in declaration order.
- */
-inputs: Array<AutomationPortDto>, settings: Array<AutomationCfgDto>, };
-
-/**
  * **A step of a run, opened** — what the workspace stands a terminal on
  * ([`amenbo_core::ops::automation_step::open`]).
  *
@@ -515,9 +531,9 @@ folder?: string,
 interactive: boolean, };
 
 /**
- * **What is handed from one step to the next.**
+ * **What is handed from one spot to the next.**
  */
-export type AutomationWireDto = { id: number, fromStepId: number, fromExitName?: string, fromPortName: string, toStepId: number, toPortName: string, };
+export type AutomationWireDto = { id: number, fromPlacementId: number, fromExitName?: string, fromPortName: string, toPlacementId: number, toPortName: string, };
 
 /**
  * What [`run_backup`](crate::commands::run_backup) returns: the camelCase DTO of core's

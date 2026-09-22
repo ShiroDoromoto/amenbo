@@ -40,7 +40,16 @@ let container: HTMLDivElement;
 let root: Root;
 
 function action(over: Partial<AutomationActionCardDto> = {}): AutomationActionCardDto {
-  return { id: 3, name: "Take one", prompt: "Take the next task.", global: false, usedBy: 2, ...over };
+  return {
+    id: 3,
+    name: "Take one",
+    prompt: "Take the next task.",
+    entryStepId: 11,
+    steps: 1,
+    global: false,
+    usedBy: 2,
+    ...over,
+  };
 }
 
 async function render() {
@@ -135,6 +144,7 @@ describe("writing a prompt", () => {
     await act(async () => { button(t("auto.actions.save")).click(); });
     expect(hoisted.edit).toHaveBeenCalledWith(3, {
       name: "Take the next one",
+      step: 11,
       prompt: "Take the next ready task.",
     });
     expect(container.querySelector(".auto__row")).not.toBeNull();

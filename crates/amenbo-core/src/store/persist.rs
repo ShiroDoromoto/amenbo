@@ -1561,44 +1561,55 @@ impl Store {
 /// do its reads and writes inside it — and what the declaration buys is in [`write_reach`]: the reach
 /// guard and the sync version are both read off it, so neither is a thing a new wrapper here can forget.
 impl Store {
-    /// Add a prompt to the library (one operation = one transaction). `project_id` `None` is the
+    /// Add an action to the library (one operation = one transaction). `project_id` `None` is the
     /// device's own library, which is a human's to write: an AI bound to a project is turned away from
     /// it the way it is from the inbox.
     pub fn automation_action_add(
         &mut self,
         project_id: Option<i64>,
         name: &str,
-        prompt: &str,
     ) -> Result<crate::model::AutomationAction> {
         self.write_one(&[WriteTarget::NewIn(project_id)], |tx| {
-            crate::ops::automation::action_add(tx, project_id, name, prompt)
+            crate::ops::automation::action_add(tx, project_id, name)
         })
     }
 
-    /// Rename a library action, or rewrite its prompt (one operation = one transaction).
-    /// **Raise a step's own prompt into the library** (one operation = one transaction): the action is
-    /// made, the step's declarations move onto it, and the step is pointed at it
-    /// ([`crate::ops::automation::action_from_step`]). Half of it would be an automation that has lost
-    /// its wiring, which is why it is one write.
-    pub fn automation_action_from_step(
+    /// **Write a whole action from one prompt** (one operation = one transaction): the action, the one
+    /// step carrying that prompt, and the ways out and inputs they are declared with
+    /// ([`crate::ops::automation::action_from_prompt`]). Half of it would be an action nothing can
+    /// open, which is why it is one write.
+    pub fn automation_action_from_prompt(
         &mut self,
-        step_id: i64,
         project_id: Option<i64>,
-        name: &str,
+        new: crate::ops::automation::NewStep,
+        exits: &[String],
+        inputs: &[(String, crate::model::AutomationPortKind, bool)],
     ) -> Result<crate::model::AutomationAction> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, step_id)], |tx| {
-            crate::ops::automation::action_from_step(tx, step_id, project_id, name)
+        self.write_one(&[WriteTarget::NewIn(project_id)], |tx| {
+            crate::ops::automation::action_from_prompt(tx, project_id, new, exits, inputs)
         })
     }
 
+    /// Rename a library action (one operation = one transaction).
     pub fn automation_action_update(
         &mut self,
         id: i64,
         name: Option<&str>,
-        prompt: Option<&str>,
     ) -> Result<crate::model::AutomationAction> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
-            crate::ops::automation::action_update(tx, id, name, prompt)
+            crate::ops::automation::action_update(tx, id, name)
+        })
+    }
+
+    /// Name the step a placement of this action opens first, or clear it (one operation = one
+    /// transaction).
+    pub fn automation_action_set_entry(
+        &mut self,
+        id: i64,
+        step_id: Option<i64>,
+    ) -> Result<crate::model::AutomationAction> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
+            crate::ops::automation::action_set_entry(tx, id, step_id)
         })
     }
 
@@ -1613,8 +1624,8 @@ impl Store {
         })
     }
 
-    /// Delete a library action with everything it declared (one operation = one transaction). Refused
-    /// while a step runs it.
+    /// Delete a library action with the steps inside it and everything it declared (one operation =
+    /// one transaction). Refused while it is placed on a picture.
     pub fn automation_action_delete(&mut self, id: i64) -> Result<()> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
             crate::ops::automation::action_delete(tx, id)
@@ -1657,14 +1668,72 @@ impl Store {
         })
     }
 
-    /// Name the step a run starts at, or clear it (one operation = one transaction).
+    /// Name the placement a run starts at, or clear it (one operation = one transaction).
     pub fn automation_set_entry(
         &mut self,
         id: i64,
-        step_id: Option<i64>,
+        placement_id: Option<i64>,
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::set_entry(tx, id, step_id)
+            crate::ops::automation::set_entry(tx, id, placement_id)
+        })
+    }
+
+    /// Put an action on an automation (one operation = one transaction).
+    pub fn automation_placement_add(
+        &mut self,
+        automation_id: i64,
+        action_id: i64,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(
+            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
+            |tx| crate::ops::automation::placement_add(tx, automation_id, action_id),
+        )
+    }
+
+    /// Put an action in on a line (one operation = one transaction): the placement and the two edges
+    /// that leave nothing pointing at nothing.
+    pub fn automation_placement_insert(
+        &mut self,
+        edge_id: i64,
+        action_id: i64,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
+            crate::ops::automation::placement_insert(tx, edge_id, action_id)
+        })
+    }
+
+    /// Write an action from one prompt and put it in on a line (one operation = one transaction): the
+    /// action, its one step, the ways out and inputs they are declared with, the placement, and the
+    /// two edges that leave nothing pointing at nothing.
+    pub fn automation_placement_insert_from_prompt(
+        &mut self,
+        edge_id: i64,
+        new: crate::ops::automation::NewStep,
+        exits: &[String],
+        inputs: &[(String, crate::model::AutomationPortKind, bool)],
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
+            crate::ops::automation::placement_insert_from_prompt(tx, edge_id, new, exits, inputs)
+        })
+    }
+
+    /// Reorder a placement within its automation's lists (one operation = one transaction).
+    pub fn automation_placement_move(
+        &mut self,
+        id: i64,
+        pos: crate::ops::Position,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, id)], |tx| {
+            crate::ops::automation::placement_move(tx, id, pos)
+        })
+    }
+
+    /// Take a placement off its automation with the answers and lines hanging on it (one operation =
+    /// one transaction).
+    pub fn automation_placement_delete(&mut self, id: i64) -> Result<()> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, id)], |tx| {
+            crate::ops::automation::placement_delete(tx, id)
         })
     }
 
@@ -1712,37 +1781,38 @@ impl Store {
         })
     }
 
-    /// Delete a shared document with the links that hand it to steps (one operation = one transaction).
+    /// Delete a shared document with the links that hand it to placements (one operation = one
+    /// transaction).
     pub fn automation_note_delete(&mut self, id: i64) -> Result<()> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Note, id)], |tx| {
             crate::ops::automation::note_delete(tx, id)
         })
     }
 
-    /// Hand a shared document to a step (one operation = one transaction).
+    /// Hand a shared document to a placement (one operation = one transaction).
     pub fn automation_note_link(
         &mut self,
-        step_id: i64,
+        placement_id: i64,
         note_id: i64,
-    ) -> Result<crate::model::AutomationStepNote> {
+    ) -> Result<crate::model::AutomationPlacementNote> {
         self.write_one(
             &[
-                WriteTarget::AutomationPart(AutomationPart::Step, step_id),
+                WriteTarget::AutomationPart(AutomationPart::Placement, placement_id),
                 WriteTarget::AutomationPart(AutomationPart::Note, note_id),
             ],
-            |tx| crate::ops::automation::note_link(tx, step_id, note_id),
+            |tx| crate::ops::automation::note_link(tx, placement_id, note_id),
         )
     }
 
-    /// Stop handing a shared document to a step (one operation = one transaction). Answers whether
-    /// there was a link to take.
-    pub fn automation_note_unlink(&mut self, step_id: i64, note_id: i64) -> Result<bool> {
+    /// Stop handing a shared document to a placement (one operation = one transaction). Answers
+    /// whether there was a link to take.
+    pub fn automation_note_unlink(&mut self, placement_id: i64, note_id: i64) -> Result<bool> {
         self.write_one(
             &[
-                WriteTarget::AutomationPart(AutomationPart::Step, step_id),
+                WriteTarget::AutomationPart(AutomationPart::Placement, placement_id),
                 WriteTarget::AutomationPart(AutomationPart::Note, note_id),
             ],
-            |tx| crate::ops::automation::note_unlink(tx, step_id, note_id),
+            |tx| crate::ops::automation::note_unlink(tx, placement_id, note_id),
         )
     }
 
@@ -1877,23 +1947,21 @@ impl Store {
 
     pub fn automation_step_add(
         &mut self,
-        automation_id: i64,
+        action_id: i64,
         new: crate::ops::automation::NewStep,
     ) -> Result<crate::model::AutomationStep> {
-        self.write_one(
-            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation::step_add(tx, automation_id, new),
-        )
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
+            crate::ops::automation::step_add(tx, action_id, new)
+        })
     }
 
-    /// Change a step (one operation = one transaction). Switching where its prompt comes from moves its
-    /// declarations with it, which is why it rides the same transaction as the columns.
+    /// Change a step (one operation = one transaction).
     #[allow(clippy::too_many_arguments)]
     pub fn automation_step_update(
         &mut self,
         id: i64,
         name: Option<&str>,
-        source: Option<crate::ops::automation::StepSource>,
+        prompt: Option<&str>,
         agent: Option<&str>,
         model: Option<Option<&str>>,
         interactive: Option<bool>,
@@ -1906,7 +1974,7 @@ impl Store {
                 tx,
                 id,
                 name,
-                source,
+                prompt,
                 agent,
                 model,
                 interactive,
@@ -1931,7 +1999,7 @@ impl Store {
         })
     }
 
-    /// Reorder a step within its automation's lists (one operation = one transaction).
+    /// Reorder a step within its action's lists (one operation = one transaction).
     pub fn automation_step_move(
         &mut self,
         id: i64,
@@ -1942,8 +2010,8 @@ impl Store {
         })
     }
 
-    /// Delete a step with its declarations, its document links and every edge and wire naming it (one
-    /// operation = one transaction).
+    /// Delete a step with its declarations and every edge and wire naming it (one operation = one
+    /// transaction).
     pub fn automation_step_delete(&mut self, id: i64) -> Result<()> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, id)], |tx| {
             crate::ops::automation::step_delete(tx, id)
@@ -2043,18 +2111,17 @@ impl Store {
         })
     }
 
-    /// Declare a setting on a step or a library action (one operation = one transaction).
+    /// Declare a setting on a library action (one operation = one transaction).
     pub fn automation_cfg_add(
         &mut self,
-        owner_kind: crate::model::AutomationOwner,
-        owner_id: i64,
+        action_id: i64,
         name: &str,
         kind: crate::model::AutomationCfgKind,
         required: bool,
         options: Option<&str>,
     ) -> Result<crate::model::AutomationCfg> {
-        self.write_one(&[declarer_target(owner_kind, owner_id)], |tx| {
-            crate::ops::automation::cfg_add(tx, owner_kind, owner_id, name, kind, required, options)
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
+            crate::ops::automation::cfg_add(tx, action_id, name, kind, required, options)
         })
     }
 
@@ -2072,16 +2139,16 @@ impl Store {
         })
     }
 
-    /// Answer a setting on one step (one operation = one transaction). A step running a library action
-    /// takes a row of its own under the declared name, and the answer goes there.
+    /// Answer a setting on one placement (one operation = one transaction). The placement takes a row
+    /// of its own under the action's declared name, and the answer goes there.
     pub fn automation_cfg_set(
         &mut self,
-        step_id: i64,
+        placement_id: i64,
         name: &str,
         value: Option<&str>,
     ) -> Result<crate::model::AutomationCfg> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, step_id)], |tx| {
-            crate::ops::automation::cfg_set(tx, step_id, name, value)
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, placement_id)], |tx| {
+            crate::ops::automation::cfg_set(tx, placement_id, name, value)
         })
     }
 
@@ -2103,16 +2170,17 @@ impl Store {
         })
     }
 
-    /// Say what happens after one step leaves through one way out (one operation = one transaction).
+    /// Say what happens after one box leaves through one way out (one operation = one transaction).
     pub fn automation_edge_add(
         &mut self,
-        from_step_id: i64,
+        owner_kind: crate::model::AutomationPictureOwner,
+        from_id: i64,
         exit_name: Option<&str>,
         target: crate::ops::automation::EdgeTarget,
         max_times: Option<i64>,
     ) -> Result<crate::model::AutomationEdge> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, from_step_id)], |tx| {
-            crate::ops::automation::edge_add(tx, from_step_id, exit_name, target, max_times)
+        self.write_one(&[box_target(owner_kind, from_id)], |tx| {
+            crate::ops::automation::edge_add(tx, owner_kind, from_id, exit_name, target, max_times)
         })
     }
 
@@ -2135,27 +2203,26 @@ impl Store {
         })
     }
 
-    /// Join what one way out hands on to what a later step takes in (one operation = one transaction).
+    /// Join what one way out hands on to what a later box takes in (one operation = one transaction).
     pub fn automation_wire_add(
         &mut self,
-        from_step_id: i64,
+        owner_kind: crate::model::AutomationPictureOwner,
+        from_id: i64,
         from_exit_name: Option<&str>,
         from_port_name: &str,
-        to_step_id: i64,
+        to_id: i64,
         to_port_name: &str,
     ) -> Result<crate::model::AutomationWire> {
         self.write_one(
-            &[
-                WriteTarget::AutomationPart(AutomationPart::Step, from_step_id),
-                WriteTarget::AutomationPart(AutomationPart::Step, to_step_id),
-            ],
+            &[box_target(owner_kind, from_id), box_target(owner_kind, to_id)],
             |tx| {
                 crate::ops::automation::wire_add(
                     tx,
-                    from_step_id,
+                    owner_kind,
+                    from_id,
                     from_exit_name,
                     from_port_name,
-                    to_step_id,
+                    to_id,
                     to_port_name,
                 )
             },
@@ -2170,7 +2237,7 @@ impl Store {
     }
 }
 
-/// The write target for whichever of the two declared a way out or a setting.
+/// The write target for whichever of the two declared a way out or a port.
 fn declarer_target(owner_kind: crate::model::AutomationOwner, owner_id: i64) -> WriteTarget {
     match owner_kind {
         crate::model::AutomationOwner::Step => {
@@ -2178,6 +2245,18 @@ fn declarer_target(owner_kind: crate::model::AutomationOwner, owner_id: i64) -> 
         }
         crate::model::AutomationOwner::Action => {
             WriteTarget::AutomationPart(AutomationPart::Action, owner_id)
+        }
+    }
+}
+
+/// The write target for one box of a picture: an automation's is a placement, an action's is a step.
+fn box_target(owner_kind: crate::model::AutomationPictureOwner, box_id: i64) -> WriteTarget {
+    match owner_kind {
+        crate::model::AutomationPictureOwner::Automation => {
+            WriteTarget::AutomationPart(AutomationPart::Placement, box_id)
+        }
+        crate::model::AutomationPictureOwner::Action => {
+            WriteTarget::AutomationPart(AutomationPart::Step, box_id)
         }
     }
 }

@@ -16,7 +16,9 @@
 use rusqlite::Connection;
 
 use crate::error::Result;
-use crate::model::{AttachmentTarget, AutomationOwner};
+use crate::model::{
+    AttachmentTarget, AutomationCfgOwner, AutomationOwner, AutomationPictureOwner,
+};
 use crate::store_engine::read;
 
 pub(super) fn task(conn: &Connection, id: i64) -> Result<Option<i64>> {
@@ -68,9 +70,19 @@ pub(super) fn automation_action(conn: &Connection, id: i64) -> Result<Option<i64
         .and_then(|a| a.project_id))
 }
 
+/// The project a step is in: the library action holding it says, the same way the action's own reach
+/// does — so a step of a device-held action is nobody's project's.
 pub(super) fn automation_step(conn: &Connection, id: i64) -> Result<Option<i64>> {
     match read::automation_step(conn, id).map_err(crate::error::engine_on(conn))? {
-        Some(s) => automation(conn, s.automation_id),
+        Some(s) => automation_action(conn, s.action_id),
+        None => Ok(None),
+    }
+}
+
+/// The project a placement is on — its automation's.
+pub(super) fn automation_placement(conn: &Connection, id: i64) -> Result<Option<i64>> {
+    match read::automation_placement(conn, id).map_err(crate::error::engine_on(conn))? {
+        Some(p) => automation(conn, p.automation_id),
         None => Ok(None),
     }
 }
@@ -82,7 +94,7 @@ pub(super) fn automation_note(conn: &Connection, id: i64) -> Result<Option<i64>>
     }
 }
 
-/// The project behind whichever of the two declared a way out or a setting.
+/// The project behind whichever of the two declared a way out or a port.
 fn automation_declarer(
     conn: &Connection,
     owner_kind: AutomationOwner,
@@ -111,23 +123,48 @@ pub(super) fn automation_port(conn: &Connection, id: i64) -> Result<Option<i64>>
     }
 }
 
+/// The project behind whichever half of a setting this row is: the action's declaration, or one
+/// placement's answer to it.
+fn automation_cfg_owner(
+    conn: &Connection,
+    owner_kind: AutomationCfgOwner,
+    owner_id: i64,
+) -> Result<Option<i64>> {
+    match owner_kind {
+        AutomationCfgOwner::Action => automation_action(conn, owner_id),
+        AutomationCfgOwner::Placement => automation_placement(conn, owner_id),
+    }
+}
+
+/// The project a picture is drawn in: an automation's own, or the one holding the library action.
+fn automation_picture(
+    conn: &Connection,
+    owner_kind: AutomationPictureOwner,
+    owner_id: i64,
+) -> Result<Option<i64>> {
+    match owner_kind {
+        AutomationPictureOwner::Automation => automation(conn, owner_id),
+        AutomationPictureOwner::Action => automation_action(conn, owner_id),
+    }
+}
+
 pub(super) fn automation_cfg(conn: &Connection, id: i64) -> Result<Option<i64>> {
     match read::automation_cfg(conn, id).map_err(crate::error::engine_on(conn))? {
-        Some(c) => automation_declarer(conn, c.owner_kind, c.owner_id),
+        Some(c) => automation_cfg_owner(conn, c.owner_kind, c.owner_id),
         None => Ok(None),
     }
 }
 
 pub(super) fn automation_edge(conn: &Connection, id: i64) -> Result<Option<i64>> {
     match read::automation_edge(conn, id).map_err(crate::error::engine_on(conn))? {
-        Some(e) => automation(conn, e.automation_id),
+        Some(e) => automation_picture(conn, e.owner_kind, e.owner_id),
         None => Ok(None),
     }
 }
 
 pub(super) fn automation_wire(conn: &Connection, id: i64) -> Result<Option<i64>> {
     match read::automation_wire(conn, id).map_err(crate::error::engine_on(conn))? {
-        Some(w) => automation(conn, w.automation_id),
+        Some(w) => automation_picture(conn, w.owner_kind, w.owner_id),
         None => Ok(None),
     }
 }

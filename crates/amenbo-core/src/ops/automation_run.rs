@@ -33,12 +33,12 @@ use rusqlite::Connection;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, Automation, AutomationCfg, AutomationEnds, AutomationExit, AutomationPortDirection,
-    AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStepStatus, AutomationStep,
+    ActorKind, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPortDirection,
+    AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
+    AutomationRunStepStatus,
     RunDefCfg, RunDefExit, RunDefPort, ERROR_EXIT,
 };
-use crate::ops::automation::{declarer, port_declarer};
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -50,10 +50,14 @@ use crate::time::Timestamp;
 /// as English, and the build screen draws them as a list beside the step each belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unmet {
-    /// The automation has no steps at all. Nothing else is worth saying about it.
+    /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
     NoSteps,
-    /// No step is named as the entry, so there is nowhere for a run to start and nothing is reachable.
+    /// No placement is named as the entry, so there is nowhere for a run to start and nothing is
+    /// reachable.
     NoEntry,
+    /// An action standing on the picture has no step to open — none written yet, or none named as its
+    /// entry. A run reaching that spot would have no terminal to put up.
+    ActionEmpty { action: String },
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
     EntryTakesNoTask { step: String },
@@ -81,8 +85,11 @@ impl Unmet {
     /// falls back to.
     pub fn say(&self) -> String {
         match self {
-            Unmet::NoSteps => "it has no steps".to_string(),
-            Unmet::NoEntry => "no step is named as the entry".to_string(),
+            Unmet::NoSteps => "no action is placed on it".to_string(),
+            Unmet::NoEntry => "no placement is named as the entry".to_string(),
+            Unmet::ActionEmpty { action } => {
+                format!("the action '{action}' placed on it has no step to start at")
+            }
             Unmet::EntryTakesNoTask { step } => {
                 format!("the entry '{step}' takes no task — declare a task_take output on one of its ways out")
             }
@@ -113,6 +120,7 @@ impl Unmet {
         match self {
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
+            Unmet::ActionEmpty { .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
             // The unnamed way out is a sentence of its own: there is no name to put in one.
             Unmet::OpenExit { exit: None, .. } => ErrorCode::NotReadyAutomationOpenExitUnnamed,
@@ -134,6 +142,7 @@ impl Unmet {
         let msg = Msg::new(self.say()).coded(self.code());
         match self {
             Unmet::NoSteps | Unmet::NoEntry => msg,
+            Unmet::ActionEmpty { action } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step } => msg.with("step", step),
             Unmet::OpenExit { step, exit } => match exit {
                 Some(exit) => msg.with("step", step).with("exit", exit),
@@ -214,10 +223,14 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. Two of the eight
-/// answer alone: an automation with no steps has nothing else to say about it, and one with no entry has
-/// nothing reachable to say it about — every other check is asked of the steps a run would actually
-/// walk, and with no entry that is none of them.
+/// The list is walked in display order, so a person reading it walks their own picture. Two of the nine
+/// answer alone: an automation with nothing placed on it has nothing else to say about it, and one with
+/// no entry has nothing reachable to say it about — every other check is asked of the placements a run
+/// would actually walk, and with no entry that is none of them.
+///
+/// **What is asked of a placement is asked of the action standing on it**, except the agent and the
+/// model: those are each inner step's own answer (`AMB-D-950`), so they are asked of every step the
+/// action holds.
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
@@ -229,78 +242,107 @@ pub fn check(
 ) -> Result<Vec<Unmet>> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
-    let steps = read::automation_steps_of(conn, automation_id)?;
-    if steps.is_empty() {
+    let placements = read::automation_placements_of(conn, automation_id)?;
+    if placements.is_empty() {
         return Ok(vec![Unmet::NoSteps]);
     }
-    let Some(entry_id) = automation.entry_step_id else {
+    let Some(entry_id) = automation.entry_placement_id else {
         return Ok(vec![Unmet::NoEntry]);
     };
-    let by_id: BTreeMap<i64, &AutomationStep> = steps.iter().map(|s| (s.id, s)).collect();
+    let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let live = reachable(conn, entry_id, &by_id)?;
 
     let mut unmet = Vec::new();
     if let Some(entry) = by_id.get(&entry_id) {
-        if !takes_a_task(conn, entry)? {
-            unmet.push(Unmet::EntryTakesNoTask { step: entry.name.clone() });
+        if !takes_a_task(conn, entry.action_id)? {
+            unmet.push(Unmet::EntryTakesNoTask { step: action_name(conn, entry.action_id)? });
         }
     }
-    for step in steps.iter().filter(|s| live.contains(&s.id)) {
-        for exit in read::automation_exits_of(conn, declarer(step).0, declarer(step).1)? {
+    for placement in placements.iter().filter(|p| live.contains(&p.id)) {
+        let name = action_name(conn, placement.action_id)?;
+        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
             // The error way out is the one nobody has to answer for. Every step and every action is
             // born carrying it (crate::ops::automation), so asking for an edge on each of them
-            // would put one more thing to write on every step somebody adds — for the case that is
-            // already handled. Left alone it halts the run and calls a person, and an edge on it is
-            // how somebody says otherwise.
+            // would put one more thing to write on every action somebody places — for the case that
+            // is already handled. Left alone it halts the run and calls a person, and an edge on it
+            // is how somebody says otherwise.
             if exit.name.as_deref() == Some(ERROR_EXIT) {
                 continue;
             }
-            if !decided(conn, step.id, exit.name.as_deref(), &by_id)? {
-                unmet.push(Unmet::OpenExit { step: step.name.clone(), exit: exit.name.clone() });
+            if !decided(conn, placement.id, exit.name.as_deref(), &by_id)? {
+                unmet.push(Unmet::OpenExit { step: name.clone(), exit: exit.name.clone() });
             }
         }
-        let (port_kind, port_owner) = port_declarer(step);
-        for port in read::automation_ports_of(conn, port_kind, port_owner, AutomationPortDirection::In)? {
-            if port.required && !fed(conn, step, &port.name, &live, &by_id)? {
-                unmet.push(Unmet::UnwiredInput { step: step.name.clone(), port: port.name });
+        for port in read::automation_ports_of(
+            conn,
+            AutomationPortOwner::Action,
+            placement.action_id,
+            AutomationPortDirection::In,
+        )? {
+            if port.required && !fed(conn, placement, &port.name, &live, &by_id)? {
+                unmet.push(Unmet::UnwiredInput { step: name.clone(), port: port.name });
             }
         }
-        for cfg in settings_of(conn, step)? {
+        for cfg in settings_of(conn, placement)? {
             if cfg.required && cfg.value.is_none() {
-                unmet.push(Unmet::UnansweredCfg { step: step.name.clone(), cfg: cfg.name });
+                unmet.push(Unmet::UnansweredCfg { step: name.clone(), cfg: cfg.name });
             }
         }
-        if let Some(startable) = startable {
-            if !startable.iter().any(|id| id == &step.agent) {
-                unmet.push(Unmet::AgentMissing {
-                    step: step.name.clone(),
-                    agent: step.agent.clone(),
-                });
-            }
+        let steps = steps_opened_by(conn, placement.action_id)?;
+        if steps.is_empty() {
+            unmet.push(Unmet::ActionEmpty { action: name.clone() });
+            continue;
         }
-        // Asked of the step's own model, and only where the agent offered a list (`ModelsHere`). A
-        // step naming no model is on whatever the provider's own settings have, which is not a name
-        // this could judge.
-        if let (Some(model), Some(offered)) = (step.model.as_deref(), models.get(&step.agent)) {
-            if !offered.iter().any(|id| id == model) {
-                unmet.push(Unmet::ModelMissing {
-                    step: step.name.clone(),
-                    agent: step.agent.clone(),
-                    model: model.to_string(),
-                });
+        for step in &steps {
+            if let Some(startable) = startable {
+                if !startable.iter().any(|id| id == &step.agent) {
+                    unmet.push(Unmet::AgentMissing {
+                        step: step.name.clone(),
+                        agent: step.agent.clone(),
+                    });
+                }
+            }
+            // Asked of the step's own model, and only where the agent offered a list (`ModelsHere`).
+            // A step naming no model is on whatever the provider's own settings have, which is not a
+            // name this could judge.
+            if let (Some(model), Some(offered)) = (step.model.as_deref(), models.get(&step.agent)) {
+                if !offered.iter().any(|id| id == model) {
+                    unmet.push(Unmet::ModelMissing {
+                        step: step.name.clone(),
+                        agent: step.agent.clone(),
+                        model: model.to_string(),
+                    });
+                }
             }
         }
     }
     Ok(unmet)
 }
 
-/// The steps a run could actually reach, walked from the entry along the edges that go on to another
-/// step. A step nothing reaches is not checked: it cannot stop a run, and refusing to launch over one
-/// would make an automation undeletable-in-practice while its author was still drawing it.
+/// What a placement is called in a refusal: the name of the action standing on it.
+fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
+    Ok(read::automation_action(conn, action_id)?
+        .map(|a| a.name)
+        .unwrap_or_else(|| format!("action '{action_id}'")))
+}
+
+/// **The steps a run opens when it reaches one action.** Today that is the one the action starts at,
+/// and an action with no entry opens nothing; walking the whole column inside is `AMB-T-5313`'s.
+fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model::AutomationStep>> {
+    let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
+        return Ok(Vec::new());
+    };
+    Ok(read::automation_step(conn, entry)?.into_iter().collect())
+}
+
+/// The placements a run could actually reach, walked from the entry along the edges that go on to
+/// another placement. A placement nothing reaches is not checked: it cannot stop a run, and refusing to
+/// launch over one would make an automation undeletable-in-practice while its author was still drawing
+/// it.
 fn reachable(
     conn: &Connection,
     entry_id: i64,
-    by_id: &BTreeMap<i64, &AutomationStep>,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<BTreeSet<i64>> {
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
@@ -308,10 +350,15 @@ fn reachable(
         if !by_id.contains_key(&id) || !seen.insert(id) {
             continue;
         }
-        let step = by_id[&id];
-        for exit in read::automation_exits_of(conn, declarer(step).0, declarer(step).1)? {
-            let edge = read::automation_edge_for_exit(conn, id, exit.name.as_deref())?;
-            if let Some(next) = edge.and_then(|e| e.to_step_id) {
+        let placement = by_id[&id];
+        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+            let edge = read::automation_edge_for_exit(
+                conn,
+                AutomationPictureOwner::Automation,
+                id,
+                exit.name.as_deref(),
+            )?;
+            if let Some(next) = edge.and_then(|e| e.to_id) {
                 todo.push(next);
             }
         }
@@ -319,27 +366,34 @@ fn reachable(
     Ok(seen)
 }
 
-/// Whether a way out has something set to happen after it. An edge that goes on to a step of some other
-/// automation — or to none — decides nothing, so it counts as undecided rather than as an edge.
+/// Whether a way out has something set to happen after it. An edge that goes on to a placement of some
+/// other automation — or to none — decides nothing, so it counts as undecided rather than as an edge.
 fn decided(
     conn: &Connection,
-    step_id: i64,
+    placement_id: i64,
     exit_name: Option<&str>,
-    by_id: &BTreeMap<i64, &AutomationStep>,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<bool> {
-    let Some(edge) = read::automation_edge_for_exit(conn, step_id, exit_name)? else {
+    let Some(edge) = read::automation_edge_for_exit(
+        conn,
+        AutomationPictureOwner::Automation,
+        placement_id,
+        exit_name,
+    )?
+    else {
         return Ok(false);
     };
-    Ok(match edge.to_step_id {
+    Ok(match edge.to_id {
         Some(to) => by_id.contains_key(&to),
         None => true,
     })
 }
 
-/// Whether a step declares a `task_take` output on any of its ways out — the thing that makes it usable
-/// as an entry, since the task it comes out holding is what the run is about from there on.
-fn takes_a_task(conn: &Connection, step: &AutomationStep) -> Result<bool> {
-    for exit in read::automation_exits_of(conn, declarer(step).0, declarer(step).1)? {
+/// Whether an action declares a `task_take` output on any of its ways out — the thing that makes a
+/// placement of it usable as an entry, since the task it comes out holding is what the run is about
+/// from there on.
+fn takes_a_task(conn: &Connection, action_id: i64) -> Result<bool> {
+    for exit in read::automation_exits_of(conn, AutomationOwner::Action, action_id)? {
         if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
             return Ok(true);
         }
@@ -352,33 +406,38 @@ fn takes_a_task(conn: &Connection, step: &AutomationStep) -> Result<bool> {
 fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model::AutomationPort>> {
     Ok(read::automation_ports_of(
         conn,
-        crate::model::AutomationPortOwner::Exit,
+        AutomationPortOwner::Exit,
         exit.id,
         AutomationPortDirection::Out,
     )?)
 }
 
 /// Whether anything actually reaches one input. A wire counts only where **both** halves hold: its far
-/// end is declared — that step's way out really hands on a port of that name — and that step is
-/// reachable from the entry. A wire whose far end was renamed underneath it is parted rather than
-/// rewritten ([`crate::ops::automation`]), and a wire from a step no run reaches would never carry
+/// end is declared — that placement's way out really hands on a port of that name — and that placement
+/// is reachable from the entry. A wire whose far end was renamed underneath it is parted rather than
+/// rewritten ([`crate::ops::automation`]), and a wire from a placement no run reaches would never carry
 /// anything, so neither of them feeds an input.
 fn fed(
     conn: &Connection,
-    step: &AutomationStep,
+    placement: &AutomationPlacement,
     port_name: &str,
     live: &BTreeSet<i64>,
-    by_id: &BTreeMap<i64, &AutomationStep>,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<bool> {
-    for wire in read::automation_wires_to_port(conn, step.id, port_name)? {
-        if !live.contains(&wire.from_step_id) {
+    for wire in read::automation_wires_to_port(
+        conn,
+        AutomationPictureOwner::Automation,
+        placement.id,
+        port_name,
+    )? {
+        if !live.contains(&wire.from_id) {
             continue;
         }
-        let Some(from) = by_id.get(&wire.from_step_id) else { continue };
+        let Some(from) = by_id.get(&wire.from_id) else { continue };
         let exit = read::automation_exit_by_name(
             conn,
-            declarer(from).0,
-            declarer(from).1,
+            AutomationOwner::Action,
+            from.action_id,
             wire.from_exit_name.as_deref(),
         )?;
         let Some(exit) = exit else { continue };
@@ -389,23 +448,18 @@ fn fed(
     Ok(false)
 }
 
-/// One step's settings, **declaration and answer together**. Public because the build screen draws the
-/// same pair and must not put them back together a second way ([`crate::ops::automation::cfg_set`]). A step carrying its own prompt declared
-/// them itself and answers on the same row; a step running a library action reads the declaration from
-/// the action and answers on a row of its own under the same name
+/// One placement's settings, **declaration and answer together**. Public because the build screen draws
+/// the same pair and must not put them back together a second way. The action declares and carries no
+/// answer; the placement answers on a row of its own under the same name
 /// ([`crate::ops::automation::cfg_set`]), so the two have to be put back together here.
-pub fn settings_of(conn: &Connection, step: &AutomationStep) -> Result<Vec<AutomationCfg>> {
-    let (owner_kind, owner_id) = declarer(step);
-    let declared = read::automation_cfgs_of(conn, owner_kind, owner_id)?;
-    if owner_kind == crate::model::AutomationOwner::Step {
-        return Ok(declared);
-    }
+pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec<AutomationCfg>> {
+    let declared = read::automation_cfgs_of(conn, AutomationCfgOwner::Action, placement.action_id)?;
     let mut out = Vec::with_capacity(declared.len());
     for mut cfg in declared {
         cfg.value = read::automation_cfg_by_name(
             conn,
-            crate::model::AutomationOwner::Step,
-            step.id,
+            AutomationCfgOwner::Placement,
+            placement.id,
             &cfg.name,
         )?
         .and_then(|answer| answer.value);
@@ -414,7 +468,7 @@ pub fn settings_of(conn: &Connection, step: &AutomationStep) -> Result<Vec<Autom
     Ok(out)
 }
 
-/// **Launch an automation**: check it, copy its steps into a run, and start it.
+/// **Launch an automation**: check it, copy what is placed on it into a run, and start it.
 ///
 /// Three things refuse, in this order.
 ///
@@ -469,8 +523,8 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    for step in read::automation_steps_of(tx.conn(), automation_id)? {
-        let def = snapshot(tx, run.id, &step, now)?;
+    for placement in read::automation_placements_of(tx.conn(), automation_id)? {
+        let def = snapshot(tx, run.id, &placement, now)?;
         emit_create(tx, record::automation_run_def(&def))?;
     }
     Ok(run)
@@ -492,38 +546,46 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
     Error::NotReady(msg)
 }
 
-/// **One step, as it stands at this moment** — the copy a run reads from then on.
+/// **One placement, as it stands at this moment** — the copy a run reads from then on.
 ///
-/// The prompt is resolved here rather than kept as a pointer: a step running a library action would
-/// otherwise read whatever that action was edited into halfway through the run. The three JSON columns
-/// hold what has no column of its own, and they are written from the same two places every other read of
-/// a step's declarations goes to ([`declarer`], [`port_declarer`]).
+/// The ways out, the inputs and the settings are the placement's: the action's declarations with this
+/// spot's answers written in. The prompt, the agent, the model and the three flags are the step the
+/// action opens, resolved here rather than kept as a pointer — the action would otherwise be read
+/// halfway through the run as whatever it had since been edited into.
+///
+/// One row per placement, which is one row per step while an action opens a single step. Walking the
+/// whole column inside an action, and writing a row per step of it, is `AMB-T-5313`'s.
 fn snapshot(
     tx: &WriteTx<'_>,
     run_id: i64,
-    step: &AutomationStep,
+    placement: &AutomationPlacement,
     now: Timestamp,
 ) -> Result<AutomationRunDef> {
     let conn = tx.conn();
-    let prompt = match step.action_id {
-        None => step.prompt.clone(),
-        Some(action_id) => read::automation_action(conn, action_id)?.map(|a| a.prompt),
-    };
+    let action = read::automation_action(conn, placement.action_id)?
+        .ok_or_else(|| not_found("action", placement.action_id))?;
+    let step = steps_opened_by(conn, placement.action_id)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::invalid(format!("action '{}' has no step to open", action.name)))?;
     let mut exits = Vec::new();
-    for exit in read::automation_exits_of(conn, declarer(step).0, declarer(step).1)? {
+    for exit in read::automation_exits_of(conn, AutomationOwner::Action, action.id)? {
         let outs = outs_of(conn, &exit)?
             .into_iter()
             .map(|p| RunDefPort { name: p.name, kind: p.kind, required: p.required })
             .collect();
         exits.push(RunDefExit { name: exit.name.clone(), outs });
     }
-    let (port_kind, port_owner) = port_declarer(step);
-    let ins: Vec<RunDefPort> =
-        read::automation_ports_of(conn, port_kind, port_owner, AutomationPortDirection::In)?
-            .into_iter()
-            .map(|p| RunDefPort { name: p.name, kind: p.kind, required: p.required })
-            .collect();
-    let cfg: Vec<RunDefCfg> = settings_of(conn, step)?
+    let ins: Vec<RunDefPort> = read::automation_ports_of(
+        conn,
+        AutomationPortOwner::Action,
+        action.id,
+        AutomationPortDirection::In,
+    )?
+    .into_iter()
+    .map(|p| RunDefPort { name: p.name, kind: p.kind, required: p.required })
+    .collect();
+    let cfg: Vec<RunDefCfg> = settings_of(conn, placement)?
         .into_iter()
         .map(|c| RunDefCfg {
             name: c.name,
@@ -536,13 +598,14 @@ fn snapshot(
     Ok(AutomationRunDef {
         id: read::next_id(conn, "automation_run_def")?,
         run_id,
+        placement_id: Some(placement.id),
         step_id: Some(step.id),
-        name: step.name.clone(),
-        prompt,
-        agent: step.agent.clone(),
-        model: step.model.clone(),
+        name: action.name,
+        prompt: Some(step.prompt),
+        agent: step.agent,
+        model: step.model,
         interactive: step.interactive,
-        work_dir_ref: step.work_dir_ref.clone(),
+        work_dir_ref: step.work_dir_ref,
         report_to_task: step.report_to_task,
         show_history: step.show_history,
         exits: serde_json::to_string(&exits).map_err(Error::from)?,
@@ -553,22 +616,23 @@ fn snapshot(
     })
 }
 
-/// **The step a run starts at** — the copy taken at launch of the automation's entry step, or `None`
-/// where the automation has since lost its entry or the run carries no copy of it.
+/// **The spot a run starts at** — the copy taken at launch of the automation's entry placement, or
+/// `None` where the automation has since lost its entry or the run carries no copy of it.
 ///
-/// It is read off the live definition's `entry_step_id` and matched against the copies by `step_id`,
-/// because the copy itself does not say which of them the entry was: the picture is walked from the
-/// entry along the edges, and a run that is under way has already walked past it.
+/// It is read off the live definition's `entry_placement_id` and matched against the copies by
+/// `placement_id`, because the copy itself does not say which of them the entry was: the picture is
+/// walked from the entry along the edges, and a run that is under way has already walked past it.
 pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
     let Some(run) = read::automation_run(conn, run_id)? else {
         return Err(not_found("run", run_id));
     };
-    let Some(entry) = read::automation(conn, run.automation_id)?.and_then(|a| a.entry_step_id) else {
+    let Some(entry) = read::automation(conn, run.automation_id)?.and_then(|a| a.entry_placement_id)
+    else {
         return Ok(None);
     };
     Ok(read::automation_run_defs_of(conn, run_id)?
         .into_iter()
-        .find(|def| def.step_id == Some(entry)))
+        .find(|def| def.placement_id == Some(entry)))
 }
 
 /// **What a run is waiting for**, in the three shapes a watcher has to tell apart.
@@ -634,67 +698,72 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     // Everything below is a run standing between two steps with nothing to stand towards. A way out
     // that closed or halted the run would have done so in the report that took it, so a run still
     // `running` here is one whose picture stopped leading anywhere after it had already left.
-    let Some(from) = read::automation_run_def(conn, last.run_def_id)?.and_then(|def| def.step_id)
+    let Some(from) = read::automation_run_def(conn, last.run_def_id)?.and_then(|def| def.placement_id)
     else {
         return Ok(Waiting::NoWayOn);
     };
-    let Some(edge) = read::automation_edge_for_exit(conn, from, last.exit_name.as_deref())? else {
+    let Some(edge) = read::automation_edge_for_exit(
+        conn,
+        AutomationPictureOwner::Automation,
+        from,
+        last.exit_name.as_deref(),
+    )?
+    else {
         return Ok(Waiting::NoWayOn);
     };
-    let Some(to) = edge.to_step_id.filter(|_| edge.ends == AutomationEnds::Go) else {
+    let Some(to) = edge.to_id.filter(|_| edge.ends == AutomationEnds::Go) else {
         return Ok(Waiting::NoWayOn);
     };
     Ok(read::automation_run_defs_of(conn, run_id)?
         .into_iter()
-        .find(|def| def.step_id == Some(to))
+        .find(|def| def.placement_id == Some(to))
         .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{AutomationEdge, AutomationOwner, AutomationPortOwner};
-    use crate::ops::automation::{
-        self, EdgeTarget, NewAutomation, NewStep, StepSource,
-    };
-    use crate::ops::test_support::{mk_project, with_tx};
+    use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
+    use crate::ops::test_support::{mk_placed, mk_project, only_step, with_tx};
 
-    /// What every test here starts from: one automation, one step that takes a task and closes the run,
-    /// and every way out of it decided. It launches as it stands, so each test can take one thing back
-    /// off and watch the check find it.
-    fn launchable(tx: &WriteTx<'_>) -> (Automation, AutomationStep) {
+    fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
-        let automation = automation::add(
+        automation::add(tx, project, NewAutomation { name: name.into(), ..Default::default() })
+            .expect("add automation")
+    }
+
+    /// What every test here starts from: one automation, one action of one step that takes a task and
+    /// closes the run, placed once, and every way out of it decided. It launches as it stands, so each
+    /// test can take one thing back off and watch the check find it.
+    fn launchable(tx: &WriteTx<'_>) -> (Automation, AutomationAction, AutomationPlacement) {
+        let automation = mk_automation(tx, "1件やりきる");
+        let (action, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
+        takes_task_on(tx, action.id, None);
+        automation::edge_add(
             tx,
-            project,
-            NewAutomation { name: "1件やりきる".into(), ..Default::default() },
+            AutomationPictureOwner::Automation,
+            placement.id,
+            None,
+            EdgeTarget::Done,
+            None,
         )
-        .expect("add automation");
-        let step = automation::step_add(
-            tx,
-            automation.id,
-            NewStep::with_prompt("取る", "take one", "claude"),
-        )
-        .expect("add step");
-        takes_task_on(tx, &step, None);
-        automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
+        .expect("edge");
         // Nothing is written for the error way out: it is carried from birth and halts unless
         // somebody says otherwise, which is what `an_error_way_out_nobody_answered_for_is_not_open`
         // holds this to.
-        let automation = automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
-        (automation, step)
+        let automation =
+            automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
+        (automation, action, placement)
     }
 
-    /// Declare a `task_take` output on one way out of a step — what makes it usable as an entry.
-    fn takes_task_on(tx: &WriteTx<'_>, step: &AutomationStep, exit_name: Option<&str>) {
-        let exit = read::automation_exit_by_name(
-            tx.conn(),
-            declarer(step).0,
-            declarer(step).1,
-            exit_name,
-        )
-        .expect("read")
-        .expect("the way out");
+    /// Declare a `task_take` output on one way out of an action — what makes a placement of it usable
+    /// as an entry.
+    fn takes_task_on(tx: &WriteTx<'_>, action_id: i64, exit_name: Option<&str>) {
+        let exit =
+            read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action_id, exit_name)
+                .expect("read")
+                .expect("the way out");
         automation::port_add(
             tx,
             AutomationPortOwner::Exit,
@@ -705,6 +774,24 @@ mod tests {
             true,
         )
         .expect("port");
+    }
+
+    /// Name a model on the one step an action holds.
+    fn names_model(tx: &WriteTx<'_>, action: &AutomationAction, model: &str) {
+        let step = only_step(tx, action);
+        automation::step_update(
+            tx,
+            step.id,
+            None,
+            None,
+            None,
+            Some(Some(model)),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("name a model");
     }
 
     /// The machine every test launches on: one that can start `claude`, with a window
@@ -725,7 +812,7 @@ mod tests {
     #[test]
     fn a_finished_automation_passes_the_check_and_launches_running() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
@@ -738,15 +825,9 @@ mod tests {
     }
 
     #[test]
-    fn an_automation_with_no_steps_says_only_that() {
+    fn an_automation_with_nothing_placed_on_it_says_only_that() {
         with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let automation = automation::add(
-                tx,
-                project,
-                NewAutomation { name: "空".into(), ..Default::default() },
-            )
-            .expect("add");
+            let automation = mk_automation(tx, "空");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::NoSteps],
@@ -758,7 +839,7 @@ mod tests {
     #[test]
     fn an_automation_with_no_entry_says_only_that() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             automation::set_entry(tx, automation.id, None).expect("clear entry");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
@@ -768,24 +849,35 @@ mod tests {
         });
     }
 
+    /// **An action with nothing to open is refused** (`AMB-D-949`). A placement of it is drawn on the
+    /// picture like any other, and a run reaching it would have no terminal to put up.
+    #[test]
+    fn a_placement_standing_on_an_action_with_no_step_is_refused() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            automation::action_set_entry(tx, action.id, None).expect("take the entry off");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::ActionEmpty { action: "取る".into() }],
+            );
+        });
+    }
+
     #[test]
     fn an_entry_that_takes_no_task_is_refused() {
         with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let automation = automation::add(
+            let automation = mk_automation(tx, "1件やりきる");
+            let (_, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
+            automation::edge_add(
                 tx,
-                project,
-                NewAutomation { name: "1件やりきる".into(), ..Default::default() },
+                AutomationPictureOwner::Automation,
+                placement.id,
+                None,
+                EdgeTarget::Done,
+                None,
             )
-            .expect("add");
-            let step = automation::step_add(
-                tx,
-                automation.id,
-                NewStep::with_prompt("取る", "take one", "claude"),
-            )
-            .expect("step");
-            automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
-            automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
+            .expect("edge");
+            automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::EntryTakesNoTask { step: "取る".into() }],
@@ -796,9 +888,10 @@ mod tests {
     #[test]
     fn a_way_out_with_nothing_after_it_is_refused() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
-            let exit = automation::exit_add(tx, AutomationOwner::Step, step.id, Some("直すところがある"))
-                .expect("exit");
+            let (automation, action, _) = launchable(tx);
+            let exit =
+                automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
+                    .expect("exit");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::OpenExit { step: "取る".into(), exit: exit.name.clone() }],
@@ -812,7 +905,7 @@ mod tests {
         with_tx(|tx| {
             // `launchable` writes no edge on the error way out, so a check that asked for one would
             // refuse the automation every other test here launches.
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert_eq!(unmet, vec![], "the error way out is carried from birth, not written");
         });
@@ -821,11 +914,11 @@ mod tests {
     #[test]
     fn a_required_input_nothing_reaches_is_refused() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
+            let (automation, action, _) = launchable(tx);
             automation::port_add(
                 tx,
-                AutomationPortOwner::Step,
-                step.id,
+                AutomationPortOwner::Action,
+                action.id,
                 AutomationPortDirection::In,
                 "下書き",
                 AutomationPortKind::Value,
@@ -840,21 +933,16 @@ mod tests {
     }
 
     #[test]
-    fn a_wire_from_a_step_no_run_reaches_does_not_feed_an_input() {
+    fn a_wire_from_a_placement_no_run_reaches_does_not_feed_an_input() {
         with_tx(|tx| {
-            let (automation, entry) = launchable(tx);
-            // A second step, wired into the entry's input but reached by nothing: the run would walk
-            // straight past it, so what it hands on never arrives.
-            let orphan = automation::step_add(
-                tx,
-                automation.id,
-                NewStep::with_prompt("書く", "write it", "claude"),
-            )
-            .expect("step");
+            let (automation, entry_action, entry) = launchable(tx);
+            // A second placement, wired into the entry's input but reached by nothing: the run would
+            // walk straight past it, so what it hands on never arrives.
+            let (orphan_action, orphan) = mk_placed(tx, &automation, "書く", "write it", "claude");
             let exit = read::automation_exit_by_name(
                 tx.conn(),
-                AutomationOwner::Step,
-                orphan.id,
+                AutomationOwner::Action,
+                orphan_action.id,
                 None,
             )
             .expect("read")
@@ -871,15 +959,24 @@ mod tests {
             .expect("out");
             automation::port_add(
                 tx,
-                AutomationPortOwner::Step,
-                entry.id,
+                AutomationPortOwner::Action,
+                entry_action.id,
                 AutomationPortDirection::In,
                 "下書き",
                 AutomationPortKind::Value,
                 true,
             )
             .expect("in");
-            automation::wire_add(tx, orphan.id, None, "下書き", entry.id, "下書き").expect("wire");
+            automation::wire_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                orphan.id,
+                None,
+                "下書き",
+                entry.id,
+                "下書き",
+            )
+            .expect("wire");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
@@ -891,11 +988,10 @@ mod tests {
     #[test]
     fn a_required_setting_nobody_answered_is_refused() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
             automation::cfg_add(
                 tx,
-                AutomationOwner::Step,
-                step.id,
+                action.id,
                 "作業フォルダ",
                 crate::model::AutomationCfgKind::Folder,
                 true,
@@ -905,48 +1001,9 @@ mod tests {
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "作業フォルダ".into() }],
+                "the declaration is the action's and the answer is the placement's",
             );
-            automation::cfg_set(tx, step.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
-        });
-    }
-
-    #[test]
-    fn a_library_actions_setting_is_answered_on_the_step() {
-        with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let automation = automation::add(
-                tx,
-                project,
-                NewAutomation { name: "1件やりきる".into(), ..Default::default() },
-            )
-            .expect("add");
-            let action = automation::action_add(tx, Some(project), "取る", "take one").expect("action");
-            automation::cfg_add(
-                tx,
-                AutomationOwner::Action,
-                action.id,
-                "絞り込み",
-                crate::model::AutomationCfgKind::TaskFilter,
-                true,
-                None,
-            )
-            .expect("cfg");
-            let step = automation::step_add(
-                tx,
-                automation.id,
-                NewStep { source: StepSource::Action(action.id), ..NewStep::with_prompt("取る", "", "claude") },
-            )
-            .expect("step");
-            takes_task_on(tx, &step, None);
-            automation::edge_add(tx, step.id, None, EdgeTarget::Done, None).expect("edge");
-            automation::set_entry(tx, automation.id, Some(step.id)).expect("entry");
-            assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "絞り込み".into() }],
-                "the declaration is the action's and the answer is the step's",
-            );
-            automation::cfg_set(tx, step.id, "絞り込み", Some("{}")).expect("answer");
+            automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
         });
     }
@@ -954,7 +1011,7 @@ mod tests {
     #[test]
     fn an_agent_this_machine_cannot_start_is_refused_and_an_unasked_machine_is_not() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&[]), nothing_asked()).expect("check"),
                 vec![Unmet::AgentMissing { step: "取る".into(), agent: "claude".into() }],
@@ -978,20 +1035,8 @@ mod tests {
     #[test]
     fn a_model_the_agent_does_not_offer_here_is_refused() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
-            automation::step_update(
-                tx,
-                step.id,
-                None,
-                None,
-                None,
-                Some(Some("opus-9")),
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("name a model");
+            let (automation, action, _) = launchable(tx);
+            names_model(tx, &action, "opus-9");
             assert_eq!(
                 check(
                     tx.conn(),
@@ -1023,20 +1068,8 @@ mod tests {
     #[test]
     fn a_model_is_judged_only_against_an_agent_that_answered() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
-            automation::step_update(
-                tx,
-                step.id,
-                None,
-                None,
-                None,
-                Some(Some("opus-9")),
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("name a model");
+            let (automation, action, _) = launchable(tx);
+            names_model(tx, &action, "opus-9");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
@@ -1054,7 +1087,7 @@ mod tests {
     #[test]
     fn a_step_naming_no_model_is_not_judged_on_one() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             assert_eq!(
                 check(
                     tx.conn(),
@@ -1072,7 +1105,7 @@ mod tests {
     #[test]
     fn an_archived_automation_and_a_closed_workspace_each_refuse_the_launch() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             let startable = claude();
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
@@ -1084,8 +1117,8 @@ mod tests {
     #[test]
     fn the_refusal_carries_one_part_per_reason() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
-            automation::exit_add(tx, AutomationOwner::Step, step.id, Some("直すところがある"))
+            let (automation, action, _) = launchable(tx);
+            automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                 .expect("exit");
             let err = launch(tx, automation.id, &here(&[])).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
@@ -1111,7 +1144,7 @@ mod tests {
     fn the_two_refusals_that_stand_alone_name_themselves_too() {
         with_tx(|tx| {
             let startable = claude();
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             automation::update(tx, automation.id, None, None, None, Some(true)).expect("archive");
             let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
             let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
@@ -1130,24 +1163,28 @@ mod tests {
     }
 
     #[test]
-    fn the_steps_are_copied_into_the_run_and_stop_following_the_definition() {
+    fn what_is_placed_is_copied_into_the_run_and_stops_following_the_definition() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
             let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(defs.len(), 1);
             assert_eq!(defs[0].name, "取る");
             assert_eq!(defs[0].prompt.as_deref(), Some("take one"));
+            assert_eq!(defs[0].placement_id, Some(placement.id));
             assert_eq!(defs[0].step_id, Some(step.id));
             let exits: Vec<RunDefExit> = serde_json::from_str(&defs[0].exits).expect("exits");
             assert_eq!(exits.len(), 2, "the unnamed way out and the error one");
             assert_eq!(exits[0].outs[0].kind, AutomationPortKind::TaskTake);
 
+            automation::action_update(tx, action.id, Some("取り直す"))
+                .expect("edit the definition under the run");
             automation::step_update(
                 tx,
                 step.id,
-                Some("取り直す"),
-                Some(StepSource::Prompt("take another".into())),
+                None,
+                Some("take another"),
                 None,
                 None,
                 None,
@@ -1155,9 +1192,10 @@ mod tests {
                 None,
                 None,
             )
-            .expect("edit the definition under the run");
+            .expect("rewrite the prompt under the run");
             let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(defs[0].name, "取る", "the copy is what the run reads from here on");
+            assert_eq!(defs[0].prompt.as_deref(), Some("take one"));
         });
     }
 
@@ -1169,14 +1207,14 @@ mod tests {
     #[test]
     fn what_a_run_is_waiting_to_have_opened_is_read_off_what_it_has_already_done() {
         with_tx(|tx| {
-            let (automation, step) = launchable(tx);
+            let (automation, _, placement) = launchable(tx);
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
 
             // Nothing has run yet, so what is waiting is where the run starts.
             let Waiting::Step(first) = next_def(tx.conn(), run.id).expect("next") else {
                 panic!("the entry is what a fresh run waits for")
             };
-            assert_eq!(first.step_id, Some(step.id));
+            assert_eq!(first.placement_id, Some(placement.id));
 
             // A step under way is nobody's to open a second time.
             let opening = match crate::ops::automation_step::open(tx, run.id, first.id, None)
@@ -1213,12 +1251,12 @@ mod tests {
     ///
     /// The two are one answer to look at — nothing is open either way — and telling them apart is the
     /// whole of why there are three. A definition goes on being edited while runs of it are out, so a
-    /// run that has lost the step it would start at is a shape that happens rather than one that
+    /// run that has lost the spot it would start at is a shape that happens rather than one that
     /// cannot; left as "nothing to do" it holds its task for the rest of the session.
     #[test]
-    fn a_run_that_has_lost_the_step_it_would_start_at_says_it_cannot_go_on() {
+    fn a_run_that_has_lost_the_spot_it_would_start_at_says_it_cannot_go_on() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Step(_)));
 
@@ -1236,38 +1274,37 @@ mod tests {
     }
 
     /// A picture with somewhere to stand towards: the entry takes a task and leaves through its
-    /// unnamed way out into a second step, which closes the run. What the tests about a run standing
-    /// between two steps start from — [`launchable`]'s single step closes the run on the spot and
-    /// never stands anywhere.
-    fn two_steps(tx: &WriteTx<'_>) -> (Automation, AutomationStep, AutomationEdge) {
-        let project = mk_project(tx, "amenbo");
-        let automation = automation::add(
+    /// unnamed way out into a second placement, which closes the run. What the tests about a run
+    /// standing between two spots start from — [`launchable`]'s single placement closes the run on the
+    /// spot and never stands anywhere.
+    fn two_spots(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, AutomationEdge) {
+        let automation = mk_automation(tx, "取って読む");
+        let (first_action, first) = mk_placed(tx, &automation, "取る", "take one", "claude");
+        takes_task_on(tx, first_action.id, None);
+        let (_, second) = mk_placed(tx, &automation, "読む", "read it back", "claude");
+        automation::edge_add(
             tx,
-            project,
-            NewAutomation { name: "取って読む".into(), ..Default::default() },
+            AutomationPictureOwner::Automation,
+            second.id,
+            None,
+            EdgeTarget::Done,
+            None,
         )
-        .expect("add automation");
-        let first = automation::step_add(
+        .expect("edge");
+        let onward = automation::edge_add(
             tx,
-            automation.id,
-            NewStep::with_prompt("取る", "take one", "claude"),
+            AutomationPictureOwner::Automation,
+            first.id,
+            None,
+            EdgeTarget::Go(second.id),
+            None,
         )
-        .expect("add step");
-        takes_task_on(tx, &first, None);
-        let second = automation::step_add(
-            tx,
-            automation.id,
-            NewStep::with_prompt("読む", "read it back", "claude"),
-        )
-        .expect("add step");
-        automation::edge_add(tx, second.id, None, EdgeTarget::Done, None).expect("edge");
-        let onward =
-            automation::edge_add(tx, first.id, None, EdgeTarget::Go(second.id), None).expect("edge");
+        .expect("edge");
         automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
         (automation, first, onward)
     }
 
-    /// Walk that picture as far as the gap between its two steps: the entry opened, a task taken, and
+    /// Walk that picture as far as the gap between its two spots: the entry opened, a task taken, and
     /// a report that left through the way out leading on. The run is left `running` with nothing
     /// open, which is the one state [`Waiting`]'s three answers are told apart in.
     fn standing_between(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -1290,21 +1327,21 @@ mod tests {
             .expect("report");
         assert!(
             matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Step(_)),
-            "with the picture as it stands, the second step is what it waits for",
+            "with the picture as it stands, the second spot is what it waits for",
         );
         read::automation_run(tx.conn(), run.id).expect("read").expect("the run")
     }
 
-    /// **The step it left from is no longer in the picture.** The run's copy of it is still there —
-    /// that is what a copy is for — but the copy no longer names a live step, and a way out is read
-    /// off the live one.
+    /// **The spot it left from is no longer in the picture.** The run's copy of it is still there —
+    /// that is what a copy is for — but the copy no longer names a live placement, and a way out is
+    /// read off the live picture.
     #[test]
-    fn a_run_whose_step_was_taken_out_from_under_it_says_it_cannot_go_on() {
+    fn a_run_whose_spot_was_taken_out_from_under_it_says_it_cannot_go_on() {
         with_tx(|tx| {
-            let (automation, first, _) = two_steps(tx);
+            let (automation, first, _) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
-            automation::step_delete(tx, first.id).expect("delete the step");
+            automation::placement_delete(tx, first.id).expect("take the placement off");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
             assert_eq!(
@@ -1320,7 +1357,7 @@ mod tests {
     #[test]
     fn a_run_whose_way_out_lost_its_edge_says_it_cannot_go_on() {
         with_tx(|tx| {
-            let (automation, _, onward) = two_steps(tx);
+            let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
             automation::edge_delete(tx, onward.id).expect("delete the edge");
@@ -1335,7 +1372,7 @@ mod tests {
     #[test]
     fn a_run_whose_way_out_now_ends_the_run_says_it_cannot_go_on() {
         with_tx(|tx| {
-            let (automation, _, onward) = two_steps(tx);
+            let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
             automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
@@ -1345,23 +1382,18 @@ mod tests {
         });
     }
 
-    /// **It leads to a step the run never copied down.** A step added after the launch is not in the
-    /// run's own copies, and a run reads its copies rather than the live picture — so an edge pointed
-    /// at one leads nowhere this run can go.
+    /// **It leads to a spot the run never copied down.** A placement added after the launch is not in
+    /// the run's own copies, and a run reads its copies rather than the live picture — so an edge
+    /// pointed at one leads nowhere this run can go.
     #[test]
-    fn a_run_sent_to_a_step_added_after_it_launched_says_it_cannot_go_on() {
+    fn a_run_sent_to_a_spot_added_after_it_launched_says_it_cannot_go_on() {
         with_tx(|tx| {
-            let (automation, _, onward) = two_steps(tx);
+            let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
-            let late = automation::step_add(
-                tx,
-                automation.id,
-                NewStep::with_prompt("直す", "fix it", "claude"),
-            )
-            .expect("add step");
+            let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
             automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
-                .expect("point it at the new step");
+                .expect("point it at the new placement");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
         });
@@ -1372,7 +1404,7 @@ mod tests {
     #[test]
     fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {
-            let (automation, _) = launchable(tx);
+            let (automation, _, _) = launchable(tx);
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("launch");
             let second = launch(tx, automation.id, &here(&startable)).expect("launch");

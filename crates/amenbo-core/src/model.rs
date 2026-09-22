@@ -1275,15 +1275,21 @@ pub struct Attachment {
 
 // ───────────────────────── automation: what is built ─────────────────────────
 //
-// Ten records for the definition, mirroring the ten definition tables the store_engine schema
+// Eleven records for the definition, mirroring the eleven definition tables the store_engine schema
 // declares. What ran is five more tables that no model shape covers yet — they are the launch side's,
 // and nothing here reads them.
 //
-// Two of them hang off either a step or a library action. A settings declaration (AutomationCfg) and a
-// way out (AutomationExit) are written the same whichever of the two declares them, so they carry an
-// AutomationOwner instead of two nullable keys.
+// Three layers, one word each (`AMB-D-949`): an Automation places AutomationActions, an action holds
+// AutomationSteps, and one step is one terminal. An AutomationPlacement is one action standing at one
+// spot of one automation.
+//
+// Four of the records hang off more than one kind of owner, because what they say is the same
+// whichever of them says it: a way out (AutomationExit) and a port (AutomationPort) are a step's or
+// an action's, a setting (AutomationCfg) is declared by an action and answered by a placement, and
+// the picture (AutomationEdge, AutomationWire) is drawn either on an automation or inside an action.
+// Each carries an owner enum instead of one nullable key per kind.
 
-/// Which of the two an [`AutomationCfg`] or an [`AutomationExit`] hangs off.
+/// Which of the two an [`AutomationExit`] or an [`AutomationPort`] is declared by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationOwner {
@@ -1308,9 +1314,71 @@ impl AutomationOwner {
     }
 }
 
-/// Which of the three an [`AutomationPort`] hangs off. What a step takes in is declared by the step or
-/// by the action it points at; what it hands on is declared by the way out it left through, so the
-/// exit is a third owner here and nowhere else.
+/// Which of the two halves of a setting an [`AutomationCfg`] row is: the action's declaration, or one
+/// placement's answer to it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationCfgOwner {
+    Action,
+    Placement,
+}
+
+impl AutomationCfgOwner {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationCfgOwner::Action => "action",
+            AutomationCfgOwner::Placement => "placement",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationCfgOwner> {
+        match s {
+            "action" => Some(AutomationCfgOwner::Action),
+            "placement" => Some(AutomationCfgOwner::Placement),
+            _ => None,
+        }
+    }
+}
+
+/// Which picture an [`AutomationEdge`] or an [`AutomationWire`] is drawn on — and with it, what the
+/// boxes at either end are: an automation's are [`AutomationPlacement`]s, an action's are
+/// [`AutomationStep`]s.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationPictureOwner {
+    #[default]
+    Automation,
+    Action,
+}
+
+impl AutomationPictureOwner {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationPictureOwner::Automation => "automation",
+            AutomationPictureOwner::Action => "action",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationPictureOwner> {
+        match s {
+            "automation" => Some(AutomationPictureOwner::Automation),
+            "action" => Some(AutomationPictureOwner::Action),
+            _ => None,
+        }
+    }
+
+    /// The table the boxes of this picture are rows of — what `from_id` and `to_id` name.
+    pub fn box_table(&self) -> &'static str {
+        match self {
+            AutomationPictureOwner::Automation => "automation_placement",
+            AutomationPictureOwner::Action => "automation_step",
+        }
+    }
+}
+
+/// Which of the three an [`AutomationPort`] hangs off. What a step or an action takes in is declared by
+/// that step or action; what it hands on is declared by the way out it left through, so the exit is a
+/// third owner here and nowhere else.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationPortOwner {
@@ -1492,11 +1560,14 @@ pub const ERROR_EXIT: &str = "*";
 /// converges, not a review that goes round three times.
 pub const DEFAULT_MAX_TIMES: i64 = 10;
 
-/// **A prompt worth using twice** — one entry of the library. `project_id` `None` is one held by the
+/// **A unit worth using twice** — one entry of the library. `project_id` `None` is one held by the
 /// device rather than by a project, and it is reachable from every project on it.
 ///
-/// It names no agent and no model: who is asked to carry the prompt out is
-/// [`AutomationStep`]'s answer, so two automations can run the same action with different agents.
+/// It is a picture of its own: the [`AutomationStep`]s hang off it, the edges and wires between them
+/// are drawn on it, and `entry_step_id` is the step a placement of it opens first.
+///
+/// It names no agent and no model: who is asked to carry a prompt out is each [`AutomationStep`]'s
+/// answer, so two automations can run the same action with different agents.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationAction {
     pub id: i64,
@@ -1504,17 +1575,21 @@ pub struct AutomationAction {
     #[serde(default)]
     pub project_id: Option<i64>,
     pub name: String,
-    pub prompt: String,
+    /// The step this action opens first. `None` while it is still being built; launching an
+    /// automation that places it is refused at the launch check, not here.
+    #[serde(default)]
+    pub entry_step_id: Option<i64>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
 
-/// **One automation** — its steps, what runs after what, and the preamble every step's launch carries.
+/// **One automation** — the actions placed on it, what runs after what, and the preamble every step's
+/// launch carries.
 ///
-/// `entry_step_id` is where a run starts; from it the edges are walked, and the place a step sits in
-/// the picture and the number it is drawn with both fall out of that walk rather than out of
-/// `order_key`, which records only the order the steps were added in.
+/// `entry_placement_id` is where a run starts; from it the edges are walked, and the place a
+/// placement sits in the picture and the number it is drawn with both fall out of that walk rather
+/// than out of `order_key`, which records only the order things were added in.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Automation {
     pub id: i64,
@@ -1524,10 +1599,10 @@ pub struct Automation {
     /// Prepended to every step's launch. Kept short — the material a prompt would otherwise repeat
     /// belongs in an [`AutomationNote`].
     pub preamble: String,
-    /// The step a run opens its first terminal on. `None` while the automation is still being built;
-    /// launching without one is refused at the launch check, not here.
+    /// The placement a run opens first. `None` while the automation is still being built; launching
+    /// without one is refused at the launch check, not here.
     #[serde(default)]
-    pub entry_step_id: Option<i64>,
+    pub entry_placement_id: Option<i64>,
     #[serde(default)]
     pub archived: bool,
     pub order_key: String,
@@ -1535,8 +1610,22 @@ pub struct Automation {
     pub updated_at: Timestamp,
 }
 
-/// **A document the steps of one automation share.** Long is fine here; which steps are handed it is
-/// [`AutomationStepNote`]'s to say.
+/// **One action, placed on one automation.** It carries no prompt, no agent and no way out of its own
+/// — those are the action's. What is this row's is which action stands here, and, through the
+/// [`AutomationCfg`] answers and the lines drawn onto it, everything that belongs to this spot rather
+/// than to the library. The same action placed twice gives two rows.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationPlacement {
+    pub id: i64,
+    pub automation_id: i64,
+    pub action_id: i64,
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **A document the placements of one automation share.** Long is fine here; which placements are
+/// handed it is [`AutomationPlacementNote`]'s to say.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationNote {
     pub id: i64,
@@ -1548,20 +1637,14 @@ pub struct AutomationNote {
     pub updated_at: Timestamp,
 }
 
-/// **One step of one automation.** Either it points at a library action (`action_id`) or it carries its
-/// own `prompt`; exactly one of the two is set, and which it is decides where its ways out, its
-/// settings declarations and its inputs are read from.
+/// **One step of one action**, and one terminal when it is opened. Its `prompt` is its own — an action
+/// holds the prompts rather than being one.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationStep {
     pub id: i64,
-    pub automation_id: i64,
+    pub action_id: i64,
     pub name: String,
-    /// The library action this step runs, or `None` when it carries its own `prompt`.
-    #[serde(default)]
-    pub action_id: Option<i64>,
-    /// The prompt written for this step alone, or `None` when it points at an action.
-    #[serde(default)]
-    pub prompt: Option<String>,
+    pub prompt: String,
     pub agent: String,
     /// `None` leaves the agent's own default model.
     #[serde(default)]
@@ -1569,7 +1652,8 @@ pub struct AutomationStep {
     /// May this step wait for a person? A step that does not say so is not left standing on one.
     #[serde(default)]
     pub interactive: bool,
-    /// The name of the setting or the input the working folder is taken from — a name, not a path.
+    /// The name of the setting or the input the working folder is taken from — a name, not a path, so
+    /// the answer is given where the action is placed rather than baked in here.
     #[serde(default)]
     pub work_dir_ref: Option<String>,
     /// Does this step's report also land as a comment on the task?
@@ -1583,13 +1667,13 @@ pub struct AutomationStep {
     pub updated_at: Timestamp,
 }
 
-/// **A setting, declared by an action or a step and answered where it is used.** An action's row is the
-/// declaration alone, so its `value` is `None`; a step pointing at that action carries a row of its own
+/// **A setting, declared by an action and answered where it is placed.** The action's row is the
+/// declaration alone, so its `value` is `None`; each placement of that action carries a row of its own
 /// under the same `name`, and that is where the answer written while building sits.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationCfg {
     pub id: i64,
-    pub owner_kind: AutomationOwner,
+    pub owner_kind: AutomationCfgOwner,
     pub owner_id: i64,
     pub name: String,
     pub kind: AutomationCfgKind,
@@ -1597,7 +1681,7 @@ pub struct AutomationCfg {
     /// The choices, as JSON, for `kind = Choice`. `None` for every other kind.
     #[serde(default)]
     pub options: Option<String>,
-    /// The answer written while building, as JSON. `None` on an action's declaration row.
+    /// The answer written while building, as JSON. `None` on the action's declaration row.
     #[serde(default)]
     pub value: Option<String>,
     pub order_key: String,
@@ -1605,11 +1689,11 @@ pub struct AutomationCfg {
     pub updated_at: Timestamp,
 }
 
-/// **Which shared documents a step is handed.**
+/// **Which shared documents a placement is handed**, and with it every step opened under it.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct AutomationStepNote {
+pub struct AutomationPlacementNote {
     pub id: i64,
-    pub step_id: i64,
+    pub placement_id: i64,
     pub note_id: i64,
     pub order_key: String,
     pub created_at: Timestamp,
@@ -1617,8 +1701,8 @@ pub struct AutomationStepNote {
 }
 
 /// **A way out of a step or an action**, named by whoever built it. Which one the agent took is the
-/// whole condition the next step is chosen by. `name` `None` is the unnamed way out, which is what a
-/// step with only one has; [`ERROR_EXIT`] is the one every owner carries from birth.
+/// whole condition the next box is chosen by. `name` `None` is the unnamed way out, which is what an
+/// owner with only one has; [`ERROR_EXIT`] is the one every owner carries from birth.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationExit {
     pub id: i64,
@@ -1631,8 +1715,8 @@ pub struct AutomationExit {
     pub updated_at: Timestamp,
 }
 
-/// **What a step takes in, and what a way out of it hands on.** One record for both, told apart by
-/// `direction`.
+/// **What a step or an action takes in, and what a way out of it hands on.** One record for both, told
+/// apart by `direction`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationPort {
     pub id: i64,
@@ -1649,20 +1733,24 @@ pub struct AutomationPort {
 
 /// **What happens after a way out is taken.** The edge carries no condition of its own: the exit *is*
 /// the condition.
+///
+/// `owner_kind` says which picture the line is drawn on, and with it what `from_id` and `to_id` name —
+/// a placement on an automation, a step inside an action.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationEdge {
     pub id: i64,
-    pub automation_id: i64,
-    pub from_step_id: i64,
+    pub owner_kind: AutomationPictureOwner,
+    pub owner_id: i64,
+    pub from_id: i64,
     /// The way out this edge hangs on — `None` for the unnamed one, [`ERROR_EXIT`] for the error one.
     #[serde(default)]
     pub exit_name: Option<String>,
     /// Where it goes, for `ends = Go`. `None` for `Done` and `Halt`, which go nowhere.
     #[serde(default)]
-    pub to_step_id: Option<i64>,
+    pub to_id: Option<i64>,
     pub ends: AutomationEnds,
     /// How often this edge may be taken for one task. `None` is no limit, which is the right answer for
-    /// an edge into a step that takes a fresh task.
+    /// an edge into a box that takes a fresh task.
     #[serde(default)]
     pub max_times: Option<i64>,
     pub order_key: String,
@@ -1670,18 +1758,20 @@ pub struct AutomationEdge {
     pub updated_at: Timestamp,
 }
 
-/// **What is handed from one step to the next.** Both ends are named rather than keyed: the same action
-/// used at two places in one automation gives two steps whose ports carry the same names, so only
-/// `step_id` + `exit_name` + `port_name` says which of them is meant.
+/// **What is handed from one box to the next**, on either of the two pictures an [`AutomationEdge`] is
+/// drawn on. Both ends are named rather than keyed: one action placed twice on an automation gives two
+/// placements whose ports carry the same names, so only `from_id` + `from_exit_name` + `from_port_name`
+/// says which of them is meant.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationWire {
     pub id: i64,
-    pub automation_id: i64,
-    pub from_step_id: i64,
+    pub owner_kind: AutomationPictureOwner,
+    pub owner_id: i64,
+    pub from_id: i64,
     #[serde(default)]
     pub from_exit_name: Option<String>,
     pub from_port_name: String,
-    pub to_step_id: i64,
+    pub to_id: i64,
     pub to_port_name: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1805,11 +1895,15 @@ pub struct AutomationRun {
 pub struct AutomationRunDef {
     pub id: i64,
     pub run_id: i64,
+    /// Which spot of the picture this copy was opened from, or `None` where that placement has since
+    /// been taken off.
+    #[serde(default)]
+    pub placement_id: Option<i64>,
     /// The way back to the live definition, or `None` where that step has since been deleted.
     #[serde(default)]
     pub step_id: Option<i64>,
     pub name: String,
-    /// The prompt as it read at launch — the step's own, or the library action's, already resolved.
+    /// The prompt as it read at launch.
     #[serde(default)]
     pub prompt: Option<String>,
     pub agent: String,

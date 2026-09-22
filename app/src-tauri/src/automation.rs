@@ -2,11 +2,16 @@
 //! doors behind the automations screen, its build screen, the "running" tab and the pane a run is
 //! drawn in.
 //!
-//! Core owns the ten definition tables, the writes that build them
+//! Core owns the eleven definition tables, the writes that build them
 //! ([`amenbo_core::ops::automation`]) and the read that resolves them
-//! ([`amenbo_core::ops::automation_view`]) — a step's ways out, its inputs and its settings come
-//! already read off the library action it points at or off itself. Nothing is built or resolved
-//! here. What this side does is name: the same rows under the names a screen draws them by.
+//! ([`amenbo_core::ops::automation_view`]) — a spot's ways out, its inputs and its settings come
+//! already read off the library action standing on it. Nothing is built or resolved here. What this
+//! side does is name: the same rows under the names a screen draws them by.
+//!
+//! **Three layers, and this side names the one the picture is drawn in** (`AMB-D-949`). A box on the
+//! build screen is a placement; what it declares is the action's, and what it runs on is that
+//! action's step. A door here takes whichever of the three the write belongs to, so a screen never
+//! has to walk from one to another to find out where a field lives.
 //!
 //! **The launch check is core's, and is asked here rather than repeated**
 //! ([`amenbo_core::ops::automation_run::check`]). It was written twice once, and the two lists
@@ -38,11 +43,11 @@
 //! with this (`AMB-T-5289`).
 
 use amenbo_core::model::{
-    ActorKind, AutomationCfg, AutomationCfgKind, AutomationOwner, AutomationPort,
-    AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
-    AutomationStoppedReason,
+    ActorKind, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationOwner,
+    AutomationPictureOwner, AutomationPort, AutomationPortDirection, AutomationPortKind,
+    AutomationPortOwner, AutomationRunStatus, AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::{NewAutomation, NewStep, StepSource};
+use amenbo_core::ops::automation::{NewAutomation, NewStep};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -53,8 +58,8 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationCardDto, AutomationCfgDto, AutomationDetailDto,
     AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto, AutomationLaunchCheckDto,
-    AutomationPortDto, AutomationRunCardDto, AutomationRunStartedDto, AutomationRunTaskDto,
-    AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
+    AutomationPlacementDto, AutomationPortDto, AutomationRunCardDto, AutomationRunStartedDto,
+    AutomationRunTaskDto, AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
 use tauri::Emitter;
@@ -73,7 +78,7 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
         .map(|card| AutomationCardDto {
             id: card.automation.id,
             name: card.automation.name,
-            steps: card.steps,
+            placements: card.placements,
             archived: card.automation.archived,
         })
         .collect())
@@ -142,115 +147,112 @@ pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
 /// **The library this project reaches** — the device's own actions first, then the project's own.
 ///
 /// The two libraries answer as one list because they are one list on screen: what a reader is
-/// choosing between is every prompt a step here could be pointed at, and which of the two holds one
-/// is a column of that list rather than a second list to go and look in.
+/// choosing between is every action this automation could place, and which of the two holds one is a
+/// column of that list rather than a second list to go and look in.
 #[tauri::command]
 pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_action_page");
     let store = open_store_read()?;
-    let cards = automation_view::action_cards(store.read_model().conn(), Some(project_id))?;
-    Ok(cards
-        .into_iter()
-        .map(|card| AutomationActionCardDto {
+    let conn = store.read_model().conn();
+    let cards = automation_view::action_cards(conn, Some(project_id))?;
+    let mut out = Vec::with_capacity(cards.len());
+    for card in cards {
+        // The prompt on the row is the one the action opens with. An action of several steps has
+        // more than one, and the row then names the first — the whole list is the action's own
+        // screen's (`AMB-T-5315`).
+        let opens = match card.action.entry_step_id {
+            Some(id) => read::automation_step(conn, id)?,
+            None => None,
+        };
+        out.push(AutomationActionCardDto {
             id: card.action.id,
             name: card.action.name,
-            prompt: card.action.prompt,
+            prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
+            entry_step_id: opens.map(|s| s.id),
+            steps: card.steps,
             // The shelf travels as the fact the screen draws rather than as the project id: a screen
             // inside one project would only ever read an id back as "mine" or "the device's".
             global: card.action.project_id.is_none(),
             used_by: card.used_by,
-        })
-        .collect())
+        });
+    }
+    Ok(out)
 }
 
 /// **Make a library action** — a name, and which library it lands in.
 ///
 /// **The prompt is not asked for here.** It is written in the box the list opens on the row
 /// ([`automation_action_edit`]), which is the one place a prompt is written: a second field writing
-/// the same column would be a second place to keep in step. The row is born carrying an empty
-/// prompt, and the screen opens that box on it straight away.
+/// the same text would be a second place to keep in step.
+///
+/// It is born holding one step, and that step is what the action opens — so the box the screen opens
+/// on the new row has a row to write the prompt on. Who is asked to carry it out is not settled here
+/// either, and until somebody picks an agent the run check says so
+/// ([`amenbo_core::ops::automation_run::Unmet::AgentMissing`]). An action of several steps is written
+/// from its own screen (`AMB-T-5315`).
 ///
 /// `project` is which library it lands in — the project's own, or the device's where every project
-/// on this machine reaches it ([`automation_action_from_step`]).
+/// on this machine reaches it.
 #[tauri::command]
 pub fn automation_action_add(project: Option<i64>, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_action_add(project, &name, "")?;
+        store.automation_action_from_prompt(project, NewStep::new(&name, "", ""), &[], &[])?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automationActions"]))
 }
 
-/// **Rename a library action, or rewrite its prompt.** Only what is `Some` is written.
+/// **Rename a library action, and rewrite the prompt the step it opens runs on.** Only what is
+/// `Some` is written, and `step` names the row the prompt is written on — the action's own entry, as
+/// the listing hands it back.
 ///
-/// The rewrite reaches every step pointing at this action, which is what the library is for — and
-/// what the screen says before the box is opened. It does not reach a run already under way: a run
-/// resolves each step's prompt as it opens the step, off the action as it stands at that moment
-/// ([`amenbo_core::ops::automation_run`]), so what a running step carries is settled and this cannot
-/// reach back into it.
+/// The rewrite reaches every placement of this action, which is what the library is for — and what
+/// the screen says before the box is opened. It does not reach a run already under way: a run takes
+/// its copy at the launch ([`amenbo_core::ops::automation_run`]), so what a running step carries is
+/// settled and this cannot reach back into it.
 #[tauri::command]
 pub fn automation_action_edit(
     id: i64,
     name: Option<String>,
+    step: Option<i64>,
     prompt: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_action_update(id, name.as_deref(), prompt.as_deref())?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automationActions"]))
-}
-
-/// **Raise a step's own prompt into the library**: make an action of it, move the step's declarations
-/// onto that action, and point the step at it
-/// ([`amenbo_core::ops::automation::action_from_step`]).
-///
-/// It is the one road from the build screen into the library, which until now could only be filled
-/// from the CLI. The declarations **move** rather than being copied — a step that runs an action
-/// declares nothing of its own — and the picture around the step goes on reading because an edge and
-/// a wire name a way out by its name.
-///
-/// `project` is which library it lands in: the project's own, or the device's where every project on
-/// this machine reaches it. The device's is the wider reach, and the panel says which is which rather
-/// than picking for the reader.
-///
-/// The ack names both: the definition, whose step now points somewhere else, and the library, which
-/// has one more action in it.
-#[tauri::command]
-pub fn automation_action_from_step(
-    step: i64,
-    project: Option<i64>,
-    name: String,
-) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_action_from_step(step, project, &name)?;
+        store.automation_action_update(id, name.as_deref())?;
+        if let (Some(step), Some(prompt)) = (step, prompt.as_deref()) {
+            store.automation_step_update(
+                step,
+                None,
+                Some(prompt),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )?;
+        }
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Change one step of an automation.** Only what is `Some` is written.
+/// **Change the step one library action opens.** Only what is `Some` is written.
 ///
-/// `action` and `prompt` are the two halves of where the prompt comes from, and exactly one may be
-/// given: switching from one to the other takes the step's ways out, its settings and its inputs with
-/// it, because those are read off whichever of the two declares them
-/// ([`amenbo_core::ops::automation::step_update`]). The panel puts that switch on one control for the
-/// same reason — there is no state where a step has both and none where it has neither.
+/// The fields are the step's, not the placement's: a prompt, who is asked to carry it out, the model
+/// and the three flags all belong to the terminal that is stood up, and an action holds the steps
+/// (`AMB-D-950`). Writing one reaches every placement of that action, which is what the library is
+/// for.
 ///
 /// `model` and `work_dir` are each a field with a third answer: written, cleared, or left alone. The
 /// pair of arguments says which — `clear_model` beats a `model` beside it, and the same for the
 /// folder — rather than a single `Option<Option<..>>`, which does not cross the IPC boundary as a
 /// shape a screen can write.
-///
-/// The ack names the library as well as the definition. Pointing a step at an action, or away from
-/// one, moves how many automations that action is used by, which is a column of the actions tab
-/// (`automations_using`).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn automation_step_edit(
     id: i64,
     name: Option<String>,
-    action: Option<i64>,
     prompt: Option<String>,
     agent: Option<String>,
     model: Option<String>,
@@ -261,17 +263,6 @@ pub fn automation_step_edit(
     report_to_task: Option<bool>,
     history: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
-    let source = match (action, prompt.as_deref()) {
-        (Some(_), Some(_)) => {
-            return Err(amenbo_core::Error::invalid(
-                "a step runs a library action or carries a prompt of its own, never both",
-            )
-            .into())
-        }
-        (Some(action), None) => Some(StepSource::Action(action)),
-        (None, Some(prompt)) => Some(StepSource::Prompt(prompt.to_string())),
-        (None, None) => None,
-    };
     let model = match (clear_model, model.as_deref()) {
         (Some(true), _) => Some(None),
         (_, Some(model)) => Some(Some(model)),
@@ -286,7 +277,7 @@ pub fn automation_step_edit(
         store.automation_step_update(
             id,
             name.as_deref(),
-            source,
+            prompt.as_deref(),
             agent.as_deref(),
             model,
             interactive,
@@ -299,81 +290,77 @@ pub fn automation_step_edit(
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-// ───────────────────────── what a step declares ─────────────────────────
-
-/// **The step a declaration may be written on.** A step that runs a library action is refused.
-///
-/// Core refuses the *add* already ([`amenbo_core::ops::automation::cfg_add`] and its neighbours):
-/// a step pointing at an action declares nothing of its own, and a row written on it would sit
-/// unread. What core cannot see is the *edit*, because these doors name a declaration the way the
-/// panel holds it — by the step and the name. There is no id on a setting or an input for the panel
-/// to send: the two rows an action-backed step has under one name are folded into the one row a
-/// screen draws ([`cfg_dto`]), so an id would be ambiguous. Resolved against such a step, a name
-/// would find the row that carries its **answer** ([`automation_cfg_answer`]) and rewrite the
-/// declaration nobody reads off it — silently. So the refusal is here, at the one place that turns a
-/// name into a row.
-fn declaring_step(store: &amenbo_core::Store, step_id: i64) -> Result<(), CmdError> {
-    let step = read::automation_step(store.read_model().conn(), step_id)?
-        .ok_or_else(|| no_step(step_id))?;
-    match step.action_id {
-        None => Ok(()),
-        Some(action_id) => Err(amenbo_core::Error::invalid(format!(
-            "step '{step_id}' runs action '{action_id}', so what it declares is the action's — \
-             write it there, or give the step a prompt of its own first"
-        ))
-        .into()),
-    }
+/// **Take one action off a picture**, with the answers written on it and every line naming it. The
+/// action itself is untouched: the library outlives any one picture.
+#[tauri::command]
+pub fn automation_placement_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_placement_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-fn no_step(step_id: i64) -> CmdError {
-    amenbo_core::Error::not_found(format!("step '{step_id}' not found")).into()
-}
+// ───────────────────────── what an action declares ─────────────────────────
+//
+// A way out, a port and a setting are the action's, never the placement's — which is what lets one
+// action be placed twice and read the same both times. So every door below names the action, and the
+// one door that writes an answer names the placement (`automation_cfg_answer`).
+//
+// There is no id on a setting or an input for a screen to send: the two rows a setting has — the
+// action's declaration and each placement's answer — are folded into the one row a screen draws
+// (cfg_dto), so a name is what turns into a row here.
 
-/// A declaration this step was expected to carry and does not — the panel naming a row that has
+/// A declaration this action was expected to carry and does not — the panel naming a row that has
 /// since gone, which is what a definition re-read after somebody else's write looks like.
-fn undeclared(what: &str, step_id: i64, name: &str) -> CmdError {
-    amenbo_core::Error::not_found(format!("step '{step_id}' declares no {what} called '{name}'"))
+fn undeclared(what: &str, action_id: i64, name: &str) -> CmdError {
+    amenbo_core::Error::not_found(format!("action '{action_id}' declares no {what} called '{name}'"))
         .into()
 }
 
-/// One of this step's ways out, by the name the panel holds it under. `None` is the unnamed one,
+/// One of this action's ways out, by the name the panel holds it under. `None` is the unnamed one,
 /// which is a row like any other and is named by having no name.
-fn exit_row(store: &amenbo_core::Store, step_id: i64, name: Option<&str>) -> Result<i64, CmdError> {
-    declaring_step(store, step_id)?;
+fn exit_row(
+    store: &amenbo_core::Store,
+    action_id: i64,
+    name: Option<&str>,
+) -> Result<i64, CmdError> {
     let found = read::automation_exit_by_name(
         store.read_model().conn(),
-        AutomationOwner::Step,
-        step_id,
+        AutomationOwner::Action,
+        action_id,
         name,
     )?;
     found.map(|one| one.id).ok_or_else(|| match name {
-        Some(name) => undeclared("way out", step_id, name),
+        Some(name) => undeclared("way out", action_id, name),
         None => amenbo_core::Error::not_found(format!(
-            "step '{step_id}' declares no unnamed way out"
+            "action '{action_id}' declares no unnamed way out"
         ))
         .into(),
     })
 }
 
-/// One of this step's settings, by name.
-fn cfg_row(store: &amenbo_core::Store, step_id: i64, name: &str) -> Result<i64, CmdError> {
-    declaring_step(store, step_id)?;
-    let found =
-        read::automation_cfg_by_name(store.read_model().conn(), AutomationOwner::Step, step_id, name)?;
-    found.map(|one| one.id).ok_or_else(|| undeclared("setting", step_id, name))
+/// One of this action's settings, by name.
+fn cfg_row(store: &amenbo_core::Store, action_id: i64, name: &str) -> Result<i64, CmdError> {
+    let found = read::automation_cfg_by_name(
+        store.read_model().conn(),
+        AutomationCfgOwner::Action,
+        action_id,
+        name,
+    )?;
+    found.map(|one| one.id).ok_or_else(|| undeclared("setting", action_id, name))
 }
 
-/// One of this step's inputs, by name.
-fn input_row(store: &amenbo_core::Store, step_id: i64, name: &str) -> Result<i64, CmdError> {
-    declaring_step(store, step_id)?;
+/// One of this action's inputs, by name.
+fn input_row(store: &amenbo_core::Store, action_id: i64, name: &str) -> Result<i64, CmdError> {
     let found = read::automation_port_by_name(
         store.read_model().conn(),
-        AutomationPortOwner::Step,
-        step_id,
+        AutomationPortOwner::Action,
+        action_id,
         AutomationPortDirection::In,
         name,
     )?;
-    found.map(|one| one.id).ok_or_else(|| undeclared("input", step_id, name))
+    found.map(|one| one.id).ok_or_else(|| undeclared("input", action_id, name))
 }
 
 /// The kind a setting takes its answer as, refused here rather than stored: no row may exist whose
@@ -399,17 +386,16 @@ fn port_kind(word: &str) -> Result<AutomationPortKind, CmdError> {
     })
 }
 
-/// **Declare another way out of this step.** Every step is born carrying the unnamed one and the
+/// **Declare another way out of this action.** Every action is born carrying the unnamed one and the
 /// error one, so this is the second and every one after it — and `*` is refused as a name, that one
 /// being carried already ([`amenbo_core::ops::automation::exit_add`]).
 #[tauri::command]
-pub fn automation_exit_declare(step_id: i64, name: String) -> Result<WriteAck, CmdError> {
+pub fn automation_exit_declare(action_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        declaring_step(store, step_id)?;
-        store.automation_exit_add(AutomationOwner::Step, step_id, Some(&name))?;
+        store.automation_exit_add(AutomationOwner::Action, action_id, Some(&name))?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Rename one way out**, `to` being `null` for the unnamed one.
@@ -420,36 +406,36 @@ pub fn automation_exit_declare(step_id: i64, name: String) -> Result<WriteAck, C
 /// ([`amenbo_core::ops::automation::exit_rename`]).
 #[tauri::command]
 pub fn automation_exit_rename(
-    step_id: i64,
+    action_id: i64,
     from: Option<String>,
     to: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let id = exit_row(store, step_id, from.as_deref())?;
+        let id = exit_row(store, action_id, from.as_deref())?;
         store.automation_exit_rename(id, to.as_deref())?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Take one way out away**, with the outputs declared on it. The error one is refused by core:
-/// every step carries it whether or not a row says so.
+/// every action carries it whether or not a row says so.
 #[tauri::command]
-pub fn automation_exit_remove(step_id: i64, name: Option<String>) -> Result<WriteAck, CmdError> {
+pub fn automation_exit_remove(action_id: i64, name: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let id = exit_row(store, step_id, name.as_deref())?;
+        let id = exit_row(store, action_id, name.as_deref())?;
         store.automation_exit_delete(id)?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Declare a setting on this step** — the name it is answered under, the kind of answer it takes,
+/// **Declare a setting on this action** — the name it is answered under, the kind of answer it takes,
 /// and whether it has to be answered. `options` is the choice list, as JSON, and belongs to
-/// `choice` alone.
+/// `choice` alone. Each placement of the action answers it on a row of its own.
 #[tauri::command]
 pub fn automation_cfg_declare(
-    step_id: i64,
+    action_id: i64,
     name: String,
     kind: String,
     required: bool,
@@ -457,18 +443,10 @@ pub fn automation_cfg_declare(
 ) -> Result<WriteAck, CmdError> {
     let kind = cfg_kind(&kind)?;
     with_store_mut(|store| {
-        declaring_step(store, step_id)?;
-        store.automation_cfg_add(
-            AutomationOwner::Step,
-            step_id,
-            &name,
-            kind,
-            required,
-            options.as_deref(),
-        )?;
+        store.automation_cfg_add(action_id, &name, kind, required, options.as_deref())?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Change a setting's declaration.** Only what is `Some` is written, and `name` names the row
@@ -481,7 +459,7 @@ pub fn automation_cfg_declare(
 /// choice list on a kind that would never show it.
 #[tauri::command]
 pub fn automation_cfg_edit(
-    step_id: i64,
+    action_id: i64,
     name: String,
     rename: Option<String>,
     kind: Option<String>,
@@ -496,40 +474,39 @@ pub fn automation_cfg_edit(
         _ => None,
     };
     with_store_mut(|store| {
-        let id = cfg_row(store, step_id, &name)?;
+        let id = cfg_row(store, action_id, &name)?;
         store.automation_cfg_update(id, rename.as_deref(), kind, required, options)?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Take a setting away**, with the answer written on it.
+/// **Take a setting away**, leaving the answers written for it on the placements it was declared to.
 #[tauri::command]
-pub fn automation_cfg_remove(step_id: i64, name: String) -> Result<WriteAck, CmdError> {
+pub fn automation_cfg_remove(action_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let id = cfg_row(store, step_id, &name)?;
+        let id = cfg_row(store, action_id, &name)?;
         store.automation_cfg_delete(id)?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Declare an input on this step** — what it takes in, and whether a run may open it with nothing
-/// reaching that input. An output belongs to the way out that produced it and is not sayable here
-/// ([`amenbo_core::ops::automation::port_add`]).
+/// **Declare an input on this action** — what it takes in, and whether a run may open a placement of
+/// it with nothing reaching that input. An output belongs to the way out that produced it and is not
+/// sayable here ([`amenbo_core::ops::automation::port_add`]).
 #[tauri::command]
 pub fn automation_input_declare(
-    step_id: i64,
+    action_id: i64,
     name: String,
     kind: String,
     required: bool,
 ) -> Result<WriteAck, CmdError> {
     let kind = port_kind(&kind)?;
     with_store_mut(|store| {
-        declaring_step(store, step_id)?;
         store.automation_port_add(
-            AutomationPortOwner::Step,
-            step_id,
+            AutomationPortOwner::Action,
+            action_id,
             AutomationPortDirection::In,
             &name,
             kind,
@@ -537,14 +514,14 @@ pub fn automation_input_declare(
         )?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Change an input's declaration.** Only what is `Some` is written; renaming parts every wire that
 /// named the old name, for [`automation_exit_rename`]'s reason.
 #[tauri::command]
 pub fn automation_input_edit(
-    step_id: i64,
+    action_id: i64,
     name: String,
     rename: Option<String>,
     kind: Option<String>,
@@ -552,25 +529,25 @@ pub fn automation_input_edit(
 ) -> Result<WriteAck, CmdError> {
     let kind = kind.as_deref().map(port_kind).transpose()?;
     with_store_mut(|store| {
-        let id = input_row(store, step_id, &name)?;
+        let id = input_row(store, action_id, &name)?;
         store.automation_port_update(id, rename.as_deref(), kind, required)?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Take an input away.** The wires that fed it are left where they are, parted.
 #[tauri::command]
-pub fn automation_input_remove(step_id: i64, name: String) -> Result<WriteAck, CmdError> {
+pub fn automation_input_remove(action_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let id = input_row(store, step_id, &name)?;
+        let id = input_row(store, action_id, &name)?;
         store.automation_port_delete(id)?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Answer one setting on one step**, or leave it unanswered with no `value`.
+/// **Answer one setting on one placement**, or leave it unanswered with no `value`.
 ///
 /// The answer travels as the JSON its kind takes — a string for a folder, a choice and a text, a
 /// number for a number, and an object naming each part of a task filter. The shape is the screen's to
@@ -578,31 +555,34 @@ pub fn automation_input_remove(step_id: i64, name: String) -> Result<WriteAck, C
 /// (`app/src/screens/automationCfg.ts`); core keeps the text as it is handed and the run reads it
 /// ([`amenbo_core::ops::automation::cfg_set`]).
 ///
-/// A step running a library action answers on a row of its own under the declared name, so a second
-/// step running the same action is not answering for both. That split is core's, and this door does
-/// not have to know which of the two it is writing.
+/// Each placement answers on a row of its own under the declared name, so one action placed twice is
+/// not answered for both at once. That split is core's, and this door does not have to know which of
+/// the two rows it is writing.
 #[tauri::command]
 pub fn automation_cfg_answer(
-    step_id: i64,
+    placement_id: i64,
     name: String,
     value: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_cfg_set(step_id, &name, value.as_deref())?;
+        store.automation_cfg_set(placement_id, &name, value.as_deref())?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Put a step in on a line** — the one road by which a step joins a picture already drawn.
+/// **Put an action in on a line** — the one road by which a box joins a picture already drawn.
+///
+/// `action` places one already in the library. With a `prompt` instead, an action is written from it
+/// first and placed: what stands on a picture is always a placement of an action, and writing the
+/// prompt where the reader is looking is what keeps that from being two screens (`AMB-T-5317`).
 ///
 /// `inputs` is a flat list of triples the screen sends as `[name, kind, required]`, because a struct
 /// per row would be one more shape to keep in step across the boundary for three fields. An unknown
 /// kind is refused here rather than stored: the four are the port kinds core knows
 /// ([`amenbo_core::model::AutomationPortKind`]).
 ///
-/// The whole press is one transaction, edges and all
-/// ([`amenbo_core::ops::automation::step_insert`]): a step left behind with the line still running
+/// The whole press is one transaction, edges and all: a box left behind with the line still running
 /// past it is a picture nobody asked for.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -617,34 +597,40 @@ pub fn automation_step_insert(
     exits: Vec<String>,
     inputs: Vec<(String, String, bool)>,
 ) -> Result<WriteAck, CmdError> {
-    let source = match (action, prompt.as_deref()) {
-        (Some(_), Some(_)) | (None, None) => {
-            return Err(amenbo_core::Error::invalid(
-                "a step runs a library action or carries a prompt of its own",
-            )
-            .into())
-        }
-        (Some(action), None) => StepSource::Action(action),
-        (None, Some(prompt)) => StepSource::Prompt(prompt.to_string()),
-    };
     let mut ports = Vec::with_capacity(inputs.len());
     for (name, kind, required) in inputs {
         ports.push((name, port_kind(&kind)?, required));
     }
-    let new = NewStep {
-        name,
-        source,
-        agent,
-        model,
-        interactive,
-        work_dir_ref: None,
-        report_to_task: false,
-        show_history: true,
-    };
-    with_store_mut(|store| {
-        store.automation_step_insert(edge_id, new, &exits, &ports)?;
-        Ok(())
-    })?;
+    match (action, prompt) {
+        (Some(_), Some(_)) | (None, None) => {
+            return Err(amenbo_core::Error::invalid(
+                "say what stands here — a library action, or a prompt to write one from",
+            )
+            .into())
+        }
+        (Some(action), None) => {
+            with_store_mut(|store| {
+                store.automation_placement_insert(edge_id, action)?;
+                Ok(())
+            })?;
+        }
+        (None, Some(prompt)) => {
+            let new = NewStep {
+                name,
+                prompt,
+                agent,
+                model,
+                interactive,
+                work_dir_ref: None,
+                report_to_task: false,
+                show_history: true,
+            };
+            with_store_mut(|store| {
+                store.automation_placement_insert_from_prompt(edge_id, new, &exits, &ports)?;
+                Ok(())
+            })?;
+        }
+    }
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
@@ -675,25 +661,26 @@ pub fn automation_output_add(
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Say what fills one of a step's inputs**, by naming the way out and the output it comes from.
+/// **Say what fills one of a spot's inputs**, by naming the way out and the output it comes from.
 ///
 /// Drawing the same wire twice answers the one already drawn rather than writing a second row
 /// ([`amenbo_core::ops::automation::wire_add`]), so the screen's control can send what the reader
 /// picked without first working out whether anything was there.
 #[tauri::command]
 pub fn automation_wire_set(
-    from_step_id: i64,
+    from_placement_id: i64,
     from_exit_name: Option<String>,
     from_port_name: String,
-    to_step_id: i64,
+    to_placement_id: i64,
     to_port_name: String,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.automation_wire_add(
-            from_step_id,
+            AutomationPictureOwner::Automation,
+            from_placement_id,
             from_exit_name.as_deref(),
             &from_port_name,
-            to_step_id,
+            to_placement_id,
             &to_port_name,
         )?;
         Ok(())
@@ -1079,17 +1066,17 @@ fn detail_dto(view: automation_view::AutomationView) -> AutomationDetailDto {
         name: a.name,
         notes: a.notes,
         preamble: a.preamble,
-        entry_step_id: a.entry_step_id,
+        entry_placement_id: a.entry_placement_id,
         archived: a.archived,
-        steps: view.steps.into_iter().map(step_dto).collect(),
+        placements: view.placements.into_iter().map(placement_dto).collect(),
         edges: view
             .edges
             .into_iter()
             .map(|edge| AutomationEdgeDto {
                 id: edge.id,
-                from_step_id: edge.from_step_id,
+                from_placement_id: edge.from_id,
                 exit_name: edge.exit_name,
-                to_step_id: edge.to_step_id,
+                to_placement_id: edge.to_id,
                 ends: edge.ends.as_str(),
                 max_times: edge.max_times,
             })
@@ -1099,31 +1086,38 @@ fn detail_dto(view: automation_view::AutomationView) -> AutomationDetailDto {
             .into_iter()
             .map(|wire| AutomationWireDto {
                 id: wire.id,
-                from_step_id: wire.from_step_id,
+                from_placement_id: wire.from_id,
                 from_exit_name: wire.from_exit_name,
                 from_port_name: wire.from_port_name,
-                to_step_id: wire.to_step_id,
+                to_placement_id: wire.to_id,
                 to_port_name: wire.to_port_name,
             })
             .collect(),
     }
 }
 
-/// One step, with the prompt it runs on already chosen between its own and its action's.
-fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
-    let step = view.step;
-    AutomationStepDto {
-        id: step.id,
-        name: step.name,
-        action_id: step.action_id,
-        action_name: view.action.map(|one| one.name),
-        prompt: view.prompt,
-        agent: step.agent,
-        model: step.model,
-        interactive: step.interactive,
-        work_dir_ref: step.work_dir_ref,
-        report_to_task: step.report_to_task,
-        show_history: step.show_history,
+/// One spot on the picture: the action standing there, and the step it opens first flattened onto it
+/// so the panel writes through one shape.
+///
+/// **Flattened because an action opens one step today.** Drawing the whole column inside an action is
+/// its own screen's (`AMB-T-5315`); until there is one, a spot reads exactly as the step it was folded
+/// out of did.
+fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto {
+    let placement = view.placement;
+    let action = view.action;
+    let opens = view.entry_step;
+    AutomationPlacementDto {
+        id: placement.id,
+        name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
+        action_id: placement.action_id,
+        step_id: opens.as_ref().map(|s| s.id),
+        prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
+        agent: opens.as_ref().map(|s| s.agent.clone()).unwrap_or_default(),
+        model: opens.as_ref().and_then(|s| s.model.clone()),
+        interactive: opens.as_ref().is_some_and(|s| s.interactive),
+        work_dir_ref: opens.as_ref().and_then(|s| s.work_dir_ref.clone()),
+        report_to_task: opens.as_ref().is_some_and(|s| s.report_to_task),
+        show_history: opens.as_ref().map_or(true, |s| s.show_history),
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),

@@ -1,29 +1,25 @@
 // @vitest-environment jsdom
-// What the step panel draws and what each control writes (`AMB-T-5256`, `AMB-T-5282`). The reads and
-// the write doors are stubbed; every field, its control and what it sends run for real.
+// What the panel draws for the pressed spot and what each control writes (`AMB-T-5256`,
+// `AMB-T-5282`). The reads and the write doors are stubbed; every field, its control and what it
+// sends run for real.
 //
-// What these guard: **nothing pressed says so** rather than drawing an empty form; **where the prompt
-// comes from is one control**, and a prompt that came from the library is read here and not written;
-// **a setting is answered by the control its kind takes**, a task filter on rows rather than in a
-// filter expression; **an input is filled from a list of what fits**; **the error way out is always
-// the last line of the ways out**; and **an agent this machine cannot start is listed and cannot be
-// picked**, which is what keeps the list from being shorter on one machine than on another.
-//
-// And what a step **declares**, not only what it answers: a way out is written from the line under
-// the list; moving a setting off `choice` takes its list of choices with it, in the one call core
-// will accept; a step running a library action is drawn without any of it, reading the action's; and
-// a refusal lands on the panel rather than in the console.
+// What these guard: **nothing pressed says so** rather than drawing an empty form; **each field
+// writes on the layer it belongs to** (`AMB-D-949`) — the name and the declarations on the library
+// action, the answer on this placement, the prompt and the flags on the action's step; **a setting is
+// answered by the control its kind takes**, a task filter on rows rather than in a filter expression;
+// **an input is filled from a list of what fits**; **the error way out is always the last line of the
+// ways out**; and **a refusal lands on the panel** rather than in the console.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationDetailDto, AutomationStepDto } from "../bindings/bindings";
+import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
+  editAction: vi.fn(),
   editStep: vi.fn(),
   answerCfg: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
-  raise: vi.fn(),
   declareExit: vi.fn(),
   renameExit: vi.fn(),
   removeExit: vi.fn(),
@@ -36,12 +32,11 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../core/automations", () => ({
-  useAutomationActions: () => [{ id: 4, name: "Review", prompt: "", global: false, usedBy: 1 }],
+  editAutomationAction: hoisted.editAction,
   editAutomationStep: hoisted.editStep,
   answerAutomationCfg: hoisted.answerCfg,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
-  raiseStepToLibrary: hoisted.raise,
   declareAutomationExit: hoisted.declareExit,
   renameAutomationExit: hoisted.renameExit,
   removeAutomationExit: hoisted.removeExit,
@@ -56,7 +51,7 @@ vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
 // The machine's own answers. `inTauri` is false in this environment, so neither probe is made and
-// what the panel draws is the step's own value plus whatever these would have added.
+// what the panel draws is the spot's own value plus whatever these would have added.
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
 import { t } from "../core/i18n";
@@ -67,10 +62,13 @@ import { AutomationStepPanel } from "./AutomationStepPanel";
 let container: HTMLDivElement;
 let root: Root;
 
-function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
+/** The action standing at a spot, flattened onto it the way the door hands it over. */
+function spot(over: Partial<AutomationPlacementDto> = {}): AutomationPlacementDto {
   return {
     id: 1,
     name: "Take the next task",
+    actionId: 4,
+    stepId: 11,
     prompt: "take one",
     agent: "claude-code",
     interactive: false,
@@ -90,9 +88,9 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     name: "Morning round",
     notes: "",
     preamble: "",
-    entryStepId: 1,
+    entryPlacementId: 1,
     archived: false,
-    steps: [step()],
+    placements: [spot()],
     edges: [],
     wires: [],
     ...over,
@@ -128,7 +126,6 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   for (const one of Object.values(hoisted)) one.mockReset();
-  hoisted.raise.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -136,108 +133,85 @@ afterEach(() => {
   container.remove();
 });
 
-describe("the step panel", () => {
-  it("says so while no step is pressed", async () => {
-    await render({ automation: detail(), stepId: null, projectId: 1 });
+describe("the panel of one spot", () => {
+  it("says so while nothing is pressed", async () => {
+    await render({ automation: detail(), placementId: null, projectId: 1 });
     expect(container.textContent).toContain(t("auto.step.none"));
     expect(selects()).toHaveLength(0);
   });
 
-  it("writes the name when the caret leaves the box, not a letter at a time", async () => {
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
+  /// The name is the library action's, not the spot's — one action placed twice is one name, which
+  /// is what the library is for.
+  it("writes the name onto the action when the caret leaves the box", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
     const box = boxes()[0]!;
     await typeInto(box, "Take one");
-    expect(hoisted.editStep).not.toHaveBeenCalled();
+    expect(hoisted.editAction).not.toHaveBeenCalled();
     await act(async () => {
       box.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
-    expect(hoisted.editStep).toHaveBeenCalledWith(1, { name: "Take one" });
+    expect(hoisted.editAction).toHaveBeenCalledWith(4, { name: "Take one" });
   });
 
-  /// **The one road from the build screen into the library** (`AMB-T-5277`). Until it was here, the
-  /// only way to put a prompt in the library was the CLI, while the tab that lists them was on screen.
-  it("raises a step's own prompt into a library the reader picks", async () => {
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
-    const press = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((b) => b.textContent === t("auto.step.raise"))!;
-
-    // The name starts as the step's, and is the reader's to change: a step is named for its place in
-    // one automation, an action for what it is.
-    const named = boxes().find((b) => b.getAttribute("aria-label") === t("auto.step.raiseName"))!;
-    expect(named.value).toBe("Take the next task");
-    await typeInto(named, "Take one");
-
-    await act(async () => { press().click(); });
-    expect(hoisted.raise).toHaveBeenCalledWith(1, "Take one", 1);
-
-    // The device's library is the wider reach, and is asked for rather than defaulted to.
-    const reach = selects().find((one) => one.value === "project")!;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
-      setter.call(reach, "device");
-      reach.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => { press().click(); });
-    expect(hoisted.raise).toHaveBeenLastCalledWith(1, "Take one", null);
-  });
-
-  it("offers no raise to a step that already runs a library action", async () => {
-    // There is nothing of its own left to raise, and what it carries is the library's already.
-    await render({
-      automation: detail({ steps: [step({ actionId: 4, actionName: "Review", prompt: "review it" })] }),
-      stepId: 1,
-      projectId: 1,
-    });
-    expect(container.textContent).not.toContain(t("auto.step.raiseWhat"));
-  });
-
-  it("puts where the prompt comes from on one control, the library beside the step's own", async () => {
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
-    const source = selects()[0]!;
-    expect([...source.options].map((one) => one.textContent)).toEqual([
-      t("auto.step.sourceOwn"),
-      "Review",
-    ]);
-    await act(async () => {
-      source.value = "4";
-      source.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(hoisted.editStep).toHaveBeenCalledWith(1, { source: { action: 4 } });
-  });
-
-  it("reads a prompt that came from the library rather than taking it", async () => {
-    const one = detail({ steps: [step({ actionId: 4, actionName: "Review" })] });
-    await render({ automation: one, stepId: 1, projectId: 1 });
+  /// The prompt is the action's step's: what is stood up is a terminal, and an action holds the
+  /// steps (`AMB-D-950`).
+  it("writes the prompt onto the step the action opens", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
     const prompt = container.querySelector<HTMLTextAreaElement>("textarea")!;
-    expect(prompt.readOnly).toBe(true);
-    expect(container.textContent).toContain("Review");
-    // And what its ways out hand on is the library's too, so this step is not offered the control.
-    expect(container.textContent).not.toContain(t("auto.step.outputAdd"));
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(prompt, "take another");
+      prompt.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      prompt.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, { prompt: "take another" });
+  });
+
+  /// An action that holds no step has no prompt to draw and no agent to pick — the launch check is
+  /// what names it, and the panel leaves those fields off rather than drawing them over nothing.
+  it("leaves the step's own fields off where the action opens nothing", async () => {
+    const one = detail({ placements: [spot({ stepId: undefined, prompt: "" })] });
+    await render({ automation: one, placementId: 1, projectId: 1 });
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(container.textContent).not.toContain(t("auto.step.agent"));
+    // What the action declares is still there to write on.
+    expect(container.textContent).toContain(t("auto.step.exits"));
   });
 
   it("answers a task filter on rows, and writes the object naming each part", async () => {
     const one = detail({
-      steps: [step({ settings: [{ name: "which", kind: "taskfilter", required: true }] })],
+      placements: [spot({ settings: [{ name: "which", kind: "taskfilter", required: true }] })],
     });
-    await render({ automation: one, stepId: 1, projectId: 1 });
+    await render({ automation: one, placementId: 1, projectId: 1 });
     const chip = [...container.querySelectorAll<HTMLButtonElement>(".autostep__chip")].find(
       (b) => b.textContent === t("filter.opt.assignee.meAi"),
     )!;
     await act(async () => {
       chip.click();
     });
+    // The answer is the placement's, so one action placed twice is not answered for both.
     expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "which", '{"assignee":["me-ai"]}');
   });
 
   it("fills an input from what fits, and empties it back to nothing reaching it", async () => {
     const one = detail({
-      steps: [
-        step({ id: 1, exits: [{ id: 10, outputs: [{ name: "note", kind: "value", required: true }] }] }),
-        step({ id: 2, name: "work", inputs: [{ name: "note", kind: "value", required: true }] }),
+      placements: [
+        spot({ id: 1, exits: [{ id: 10, outputs: [{ name: "note", kind: "value", required: true }] }] }),
+        spot({
+          id: 2,
+          name: "work",
+          actionId: 5,
+          stepId: 12,
+          inputs: [{ name: "note", kind: "value", required: true }],
+        }),
       ],
-      wires: [{ id: 3, fromStepId: 1, fromPortName: "note", toStepId: 2, toPortName: "note" }],
+      wires: [
+        { id: 3, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" },
+      ],
     });
-    await render({ automation: one, stepId: 2, projectId: 1 });
+    await render({ automation: one, placementId: 2, projectId: 1 });
     const wire = selects().find((s) => [...s.options].some((o) => o.textContent?.includes("note")))!;
     await act(async () => {
       wire.value = "";
@@ -246,64 +220,45 @@ describe("the step panel", () => {
     expect(hoisted.clearWire).toHaveBeenCalledWith(3);
   });
 
-  it("draws the error way out last, and always, on a step that reads the library's", async () => {
-    const one = detail({
-      steps: [
-        step({
-          actionId: 4,
-          actionName: "Review",
-          exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }],
-        }),
-      ],
-    });
-    await render({ automation: one, stepId: 1, projectId: 1 });
-    const named = [...container.querySelectorAll(".autostep__exitname")].map((one) => one.textContent);
-    expect(named).toEqual([t("auto.step.exitUnnamed")]);
-    const last = [...container.querySelectorAll(".autostep__exits li")].pop()!;
-    expect(last.className).toContain("autostep__exiterr");
-    expect(last.textContent).toBe(t("auto.pic.errorExit"));
-    // And nothing to declare with: the ways out, the settings and the inputs are the action's.
-    expect(container.querySelectorAll(".autostep__declare")).toHaveLength(0);
-  });
-
-  it("draws the error way out last among the rows a step's own ways out are written on", async () => {
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
+  it("draws the error way out last, and offers neither a rename nor a delete on it", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
     const ways = [...container.querySelectorAll(".autostep__exits li")];
     expect(ways).toHaveLength(2);
     expect(ways[0]!.querySelector("input")!.placeholder).toBe(t("auto.step.exitUnnamed"));
-    // The error one is drawn and not offered: no box to rename it in, no press to take it away.
     expect(ways[1]!.className).toContain("autostep__exiterr");
+    expect(ways[1]!.textContent).toBe(t("auto.pic.errorExit"));
     expect(ways[1]!.querySelectorAll("input, button")).toHaveLength(0);
   });
 
-  it("declares a way out under the name that was typed, and empties the box once it is written",
-    async () => {
-      await render({ automation: detail(), stepId: 1, projectId: 1 });
-      const line = declareLine(t("auto.step.exitName"));
-      const box = line.querySelector<HTMLInputElement>("input")!;
-      await typeInto(box, "something to fix");
-      await act(async () => {
-        line.querySelector<HTMLButtonElement>("button")!.click();
-      });
-      expect(hoisted.declareExit).toHaveBeenCalledWith(1, "something to fix");
-      expect(box.value).toBe("");
+  it("declares a way out on the action under the name that was typed, and empties the box", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
+    const line = declareLine(t("auto.step.exitName"));
+    const box = line.querySelector<HTMLInputElement>("input")!;
+    await typeInto(box, "something to fix");
+    await act(async () => {
+      line.querySelector<HTMLButtonElement>("button")!.click();
     });
+    expect(hoisted.declareExit).toHaveBeenCalledWith(4, "something to fix");
+    expect(box.value).toBe("");
+  });
 
   it("takes a setting off choice and its list of choices in the one call", async () => {
     const one = detail({
-      steps: [step({ settings: [{ name: "depth", kind: "choice", required: false, options: '["quick"]' }] })],
+      placements: [
+        spot({ settings: [{ name: "depth", kind: "choice", required: false, options: '["quick"]' }] }),
+      ],
     });
-    await render({ automation: one, stepId: 1, projectId: 1 });
+    await render({ automation: one, placementId: 1, projectId: 1 });
     const kind = selects().find((s) => s.value === "choice")!;
     await act(async () => {
       kind.value = "text";
       kind.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    expect(hoisted.editCfg).toHaveBeenCalledWith(1, "depth", { kind: "text", options: null });
+    expect(hoisted.editCfg).toHaveBeenCalledWith(4, "depth", { kind: "text", options: null });
   });
 
-  it("declares an input as what it carries", async () => {
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
+  it("declares an input on the action as what it carries", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
     const line = declareLine(t("auto.step.inputName"));
     await typeInto(line.querySelector<HTMLInputElement>("input")!, "report");
     await act(async () => {
@@ -314,12 +269,12 @@ describe("the step panel", () => {
     await act(async () => {
       line.querySelector<HTMLButtonElement>("button")!.click();
     });
-    expect(hoisted.declareInput).toHaveBeenCalledWith(1, { name: "report", kind: "file" });
+    expect(hoisted.declareInput).toHaveBeenCalledWith(4, { name: "report", kind: "file" });
   });
 
   it("draws what core refused, and leaves the typed name where it can be fixed", async () => {
     hoisted.declareExit.mockRejectedValue("a way out called 'done' is already declared here");
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
     const line = declareLine(t("auto.step.exitName"));
     const box = line.querySelector<HTMLInputElement>("input")!;
     await typeInto(box, "done");
@@ -330,12 +285,12 @@ describe("the step panel", () => {
     expect(box.value).toBe("done");
   });
 
-  it("takes a flag on the spot", async () => {
-    await render({ automation: detail(), stepId: 1, projectId: 1 });
+  it("takes a flag on the spot, onto the step it is a flag of", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
     const check = boxes().find((b) => b.type === "checkbox")!;
     await act(async () => {
       check.click();
     });
-    expect(hoisted.editStep).toHaveBeenCalledWith(1, { interactive: true });
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, { interactive: true });
   });
 });

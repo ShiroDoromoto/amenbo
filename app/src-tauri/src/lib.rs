@@ -482,7 +482,7 @@ pub fn run() {
       automation::automation_action_page,
       automation::automation_action_add,
       automation::automation_action_edit,
-      automation::automation_action_from_step,
+      automation::automation_placement_remove,
       automation::automation_step_edit,
       automation::automation_step_insert,
       automation::automation_output_add,

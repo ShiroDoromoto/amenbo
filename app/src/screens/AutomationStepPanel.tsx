@@ -1,37 +1,26 @@
-// What the pressed step holds, on the build screen's third place (`AMB-T-5256`, `AMB-T-5282`).
+// What the pressed spot holds, on the build screen's third place (`AMB-T-5256`, `AMB-T-5282`).
 //
-// **It stands where it stands, whatever the picture does.** A definition of forty steps draws a
+// **It stands where it stands, whatever the picture does.** A definition of forty boxes draws a
 // picture two thousand pixels tall, and a panel that followed the box a reader pressed would put the
 // contents off the bottom of the screen — so the picture scrolls inside its own place
 // (`./AutomationPicture`) and this one is always in the same spot.
 //
 // **Every field writes on the spot.** There is no Save: what a reader changed is what the definition
-// now says, and a panel with a button would leave a step half-edited every time somebody pressed
+// now says, and a panel with a button would leave a spot half-edited every time somebody pressed
 // another box in the picture. A box of text writes when the caret leaves it, so a name is not written
 // a letter at a time.
 //
-// **Where the prompt comes from is one control** (`auto.step.source`). A step runs a library action
-// or carries a prompt of its own, and there is no state between the two — drawn as "use" and "drop"
-// it would be two presses for one change, with a step carrying neither in between. Switching takes
-// the step's ways out, its settings and its inputs with it, because those are read off whichever of
-// the two declares them, and the control says so beside itself
-// (`amenbo_core::ops::automation::step_update`).
-//
-// **What a step declares is written here too, not only answered** — a second way out, a setting, an
-// input. Only for a step carrying its own prompt: one that runs a library action reads the action's
-// declarations, so the rows are drawn as they stand and the control that would change them is not
-// there. The three families are addressed by name rather than by id, which is the shape the doors
-// take (`../core/automations`).
+// **Each field writes on the layer it belongs to** (`AMB-D-949`). A box on the picture is a placement
+// of a library action: what it declares — a way out, an input, a setting — is the action's, and
+// reaches every other placement of it; what a setting is answered with is this placement's alone; and
+// the prompt, the agent, the model and the three flags are the action's step's. The doors take
+// whichever of the three the field lives on (`../core/automations`).
 //
 // **A setting is answered by the control its kind takes** — never by writing a filter expression. The
 // shape each one is kept in is `./automationCfg`'s.
 //
 // **A wire is picked from a list, not drawn** (`./automationWires`), and what does not fit is not
 // offered.
-//
-// **The agent and the model are this panel's even for a step that runs a library action.** The prompt
-// is the library's; who carries it out is the automation's, and the same action is run by one step on
-// one agent and by another step on another.
 //
 // **A refusal is drawn, once, at the top.** Answering a setting cannot be refused for anything a
 // reader can see coming, but declaring one can — a name already taken, a blank one, the error way out
@@ -43,16 +32,15 @@ import {
   declareAutomationCfg,
   declareAutomationExit,
   declareAutomationInput,
+  editAutomationAction,
   editAutomationCfg,
   editAutomationInput,
   editAutomationStep,
-  raiseStepToLibrary,
   removeAutomationCfg,
   removeAutomationExit,
   removeAutomationInput,
   renameAutomationExit,
   setAutomationWire,
-  useAutomationActions,
   type CfgKind,
 } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
@@ -80,8 +68,8 @@ import type {
   AutomationCfgDto,
   AutomationDetailDto,
   AutomationExitDto,
+  AutomationPlacementDto,
   AutomationPortDto,
-  AutomationStepDto,
   WakeCandidateDto,
   WakeDto,
 } from "../bindings/bindings";
@@ -311,16 +299,14 @@ function DeclEdit({
 
 /** One way out: what it is called, what leaving by it hands on, and the presses that change either. */
 function ExitRow({
-  step,
+  actionId,
   exit,
-  own,
   onAddOutput,
   run,
 }: {
-  step: AutomationStepDto;
+  /** The library action that declares it — what a way out belongs to, never the placement. */
+  actionId: number;
   exit: AutomationExitDto;
-  /** Whether this step declares its own — a step running a library action reads the action's. */
-  own: boolean;
   onAddOutput: () => void;
   run: Run;
 }) {
@@ -328,59 +314,51 @@ function ExitRow({
   const was = exit.name ?? null;
   return (
     <li className="autostep__exit">
-      {own ? (
-        <input
-          className="autostep__declname"
-          placeholder={t("auto.step.exitUnnamed")}
-          aria-label={t("auto.step.exits")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            const now = name.trim() === "" ? null : name.trim();
-            if (now !== was) void run(renameAutomationExit(step.id, was, now));
-          }}
-        />
-      ) : (
-        <span className="autostep__exitname">{exitLabel(exit.name)}</span>
-      )}
-      {/* What leaving by this way out hands on. It hangs off the way out and not off the step,
-          because a step with three ways out hands on three different things. */}
+      <input
+        className="autostep__declname"
+        placeholder={t("auto.step.exitUnnamed")}
+        aria-label={t("auto.step.exits")}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => {
+          const now = name.trim() === "" ? null : name.trim();
+          if (now !== was) void run(renameAutomationExit(actionId, was, now));
+        }}
+      />
+      {/* What leaving by this way out hands on. It hangs off the way out and not off the action,
+          because an action with three ways out hands on three different things. */}
       {exit.outputs.map((port) => (
         <span key={port.name} className="autostep__out">
           {port.name}
           <span className="autostep__outkind">{kindLabel(port.kind)}</span>
         </span>
       ))}
-      {/* Only for a step that declares its own. A step running a library action reads the action's
-          ways out, and an output declared on one of those is declared for every step running that
-          action — which is the library's to change, not this step's. */}
-      {own && (
-        <>
-          <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
-            {t("auto.step.outputAdd")}
-          </button>
-          <button type="button" className="btn" onClick={() => void run(removeAutomationExit(step.id, was))}>
-            {t("auto.step.remove")}
-          </button>
-        </>
-      )}
+      <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
+        {t("auto.step.outputAdd")}
+      </button>
+      <button type="button" className="btn" onClick={() => void run(removeAutomationExit(actionId, was))}>
+        {t("auto.step.remove")}
+      </button>
     </li>
   );
 }
 
 /** One setting: how it is declared, and then the control its kind takes for the answer. */
 function CfgRow({
-  step,
+  placementId,
+  actionId,
   cfg,
-  own,
   run,
 }: {
-  step: AutomationStepDto;
+  /** The spot the answer is written on. */
+  placementId: number;
+  /** The library action that declares it — where the name, the kind and the choices are written. */
+  actionId: number;
   cfg: AutomationCfgDto;
-  own: boolean;
   run: Run;
 }) {
-  const answer = (value: string | null) => void run(answerAutomationCfg(step.id, cfg.name, value));
+  const answer = (value: string | null) =>
+    void run(answerAutomationCfg(placementId, cfg.name, value));
   const [text, setText] = useDraft(cfg.kind === "number" ? "" : readText(cfg.value));
   const [number, setNumber] = useDraft(cfg.kind === "number" ? String(readNumber(cfg.value) ?? "") : "");
   const [choiceText, setChoiceText] = useDraft(choicesOf(cfg.options).join("\n"));
@@ -389,35 +367,28 @@ function CfgRow({
 
   return (
     <div className="autostep__cfg">
-      {own ? (
-        <DeclEdit
-          label={t("auto.step.cfg")}
-          name={cfg.name}
-          kind={cfg.kind}
-          kinds={choicesOfKinds(CFG_KINDS)}
-          required={cfg.required}
-          onRename={(to) => void run(editAutomationCfg(step.id, cfg.name, { name: to }))}
-          // A choice list belongs to a choice and to nothing else, so leaving one behind on another
-          // kind is refused — the move has to take it with it, in the one call.
-          onKind={(to) =>
-            void run(
-              editAutomationCfg(step.id, cfg.name, {
-                kind: to as CfgKind,
-                ...(to === "choice" ? {} : { options: null }),
-              }),
-            )
-          }
-          onRequired={(to) => void run(editAutomationCfg(step.id, cfg.name, { required: to }))}
-          onRemove={() => void run(removeAutomationCfg(step.id, cfg.name))}
-        />
-      ) : (
-        <div className="autostep__cfgname">
-          {cfg.name}
-          {cfg.required && <span className="autostep__req">{t("auto.step.required")}</span>}
-        </div>
-      )}
+      <DeclEdit
+        label={t("auto.step.cfg")}
+        name={cfg.name}
+        kind={cfg.kind}
+        kinds={choicesOfKinds(CFG_KINDS)}
+        required={cfg.required}
+        onRename={(to) => void run(editAutomationCfg(actionId, cfg.name, { name: to }))}
+        // A choice list belongs to a choice and to nothing else, so leaving one behind on another
+        // kind is refused — the move has to take it with it, in the one call.
+        onKind={(to) =>
+          void run(
+            editAutomationCfg(actionId, cfg.name, {
+              kind: to as CfgKind,
+              ...(to === "choice" ? {} : { options: null }),
+            }),
+          )
+        }
+        onRequired={(to) => void run(editAutomationCfg(actionId, cfg.name, { required: to }))}
+        onRemove={() => void run(removeAutomationCfg(actionId, cfg.name))}
+      />
 
-      {own && cfg.kind === "choice" && (
+      {cfg.kind === "choice" && (
         <label className="autostep__field">
           <span className="autostep__label">{t("auto.step.choices")}</span>
           <textarea
@@ -426,7 +397,7 @@ function CfgRow({
             onChange={(e) => setChoiceText(e.target.value)}
             onBlur={() =>
               writeChoices(choiceText) !== (cfg.options ?? null) &&
-              void run(editAutomationCfg(step.id, cfg.name, { options: writeChoices(choiceText) }))
+              void run(editAutomationCfg(actionId, cfg.name, { options: writeChoices(choiceText) }))
             }
           />
         </label>
@@ -487,45 +458,38 @@ function CfgRow({
   );
 }
 
-/** One input: how it is declared, and what is wired into it. */
+/** One input: how it is declared on the action, and what is wired into it at this spot. */
 function InputRow({
   automation,
-  step,
+  placement,
   input,
-  own,
   run,
 }: {
   automation: AutomationDetailDto;
-  step: AutomationStepDto;
+  placement: AutomationPlacementDto;
   input: AutomationPortDto;
-  own: boolean;
   run: Run;
 }) {
-  const now = wireInto(automation, step.id, input.name);
-  const choices = wireChoices(automation, step.id, input);
-  const picked = now === undefined ? "" : choiceKey(now.fromStepId, now.fromExitName, now.fromPortName);
+  const actionId = placement.actionId;
+  const now = wireInto(automation, placement.id, input.name);
+  const choices = wireChoices(automation, placement.id, input);
+  const picked =
+    now === undefined ? "" : choiceKey(now.fromPlacementId, now.fromExitName, now.fromPortName);
   return (
     <div className="autostep__wire">
-      {own ? (
-        <DeclEdit
-          label={t("auto.step.inputs")}
-          name={input.name}
-          kind={input.kind}
-          kinds={choicesOfKinds(PORT_KINDS)}
-          required={input.required}
-          onRename={(to) => void run(editAutomationInput(step.id, input.name, { name: to }))}
-          onKind={(to) =>
-            void run(editAutomationInput(step.id, input.name, { kind: to as AutomationPortDto["kind"] }))
-          }
-          onRequired={(to) => void run(editAutomationInput(step.id, input.name, { required: to }))}
-          onRemove={() => void run(removeAutomationInput(step.id, input.name))}
-        />
-      ) : (
-        <span className="autostep__cfgname">
-          {input.name}
-          {input.required && <span className="autostep__req">{t("auto.step.required")}</span>}
-        </span>
-      )}
+      <DeclEdit
+        label={t("auto.step.inputs")}
+        name={input.name}
+        kind={input.kind}
+        kinds={choicesOfKinds(PORT_KINDS)}
+        required={input.required}
+        onRename={(to) => void run(editAutomationInput(actionId, input.name, { name: to }))}
+        onKind={(to) =>
+          void run(editAutomationInput(actionId, input.name, { kind: to as AutomationPortDto["kind"] }))
+        }
+        onRequired={(to) => void run(editAutomationInput(actionId, input.name, { required: to }))}
+        onRemove={() => void run(removeAutomationInput(actionId, input.name))}
+      />
       <select
         aria-label={input.name}
         value={picked}
@@ -537,8 +501,12 @@ function InputRow({
           }
           void run(
             setAutomationWire(
-              { stepId: chosen.stepId, exitName: chosen.exitName, portName: chosen.portName },
-              { stepId: step.id, portName: input.name },
+              {
+                placementId: chosen.placementId,
+                exitName: chosen.exitName,
+                portName: chosen.portName,
+              },
+              { placementId: placement.id, portName: input.name },
             ),
           );
         }}
@@ -546,7 +514,7 @@ function InputRow({
         <option value="">{t("auto.step.unwired")}</option>
         {choices.map((one) => (
           <option key={one.key} value={one.key}>
-            {`${one.stepName} · ${exitLabel(one.exitName)} · ${one.portName}`}
+            {`${one.placementName} · ${exitLabel(one.exitName)} · ${one.portName}`}
           </option>
         ))}
       </select>
@@ -554,91 +522,24 @@ function InputRow({
   );
 }
 
-/**
- * **Put this step's prompt in the library**, so other automations can run the same one
- * (`../core/automations`).
- *
- * **It is offered only while the step carries a prompt of its own.** A step running an action has
- * nothing of its own left to raise, and the control above is where it goes back to one.
- *
- * **The name is asked for, and starts as the step's.** The two are different things — a step is named
- * for its place in one automation ("review what was just written"), an action for what it is ("review")
- * — and a library of names borrowed from whichever automation raised them first reads as one nobody
- * chose.
- *
- * **Which library is asked for too.** The device's is reached by every project on this machine and the
- * project's by one, and a wrong answer is not undone from this panel — so the reach is a choice rather
- * than a default the reader finds out about later.
- */
-function RaiseToLibrary({
-  step,
-  projectId,
-}: {
-  step: AutomationStepDto;
-  projectId: number | null;
-}) {
-  const [name, setName] = useDraft(step.name);
-  const [wide, setWide] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [raising, setRaising] = useState(false);
-
-  const raise = async () => {
-    setError(null);
-    setRaising(true);
-    try {
-      await raiseStepToLibrary(step.id, name.trim(), wide ? null : projectId);
-    } catch (err) {
-      setError(errText(err));
-    } finally {
-      setRaising(false);
-    }
-  };
-
-  return (
-    <div className="autostep__field">
-      <span className="autostep__label">{t("auto.step.raise")}</span>
-      <span className="autostep__note">{t("auto.step.raiseWhat")}</span>
-      <input
-        aria-label={t("auto.step.raiseName")}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <select value={wide ? "device" : "project"} onChange={(e) => setWide(e.target.value === "device")}>
-        <option value="project">{t("auto.step.raiseHere")}</option>
-        <option value="device">{t("auto.step.raiseEverywhere")}</option>
-      </select>
-      <button
-        type="button"
-        className="btn"
-        disabled={raising || name.trim() === "" || (!wide && projectId === null)}
-        onClick={() => void raise()}
-      >
-        {t("auto.step.raise")}
-      </button>
-      {error !== null && <ErrorNote tone="quiet">{error}</ErrorNote>}
-    </div>
-  );
-}
-
 export function AutomationStepPanel({
   automation,
-  stepId,
+  placementId,
   projectId,
 }: {
   automation: AutomationDetailDto | null;
-  /** The step the picture is showing as pressed, or nothing while none is. */
-  stepId: number | null;
+  /** The spot the picture is showing as pressed, or nothing while none is. */
+  placementId: number | null;
   projectId: number | null;
 }) {
-  const actions = useAutomationActions(projectId);
-  const step = automation?.steps.find((one) => one.id === stepId) ?? null;
+  const placement = automation?.placements.find((one) => one.id === placementId) ?? null;
   const agents = useAgents(projectId);
-  const models = useModels(step?.agent ?? "");
-  const [name, setName] = useDraft(step?.name ?? "");
+  const models = useModels(placement?.agent ?? "");
+  const [name, setName] = useDraft(placement?.name ?? "");
   // The way out an output artefact is being declared on, while that dialog is open
   // (`AMB-T-5257`).
   const [adding, setAdding] = useState<number | null>(null);
-  const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
+  const [prompt, setPrompt] = useDraft(placement?.prompt ?? "");
   const [refused, setRefused] = useState<string | null>(null);
 
   const run: Run = (write) => {
@@ -651,18 +552,22 @@ export function AutomationStepPanel({
       });
   };
 
-  if (automation === null || step === null) {
+  if (automation === null || placement === null) {
     return <div className="auto__empty">{t("auto.step.none")}</div>;
   }
 
-  // Whether this step declares its own ways out, settings and inputs. One running a library action
-  // reads the action's, and core refuses a declaration written on it.
-  const own = step.actionId === undefined;
-  const takesTask = step.exits.some((exit) => exit.outputs.some((port) => port.kind === "task_take"));
-  // Where the working folder may be taken from: a setting or an input this step holds, by name.
+  const actionId = placement.actionId;
+  // The step this spot opens — where the prompt, the agent, the model and the three flags are
+  // written. An action that holds none is one the launch check names, and its fields are left off
+  // rather than drawn over nothing.
+  const stepId = placement.stepId;
+  const takesTask = placement.exits.some((exit) =>
+    exit.outputs.some((port) => port.kind === "task_take"),
+  );
+  // Where the working folder may be taken from: a setting or an input this action holds, by name.
   const folderNames = [
-    ...step.settings.filter((one) => one.kind === "folder").map((one) => one.name),
-    ...step.inputs.filter((one) => one.kind === "file").map((one) => one.name),
+    ...placement.settings.filter((one) => one.kind === "folder").map((one) => one.name),
+    ...placement.inputs.filter((one) => one.kind === "file").map((one) => one.name),
   ];
 
   return (
@@ -674,7 +579,7 @@ export function AutomationStepPanel({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onBlur={() => name !== step.name && void run(editAutomationStep(step.id, { name }))}
+          onBlur={() => name !== placement.name && void run(editAutomationAction(actionId, { name }))}
         />
       </label>
 
@@ -685,217 +590,201 @@ export function AutomationStepPanel({
         </span>
       </div>
 
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.source")}</span>
-        <select
-          value={step.actionId === undefined ? "" : String(step.actionId)}
-          onChange={(e) =>
-            void run(
-              editAutomationStep(step.id, {
-                source: e.target.value === "" ? { prompt: step.prompt } : { action: Number(e.target.value) },
-              }),
-            )
-          }
-        >
-          <option value="">{t("auto.step.sourceOwn")}</option>
-          {actions.map((one) => (
-            <option key={one.id} value={String(one.id)}>
-              {one.name}
-            </option>
-          ))}
-        </select>
-        <span className="autostep__note">{t("auto.step.sourceMoves")}</span>
-        {!own && (
-          <span className="autostep__note">
-            {tf("auto.step.declaresFromAction", { action: step.actionName ?? "" })}
-          </span>
-        )}
-      </label>
-
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.prompt")}</span>
-        <textarea
-          className="autostep__prompt"
-          rows={6}
-          readOnly={!own}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onBlur={() =>
-            own && prompt !== step.prompt && void run(editAutomationStep(step.id, { source: { prompt } }))
-          }
-        />
-        {!own && (
-          <span className="autostep__note">
-            {tf("auto.step.promptFromAction", { action: step.actionName ?? "" })}
-          </span>
-        )}
-      </label>
-
-      {own && <RaiseToLibrary step={step} projectId={projectId} />}
+      {stepId !== undefined && (
+        <label className="autostep__field">
+          <span className="autostep__label">{t("auto.step.prompt")}</span>
+          <textarea
+            className="autostep__prompt"
+            rows={6}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onBlur={() =>
+              prompt !== placement.prompt && void run(editAutomationStep(stepId, { prompt }))
+            }
+          />
+        </label>
+      )}
 
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.cfg")}</span>
-        {step.settings.length === 0 && <span className="autostep__said">{t("auto.step.declaresNone")}</span>}
-        {step.settings.map((cfg) => (
-          <CfgRow key={cfg.name} step={step} cfg={cfg} own={own} run={run} />
-        ))}
-        {own && (
-          <DeclareRow
-            what={t("auto.step.cfgName")}
-            kinds={choicesOfKinds(CFG_KINDS)}
-            onAdd={(declared, kind) =>
-              run(declareAutomationCfg(step.id, { name: declared, kind: kind as CfgKind }))
-            }
-          />
+        {placement.settings.length === 0 && (
+          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
         )}
+        {placement.settings.map((cfg) => (
+          <CfgRow
+            key={cfg.name}
+            placementId={placement.id}
+            actionId={actionId}
+            cfg={cfg}
+            run={run}
+          />
+        ))}
+        <DeclareRow
+          what={t("auto.step.cfgName")}
+          kinds={choicesOfKinds(CFG_KINDS)}
+          onAdd={(declared, kind) =>
+            run(declareAutomationCfg(actionId, { name: declared, kind: kind as CfgKind }))
+          }
+        />
       </div>
 
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.inputs")}</span>
-        {step.inputs.length === 0 && <span className="autostep__said">{t("auto.step.declaresNone")}</span>}
-        {step.inputs.map((input) => (
+        {placement.inputs.length === 0 && (
+          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
+        )}
+        {placement.inputs.map((input) => (
           <InputRow
             key={input.name}
             automation={automation}
-            step={step}
+            placement={placement}
             input={input}
-            own={own}
             run={run}
           />
         ))}
-        {own && (
-          <DeclareRow
-            what={t("auto.step.inputName")}
-            kinds={choicesOfKinds(PORT_KINDS)}
-            onAdd={(declared, kind) =>
-              run(
-                declareAutomationInput(step.id, {
-                  name: declared,
-                  kind: kind as AutomationPortDto["kind"],
-                }),
-              )
-            }
-          />
-        )}
+        <DeclareRow
+          what={t("auto.step.inputName")}
+          kinds={choicesOfKinds(PORT_KINDS)}
+          onAdd={(declared, kind) =>
+            run(
+              declareAutomationInput(actionId, {
+                name: declared,
+                kind: kind as AutomationPortDto["kind"],
+              }),
+            )
+          }
+        />
       </div>
 
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.exits")}</span>
         <ul className="autostep__exits">
-          {step.exits
+          {placement.exits
             .filter((one) => one.name !== ERROR_EXIT)
             .map((one) => (
               <ExitRow
                 key={one.id}
-                step={step}
+                actionId={actionId}
                 exit={one}
-                own={own}
                 onAddOutput={() => setAdding(one.id)}
                 run={run}
               />
             ))}
-          {/* The error way out, always drawn and always last: every step carries one, and a list that
-              left it off where nobody had said anything about it would read as a step that cannot
-              fail. It hands nothing on — what a step that fell over has to say is its report — and
-              nothing here renames or removes it, which core refuses either way. */}
+          {/* The error way out, always drawn and always last: every action carries one, and a list
+              that left it off where nobody had said anything about it would read as a spot that
+              cannot fail. It hands nothing on — what a step that fell over has to say is its report
+              — and nothing here renames or removes it, which core refuses either way. */}
           <li className="autostep__exiterr">{t("auto.pic.errorExit")}</li>
         </ul>
-        {own && (
-          <DeclareRow
-            what={t("auto.step.exitName")}
-            kinds={null}
-            onAdd={(declared) => run(declareAutomationExit(step.id, declared))}
-          />
-        )}
+        <DeclareRow
+          what={t("auto.step.exitName")}
+          kinds={null}
+          onAdd={(declared) => run(declareAutomationExit(actionId, declared))}
+        />
       </div>
 
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.agent")}</span>
-        <select
-          value={step.agent}
-          onChange={(e) => void run(editAutomationStep(step.id, { agent: e.target.value }))}
-        >
-          {agents.every((one) => one.id !== step.agent) && (
-            <option value={step.agent}>{step.agent}</option>
-          )}
-          {agents.map((one) => (
-            <option key={one.id} value={one.id} disabled={!one.installed}>
-              {one.installed ? one.label : tf("auto.step.notHere", { agent: one.label })}
-            </option>
-          ))}
-        </select>
-      </label>
+      {stepId !== undefined && (
+        <>
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.step.agent")}</span>
+            <select
+              value={placement.agent}
+              onChange={(e) => void run(editAutomationStep(stepId, { agent: e.target.value }))}
+            >
+              {agents.every((one) => one.id !== placement.agent) && (
+                <option value={placement.agent}>{placement.agent}</option>
+              )}
+              {agents.map((one) => (
+                <option key={one.id} value={one.id} disabled={!one.installed}>
+                  {one.installed ? one.label : tf("auto.step.notHere", { agent: one.label })}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.model")}</span>
-        <select
-          value={step.model ?? ""}
-          onChange={(e) =>
-            void run(editAutomationStep(step.id, { model: e.target.value === "" ? null : e.target.value }))
-          }
-        >
-          <option value="">{t("auto.step.modelDefault")}</option>
-          {step.model !== undefined && (models?.models ?? []).every((one) => one.id !== step.model) && (
-            <option value={step.model}>{step.model}</option>
-          )}
-          {(models?.models ?? []).map((one) => (
-            <option key={one.id} value={one.id}>
-              {one.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.step.model")}</span>
+            <select
+              value={placement.model ?? ""}
+              onChange={(e) =>
+                void run(
+                  editAutomationStep(stepId, {
+                    model: e.target.value === "" ? null : e.target.value,
+                  }),
+                )
+              }
+            >
+              <option value="">{t("auto.step.modelDefault")}</option>
+              {placement.model !== undefined &&
+                (models?.models ?? []).every((one) => one.id !== placement.model) && (
+                  <option value={placement.model}>{placement.model}</option>
+                )}
+              {(models?.models ?? []).map((one) => (
+                <option key={one.id} value={one.id}>
+                  {one.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.folder")}</span>
-        <select
-          value={step.workDirRef ?? ""}
-          onChange={(e) =>
-            void run(editAutomationStep(step.id, { workDir: e.target.value === "" ? null : e.target.value }))
-          }
-        >
-          <option value="">{t("auto.step.folderNone")}</option>
-          {step.workDirRef !== undefined && !folderNames.includes(step.workDirRef) && (
-            <option value={step.workDirRef}>{step.workDirRef}</option>
-          )}
-          {folderNames.map((one) => (
-            <option key={one} value={one}>
-              {one}
-            </option>
-          ))}
-        </select>
-      </label>
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.step.folder")}</span>
+            <select
+              value={placement.workDirRef ?? ""}
+              onChange={(e) =>
+                void run(
+                  editAutomationStep(stepId, {
+                    workDir: e.target.value === "" ? null : e.target.value,
+                  }),
+                )
+              }
+            >
+              <option value="">{t("auto.step.folderNone")}</option>
+              {placement.workDirRef !== undefined && !folderNames.includes(placement.workDirRef) && (
+                <option value={placement.workDirRef}>{placement.workDirRef}</option>
+              )}
+              {folderNames.map((one) => (
+                <option key={one} value={one}>
+                  {one}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.interactive}
-          onChange={(e) => void run(editAutomationStep(step.id, { interactive: e.target.checked }))}
-        />
-        {t("auto.step.interactive")}
-      </label>
+          <label className="autostep__check">
+            <input
+              type="checkbox"
+              checked={placement.interactive}
+              onChange={(e) => void run(editAutomationStep(stepId, { interactive: e.target.checked }))}
+            />
+            {t("auto.step.interactive")}
+          </label>
 
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.reportToTask}
-          onChange={(e) => void run(editAutomationStep(step.id, { reportToTask: e.target.checked }))}
-        />
-        {t("auto.step.reportToTask")}
-      </label>
+          <label className="autostep__check">
+            <input
+              type="checkbox"
+              checked={placement.reportToTask}
+              onChange={(e) =>
+                void run(editAutomationStep(stepId, { reportToTask: e.target.checked }))
+              }
+            />
+            {t("auto.step.reportToTask")}
+          </label>
 
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.showHistory}
-          onChange={(e) => void run(editAutomationStep(step.id, { history: e.target.checked }))}
-        />
-        {t("auto.step.history")}
-      </label>
+          <label className="autostep__check">
+            <input
+              type="checkbox"
+              checked={placement.showHistory}
+              onChange={(e) => void run(editAutomationStep(stepId, { history: e.target.checked }))}
+            />
+            {t("auto.step.history")}
+          </label>
+        </>
+      )}
 
       {adding !== null && (
         <AutomationOutputAdd
-          exit={step.exits.find((one) => one.id === adding)!}
+          exit={placement.exits.find((one) => one.id === adding)!}
           onClose={() => setAdding(null)}
         />
       )}

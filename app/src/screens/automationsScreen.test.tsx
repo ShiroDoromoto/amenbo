@@ -54,7 +54,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
-  return { id: 7, name: "Morning round", steps: 3, archived: false, ...over };
+  return { id: 7, name: "Morning round", placements: 3, archived: false, ...over };
 }
 
 function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
@@ -65,7 +65,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     notes: "",
     preamble: "",
     archived: false,
-    steps: [],
+    placements: [],
     edges: [],
     wires: [],
     ...over,
@@ -140,7 +140,7 @@ describe("the automations screen", () => {
   });
 
   it("names each automation and how many steps it is built out of", async () => {
-    hoisted.automations = [card({ steps: 3 }), card({ id: 8, name: "Nightly", archived: true })];
+    hoisted.automations = [card({ placements: 3 }), card({ id: 8, name: "Nightly", archived: true })];
     await render();
     const rows = [...container.querySelectorAll(".auto__row")].map((one) => one.textContent ?? "");
     expect(rows[0]).toContain("Morning round");

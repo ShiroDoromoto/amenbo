@@ -1045,21 +1045,16 @@ mod tests {
         });
     }
 
-    /// **A second step inside an action**, joined onto the way out of the step it starts at. An action
-    /// written from one prompt carries no line inside it, so the first one is drawn here.
+    /// **A second step inside an action**, put in on the line its first step leaves the action by — so
+    /// the one it starts at goes on to this one, and this one is what leaves the action from here.
     fn goes_on_to(tx: &WriteTx<'_>, action: &AutomationAction, name: &str, agent: &str) {
         let entry = only_step(tx, action);
-        let step = automation::step_add(tx, action.id, NewStep::new(name, "続ける", agent))
+        let leaves_by =
+            read::automation_edge_for_exit(tx.conn(), AutomationPictureOwner::Action, entry.id, None)
+                .expect("read the line out of the action")
+                .expect("the step an action is written with leaves it by its unnamed way out");
+        automation::step_insert(tx, leaves_by.id, NewStep::new(name, "続ける", agent), &[], &[])
             .expect("the second step");
-        automation::edge_add(
-            tx,
-            AutomationPictureOwner::Action,
-            entry.id,
-            None,
-            EdgeTarget::Go(step.id),
-            Some(crate::model::DEFAULT_MAX_TIMES),
-        )
-        .expect("the line inside");
     }
 
     #[test]

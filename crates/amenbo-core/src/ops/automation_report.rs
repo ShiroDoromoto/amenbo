@@ -26,6 +26,7 @@ use crate::model::{
 };
 use crate::ops::automation_stop::{self, Ended};
 use crate::ops::emit_create;
+use rusqlite::Connection;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -96,6 +97,26 @@ fn exits_of(def: &AutomationRunDef) -> Result<Vec<RunDefExit>> {
 /// which way out it belongs to is settled at [`done`], not here.
 fn declared_out<'a>(exits: &'a [RunDefExit], name: &str) -> Option<&'a RunDefPort> {
     exits.iter().find_map(|e| e.outs.iter().find(|p| p.name == name))
+}
+
+/// **What one of this step's declared outputs carries**, by the name it was declared under — `None`
+/// where the step declares nothing under that name.
+///
+/// It is read **before** a value is put down, because what a name takes decides which command says it:
+/// a value and a file go down with `automation out`, the task the run is about is reserved and handed
+/// on in one act by [`take`], and a task the step raised along the way goes down with `out` too, as an
+/// id. A caller that guessed would be refused by [`put`] with a sentence about kinds, which is not the
+/// sentence somebody typing needs.
+pub fn out_kind(
+    conn: &Connection,
+    run_step_id: i64,
+    name: &str,
+) -> Result<Option<AutomationPortKind>> {
+    let run_step = read::automation_run_step(conn, run_step_id)?
+        .ok_or_else(|| not_found("step execution", run_step_id))?;
+    let def = read::automation_run_def(conn, run_step.run_def_id)?
+        .ok_or_else(|| not_found("step of a run", run_step.run_def_id))?;
+    Ok(declared_out(&exits_of(&def)?, name).map(|port| port.kind))
 }
 
 // ───────────────────────── take ─────────────────────────
@@ -651,6 +672,58 @@ mod tests {
             .into_iter()
             .filter(|v| v.direction == AutomationPortDirection::Out)
             .collect()
+    }
+
+    /// **What a name was declared to take is readable before anything is put down** (`AMB-T-5279`).
+    ///
+    /// It is what lets the side a person types on say the right command per kind, rather than letting
+    /// them find out from a refusal about kinds.
+    #[test]
+    fn what_a_declared_name_carries_is_readable_by_that_name() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            out_on(tx, &p.first, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first).run_step;
+
+            let kind = |name: &str| out_kind(tx.conn(), step.id, name).expect("read");
+            assert_eq!(kind("note"), Some(AutomationPortKind::Value));
+            assert_eq!(kind("タスク"), Some(AutomationPortKind::TaskTake));
+            assert_eq!(kind("raised"), Some(AutomationPortKind::TaskMake));
+            assert_eq!(kind("nothing of the sort"), None, "a name nobody declared");
+        });
+    }
+
+    /// **A task the step raised along the way is handed on like anything else, and is not reserved.**
+    ///
+    /// It is a product of the step, not the task the run is working: nothing moves its status, and the
+    /// run's stretch goes on naming the task it took ([`take`]).
+    #[test]
+    fn a_task_raised_along_the_way_is_handed_on_without_being_reserved() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            out_on(tx, &p.first, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first).run_step;
+            let working = a_task(tx, p.project, "調べる");
+            take(tx, step.id, working.id).expect("take");
+            let raised = a_task(tx, p.project, "あとで直す");
+
+            out(tx, step.id, "raised", Produced::Task(raised.id)).expect("hand it on");
+
+            let handed = outs(tx, step.id);
+            let one = handed.iter().find(|v| v.name == "raised").expect("the raised task");
+            assert_eq!(one.task_id, Some(raised.id));
+            assert_eq!(
+                read::task_status(tx.conn(), raised.id).expect("read"),
+                Some(crate::model::TaskStatus::Todo),
+                "nothing reserved it — whoever comes to it next picks it up",
+            );
+            let stretch = read::automation_run_task_last(tx.conn(), run.id)
+                .expect("read")
+                .expect("the stretch");
+            assert_eq!(stretch.task_id, Some(working.id), "the run is still working the task it took");
+        });
     }
 
     #[test]

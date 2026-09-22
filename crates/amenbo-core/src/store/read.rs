@@ -884,4 +884,20 @@ impl Store {
         })?;
         Ok(crate::store_engine::read::automation_run_values_of(self.engine.conn(), run_step_id)?)
     }
+
+    /// **What one of a step's declared outputs carries**, by the name it was declared under — `None`
+    /// where the step declares nothing under that name.
+    ///
+    /// What a name takes is what decides which command hands it on, so this is asked before anything is
+    /// put down ([`crate::ops::automation_report::out_kind`]).
+    pub fn automation_out_kind(
+        &self,
+        run_step_id: i64,
+        name: &str,
+    ) -> Result<Option<crate::model::AutomationPortKind>> {
+        self.reachable(&format!("automation run step #{run_step_id}"), |c| {
+            super::owner::automation_run_step(c, run_step_id)
+        })?;
+        crate::ops::automation_report::out_kind(self.engine.conn(), run_step_id, name)
+    }
 }

@@ -1411,8 +1411,11 @@ impl AutomationPortDirection {
 
 /// What a port carries. `TaskTake` is the one that decides what the run is about — the task it comes
 /// out holding is the task every step after it works on — and `TaskMake` is a task a step raised along
-/// the way.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// the way, which the run does not work and nothing reserves.
+///
+/// Ordered so a set of them lists in the order they are declared in here, which is the order the way
+/// out's own line reads in ([`crate::ops::automation_step`]'s "how to hand your work back").
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationPortKind {
     Value,

@@ -22,6 +22,7 @@
 //! caller's, which is the one place every way a run can end is handled ([`super::automation_run`]).
 
 use crate::error::{Error, Result};
+use std::collections::BTreeSet;
 use crate::model::{
     AutomationPortDirection, AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, RunDefExit,
@@ -456,6 +457,13 @@ fn one_value(handed: &Handed) -> String {
 /// **The error way out is named but not offered.** It is where a step that fell over goes, and a step
 /// choosing it on purpose is saying it failed — which is a real answer, and a different one from
 /// leaving through a way out somebody drew for the case.
+///
+/// **The command is named per kind, and only for the kinds this step declares.** There is no one verb
+/// that puts every kind down: the task the run is about is reserved and declared in one act by
+/// `automation take`, because splitting the two leaves a task `in_progress` that nothing can hand back
+/// when the agent dies between them ([`crate::ops::automation_report::take`]). A text that said "put
+/// each one down with `out`" was therefore wrong on exactly the step every automation has to start
+/// with — and an agent does what the text says (`AMB-T-5279`).
 fn handing_back(exits: &[RunDefExit]) -> String {
     let cli = crate::config::Paths::command_name();
     let mut lines = vec![format!("## How to hand your work back\n")];
@@ -479,10 +487,35 @@ fn handing_back(exits: &[RunDefExit]) -> String {
         };
         lines.push(format!("- {} — {outs}", named(exit.name.as_deref())));
     }
+    let kinds: BTreeSet<AutomationPortKind> =
+        exits.iter().flat_map(|e| e.outs.iter().map(|p| p.kind)).collect();
+    if !kinds.is_empty() {
+        lines.push(String::new());
+        lines.push("Put each one down before you finish:".to_string());
+        for kind in &kinds {
+            lines.push(match kind {
+                AutomationPortKind::Value => {
+                    format!("- a value — `{cli} automation out <name>=<value>`")
+                }
+                AutomationPortKind::File => {
+                    format!("- a file — `{cli} automation out <name> --file <path>`")
+                }
+                // Reserving and declaring are one command, so this one is not `out` and never can be.
+                AutomationPortKind::TaskTake => format!(
+                    "- the task this step takes — `{cli} automation take <task>`, which reserves it \
+                     and hands it on in one act. It is refused for a task somebody else already holds."
+                ),
+                AutomationPortKind::TaskMake => format!(
+                    "- a task you raised along the way — `{cli} automation out <name>=<task>`. It is \
+                     not the task this run is working: nothing reserves it, and whoever comes to it \
+                     next picks it up."
+                ),
+            });
+        }
+    }
     lines.push(String::new());
     lines.push(format!(
-        "Put each one down with `{cli} automation out <name>=<value>` (a file with `--file <path>`), \
-         then finish with `{cli} automation done --exit \"<way out>\" --report -`. A report is owed \
+        "Then finish with `{cli} automation done --exit \"<way out>\" --report -`. A report is owed \
          whichever way out you take."
     ));
     lines.join("\n")
@@ -746,6 +779,36 @@ mod tests {
                 !text.contains("What you have been handed"),
                 "the first step is handed nothing: {text}"
             );
+        });
+    }
+
+    /// **The text names the command each kind is actually handed on with** (`AMB-T-5279`).
+    ///
+    /// A step's agent does what the text says. It said "put each one down with `automation out`" for
+    /// every kind, and the one kind every automation has to start with — the task the run is about —
+    /// cannot be put down that way at all: reserving and declaring it are one act, so a step following
+    /// the text was refused every time.
+    #[test]
+    fn the_text_names_a_command_per_kind_and_not_out_for_the_task_it_takes() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            out_on(tx, &p.first, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            let run = a_run(tx, &p.automation);
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, LANES).expect("open")).text;
+
+            assert!(text.contains("- a value — `amenbo automation out <name>=<value>`"), "{text}");
+            assert!(
+                text.contains("the task this step takes — `amenbo automation take <task>`"),
+                "{text}"
+            );
+            assert!(
+                text.contains("a task you raised along the way — `amenbo automation out <name>=<task>`"),
+                "{text}"
+            );
+            // The line that was wrong: one command for every kind.
+            assert!(!text.contains("Put each one down with `amenbo automation out"), "{text}");
+            // A kind this step declares nothing of is not explained at it.
+            assert!(!text.contains("a file — `amenbo automation out"), "{text}");
         });
     }
 

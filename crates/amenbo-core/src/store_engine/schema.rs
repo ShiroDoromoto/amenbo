@@ -1007,18 +1007,18 @@ datasets! {
     // **A unit worth using twice** — the library. `project_id` NULL is one held by the device rather
     // than by a project, which is a shape `secret` already has here.
     //
-    // It is a picture in its own right: the `automation_step` rows hang off it, the edges and wires
-    // between them are drawn on it, and `entry_step_id` is the step a placement of it opens first.
-    // Nullable because an action under construction has no entry yet, and `RESTRICT` because deleting
-    // the step it starts at is a thing the op has to be told to do.
+    // It is a picture in its own right: the `automation_action_step` rows hang off it, the edges
+    // and wires between them are drawn on it, and `entry_step_id` is the step a placement of it
+    // opens first. Nullable because an action under construction has no entry yet, and `RESTRICT`
+    // because deleting the step it starts at is a thing the op has to be told to do.
     //
     // It names no agent and no model: who is asked to carry a prompt out is each step's own answer,
     // so the same action can be run by different agents in two automations (the columns are on
-    // `automation_step`).
+    // `automation_action_step`).
     automation_action {
         project_id: fk_opt("project", "RESTRICT"),
         name: col(REQ),
-        entry_step_id: fk_opt("automation_step", "RESTRICT"),
+        entry_step_id: fk_opt("automation_action_step", "RESTRICT"),
         order_key: col(ORDER_KEY),
     }
 
@@ -1077,7 +1077,7 @@ datasets! {
     //
     // `work_dir_ref` names the setting or the input the folder is taken from — a name, not a path, so
     // the answer is given once where the action is placed rather than baked into every step.
-    automation_step {
+    automation_action_step {
         action_id: fk("automation_action", "RESTRICT"),
         name: col(REQ),
         prompt: col(REQ),
@@ -1233,7 +1233,7 @@ datasets! {
     automation_run_def {
         run_id: fk("automation_run", "RESTRICT"),
         placement_id: fk_opt("automation_placement", "SET NULL"),
-        step_id: fk_opt("automation_step", "SET NULL"),
+        step_id: fk_opt("automation_action_step", "SET NULL"),
         name: col(REQ),
         prompt: col(OPT),
         agent: col(REQ),

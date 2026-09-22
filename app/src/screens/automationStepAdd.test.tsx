@@ -6,7 +6,8 @@
 // here**, and one that runs an action is not asked to declare what the action declares; **inside an
 // action there is no library to pick from** (`AMB-D-949`) and the press goes through that picture's
 // own door — the line it was opened from, or the action itself where there is no line yet
-// (`AMB-T-5315`); **what the dialog took is what is sent**, ways out and inputs together; **nothing
+// (`AMB-T-5315`); **a written action is asked which library to land in** (`AMB-T-5317`); **what the
+// dialog took is what is sent**, ways out and inputs together; **nothing
 // is sent until the dialog has what a step cannot be made without**; and, for the output artefact, **the name starts on
 // the way out's own and stops following once somebody writes their own** — but only where that way
 // out hands on nothing yet.
@@ -110,11 +111,25 @@ describe("putting a step in on a line", () => {
 
     expect(hoisted.insert).toHaveBeenCalledWith(9, {
       name: "実装する",
-      source: { prompt: "やる" },
+      source: { prompt: "やる", shelf: "project" },
       agent: "claude-code",
       interactive: false,
       exits: ["直すところがある"],
       inputs: [{ name: "要件", kind: "value", required: true }],
+    });
+  });
+
+  /// Where a written action is kept outlives the picture it was written at, so it is asked rather
+  /// than assumed — and asked only of an action being written (`AMB-T-5317`).
+  it("sends the library the written action was told to land in", async () => {
+    await open();
+    await typeInto(boxes()[0]!, "実装する");
+    await typeInto(document.body.querySelector("textarea")!, "やる");
+    await pick(selects()[1]!, "device");
+    await act(async () => button(t("auto.add.put")).click());
+
+    expect(hoisted.insert.mock.calls[0]![1]).toMatchObject({
+      source: { prompt: "やる", shelf: "device" },
     });
   });
 
@@ -123,6 +138,8 @@ describe("putting a step in on a line", () => {
     await typeInto(boxes()[0]!, "見直す");
     await pick(selects()[0]!, "4");
     expect(document.body.querySelector("textarea")).toBeNull();
+    // Including the library to keep it in: an action off the shelf is already kept somewhere.
+    expect(selects()).toHaveLength(1);
     expect(buttons().some((b) => b.textContent === t("auto.add.exitAdd"))).toBe(false);
     expect(buttons().some((b) => b.textContent === t("auto.add.inputAdd"))).toBe(false);
     await act(async () => button(t("auto.add.put")).click());

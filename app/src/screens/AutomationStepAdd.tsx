@@ -10,16 +10,22 @@
 // the new box, and the new box goes on to whatever that way out used to reach
 // (`amenbo_core::ops::automation::placement_insert`, `…::step_insert`) — one act.
 //
-// **It is not the only road in.** A box that belongs beside the picture rather than on a line is put
-// down by the row under it (`./AutomationPlaceRow`, and the press above an action's picture), which
-// is also how the first one arrives: this dialog needs a line, and a picture with nothing on it has
-// none.
+// **A picture with nothing on it is opened the same way.** The row under it (`./AutomationPlaceRow`,
+// and the press above an action's picture) names the picture instead of a line, and the box it puts
+// down stands on its own with nothing pointing at it — so the first box of all is written here too,
+// rather than only in the library tab.
 //
 // **A box on an automation runs a library action, or carries a prompt written here and becomes
-// one.** A prompt typed here becomes an ordinary action in this project's library and is placed in
-// the same act (`AMB-T-5317`); an action picked from the library declares nothing of its own — its
-// ways out and its inputs are the action's — so those two sections are not drawn for it rather than
-// drawn and refused.
+// one.** A prompt typed here becomes an ordinary action and is placed in the same act
+// (`AMB-T-5317`); an action picked from the library declares nothing of its own — its ways out and
+// its inputs are the action's — so those two sections are not drawn for it rather than drawn and
+// refused. **Only the line's road offers the library**: the row that opens this dialog on a whole
+// picture has a pulldown of its own beside it, and two of them would be one question asked twice.
+//
+// **Where the written action is kept is asked here, not assumed** (`AMB-T-5317`). It is an ordinary
+// action once written, so it lands either in the device's library, which every project on this
+// machine reaches, or in this project's — the same two the library tab asks for
+// (`./AutomationActionsTab`), and the choice outlives the picture it was written at.
 //
 // **What it declares is what a dialog can take without becoming a screen**: the named ways out, and
 // the inputs with what each carries. Everything else is on the panel, which is where a reader lands
@@ -30,7 +36,9 @@ import {
   addAutomationStep,
   insertAutomationActionStep,
   insertAutomationStep,
+  placeAutomationActionFromPrompt,
   useAutomationActions,
+  type ActionShelf,
 } from "../core/automations";
 import { t } from "../core/i18n";
 import { Icon } from "../components/Icon";
@@ -40,11 +48,12 @@ import { PORT_KINDS } from "./automationPortKinds";
 type Draft = { name: string; kind: string; required: boolean };
 
 /**
- * Where the new box goes: onto a line of either picture, or into an action that has no line to press
- * yet.
+ * Where the new box goes: onto a line of either picture, or onto a picture that has no line to press
+ * yet — an automation or an action, named by itself.
  */
 export type AddTarget =
   | { picture: "automation"; edgeId: number }
+  | { picture: "automation"; automationId: number }
   | { picture: "action"; edgeId: number }
   | { picture: "action"; actionId: number };
 
@@ -63,12 +72,19 @@ export function AutomationStepAdd({
   const actions = useAutomationActions(projectId);
   const [name, setName] = useState("");
   const [action, setAction] = useState<string>("");
+  const [shelf, setShelf] = useState<ActionShelf>("project");
   const [prompt, setPrompt] = useState("");
   const [interactive, setInteractive] = useState(false);
   const [exits, setExits] = useState<string[]>([]);
   const [inputs, setInputs] = useState<Draft[]>([]);
-  // Inside an action there is no library to pick from, so what goes in always carries its own words.
-  const own = into.picture === "action" || action === "";
+  // The library is offered on an automation's line and nowhere else: inside an action there is none
+  // to pick from (`AMB-D-949`), and the row that opens this on a whole picture has its own pulldown.
+  const offerLibrary = into.picture === "automation" && "edgeId" in into;
+  // So what goes in carries its own words wherever the library was not offered, or not picked from.
+  const own = !offerLibrary || action === "";
+  // Which library a written action lands in. A project's own is the likelier answer and the one
+  // offered first, but with no project open the device's is the only one there is.
+  const shelfPicked = projectId === null ? "device" : shelf;
 
   const ready = name.trim() !== "" && (!own || prompt.trim() !== "");
   const put = () => {
@@ -82,13 +98,24 @@ export function AutomationStepAdd({
         : [],
     };
     if (into.picture === "automation") {
-      void insertAutomationStep(into.edgeId, {
-        name: name.trim(),
-        source: own ? { prompt: prompt.trim() } : { action: Number(action) },
-        agent,
-        interactive,
-        ...declared,
-      });
+      void ("edgeId" in into
+        ? insertAutomationStep(into.edgeId, {
+            name: name.trim(),
+            source: own
+              ? { prompt: prompt.trim(), shelf: shelfPicked }
+              : { action: Number(action) },
+            agent,
+            interactive,
+            ...declared,
+          })
+        : placeAutomationActionFromPrompt(into.automationId, {
+            name: name.trim(),
+            prompt: prompt.trim(),
+            shelf: shelfPicked,
+            agent,
+            interactive,
+            ...declared,
+          }));
     } else {
       const step = { name: name.trim(), prompt: prompt.trim(), agent, interactive, ...declared };
       void ("edgeId" in into
@@ -115,7 +142,7 @@ export function AutomationStepAdd({
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
-        {into.picture === "automation" && (
+        {offerLibrary && (
           <label className="autostep__field">
             <span className="autostep__label">{t("auto.step.source")}</span>
             <select value={action} onChange={(e) => setAction(e.target.value)}>
@@ -125,6 +152,16 @@ export function AutomationStepAdd({
                   {one.name}
                 </option>
               ))}
+            </select>
+          </label>
+        )}
+
+        {own && into.picture === "automation" && projectId !== null && (
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.actions.reach")}</span>
+            <select value={shelf} onChange={(e) => setShelf(e.target.value as ActionShelf)}>
+              <option value="project">{t("auto.actions.reachProject")}</option>
+              <option value="device">{t("auto.actions.reachDevice")}</option>
             </select>
           </label>
         )}

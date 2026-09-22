@@ -1170,7 +1170,8 @@ const ui = {
   "auto.pic.entry": "Starts here",
   "auto.pic.place": "Place an action",
   "auto.pic.placeDo": "Place",
-  "auto.pic.libraryEmpty": "The library holds no action yet — make one on the actions tab",
+  "auto.pic.libraryEmpty": "The library holds no action yet — write one here, or make one on the actions tab",
+  "auto.pic.writeDo": "Write one here",
   // The panel beside the picture: what the pressed step holds, field by field. The three rows a
   // task filter is answered on borrow the words the board's filters already use
   // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.

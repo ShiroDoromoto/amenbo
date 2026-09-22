@@ -484,6 +484,7 @@ pub fn run() {
       automation::automation_action_add,
       automation::automation_action_edit,
       automation::automation_placement_add,
+      automation::automation_placement_add_from_prompt,
       automation::automation_placement_remove,
       automation::automation_step_edit,
       automation::automation_step_insert,

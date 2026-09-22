@@ -26,6 +26,8 @@ import { todayStr } from "./calendar";
 export interface WriteAck {
   tasks: number[];
   decisions: number[];
+  /** The automations the write made — not an invalidation key, but where a creation's new id comes back. */
+  automations: number[];
   scopes: string[]; // "tasks" / "decisions" (empty = nothing to invalidate)
 }
 
@@ -48,6 +50,22 @@ function me() {
  */
 export async function invokeAck(cmd: string, args: Record<string, unknown>): Promise<void> {
   return applyAck(await invoke<WriteAck>(cmd, args));
+}
+
+/**
+ * The same road, for a write whose answer the caller needs as well as its invalidation — a creation,
+ * where what the screen does next is open the thing it just made. The ack is applied exactly as
+ * `invokeAck` applies it and **awaited**, then handed back so the caller can lift the new id out of
+ * it. What this exists instead of is a second call that goes looking for the row that was not there
+ * before, which is a guess wherever two writes can land between the two calls.
+ */
+export async function invokeForAck(
+  cmd: string,
+  args: Record<string, unknown>,
+): Promise<WriteAck> {
+  const ack = await invoke<WriteAck>(cmd, args);
+  await applyAck(ack);
+  return ack;
 }
 
 /**
@@ -93,6 +111,10 @@ function applyAck(ack: WriteAck): Promise<void> {
       // stale is the whole list rather than one row: the prompt shown is the row's own, and the
       // count beside it is read off the steps pointing at it.
       case "automationActions": return scopes.has("automationActions");
+      // The definitions of one project, as the "automations" tab lists them. A write reaches it for
+      // two reasons: the list gains or loses a row, and the step count drawn on each row is read off
+      // the steps the build screen is adding and removing.
+      case "automations": return scopes.has("automations");
       // One automation's whole definition, and whether it could be started. Every write the build
       // screen makes lands in one of the definition's tables, and what goes stale is the whole
       // answer — the picture, the step panel and the launch check are three readings of it

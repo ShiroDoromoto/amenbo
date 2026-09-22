@@ -720,6 +720,11 @@ pub struct WriteAck {
     pub(crate) tasks: Vec<i64>,
     /// Decision ids that were touched (the single-record query `["decision", id]` gets invalidated).
     pub(crate) decisions: Vec<i64>,
+    /// Automation ids the write made. Not an invalidation key — the "automations" scope already
+    /// reaches every automation query — but the one road back from a write to what it created, so a
+    /// screen that has just made an automation can open it without going to look for the row that
+    /// was not there before.
+    pub(crate) automations: Vec<i64>,
     /// Coarse-grained scopes to invalidate ("tasks"/"decisions"). Empty means there is no query to
     /// invalidate — as with a roster write, where refetching the snapshot in `loadSnapshot` is
     /// enough to show the change.

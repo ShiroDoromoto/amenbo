@@ -918,6 +918,7 @@ export const de: Translation = {
     "auto.ready": "Kann gestartet werden.",
     "auto.notReady": "Kann noch nicht gestartet werden:",
     "auto.queued": "Alle Spuren sind belegt – dieser Lauf steht an und startet, sobald eine frei wird.",
+    "auto.startOne": "Eine Automation starten",
     "auto.block.noSteps": "Sie hat keine Schritte.",
     "auto.block.noEntry": "Kein Schritt ist als Startpunkt eines Laufs benannt.",
     "auto.block.entryTakesNoTask": "{step}: Der Startschritt nimmt keine Aufgabe auf, also ginge es in allen folgenden Schritten um nichts.",

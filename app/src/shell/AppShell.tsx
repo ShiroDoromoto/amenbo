@@ -792,6 +792,7 @@ export function AppShell() {
                   onDirtyChange={setRightDirty}
                   onSelectDecision={selectDecision}
                   onGoToPane={goToPane}
+                  workspaceOpen={workspaceOpen}
                   focusCommentAt={replyFocus?.taskId === selectedTaskId ? replyFocus.nonce : undefined}
                   editCommentAt={editFocus?.taskId === selectedTaskId
                     ? { commentId: editFocus.commentId, nonce: editFocus.nonce }

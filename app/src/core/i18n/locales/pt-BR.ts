@@ -927,6 +927,7 @@ export const ptBR: Translation = {
     "auto.ready": "Pode ser iniciada.",
     "auto.notReady": "Ainda não pode ser iniciada:",
     "auto.queued": "Todas as faixas estão ocupadas: esta execução fica na fila e começa quando uma for liberada.",
+    "auto.startOne": "Iniciar uma automação",
     "auto.block.noSteps": "Não tem nenhum passo.",
     "auto.block.noEntry": "Nenhum passo está indicado como aquele por onde uma execução começa.",
     "auto.block.entryTakesNoTask": "{step}: o passo inicial não assume nenhuma tarefa, então os passos seguintes não tratariam de nada.",

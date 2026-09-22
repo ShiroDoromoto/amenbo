@@ -926,6 +926,7 @@ export const fr: Translation = {
     "auto.ready": "Prête à être lancée.",
     "auto.notReady": "Pas encore prête à être lancée :",
     "auto.queued": "Toutes les voies sont prises : cette exécution attend son tour et démarre dès qu’une se libère.",
+    "auto.startOne": "Lancer une automatisation",
     "auto.block.noSteps": "Elle n’a aucune étape.",
     "auto.block.noEntry": "Aucune étape n’est désignée comme celle par laquelle une exécution commence.",
     "auto.block.entryTakesNoTask": "{step} : l’étape de départ ne prend aucune tâche, donc les étapes suivantes ne porteraient sur rien.",

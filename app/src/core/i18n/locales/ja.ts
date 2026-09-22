@@ -920,6 +920,7 @@ export const ja: Translation = {
     "auto.ready": "起動できます",
     "auto.notReady": "起動できません",
     "auto.queued": "この実行は、レーンが1つ空くまで順番待ちです",
+    "auto.startOne": "オートメーションを起動する",
     "auto.block.noSteps": "ステップが1つも無い",
     "auto.block.noEntry": "走り出すステップが決まっていない",
     "auto.block.entryTakesNoTask": "{step}：走り出すステップがタスクを取らないので、その先のステップが何についてのものか決まらない",

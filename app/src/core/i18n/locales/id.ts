@@ -915,6 +915,7 @@ export const id: Translation = {
     "auto.ready": "Siap dijalankan.",
     "auto.notReady": "Belum siap dijalankan:",
     "auto.queued": "Semua jalur terpakai — proses ini mengantre dan mulai saat satu jalur kosong.",
+    "auto.startOne": "Mulai sebuah otomasi",
     "auto.block.noSteps": "Tidak punya langkah sama sekali.",
     "auto.block.noEntry": "Tidak ada langkah yang ditetapkan sebagai tempat sebuah jalan dimulai.",
     "auto.block.entryTakesNoTask": "{step}: langkah awal tidak mengambil tugas, jadi langkah-langkah sesudahnya tidak mengerjakan apa pun.",

@@ -31,6 +31,9 @@ pub enum RefKind {
     Dimension,
     DimensionValue,
     Attachment,
+    /// An automation — the record a hit on one of its shared documents is on (`AMB-D-944`). Display-only:
+    /// it is not a number a reader types back at us, and the documents inside it carry no ref of their own.
+    Automation,
 }
 
 impl RefKind {
@@ -46,6 +49,7 @@ impl RefKind {
         RefKind::Dimension,
         RefKind::DimensionValue,
         RefKind::Attachment,
+        RefKind::Automation,
     ];
 
     /// The kind's code, as it appears between the namespace and the number.
@@ -59,6 +63,7 @@ impl RefKind {
             RefKind::Dimension => "DIM",
             RefKind::DimensionValue => "DIMV",
             RefKind::Attachment => "ATT",
+            RefKind::Automation => "AUT",
         }
     }
 }
@@ -78,8 +83,9 @@ pub const URL_SCHEME: &str = "amenbo";
 ///
 /// `None` for every other kind, and that is the whole of the rule: a task and a decision are the two
 /// things the board opens on their own, while a comment, an axis, a value and an attachment are read
-/// inside the record that holds them and have no destination to name. A kind with nowhere to lead is left
-/// as plain text rather than dressed as a link that would go nowhere.
+/// inside the record that holds them and have no destination to name. An automation has nowhere to lead
+/// yet either — the build screen is reached from the automations screen and from nowhere else. A kind with
+/// nowhere to lead is left as plain text rather than dressed as a link that would go nowhere.
 pub fn url(kind: RefKind, id: i64) -> Option<String> {
     let what = match kind {
         RefKind::Task => "task",
@@ -112,6 +118,11 @@ pub fn task_comment(id: i64) -> String {
 /// A decision comment's ref: `AMB-DC-<n>`.
 pub fn decision_comment(id: i64) -> String {
     render(RefKind::DecisionComment, id)
+}
+
+/// An automation's ref: `AMB-AUT-<n>`.
+pub fn automation(id: i64) -> String {
+    render(RefKind::Automation, id)
 }
 
 /// Drop a leading `AMB-` (case-insensitive), leaving whatever followed it. Input without one comes back
@@ -154,6 +165,7 @@ mod tests {
         assert_eq!(render(RefKind::Dimension, 3), "AMB-DIM-3");
         assert_eq!(render(RefKind::DimensionValue, 3), "AMB-DIMV-3");
         assert_eq!(render(RefKind::Attachment, 3), "AMB-ATT-3");
+        assert_eq!(render(RefKind::Automation, 3), "AMB-AUT-3");
     }
 
     /// `ALL` is written by hand, so this match is what keeps it honest: it is exhaustive, so a kind added
@@ -170,7 +182,8 @@ mod tests {
                 | RefKind::DecisionComment
                 | RefKind::Dimension
                 | RefKind::DimensionValue
-                | RefKind::Attachment => {}
+                | RefKind::Attachment
+                | RefKind::Automation => {}
             }
         }
         // Each code is distinct, so no two kinds can be read as one another.
@@ -195,6 +208,7 @@ mod tests {
             RefKind::Dimension,
             RefKind::DimensionValue,
             RefKind::Attachment,
+            RefKind::Automation,
         ] {
             assert_eq!(url(nowhere, 1), None, "{nowhere:?} is read inside what holds it");
         }

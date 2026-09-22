@@ -1,9 +1,12 @@
 // One automation, opened — the screen it is built and started from.
 //
-// **Three places, each named on the screen**: "launch", which is this task's; "build", the picture of
-// the steps (`AMB-T-5255`); and "step", the panel showing what the pressed step holds
-// (`AMB-T-5256`). The two that are not built yet draw their heading and nothing under it, so the
-// screen already reads as the three places it is rather than as one that will grow legs later.
+// **Three places, each named on the screen**: "launch", which refuses; "build", the picture of the
+// steps (`./AutomationPicture`); and "step", the panel showing what the pressed step holds, which
+// draws its heading and nothing under it until `AMB-T-5256` fills it.
+//
+// **The picture is handed the definition and no handlers yet.** Pressing a step is what the step
+// place is for and the `+` on a line opens a dialog nobody has built (`AMB-T-5257`), so both are
+// held shut here rather than wired to something that would do nothing.
 //
 // **The launch place refuses, the build place never does.** Building is always half-finished — a step
 // with no way onward, an input nobody has wired — and every one of those saves
@@ -18,6 +21,7 @@
 // **A closed workspace is not on the list.** It is not about the definition and stops being true the
 // moment a window opens, so the launch raises it at the press rather than the build screen drawing it
 // among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`).
+import { AutomationPicture } from "./AutomationPicture";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { t, tf } from "../core/i18n";
@@ -117,10 +121,10 @@ export function AutomationBuildScreen({
         </div>
       </div>
 
-      {/* The picture of the steps. `AMB-T-5255` draws it. */}
       <div className="settings__section">
         <div className="settings__body">
           <h3 className="auto__place">{t("auto.build.picture")}</h3>
+          <AutomationPicture automation={automation} />
         </div>
       </div>
 

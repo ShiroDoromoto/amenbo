@@ -15,12 +15,21 @@ import { getSnapshot, subscribe } from "../core/snapshot";
  * its faces — so every pairing of them is a question someone can ask. As one row they were exclusive, and
  * "a comment on a task" was the answer nobody could reach: picking the face gave up the side.
  */
-const KINDS: readonly (SearchKind | null)[] = [null, "task", "decision"];
+const KINDS: readonly (SearchKind | null)[] = [null, "task", "decision", "automation"];
 const FACES: readonly (SearchFace | null)[] = [null, "title", "body", "comment", "label", "attachment"];
 
 /**
- * The cross-cutting search (`AMB-D-449`): where a word is written, across tasks, decisions and the
- * comments on either.
+ * Why the narrowing box is off, which is not one reason but two: no kind is picked, or the picked kind has
+ * no listing to lend the box a grammar (`AMB-D-944`). The move back is different for each — pick a kind,
+ * or pick another one — so the box says which it is rather than one line covering both.
+ */
+function offKey(kind: SearchKind | null): "search.filterPhOff" | "search.filterPhNone" {
+  return kind === null ? "search.filterPhOff" : "search.filterPhNone";
+}
+
+/**
+ * The cross-cutting search (`AMB-D-449`): where a word is written, across tasks, decisions, the comments
+ * on either, and the documents an automation's steps share (`AMB-D-944`).
  *
  * It is a screen and not a filter on one, because what it answers is not a list. A board's search box
  * narrows the rows in front of you and returns ids; this returns **places** — a face, the record it
@@ -64,9 +73,10 @@ export function SearchScreen({
 
   // The narrowing is one side's vocabulary or the other's, so with no side named there is nothing to
   // read it in (`AMB-D-563`) — the box is off, and what is written in it is not part of the question.
-  // Kept rather than cleared: crossing to the other side to look and back again is no reason to
-  // retype it.
-  const narrowable = kind !== null;
+  // It is off on the automations too, that side having no listing to take a grammar from
+  // (`AMB-D-944`). Kept rather than cleared: crossing to another side to look and back again is no
+  // reason to retype it.
+  const narrowable = kind === "task" || kind === "decision";
   const narrowing = narrowable ? filter : "";
 
   const submit = () => {
@@ -106,14 +116,14 @@ export function SearchScreen({
             if (e.key === "Enter") submit();
           }}
         />
-        {/* Off until a side is named, and saying which side it is being read in while it is on: the
-            two grammars share their keys and mean different things by them, so a box that looked the
-            same either way would be the screen keeping that to itself (`AMB-D-563`). */}
+        {/* Off until a side with a listing is named, and saying which side it is being read in while it
+            is on: the two grammars share their keys and mean different things by them, so a box that
+            looked the same either way would be the screen keeping that to itself (`AMB-D-563`). */}
         <input
           {...asTyped}
           className="palette__input srch__filter"
-          placeholder={narrowable ? t(`search.filterPh.${kind}`) : t("search.filterPhOff")}
-          title={narrowable ? undefined : t("search.filterPhOff")}
+          placeholder={narrowable ? t(`search.filterPh.${kind}`) : t(offKey(kind))}
+          title={narrowable ? undefined : t(offKey(kind))}
           disabled={!narrowable}
           value={filterDraft}
           onChange={(e) => setFilterDraft(e.target.value)}
@@ -215,18 +225,29 @@ const FACE_ICON: Record<SearchFace, IconName> = {
  * (`AMB-D-565`). Which record and which of its faces are two questions, and one emoji answering both is
  * what left the side legible only in the ref — where a reader had to spell `AMB-T-` out to find it.
  *
- * The gavel is the decision's mark everywhere else on the screen, so it is the decision's here too.
+ * The gavel is the decision's mark everywhere else on the screen, so it is the decision's here too, and
+ * the rocket the automations' for the same reason (`BoardScreen`'s tab carries it).
  *
  * Both marks were once drawn in different kinds of glyph — one text-like, one a colour emoji — and it was that
  * difference in kind that made the pair read as two axes rather than one cluster. Drawn to one convention
  * (`AMB-D-686`) that difference is gone, so the reading is carried instead by the face's mark being the quieter
  * of the two, set apart from the record's (`.srch__face`).
  */
-const KIND_ICON = { task: "checkSquare", decision: "gavel" } as const satisfies Record<string, IconName>;
+const KIND_ICON = {
+  task: "checkSquare",
+  decision: "gavel",
+  automation: "rocket",
+} as const satisfies Record<string, IconName>;
 
-/** Which side a hit is on. The wire carries a bare string, and everything but `task` is the other side. */
+/**
+ * Which side a hit is on. The wire carries a bare string, so the two named sides are read off it and
+ * anything else falls to the decision — which is what it was before the automations arrived, and still the
+ * safe reading for a string this build has no mark for.
+ */
 function sideOf(hit: SearchHit): keyof typeof KIND_ICON {
-  return hit.kind === "task" ? "task" : "decision";
+  if (hit.kind === "task") return "task";
+  if (hit.kind === "automation") return "automation";
+  return "decision";
 }
 
 /**
@@ -243,6 +264,22 @@ function targetKey(hit: SearchHit): string {
 }
 
 /**
+ * Where a hit's ref leads, or nothing where it leads nowhere. A task and a decision are the two the board
+ * opens on their own; an automation's documents are read in the build screen, which is reached from the
+ * automations tab and from nowhere else yet (`AMB-D-944`), so its ref is a name to read rather than a place
+ * to go. Reading the number back out of the ref is what the ref spelling is for (`core/idref`).
+ */
+function opener(
+  hit: SearchHit,
+  onOpenTask: (id: number) => void,
+  onOpenDecision: (id: number) => void,
+): (() => void) | undefined {
+  const target = parseRef(hit.ref);
+  if (!target) return undefined;
+  return () => (target.space === "task" ? onOpenTask(target.num) : onOpenDecision(target.num));
+}
+
+/**
  * One place the words are written. The ref reads first because it is what the reader opens next; the
  * excerpt sits under it, and a comment ref says which remark when the hit is not on the record's own
  * faces.
@@ -256,12 +293,11 @@ function HitRow({
   onOpenTask: (id: number) => void;
   onOpenDecision: (id: number) => void;
 }) {
-  // The ref is the only handle a hit carries — it holds no id — and reading the number back out of it is
-  // what the ref spelling is for (`core/idref`).
-  const target = parseRef(hit.ref);
-  const open = target
-    ? () => (target.space === "task" ? onOpenTask(target.num) : onOpenDecision(target.num))
-    : undefined;
+  // The ref is the only handle a hit carries — it holds no id.
+  const open = opener(hit, onOpenTask, onOpenDecision);
+  // A ref with nowhere to lead and a record that stopped being readable are both unpressable, and the CSS
+  // mutes both — but they are not the same thing, so they are not written as the same class.
+  const flat = sideOf(hit) === "automation" ? "feed__target--plain" : "feed__target--gone";
   return (
     <div className="feed__item">
       <span className="srch__face">
@@ -273,7 +309,7 @@ function HitRow({
           {open ? (
             <button className="feed__target srch__ref" onClick={open}>{hit.ref}</button>
           ) : (
-            <span className="feed__target feed__target--gone srch__ref">{hit.ref}</span>
+            <span className={`feed__target ${flat} srch__ref`}>{hit.ref}</span>
           )}{" "}
           {hit.title}
         </div>

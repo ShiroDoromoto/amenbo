@@ -565,17 +565,23 @@ const ui = {
   "activity.filterFacet": "By", "activity.filterHuman": "Human", "activity.filterAi": "AI",
   "activity.note": "Humans and AI read the same stream (AI uses activity --json)",
   "activity.today": "Today", "activity.reply": "Reply",
-  // search screen (where a word is written, across tasks, decisions and the comments on either)
+  // search screen (where a word is written, across tasks, decisions, the comments on either, and the
+  // documents an automation's steps share)
   "search.placeholder": "Words to look for", "search.run": "Search",
   // The narrowing box, in the vocabulary of whichever side is picked (`AMB-D-563`) — the same key can
   // mean different things on the two, so the hint is the side's own. Off with no side picked: there
   // would be no grammar to read the expression in, and the box says which move turns it back on.
   "search.filterPh.task": "status:todo …", "search.filterPh.decision": "status:decided …",
   "search.filterPhOff": "Pick a kind first",
+  // Off with a kind picked, too, where that kind has no listing to lend the box a grammar — the
+  // automations (`AMB-D-944`). Said apart from the line above, because the move that turns the box back
+  // on is a different one: there, pick a kind; here, pick another.
+  "search.filterPhNone": "This kind takes no narrowing",
   // The two knobs the screen narrows by, each labelling its own axis (`AMB-D-562`). "In" used to head one
   // row holding both, which is what made a comment look like a third kind of record.
-  "search.kind": "Kind", "search.kindAll": "Both",
+  "search.kind": "Kind", "search.kindAll": "All",
   "search.kind.task": "Tasks", "search.kind.decision": "Decisions",
+  "search.kind.automation": "Automations",
   "search.faceAxis": "Where", "search.faceAll": "Anywhere",
   // The scope, drawn as a pull-down and kept out of the box beside it (`AMB-D-564`).
   "search.project": "Project", "search.projectAll": "Every project",
@@ -591,6 +597,8 @@ const ui = {
   // names one hit.
   "search.on.task": "Task", "search.on.taskComment": "Comment on a task",
   "search.on.decision": "Decision", "search.on.decisionComment": "Comment on a decision",
+  // An automation has no timeline, so there is no "comment on" arm to go with this one.
+  "search.on.automation": "Automation",
   // The one line a screen shows in place of a command, where nothing on the machine reaches this
   // build's CLI yet (a Linux preview before its member installs it; see components/NoCli.tsx).
   "cli.none": "No command is on your PATH yet. This preview ships its CLI as a file beside the app — copy it into ~/.local/bin (or anywhere on your PATH) and it becomes the command to type.",
@@ -1162,6 +1170,18 @@ const ui = {
   "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
+  // The picture of the steps on the build screen: what it says about a step, and what it writes
+  // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
+  // around a group of steps is.
+  "auto.pic.empty": "This automation has no steps yet.",
+  "auto.pic.lap": "One task",
+  "auto.pic.insert": "Put a step in here",
+  "auto.pic.errorExit": "error",
+  "auto.pic.endsDone": "the task is finished",
+  "auto.pic.endsHalt": "stop and call a person",
+  "auto.pic.fromAction": "from {action}",
+  "auto.pic.unfed": "nothing reaches {names}",
+  "auto.pic.hands": "hands {from} on to {to}",
   "auto.actions.empty": "The library has no actions yet.",
   "auto.actions.reachDevice": "This device",
   "auto.actions.reachProject": "This project",

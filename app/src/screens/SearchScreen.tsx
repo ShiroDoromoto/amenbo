@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from "react";
 import { PriorityDot, When } from "../components/atoms";
 import { Icon, type IconName } from "../components/Icon";
 import { errText, isPriority, isStatus, statusLabel, t, tf } from "../core/i18n";
-import { parseRef } from "../core/idref";
+import { automationRefNum, parseRef } from "../core/idref";
 import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKind } from "../core/reads";
 import { asTyped } from "../core/keys";
 import { getSnapshot, subscribe } from "../core/snapshot";
@@ -49,9 +49,13 @@ function offKey(kind: SearchKind | null): "search.filterPhOff" | "search.filterP
 export function SearchScreen({
   onOpenTask,
   onOpenDecision,
+  onOpenAutomation,
 }: {
   onOpenTask: (id: number) => void;
   onOpenDecision: (id: number) => void;
+  /** Open an automation's build screen — which project it is in is answered on the way there
+   *  (`../shell/AppShell`). */
+  onOpenAutomation: (id: number) => void;
 }) {
   // What is being typed, and what was asked. They differ between a keystroke and Enter, which is the
   // whole point: `asked` is what the query key is built from, so typing costs no reads.
@@ -193,6 +197,7 @@ export function SearchScreen({
               hit={hit}
               onOpenTask={onOpenTask}
               onOpenDecision={onOpenDecision}
+              onOpenAutomation={onOpenAutomation}
             />
           ))
         )}
@@ -265,15 +270,22 @@ function targetKey(hit: SearchHit): string {
 
 /**
  * Where a hit's ref leads, or nothing where it leads nowhere. A task and a decision are the two the board
- * opens on their own; an automation's documents are read in the build screen, which is reached from the
- * automations tab and from nowhere else yet (`AMB-D-944`), so its ref is a name to read rather than a place
- * to go. Reading the number back out of the ref is what the ref spelling is for (`core/idref`).
+ * opens on their own; an automation's documents are read in its build screen, which the row goes to by
+ * asking for the screen rather than by naming a place (`AMB-D-944`, `../shell/AppShell`). Reading the
+ * number back out of the ref is what the ref spelling is for (`core/idref`).
+ *
+ * **Nothing here knows which project an automation is in.** A hit carries the ref and no more, and the
+ * project is what the screen it opens is drawn for — so the answer is fetched on the way, which is why
+ * this road is the one that is handed a number alone.
  */
 function opener(
   hit: SearchHit,
   onOpenTask: (id: number) => void,
   onOpenDecision: (id: number) => void,
+  onOpenAutomation: (id: number) => void,
 ): (() => void) | undefined {
+  const automation = automationRefNum(hit.ref);
+  if (automation !== null) return () => onOpenAutomation(automation);
   const target = parseRef(hit.ref);
   if (!target) return undefined;
   return () => (target.space === "task" ? onOpenTask(target.num) : onOpenDecision(target.num));
@@ -288,16 +300,15 @@ function HitRow({
   hit,
   onOpenTask,
   onOpenDecision,
+  onOpenAutomation,
 }: {
   hit: SearchHit;
   onOpenTask: (id: number) => void;
   onOpenDecision: (id: number) => void;
+  onOpenAutomation: (id: number) => void;
 }) {
   // The ref is the only handle a hit carries — it holds no id.
-  const open = opener(hit, onOpenTask, onOpenDecision);
-  // A ref with nowhere to lead and a record that stopped being readable are both unpressable, and the CSS
-  // mutes both — but they are not the same thing, so they are not written as the same class.
-  const flat = sideOf(hit) === "automation" ? "feed__target--plain" : "feed__target--gone";
+  const open = opener(hit, onOpenTask, onOpenDecision, onOpenAutomation);
   return (
     <div className="feed__item">
       <span className="srch__face">
@@ -309,7 +320,9 @@ function HitRow({
           {open ? (
             <button className="feed__target srch__ref" onClick={open}>{hit.ref}</button>
           ) : (
-            <span className={`feed__target ${flat} srch__ref`}>{hit.ref}</span>
+            // A ref that leads nowhere at all is one whose record stopped being readable, and the
+            // muting says so.
+            <span className="feed__target feed__target--gone srch__ref">{hit.ref}</span>
           )}{" "}
           {hit.title}
         </div>

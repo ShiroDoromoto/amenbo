@@ -40,7 +40,12 @@ vi.mock("../talk/frames", async (importOriginal) => ({
 
 // The half that hangs off the change feed. What it watches is the feed's business
 // (`../core/changes`); what is under test is that the band draws this number and not the other one.
-vi.mock("../core/automations", () => ({ useLanesHeld: () => hoisted.held }));
+vi.mock("../core/automations", () => ({
+  useLanesHeld: () => hoisted.held,
+  // The empty frame offers a launch as well as a terminal, and reads this for the rows
+  // (`../components/StartAutomation`). None here: what this file is about is the band over the panes.
+  useAutomations: () => [],
+}));
 
 vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
 vi.mock("../files/FolderTree", () => ({ FolderTree: () => null }));

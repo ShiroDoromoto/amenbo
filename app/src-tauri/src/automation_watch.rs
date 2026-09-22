@@ -57,6 +57,11 @@ pub(crate) fn wake() {
 
 /// The thread itself. It never returns: the app ending is what ends it.
 pub fn watch(app: tauri::AppHandle) {
+    // Before the first look, and before anything else in this process can act on a run: what a
+    // previous launch left standing is stopped (`sweep`). Here rather than beside the other startup
+    // work because the order matters and this is where it is guaranteed — a look taken first would
+    // open a step for a run that is about to be told it crashed.
+    sweep();
     loop {
         // A failure is not fatal and not a reason to stop looking: the store may be mid-swap, or a
         // run may have been deleted between the two reads. The next look is a second away.
@@ -68,6 +73,35 @@ pub fn watch(app: tauri::AppHandle) {
             }
         };
         sleep(if going { WHILE_GOING } else { WHILE_IDLE });
+    }
+}
+
+/// **Stop what a previous launch left standing**, once, before this one acts on any run.
+///
+/// A run's steps are terminals of the app, so a `running` row on the way up is a record of what was
+/// true before rather than of anything going on now: left alone it holds a lane nobody is using and
+/// a task nobody is working.
+///
+/// **Nobody is told.** What a person needs to find is the task, and stopping a run hands that back
+/// to `todo` with a comment saying how far it got — which is where they work, and it is there
+/// whether or not they were looking at a banner when the app came up
+/// (`amenbo_core::ops::automation_stop::ended`).
+///
+/// **The CLI does not do this.** Opening the store from a terminal says nothing about whether the app
+/// is running, so a sweep there would stop the runs of an app that is up and watching them.
+fn sweep() {
+    let swept = crate::commands::open_store().and_then(|mut store| {
+        let lanes = store.config.automation_lanes;
+        store.automation_sweep(lanes).map_err(crate::error::CmdError::from)
+    });
+    match swept {
+        Ok(runs) if !runs.is_empty() => {
+            log::info!("{} run(s) did not survive the last launch and were stopped", runs.len());
+        }
+        Ok(_) => {}
+        // Not fatal and not worth stopping the watch over: what was not swept is swept next launch,
+        // and until then it costs a lane.
+        Err(e) => log::warn!("the runs left by the last launch were not swept: {}", e.message_en),
     }
 }
 

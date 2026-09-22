@@ -911,6 +911,7 @@ export const ko: Translation = {
     "auto.ready": "시작할 수 있습니다.",
     "auto.notReady": "아직 시작할 수 없습니다:",
     "auto.queued": "레인이 모두 찼습니다. 이 실행은 대기 중이며, 하나가 비면 시작합니다.",
+    "auto.startOne": "오토메이션 시작",
     "auto.block.noSteps": "스텝이 하나도 없습니다.",
     "auto.block.noEntry": "실행이 시작될 스텝이 정해져 있지 않습니다.",
     "auto.block.entryTakesNoTask": "{step}: 시작 스텝이 태스크를 가져오지 않아, 그다음 스텝들이 무엇을 다루는지 정해지지 않습니다.",

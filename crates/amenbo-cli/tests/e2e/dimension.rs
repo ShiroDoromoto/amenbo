@@ -226,7 +226,7 @@ fn promoting_a_comment_carries_the_axes_it_names_and_reports_the_rest() {
     assert!(named.contains(&"運用第2期"), "and the era the create fills: {shown}");
 
     // The decision-comment side behaves the same way.
-    let dcid = id_str(&cli.json(&["decision", "comment", "add", &decision_ref(&did), "--text", "桁も決める", "--json"])["comment"]["id"]);
+    let dcid = id_str(&cli.json(&["decision", "comment-add", &decision_ref(&did), "--text", "桁も決める", "--json"])["comment"]["id"]);
     let raised = cli.json(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める(分類なし)", "--json"]);
     assert_eq!(
         raised["decision"]["unmet_required_dimensions"],

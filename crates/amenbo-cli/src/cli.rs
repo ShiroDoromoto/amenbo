@@ -679,12 +679,6 @@ pub enum ViewerCmd {
 
 #[derive(Subcommand, Debug)]
 pub enum NotifyCmd {
-    /// The device's shelf of connections — add, change, mark, remove, and try one.
-    Target {
-        #[command(subcommand)]
-        sub: NotifyTargetCmd,
-    },
-
     /// Start reporting from this project, through whatever it has selected.
     On,
 
@@ -694,7 +688,7 @@ pub enum NotifyCmd {
 
     /// Send this project's notifications through one more target.
     Use {
-        /// the target on the shelf (`notify target list` says which)
+        /// the target on the shelf (`notify target-list` says which)
         target: i64,
     },
 
@@ -720,19 +714,16 @@ pub enum NotifyCmd {
         #[arg(long)]
         off: bool,
     },
-}
 
-#[derive(Subcommand, Debug)]
-pub enum NotifyTargetCmd {
     /// Every connection on this device's shelf, in the order they were raised.
-    List,
+    TargetList,
 
-    /// Raise a connection under a name. The connection itself is written afterwards (`notify target set`),
-    /// which is what gives its credential a row to hang off.
+    /// Raise a connection under a name. The connection itself is written afterwards
+    /// (`notify target-set`), which is what gives its credential a row to hang off.
     ///
     /// The first one ever raised carries the default mark, there being nothing else a new project could
     /// point at.
-    Add {
+    TargetAdd {
         /// what carries it
         #[arg(long, value_parser = ["slack", "mail"])]
         kind: String,
@@ -744,7 +735,7 @@ pub enum NotifyTargetCmd {
     ///
     /// **The credential is `--secret`**, and `-` reads it from stdin — a webhook URL or a password on the
     /// command line is visible in the process list and lands in shell history. An empty value clears it.
-    Set {
+    TargetSet {
         /// the target on the shelf
         target: i64,
         /// the name it is offered under
@@ -769,7 +760,7 @@ pub enum NotifyTargetCmd {
 
     /// Move the default mark — where a **newly created** project starts out pointing. The projects already
     /// standing keep the selection they made.
-    Default {
+    TargetDefault {
         /// the target on the shelf
         target: i64,
     },
@@ -777,7 +768,7 @@ pub enum NotifyTargetCmd {
     /// Remove a target, and with it every project's selection of it and the credential it held.
     ///
     /// It asks first, and says how many projects lose it — the global `--yes` answers ahead of the ask.
-    Rm {
+    TargetRm {
         /// the target on the shelf
         target: i64,
     },
@@ -787,13 +778,13 @@ pub enum NotifyTargetCmd {
     /// How much that means is the kind's: a mail relay is connected to and the account offered to it, a
     /// Slack webhook has only the shape of its URL read — it has no door but posting, and a webhook
     /// revoked yesterday still has the shape.
-    Check {
+    TargetCheck {
         /// the target on the shelf
         target: i64,
     },
 
     /// Send one message through it, which is the only thing that answers whether it still works.
-    Test {
+    TargetTest {
         /// the target on the shelf
         target: i64,
     },
@@ -966,7 +957,7 @@ pub enum HardEraseCmd {
     /// Remove a decision comment in full — the same surgery as `hard-erase comment`, on the other comment
     /// table. It is its own subcommand because the two tables number apart: a bare id says nothing about
     /// which one it belongs to, so the command is what says it. Find ids with
-    /// `decision comment list <decision> --json`.
+    /// `decision comment-list <decision> --json`.
     DecisionComment {
         /// decision comment ref(s) to erase, AMB-DC-n
         #[arg(required = true)]
@@ -1438,11 +1429,29 @@ pub enum TaskCmd {
         #[arg(long)]
         name: Option<String>,
     },
-    /// Record / list / forget the git commit SHAs that implemented a task — the anchor from
-    /// history back to a task (Amenbo stores each SHA opaquely and never reads git)
-    Commit {
-        #[command(subcommand)]
-        sub: TaskCommitCmd,
+    /// Record a commit SHA on a task (idempotent; full-length lower-case hex only)
+    ///
+    /// The anchor from history back to a task, since a public commit carries no store-local
+    /// reference. Amenbo stores each SHA opaquely: it never reads git, verifies the commit, or
+    /// knows which forge it lives on.
+    CommitAdd {
+        /// target task ref (AMB-T-n)
+        task: String,
+        /// the full commit SHA — 40 hex for SHA-1, 64 for SHA-256 (short forms, branches, tags and
+        /// revisions are refused)
+        sha: String,
+    },
+    /// List a task's recorded commit SHAs, oldest first
+    CommitList {
+        /// target task ref (AMB-T-n)
+        task: String,
+    },
+    /// Forget a commit SHA on a task — permanently
+    CommitRm {
+        /// target task ref (AMB-T-n)
+        task: String,
+        /// the commit SHA to forget (any case — normalised the way it was stored)
+        sha: String,
     },
     /// Assign an assignee to a task
     Assign {
@@ -1458,34 +1467,6 @@ pub enum TaskCmd {
     /// Remove a task's assignee
     Unassign { id: String },
     Delete { id: String },
-}
-
-/// A task's git commit SHAs (`add`/`list`/`rm`) — the anchor from history back to a task, since a
-/// public commit carries no store-local reference. Amenbo stores each SHA as an opaque full-length
-/// hex string: it never reads git, verifies the commit, or knows which forge it lives on.
-#[derive(Subcommand, Debug)]
-pub enum TaskCommitCmd {
-    /// Record a commit SHA on a task (idempotent; full-length lower-case hex only)
-    Add {
-        /// target task ref (AMB-T-n)
-        task: String,
-        /// the full commit SHA — 40 hex for SHA-1, 64 for SHA-256 (short forms, branches, tags and
-        /// revisions are refused)
-        sha: String,
-    },
-    /// List a task's recorded commit SHAs, oldest first
-    List {
-        /// target task ref (AMB-T-n)
-        task: String,
-    },
-    /// Forget a commit SHA on a task — permanently (alias: remove)
-    #[command(alias = "remove")]
-    Rm {
-        /// target task ref (AMB-T-n)
-        task: String,
-        /// the commit SHA to forget (any case — normalised the way it was stored)
-        sha: String,
-    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1684,15 +1665,48 @@ pub enum DecisionCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
-    /// Discuss on a decision's timeline (append-only comments)
-    Comment {
-        #[command(subcommand)]
-        sub: DecisionCommentCmd,
-    },
-    /// Attach a file (blob, ingested) or external link (--url) to a decision (manage via `attach`)
-    Attach {
+    /// Add a comment to a decision's timeline
+    CommentAdd {
         /// target decision ref (AMB-D-n)
-        id: String,
+        decision: String,
+        /// comment body, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
+        /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
+        #[arg(long)]
+        text: String,
+    },
+    /// List a decision's comments (oldest first; pairs with --offset for paging)
+    CommentList {
+        /// target decision ref (AMB-D-n)
+        decision: String,
+        /// max count (oldest first; pairs with --offset for paging)
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of items to skip, oldest first (paging)
+        #[arg(long)]
+        offset: Option<usize>,
+    },
+    /// Delete a comment posted by mistake — permanently, with its attachments.
+    /// The id comes from `decision comment-list`
+    CommentRm {
+        /// target decision comment ref, AMB-DC-n (from `decision comment-list`)
+        comment: String,
+    },
+    /// Rewrite a comment's body in place — the id, its place on the timeline, and its
+    /// attachments all stay. The id comes from `decision comment-list`
+    CommentEdit {
+        /// target decision comment ref, AMB-DC-n (from `decision comment-list`)
+        comment: String,
+        /// the new body, as Markdown — it replaces the old one outright. Pass `-` to read it from stdin
+        /// (a shell eats code spans out of a quoted argument).
+        #[arg(long)]
+        text: String,
+    },
+    /// Attach a file (blob, ingested) or external link (--url) to a single decision comment — kept
+    /// separate from the parent decision's own attachments (manage via `attach`)
+    CommentAttach {
+        /// target decision comment ref, AMB-DC-n (from `decision comment-list`)
+        comment: String,
         /// file path to ingest as a blob, or the external URL with --url
         source: String,
         /// treat <source> as an external URL link instead of ingesting a file
@@ -1704,55 +1718,10 @@ pub enum DecisionCmd {
         #[arg(long)]
         name: Option<String>,
     },
-}
-
-/// Decision comment operations (`add`/`list`/`rm`/`edit`) — a decision's timeline (a comment
-/// posted by mistake is deleted outright or rewritten in place, not retracted).
-/// Mirrors the task [`CommentCmd`]; `finish-writing`/`reject --reason` are thin sugar over `comment add`.
-#[derive(Subcommand, Debug)]
-pub enum DecisionCommentCmd {
-    /// Add a comment to a decision's timeline
-    Add {
-        /// target decision ref (AMB-D-n)
-        decision: String,
-        /// comment body, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
-        /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
-        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
-        #[arg(long)]
-        text: String,
-    },
-    /// List a decision's comments (oldest first; pairs with --offset for paging)
-    List {
-        /// target decision ref (AMB-D-n)
-        decision: String,
-        /// max count (oldest first; pairs with --offset for paging)
-        #[arg(long)]
-        limit: Option<usize>,
-        /// number of items to skip, oldest first (paging)
-        #[arg(long)]
-        offset: Option<usize>,
-    },
-    /// Delete a comment posted by mistake — permanently, with its attachments.
-    /// The id comes from `decision comment list`
-    Rm {
-        /// target decision comment ref, AMB-DC-n (from `decision comment list`)
-        comment: String,
-    },
-    /// Rewrite a comment's body in place — the id, its place on the timeline, and its
-    /// attachments all stay. The id comes from `decision comment list`
-    Edit {
-        /// target decision comment ref, AMB-DC-n (from `decision comment list`)
-        comment: String,
-        /// the new body, as Markdown — it replaces the old one outright. Pass `-` to read it from stdin
-        /// (a shell eats code spans out of a quoted argument).
-        #[arg(long)]
-        text: String,
-    },
-    /// Attach a file (blob, ingested) or external link (--url) to a single decision comment — kept
-    /// separate from the parent decision's own attachments (manage via `attach`)
+    /// Attach a file (blob, ingested) or external link (--url) to a decision (manage via `attach`)
     Attach {
-        /// target decision comment ref, AMB-DC-n (from `decision comment list`)
-        comment: String,
+        /// target decision ref (AMB-D-n)
+        id: String,
         /// file path to ingest as a blob, or the external URL with --url
         source: String,
         /// treat <source> as an external URL link instead of ingesting a file
@@ -1779,7 +1748,7 @@ pub enum AttachCmd {
         /// list the attachments on this task comment (id from `comment list`)
         #[arg(long, value_name = "ID", conflicts_with_all = ["target", "decision_comment"])]
         task_comment: Option<String>,
-        /// list the attachments on this decision comment (id from `decision comment list`)
+        /// list the attachments on this decision comment (id from `decision comment-list`)
         #[arg(long, value_name = "ID", conflicts_with_all = ["target", "task_comment"])]
         decision_comment: Option<String>,
     },

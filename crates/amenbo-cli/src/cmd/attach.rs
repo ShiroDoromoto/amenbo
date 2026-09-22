@@ -219,7 +219,7 @@ pub(crate) fn attach(store: &mut Store, flags: &Flags, sub: AttachCmd) -> Result
 /// (`AMB-T-n` / `AMB-D-n`); a comment is named by a flag that says which table it is in (`--task-comment` /
 /// `--decision-comment`). The two comment tables are numbered independently, so a bare `5` could equally be
 /// task comment 5 or decision comment 5. Rather than stamp a kind onto the id, the command says which table
-/// it means — the same shape as `comment attach` / `decision comment attach` splitting the tables by
+/// it means — the same shape as `comment attach` / `decision comment-attach` splitting the tables by
 /// namespace, except that here a flag makes the choice.
 fn resolve_attach_ls_target(
     store: &Store,

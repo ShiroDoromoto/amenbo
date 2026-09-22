@@ -28,8 +28,8 @@ impl Driver<'_> {
             "raise" => {
                 let kind = req_str(with, "kind")?;
                 let name = req_str(with, "name")?;
-                let v = self.run_json(&["notify", "target", "add", "--kind", kind, name, "--json"])?;
-                let id = v["target"]["id"].as_i64().ok_or("notify target add did not report an id")?;
+                let v = self.run_json(&["notify", "target-add", "--kind", kind, name, "--json"])?;
+                let id = v["target"]["id"].as_i64().ok_or("notify target-add did not report an id")?;
                 if let Some(binding) = bind {
                     self.bindings.insert(binding.to_string(), id);
                 }
@@ -38,7 +38,7 @@ impl Driver<'_> {
             "connect" => {
                 let target = self.resolve(with)?.to_string();
                 let mut args: Vec<String> =
-                    vec!["notify".into(), "target".into(), "set".into(), target.clone(), "--json".into()];
+                    vec!["notify".into(), "target-set".into(), target.clone(), "--json".into()];
                 for (key, flag) in [
                     ("secret", "--secret"),
                     ("smtp_host", "--smtp-host"),
@@ -59,7 +59,7 @@ impl Driver<'_> {
             }
             "mark-default" => {
                 let target = self.resolve(with)?;
-                self.run_json(&["notify", "target", "default", &target.to_string(), "--json"])?;
+                self.run_json(&["notify", "target-default", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!(
                     "new projects now start out pointing at notification target {target}"
                 )))
@@ -68,7 +68,7 @@ impl Driver<'_> {
             // asked, and a driver that met it would stall rather than walk the road.
             "remove" => {
                 let target = self.resolve(with)?;
-                self.run_json(&["notify", "target", "rm", &target.to_string(), "--yes", "--json"])?;
+                self.run_json(&["notify", "target-rm", &target.to_string(), "--yes", "--json"])?;
                 Ok(Outcome::action(format!("removed notification target {target}")))
             }
             "report" => {
@@ -202,7 +202,7 @@ impl Driver<'_> {
                 // The exit status is the verdict, not the shape of what was printed: a refusal writes
                 // its sentence to stderr and leaves stdout empty, and reading a missing JSON object
                 // as "not usable" would let a command that printed nothing at all pass for one.
-                let out = self.invoke(&["notify", "target", "check", &target.to_string(), "--json"])?;
+                let out = self.invoke(&["notify", "target-check", &target.to_string(), "--json"])?;
                 let usable = out.status.success();
                 let said = if usable {
                     String::from_utf8_lossy(&out.stdout).trim().to_string()

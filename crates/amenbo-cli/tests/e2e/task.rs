@@ -1027,9 +1027,9 @@ fn commit_filter_walks_git_back_to_the_task() {
 
     let sha_a = "a".repeat(40); // SHA-1 form
     let sha_b = "b".repeat(64); // SHA-256 form
-    cli.json(&["task", "commit", "add", &t1, &sha_a, "--json"]);
-    cli.json(&["task", "commit", "add", &t2, &sha_a, "--json"]); // the same commit on two tasks
-    cli.json(&["task", "commit", "add", &t2, &sha_b, "--json"]);
+    cli.json(&["task", "commit-add", &t1, &sha_a, "--json"]);
+    cli.json(&["task", "commit-add", &t2, &sha_a, "--json"]); // the same commit on two tasks
+    cli.json(&["task", "commit-add", &t2, &sha_b, "--json"]);
 
     // Sorted task ids a `commit:` filter returns.
     let ids_for = |sha: &str| -> Vec<String> {
@@ -1067,7 +1067,7 @@ fn a_short_sha_is_refused_with_the_way_to_the_full_one() {
     let pid = cli.a_project();
     let t = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", "one", "--json"])["task"]["id"]);
 
-    let (stderr, code) = cli.run_err(&["task", "commit", "add", &t, "abc1234", "--json"]);
+    let (stderr, code) = cli.run_err(&["task", "commit-add", &t, "abc1234", "--json"]);
     assert_ne!(code, 0, "a short SHA must be refused: {stderr}");
     let v: Value = serde_json::from_str(stderr.trim()).unwrap_or_else(|_| panic!("error JSON: {stderr}"));
     assert_eq!(v["error"]["code"], "invalid_commit_sha", "the refusal names itself: {stderr}");
@@ -1075,7 +1075,7 @@ fn a_short_sha_is_refused_with_the_way_to_the_full_one() {
     assert!(hint.contains("git rev-parse"), "the hint names what expands a short SHA: {stderr}");
 
     // The expanded form goes straight through, which is what the hint promises.
-    cli.json(&["task", "commit", "add", &t, &"a".repeat(40), "--json"]);
+    cli.json(&["task", "commit-add", &t, &"a".repeat(40), "--json"]);
 }
 
 /// `search` over the word index (`AMB-D-450`), end to end: it reaches every face of a task — its title,

@@ -238,7 +238,7 @@ fn an_empty_ref_resolves_to_nothing() {
 }
 
 /// The two comment tables number independently, so the same decimal id can stand in both. **The command
-/// says which table**: `comment attach` means a task comment, `decision comment attach` a decision comment,
+/// says which table**: `comment attach` means a task comment, `decision comment-attach` a decision comment,
 /// and `attach ls` picks the table with a flag. Comment ids carry no type sigil, unlike `T-n` / `D-n`.
 #[test]
 fn a_comment_id_in_both_tables_is_disjoined_by_the_command() {
@@ -254,7 +254,7 @@ fn a_comment_id_in_both_tables_is_disjoined_by_the_command() {
     // id — that collision is exactly why the table has to be named.
     let tc = id_str(&cli.json(&["comment", "add", &tid, "--text", "タスクのコメント", "--json"])["comment"]["id"]);
     let dc = loop {
-        let id = id_str(&cli.json(&["decision", "comment", "add", &did, "--text", "決定のコメント", "--json"])["comment"]["id"]);
+        let id = id_str(&cli.json(&["decision", "comment-add", &did, "--text", "決定のコメント", "--json"])["comment"]["id"]);
         assert!(id.parse::<i64>().unwrap() <= tc.parse::<i64>().unwrap(), "the decision numbering overtook the task numbering");
         if id == tc {
             break id;
@@ -262,7 +262,7 @@ fn a_comment_id_in_both_tables_is_disjoined_by_the_command() {
     };
 
     cli.json(&["comment", "attach", &tc, "https://example.com/task", "--url", "--json"]);
-    cli.json(&["decision", "comment", "attach", &dc, "https://example.com/decision", "--url", "--json"]);
+    cli.json(&["decision", "comment-attach", &dc, "https://example.com/decision", "--url", "--json"]);
 
     // The same id reaches the right table, because the command and its flag choose the table.
     let on_task = cli.json(&["attach", "ls", "--task-comment", &tc, "--json"]);
@@ -292,23 +292,23 @@ fn task_and_decision_comment_refs_are_spelled_apart() {
 
     let tc = cli.json(&["comment", "add", &tid, "--text", "タスク側", "--json"]);
     let tcid = id_str(&tc["comment"]["id"]);
-    let dc = cli.json(&["decision", "comment", "add", &did, "--text", "決定側", "--json"]);
+    let dc = cli.json(&["decision", "comment-add", &did, "--text", "決定側", "--json"]);
     let dcid = id_str(&dc["comment"]["id"]);
 
     // The listings are where a person reads a ref off the screen, so that is where the spelling has to be
     // right (`--json` carries the id, the human line carries the ref).
     let (task_list, _, _) = cli.run_both(&["comment", "list", &tid]);
     assert!(task_list.contains(&format!("AMB-TC-{tcid}")), "a task comment reads as AMB-TC: {task_list}");
-    let (decision_list, _, _) = cli.run_both(&["decision", "comment", "list", &did]);
+    let (decision_list, _, _) = cli.run_both(&["decision", "comment-list", &did]);
     assert!(decision_list.contains(&format!("AMB-DC-{dcid}")), "a decision comment reads as AMB-DC: {decision_list}");
 
     // Each door takes its own spelling…
     cli.json(&["comment", "edit", &format!("AMB-TC-{tcid}"), "--text", "タスク側（改）", "--json"]);
-    cli.json(&["decision", "comment", "edit", &format!("AMB-DC-{dcid}"), "--text", "決定側（改）", "--json"]);
+    cli.json(&["decision", "comment-edit", &format!("AMB-DC-{dcid}"), "--text", "決定側（改）", "--json"]);
     // …and not the other's, whatever number it carries.
     let (_, wrong_task) = cli.run(&["comment", "edit", &format!("AMB-DC-{dcid}"), "--text", "x", "--json"]);
     assert_eq!(wrong_task, 1, "a decision comment's ref is not a task comment's");
-    let (_, wrong_decision) = cli.run(&["decision", "comment", "edit", &format!("AMB-TC-{tcid}"), "--text", "x", "--json"]);
+    let (_, wrong_decision) = cli.run(&["decision", "comment-edit", &format!("AMB-TC-{tcid}"), "--text", "x", "--json"]);
     assert_eq!(wrong_decision, 1, "a task comment's ref is not a decision comment's");
     // The retired spelling is not a third accepted form.
     let (_, retired) = cli.run(&["comment", "edit", &format!("AMB-C-{tcid}"), "--text", "x", "--json"]);
@@ -346,10 +346,10 @@ fn comment_rm_deletes_the_comment_and_its_attachment() {
     // Decision comments delete the same way.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
     let did = id_str(&d["decision"]["id"]);
-    let dc = cli.json(&["decision", "comment", "add", &did, "--text", "誤投稿", "--json"]);
+    let dc = cli.json(&["decision", "comment-add", &did, "--text", "誤投稿", "--json"]);
     let dcid = id_str(&dc["comment"]["id"]);
-    cli.json(&["decision", "comment", "rm", &dcid, "--yes", "--json"]);
-    assert_eq!(cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 0);
+    cli.json(&["decision", "comment-rm", &dcid, "--yes", "--json"]);
+    assert_eq!(cli.json(&["decision", "comment-list", &did, "--json"])["count"], 0);
 }
 
 /// A post you only want to reword is rewritten in place by `comment edit`: id, position in the thread and
@@ -385,11 +385,11 @@ fn comment_edit_rewrites_the_body_and_keeps_the_id_and_its_attachment() {
     // Decision comments take the same shape, and stay editable under an accepted decision: what freezes is the decision's body.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
     let did = id_str(&d["decision"]["id"]);
-    let dc = cli.json(&["decision", "comment", "add", &did, "--text", "誤字のある投稿", "--json"]);
+    let dc = cli.json(&["decision", "comment-add", &did, "--text", "誤字のある投稿", "--json"]);
     let dcid = id_str(&dc["comment"]["id"]);
     cli.json(&["decision", "finish-writing", &did, "--json"]);
-    cli.json(&["decision", "comment", "edit", &dcid, "--text", "直した投稿", "--json"]);
-    let dlisted = cli.json(&["decision", "comment", "list", &did, "--json"]);
+    cli.json(&["decision", "comment-edit", &dcid, "--text", "直した投稿", "--json"]);
+    let dlisted = cli.json(&["decision", "comment-list", &did, "--json"]);
     assert_eq!(dlisted["count"], 1);
     assert_eq!(dlisted["comments"][0]["text"], "直した投稿");
 }
@@ -432,11 +432,11 @@ fn an_edited_comment_says_so_and_an_untouched_one_stays_quiet() {
     // Decision comments mirror it.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
     let did = id_str(&d["decision"]["id"]);
-    let dc = cli.json(&["decision", "comment", "add", &did, "--text", "誤字のある投稿", "--json"]);
+    let dc = cli.json(&["decision", "comment-add", &did, "--text", "誤字のある投稿", "--json"]);
     let dcid = id_str(&dc["comment"]["id"]);
-    assert!(cli.json(&["decision", "comment", "list", &did, "--json"])["comments"][0]["edited_at"].is_null());
-    cli.json(&["decision", "comment", "edit", &dcid, "--text", "直した投稿", "--json"]);
-    let dlisted = cli.json(&["decision", "comment", "list", &did, "--json"]);
+    assert!(cli.json(&["decision", "comment-list", &did, "--json"])["comments"][0]["edited_at"].is_null());
+    cli.json(&["decision", "comment-edit", &dcid, "--text", "直した投稿", "--json"]);
+    let dlisted = cli.json(&["decision", "comment-list", &did, "--json"]);
     assert!(dlisted["comments"][0]["edited_at"].is_string(), "a decision comment also says edited: {dlisted}");
 }
 

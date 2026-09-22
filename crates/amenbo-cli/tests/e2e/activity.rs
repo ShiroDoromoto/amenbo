@@ -186,7 +186,7 @@ fn activity_carries_a_decision_records_comments_too() {
             ["decision"]["id"],
     );
     cli.run(&["comment", "add", &task, "--actor", "ai", "--text", "task said"]);
-    cli.run(&["decision", "comment", "add", &dec, "--actor", "ai", "--text", "decision said"]);
+    cli.run(&["decision", "comment-add", &dec, "--actor", "ai", "--text", "decision said"]);
 
     let comments = cli.json(&["activity", "--kind", "comment", "--json"]);
     let items = comments["items"].as_array().unwrap().clone();

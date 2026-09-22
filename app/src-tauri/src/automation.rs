@@ -42,7 +42,7 @@ use amenbo_core::model::{
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
     AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::{NewStep, StepSource};
+use amenbo_core::ops::automation::{NewAutomation, NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -77,6 +77,25 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
             archived: card.automation.archived,
         })
         .collect())
+}
+
+/// **Make an automation**, born with no steps and no entry
+/// ([`amenbo_core::ops::automation::add`]).
+///
+/// A name is all it takes. The notes are written on the build screen, once there is a picture to
+/// write them about — asking for them at the press would put a form in front of the one road into
+/// the screen where the work actually happens. The preamble is written nowhere: it is Amenbo's own
+/// fixed sentence at the head of every launch, and the column goes with it (`AMB-T-5325`).
+///
+/// The ack names the new automation, which is what the screen opens the build screen on: a creation
+/// that answered with the scope alone would leave the press having to go and find the row that was
+/// not there a moment ago.
+#[tauri::command]
+pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdError> {
+    let made = with_store_mut(|store| {
+        Ok(store.automation_add(project_id, NewAutomation { name, ..Default::default() })?)
+    })?;
+    Ok(WriteAck::new(&["automations"]).automation(made.id))
 }
 
 /// **Rename an automation, rewrite its notes, or put it out of the way.** Only what is `Some` is
@@ -142,6 +161,24 @@ pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCar
             used_by: card.used_by,
         })
         .collect())
+}
+
+/// **Make a library action** — a name, and which library it lands in.
+///
+/// **The prompt is not asked for here.** It is written in the box the list opens on the row
+/// ([`automation_action_edit`]), which is the one place a prompt is written: a second field writing
+/// the same column would be a second place to keep in step. The row is born carrying an empty
+/// prompt, and the screen opens that box on it straight away.
+///
+/// `project` is which library it lands in — the project's own, or the device's where every project
+/// on this machine reaches it ([`automation_action_from_step`]).
+#[tauri::command]
+pub fn automation_action_add(project: Option<i64>, name: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_add(project, &name, "")?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
 }
 
 /// **Rename a library action, or rewrite its prompt.** Only what is `Some` is written.

@@ -26,6 +26,8 @@ import { todayStr } from "./calendar";
 export interface WriteAck {
   tasks: number[];
   decisions: number[];
+  /** The automations the write made — not an invalidation key, but where a creation's new id comes back. */
+  automations: number[];
   scopes: string[]; // "tasks" / "decisions" (empty = nothing to invalidate)
 }
 
@@ -48,6 +50,22 @@ function me() {
  */
 export async function invokeAck(cmd: string, args: Record<string, unknown>): Promise<void> {
   return applyAck(await invoke<WriteAck>(cmd, args));
+}
+
+/**
+ * The same road, for a write whose answer the caller needs as well as its invalidation — a creation,
+ * where what the screen does next is open the thing it just made. The ack is applied exactly as
+ * `invokeAck` applies it and **awaited**, then handed back so the caller can lift the new id out of
+ * it. What this exists instead of is a second call that goes looking for the row that was not there
+ * before, which is a guess wherever two writes can land between the two calls.
+ */
+export async function invokeForAck(
+  cmd: string,
+  args: Record<string, unknown>,
+): Promise<WriteAck> {
+  const ack = await invoke<WriteAck>(cmd, args);
+  await applyAck(ack);
+  return ack;
 }
 
 /**
@@ -93,9 +111,11 @@ function applyAck(ack: WriteAck): Promise<void> {
       // stale is the whole list rather than one row: the prompt shown is the row's own, and the
       // count beside it is read off the steps pointing at it.
       case "automationActions": return scopes.has("automationActions");
-      // A project's list of definitions. It goes stale on a rename, on a row being put out of the
-      // way and on one being deleted — three writes that reach the list without touching any one
-      // definition's own read, which is why it is watched apart from `automation` below.
+      // The definitions of one project, as the "automations" tab lists them. A write reaches it for
+      // three reasons: the list gains or loses a row, a row it keeps is renamed or put out of the
+      // way, and the step count drawn on each row is read off the steps the build screen is adding
+      // and removing. None of the three is one definition's own read, which is why this is watched
+      // apart from `automation` below.
       case "automations": return scopes.has("automations");
       // One automation's whole definition, and whether it could be started. Every write the build
       // screen makes lands in one of the definition's tables, and what goes stale is the whole

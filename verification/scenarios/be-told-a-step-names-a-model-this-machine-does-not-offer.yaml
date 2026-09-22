@@ -1,0 +1,118 @@
+# A step names a model, and whether this machine has it is a thing nobody knows until somebody has
+# asked. So this reason is the one the launch place cannot draw from the definition alone: the same
+# automation reads ready before the question has been put and short of something after it, and
+# neither reading is wrong.
+#
+# ── Why an unasked provider is not judged ───────────────────────────────────────────────────────
+# Asking a provider what it offers is a login shell and that provider starting up
+# (`app/src-tauri/src/agent_models.rs`), and a build screen is drawn far more often than anybody
+# wants that. What the app keeps is what has already been answered, for the life of the process —
+# so a provider nobody has asked has no list, and a step of its is left unjudged rather than judged
+# against nothing. A build that read silence as "this agent has no models" would turn a provider the
+# reader simply has not touched yet into a screenful of reasons not to launch.
+#
+# ── What puts the question ──────────────────────────────────────────────────────────────────────
+# Three places ask, and all three are a reader looking at what an agent can be started on: the row
+# under an empty frame, the row under a running pane, and the step panel — which asks for the agent
+# the step it is drawn for is carried out by (`app/src/screens/AutomationStepPanel.tsx`). This road
+# walks the third, because it is the one that happens where the answer is read: a reader on the build
+# screen presses a step to look at it, and the launch place beside it has something to say it did not
+# have a moment ago.
+#
+# ── Why the screen is left and come back to ─────────────────────────────────────────────────────
+# The launch place is read when the build screen opens. The ask the panel makes lands after that, so
+# the list does not move under the reader — it is the next reading that carries the reason. A road
+# that asserted it without going back would be asserting that the app re-reads a check it has no
+# reason to re-read, and that is not what is being defended here.
+#
+# ── Why the model is named from the terminal ────────────────────────────────────────────────────
+# The panel's model control offers what the agent answered with, plus whatever the step already
+# names. So a model this machine does not offer is not one a reader picks on the screen: the only
+# place it is written is the definition, which is built at the terminal. A machine whose provider
+# answers with a different set stands in the same place, and this reason is the launch place's whole
+# answer to both.
+id: be-told-a-step-names-a-model-this-machine-does-not-offer
+title: A step's model is judged only once its agent has been asked, and then the launch place names it
+description: >
+  Stand a definition up that is short of nothing except that one of its steps names a model the agent
+  on this machine does not answer with. Open the build screen: the launch place says it is ready,
+  because nobody has asked that agent anything yet. Press the step, which is one of the three places
+  that puts the question, and open the build screen again: the same definition now lists one reason,
+  naming the step and the model it asks for.
+given:
+  # One agent, answering with two models it can be started on. The names are the harness's own — a
+  # road never writes a real model name — and the step below names a third of that family, which is
+  # a name this machine has not answered with and never will.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, models: 2 } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a model that is not here" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task, model: scenario-model-09 }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  # Both ways out say what happens after them, so nothing about the definition itself is in the way
+  # and the one reason below is the only one there can be.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Ready, with a model named that is not here. Nobody has asked the agent anything, so the step is
+  # not judged on it — and this half of the road is the one that says the silence is kept as silence.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  # The press that puts the question. What the panel draws is beside the point; what it does on the
+  # way is ask the agent this step is carried out by what it can be started on.
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: take
+
+  # The name is on the panel although the agent never offered it — the control carries what the step
+  # already says as well as what came back, or a reader would be shown their own definition with a
+  # row of it quietly missing.
+  - type: assert
+    domain: automation
+    op: step-shows
+    with:
+      field: model
+      value: scenario-model-09
+
+  # Away and back, which is what makes the launch place read the check again.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: model_missing
+      step: take
+      at: scenario-model-09
+      present: true

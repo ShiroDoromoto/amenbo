@@ -5,7 +5,7 @@
 //! a road takes as many as its own goal asks for. What each of them answers with is the id the next
 //! one names, which is why nearly all of them bind.
 //!
-//! **What a step of a run types is not here** (`automation take` / `out` / `done`). Those are refused
+//! **What a step of a run types is not here** (`automation step-take` / `step-out` / `step-done`). Those are refused
 //! outside the terminal a run opened for a step, and a run started at the terminal opens none — there
 //! is no window to draw one in. The road for them waits on a door that opens a step without a screen.
 //!
@@ -50,7 +50,8 @@ impl Driver<'_> {
                 let automation = self.resolve(with)?;
                 let name = req_str(with, "name")?;
                 let mut args: Vec<String> =
-                    vec!["automation".into(), "step".into(), "add".into(), automation.to_string()];
+                    vec!["automation".into(),
+                    "step-add".into(), automation.to_string()];
                 args.push("--name".into());
                 args.push(name.into());
                 args.push("--agent".into());
@@ -79,8 +80,7 @@ impl Driver<'_> {
                 let name = req_str(with, "name")?;
                 let args = [
                     "automation".into(),
-                    "exit".into(),
-                    "add".into(),
+                    "exit-add".into(),
                     flag.into(),
                     owner.to_string(),
                     "--name".into(),
@@ -101,8 +101,7 @@ impl Driver<'_> {
                 let kind = req_str(with, "kind")?;
                 let mut args: Vec<String> = vec![
                     "automation".into(),
-                    "port".into(),
-                    "add".into(),
+                    "port-add".into(),
                     owner_flag.into(),
                     owner.to_string(),
                     "--name".into(),
@@ -120,7 +119,8 @@ impl Driver<'_> {
             "edge-add" => {
                 let from = self.way_out(with)?;
                 let mut args: Vec<String> =
-                    vec!["automation".into(), "edge".into(), "add".into(), "--from".into(), from.clone()];
+                    vec!["automation".into(),
+                    "edge-add".into(), "--from".into(), from.clone()];
                 let goes = match (with.contains_key("to"), opt_bool(with, "halt").unwrap_or(false)) {
                     (true, _) => {
                         args.push("--to".into());
@@ -152,8 +152,7 @@ impl Driver<'_> {
                 let to_port = req_str(with, "to_port")?;
                 let args = [
                     "automation".into(),
-                    "wire".into(),
-                    "add".into(),
+                    "wire-add".into(),
                     "--from".into(),
                     from.clone(),
                     "--from-port".into(),
@@ -174,8 +173,7 @@ impl Driver<'_> {
                 let step = self.resolve_key(with, "step")?;
                 self.run_json(&[
                     "automation",
-                    "entry",
-                    "set",
+                    "entry-set",
                     &automation.to_string(),
                     "--step",
                     &step.to_string(),
@@ -189,8 +187,7 @@ impl Driver<'_> {
                 let kind = req_str(with, "kind")?;
                 let mut args: Vec<String> = vec![
                     "automation".into(),
-                    "cfg".into(),
-                    "add".into(),
+                    "cfg-add".into(),
                     flag.into(),
                     owner.to_string(),
                     "--name".into(),
@@ -214,8 +211,7 @@ impl Driver<'_> {
                 let name = req_str(with, "name")?;
                 let mut args: Vec<String> = vec![
                     "automation".into(),
-                    "cfg".into(),
-                    "set".into(),
+                    "cfg-set".into(),
                     step.to_string(),
                     "--name".into(),
                     name.into(),
@@ -236,8 +232,7 @@ impl Driver<'_> {
                 let name = req_str(with, "name")?;
                 let args = [
                     "automation".into(),
-                    "note".into(),
-                    "add".into(),
+                    "note-add".into(),
                     automation.to_string(),
                     "--name".into(),
                     name.to_string(),
@@ -253,8 +248,7 @@ impl Driver<'_> {
                 let step = self.resolve_key(with, "step")?;
                 self.run_json(&[
                     "automation",
-                    "note",
-                    "link",
+                    "note-link",
                     &step.to_string(),
                     &note.to_string(),
                     "--json",
@@ -263,7 +257,7 @@ impl Driver<'_> {
             }
             "action-add" => {
                 let name = req_str(with, "name")?;
-                let mut args: Vec<String> = vec!["automation".into(), "action".into(), "add".into()];
+                let mut args: Vec<String> = vec!["automation".into(), "action-add".into()];
                 if with.contains_key("project") {
                     args.push("--project".into());
                     args.push(self.resolve_key(with, "project")?.to_string());
@@ -280,8 +274,7 @@ impl Driver<'_> {
                 let action = self.resolve(with)?;
                 let args = [
                     "automation".into(),
-                    "action".into(),
-                    "update".into(),
+                    "action-update".into(),
                     action.to_string(),
                     "--prompt".into(),
                     req_str(with, "prompt")?.to_string(),
@@ -311,7 +304,8 @@ impl Driver<'_> {
             "run" => {
                 let run = self.resolve(with)?;
                 let want = req_str(with, "status")?;
-                let v = self.run_json(&["automation", "run", "show", &run.to_string(), "--json"])?;
+                let v = self.run_json(&["automation",
+                    "run-show", &run.to_string(), "--json"])?;
                 let row = &v["run"];
                 let status = row["status"].as_str().unwrap_or("(none reported)");
                 let mut pass = status == want;
@@ -339,7 +333,8 @@ impl Driver<'_> {
                         "the automation it came from",
                     ),
                 };
-                let v = self.run_json(&["automation", "run", "list", flag, &id.to_string(), "--json"])?;
+                let v = self.run_json(&["automation",
+                    "run-list", flag, &id.to_string(), "--json"])?;
                 let rows = v["runs"].as_array().map(Vec::as_slice).unwrap_or(&[]);
                 // Each row is the run and how many moves it made, so the run is a step inside the row rather
                 // than the row itself.
@@ -392,7 +387,8 @@ impl Driver<'_> {
             // shelves it sits on, which is the column the listing carries rather than a second list.
             "action-listed" => {
                 let target = self.resolve(with)?;
-                let v = self.run_json(&["automation", "action", "list", "--json"])?;
+                let v = self.run_json(&["automation",
+                    "action-list", "--json"])?;
                 let rows = v["actions"].as_array().map(Vec::as_slice).unwrap_or(&[]);
                 let Some(row) = rows.iter().find(|one| one["action"]["id"].as_i64() == Some(target))
                 else {

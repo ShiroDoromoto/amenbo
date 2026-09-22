@@ -41,7 +41,7 @@ import type { AutomationDetailDto } from "../bindings/bindings";
 /**
  * What carries out the step a line leaves — the likeliest answer for the step being put in front of
  * it, and what the dialog starts on. A definition that names none falls back to the first agent the
- * catalog lists, which is what `automation step add` asks for and never guesses.
+ * catalog lists, which is what `automation step-add` asks for and never guesses.
  */
 function agentOn(automation: AutomationDetailDto | null, edgeId: number): string {
   const edge = automation?.edges.find((one) => one.id === edgeId);

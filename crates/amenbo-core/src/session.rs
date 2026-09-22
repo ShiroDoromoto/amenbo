@@ -62,7 +62,7 @@ pub const PANE_VAR: &str = "AMENBO_PANE";
 /// ([`crate::model::AutomationRunStep`], `AMB-T-5249`). Set beside [`SESSION_VAR`] by the window, on
 /// the terminals it opens for a step of a run, and on no other.
 ///
-/// **It is what makes `amenbo automation done` sayable at all.** The agent carrying a step out is
+/// **It is what makes `amenbo automation step-done` sayable at all.** The agent carrying a step out is
 /// told what to do and nothing about where it sits: which run it is in, which step of it, and what
 /// that step declared are none of its business, and a step asked to quote a number back would be a
 /// step whose prompt has to carry one. So the window, which opened the terminal and therefore knows,

@@ -4005,18 +4005,18 @@ impl Instructor {
             // The ref is left as a gap for the same reason `workspace run`'s is — the store issues the
             // number, so a road can name the task but never the characters the command takes.
             (Domain::Automation, "take-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation take <ref>` and run it, putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — where the command says `<ref>`. Confirm the line comes back saying the task was taken.",
+                "In the pane this run is drawn in, type `amenbo automation step-take <ref>` and run it, putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — where the command says `<ref>`. Confirm the line comes back saying the task was taken.",
                 self.task_label(with)
             ),
             (Domain::Automation, "out-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation out \"{}={}\"` and run it, and confirm the line comes back saying it was handed on.",
+                "In the pane this run is drawn in, type `amenbo automation step-out \"{}={}\"` and run it, and confirm the line comes back saying it was handed on.",
                 req(with, "name")?,
                 req(with, "value")?
             ),
             // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
             // one — which is the shape of the command and not a default this writes in.
             (Domain::Automation, "done-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation done --report \"{}\"{}` and run it, and confirm the line comes back saying the step is done.",
+                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\"{}` and run it, and confirm the line comes back saying the step is done.",
                 req(with, "report")?,
                 match arg_str(with, "exit") {
                     Some(exit) => format!(" --exit \"{exit}\""),
@@ -4037,7 +4037,7 @@ impl Instructor {
             // read off the terminal a line earlier rather than spelled here, a road having no way to
             // know what a store will mint.
             (Domain::Automation, "entry-off") => format!(
-                "Click into the shell pane and clear what is on it — hold control and press L, which clears the screen without sending a line. Then type `amenbo automation list --actor human` and press return, and read the number beside \"{}\". Then type `amenbo automation entry set <id> --clear --actor human` with that number in place of `<id>`, press return, and confirm the line comes back saying the automation now starts nowhere. Touch nothing else on the screen until the next step: when this lands is the whole of what is being read.",
+                "Click into the shell pane and clear what is on it — hold control and press L, which clears the screen without sending a line. Then type `amenbo automation list --actor human` and press return, and read the number beside \"{}\". Then type `amenbo automation entry-set <id> --clear --actor human` with that number in place of `<id>`, press return, and confirm the line comes back saying the automation now starts nowhere. Touch nothing else on the screen until the next step: when this lands is the whole of what is being read.",
                 self.target_label(with)
             ),
             // The two ways in that are not the build screen. Neither hands anything over at the

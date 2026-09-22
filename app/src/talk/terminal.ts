@@ -199,7 +199,7 @@ export type PaneStart = {
   fresh?: boolean;
   /**
    * The step execution this terminal is carrying out (`crate::session::STEP_VAR`), for a pane a run
-   * opened. The agent reads it out of the environment, which is how `amenbo automation done` knows
+   * opened. The agent reads it out of the environment, which is how `amenbo automation step-done` knows
    * which step it is speaking for without the step's prompt having to carry a number.
    */
   runStep?: number | null;

@@ -102,7 +102,7 @@ fn declared_out<'a>(exits: &'a [RunDefExit], name: &str) -> Option<&'a RunDefPor
 /// where the step declares nothing under that name.
 ///
 /// It is read **before** a value is put down, because what a name takes decides which command says it:
-/// a value and a file go down with `automation out`, the task the run is about is reserved and handed
+/// a value and a file go down with `automation step-out`, the task the run is about is reserved and handed
 /// on in one act by [`take`], and a task the step raised along the way goes down with `out` too, as an
 /// id. A caller that guessed would be refused by [`put`] with a sentence about kinds, which is not the
 /// sentence somebody typing needs.

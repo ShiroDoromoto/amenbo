@@ -498,7 +498,7 @@ pub fn snapshot() -> Result<Snapshot, CmdError> {
 }
 
 impl WriteAck {
-    fn new(scopes: &[&'static str]) -> WriteAck {
+    pub(crate) fn new(scopes: &[&'static str]) -> WriteAck {
         WriteAck { scopes: scopes.to_vec(), ..Default::default() }
     }
     fn task(mut self, id: i64) -> WriteAck {

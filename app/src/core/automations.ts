@@ -17,6 +17,7 @@ import type {
   AutomationCardDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
+  AutomationRunCardDto,
   WakeDto,
 } from "../bindings/bindings";
 
@@ -104,4 +105,22 @@ export async function fetchLanesHeld(): Promise<number> {
 export function useLanesHeld(): number {
   const { data } = useQuery<number>(["automationLanesHeld"], fetchLanesHeld);
   return data ?? 0;
+}
+
+/**
+ * **What is under way right now**, across every project — the rows of the "running" tab.
+ *
+ * It crosses projects because the lanes do, and this is where a reader sees what the count on the
+ * band over the panes is made of (`fetchLanesHeld`). Runs that are `done` are not in it: what a
+ * finished run did is reached from the task it worked, never listed here.
+ */
+export async function fetchLiveRuns(): Promise<AutomationRunCardDto[]> {
+  if (!inTauri()) return [];
+  return invoke<AutomationRunCardDto[]>("automation_running_page", {});
+}
+
+/** Subscribing read of the runs under way. Empty until the first answer lands. */
+export function useLiveRuns(): AutomationRunCardDto[] {
+  const { data } = useQuery<AutomationRunCardDto[]>(["automationRuns"], fetchLiveRuns);
+  return data ?? [];
 }

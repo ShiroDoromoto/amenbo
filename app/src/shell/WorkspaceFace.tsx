@@ -231,7 +231,7 @@ export function WorkspaceFace({
    * gone to where it is on the screen, and opened again under that same id where it is not, at which
    * point it is asked where it works the way every new pane is (`./EmptySlot`).
    */
-  openIn?: { project: number; dir?: string; pane?: string; nth: number } | null;
+  openIn?: { project: number; dir?: string; pane?: string; run?: number; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // The two halves of the lane count on the band. They come from different places on purpose: how
@@ -861,13 +861,22 @@ export function WorkspaceFace({
   // it.
   useEffect(() => {
     if (!settled || !openIn) return;
-    const { project, dir, pane } = openIn;
+    const { project, dir, pane, run } = openIn;
     // An ask that names a pane is answered here and goes no further: what it is about is a place, and
     // whether that place is on the screen is this layout's answer alone — no folder to check against
     // the project's bindings, because the record it came off holds none (`AMB-D-897`).
     if (pane) {
       setLayout((was) => {
         if (was.frames.some((one) => one.id === pane)) return focusOn(was, pane);
+        // **A run's place is stood for the run.** The id would be the same either way, and the frame
+        // would not: a place stood as an ordinary empty pane knows nothing about the run, so the step
+        // that opens next would look for the run's pane, find none, and stand a second one under this
+        // very id (`../talk/layout`). This is the road a row of the "running" tab travels, where the
+        // run it is about has not taken a lane yet and so has no pane.
+        if (run !== undefined) {
+          const stood = stoodForRun(was, project, run);
+          return focusOn(stood.layout, stood.frame.id);
+        }
         // Opened again under the same id, which is what keeps a provider pointed at a home of its own
         // pointed at the same one (`crate::pane_home`). It is not started: the record names neither
         // the folder nor the provider, and both are asked for on the empty frame the way they are for

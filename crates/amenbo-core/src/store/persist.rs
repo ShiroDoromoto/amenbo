@@ -1753,6 +1753,61 @@ impl Store {
         })
     }
 
+    /// **Ask a run to pause** (one operation = one transaction). A step under way cannot be cut in
+    /// half, so what this writes is the request; the run settles at the end of that step
+    /// ([`crate::ops::automation_stop::pause`]).
+    pub fn automation_run_pause(
+        &mut self,
+        run_id: i64,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Paused> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::pause(tx, run_id, lanes)
+        })
+    }
+
+    /// **Pick a paused run up again** (one operation = one transaction). It takes a lane where one is
+    /// free and joins the queue where none is ([`crate::ops::automation_stop::resume`]); opening the
+    /// step it answers with is the caller's.
+    pub fn automation_run_resume(
+        &mut self,
+        run_id: i64,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Resumed> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::resume(tx, run_id, lanes)
+        })
+    }
+
+    /// **Stop a run now** (one operation = one transaction) — the lane goes back, the task it was
+    /// holding goes back to `todo`, and a line is left on that task
+    /// ([`crate::ops::automation_stop::stop`]).
+    pub fn automation_run_stop(
+        &mut self,
+        run_id: i64,
+        reason: crate::model::AutomationStoppedReason,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Ended> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::stop(tx, run_id, reason, lanes)
+        })
+    }
+
+    /// **Give a promoted run a step to open, or end it** (one operation = one transaction).
+    /// [`crate::ops::automation_stop::took_a_lane`] says which.
+    pub fn automation_run_took_a_lane(
+        &mut self,
+        run_id: i64,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::TookALane> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            let run = crate::store_engine::read::automation_run(tx.conn(), run_id)?.ok_or_else(
+                || crate::error::Error::not_found(format!("run '{run_id}' not found")),
+            )?;
+            crate::ops::automation_stop::took_a_lane(tx, &run, lanes)
+        })
+    }
+
     pub fn automation_step_add(
         &mut self,
         automation_id: i64,

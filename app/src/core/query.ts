@@ -127,6 +127,10 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // re-read on a write of our own, and a lane is taken by whatever step reported, from wherever
       // it was running.
       case "automationLanesHeld": return touchesScope("automationLanes");
+      // The "running" tab's rows. What moves them is a run being launched, taking a lane, moving on to
+      // its next step or ending — every one of which is a row of `automation_run`, of the stretch it
+      // is spending on a task, or of the steps it has opened (`core/changes`).
+      case "automationRuns": return touchesScope("automationRuns");
       default: return false;
     }
   });

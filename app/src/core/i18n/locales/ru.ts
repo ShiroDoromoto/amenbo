@@ -932,6 +932,23 @@ export const ru: Translation = {
     "auto.block.unansweredCfg": "{step}: обязательная настройка {at} осталась без ответа.",
     "auto.block.agentMissing": "{step}: эта машина не может запустить {at}.",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Ничего не выполняется.",
+    "auto.run.pause": "Приостановить",
+    "auto.run.resume": "Продолжить",
+    "auto.run.stop": "Остановить",
+    "auto.run.queued": "Ожидает дорожку",
+    "auto.run.running": "Выполняется",
+    "auto.run.paused": "Приостановлен",
+    "auto.run.pausing": "Приостановится после этого шага",
+    "auto.run.stopped": "Остановлен",
+    "auto.run.crashed": "приложение было перезапущено",
+    "auto.run.maxTimes": "слишком много кругов",
+    "auto.run.noAgent": "не удалось запустить агента",
+    "auto.run.byHuman": "остановлен вручную",
+    "auto.run.step": "Шаг {n} · {step}",
+
     "mcp.title": "Подключение по MCP",
     "mcp.setupTitle": "Работать со своими проектами из ИИ",
     "mcp.open": "Подключиться по MCP (если ваш ИИ не может открыть папку)",

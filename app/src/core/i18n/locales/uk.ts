@@ -932,6 +932,23 @@ export const uk: Translation = {
     "auto.block.unansweredCfg": "{step}: обов’язкове налаштування {at} лишилося без відповіді.",
     "auto.block.agentMissing": "{step}: ця машина не може запустити {at}.",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Нічого не виконується.",
+    "auto.run.pause": "Призупинити",
+    "auto.run.resume": "Продовжити",
+    "auto.run.stop": "Зупинити",
+    "auto.run.queued": "Очікує смугу",
+    "auto.run.running": "Виконується",
+    "auto.run.paused": "Призупинено",
+    "auto.run.pausing": "Призупиниться після цього кроку",
+    "auto.run.stopped": "Зупинено",
+    "auto.run.crashed": "застосунок було перезапущено",
+    "auto.run.maxTimes": "забагато кіл",
+    "auto.run.noAgent": "не вдалося запустити агента",
+    "auto.run.byHuman": "зупинено вручну",
+    "auto.run.step": "Крок {n} · {step}",
+
     "mcp.title": "Підключення через MCP",
     "mcp.setupTitle": "Працювати зі своїми проєктами із ШІ",
     "mcp.open": "Підключитися через MCP (якщо ваш ШІ не може відкрити теку)",

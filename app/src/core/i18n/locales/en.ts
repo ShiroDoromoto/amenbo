@@ -1151,6 +1151,23 @@ const ui = {
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
 
+  // The "running" tab: what is under way, what each run is on, and the three presses that
+  // move it (`app/src/screens/RunningTab.tsx`).
+  "auto.running.empty": "Nothing is running.",
+  "auto.run.pause": "Pause",
+  "auto.run.resume": "Resume",
+  "auto.run.stop": "Stop",
+  "auto.run.queued": "Waiting for a lane",
+  "auto.run.running": "Running",
+  "auto.run.paused": "Paused",
+  "auto.run.pausing": "Pausing after this step",
+  "auto.run.stopped": "Stopped",
+  "auto.run.crashed": "the app was restarted under it",
+  "auto.run.maxTimes": "it went round too many times",
+  "auto.run.noAgent": "its agent could not be started",
+  "auto.run.byHuman": "stopped by hand",
+  "auto.run.step": "Step {n} · {step}",
+
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,
   // because the reader who has Amenbo on the command line needs none of it.

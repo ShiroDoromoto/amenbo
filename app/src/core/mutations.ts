@@ -85,6 +85,10 @@ function applyAck(ack: WriteAck): Promise<void> {
       case "decisionComments": return decisions.has(key[1] as number);
       case "attachments": return tasks.has(Number(key[2])) || decisions.has(Number(key[2]));
       case "commits": return tasks.has(key[1] as number);
+      // The "running" tab and the band that counts the lanes with it. Pausing, resuming and stopping
+      // a run all move both, and all three ack with this scope (`crate::automation`).
+      case "automationRuns":
+      case "automationLanesHeld": return scopes.has("automationRuns");
       default: return false;
     }
   });
@@ -1307,6 +1311,31 @@ export async function setUpdateCheck(enabled: boolean): Promise<void> {
 export async function setAutomationLanes(lanes: number): Promise<void> {
   if (inTauri()) return invokeAck("config_set_automation_lanes", { lanes });
   mockMutate((s) => ({ ...s, automationLanes: lanes }));
+}
+
+/**
+ * **Ask a run to pause.** A step under way cannot be cut in half — it is an agent in a terminal,
+ * mid-sentence — so the run goes on until that step reports and settles there, handing its lane back
+ * (`amenbo_core::ops::automation_stop::pause`). A run with nothing under way pauses on the spot.
+ *
+ * The browser has no runs to pause: the "running" tab is empty there, so there is no row to press.
+ */
+export async function pauseRun(run: number): Promise<void> {
+  if (inTauri()) return invokeAck("automation_run_pause", { run });
+}
+
+/** **Pick a paused run up again**, from the way out its last step left through. It opens a terminal
+ *  where a lane is free and joins the queue where none is. */
+export async function resumeRun(run: number): Promise<void> {
+  if (inTauri()) return invokeAck("automation_run_resume", { run });
+}
+
+/**
+ * **Stop a run now.** The lane goes back, the task it was holding goes back to `todo`, and a line is
+ * left on that task saying what became of it — which is why the ack names the task scope as well.
+ */
+export async function stopRun(run: number): Promise<void> {
+  if (inTauri()) return invokeAck("automation_run_stop", { run });
 }
 
 /**

@@ -1,5 +1,6 @@
-//! **Reading an automation's definition, saying whether it could be started, and opening a step of a
-//! run** — the doors behind the automations screen, its build screen, and the pane a run is drawn in.
+//! **Reading an automation's definition, saying whether it could be started, and running one** — the
+//! doors behind the automations screen, its build screen, the "running" tab and the pane a run is
+//! drawn in.
 //!
 //! Core owns the ten definition tables and the writes that build them
 //! ([`amenbo_core::ops::automation`]); nothing is built here. What this side does is resolve and
@@ -23,21 +24,28 @@
 //! The press that starts a run is on the ledger and the pane it opens is in the workspace — the same
 //! window in one shape of the app and the other window in the other (`AMB-D-753`) — so an answer
 //! handed back to whoever pressed would reach a screen with no pane to stand it in.
+//!
+//! **Whatever frees a lane owes the next run a terminal.** Core hands a run back with the one a
+//! freed lane promoted ([`amenbo_core::ops::automation_stop::Ended`]), and promotion writes
+//! `running` and nothing else — so the three doors that can end a run, and the one that opens a
+//! step, all go through the same walk (`follow` below). Dropped, a promoted run sits `running` with no
+//! terminal under it and the queue stops moving.
 
 use amenbo_core::model::{
     Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
-    AutomationPortOwner, AutomationStep,
+    AutomationPortOwner, AutomationStep, AutomationStoppedReason,
 };
 use amenbo_core::ops::automation::declarer;
 use amenbo_core::ops::automation_run::{self, Unmet};
+use amenbo_core::ops::automation_stop::{Paused, Resumed, TookALane};
 use amenbo_core::ops::automation_step::Opened;
 use amenbo_core::store_engine::{read, StoreEngine};
 
 use crate::commands::open_store_read;
 use crate::dto::{
     AutomationCardDto, AutomationCfgDto, AutomationDetailDto, AutomationEdgeDto, AutomationExitDto,
-    AutomationLaunchBlockDto, AutomationLaunchCheckDto, AutomationPortDto, AutomationStepDto,
-    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto,
+    AutomationLaunchBlockDto, AutomationLaunchCheckDto, AutomationPortDto, AutomationRunCardDto,
+    AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
 use tauri::Emitter;
@@ -127,6 +135,71 @@ pub fn automation_lanes_held() -> Result<i64, CmdError> {
     Ok(read::automation_run_ids_running(store.read_model().conn())?.len() as i64)
 }
 
+/// **How many stopped runs the "running" tab is shown.** A stop is kept on the list so that a failure
+/// nobody was watching is still seen — not so that every failure since the store was made is listed.
+/// What a run did months ago is read from the task it worked ([`amenbo_core::store::Store::automation_runs_for_task`]).
+const STOPPED_SHOWN: usize = 20;
+
+/// **What is under way right now**, across every project — the rows of the "running" tab.
+///
+/// It crosses projects for the same reason [`automation_lanes_held`] does, and it is the tab that says
+/// which project each of those lanes is in. Runs that are `done` are not here: what a finished run did
+/// is reached from the task it worked or the automation it came from, never searched for
+/// (`amenbo_core::store::Store`'s run reads).
+#[tauri::command]
+pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_running_page");
+    let store = open_store_read()?;
+    let engine = store.read_model();
+    let mut out = Vec::new();
+    for run in read::automation_runs_live(engine.conn(), STOPPED_SHOWN)? {
+        out.push(run_card(engine, run)?);
+    }
+    Ok(out)
+}
+
+/// One run as the tab draws it: what it is, how far in, and what it is on.
+fn run_card(
+    engine: &StoreEngine,
+    run: amenbo_core::model::AutomationRun,
+) -> Result<AutomationRunCardDto, CmdError> {
+    let conn = engine.conn();
+    let steps = read::automation_run_steps_of(conn, run.id)?;
+    // The step it is on, or the last one it ran — read through the run's own copy of the definition,
+    // which is what says what was asked at launch rather than what the automation says now.
+    let step_name = match steps.last() {
+        Some(last) => read::automation_run_def(conn, last.run_def_id)?.map(|def| def.name),
+        None => None,
+    };
+    // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
+    let task = match read::automation_run_task_last(conn, run.id)? {
+        Some(stretch) => stretch.task_id,
+        None => None,
+    };
+    let task_title = match task {
+        Some(id) => read::task(conn, id)?.map(|one| one.title),
+        None => None,
+    };
+    Ok(AutomationRunCardDto {
+        run: run.id,
+        project: run.project_id,
+        project_name: read::project(conn, run.project_id)?.map(|p| p.name).unwrap_or_default(),
+        automation: run.automation_id,
+        automation_name: read::automation(conn, run.automation_id)?
+            .map(|one| one.name)
+            .unwrap_or_default(),
+        status: run.status.as_str(),
+        pause_requested: run.pause_requested,
+        stopped_reason: run.stopped_reason.map(|one| one.as_str()),
+        step_name,
+        steps_done: steps.len(),
+        // A stretch whose task has since been deleted keeps the id and answers no title, which is
+        // what `task_id` being `Some` with nothing beside it means on the row.
+        task_id: task,
+        task_title,
+    })
+}
+
 /// The event the workspace hears when a step of a run is ready to be drawn.
 ///
 /// It travels as an event rather than as an answer because of where the two ends are: the press that
@@ -153,14 +226,15 @@ pub fn automation_step_open(
     run_def_id: Option<i64>,
 ) -> Result<AutomationStepOpenDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_step_open");
+    let lanes = lanes()?;
+    let mut store = crate::commands::open_store()?;
     let def_id = match run_def_id {
         Some(id) => id,
+        // Uncoded on purpose. An automation with no entry is refused at the launch check
+        // (`amenbo_core::ops::automation_run::Unmet::NoEntry`), so the only way to reach this is
+        // the entry being taken off while a run of it is under way — which no screen puts in
+        // front of anybody, and a code is split off a family where one does.
         None => {
-            let store = open_store_read()?;
-            // Uncoded on purpose. An automation with no entry is refused at the launch check
-            // (`amenbo_core::ops::automation_run::Unmet::NoEntry`), so the only way to reach this is
-            // the entry being taken off while a run of it is under way — which no screen puts in
-            // front of anybody, and a code is split off a family where one does.
             automation_run::entry_def(store.read_model().conn(), run_id)?
                 .ok_or_else(|| {
                     CmdError::from(amenbo_core::error::Error::invalid(format!(
@@ -170,14 +244,124 @@ pub fn automation_step_open(
                 .id
         }
     };
-    // How many runs may be under way at once. It is a setting and lives outside the store, so it is
-    // read here and handed down: a step that cannot be opened stops the run, and stopping one hands
-    // its lane back to whatever was waiting for it.
-    let paths = amenbo_core::config::Paths::resolve()?;
-    let lanes = amenbo_core::config::Config::load(&paths.config_file).automation_lanes;
+    drive(&app, &mut store, run_id, def_id, lanes)
+}
+
+/// **Pause a run** — it settles at the end of the step under way, and hands its lane back there
+/// ([`amenbo_core::ops::automation_stop::pause`]).
+///
+/// Pressed on a run with nothing under way it takes effect on the spot, and then a lane may come free
+/// here — which is why this door takes the window: whatever was waiting is promoted inside the same
+/// press, and a promoted run needs a terminal opening on it.
+#[tauri::command]
+pub fn automation_run_pause(app: tauri::AppHandle, run: i64) -> Result<WriteAck, CmdError> {
+    let lanes = lanes()?;
     let mut store = crate::commands::open_store()?;
+    let woke = match store.automation_run_pause(run, lanes)? {
+        Paused::Asked(_) => None,
+        Paused::Now(ended) => ended.woke,
+    };
+    follow(&app, &mut store, woke, lanes)?;
+    Ok(ack())
+}
+
+/// **Pick a paused run up again** ([`amenbo_core::ops::automation_stop::resume`]). It opens a terminal
+/// on the step its last one led to where a lane is free, and joins the queue where none is.
+#[tauri::command]
+pub fn automation_run_resume(app: tauri::AppHandle, run: i64) -> Result<WriteAck, CmdError> {
+    let lanes = lanes()?;
+    let mut store = crate::commands::open_store()?;
+    match store.automation_run_resume(run, lanes)? {
+        Resumed::Step { run, next } => {
+            drive(&app, &mut store, run.id, next.id, lanes)?;
+        }
+        Resumed::Queued(_) => {}
+    }
+    Ok(ack())
+}
+
+/// **Stop a run now** ([`amenbo_core::ops::automation_stop::stop`]) — the lane goes back, the task it
+/// was holding goes back to `todo`, and a line is left on that task saying what became of it.
+///
+/// The reason is `by_human` and is not asked for: this door is a button, and the three other reasons
+/// are ones the machine finds rather than ones a person presses.
+#[tauri::command]
+pub fn automation_run_stop(app: tauri::AppHandle, run: i64) -> Result<WriteAck, CmdError> {
+    let lanes = lanes()?;
+    let mut store = crate::commands::open_store()?;
+    let ended = store.automation_run_stop(run, AutomationStoppedReason::ByHuman, lanes)?;
+    follow(&app, &mut store, ended.woke, lanes)?;
+    Ok(ack())
+}
+
+/// What every one of the three writes above invalidates: the "running" tab, and the band that counts
+/// the lanes with it. The task a stop handed back is named too — it went to `todo` and picked up a
+/// comment, and the pane reading it is the one place that would otherwise go on drawing the old
+/// status.
+fn ack() -> WriteAck {
+    WriteAck::new(&["automationRuns", "tasks"])
+}
+
+/// How many runs may be under way at once. It is a setting and lives outside the store, so every door
+/// that can free a lane reads it here and hands it down: a step that cannot be opened stops the run,
+/// and stopping one hands its lane back to whatever was waiting for it.
+fn lanes() -> Result<i64, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    Ok(amenbo_core::config::Config::load(&paths.config_file).automation_lanes)
+}
+
+/// **Open a step, tell the workspace, and then follow the lane** — the whole of what a press that
+/// moves a run owes.
+fn drive(
+    app: &tauri::AppHandle,
+    store: &mut amenbo_core::Store,
+    run_id: i64,
+    def_id: i64,
+    lanes: i64,
+) -> Result<AutomationStepOpenDto, CmdError> {
+    let (dto, woke) = open_one(app, store, run_id, def_id, lanes)?;
+    follow(app, store, woke, lanes)?;
+    Ok(dto)
+}
+
+/// **Give every run a freed lane woke a terminal of its own.**
+///
+/// A run ending hands its lane back, and whatever has waited longest is promoted to `running` in the
+/// same transaction — with nothing running in it. Core is explicit that the driver which freed the
+/// lane is the one that owes it a step ([`amenbo_core::ops::automation_stop::Ended`]), and one
+/// promotion can lead to another: the step this opens may itself stop for a missing input, freeing the
+/// lane again. So it is a walk and not a single hop, and it ends because every turn of it either
+/// stands a terminal up or ends a run, and there are finitely many runs to end.
+fn follow(
+    app: &tauri::AppHandle,
+    store: &mut amenbo_core::Store,
+    woke: Option<amenbo_core::model::AutomationRun>,
+    lanes: i64,
+) -> Result<(), CmdError> {
+    let mut next = woke;
+    while let Some(run) = next.take() {
+        next = match store.automation_run_took_a_lane(run.id, lanes)? {
+            TookALane::Step(def) => open_one(app, store, run.id, def.id, lanes)?.1,
+            TookALane::Lost(ended) => ended.woke,
+        };
+    }
+    Ok(())
+}
+
+/// One step opened and told to the window, with whatever run a freed lane woke handed back.
+///
+/// The answer and the event carry the same thing. The event is what the workspace acts on, and the
+/// answer is for the caller to know what happened — a run stopped for a missing input opens no
+/// terminal, and the press that started it is owed that sentence.
+fn open_one(
+    app: &tauri::AppHandle,
+    store: &mut amenbo_core::Store,
+    run_id: i64,
+    def_id: i64,
+    lanes: i64,
+) -> Result<(AutomationStepOpenDto, Option<amenbo_core::model::AutomationRun>), CmdError> {
     let opened = store.automation_step_open(run_id, def_id, lanes)?;
-    let (project, step, missing) = match opened {
+    let (project, step, missing, woke) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
             let run = read::automation_run(store.read_model().conn(), run_id)?
@@ -196,17 +380,18 @@ pub fn automation_step_open(
                     interactive: def.interactive,
                 }),
                 Vec::new(),
+                None,
             )
         }
-        // `woke` is the run that took the lane this one gave up. It is the "running" tab's to draw
-        // and not this door's: what a step's pane is told about is its own step.
-        Opened::Stopped { run, missing, .. } => (run.project_id, None, missing),
+        // What a step's pane is told about is its own step, so the run a freed lane woke is not in the
+        // event — it is handed back for the walk above to open in a press of its own.
+        Opened::Stopped { run, missing, woke } => (run.project_id, None, missing, woke),
     };
     let dto = AutomationStepOpenDto { run: run_id, project, step, missing };
     if let Err(e) = app.emit(STEP_EVENT, dto.clone()) {
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
-    Ok(dto)
+    Ok((dto, woke))
 }
 
 // ───────────────────────────── shaping ─────────────────────────────

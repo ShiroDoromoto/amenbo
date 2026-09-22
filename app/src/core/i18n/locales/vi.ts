@@ -916,6 +916,23 @@ export const vi: Translation = {
     "auto.block.unansweredCfg": "{step}: thiết lập bắt buộc {at} chưa có câu trả lời.",
     "auto.block.agentMissing": "{step}: máy này không chạy được {at}.",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Không có gì đang chạy.",
+    "auto.run.pause": "Tạm dừng",
+    "auto.run.resume": "Tiếp tục",
+    "auto.run.stop": "Dừng",
+    "auto.run.queued": "Đang chờ làn",
+    "auto.run.running": "Đang chạy",
+    "auto.run.paused": "Đã tạm dừng",
+    "auto.run.pausing": "Sẽ tạm dừng sau bước này",
+    "auto.run.stopped": "Đã dừng",
+    "auto.run.crashed": "ứng dụng đã khởi động lại",
+    "auto.run.maxTimes": "lặp quá nhiều vòng",
+    "auto.run.noAgent": "không khởi động được tác nhân của nó",
+    "auto.run.byHuman": "đã dừng bằng tay",
+    "auto.run.step": "Bước {n} · {step}",
+
     "mcp.title": "Kết nối qua MCP",
     "mcp.setupTitle": "Dùng các dự án của bạn từ AI",
     "mcp.open": "Kết nối qua MCP (khi AI của bạn không mở được thư mục)",

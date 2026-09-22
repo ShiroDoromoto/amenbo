@@ -896,6 +896,24 @@ pub const STEPS: &[Step] = &[
         name: "rename automation_step to automation_action_step, after the owner it now hangs on",
         apply: Apply::Custom(name_the_step_after_its_action),
     },
+    Step {
+        to: 55,
+        name: "drop automation_step_note, the last name v50 lays down that no registry has",
+        // `AMB-D-949`. v50 lays `automation_step_note` down in frozen text, and v53's fold drops it
+        // wherever the fold runs. The fold is skipped whole on a store born below v50 — genesis
+        // handed that store today's registry, which has no such table — so there v50's name is laid
+        // down over a store that never asked for it and stays, with nothing in the build that reads
+        // it. `automation_step` was the other name of that pair, and v54's rename cleared it away.
+        //
+        // **Empty by construction, which is why the drop is the whole of the step.** No op has ever
+        // known this name on that path: the registry did not carry it when the store was born, and
+        // no op runs during a migration. Nothing is rewritten in `change_feed` for the same reason —
+        // a dataset key that was never handed out leaves no row for a carrier to be served. It is
+        // also what makes the `REFERENCES` the table still spells at `automation_step`, a name v54
+        // took away, cost nothing: dropping an empty table deletes no row for a foreign key to be
+        // checked against.
+        apply: Apply::Sql("DROP TABLE IF EXISTS automation_step_note;"),
+    },
 ];
 
 /// v52: `automation_run.stopped_reason` admits `no_way_on`.
@@ -6143,6 +6161,45 @@ mod tests {
                  WHERE name = 'automation_id'"),
             0,
             "and it is not carried over the table genesis built",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **v55 drops the note table no registry has** (`AMB-D-949`).
+    ///
+    /// The store that carries it this far is the one the fold passed over: born below v50, handed
+    /// today's registry by genesis, and then handed v50's frozen text on top of that. The chain is
+    /// run to v54 first so the table is seen standing — what the assertion after it names is this
+    /// step's work and no other's.
+    #[test]
+    fn the_note_table_v50_lays_down_is_dropped() {
+        let dir = scratch("step-note-baseline");
+        let engine = store_at(&dir, OLDEST_FROZEN_VERSION);
+        let standing = |table: &str| -> i64 {
+            engine
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+
+        run(&engine, &dir, steps_through(54), &mut crate::progress::ignore).unwrap();
+        assert_eq!(
+            standing("automation_step_note"),
+            1,
+            "v50 lays the table down on a store that never asked for it",
+        );
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(standing("automation_step_note"), 0, "and the step after v54 takes it away");
+        assert_eq!(
+            standing("automation_placement_note"),
+            1,
+            "the note table the registry does declare is left where it stands",
         );
         std::fs::remove_dir_all(&dir).ok();
     }

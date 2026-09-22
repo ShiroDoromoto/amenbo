@@ -11,16 +11,24 @@
 // to be let down by it, which is here: the reasons are listed, and the button is not offered while
 // there is one.
 //
+// **The press can still be refused, and its refusal is drawn where the list is.** Two things move
+// between the screen being drawn and the button being pressed — the machine, and whether the
+// workspace is standing — and core raises both as a sentence rather than as a reason on the list
+// (`amenbo_core::ops::automation_run::launch`). A run that took no lane is not a refusal: it says so
+// and waits.
+//
 // **The list of reasons is read, not worked out here** (`../core/automations`). It was worked out
 // here once, beside core's own, and the two disagreed on five points — so the screen could say an
 // automation was ready and the press then refuse it (`AMB-T-5272`).
 //
 // **A closed workspace is not on the list.** It is not about the definition and stops being true the
 // moment a window opens, so the launch raises it at the press rather than the build screen drawing it
-// among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`).
-import { useAutomation, useLaunchCheck } from "../core/automations";
+// among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`). Whether it is
+// standing is handed down from the shell, which is the one place that knows which window holds it.
+import { useState } from "react";
+import { launchAutomation, useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
-import { t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import type { AutomationLaunchBlockDto } from "../bindings/bindings";
 
@@ -55,22 +63,50 @@ function blockText(block: AutomationLaunchBlockDto): string {
 }
 
 export function AutomationBuildScreen({
-  id, projectId, onBack, onStart,
+  id, projectId, workspaceOpen, onBack,
 }: {
   id: number;
   /** Whose project this automation is — what the machine is asked about, and where its folders are. */
   projectId: number | null;
-  onBack: () => void;
   /**
-   * Start this automation. Absent while the road that writes a run is still being laid
-   * (`AMB-T-5244`), and the button is held shut until it is there — a press with nothing behind it
-   * is worse than a button that says it cannot be pressed yet.
+   * Whether the workspace is standing. It is handed down rather than asked here: which window holds
+   * it is the shell's to know (`../shell/AppShell`, `AMB-D-753`), and core refuses a launch without
+   * it — last of its three refusals, so a half-built automation is named before a window is.
    */
-  onStart?: (id: number) => void;
+  workspaceOpen: boolean;
+  onBack: () => void;
 }) {
   const automation = useAutomation(id);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
+  // What the last press came back with: the sentence core refused with, or that the run is in line
+  // behind the lanes. Both are cleared by the next press — what a reader is owed is the outcome of
+  // the press they just made.
+  const [refused, setRefused] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
+  // A press already under way. The answer carries the pane the run opens in, so a second press
+  // before the first lands would be a second run nobody asked for.
+  const [starting, setStarting] = useState(false);
+
+  async function start() {
+    if (projectId === null) return;
+    setRefused(null);
+    setQueued(false);
+    setStarting(true);
+    try {
+      const started = await launchAutomation(
+        id,
+        projectId,
+        folders.live.map((one) => one.path),
+        workspaceOpen,
+      );
+      setQueued(started?.queued ?? false);
+    } catch (e) {
+      setRefused(errText(e));
+    } finally {
+      setStarting(false);
+    }
+  }
 
   return (
     <div className="settings">
@@ -109,11 +145,14 @@ export function AutomationBuildScreen({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!check?.ready || !onStart}
-            onClick={() => onStart?.(id)}
+            disabled={!check?.ready || starting || projectId === null}
+            onClick={start}
           >
             {t("auto.start")}
           </button>
+
+          {queued && <div className="auto__ready">{t("auto.queued")}</div>}
+          {refused !== null && <div className="auto__notready">{refused}</div>}
         </div>
       </div>
 

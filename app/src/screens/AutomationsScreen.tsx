@@ -29,7 +29,14 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
   { id: "actions", label: () => t("auto.tab.actions") },
 ];
 
-export function AutomationsScreen({ projectId }: { projectId: number | null }) {
+export function AutomationsScreen({
+  projectId,
+  workspaceOpen,
+}: {
+  projectId: number | null;
+  /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
+  workspaceOpen: boolean;
+}) {
   const [tab, setTab] = useState<Tab>("automations");
   // Which definition is open, or nothing while the list is. The build screen replaces the list
   // rather than standing beside it, so this is where the screen is and not a selection within it.
@@ -41,6 +48,7 @@ export function AutomationsScreen({ projectId }: { projectId: number | null }) {
       <AutomationBuildScreen
         id={open}
         projectId={projectId}
+        workspaceOpen={workspaceOpen}
         onBack={() => setOpen(null)}
       />
     );

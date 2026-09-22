@@ -23,6 +23,7 @@ import type {
   AutomationCardDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
+  AutomationRunStartedDto,
   WakeDto,
 } from "../bindings/bindings";
 
@@ -111,10 +112,49 @@ export async function fetchLaunchCheck(
   folders: readonly string[],
 ): Promise<AutomationLaunchCheckDto | null> {
   if (!inTauri()) return null;
-  const agents = await invoke<WakeDto>("wake_choices", { project: projectId, folders: [...folders] })
+  const agents = await startableAgents(projectId, folders);
+  return invoke<AutomationLaunchCheckDto>("automation_launch_check", { id, agents });
+}
+
+/**
+ * The agent ids this machine can start, over the folders this project works in, or `null` where the
+ * probe did not answer.
+ *
+ * The check asks it and so does the press, and both have to ask the same question: a list that said
+ * one thing while a screen was drawn and another when the button was pressed would refuse a launch
+ * the screen had just called ready.
+ */
+async function startableAgents(
+  projectId: number,
+  folders: readonly string[],
+): Promise<string[] | null> {
+  return invoke<WakeDto>("wake_choices", { project: projectId, folders: [...folders] })
     .then((wake) => wake.candidates.filter((one) => one.installed).map((one) => one.id))
     .catch(() => null);
-  return invoke<AutomationLaunchCheckDto>("automation_launch_check", { id, agents });
+}
+
+/**
+ * **Start a run of this automation.** Answers the run's id, and whether it is in line rather than
+ * under way.
+ *
+ * `workspaceOpen` is this side's to answer and is passed rather than worked out by the host: the
+ * workspace is a face of this window in one shape of the app and a window of its own in the other
+ * (`AMB-D-753`). Core refuses a launch with it closed, last of the three refusals, and the sentence
+ * it raises is what the screen puts in front of the reader.
+ *
+ * It returns no `WriteAck`. What a launch changes on screen is the pane the run's first step opens
+ * in, which arrives as an event (`talk/automationStep`), and the lanes the band draws, which the
+ * change feed carries — neither is a query this side would invalidate.
+ */
+export async function launchAutomation(
+  id: number,
+  projectId: number,
+  folders: readonly string[],
+  workspaceOpen: boolean,
+): Promise<AutomationRunStartedDto | null> {
+  if (!inTauri()) return null;
+  const agents = await startableAgents(projectId, folders);
+  return invoke<AutomationRunStartedDto>("automation_launch", { id, agents, workspaceOpen });
 }
 
 /** Subscribing read of the launch check for one automation. */

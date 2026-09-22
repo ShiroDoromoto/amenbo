@@ -906,6 +906,7 @@ export const hi: Translation = {
     "auto.start": "शुरू करें",
     "auto.ready": "शुरू किया जा सकता है।",
     "auto.notReady": "अभी शुरू नहीं किया जा सकता:",
+    "auto.queued": "सभी लेन भरी हैं — यह रन कतार में है और एक खाली होते ही शुरू होगा।",
     "auto.block.noSteps": "इसमें कोई चरण नहीं है।",
     "auto.block.noEntry": "कोई चरण ऐसा तय नहीं है जहाँ से रन शुरू हो।",
     "auto.block.entryTakesNoTask": "{step}: शुरू का चरण कोई टास्क नहीं उठाता, इसलिए उसके बाद के चरण किसी चीज़ पर नहीं होंगे।",

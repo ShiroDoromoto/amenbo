@@ -918,6 +918,7 @@ export const it: Translation = {
     "auto.start": "Avvia",
     "auto.ready": "Si può avviare.",
     "auto.notReady": "Non si può ancora avviare:",
+    "auto.queued": "Tutte le corsie sono occupate: questa esecuzione è in coda e parte quando una si libera.",
     "auto.block.noSteps": "Non ha nessun passo.",
     "auto.block.noEntry": "Nessun passo è indicato come quello da cui parte un’esecuzione.",
     "auto.block.entryTakesNoTask": "{step}: il passo iniziale non prende nessuna attività, quindi i passi successivi non riguarderebbero nulla.",

@@ -3426,6 +3426,21 @@ pub struct AutomationLaunchCheckDto {
     pub(crate) blocks: Vec<AutomationLaunchBlockDto>,
 }
 
+/// **A run, just launched** — what the press is answered with.
+///
+/// `queued` is the one thing the press cannot see for itself: every lane was held, so the run is in
+/// line rather than under way and no pane stands for it yet. A run that took a lane says nothing
+/// beyond its id — the pane arriving is what it looks like, and that comes as an event
+/// ([`AutomationStepOpenDto`]).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunStartedDto {
+    #[ts(type = "number")]
+    pub(crate) run: i64,
+    pub(crate) queued: bool,
+}
+
 /// **A step of a run, opened** — what the workspace stands a terminal on
 /// ([`amenbo_core::ops::automation_step::open`]).
 ///

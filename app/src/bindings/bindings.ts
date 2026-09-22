@@ -349,6 +349,16 @@ export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<Automatio
 export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_take" | "task_make", required: boolean, };
 
 /**
+ * **A run, just launched** — what the press is answered with.
+ *
+ * `queued` is the one thing the press cannot see for itself: every lane was held, so the run is in
+ * line rather than under way and no pane stands for it yet. A run that took a lane says nothing
+ * beyond its id — the pane arriving is what it looks like, and that comes as an event
+ * ([`AutomationStepOpenDto`]).
+ */
+export type AutomationRunStartedDto = { run: number, queued: boolean, };
+
+/**
  * **One step**, with the declarations it runs under already resolved.
  */
 export type AutomationStepDto = { id: number, name: string, 

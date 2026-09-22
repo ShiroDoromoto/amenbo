@@ -923,6 +923,7 @@ export const pl: Translation = {
     "auto.start": "Uruchom",
     "auto.ready": "Można uruchomić.",
     "auto.notReady": "Jeszcze nie można uruchomić:",
+    "auto.queued": "Wszystkie pasy są zajęte — to uruchomienie czeka w kolejce i ruszy, gdy jeden się zwolni.",
     "auto.block.noSteps": "Nie ma żadnego kroku.",
     "auto.block.noEntry": "Żaden krok nie jest wskazany jako ten, od którego zaczyna się przebieg.",
     "auto.block.entryTakesNoTask": "{step}: krok początkowy nie podejmuje żadnego zadania, więc kolejne kroki nie dotyczyłyby niczego.",

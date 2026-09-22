@@ -907,6 +907,7 @@ export const th: Translation = {
     "auto.start": "เริ่ม",
     "auto.ready": "เริ่มได้",
     "auto.notReady": "ยังเริ่มไม่ได้:",
+    "auto.queued": "เลนเต็มทั้งหมด การรันนี้เข้าคิวไว้ และจะเริ่มเมื่อมีเลนว่าง",
     "auto.block.noSteps": "ยังไม่มีขั้นตอนเลย",
     "auto.block.noEntry": "ยังไม่ได้กำหนดขั้นตอนที่การทำงานจะเริ่ม",
     "auto.block.entryTakesNoTask": "{step}: ขั้นตอนเริ่มต้นไม่ได้รับงานมา ขั้นตอนถัดไปจึงไม่มีเรื่องที่จะทำ",

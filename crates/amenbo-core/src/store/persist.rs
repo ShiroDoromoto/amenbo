@@ -1731,7 +1731,26 @@ impl Store {
         )
     }
 
-    /// Add a step to an automation (one operation = one transaction).
+    /// **Launch an automation** — check it, write the run down and copy its steps into it (one
+    /// operation = one transaction).
+    ///
+    /// The reach is the automation's: the run is filed under the project the automation sits in, and
+    /// that project is what a launch writes into.
+    ///
+    /// `by` carries what the store cannot answer — which agents this machine can start, how many
+    /// lanes there are, whether the workspace is open, and who pressed
+    /// ([`crate::ops::automation_run::Launcher`]).
+    pub fn automation_launch(
+        &mut self,
+        automation_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+    ) -> Result<crate::model::AutomationRun> {
+        self.write_one(
+            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
+            |tx| crate::ops::automation_run::launch(tx, automation_id, by),
+        )
+    }
+
     /// **Open one step of a run** — write the execution down and build the text its terminal is
     /// started on (one operation = one transaction).
     ///

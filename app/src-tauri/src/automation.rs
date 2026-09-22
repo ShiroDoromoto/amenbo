@@ -25,7 +25,7 @@
 //! handed back to whoever pressed would reach a screen with no pane to stand it in.
 
 use amenbo_core::model::{
-    Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
+    ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
     AutomationPortOwner, AutomationStep,
 };
 use amenbo_core::ops::automation::declarer;
@@ -37,8 +37,8 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationCardDto, AutomationCfgDto, AutomationDetailDto,
     AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto, AutomationLaunchCheckDto,
-    AutomationPortDto, AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto,
-    AutomationWireDto, WriteAck,
+    AutomationPortDto, AutomationRunStartedDto, AutomationStepDto, AutomationStepOpenDto,
+    AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::BTreeSet;
@@ -189,6 +189,48 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
 pub fn automation_lanes_held() -> Result<i64, CmdError> {
     let store = open_store_read()?;
     Ok(read::automation_run_ids_running(store.read_model().conn())?.len() as i64)
+}
+
+/// **Start a run of this automation** — the press behind the build screen's "start".
+///
+/// What the store cannot answer is handed in, each from the side that holds it
+/// ([`amenbo_core::ops::automation_run::Launcher`]). `agents` is what this machine can start, asked
+/// by the face for the empty frame and passed on here rather than probed again; `null` is "nobody
+/// asked", and then no step is judged on its agent (`AMB-D-792`). `workspace_open` is the screen's
+/// to answer: the workspace is a face of this window in one shape of the app and a window of its own
+/// in the other (`AMB-D-753`), and which of those is standing is not a thing the store or this door
+/// can see.
+///
+/// **A refusal comes back as a refusal.** Core raises the archived automation, the launch check and
+/// the closed workspace in that order, each with a sentence the screen can put in front of a person
+/// ([`amenbo_core::ops::automation_run::launch`]) — so nothing is judged twice here.
+///
+/// **A run that took a lane is opened on its first step before this answers.** The pane the run is
+/// drawn in is stood by the workspace when it hears that step, so a launch that stopped short of it
+/// would be a press that wrote a row and left the screen unchanged. A queued run opens nothing: what
+/// wakes it is a lane being handed back (`AMB-T-5246`, `AMB-T-5247`).
+#[tauri::command]
+pub fn automation_launch(
+    app: tauri::AppHandle,
+    id: i64,
+    agents: Option<Vec<String>>,
+    workspace_open: bool,
+) -> Result<AutomationRunStartedDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_launch");
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let lanes = amenbo_core::config::Config::load(&paths.config_file).automation_lanes;
+    let by = automation_run::Launcher {
+        startable: agents.as_deref(),
+        lanes,
+        workspace_open,
+        by: Some(ActorKind::Human),
+    };
+    let run = with_store_mut(|store| Ok(store.automation_launch(id, &by)?))?;
+    let queued = !run.status.holds_a_lane();
+    if !queued {
+        automation_step_open(app, run.id, None)?;
+    }
+    Ok(AutomationRunStartedDto { run: run.id, queued })
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.

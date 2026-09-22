@@ -97,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal,
+  onStartTerminal, workspaceOpen,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -112,6 +112,8 @@ export function BoardScreen({
   /** Work in this folder, in this project, in the terminal — the first loop's one move, carried out
    *  by the shell (`../shell/AppShell`). */
   onStartTerminal: (project: number, dir: string) => void;
+  /** Whether the workspace is standing, for the press that starts a run (`./AutomationsScreen`). */
+  workspaceOpen: boolean;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -328,7 +330,9 @@ export function BoardScreen({
           onSelectDecision={onSelectDecision}
         />
       )}
-      {tab === "automations" && <AutomationsScreen projectId={projectId} />}
+      {tab === "automations" && (
+        <AutomationsScreen projectId={projectId} workspaceOpen={workspaceOpen} />
+      )}
       {/* The loop speaks about a folder, and `linkFolder` standing ahead of it is what guarantees there
           is one to speak about. */}
       {tab === "tasks" && notice === "firstLoop" && folders.live[0] && (

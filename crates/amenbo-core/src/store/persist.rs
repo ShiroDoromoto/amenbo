@@ -1731,11 +1731,14 @@ impl Store {
         )
     }
 
-    /// Add a step to an automation (one operation = one transaction).
     /// **Launch an automation** — check it, copy its steps into a run, and take a lane if one is free
     /// (one operation = one transaction).
     ///
     /// The reach is the automation's, the run being made under it.
+    ///
+    /// `by` carries what the store cannot answer — which agents this machine can start, how many
+    /// lanes there are, whether the workspace is open, and who pressed
+    /// ([`crate::ops::automation_run::Launcher`]).
     pub fn automation_launch(
         &mut self,
         automation_id: i64,
@@ -1804,7 +1807,14 @@ impl Store {
         })
     }
 
-    /// **Stop a run**, hand its task back and give up its lane.
+    /// **Stop a run now** (one operation = one transaction).
+    ///
+    /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
+    /// it was holding, and the line left on that task.
+    ///
+    /// `reason` is which of the four stops this is, and `lanes` is how many runs may be under way at
+    /// once ([`crate::config::Config::automation_lanes`]) — a lane handed back promotes whatever has
+    /// waited longest, and that run is in the answer.
     pub fn automation_stop(
         &mut self,
         run_id: i64,
@@ -1837,22 +1847,18 @@ impl Store {
         })
     }
 
-    /// **Stop a run now** (one operation = one transaction).
-    ///
-    /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
-    /// it was holding, and the line left on that task.
-    ///
-    /// `reason` is which of the four stops this is, and `lanes` is how many runs may be under way at
-    /// once ([`crate::config::Config::automation_lanes`]) — a lane handed back promotes whatever has
-    /// waited longest, and that run is in the answer.
-    pub fn automation_run_stop(
+    /// **Give a promoted run a step to open, or end it** (one operation = one transaction).
+    /// [`crate::ops::automation_stop::took_a_lane`] says which.
+    pub fn automation_run_took_a_lane(
         &mut self,
         run_id: i64,
-        reason: crate::model::AutomationStoppedReason,
         lanes: i64,
-    ) -> Result<crate::ops::automation_stop::Ended> {
+    ) -> Result<crate::ops::automation_stop::TookALane> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::stop(tx, run_id, reason, lanes)
+            let run = crate::store_engine::read::automation_run(tx.conn(), run_id)?.ok_or_else(
+                || crate::error::Error::not_found(format!("run '{run_id}' not found")),
+            )?;
+            crate::ops::automation_stop::took_a_lane(tx, &run, lanes)
         })
     }
 

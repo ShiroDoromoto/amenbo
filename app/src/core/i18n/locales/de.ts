@@ -917,6 +917,7 @@ export const de: Translation = {
     "auto.start": "Starten",
     "auto.ready": "Kann gestartet werden.",
     "auto.notReady": "Kann noch nicht gestartet werden:",
+    "auto.queued": "Alle Spuren sind belegt – dieser Lauf steht an und startet, sobald eine frei wird.",
     "auto.block.noSteps": "Sie hat keine Schritte.",
     "auto.block.noEntry": "Kein Schritt ist als Startpunkt eines Laufs benannt.",
     "auto.block.entryTakesNoTask": "{step}: Der Startschritt nimmt keine Aufgabe auf, also ginge es in allen folgenden Schritten um nichts.",
@@ -945,6 +946,23 @@ export const de: Translation = {
     "auto.actions.reaches": "Was hier gespeichert wird, trägt jeder Schritt, der auf diese Aktion zeigt.",
     "auto.actions.save": "Speichern",
     "auto.actions.cancel": "Abbrechen",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Es läuft nichts.",
+    "auto.run.pause": "Pausieren",
+    "auto.run.resume": "Fortsetzen",
+    "auto.run.stop": "Stoppen",
+    "auto.run.queued": "Wartet auf eine Spur",
+    "auto.run.running": "Läuft",
+    "auto.run.paused": "Pausiert",
+    "auto.run.pausing": "Pausiert nach diesem Schritt",
+    "auto.run.stopped": "Gestoppt",
+    "auto.run.crashed": "die App wurde neu gestartet",
+    "auto.run.maxTimes": "zu viele Durchläufe",
+    "auto.run.noAgent": "der Agent ließ sich nicht starten",
+    "auto.run.byHuman": "von Hand gestoppt",
+    "auto.run.step": "Schritt {n} · {step}",
 
     "mcp.title": "Über MCP verbinden",
     "mcp.setupTitle": "Deine Projekte aus einer KI heraus nutzen",

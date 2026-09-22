@@ -926,6 +926,7 @@ export const ptBR: Translation = {
     "auto.start": "Iniciar",
     "auto.ready": "Pode ser iniciada.",
     "auto.notReady": "Ainda não pode ser iniciada:",
+    "auto.queued": "Todas as faixas estão ocupadas: esta execução fica na fila e começa quando uma for liberada.",
     "auto.block.noSteps": "Não tem nenhum passo.",
     "auto.block.noEntry": "Nenhum passo está indicado como aquele por onde uma execução começa.",
     "auto.block.entryTakesNoTask": "{step}: o passo inicial não assume nenhuma tarefa, então os passos seguintes não tratariam de nada.",
@@ -954,6 +955,23 @@ export const ptBR: Translation = {
     "auto.actions.reaches": "O que for salvo aqui é levado por cada etapa que aponta para esta ação.",
     "auto.actions.save": "Salvar",
     "auto.actions.cancel": "Cancelar",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Nada em execução.",
+    "auto.run.pause": "Pausar",
+    "auto.run.resume": "Retomar",
+    "auto.run.stop": "Parar",
+    "auto.run.queued": "Aguardando uma faixa",
+    "auto.run.running": "Em execução",
+    "auto.run.paused": "Pausada",
+    "auto.run.pausing": "Pausa ao fim deste passo",
+    "auto.run.stopped": "Parada",
+    "auto.run.crashed": "o aplicativo foi reiniciado",
+    "auto.run.maxTimes": "deu voltas demais",
+    "auto.run.noAgent": "não foi possível iniciar seu agente",
+    "auto.run.byHuman": "parada à mão",
+    "auto.run.step": "Passo {n} · {step}",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar seus projetos a partir de uma IA",

@@ -24,6 +24,7 @@
 //! longer exists. So the check is made once, at startup ([`sweep`]), by whoever opens the store.
 
 use crate::error::{Error, Result};
+use rusqlite::Connection;
 use crate::model::{
     ActorKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunTask,
     AutomationStoppedReason, TaskStatus,
@@ -284,7 +285,7 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64, lanes: i64) -> Result<Resumed> {
             before.status.as_str()
         )));
     }
-    let Some(next) = next_after_the_pause(tx, &before)? else {
+    let Some(next) = next_after_the_pause(tx.conn(), &before)? else {
         ended(tx, before, AutomationRunStatus::Stopped, None, lanes)?;
         return Err(Error::invalid(format!(
             "run '{run_id}' cannot go on: what followed the step it paused after is no longer in the \
@@ -307,12 +308,54 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64, lanes: i64) -> Result<Resumed> {
     }
 }
 
+/// **What a run that has just taken a lane does next.**
+#[derive(Clone, Debug)]
+pub enum TookALane {
+    /// Open a terminal on this step.
+    Step(Box<AutomationRunDef>),
+    /// It has nothing left to open — the picture lost the step its last one led to — so it was
+    /// stopped. `Ended::woke` is whatever took the lane it had just been given.
+    Lost(Ended),
+}
+
+/// **Take a promoted run from `running` to a terminal, or end it.**
+///
+/// A lane handed back promotes whatever has waited longest ([`crate::ops::automation_run::promote_next`]),
+/// which writes `running` and nothing else; the driver that freed the lane then owes that run a step.
+/// Where the picture no longer says which step that is, the run is ended here rather than left
+/// `running` with no terminal under it — the same answer [`resume`] gives for the same reason.
+pub fn took_a_lane(tx: &WriteTx<'_>, run: &AutomationRun, lanes: i64) -> Result<TookALane> {
+    match next_for(tx.conn(), run)? {
+        Some(def) => Ok(TookALane::Step(Box::new(def))),
+        None => Ok(TookALane::Lost(ended(
+            tx,
+            run.clone(),
+            AutomationRunStatus::Stopped,
+            None,
+            lanes,
+        )?)),
+    }
+}
+
+/// **The step a run coming off the queue opens next.**
+///
+/// A lane handed back promotes whatever has waited longest ([`crate::ops::automation_run::promote_next`]),
+/// and whoever did the promoting then has to open a step of it — a promoted run left alone sits `running`
+/// with no terminal under it. Which step that is depends on how far it had got: a run that has never run
+/// one starts at the entry, and one that was paused part-way carries on from the way out its last step
+/// left through.
+pub fn next_for(conn: &Connection, run: &AutomationRun) -> Result<Option<AutomationRunDef>> {
+    if read::automation_run_steps_of(conn, run.id)?.is_empty() {
+        return crate::ops::automation_run::entry_def(conn, run.id);
+    }
+    next_after_the_pause(conn, run)
+}
+
 /// The step a paused run opens next: the one the last finished step's way out leads to.
 fn next_after_the_pause(
-    tx: &WriteTx<'_>,
+    conn: &Connection,
     run: &AutomationRun,
 ) -> Result<Option<AutomationRunDef>> {
-    let conn = tx.conn();
     let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else { return Ok(None) };
     let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
     let Some(step_id) = def.step_id else { return Ok(None) };
@@ -492,6 +535,71 @@ mod tests {
 
     fn status_of(tx: &WriteTx<'_>, run_id: i64) -> AutomationRunStatus {
         read::automation_run(tx.conn(), run_id).expect("read").expect("the run").status
+    }
+
+    #[test]
+    fn a_run_that_took_a_lane_is_given_the_step_it_starts_at() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let first = a_run(tx, &p.automation, 1);
+            let waiting = a_run(tx, &p.automation, 1);
+            assert_eq!(status_of(tx, waiting.id), AutomationRunStatus::Queued, "one lane, two runs");
+
+            let ended = stop(tx, first.id, AutomationStoppedReason::ByHuman, 1).expect("stop");
+            let woke = ended.woke.expect("the lane went to the one that was waiting");
+            assert_eq!(woke.id, waiting.id);
+            // Promotion writes `running` and nothing else, so what the driver is owed is the step —
+            // without it the run sits `running` with no terminal under it.
+            match took_a_lane(tx, &woke, 1).expect("took a lane") {
+                TookALane::Step(def) => assert_eq!(def.step_id, Some(p.first.id), "the entry"),
+                TookALane::Lost(_) => panic!("it has a step to start at"),
+            }
+        });
+    }
+
+    #[test]
+    fn a_run_whose_picture_lost_its_entry_is_stopped_rather_than_left_running() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let first = a_run(tx, &p.automation, 1);
+            let waiting = a_run(tx, &p.automation, 1);
+            automation::set_entry(tx, p.automation.id, None).expect("entry taken off");
+
+            let ended = stop(tx, first.id, AutomationStoppedReason::ByHuman, 1).expect("stop");
+            let woke = ended.woke.expect("promoted");
+            assert!(
+                matches!(took_a_lane(tx, &woke, 1).expect("took a lane"), TookALane::Lost(_)),
+                "nothing to open",
+            );
+            assert_eq!(status_of(tx, waiting.id), AutomationRunStatus::Stopped);
+        });
+    }
+
+    #[test]
+    fn the_running_index_holds_what_is_not_over_and_the_stops_behind_it() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let running = a_run(tx, &p.automation, 1);
+            let queued = a_run(tx, &p.automation, 1);
+            let stopped = a_run(tx, &p.automation, 1);
+            stop(tx, stopped.id, AutomationStoppedReason::ByHuman, 1).expect("stop");
+            // Ending one hands its lane on, so the third run is the one left queued.
+            let live: Vec<i64> = read::automation_runs_live(tx.conn(), 20)
+                .expect("live")
+                .into_iter()
+                .map(|one| one.id)
+                .collect();
+            assert!(live.contains(&running.id) && live.contains(&queued.id) && live.contains(&stopped.id));
+            // Under way first and newest first within that, then the stops — which is the order the
+            // tab draws, without a screen sorting what it was handed.
+            let over = live.iter().position(|id| *id == stopped.id).expect("the stop is on it");
+            assert_eq!(over, live.len() - 1, "a stop sits behind everything still going");
+
+            // What is over is not on it. A finished run is read from the task it worked.
+            ended(tx, running, AutomationRunStatus::Done, None, 1).expect("done");
+            let after = read::automation_runs_live(tx.conn(), 20).expect("live");
+            assert!(after.iter().all(|one| one.status != AutomationRunStatus::Done));
+        });
     }
 
     #[test]

@@ -913,6 +913,7 @@ export const tr: Translation = {
     "auto.start": "Başlat",
     "auto.ready": "Başlatılabilir.",
     "auto.notReady": "Henüz başlatılamaz:",
+    "auto.queued": "Tüm şeritler dolu — bu çalışma sırada bekliyor ve bir şerit boşalınca başlıyor.",
     "auto.block.noSteps": "Hiç adımı yok.",
     "auto.block.noEntry": "Bir çalışmanın başlayacağı adım belirlenmemiş.",
     "auto.block.entryTakesNoTask": "{step}: başlangıç adımı hiçbir görev almıyor, bu yüzden sonraki adımlar hiçbir şeyle ilgili olmaz.",
@@ -941,6 +942,23 @@ export const tr: Translation = {
     "auto.actions.reaches": "Burada kaydedilen, bu eylemi gösteren her adımın taşıdığı şeydir.",
     "auto.actions.save": "Kaydet",
     "auto.actions.cancel": "Vazgeç",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Çalışan bir şey yok.",
+    "auto.run.pause": "Duraklat",
+    "auto.run.resume": "Sürdür",
+    "auto.run.stop": "Durdur",
+    "auto.run.queued": "Şerit bekliyor",
+    "auto.run.running": "Çalışıyor",
+    "auto.run.paused": "Duraklatıldı",
+    "auto.run.pausing": "Bu adımın sonunda duraklayacak",
+    "auto.run.stopped": "Durduruldu",
+    "auto.run.crashed": "uygulama yeniden başlatıldı",
+    "auto.run.maxTimes": "çok fazla tur attı",
+    "auto.run.noAgent": "aracısı başlatılamadı",
+    "auto.run.byHuman": "elle durduruldu",
+    "auto.run.step": "Adım {n} · {step}",
 
     "mcp.title": "MCP ile bağlan",
     "mcp.setupTitle": "Projelerinizi bir yapay zekâdan kullanın",

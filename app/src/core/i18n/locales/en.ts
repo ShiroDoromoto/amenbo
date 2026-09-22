@@ -1162,6 +1162,7 @@ const ui = {
   "auto.start": "Start",
   "auto.ready": "Ready to start.",
   "auto.notReady": "Not ready to start:",
+  "auto.queued": "Every lane is taken — this run is in line, and starts when one is handed back.",
   "auto.block.noSteps": "It has no steps.",
   "auto.block.noEntry": "No step is named as the one a run starts on.",
   "auto.block.entryTakesNoTask": "{step}: the step a run starts on takes no task, so every step after it would be about nothing.",
@@ -1196,6 +1197,23 @@ const ui = {
   "auto.actions.reaches": "What is saved here is carried by every step pointing at this action.",
   "auto.actions.save": "Save",
   "auto.actions.cancel": "Cancel",
+
+  // The "running" tab: what is under way, what each run is on, and the three presses that
+  // move it (`app/src/screens/RunningTab.tsx`).
+  "auto.running.empty": "Nothing is running.",
+  "auto.run.pause": "Pause",
+  "auto.run.resume": "Resume",
+  "auto.run.stop": "Stop",
+  "auto.run.queued": "Waiting for a lane",
+  "auto.run.running": "Running",
+  "auto.run.paused": "Paused",
+  "auto.run.pausing": "Pausing after this step",
+  "auto.run.stopped": "Stopped",
+  "auto.run.crashed": "the app was restarted under it",
+  "auto.run.maxTimes": "it went round too many times",
+  "auto.run.noAgent": "its agent could not be started",
+  "auto.run.byHuman": "stopped by hand",
+  "auto.run.step": "Step {n} · {step}",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

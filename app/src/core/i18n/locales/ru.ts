@@ -930,6 +930,7 @@ export const ru: Translation = {
     "auto.start": "Запустить",
     "auto.ready": "Можно запустить.",
     "auto.notReady": "Пока запустить нельзя:",
+    "auto.queued": "Все дорожки заняты — этот запуск в очереди и начнётся, когда освободится одна.",
     "auto.block.noSteps": "В ней нет ни одного шага.",
     "auto.block.noEntry": "Ни один шаг не назначен тем, с которого начинается прогон.",
     "auto.block.entryTakesNoTask": "{step}: начальный шаг не берёт задачу, поэтому все шаги после него были бы ни о чём.",
@@ -958,6 +959,23 @@ export const ru: Translation = {
     "auto.actions.reaches": "То, что сохранено здесь, несёт каждый шаг, указывающий на это действие.",
     "auto.actions.save": "Сохранить",
     "auto.actions.cancel": "Отмена",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Ничего не выполняется.",
+    "auto.run.pause": "Приостановить",
+    "auto.run.resume": "Продолжить",
+    "auto.run.stop": "Остановить",
+    "auto.run.queued": "Ожидает дорожку",
+    "auto.run.running": "Выполняется",
+    "auto.run.paused": "Приостановлен",
+    "auto.run.pausing": "Приостановится после этого шага",
+    "auto.run.stopped": "Остановлен",
+    "auto.run.crashed": "приложение было перезапущено",
+    "auto.run.maxTimes": "слишком много кругов",
+    "auto.run.noAgent": "не удалось запустить агента",
+    "auto.run.byHuman": "остановлен вручную",
+    "auto.run.step": "Шаг {n} · {step}",
 
     "mcp.title": "Подключение по MCP",
     "mcp.setupTitle": "Работать со своими проектами из ИИ",

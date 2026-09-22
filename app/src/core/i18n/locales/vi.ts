@@ -914,6 +914,7 @@ export const vi: Translation = {
     "auto.start": "Chạy",
     "auto.ready": "Có thể chạy.",
     "auto.notReady": "Chưa thể chạy:",
+    "auto.queued": "Mọi làn đều đã bận — lần chạy này đang xếp hàng và bắt đầu khi có làn trống.",
     "auto.block.noSteps": "Chưa có bước nào.",
     "auto.block.noEntry": "Chưa đặt bước nào là nơi một lượt chạy bắt đầu.",
     "auto.block.entryTakesNoTask": "{step}: bước mở đầu không nhận công việc nào, nên các bước sau đó sẽ không làm gì cả.",
@@ -942,6 +943,23 @@ export const vi: Translation = {
     "auto.actions.reaches": "Nội dung lưu ở đây được mọi bước trỏ tới hành động này mang theo.",
     "auto.actions.save": "Lưu",
     "auto.actions.cancel": "Huỷ",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Không có gì đang chạy.",
+    "auto.run.pause": "Tạm dừng",
+    "auto.run.resume": "Tiếp tục",
+    "auto.run.stop": "Dừng",
+    "auto.run.queued": "Đang chờ làn",
+    "auto.run.running": "Đang chạy",
+    "auto.run.paused": "Đã tạm dừng",
+    "auto.run.pausing": "Sẽ tạm dừng sau bước này",
+    "auto.run.stopped": "Đã dừng",
+    "auto.run.crashed": "ứng dụng đã khởi động lại",
+    "auto.run.maxTimes": "lặp quá nhiều vòng",
+    "auto.run.noAgent": "không khởi động được tác nhân của nó",
+    "auto.run.byHuman": "đã dừng bằng tay",
+    "auto.run.step": "Bước {n} · {step}",
 
     "mcp.title": "Kết nối qua MCP",
     "mcp.setupTitle": "Dùng các dự án của bạn từ AI",

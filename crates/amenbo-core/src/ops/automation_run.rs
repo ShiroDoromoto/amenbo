@@ -34,8 +34,9 @@ use rusqlite::Connection;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPortDirection,
-    AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationStep,
+    ActorKind, Automation, AutomationCfg, AutomationEnds, AutomationExit, AutomationPortDirection,
+    AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
+    AutomationRunStepStatus, AutomationStep,
     RunDefCfg, RunDefExit, RunDefPort, ERROR_EXIT,
 };
 use crate::ops::automation::{declarer, port_declarer};
@@ -524,6 +525,47 @@ pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunD
     Ok(read::automation_run_defs_of(conn, run_id)?
         .into_iter()
         .find(|def| def.step_id == Some(entry)))
+}
+
+/// **The step this run is waiting to have opened**, or `None` where it is waiting for nothing.
+///
+/// A run that is `running` is either carrying a step out or standing between two of them, and only the
+/// second is anybody's to act on. So this answers a step in exactly two cases — a run that has just
+/// been launched and has no execution yet, where the answer is the entry ([`entry_def`]); and a run
+/// whose last execution has reported, where the answer is read off the way out it took.
+///
+/// **It derives rather than remembers**, because the report already wrote down everything it takes:
+/// the execution carries the way out, and the picture says what follows one
+/// ([`crate::ops::automation_report::done`] resolved the same edge to decide whether the run goes on
+/// at all). A second copy kept for the watcher's benefit would be a second thing to keep true.
+///
+/// `None` covers every other shape: a step still running, a run whose last way out closed or stopped
+/// it, and an edge that names a step this run carries no copy of.
+pub fn next_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
+    let Some(run) = read::automation_run(conn, run_id)? else {
+        return Err(not_found("run", run_id));
+    };
+    if run.status != AutomationRunStatus::Running {
+        return Ok(None);
+    }
+    let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else {
+        // Nothing has run yet, so what is waiting to be opened is where the run starts.
+        return entry_def(conn, run_id);
+    };
+    if last.status == AutomationRunStepStatus::Running {
+        return Ok(None);
+    }
+    let Some(from) = read::automation_run_def(conn, last.run_def_id)?.and_then(|def| def.step_id)
+    else {
+        return Ok(None);
+    };
+    let Some(edge) = read::automation_edge_for_exit(conn, from, last.exit_name.as_deref())? else {
+        return Ok(None);
+    };
+    let Some(to) = edge.to_step_id.filter(|_| edge.ends == AutomationEnds::Go) else {
+        return Ok(None);
+    };
+    Ok(read::automation_run_defs_of(conn, run_id)?.into_iter().find(|def| def.step_id == Some(to)))
 }
 
 /// **A lane came free: wake the run that has waited longest**, and answer which one it was.
@@ -1025,6 +1067,49 @@ mod tests {
             .expect("edit the definition under the run");
             let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(defs[0].name, "取る", "the copy is what the run reads from here on");
+        });
+    }
+
+    /// What a run is waiting to have opened, at each of the three moments there is an answer to it.
+    ///
+    /// **It is derived and not remembered**, which is what this holds: the report writes the way out
+    /// down, and the picture says what follows one — so a watcher asking later reads the same answer
+    /// the report acted on, without a second copy being kept for it (`AMB-D-945`).
+    #[test]
+    fn what_a_run_is_waiting_to_have_opened_is_read_off_what_it_has_already_done() {
+        with_tx(|tx| {
+            let (automation, step) = launchable(tx);
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+
+            // Nothing has run yet, so what is waiting is where the run starts.
+            let first = next_def(tx.conn(), run.id).expect("next").expect("the entry");
+            assert_eq!(first.step_id, Some(step.id));
+
+            // A step under way is nobody's to open a second time.
+            let opening = match crate::ops::automation_step::open(tx, run.id, first.id, 3)
+                .expect("open")
+            {
+                crate::ops::automation_step::Opened::Ready(ready) => *ready,
+                crate::ops::automation_step::Opened::Stopped { missing, .. } => {
+                    panic!("stopped for {missing:?}")
+                }
+            };
+            assert!(next_def(tx.conn(), run.id).expect("next").is_none());
+
+            // The entry hands a task on through that way out, so the task is taken before it can
+            // report — the refusal that guards a step saying it is done with nothing to show.
+            let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
+            crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");
+
+            // And once it has reported, the answer is read off the way out it took — here the unnamed
+            // one, which closes the run, so there is nothing waiting and the run is no longer running.
+            crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it", 3)
+                .expect("report");
+            assert!(next_def(tx.conn(), run.id).expect("next").is_none());
+            assert_eq!(
+                read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
+                AutomationRunStatus::Done,
+            );
         });
     }
 

@@ -131,6 +131,10 @@ mod viewer;
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
 pub mod store_watch;
+
+/// The thread that keeps a run going — it looks at what is running and opens whatever step is waiting
+/// (`AMB-D-945`). A run is the subject of its own progress rather than an answer to the store moving.
+mod automation_watch;
 /// The hourly tick's startup pass: what this device answered about being woken, settled against what
 /// its scheduler holds (`AMB-D-707`).
 mod tick;
@@ -183,6 +187,12 @@ const SKIN_CHANGED_EVENT: &str = "skin-changed";
 /// the inbox archive) opens the store and scans, so it goes to a thread of its own rather than hold up
 /// launch; a failure there is not fatal and is only logged.
 fn start_store_threads(app: tauri::AppHandle) {
+  // What keeps an automation going. It is started with the other store threads and for the same
+  // reason: the store it reads is the migrated one, or none at all (`automation_watch`).
+  std::thread::spawn({
+    let app = app.clone();
+    move || automation_watch::watch(app)
+  });
   std::thread::spawn(move || commands::watch_store(app));
   std::thread::spawn(|| {
     // One thread for both, in this order: they open the same store, so running them in turn is what
@@ -470,8 +480,12 @@ pub fn run() {
       automation::automation_action_edit,
       automation::automation_detail,
       automation::automation_launch_check,
+      automation::automation_launch,
       automation::automation_lanes_held,
       automation::automation_step_open,
+      automation::automation_running_page,
+      automation::automation_run_pause,
+      automation::automation_run_resume,
       automation::automation_run_stop,
       commands::store_signature,
       commands::version_status,

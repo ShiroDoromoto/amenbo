@@ -919,6 +919,7 @@ export const ja: Translation = {
     "auto.start": "起動する",
     "auto.ready": "起動できます",
     "auto.notReady": "起動できません",
+    "auto.queued": "この実行は、レーンが1つ空くまで順番待ちです",
     "auto.block.noSteps": "ステップが1つも無い",
     "auto.block.noEntry": "走り出すステップが決まっていない",
     "auto.block.entryTakesNoTask": "{step}：走り出すステップがタスクを取らないので、その先のステップが何についてのものか決まらない",
@@ -947,6 +948,23 @@ export const ja: Translation = {
     "auto.actions.reaches": "ここで保存すると、このアクションを指しているステップすべてに効きます",
     "auto.actions.save": "保存",
     "auto.actions.cancel": "取消",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "走っている実行はありません",
+    "auto.run.pause": "一時停止",
+    "auto.run.resume": "再開",
+    "auto.run.stop": "止める",
+    "auto.run.queued": "レーン待ち",
+    "auto.run.running": "実行中",
+    "auto.run.paused": "一時停止中",
+    "auto.run.pausing": "このステップの終わりで止まります",
+    "auto.run.stopped": "停止",
+    "auto.run.crashed": "アプリが再起動した",
+    "auto.run.maxTimes": "繰り返しの上限を超えた",
+    "auto.run.noAgent": "エージェントを起動できなかった",
+    "auto.run.byHuman": "手で止めた",
+    "auto.run.step": "ステップ {n} · {step}",
 
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",

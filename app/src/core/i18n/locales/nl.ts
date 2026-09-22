@@ -913,6 +913,7 @@ export const nl: Translation = {
     "auto.start": "Start",
     "auto.ready": "Kan gestart worden.",
     "auto.notReady": "Kan nog niet gestart worden:",
+    "auto.queued": "Alle banen zijn bezet — deze run staat in de rij en start zodra er één vrijkomt.",
     "auto.block.noSteps": "Het heeft geen enkele stap.",
     "auto.block.noEntry": "Geen enkele stap is aangewezen als de stap waar een run begint.",
     "auto.block.entryTakesNoTask": "{step}: de beginstap pakt geen taak op, dus alle stappen erna zouden nergens over gaan.",
@@ -941,6 +942,23 @@ export const nl: Translation = {
     "auto.actions.reaches": "Wat hier wordt opgeslagen, draagt elke stap die naar deze actie wijst.",
     "auto.actions.save": "Opslaan",
     "auto.actions.cancel": "Annuleren",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Er loopt niets.",
+    "auto.run.pause": "Pauzeren",
+    "auto.run.resume": "Hervatten",
+    "auto.run.stop": "Stoppen",
+    "auto.run.queued": "Wacht op een baan",
+    "auto.run.running": "Loopt",
+    "auto.run.paused": "Gepauzeerd",
+    "auto.run.pausing": "Pauzeert na deze stap",
+    "auto.run.stopped": "Gestopt",
+    "auto.run.crashed": "de app is opnieuw gestart",
+    "auto.run.maxTimes": "te vaak rondgegaan",
+    "auto.run.noAgent": "de agent kon niet worden gestart",
+    "auto.run.byHuman": "met de hand gestopt",
+    "auto.run.step": "Stap {n} · {step}",
 
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",

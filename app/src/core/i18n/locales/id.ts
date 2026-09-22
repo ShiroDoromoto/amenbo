@@ -914,6 +914,7 @@ export const id: Translation = {
     "auto.start": "Mulai",
     "auto.ready": "Siap dijalankan.",
     "auto.notReady": "Belum siap dijalankan:",
+    "auto.queued": "Semua jalur terpakai — proses ini mengantre dan mulai saat satu jalur kosong.",
     "auto.block.noSteps": "Tidak punya langkah sama sekali.",
     "auto.block.noEntry": "Tidak ada langkah yang ditetapkan sebagai tempat sebuah jalan dimulai.",
     "auto.block.entryTakesNoTask": "{step}: langkah awal tidak mengambil tugas, jadi langkah-langkah sesudahnya tidak mengerjakan apa pun.",
@@ -942,6 +943,23 @@ export const id: Translation = {
     "auto.actions.reaches": "Yang disimpan di sini dibawa oleh setiap langkah yang menunjuk ke aksi ini.",
     "auto.actions.save": "Simpan",
     "auto.actions.cancel": "Batal",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Tidak ada yang berjalan.",
+    "auto.run.pause": "Jeda",
+    "auto.run.resume": "Lanjutkan",
+    "auto.run.stop": "Hentikan",
+    "auto.run.queued": "Menunggu jalur",
+    "auto.run.running": "Berjalan",
+    "auto.run.paused": "Dijeda",
+    "auto.run.pausing": "Dijeda setelah langkah ini",
+    "auto.run.stopped": "Dihentikan",
+    "auto.run.crashed": "aplikasi dimulai ulang",
+    "auto.run.maxTimes": "terlalu banyak putaran",
+    "auto.run.noAgent": "agennya tidak bisa dijalankan",
+    "auto.run.byHuman": "dihentikan secara manual",
+    "auto.run.step": "Langkah {n} · {step}",
 
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",

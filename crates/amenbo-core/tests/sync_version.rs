@@ -230,3 +230,68 @@ fn this_devices_own_tables_move_nobodys_version() {
     let _ = filed(&mut store, new_task("2件目", project));
     assert!(version_of(&store, project) > settled, "a record still moves it");
 }
+
+/// A sweep of the runs a previous launch left standing moves the version of every project it touched.
+///
+/// It is worth its own test because the sweep is the one write that **declares what it will touch
+/// rather than being handed it**: every other door names its target in its arguments, and this one
+/// reads the runs first and names those. Declared as nothing — which is the shape a cross-project
+/// sweep falls into — it would stop the runs and hand the tasks back while telling nobody carrying a
+/// copy of the store that anything had moved.
+#[test]
+fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in() {
+    use amenbo_core::model::{
+        AutomationOwner, AutomationPortKind, AutomationPortOwner, AutomationPortDirection,
+    };
+    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+    use amenbo_core::ops::automation_run::Launcher;
+
+    let mut store = temp_store();
+    let mine = store.project_add(new_project("走らせる側")).unwrap().id;
+    let other = store.project_add(new_project("隣")).unwrap().id;
+    let _ = filed(&mut store, new_task("隣の1件", other));
+
+    // The smallest automation that launches: one step that takes a task and closes the run, with
+    // every way out of it answered for.
+    let automation = store
+        .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        .unwrap();
+    let step = store
+        .automation_step_add(automation.id, NewStep::with_prompt("取る", "take one", "claude"))
+        .unwrap();
+    let took = store
+        .automation_exit_add(AutomationOwner::Step, step.id, Some("取った"))
+        .unwrap();
+    store
+        .automation_port_add(
+            AutomationPortOwner::Exit,
+            took.id,
+            AutomationPortDirection::Out,
+            "タスク",
+            AutomationPortKind::TaskTake,
+            true,
+        )
+        .unwrap();
+    store.automation_set_entry(automation.id, Some(step.id)).unwrap();
+    store.automation_edge_add(step.id, Some("取った"), EdgeTarget::Done, None).unwrap();
+    store.automation_edge_add(step.id, None, EdgeTarget::Done, None).unwrap();
+
+    let startable = ["claude".to_string()];
+    let by = Launcher {
+        startable: Some(&startable),
+        lanes: 3,
+        workspace_open: None,
+        by: Some(ActorKind::Ai),
+    };
+    let run = store.automation_launch(automation.id, &by).unwrap();
+
+    let mine_before = version_of(&store, mine);
+    let other_before = version_of(&store, other);
+
+    let swept = store.automation_sweep(3).unwrap();
+    assert_eq!(swept.len(), 1, "the one run that was standing");
+    assert_eq!(swept[0].id, run.id);
+
+    assert!(version_of(&store, mine) > mine_before, "the project the run was in heard about it");
+    assert_eq!(version_of(&store, other), other_before, "and the one next door did not");
+}

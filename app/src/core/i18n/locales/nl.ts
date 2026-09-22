@@ -914,6 +914,7 @@ export const nl: Translation = {
     "auto.ready": "Kan gestart worden.",
     "auto.notReady": "Kan nog niet gestart worden:",
     "auto.queued": "Alle banen zijn bezet — deze run staat in de rij en start zodra er één vrijkomt.",
+    "auto.startOne": "Een automatisering starten",
     "auto.block.noSteps": "Het heeft geen enkele stap.",
     "auto.block.noEntry": "Geen enkele stap is aangewezen als de stap waar een run begint.",
     "auto.block.entryTakesNoTask": "{step}: de beginstap pakt geen taak op, dus alle stappen erna zouden nergens over gaan.",

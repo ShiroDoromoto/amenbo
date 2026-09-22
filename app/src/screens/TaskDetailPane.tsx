@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { Commits } from "../components/Commits";
+import { StartAutomation } from "../components/StartAutomation";
 import { MadeIn } from "../components/MadeIn";
 import { CommentRow } from "../components/CommentRow";
 import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
 import { useTask, useTaskMadeIn } from "../core/reads";
+import { useBoundFolders } from "../core/boundFolders";
 import { addComment as mutAddComment, editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
@@ -55,8 +57,15 @@ const COMMENT_PAGE = 20; // Bounded memory: how many comments render initially (
  */
 export function TaskDetailPane({
   taskId, onDeleted, onDirtyChange, onSelectDecision, onGoToPane, focusCommentAt, editCommentAt,
+  workspaceOpen,
 }: {
   taskId: number;
+  /**
+   * Whether the workspace is standing, for the press that starts an automation
+   * (`../components/StartAutomation`). Absent outside the shell, where there is no workspace at all
+   * and so nothing for a run to be drawn in.
+   */
+  workspaceOpen?: boolean;
   onDeleted?: () => void;
   /** Report unsaved input to the parent (AppShell), which guards against discarding it on outside-click / cross. */
   onDirtyChange?: (dirty: boolean) => void;
@@ -89,6 +98,9 @@ export function TaskDetailPane({
   const [dimValues, setDimValues] = useState<Record<number, number[]>>({});
   const task = useTask(taskId);
   const madeIn = useTaskMadeIn(taskId);
+  // The folders this task's project is bound to — what the machine is asked about for the press that
+  // starts an automation (`../components/StartAutomation`).
+  const folders = useBoundFolders(task?.projectId ?? null);
   const commentCount = task?.comments ?? 0; // Grows on a post, which is what triggers the refetch
   useEffect(() => {
     if (!inTauri()) { setTaskActivity(null); return; }
@@ -480,6 +492,21 @@ export function TaskDetailPane({
           {inTauri() && <Commits taskId={taskId} />}
 
           <div className="detail__sep" />
+
+          {/* Start one of this project's automations. It carries nothing of this task: which tasks a
+              run works is the definition's, settled while it was built, and an entrance that handed
+              one over would be a run that behaved differently for having been started here
+              (`../components/StartAutomation`). */}
+          {inTauri() && (
+            <>
+              <StartAutomation
+                projectId={task.projectId}
+                folders={folders.live.map((one) => one.path)}
+                workspaceOpen={workspaceOpen ?? false}
+              />
+              <div className="detail__sep" />
+            </>
+          )}
 
           {madeIn && onGoToPane && task.projectId !== null && (
             <>

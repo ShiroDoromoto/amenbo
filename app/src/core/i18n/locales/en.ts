@@ -1163,6 +1163,7 @@ const ui = {
   "auto.ready": "Ready to start.",
   "auto.notReady": "Not ready to start:",
   "auto.queued": "Every lane is taken — this run is in line, and starts when one is handed back.",
+  "auto.startOne": "Start an automation",
   "auto.block.noSteps": "It has no steps.",
   "auto.block.noEntry": "No step is named as the one a run starts on.",
   "auto.block.entryTakesNoTask": "{step}: the step a run starts on takes no task, so every step after it would be about nothing.",

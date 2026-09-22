@@ -4032,14 +4032,6 @@ impl Instructor {
                 "On the running tab, on the row for this run, {}.",
                 run_press(req(with, "press")?)?
             ),
-            // The entry taken off while a run of the definition is out. Amenbo draws no control over
-            // this field, so the road says it at a shell the workspace opened — and the number is
-            // read off the terminal a line earlier rather than spelled here, a road having no way to
-            // know what a store will mint.
-            (Domain::Automation, "entry-off") => format!(
-                "Click into the shell pane and clear what is on it — hold control and press L, which clears the screen without sending a line. Then type `amenbo automation list --actor human` and press return, and read the number beside \"{}\". Then type `amenbo automation entry-set <id> --clear --actor human` with that number in place of `<id>`, press return, and confirm the line comes back saying the automation now starts nowhere. Touch nothing else on the screen until the next step: when this lands is the whole of what is being read.",
-                self.target_label(with)
-            ),
             // The two ways in that are not the build screen. Neither hands anything over at the
             // press: which task and which folder are the definition's.
             (Domain::Automation, "start-from-task") => format!(
@@ -7884,10 +7876,6 @@ steps_gui:
     domain: automation
     op: run-row
     with: { target: run, state: stopped, reason: no_way_on }
-  - type: action
-    domain: automation
-    op: entry-off
-    with: { target: auto }
   - type: action
     domain: automation
     op: press-run

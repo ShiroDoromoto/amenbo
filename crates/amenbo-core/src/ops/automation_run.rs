@@ -586,6 +586,15 @@ pub enum Waiting {
     /// **The run cannot go on.** Nothing is under way and nothing leads anywhere — the picture it was
     /// copied from has been changed under it, or the step it would start at is no longer in it. It
     /// will never move again on its own, so it is ended rather than looked at every second.
+    ///
+    /// **Nobody can walk a run into this on purpose**, which is why it is held by the tests below and
+    /// by no scenario (`AMB-T-5307`). Every deliberate edit under a run is answered at the door it
+    /// passes through: a report reads the picture live and stops the run there
+    /// ([`crate::ops::automation_report::done`]), and so does picking a paused run up again
+    /// ([`crate::ops::automation_stop::resume`]). What is left over is the second between a run
+    /// becoming one with nothing open — launched, reported, resumed — and the watch's next look at
+    /// it. An edit landing inside that second is the whole of what this answers, and a second is not
+    /// something a hand can aim at.
     NoWayOn,
 }
 
@@ -644,7 +653,7 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{AutomationOwner, AutomationPortOwner};
+    use crate::model::{AutomationEdge, AutomationOwner, AutomationPortOwner};
     use crate::ops::automation::{
         self, EdgeTarget, NewAutomation, NewStep, StepSource,
     };
@@ -1220,6 +1229,135 @@ mod tests {
                 AutomationRunStatus::Running,
                 "reading it says nothing about it — ending it is the watch's",
             );
+        });
+    }
+
+    /// A picture with somewhere to stand towards: the entry takes a task and leaves through its
+    /// unnamed way out into a second step, which closes the run. What the tests about a run standing
+    /// between two steps start from — [`launchable`]'s single step closes the run on the spot and
+    /// never stands anywhere.
+    fn two_steps(tx: &WriteTx<'_>) -> (Automation, AutomationStep, AutomationEdge) {
+        let project = mk_project(tx, "amenbo");
+        let automation = automation::add(
+            tx,
+            project,
+            NewAutomation { name: "取って読む".into(), ..Default::default() },
+        )
+        .expect("add automation");
+        let first = automation::step_add(
+            tx,
+            automation.id,
+            NewStep::with_prompt("取る", "take one", "claude"),
+        )
+        .expect("add step");
+        takes_task_on(tx, &first, None);
+        let second = automation::step_add(
+            tx,
+            automation.id,
+            NewStep::with_prompt("読む", "read it back", "claude"),
+        )
+        .expect("add step");
+        automation::edge_add(tx, second.id, None, EdgeTarget::Done, None).expect("edge");
+        let onward =
+            automation::edge_add(tx, first.id, None, EdgeTarget::Go(second.id), None).expect("edge");
+        automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        (automation, first, onward)
+    }
+
+    /// Walk that picture as far as the gap between its two steps: the entry opened, a task taken, and
+    /// a report that left through the way out leading on. The run is left `running` with nothing
+    /// open, which is the one state [`Waiting`]'s three answers are told apart in.
+    fn standing_between(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
+        let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+        let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
+            panic!("the entry is what a fresh run waits for")
+        };
+        let opening = match crate::ops::automation_step::open(tx, run.id, entry.id).expect("open") {
+            crate::ops::automation_step::Opened::Ready(ready) => *ready,
+            crate::ops::automation_step::Opened::Stopped { missing, .. } => {
+                panic!("stopped for {missing:?}")
+            }
+        };
+        let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
+        crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");
+        crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it")
+            .expect("report");
+        assert!(
+            matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Step(_)),
+            "with the picture as it stands, the second step is what it waits for",
+        );
+        read::automation_run(tx.conn(), run.id).expect("read").expect("the run")
+    }
+
+    /// **The step it left from is no longer in the picture.** The run's copy of it is still there —
+    /// that is what a copy is for — but the copy no longer names a live step, and a way out is read
+    /// off the live one.
+    #[test]
+    fn a_run_whose_step_was_taken_out_from_under_it_says_it_cannot_go_on() {
+        with_tx(|tx| {
+            let (automation, first, _) = two_steps(tx);
+            let run = standing_between(tx, &automation);
+
+            automation::step_delete(tx, first.id).expect("delete the step");
+
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
+            assert_eq!(
+                read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
+                AutomationRunStatus::Running,
+                "reading it says nothing about it — ending it is the watch's",
+            );
+        });
+    }
+
+    /// **The way out it left through decides nothing now.** The edge is gone, so the picture has no
+    /// answer for a run that has already taken it.
+    #[test]
+    fn a_run_whose_way_out_lost_its_edge_says_it_cannot_go_on() {
+        with_tx(|tx| {
+            let (automation, _, onward) = two_steps(tx);
+            let run = standing_between(tx, &automation);
+
+            automation::edge_delete(tx, onward.id).expect("delete the edge");
+
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
+        });
+    }
+
+    /// **The way out ends the run now instead of leading on.** Nothing is opened for an edge that
+    /// closes or stops: the run that has already left through it is standing towards an ending it
+    /// cannot reach by itself.
+    #[test]
+    fn a_run_whose_way_out_now_ends_the_run_says_it_cannot_go_on() {
+        with_tx(|tx| {
+            let (automation, _, onward) = two_steps(tx);
+            let run = standing_between(tx, &automation);
+
+            automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
+                .expect("point it at an ending");
+
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
+        });
+    }
+
+    /// **It leads to a step the run never copied down.** A step added after the launch is not in the
+    /// run's own copies, and a run reads its copies rather than the live picture — so an edge pointed
+    /// at one leads nowhere this run can go.
+    #[test]
+    fn a_run_sent_to_a_step_added_after_it_launched_says_it_cannot_go_on() {
+        with_tx(|tx| {
+            let (automation, _, onward) = two_steps(tx);
+            let run = standing_between(tx, &automation);
+
+            let late = automation::step_add(
+                tx,
+                automation.id,
+                NewStep::with_prompt("直す", "fix it", "claude"),
+            )
+            .expect("add step");
+            automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
+                .expect("point it at the new step");
+
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
         });
     }
 

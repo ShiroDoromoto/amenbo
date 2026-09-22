@@ -1354,8 +1354,8 @@ button.feed__target:hover { color: var(--c-accent); }
 /* It goes back to a row above the one it left. */
 .autopic__line--back { stroke-dasharray: 5 4; }
 .autopic__word { font-size: var(--fs-xs); fill: var(--c-text-muted); }
-/* One step. A button because that is what it is: pressing it is what puts the step's contents in the
-   panel beside the picture. */
+/* One placement. A button because that is what it is: pressing it is what puts the spot's contents in
+   the panel beside the picture. */
 .autopic__node {
   position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 2px;
   box-sizing: border-box; padding: var(--s-2);
@@ -1372,6 +1372,13 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__nodename {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; overflow-wrap: anywhere;
+}
+/* Where a run opens. A word on the box and not a colour: the picture tells nothing apart by colour,
+   and two stretches nothing joins are otherwise read the same. */
+.autopic__entry {
+  align-self: flex-start;
+  background: var(--c-accent-weak); color: var(--c-accent-text);
+  border-radius: var(--r-sm); padding: 0 var(--s-1); font-size: var(--fs-xs);
 }
 .autopic__unfed {
   display: flex; align-items: center; gap: var(--s-1);
@@ -1459,10 +1466,20 @@ button.feed__target:hover { color: var(--c-accent); }
 /* A button that adds a row to the field it is in takes its own width. The field is a column, so
    without this it would stretch the width of the panel and read as the field itself. */
 .autostep__field > .btn { align-self: flex-start; }
-/* One way out, and what it hands on, on one line. The outputs sit beside the name rather than under
-   it: what a way out is called and what it carries are read together, and a list under each name
-   would make three ways out look like nine things. */
-.autostep__exit { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+/* One way out: the head says what it is called and what it hands on, and the row under it says what
+   happens after it is taken. */
+.autostep__exit { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
+/* The outputs sit beside the name rather than under it: what a way out is called and what it carries
+   are read together, and a list under each name would make three ways out look like nine things. */
+.autostep__exithead { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+/* What happens after this way out. Indented under the way out it hangs on — one way out decides one
+   thing, and a row at the same depth would read as a second way out. */
+.autostep__next {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1);
+  padding-inline-start: var(--s-3);
+}
+.autostep__limit { display: flex; align-items: center; gap: var(--s-1); }
+.autostep__limit input { width: 6rem; }
 .autostep__exitname { font-size: var(--fs-md); }
 .autostep__out {
   display: inline-flex; align-items: baseline; gap: var(--s-1);

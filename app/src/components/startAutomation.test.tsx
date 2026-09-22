@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The two ways into a launch that are not the build screen (`AMB-T-5260`).
+// The way into a launch that is not the build screen: the empty frame (`AMB-T-5260`).
 //
 // What these guard: **the press carries nothing but the automation** — no task, no folder choice, no
-// narrowing — so a run started from a task's pane is the same run the automations tab would start;
+// narrowing — so it is the same run the automations tab would start;
 // **a project with no automations draws no entrance**, since a heading over an empty row would put
 // the subject in front of a reader who has never met it; **an archived one is not offered**, which
 // is what archiving is for; and **what the press comes back with is said where the press was made**,

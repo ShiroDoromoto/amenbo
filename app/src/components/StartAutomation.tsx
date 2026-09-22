@@ -1,11 +1,15 @@
-// **Start one of this project's automations, from wherever the reader is** — the two ways in that
-// are not the build screen (`AMB-T-5260`).
+// **Start one of this project's automations from the empty frame** — the way in that is not the
+// build screen (`AMB-T-5260`).
 //
 // **The press carries nothing.** Which tasks a run works, which folder its steps run in and what
-// each step is asked are all the definition's, settled while it was built — so starting one from a
-// task's pane and starting it from the automations tab are the same act, and what the reader chooses
-// here is which automation and nothing else. An entrance that passed the task it was opened beside
-// would be a fifth way for a run to differ from the four others (`amenbo_core::ops::automation_run`).
+// each step is asked are all the definition's, settled while it was built, so what the reader
+// chooses here is which automation and nothing else (`amenbo_core::ops::automation_run`).
+//
+// **Which is why there is no way in on a task's pane.** One stood there and was taken out: a button
+// under a task reads as "run this one on this task", and the task a reader was looking at cannot
+// reach the run — the entry step takes its own. An entrance whose place says something the launch
+// cannot do is worse than one press further away. If a step is ever handed a task at launch, that is
+// when the question is worth asking again.
 //
 // **It draws nothing where the project has none.** A project with no automations has no entrance to
 // offer, and a heading over an empty row would put the subject in front of a reader who has never

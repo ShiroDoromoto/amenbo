@@ -145,6 +145,8 @@ describe("the step panel", () => {
     const prompt = container.querySelector<HTMLTextAreaElement>("textarea")!;
     expect(prompt.readOnly).toBe(true);
     expect(container.textContent).toContain("Review");
+    // And what its ways out hand on is the library's too, so this step is not offered the control.
+    expect(container.textContent).not.toContain(t("auto.step.outputAdd"));
   });
 
   it("answers a task filter on rows, and writes the object naming each part", async () => {
@@ -183,8 +185,11 @@ describe("the step panel", () => {
       steps: [step({ exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }] })],
     });
     await render({ automation: one, stepId: 1, projectId: 1 });
-    const ways = [...container.querySelectorAll(".autostep__exits li")].map((li) => li.textContent);
-    expect(ways).toEqual([t("auto.step.exitUnnamed"), t("auto.pic.errorExit")]);
+    const named = [...container.querySelectorAll(".autostep__exitname")].map((one) => one.textContent);
+    expect(named).toEqual([t("auto.step.exitUnnamed")]);
+    const last = [...container.querySelectorAll(".autostep__exits li")].pop()!;
+    expect(last.className).toContain("autostep__exiterr");
+    expect(last.textContent).toBe(t("auto.pic.errorExit"));
   });
 
   it("takes a flag on the spot", async () => {

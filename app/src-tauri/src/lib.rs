@@ -479,6 +479,8 @@ pub fn run() {
       automation::automation_action_page,
       automation::automation_action_edit,
       automation::automation_step_edit,
+      automation::automation_step_insert,
+      automation::automation_output_add,
       automation::automation_cfg_answer,
       automation::automation_wire_set,
       automation::automation_wire_clear,

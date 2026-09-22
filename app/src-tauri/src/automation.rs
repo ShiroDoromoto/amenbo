@@ -38,9 +38,10 @@
 
 use amenbo_core::model::{
     ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
-    AutomationPortOwner, AutomationRunStatus, AutomationStep, AutomationStoppedReason,
+    AutomationPortKind, AutomationPortOwner, AutomationRunStatus, AutomationStep,
+    AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::{declarer, StepSource};
+use amenbo_core::ops::automation::{declarer, NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::{Ended, Paused, Resumed, TookALane};
 use amenbo_core::ops::automation_step::Opened;
@@ -216,6 +217,96 @@ pub fn automation_cfg_answer(
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.automation_cfg_set(step_id, &name, value.as_deref())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Put a step in on a line** — the one road by which a step joins a picture already drawn.
+///
+/// `inputs` is a flat list of triples the screen sends as `[name, kind, required]`, because a struct
+/// per row would be one more shape to keep in step across the boundary for three fields. An unknown
+/// kind is refused here rather than stored: the four are the port kinds core knows
+/// ([`amenbo_core::model::AutomationPortKind`]).
+///
+/// The whole press is one transaction, edges and all
+/// ([`amenbo_core::ops::automation::step_insert`]): a step left behind with the line still running
+/// past it is a picture nobody asked for.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_step_insert(
+    edge_id: i64,
+    name: String,
+    action: Option<i64>,
+    prompt: Option<String>,
+    agent: String,
+    model: Option<String>,
+    interactive: bool,
+    exits: Vec<String>,
+    inputs: Vec<(String, String, bool)>,
+) -> Result<WriteAck, CmdError> {
+    let source = match (action, prompt.as_deref()) {
+        (Some(_), Some(_)) | (None, None) => {
+            return Err(amenbo_core::Error::invalid(
+                "a step runs a library action or carries a prompt of its own",
+            )
+            .into())
+        }
+        (Some(action), None) => StepSource::Action(action),
+        (None, Some(prompt)) => StepSource::Prompt(prompt.to_string()),
+    };
+    let mut ports = Vec::with_capacity(inputs.len());
+    for (name, kind, required) in inputs {
+        let kind = AutomationPortKind::parse(&kind).ok_or_else(|| {
+            amenbo_core::Error::invalid(format!(
+                "'{kind}' is not something a port carries — value, file, task_take or task_make"
+            ))
+        })?;
+        ports.push((name, kind, required));
+    }
+    let new = NewStep {
+        name,
+        source,
+        agent,
+        model,
+        interactive,
+        work_dir_ref: None,
+        report_to_task: false,
+        show_history: true,
+    };
+    with_store_mut(|store| {
+        store.automation_step_insert(edge_id, new, &exits, &ports)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Declare what a way out hands on.**
+///
+/// It belongs to the way out and not to the step, because what is handed on is produced by leaving
+/// through that particular way out — a step with three ways out hands on three different things
+/// ([`amenbo_core::ops::automation::port_add`]).
+#[tauri::command]
+pub fn automation_output_add(
+    exit_id: i64,
+    name: String,
+    kind: String,
+    required: bool,
+) -> Result<WriteAck, CmdError> {
+    let kind = AutomationPortKind::parse(&kind).ok_or_else(|| {
+        amenbo_core::Error::invalid(format!(
+            "'{kind}' is not something a port carries — value, file, task_take or task_make"
+        ))
+    })?;
+    with_store_mut(|store| {
+        store.automation_port_add(
+            AutomationPortOwner::Exit,
+            exit_id,
+            AutomationPortDirection::Out,
+            &name,
+            kind,
+            required,
+        )?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))

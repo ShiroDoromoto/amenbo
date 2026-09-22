@@ -1927,6 +1927,20 @@ impl Store {
         })
     }
 
+    /// Put a step in on a line (one operation = one transaction): the step, the ways out and inputs it
+    /// was written with, and the two edges that leave nothing pointing at nothing.
+    pub fn automation_step_insert(
+        &mut self,
+        edge_id: i64,
+        new: crate::ops::automation::NewStep,
+        exits: &[String],
+        inputs: &[(String, crate::model::AutomationPortKind, bool)],
+    ) -> Result<crate::model::AutomationStep> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
+            crate::ops::automation::step_insert(tx, edge_id, new, exits, inputs)
+        })
+    }
+
     /// Reorder a step within its automation's lists (one operation = one transaction).
     pub fn automation_step_move(
         &mut self,

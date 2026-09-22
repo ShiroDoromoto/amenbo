@@ -37,9 +37,9 @@
 //! terminal under it and the queue stops moving.
 
 use amenbo_core::model::{
-    ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
-    AutomationPortKind, AutomationPortOwner, AutomationRunStatus, AutomationStep,
-    AutomationStoppedReason,
+    ActorKind, Automation, AutomationCfg, AutomationCfgKind, AutomationExit, AutomationOwner,
+    AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner,
+    AutomationRunStatus, AutomationStep, AutomationStoppedReason,
 };
 use amenbo_core::ops::automation::{declarer, NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
@@ -226,6 +226,277 @@ pub fn automation_step_edit(
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
+// ───────────────────────── what a step declares ─────────────────────────
+
+/// **The step a declaration may be written on.** A step that runs a library action is refused.
+///
+/// Core refuses the *add* already ([`amenbo_core::ops::automation::cfg_add`] and its neighbours):
+/// a step pointing at an action declares nothing of its own, and a row written on it would sit
+/// unread. What core cannot see is the *edit*, because these doors name a declaration the way the
+/// panel holds it — by the step and the name. There is no id on a setting or an input for the panel
+/// to send: the two rows an action-backed step has under one name are folded into the one row a
+/// screen draws ([`cfg_dto`]), so an id would be ambiguous. Resolved against such a step, a name
+/// would find the row that carries its **answer** ([`automation_cfg_answer`]) and rewrite the
+/// declaration nobody reads off it — silently. So the refusal is here, at the one place that turns a
+/// name into a row.
+fn declaring_step(store: &amenbo_core::Store, step_id: i64) -> Result<(), CmdError> {
+    let step = read::automation_step(store.read_model().conn(), step_id)?
+        .ok_or_else(|| no_step(step_id))?;
+    match step.action_id {
+        None => Ok(()),
+        Some(action_id) => Err(amenbo_core::Error::invalid(format!(
+            "step '{step_id}' runs action '{action_id}', so what it declares is the action's — \
+             write it there, or give the step a prompt of its own first"
+        ))
+        .into()),
+    }
+}
+
+fn no_step(step_id: i64) -> CmdError {
+    amenbo_core::Error::not_found(format!("step '{step_id}' not found")).into()
+}
+
+/// A declaration this step was expected to carry and does not — the panel naming a row that has
+/// since gone, which is what a definition re-read after somebody else's write looks like.
+fn undeclared(what: &str, step_id: i64, name: &str) -> CmdError {
+    amenbo_core::Error::not_found(format!("step '{step_id}' declares no {what} called '{name}'"))
+        .into()
+}
+
+/// One of this step's ways out, by the name the panel holds it under. `None` is the unnamed one,
+/// which is a row like any other and is named by having no name.
+fn exit_row(store: &amenbo_core::Store, step_id: i64, name: Option<&str>) -> Result<i64, CmdError> {
+    declaring_step(store, step_id)?;
+    let found = read::automation_exit_by_name(
+        store.read_model().conn(),
+        AutomationOwner::Step,
+        step_id,
+        name,
+    )?;
+    found.map(|one| one.id).ok_or_else(|| match name {
+        Some(name) => undeclared("way out", step_id, name),
+        None => amenbo_core::Error::not_found(format!(
+            "step '{step_id}' declares no unnamed way out"
+        ))
+        .into(),
+    })
+}
+
+/// One of this step's settings, by name.
+fn cfg_row(store: &amenbo_core::Store, step_id: i64, name: &str) -> Result<i64, CmdError> {
+    declaring_step(store, step_id)?;
+    let found =
+        read::automation_cfg_by_name(store.read_model().conn(), AutomationOwner::Step, step_id, name)?;
+    found.map(|one| one.id).ok_or_else(|| undeclared("setting", step_id, name))
+}
+
+/// One of this step's inputs, by name.
+fn input_row(store: &amenbo_core::Store, step_id: i64, name: &str) -> Result<i64, CmdError> {
+    declaring_step(store, step_id)?;
+    let found = read::automation_port_by_name(
+        store.read_model().conn(),
+        AutomationPortOwner::Step,
+        step_id,
+        AutomationPortDirection::In,
+        name,
+    )?;
+    found.map(|one| one.id).ok_or_else(|| undeclared("input", step_id, name))
+}
+
+/// The kind a setting takes its answer as, refused here rather than stored: no row may exist whose
+/// kind no control knows how to draw.
+fn cfg_kind(word: &str) -> Result<AutomationCfgKind, CmdError> {
+    AutomationCfgKind::parse(word).ok_or_else(|| {
+        amenbo_core::Error::invalid(format!(
+            "'{word}' is not a kind a setting can be (taskfilter, folder, choice, number, text)"
+        ))
+        .into()
+    })
+}
+
+/// What a port carries, refused here for [`cfg_kind`]'s reason. Asked by every door that takes one
+/// from a screen — an input declared on a step, an output declared on a way out, and the inputs a
+/// step arrives with — so all three refuse in the same words.
+fn port_kind(word: &str) -> Result<AutomationPortKind, CmdError> {
+    AutomationPortKind::parse(word).ok_or_else(|| {
+        amenbo_core::Error::invalid(format!(
+            "'{word}' is not something a port carries — value, file, task_take or task_make"
+        ))
+        .into()
+    })
+}
+
+/// **Declare another way out of this step.** Every step is born carrying the unnamed one and the
+/// error one, so this is the second and every one after it — and `*` is refused as a name, that one
+/// being carried already ([`amenbo_core::ops::automation::exit_add`]).
+#[tauri::command]
+pub fn automation_exit_declare(step_id: i64, name: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        declaring_step(store, step_id)?;
+        store.automation_exit_add(AutomationOwner::Step, step_id, Some(&name))?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Rename one way out**, `to` being `null` for the unnamed one.
+///
+/// **Every edge and every wire that named the old name is parted from it.** They name a way out by
+/// name, and core leaves them pointing at a name nobody declares rather than rewriting the graph
+/// around them — the parting is then visible in the picture, which is where a reader can act on it
+/// ([`amenbo_core::ops::automation::exit_rename`]).
+#[tauri::command]
+pub fn automation_exit_rename(
+    step_id: i64,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let id = exit_row(store, step_id, from.as_deref())?;
+        store.automation_exit_rename(id, to.as_deref())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take one way out away**, with the outputs declared on it. The error one is refused by core:
+/// every step carries it whether or not a row says so.
+#[tauri::command]
+pub fn automation_exit_remove(step_id: i64, name: Option<String>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let id = exit_row(store, step_id, name.as_deref())?;
+        store.automation_exit_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Declare a setting on this step** — the name it is answered under, the kind of answer it takes,
+/// and whether it has to be answered. `options` is the choice list, as JSON, and belongs to
+/// `choice` alone.
+#[tauri::command]
+pub fn automation_cfg_declare(
+    step_id: i64,
+    name: String,
+    kind: String,
+    required: bool,
+    options: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    let kind = cfg_kind(&kind)?;
+    with_store_mut(|store| {
+        declaring_step(store, step_id)?;
+        store.automation_cfg_add(
+            AutomationOwner::Step,
+            step_id,
+            &name,
+            kind,
+            required,
+            options.as_deref(),
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Change a setting's declaration.** Only what is `Some` is written, and `name` names the row
+/// while `rename` is what it becomes.
+///
+/// `options` is a field with a third answer — written, cleared, or left alone — carried as the pair
+/// `options` / `clear_options` for the reason [`automation_step_edit`]'s model is
+/// (`Option<Option<..>>` does not cross the IPC boundary as a shape a screen can write).
+/// **Moving a `choice` to another kind has to clear the list in the same call**: core refuses a
+/// choice list on a kind that would never show it.
+#[tauri::command]
+pub fn automation_cfg_edit(
+    step_id: i64,
+    name: String,
+    rename: Option<String>,
+    kind: Option<String>,
+    required: Option<bool>,
+    options: Option<String>,
+    clear_options: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    let kind = kind.as_deref().map(cfg_kind).transpose()?;
+    let options = match (clear_options, options.as_deref()) {
+        (Some(true), _) => Some(None),
+        (_, Some(options)) => Some(Some(options)),
+        _ => None,
+    };
+    with_store_mut(|store| {
+        let id = cfg_row(store, step_id, &name)?;
+        store.automation_cfg_update(id, rename.as_deref(), kind, required, options)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take a setting away**, with the answer written on it.
+#[tauri::command]
+pub fn automation_cfg_remove(step_id: i64, name: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let id = cfg_row(store, step_id, &name)?;
+        store.automation_cfg_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Declare an input on this step** — what it takes in, and whether a run may open it with nothing
+/// reaching that input. An output belongs to the way out that produced it and is not sayable here
+/// ([`amenbo_core::ops::automation::port_add`]).
+#[tauri::command]
+pub fn automation_input_declare(
+    step_id: i64,
+    name: String,
+    kind: String,
+    required: bool,
+) -> Result<WriteAck, CmdError> {
+    let kind = port_kind(&kind)?;
+    with_store_mut(|store| {
+        declaring_step(store, step_id)?;
+        store.automation_port_add(
+            AutomationPortOwner::Step,
+            step_id,
+            AutomationPortDirection::In,
+            &name,
+            kind,
+            required,
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Change an input's declaration.** Only what is `Some` is written; renaming parts every wire that
+/// named the old name, for [`automation_exit_rename`]'s reason.
+#[tauri::command]
+pub fn automation_input_edit(
+    step_id: i64,
+    name: String,
+    rename: Option<String>,
+    kind: Option<String>,
+    required: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    let kind = kind.as_deref().map(port_kind).transpose()?;
+    with_store_mut(|store| {
+        let id = input_row(store, step_id, &name)?;
+        store.automation_port_update(id, rename.as_deref(), kind, required)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take an input away.** The wires that fed it are left where they are, parted.
+#[tauri::command]
+pub fn automation_input_remove(step_id: i64, name: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let id = input_row(store, step_id, &name)?;
+        store.automation_port_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **Answer one setting on one step**, or leave it unanswered with no `value`.
 ///
 /// The answer travels as the JSON its kind takes — a string for a folder, a choice and a text, a
@@ -285,12 +556,7 @@ pub fn automation_step_insert(
     };
     let mut ports = Vec::with_capacity(inputs.len());
     for (name, kind, required) in inputs {
-        let kind = AutomationPortKind::parse(&kind).ok_or_else(|| {
-            amenbo_core::Error::invalid(format!(
-                "'{kind}' is not something a port carries — value, file, task_take or task_make"
-            ))
-        })?;
-        ports.push((name, kind, required));
+        ports.push((name, port_kind(&kind)?, required));
     }
     let new = NewStep {
         name,
@@ -321,11 +587,7 @@ pub fn automation_output_add(
     kind: String,
     required: bool,
 ) -> Result<WriteAck, CmdError> {
-    let kind = AutomationPortKind::parse(&kind).ok_or_else(|| {
-        amenbo_core::Error::invalid(format!(
-            "'{kind}' is not something a port carries — value, file, task_take or task_make"
-        ))
-    })?;
+    let kind = port_kind(&kind)?;
     with_store_mut(|store| {
         store.automation_port_add(
             AutomationPortOwner::Exit,

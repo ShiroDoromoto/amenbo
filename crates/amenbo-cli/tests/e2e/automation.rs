@@ -509,7 +509,10 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
 fn a_launchable(cli: &Cli) -> String {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
-    let (action, _) = an_action(cli, &p, "take one", "take one");
+    let (action, step) = an_action(cli, &p, "take one", "take one");
+    // The step inside leaves the action by its unnamed way out — the launch check asks the picture
+    // inside an action the same question it asks the automation's.
+    cli.json(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to", "--json"]);
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
         "automation_placement",

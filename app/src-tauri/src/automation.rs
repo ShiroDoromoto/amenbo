@@ -30,11 +30,12 @@
 //! window in one shape of the app and the other window in the other (`AMB-D-753`) — so an answer
 //! handed back to whoever pressed would reach a screen with no pane to stand it in.
 //!
-//! **Whatever frees a lane owes the next run a terminal.** Core hands a run back with the one a
-//! freed lane promoted ([`amenbo_core::ops::automation_stop::Ended`]), and promotion writes
-//! `running` and nothing else — so the three doors that can end a run, and the one that opens a
-//! step, all go through the same walk (`follow` below). Dropped, a promoted run sits `running` with no
-//! terminal under it and the queue stops moving.
+//! **No door here carries a run forward.** A press starts one, pauses it, picks it up or stops it,
+//! and that is the whole of what it does; what opens the step after is the thread that keeps runs
+//! going (`crate::automation_watch`, `AMB-D-945`). It is the same rule for the run a freed lane
+//! promotes: promotion writes `running` and nothing else, which is exactly the shape the watch is
+//! looking for. Every entrance doing its own "and then open the next one" is what the watch was
+//! stood up to end, and the two that were left are gone with this (`AMB-T-5289`).
 
 use amenbo_core::model::{
     ActorKind, Automation, AutomationCfg, AutomationCfgKind, AutomationExit, AutomationOwner,
@@ -43,7 +44,7 @@ use amenbo_core::model::{
 };
 use amenbo_core::ops::automation::{declarer, NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
-use amenbo_core::ops::automation_stop::{Ended, Paused, Resumed, TookALane};
+use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
 use amenbo_core::store_engine::{read, StoreEngine};
 
@@ -872,41 +873,41 @@ pub fn automation_step_open(
                 .id
         }
     };
-    drive(&app, &mut store, run_id, def_id, lanes)
+    open_one(&app, &mut store, run_id, def_id, lanes)
 }
 
 /// **Pause a run** — it settles at the end of the step under way, and hands its lane back there
 /// ([`amenbo_core::ops::automation_stop::pause`]). Pressed on a row of the "running" tab.
 ///
-/// Pressed on a run with nothing under way it takes effect on the spot, and then a lane may come free
-/// here — which is why this door takes the window: whatever was waiting is promoted inside the same
-/// press, and a promoted run needs a terminal opening on it.
+/// **What the freed lane wakes is not opened here** (`AMB-D-945`). A press moves a run and stops; the
+/// watch is what carries one forward, and a run promoted into the lane this gave up is `running` with
+/// nothing open — which is the one shape the watch is looking for.
 ///
 /// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not: what it moves is a
 /// run, and every screen drawing one is already following the change feed.
 #[tauri::command]
-pub fn automation_run_pause(app: tauri::AppHandle, run_id: i64) -> Result<(), CmdError> {
+pub fn automation_run_pause(run_id: i64) -> Result<(), CmdError> {
     let lanes = lanes()?;
     let mut store = crate::commands::open_store()?;
-    let woke = match store.automation_pause(run_id, lanes)? {
-        Paused::Asked(_) => None,
-        Paused::Now(ended) => ended.woke,
-    };
-    follow(&app, &mut store, woke, lanes)
+    store.automation_pause(run_id, lanes)?;
+    crate::automation_watch::wake();
+    Ok(())
 }
 
-/// **Pick a paused run up again** ([`amenbo_core::ops::automation_stop::resume`]). It opens a terminal
-/// on the step its last one led to where a lane is free, and joins the queue where none is.
+/// **Pick a paused run up again** ([`amenbo_core::ops::automation_stop::resume`]). It takes a lane
+/// where one is free and joins the queue where none is.
+///
+/// **The step it picks up at is not opened here** (`AMB-D-945`). `resume` writes `running` and the
+/// run then looks exactly like every other run standing between two steps — which the watch reads off
+/// what the run has already done ([`amenbo_core::ops::automation_run::next_def`]), the same answer
+/// `resume` worked out to decide whether it could go on at all. Opening it here would be that answer
+/// arrived at twice.
 #[tauri::command]
-pub fn automation_run_resume(app: tauri::AppHandle, run_id: i64) -> Result<(), CmdError> {
+pub fn automation_run_resume(run_id: i64) -> Result<(), CmdError> {
     let lanes = lanes()?;
     let mut store = crate::commands::open_store()?;
-    match store.automation_resume(run_id, lanes)? {
-        Resumed::Step { run, next } => {
-            drive(&app, &mut store, run.id, next.id, lanes)?;
-        }
-        Resumed::Queued(_) => {}
-    }
+    store.automation_resume(run_id, lanes)?;
+    crate::automation_watch::wake();
     Ok(())
 }
 
@@ -918,58 +919,20 @@ fn lanes() -> Result<i64, CmdError> {
     Ok(amenbo_core::config::Config::load(&paths.config_file).automation_lanes)
 }
 
-/// **Open a step, tell the workspace, and then follow the lane** — the whole of what a press that
-/// moves a run owes.
-fn drive(
-    app: &tauri::AppHandle,
-    store: &mut amenbo_core::Store,
-    run_id: i64,
-    def_id: i64,
-    lanes: i64,
-) -> Result<AutomationStepOpenDto, CmdError> {
-    let (dto, woke) = open_one(app, store, run_id, def_id, lanes)?;
-    follow(app, store, woke, lanes)?;
-    Ok(dto)
-}
-
-/// **Give every run a freed lane woke a terminal of its own.**
-///
-/// A run ending hands its lane back, and whatever has waited longest is promoted to `running` in the
-/// same transaction — with nothing running in it. Core is explicit that the driver which freed the
-/// lane is the one that owes it a step ([`amenbo_core::ops::automation_stop::Ended`]), and one
-/// promotion can lead to another: the step this opens may itself stop for a missing input, freeing the
-/// lane again. So it is a walk and not a single hop, and it ends because every turn of it either
-/// stands a terminal up or ends a run, and there are finitely many runs to end.
-fn follow(
-    app: &tauri::AppHandle,
-    store: &mut amenbo_core::Store,
-    woke: Option<amenbo_core::model::AutomationRun>,
-    lanes: i64,
-) -> Result<(), CmdError> {
-    let mut next = woke;
-    while let Some(run) = next.take() {
-        next = match store.automation_run_took_a_lane(run.id, lanes)? {
-            TookALane::Step(def) => open_one(app, store, run.id, def.id, lanes)?.1,
-            TookALane::Lost(ended) => ended.woke,
-        };
-    }
-    Ok(())
-}
-
-/// One step opened and told to the window, with whatever run a freed lane woke handed back.
+/// One step opened and told to the window.
 ///
 /// The answer and the event carry the same thing. The event is what the workspace acts on, and the
 /// answer is for the caller to know what happened — a run stopped for a missing input opens no
-/// terminal, and the press that started it is owed that sentence.
+/// terminal, and whoever asked for it is owed that sentence.
 fn open_one(
     app: &tauri::AppHandle,
     store: &mut amenbo_core::Store,
     run_id: i64,
     def_id: i64,
     lanes: i64,
-) -> Result<(AutomationStepOpenDto, Option<amenbo_core::model::AutomationRun>), CmdError> {
+) -> Result<AutomationStepOpenDto, CmdError> {
     let opened = store.automation_step_open(run_id, def_id, lanes)?;
-    let (project, step, missing, woke) = match opened {
+    let (project, step, missing) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
             let run = read::automation_run(store.read_model().conn(), run_id)?
@@ -990,12 +953,12 @@ fn open_one(
                     interactive: def.interactive,
                 }),
                 Vec::new(),
-                None,
             )
         }
-        // What a step's pane is told about is its own step, so the run a freed lane woke is not in the
-        // event — it is handed back for the walk above to open in a press of its own.
-        Opened::Stopped { run, missing, woke } => (run.project_id, None, missing, woke),
+        // What a step's pane is told about is its own step. A run promoted into the lane this one gave
+        // up is not in the event and is not opened here: it is `running` with nothing open, which is
+        // what the watch looks for (`AMB-D-945`).
+        Opened::Stopped { run, missing, .. } => (run.project_id, None, missing),
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,
@@ -1005,7 +968,7 @@ fn open_one(
     if let Err(e) = app.emit(STEP_EVENT, dto.clone()) {
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
-    Ok((dto, woke))
+    Ok(dto)
 }
 
 /// **The task one stretch of a run is working**, read off the ledger for the pane's header.
@@ -1042,12 +1005,17 @@ fn worked_task(
 /// the last step reporting and the press there is a window in which the run has finished on its own;
 /// a refusal then would put a red sentence in front of somebody who did nothing wrong. What comes
 /// back says whether this press was the one that stopped it.
+///
+/// **What the freed lane wakes is left for the watch**, as it is on every other press here
+/// (`AMB-D-945`).
 #[tauri::command]
-pub fn automation_run_stop(app: tauri::AppHandle, run_id: i64) -> Result<bool, CmdError> {
+pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
     let lanes = lanes()?;
     let mut store = crate::commands::open_store()?;
-    let Some(ended) = stop_if_going(&mut store, run_id, lanes)? else { return Ok(false) };
-    follow(&app, &mut store, ended.woke, lanes)?;
+    if stop_if_going(&mut store, run_id, lanes)?.is_none() {
+        return Ok(false);
+    }
+    crate::automation_watch::wake();
     Ok(true)
 }
 

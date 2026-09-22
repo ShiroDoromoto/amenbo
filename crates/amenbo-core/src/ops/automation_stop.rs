@@ -36,9 +36,14 @@ use crate::time::Timestamp;
 /// **A run that has stopped, and the one a lane coming free woke up.**
 ///
 /// The two travel together because the second is a consequence of the first that only this side knows:
-/// a lane handed back promotes whatever has waited longest, and the driver that stopped one run is the
-/// one that now has to open the next step of another. Dropped here, a promoted run would sit `running`
-/// with no terminal under it.
+/// a lane handed back promotes whatever has waited longest, and a caller that has to say what its press
+/// did would otherwise have no way to see it.
+///
+/// **Nothing is owed to the woken run.** Promotion writes `running` and nothing else, and that is the
+/// shape the thread which keeps runs going is looking for (`AMB-D-945`) — it reads what each running
+/// run is waiting for off what the run has already done
+/// ([`crate::ops::automation_run::next_def`]). A caller that opened the step itself would be arriving
+/// at that answer a second time, in one of the two processes that can.
 #[derive(Clone, Debug)]
 pub struct Ended {
     pub run: AutomationRun,
@@ -59,8 +64,9 @@ pub enum Paused {
 /// What picking a paused run up again did.
 #[derive(Clone, Debug)]
 pub enum Resumed {
-    /// A lane was free: open a terminal on this step ([`crate::ops::automation_step::open`] takes it
-    /// from here).
+    /// A lane was free, and this is the step it picks up at — the answer this walked the picture for,
+    /// handed back so the caller can say so. Opening it is nobody's here: the run is `running` with
+    /// nothing open, which is what the watch acts on (`AMB-D-945`).
     Step { run: AutomationRun, next: Box<AutomationRunDef> },
     /// Every lane is held, so it waits its turn — the same queue a launch joins.
     Queued(AutomationRun),
@@ -308,49 +314,6 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64, lanes: i64) -> Result<Resumed> {
     }
 }
 
-/// **What a run that has just taken a lane does next.**
-#[derive(Clone, Debug)]
-pub enum TookALane {
-    /// Open a terminal on this step.
-    Step(Box<AutomationRunDef>),
-    /// It has nothing left to open — the picture lost the step its last one led to — so it was
-    /// stopped. `Ended::woke` is whatever took the lane it had just been given.
-    Lost(Ended),
-}
-
-/// **Take a promoted run from `running` to a terminal, or end it.**
-///
-/// A lane handed back promotes whatever has waited longest ([`crate::ops::automation_run::promote_next`]),
-/// which writes `running` and nothing else; the driver that freed the lane then owes that run a step.
-/// Where the picture no longer says which step that is, the run is ended here rather than left
-/// `running` with no terminal under it — the same answer [`resume`] gives for the same reason.
-pub fn took_a_lane(tx: &WriteTx<'_>, run: &AutomationRun, lanes: i64) -> Result<TookALane> {
-    match next_for(tx.conn(), run)? {
-        Some(def) => Ok(TookALane::Step(Box::new(def))),
-        None => Ok(TookALane::Lost(ended(
-            tx,
-            run.clone(),
-            AutomationRunStatus::Stopped,
-            None,
-            lanes,
-        )?)),
-    }
-}
-
-/// **The step a run coming off the queue opens next.**
-///
-/// A lane handed back promotes whatever has waited longest ([`crate::ops::automation_run::promote_next`]),
-/// and whoever did the promoting then has to open a step of it — a promoted run left alone sits `running`
-/// with no terminal under it. Which step that is depends on how far it had got: a run that has never run
-/// one starts at the entry, and one that was paused part-way carries on from the way out its last step
-/// left through.
-pub fn next_for(conn: &Connection, run: &AutomationRun) -> Result<Option<AutomationRunDef>> {
-    if read::automation_run_steps_of(conn, run.id)?.is_empty() {
-        return crate::ops::automation_run::entry_def(conn, run.id);
-    }
-    next_after_the_pause(conn, run)
-}
-
 /// The step a paused run opens next: the one the last finished step's way out leads to.
 fn next_after_the_pause(
     conn: &Connection,
@@ -537,8 +500,13 @@ mod tests {
         read::automation_run(tx.conn(), run_id).expect("read").expect("the run").status
     }
 
+    /// **A run promoted into a freed lane is `running` with nothing open** (`AMB-D-945`).
+    ///
+    /// That is the whole of what the promotion writes, and it is deliberately all of it: the shape it
+    /// leaves is the one the watch is looking for, so nothing here owes that run a terminal.
+    /// ([`crate::ops::automation_run::next_def`] is what reads it back.)
     #[test]
-    fn a_run_that_took_a_lane_is_given_the_step_it_starts_at() {
+    fn a_run_promoted_into_a_freed_lane_is_left_for_the_watch_to_open() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let first = a_run(tx, &p.automation, 1);
@@ -548,30 +516,19 @@ mod tests {
             let ended = stop(tx, first.id, AutomationStoppedReason::ByHuman, 1).expect("stop");
             let woke = ended.woke.expect("the lane went to the one that was waiting");
             assert_eq!(woke.id, waiting.id);
-            // Promotion writes `running` and nothing else, so what the driver is owed is the step —
-            // without it the run sits `running` with no terminal under it.
-            match took_a_lane(tx, &woke, 1).expect("took a lane") {
-                TookALane::Step(def) => assert_eq!(def.step_id, Some(p.first.id), "the entry"),
-                TookALane::Lost(_) => panic!("it has a step to start at"),
-            }
-        });
-    }
-
-    #[test]
-    fn a_run_whose_picture_lost_its_entry_is_stopped_rather_than_left_running() {
-        with_tx(|tx| {
-            let p = picture(tx, false);
-            let first = a_run(tx, &p.automation, 1);
-            let waiting = a_run(tx, &p.automation, 1);
-            automation::set_entry(tx, p.automation.id, None).expect("entry taken off");
-
-            let ended = stop(tx, first.id, AutomationStoppedReason::ByHuman, 1).expect("stop");
-            let woke = ended.woke.expect("promoted");
+            assert_eq!(status_of(tx, waiting.id), AutomationRunStatus::Running);
             assert!(
-                matches!(took_a_lane(tx, &woke, 1).expect("took a lane"), TookALane::Lost(_)),
-                "nothing to open",
+                read::automation_run_steps_of(tx.conn(), waiting.id).expect("read").is_empty(),
+                "nothing was opened for it here",
             );
-            assert_eq!(status_of(tx, waiting.id), AutomationRunStatus::Stopped);
+            assert_eq!(
+                crate::ops::automation_run::next_def(tx.conn(), waiting.id)
+                    .expect("what it is waiting for")
+                    .expect("the entry")
+                    .step_id,
+                Some(p.first.id),
+                "and what it is waiting for is readable without anybody having been told",
+            );
         });
     }
 

@@ -1885,21 +1885,6 @@ impl Store {
         })
     }
 
-    /// **Give a promoted run a step to open, or end it** (one operation = one transaction).
-    /// [`crate::ops::automation_stop::took_a_lane`] says which.
-    pub fn automation_run_took_a_lane(
-        &mut self,
-        run_id: i64,
-        lanes: i64,
-    ) -> Result<crate::ops::automation_stop::TookALane> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            let run = crate::store_engine::read::automation_run(tx.conn(), run_id)?.ok_or_else(
-                || crate::error::Error::not_found(format!("run '{run_id}' not found")),
-            )?;
-            crate::ops::automation_stop::took_a_lane(tx, &run, lanes)
-        })
-    }
-
     pub fn automation_step_add(
         &mut self,
         automation_id: i64,

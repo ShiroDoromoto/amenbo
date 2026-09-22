@@ -1,5 +1,6 @@
-// The read side of the automations screen: a project's definitions, one definition whole, and
-// whether that one could be started.
+// The doors of the automations: a project's definitions, one definition whole, whether that one could
+// be started, how many lanes are held — and the one write that is not the build screen's, a run being
+// stopped from the pane it is drawn in.
 //
 // It sits beside `core/reads.ts` rather than in it because what it reads is a different shape of
 // thing: a task list is paged and an automation is not. An automation is tens of rows, and the build
@@ -104,4 +105,23 @@ export async function fetchLanesHeld(): Promise<number> {
 export function useLanesHeld(): number {
   const { data } = useQuery<number>(["automationLanesHeld"], fetchLanesHeld);
   return data ?? 0;
+}
+
+/**
+ * **Stop a run now** — what closing the pane a run is drawn in means (`../shell/TerminalPane`).
+ *
+ * The cleanup is core's and is the same one every other stop goes through: the lane is handed back,
+ * the task the run reserved goes to `todo`, and a line on that task says the run is not coming back
+ * (`amenbo_core::ops::automation_stop`).
+ *
+ * **It is not a `WriteAck` write.** What it moves is a run, a task and a comment, and every screen
+ * that draws one of those is already following the change feed — which is how a lane taken by a run
+ * in another project reaches this window in the first place (`fetchLanesHeld`).
+ *
+ * Answers whether this press was the one that stopped it: a run that had already finished is `false`
+ * and not a refusal, the press having been about the pane.
+ */
+export async function stopRun(run: number): Promise<boolean> {
+  if (!inTauri()) return false;
+  return invoke<boolean>("automation_run_stop", { runId: run });
 }

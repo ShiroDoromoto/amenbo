@@ -454,6 +454,11 @@ input[type="color"] {
   font-weight: 600;
 }
 .plate-peek__name:empty { display: none; }
+/* The run's task, given back in full under the name: the row has room for the reference and this has
+   room for the title (`../talk/nameplate`). Empty on every ordinary pane, and gone with it — an empty
+   line would push the name's panel taller for a pane that has no run. */
+.plate-peek__task { display: block; }
+.plate-peek__task:empty { display: none; }
 /* The line while a name is being typed in its place. Out of sight and still on the page: what
    draws the row is mounted once and keeps drawing into this box, so taking it away would be taking
    the label down to type a name (`../talk/plate`). */
@@ -2750,3 +2755,62 @@ body.dragging-row { user-select: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The mark that says this pane is an automation run's (`../talk/nameplate`). It sits after the name
+   rather than before it because the name is what a reader looks for, and it never shrinks: a mark
+   elided to one letter is a mark nobody can read.
+
+   It is a word in a frame rather than a colour, the row's one other mark being a colour already
+   (`.plate__dot`) — and the two would then be telling different things in the same language. */
+.plate__auto {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0 var(--s-1);
+  border: var(--border-w) var(--border-style) var(--c-rule);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+.plate__auto[hidden] { display: none; }
+
+/* The row above a run's pane gives up its bottom margin to the line under it: the two are one block
+   over the terminal, and the terminal is held off by the second of them. */
+.plate--run { padding-bottom: 0; }
+
+/* Where the run has got to — four values on one line under the name (`../talk/nameplate`).
+
+   **The pane is what decides how many of them are drawn**, not the window: the row is measured
+   against `.slot__plate`, and a pane a sixth of the page wide holds fewer words than the same row in
+   the split-out window. They are given up from the least useful end — the run's own number, then how
+   many moves in, then the task — so the narrowest pane still says which step is running. The whole of
+   the task is one hover away on the panel (`.plate-peek__task`).
+
+   One line, like the row above it, and for the same reason: a line that can grow pushes the terminal
+   about every time a step with a long name comes up. */
+.plate-run {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+.plate-run[hidden] { display: none; }
+/* The step running now. It is the one value that is never given up, so it is the one that shrinks. */
+.plate-run__step {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--c-text);
+}
+.plate-run__seq, .plate-run__no, .plate-run__task { flex: 0 0 auto; }
+/* The task the run is working. It is the ledger's own reference, which is what a person types to
+   reach it — the title is on the panel. */
+.plate-run__task { font-variant-numeric: tabular-nums; }
+.plate-run__task[hidden] { display: none; }
+@container (max-width: 15rem) { .plate-run__no { display: none; } }
+@container (max-width: 11rem) { .plate-run__seq { display: none; } }
+@container (max-width: 8rem) { .plate-run__task { display: none; } }

@@ -609,6 +609,10 @@ export const pl: Translation = {
     "face.opening": "Otwieranie przestrzeni roboczej w osobnym oknie…",
     "face.drop": "Usuń ten panel",
     "face.dropConfirm": "Usunąć ten panel? Terminal w nim zostanie zakończony, a droga powrotna do tego, co tu powiedziano, zniknie razem z miejscem.",
+    "face.auto": "Automatyczny",
+    "face.runStep": "Krok {n}",
+    "face.runNo": "Uruchomienie {n}",
+    "face.dropRunConfirm": "Usunąć ten panel? Uruchomienie zostanie zatrzymane, zadanie, nad którym pracowało, wróci na Do zrobienia, a wiersz na tym zadaniu to odnotuje.",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 

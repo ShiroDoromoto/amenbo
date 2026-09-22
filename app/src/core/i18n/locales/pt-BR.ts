@@ -606,6 +606,10 @@ export const ptBR: Translation = {
     "face.opening": "Abrindo o espaço de trabalho em uma janela própria…",
     "face.drop": "Remover este painel",
     "face.dropConfirm": "Remover este painel? O terminal nele é encerrado, e o caminho de volta ao que foi dito aqui vai junto com o lugar.",
+    "face.auto": "Automatizado",
+    "face.runStep": "Passo {n}",
+    "face.runNo": "Execução {n}",
+    "face.dropRunConfirm": "Remover este painel? A execução é interrompida, a tarefa em que ela estava volta para A fazer, e uma linha nessa tarefa diz isso.",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",
     "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 

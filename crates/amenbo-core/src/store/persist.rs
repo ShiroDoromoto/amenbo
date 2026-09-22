@@ -1753,6 +1753,25 @@ impl Store {
         })
     }
 
+    /// **Stop a run now** (one operation = one transaction).
+    ///
+    /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
+    /// it was holding, and the line left on that task.
+    ///
+    /// `reason` is which of the four stops this is, and `lanes` is how many runs may be under way at
+    /// once ([`crate::config::Config::automation_lanes`]) — a lane handed back promotes whatever has
+    /// waited longest, and that run is in the answer.
+    pub fn automation_run_stop(
+        &mut self,
+        run_id: i64,
+        reason: crate::model::AutomationStoppedReason,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Ended> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::stop(tx, run_id, reason, lanes)
+        })
+    }
+
     pub fn automation_step_add(
         &mut self,
         automation_id: i64,

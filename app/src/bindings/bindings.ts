@@ -330,6 +330,15 @@ export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<Automatio
 export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_take" | "task_make", required: boolean, };
 
 /**
+ * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
+ *
+ * Both halves are the ledger's own — the reference a person types to reach the task, and the title
+ * on it — because what a run's pane says about a task is never the agent's word for it
+ * (`AMB-D-858`).
+ */
+export type AutomationRunTaskDto = { id: number, ref: string, title: string, };
+
+/**
  * **One step**, with the declarations it runs under already resolved.
  */
 export type AutomationStepDto = { id: number, name: string, 
@@ -393,9 +402,19 @@ export type AutomationStepRunDto = {
  */
 runStep: number, 
 /**
- * What the step is called, for the pane's own header (`AMB-T-5252`).
+ * Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
+ * same step several times, so it is the count and not the step that says how far in a reader is.
  */
-name: string, say: string, agent: string, model?: string, 
+seq: number, 
+/**
+ * What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
+ */
+name: string, 
+/**
+ * The task this stretch of the run is working, where it is on one. Absent until a step takes
+ * one — a run whose first step has not reported is on no task yet.
+ */
+task?: AutomationRunTaskDto, say: string, agent: string, model?: string, 
 /**
  * Where the terminal runs, resolved from the name the step holds. Absent where the step names
  * none, and then the pane opens where a pane of that project opens.

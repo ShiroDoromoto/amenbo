@@ -592,6 +592,10 @@ export const ko: Translation = {
     "face.opening": "워크스페이스를 별도의 창에서 여는 중…",
     "face.drop": "이 페인 지우기",
     "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 여기서 나눈 이야기로 돌아갈 길도 자리와 함께 사라집니다.",
+    "face.auto": "자동",
+    "face.runStep": "{n}번째 단계",
+    "face.runNo": "실행 {n}",
+    "face.dropRunConfirm": "이 페인을 지울까요? 실행은 멈추고, 맡고 있던 할 일은 할 일로 되돌아가며, 그 할 일에 한 줄이 남습니다.",
     "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, 그 안에서 돌던 것은 돌아오지 않습니다.",
     "quit.confirmNotAll": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, {names} 페인은 돌아오지 않습니다. 그 안에서 돌던 것도 돌아오지 않습니다.",
 

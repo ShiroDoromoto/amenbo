@@ -594,6 +594,10 @@ export const nl: Translation = {
     "face.opening": "De werkruimte wordt in een eigen venster geopend…",
     "face.drop": "Dit deelvenster verwijderen",
     "face.dropConfirm": "Dit deelvenster verwijderen? De terminal erin wordt beëindigd, en de weg terug naar wat hier gezegd is verdwijnt met de plek.",
+    "face.auto": "Automatisch",
+    "face.runStep": "Stap {n}",
+    "face.runNo": "Uitvoering {n}",
+    "face.dropRunConfirm": "Dit deelvenster verwijderen? De uitvoering wordt gestopt, de taak waaraan die werkte gaat terug naar Te doen, en een regel op die taak zegt dat.",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 

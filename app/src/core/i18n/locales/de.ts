@@ -598,6 +598,10 @@ export const de: Translation = {
     "face.opening": "Der Arbeitsbereich wird in einem eigenen Fenster geöffnet…",
     "face.drop": "Diesen Bereich entfernen",
     "face.dropConfirm": "Diesen Bereich entfernen? Das Terminal darin wird beendet, und der Weg zurück in das hier Gesagte geht mit dem Platz verloren.",
+    "face.auto": "Automatisch",
+    "face.runStep": "Schritt {n}",
+    "face.runNo": "Lauf {n}",
+    "face.dropRunConfirm": "Diesen Bereich entfernen? Der Lauf wird gestoppt, die Aufgabe, an der er war, geht zurück auf Offen, und eine Zeile auf dieser Aufgabe sagt das.",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 

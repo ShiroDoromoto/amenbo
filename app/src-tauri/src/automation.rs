@@ -48,7 +48,7 @@ use amenbo_core::model::{
     AutomationPortKind, AutomationPortOwner, AutomationRunStatus, AutomationStoppedReason,
     AutomationWire,
 };
-use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -355,6 +355,67 @@ pub fn automation_placement_add(automation_id: i64, action_id: i64) -> Result<Wr
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Write an action from one prompt and put it on a picture**, standing on its own with no line
+/// reaching it ([`amenbo_core::ops::automation::placement_add_from_prompt`]) — what a picture with
+/// nothing on it is filled by, where there is no line for [`automation_step_insert`] to take
+/// (`AMB-T-5317`).
+///
+/// **It is a door apart from [`automation_placement_add`]** rather than a second road through it: the
+/// two are pressed from two controls, one carrying a single answer (which action stands here) and one
+/// a whole action, and folding them together would make the pulldown send eight empty fields.
+///
+/// `shelf` is which library the new action lands in — `"device"` for the one every project on this
+/// machine reaches, `"project"` for this automation's own. It is asked rather than assumed: an action
+/// written here is an ordinary action, and where one is kept outlives the picture it was written at.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_placement_add_from_prompt(
+    automation_id: i64,
+    name: String,
+    prompt: String,
+    shelf: String,
+    agent: String,
+    model: Option<String>,
+    interactive: bool,
+    exits: Vec<String>,
+    inputs: Vec<(String, String, bool)>,
+) -> Result<WriteAck, CmdError> {
+    let shelf = action_shelf(&shelf)?;
+    let mut ports = Vec::with_capacity(inputs.len());
+    for (name, kind, required) in inputs {
+        ports.push((name, port_kind(&kind)?, required));
+    }
+    let new = NewStep {
+        name,
+        prompt,
+        agent,
+        model,
+        interactive,
+        work_dir_ref: None,
+        report_to_task: false,
+        show_history: true,
+    };
+    with_store_mut(|store| {
+        store.automation_placement_add_from_prompt(automation_id, shelf, new, &exits, &ports)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// Which library an action written at a picture lands in, as the screen sends it. An unknown word is
+/// refused here rather than guessed at: the two are what core knows
+/// ([`amenbo_core::ops::automation::ActionShelf`]).
+fn action_shelf(word: &str) -> Result<ActionShelf, CmdError> {
+    match word {
+        "device" => Ok(ActionShelf::Device),
+        "project" => Ok(ActionShelf::Project),
+        _ => Err(amenbo_core::Error::invalid(format!(
+            "'{word}' is no library — say 'device' or 'project'"
+        ))
+        .into()),
+    }
 }
 
 /// **Put a step in on a line inside an action** — the one road by which a step joins a picture
@@ -773,6 +834,9 @@ pub fn automation_cfg_answer(
 /// first and placed: what stands on a picture is always a placement of an action, and writing the
 /// prompt where the reader is looking is what keeps that from being two screens (`AMB-T-5317`).
 ///
+/// `shelf` says which library the written action lands in (`"device"` or `"project"`), and is read
+/// only on the prompt road — an action picked out of the library is already kept somewhere.
+///
 /// `inputs` is a flat list of triples the screen sends as `[name, kind, required]`, because a struct
 /// per row would be one more shape to keep in step across the boundary for three fields. An unknown
 /// kind is refused here rather than stored: the four are the port kinds core knows
@@ -787,6 +851,7 @@ pub fn automation_step_insert(
     name: String,
     action: Option<i64>,
     prompt: Option<String>,
+    shelf: String,
     agent: String,
     model: Option<String>,
     interactive: bool,
@@ -811,6 +876,7 @@ pub fn automation_step_insert(
             })?;
         }
         (None, Some(prompt)) => {
+            let shelf = action_shelf(&shelf)?;
             let new = NewStep {
                 name,
                 prompt,
@@ -822,7 +888,7 @@ pub fn automation_step_insert(
                 show_history: true,
             };
             with_store_mut(|store| {
-                store.automation_placement_insert_from_prompt(edge_id, new, &exits, &ports)?;
+                store.automation_placement_insert_from_prompt(edge_id, shelf, new, &exits, &ports)?;
                 Ok(())
             })?;
         }

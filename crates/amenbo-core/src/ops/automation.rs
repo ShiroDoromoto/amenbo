@@ -648,17 +648,61 @@ pub fn placement_insert(
     Ok(placement)
 }
 
+/// Which library an action written at the picture lands in: the device's own, which every project on
+/// this machine reaches, or the automation's own project's.
+///
+/// It is these two and not a project id because an automation reaches no other project's library
+/// ([`checked_action`]) — naming one would only be a way of asking for a refusal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActionShelf {
+    /// The device's own library.
+    Device,
+    /// The library of the project the automation being built belongs to.
+    Project,
+}
+
+impl ActionShelf {
+    /// The `project_id` an action on this shelf is born with, for an automation in `project_id`.
+    fn under(self, project_id: i64) -> Option<i64> {
+        match self {
+            ActionShelf::Device => None,
+            ActionShelf::Project => Some(project_id),
+        }
+    }
+}
+
+/// **Write an action from one prompt and put it on a picture**, standing on its own with no line
+/// reaching it — the press a build screen makes where the picture has no line to put one in on, which
+/// is every picture with nothing on it yet (`AMB-T-5317`).
+///
+/// It is one act for [`placement_insert_from_prompt`]'s reason: half of it is an action in the
+/// library that nothing stands on.
+pub fn placement_add_from_prompt(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    shelf: ActionShelf,
+    new: NewStep,
+    exits: &[String],
+    inputs: &[(String, AutomationPortKind, bool)],
+) -> Result<AutomationPlacement> {
+    let automation = live_automation(tx, automation_id)?;
+    let action = action_from_prompt(tx, shelf.under(automation.project_id), new, exits, inputs)?;
+    placement_add(tx, automation_id, action.id)
+}
+
 /// **Write an action from one prompt and put it in on a line** — the one press a build screen makes
 /// where somebody is writing a prompt rather than picking one out of the library (`AMB-T-5317`).
 ///
 /// It is one act because half of it is a picture nobody asked for: an action in the library that
 /// nothing stands on, or a line running past a spot that was meant to be on it.
 ///
-/// The library it lands in is the automation's own project's — the shelf every placement on that
-/// picture can reach.
+/// Which library it lands in is the dialog's answer ([`ActionShelf`]), not this op's: an action
+/// written here is an ordinary action, and where an ordinary action is kept is a choice its author
+/// makes.
 pub fn placement_insert_from_prompt(
     tx: &WriteTx<'_>,
     edge_id: i64,
+    shelf: ActionShelf,
     new: NewStep,
     exits: &[String],
     inputs: &[(String, AutomationPortKind, bool)],
@@ -667,7 +711,7 @@ pub fn placement_insert_from_prompt(
     if edge.owner_kind != AutomationPictureOwner::Action {
         let automation_id = box_picture(tx, AutomationPictureOwner::Automation, edge.from_id)?;
         let project_id = live_automation(tx, automation_id)?.project_id;
-        let action = action_from_prompt(tx, Some(project_id), new, exits, inputs)?;
+        let action = action_from_prompt(tx, shelf.under(project_id), new, exits, inputs)?;
         let placement = placement_add(tx, automation_id, action.id)?;
         splice_onto_edge(tx, &edge, placement.id)?;
         return Ok(placement);
@@ -1777,6 +1821,57 @@ mod tests {
             .expect("read edge")
             .expect("an edge on that way out");
         (edge.ends, edge.to_id)
+    }
+
+    #[test]
+    fn an_action_written_at_the_picture_lands_on_the_library_it_was_told_to() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+
+            let mine = placement_add_from_prompt(
+                tx,
+                automation.id,
+                ActionShelf::Project,
+                NewStep::new("下ごしらえ", "do it", "claude"),
+                &[],
+                &[],
+            )
+            .expect("write it onto the project's shelf");
+            let shared = placement_add_from_prompt(
+                tx,
+                automation.id,
+                ActionShelf::Device,
+                NewStep::new("見直す", "do it", "claude"),
+                &[],
+                &[],
+            )
+            .expect("write it onto the device's shelf");
+
+            assert_eq!(
+                live_action(tx, live_placement(tx, mine.id).unwrap().action_id)
+                    .unwrap()
+                    .project_id,
+                Some(automation.project_id),
+                "the project's shelf is the automation's own project",
+            );
+            assert_eq!(
+                live_action(tx, live_placement(tx, shared.id).unwrap().action_id)
+                    .unwrap()
+                    .project_id,
+                None,
+                "and the device's belongs to no project at all",
+            );
+            assert!(
+                read::automation_edge_ids_naming_box(
+                    tx.conn(),
+                    AutomationPictureOwner::Automation,
+                    mine.id,
+                )
+                .unwrap()
+                .is_empty(),
+                "a box put down this way stands on its own — no line was pressed to put it in on",
+            );
+        });
     }
 
     #[test]

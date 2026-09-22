@@ -18,6 +18,7 @@ const hoisted = vi.hoisted(() => ({
   answerCfg: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
+  raise: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -26,6 +27,7 @@ vi.mock("../core/automations", () => ({
   answerAutomationCfg: hoisted.answerCfg,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
+  raiseStepToLibrary: hoisted.raise,
 }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
@@ -100,6 +102,8 @@ beforeEach(() => {
   hoisted.answerCfg.mockReset();
   hoisted.setWire.mockReset();
   hoisted.clearWire.mockReset();
+  hoisted.raise.mockReset();
+  hoisted.raise.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -123,6 +127,43 @@ describe("the step panel", () => {
       box.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     expect(hoisted.editStep).toHaveBeenCalledWith(1, { name: "Take one" });
+  });
+
+  /// **The one road from the build screen into the library** (`AMB-T-5277`). Until it was here, the
+  /// only way to put a prompt in the library was the CLI, while the tab that lists them was on screen.
+  it("raises a step's own prompt into a library the reader picks", async () => {
+    await render({ automation: detail(), stepId: 1, projectId: 1 });
+    const press = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent === t("auto.step.raise"))!;
+
+    // The name starts as the step's, and is the reader's to change: a step is named for its place in
+    // one automation, an action for what it is.
+    const named = boxes().find((b) => b.getAttribute("aria-label") === t("auto.step.raiseName"))!;
+    expect(named.value).toBe("Take the next task");
+    await typeInto(named, "Take one");
+
+    await act(async () => { press().click(); });
+    expect(hoisted.raise).toHaveBeenCalledWith(1, "Take one", 1);
+
+    // The device's library is the wider reach, and is asked for rather than defaulted to.
+    const reach = selects().find((one) => one.value === "project")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(reach, "device");
+      reach.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { press().click(); });
+    expect(hoisted.raise).toHaveBeenLastCalledWith(1, "Take one", null);
+  });
+
+  it("offers no raise to a step that already runs a library action", async () => {
+    // There is nothing of its own left to raise, and what it carries is the library's already.
+    await render({
+      automation: detail({ steps: [step({ actionId: 4, actionName: "Review", prompt: "review it" })] }),
+      stepId: 1,
+      projectId: 1,
+    });
+    expect(container.textContent).not.toContain(t("auto.step.raiseWhat"));
   });
 
   it("puts where the prompt comes from on one control, the library beside the step's own", async () => {

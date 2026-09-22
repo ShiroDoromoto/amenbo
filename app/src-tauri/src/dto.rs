@@ -3461,8 +3461,17 @@ pub struct AutomationStepRunDto {
     /// The execution row this terminal is running under — what a report or a value hangs off.
     #[ts(type = "number")]
     pub(crate) run_step: i64,
-    /// What the step is called, for the pane's own header (`AMB-T-5252`).
+    /// Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
+    /// same step several times, so it is the count and not the step that says how far in a reader is.
+    #[ts(type = "number")]
+    pub(crate) seq: i64,
+    /// What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
     pub(crate) name: String,
+    /// The task this stretch of the run is working, where it is on one. Absent until a step takes
+    /// one — a run whose first step has not reported is on no task yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task: Option<AutomationRunTaskDto>,
     pub(crate) say: String,
     pub(crate) agent: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3475,6 +3484,21 @@ pub struct AutomationStepRunDto {
     pub(crate) folder: Option<String>,
     /// Whether this step may stop and wait for a person (`automation_step.interactive`).
     pub(crate) interactive: bool,
+}
+
+/// **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
+///
+/// Both halves are the ledger's own — the reference a person types to reach the task, and the title
+/// on it — because what a run's pane says about a task is never the agent's word for it
+/// (`AMB-D-858`).
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunTaskDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) r#ref: String,
+    pub(crate) title: String,
 }
 
 /// **One thing standing in the way of a launch**, as core named it

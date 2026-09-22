@@ -600,6 +600,10 @@ export const ja: Translation = {
     "face.opening": "ワークスペースを別ウィンドウで開いています…",
     "face.drop": "このペインを消す",
     "face.dropConfirm": "このペインを消しますか？中の端末は終わり、ここで話していたことへ戻る道も場所と一緒に無くなります。",
+    "face.auto": "自動",
+    "face.runStep": "{n}件目",
+    "face.runNo": "実行 {n}",
+    "face.dropRunConfirm": "このペインを消しますか？実行は止まり、扱っていたタスクは未着手へ戻り、そのタスクに一行残ります。",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",
     "quit.confirmNotAll": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、{names} のペインは戻りません。走っていたものも戻りません。",
 

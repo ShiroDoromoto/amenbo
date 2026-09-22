@@ -605,6 +605,10 @@ export const it: Translation = {
     "face.opening": "Apertura dello spazio di lavoro in una finestra propria…",
     "face.drop": "Rimuovi questo riquadro",
     "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina, e la via di ritorno a ciò che vi è stato detto se ne va con il posto.",
+    "face.auto": "Automatizzato",
+    "face.runStep": "Passo {n}",
+    "face.runNo": "Esecuzione {n}",
+    "face.dropRunConfirm": "Rimuovere questo riquadro? L'esecuzione viene fermata, l'attività su cui stava lavorando torna a Da fare, e una riga su quell'attività lo dice.",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",
     "quit.confirmNotAll": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, tranne nei riquadri con {names}. Non torna nemmeno ciò che stavano eseguendo.",
 

@@ -605,6 +605,10 @@ export const fr: Translation = {
     "face.opening": "Ouverture de l'espace de travail dans une fenêtre à lui…",
     "face.drop": "Supprimer ce volet",
     "face.dropConfirm": "Supprimer ce volet ? Le terminal qui s'y trouve se termine, et le chemin de retour vers ce qui s'y est dit s'en va avec la place.",
+    "face.auto": "Automatisé",
+    "face.runStep": "Étape {n}",
+    "face.runNo": "Exécution {n}",
+    "face.dropRunConfirm": "Supprimer ce volet ? L'exécution est arrêtée, la tâche sur laquelle elle était repasse À faire, et une ligne sur cette tâche le dit.",
     "quit.confirm": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, pas ce qu'elles exécutaient.",
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 

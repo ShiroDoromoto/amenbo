@@ -594,6 +594,10 @@ export const tr: Translation = {
     "face.opening": "Çalışma alanı kendi penceresinde açılıyor…",
     "face.drop": "Bu bölmeyi kaldır",
     "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve burada konuşulanlara dönüş yolu da bu yerle birlikte gider.",
+    "face.auto": "Otomatik",
+    "face.runStep": "{n}. adım",
+    "face.runNo": "Çalıştırma {n}",
+    "face.dropRunConfirm": "Bu bölme kaldırılsın mı? Çalıştırma durdurulur, üzerinde çalıştığı görev Yapılacak durumuna döner ve o görevde bir satır bunu söyler.",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",
 

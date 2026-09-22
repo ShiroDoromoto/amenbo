@@ -605,6 +605,10 @@ export const es: Translation = {
     "face.opening": "Abriendo el espacio de trabajo en una ventana propia…",
     "face.drop": "Quitar este panel",
     "face.dropConfirm": "¿Quitar este panel? La terminal que hay en él se cierra, y el camino de vuelta a lo que se dijo aquí se va con el sitio.",
+    "face.auto": "Automatizado",
+    "face.runStep": "Paso {n}",
+    "face.runNo": "Ejecución {n}",
+    "face.dropRunConfirm": "¿Quitar este panel? La ejecución se detiene, la tarea en la que estaba vuelve a Pendiente, y una línea en esa tarea lo dice.",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque; lo que estaban ejecutando, no.",
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 

@@ -10,7 +10,7 @@
 // neither of which the world can rewrite behind it.
 
 import { frameLabel, frameNames, type FrameNames } from "./frames";
-import { faceOf, mountNameplate, type Plate as Row } from "./nameplate";
+import { faceOf, mountNameplate, type Plate as Row, type Say } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
 
 /** A pane's label, and the pane's way of telling it what happened. */
@@ -47,8 +47,19 @@ export type Plate = {
  * row belongs to the place rather than to the session (`./frames`). `hue` is what the lamp in front
  * of the name is drawn in — the slot's answer rather than the frame's, so it comes in from whoever
  * laid the page out (`./moving`).
+ *
+ * `run` is where the run this pane is drawing has got to, and null on every ordinary pane
+ * (`./nameplate`). **It is taken at mount and not changed afterwards**: a run's pane is built again
+ * at every step, the terminal in it being a new one each time (`../shell/WorkspaceFace`), so a value
+ * that could be swapped under a standing row would be a second way to say what one of the two roads
+ * already says.
  */
-export function mountPlate(host: HTMLElement, frame: string, hue: number): Plate {
+export function mountPlate(
+  host: HTMLElement,
+  frame: string,
+  hue: number,
+  run: Say | null = null,
+): Plate {
   const draw = mountNameplate(host);
 
   let names: FrameNames = new Map();
@@ -98,7 +109,7 @@ export function mountPlate(host: HTMLElement, frame: string, hue: number): Plate
    */
   function row(): Row | null {
     if (!(ran || names.has(frame))) return null;
-    return { name: frameLabel(names, frame, folder), dot: { hue, face: faceOf(moving) } };
+    return { name: frameLabel(names, frame, folder), dot: { hue, face: faceOf(moving) }, run };
   }
 
   function redraw(): void {

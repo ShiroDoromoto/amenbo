@@ -26,7 +26,7 @@
 
 use amenbo_core::model::{
     Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
-    AutomationPortOwner, AutomationStep,
+    AutomationPortOwner, AutomationRunStatus, AutomationStep, AutomationStoppedReason,
 };
 use amenbo_core::ops::automation::declarer;
 use amenbo_core::ops::automation_run::{self, Unmet};
@@ -37,8 +37,8 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationCardDto, AutomationCfgDto, AutomationDetailDto,
     AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto, AutomationLaunchCheckDto,
-    AutomationPortDto, AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto,
-    AutomationWireDto, WriteAck,
+    AutomationPortDto, AutomationRunTaskDto, AutomationStepDto, AutomationStepOpenDto,
+    AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::BTreeSet;
@@ -252,7 +252,9 @@ pub fn automation_step_open(
                 run.project_id,
                 Some(AutomationStepRunDto {
                     run_step: ready.run_step.id,
+                    seq: ready.run_step.seq,
                     name: def.name.clone(),
+                    task: worked_task(&store, ready.run_step.run_task_id)?,
                     say: ready.text.clone(),
                     agent: def.agent.clone(),
                     model: def.model.clone(),
@@ -271,6 +273,61 @@ pub fn automation_step_open(
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
     Ok(dto)
+}
+
+/// **The task one stretch of a run is working**, read off the ledger for the pane's header.
+///
+/// `None` where the execution belongs to no stretch — a run whose steps take no task at all — and
+/// where the task itself has been deleted since the stretch opened, the column being nulled rather
+/// than the row going with it (`automation_run_task.task_id`).
+fn worked_task(
+    store: &amenbo_core::Store,
+    run_task_id: Option<i64>,
+) -> Result<Option<AutomationRunTaskDto>, CmdError> {
+    let Some(stretch_id) = run_task_id else { return Ok(None) };
+    let conn = store.read_model().conn();
+    let Some(task_id) = read::automation_run_task(conn, stretch_id)?.and_then(|s| s.task_id) else {
+        return Ok(None);
+    };
+    Ok(read::task_title(conn, task_id)?.map(|title| AutomationRunTaskDto {
+        id: task_id,
+        r#ref: amenbo_core::idref::task(task_id),
+        title,
+    }))
+}
+
+/// **Stop a run now** — what closing the pane a run is drawn in means
+/// (`app/src/shell/TerminalPane.tsx`).
+///
+/// The cleanup is core's and is the same one every other stop goes through
+/// ([`amenbo_core::ops::automation_stop::stop`]): the lane is handed back, the task the run was
+/// working goes to `todo`, and a line on that task says the run is not coming back. The terminal
+/// standing in the pane is the pane's own to end — it is a process this side started, and core has
+/// no window to end one from.
+///
+/// **A run that is over already is not an error here.** The pane is closed by a person, and between
+/// the last step reporting and the press there is a window in which the run has finished on its own;
+/// a refusal then would put a red sentence in front of somebody who did nothing wrong. What comes
+/// back says whether this press was the one that stopped it.
+#[tauri::command]
+pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let lanes = amenbo_core::config::Config::load(&paths.config_file).automation_lanes;
+    let mut store = crate::commands::open_store()?;
+    let over = match read::automation_run(store.read_model().conn(), run_id)? {
+        Some(run) => !matches!(
+            run.status,
+            AutomationRunStatus::Running | AutomationRunStatus::Queued | AutomationRunStatus::Paused
+        ),
+        // A run nobody can find is one nothing can be stopped about, and the pane is going either
+        // way. Saying so is the whole of what is left to do.
+        None => true,
+    };
+    if over {
+        return Ok(false);
+    }
+    store.automation_run_stop(run_id, AutomationStoppedReason::ByHuman, lanes)?;
+    Ok(true)
 }
 
 // ───────────────────────────── shaping ─────────────────────────────
@@ -393,5 +450,29 @@ fn cfg_dto(cfg: AutomationCfg) -> AutomationCfgDto {
         required: cfg.required,
         options: cfg.options,
         value: cfg.value,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::tests::env_guard;
+
+    /// **A press on a pane is never a refusal.** Closing a run's pane is a person being rid of the
+    /// pane, and between the last step reporting and the press there is a window in which the run
+    /// ended on its own — so a run that is over, or one whose rows are gone entirely, answers `false`
+    /// rather than putting a red sentence in front of somebody who did nothing wrong.
+    ///
+    /// Both facts come out of the same door: what is refused by core is the stop
+    /// ([`amenbo_core::ops::automation_stop::stop`], whose own cases cover the states), and what is
+    /// answered here is whether this press was the one that stopped it.
+    #[test]
+    fn stopping_a_run_that_is_not_there_is_answered_rather_than_refused() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-stop-gone");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        amenbo_core::Store::open().unwrap();
+
+        assert!(!automation_run_stop(404).expect("a run nobody can find is not an error"));
     }
 }

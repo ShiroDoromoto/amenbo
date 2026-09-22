@@ -1,0 +1,57 @@
+# An automation is made on the screen, from the list it will be listed on. The press takes a name and
+# nothing else, and lands on the build screen of what it made: what an automation is for is the
+# picture, and a form asking for its notes first would ask before there is anything to write them
+# about. So the road that makes one is read in two places — the build screen it lands on, which is
+# empty and says so, and the list it came from, which now carries its row.
+#
+# ── Why the launch place is read first ──────────────────────────────────────────────────────────
+# A build screen that opened on the wrong definition, or on none, would still draw a launch place and
+# a picture. What says this one is the one just made is that it is short of everything: nothing is
+# placed on it yet, which is the reason the launch place gives before any other.
+id: make-an-automation-from-the-list
+title: An automation is made from the list by its name alone, and the press lands on its build screen
+description: >
+  Stand on the automations tab, make one by its name, and read the build screen the press opens: the
+  launch place says nothing is placed on it yet. Then go back to the list and read the row it made —
+  under the name it was given, with nothing placed on it.
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: create
+    with:
+      name: SCENARIO SEED — made from the list
+    as: auto
+
+  # Where the press landed. An automation made a moment ago holds nothing, and the launch place says so
+  # before anything else — it is the reason that stands in front of every other.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: no_steps
+      present: true
+
+  # And the list it was made from, with the row it now carries. The count is the half worth asking
+  # for: a row standing for an automation that had been filled from somewhere would read the same by
+  # its name alone.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: auto
+      placements: 0
+      present: true

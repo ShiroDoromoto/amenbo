@@ -4010,7 +4010,9 @@ const REGISTRY: &[OpSpec] = &[
     // `in_action` to say which — left out, it is the automation's, the way the command reads it.
     //
     // The automation itself. `notes` is its one free-text field — what every step is told before its
-    // own prompt is Amenbo's own, the same on every automation, so no road writes it.
+    // own prompt is Amenbo's own, the same on every automation, so no road writes it. **On the screen
+    // it is made from a name alone**, off the automations tab, and the press lands on its build
+    // screen; the notes are the build screen's to write, so a screen road names none here.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes"], binds: true },
     // The three fields the definition itself holds, written after it is built: its name, its notes,
     // and whether it is kept out of a reader's way. Archiving takes nothing away and stops nothing
@@ -4478,9 +4480,9 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // arranges is the machine and never the app: programs in a directory of the run's own, handed to
     // the launch and to nothing else.
     (Domain::Workspace, "can-start"),
-    // A definition already built. **Every screen road about an automation stands on one**: what
-    // reads a definition whole is the build screen, so a road that opens it has to find something
-    // there. Building one on the road instead would make every road about the picture, the panel and
+    // A definition already built. **Every screen road about an automation but the one that makes it
+    // stands on one**: what reads a definition whole is the build screen, so a road that opens it has
+    // to find something there. Building one on the road instead would make every road about the picture, the panel and
     // the launch place a road about building, which is `build-an-automation-from-the-terminal`'s to
     // be. So all three layers stand up here: the library action and the steps inside
     // it, the picture it is placed on, and what joins them.

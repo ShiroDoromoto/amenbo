@@ -3837,6 +3837,22 @@ impl Instructor {
                 "Open the automations screen of the project on the ledger and stand on {}.",
                 automation_tab(req(with, "tab")?)?
             ),
+            // **Making one from the list.** The press takes a name and nothing else, and lands on the
+            // build screen of what it made — so the step that makes one is also the step that opens
+            // it, and the road reads the build screen next rather than pressing a row. Notes are not
+            // asked for here: the panel at the foot of the build screen is where they are written.
+            (Domain::Automation, "create") => {
+                if with.contains_key("notes") {
+                    return Err(
+                        "the screen makes an automation from a name alone — its notes are written afterwards, with `update`"
+                            .to_string(),
+                    );
+                }
+                format!(
+                    "On the automations tab, press the button that makes a new automation, write \"{}\" as its name and press the button that creates it. Confirm the build screen for it opens in place of the list.",
+                    req(with, "name")?
+                )
+            }
             // A definition opens into the build screen, which replaces the list rather than standing
             // beside it — what is being looked at is one automation's whole picture.
             (Domain::Automation, "open") => format!(
@@ -7927,6 +7943,11 @@ steps_gui:
     with: { target: auto, placements: 3, present: true }
   - type: action
     domain: automation
+    op: create
+    with: { name: Evening round }
+    as: evening
+  - type: action
+    domain: automation
     op: open
     with: { target: auto }
   - type: assert
@@ -8042,11 +8063,12 @@ steps_gui:
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("automations"), "{}", lines[0]);
         assert!(lines[1].contains("Morning round") && lines[1].contains("3 actions"), "{}", lines[1]);
-        assert!(lines[5].contains("\"got one\"") && lines[5].contains("\"work\""), "{}", lines[5]);
-        assert!(lines[6].contains("the task is finished"), "{}", lines[6]);
-        assert!(lines[14].contains("output artefact") && lines[14].contains("a value"), "{}", lines[14]);
-        assert!(lines[15].contains("nothing reaches one of a box's required inputs"), "{}", lines[15]);
-        assert!(lines[18].contains("\"work\"") && lines[18].contains("\"build\""), "{}", lines[18]);
+        assert!(lines[2].contains("\"Evening round\"") && lines[2].contains("build screen"), "{}", lines[2]);
+        assert!(lines[6].contains("\"got one\"") && lines[6].contains("\"work\""), "{}", lines[6]);
+        assert!(lines[7].contains("the task is finished"), "{}", lines[7]);
+        assert!(lines[15].contains("output artefact") && lines[15].contains("a value"), "{}", lines[15]);
+        assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
+        assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);
     }
 
     /// What the dialog that puts a box in is told to declare on it. One of a thing and several read

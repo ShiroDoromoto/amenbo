@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AutomationCardDto,
   AutomationDetailDto,
+  AutomationLaunchBlockDto,
   AutomationLaunchCheckDto,
 } from "../bindings/bindings";
 
@@ -44,7 +45,7 @@ vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
 
-import { errText, t, tf } from "../core/i18n";
+import { errSentence, errText, t, tf } from "../core/i18n";
 import { AutomationsScreen } from "./AutomationsScreen";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -195,39 +196,41 @@ describe("the launch place", () => {
     await act(async () => { button("Morning round").click(); });
   }
 
+  /** One reason as the check hands it over: its code, its values, and core's English under them. */
+  function reason(code: string, fields: Record<string, string> = {}): AutomationLaunchBlockDto {
+    return { code, message_en: `English for ${code}`, fields };
+  }
+
   it("puts every reason into words a person can act on", async () => {
     // Every arm core's check can answer with (`amenbo_core::ops::automation_run::Unmet`), so a reason
     // added there without words on this side is caught here rather than on somebody's screen.
-    await open({
-      ready: false,
-      blocks: [
-        { reason: "no_entry" },
-        { reason: "entry_takes_no_task", stepName: "Read" },
-        { reason: "open_exit", stepName: "Read", at: "again" },
-        { reason: "open_exit", stepName: "Read" },
-        { reason: "unwired_input", stepName: "Write", at: "folder" },
-        { reason: "unanswered_cfg", stepName: "Write", at: "filter" },
-        { reason: "agent_missing", stepName: "Write", at: "codex-cli" },
-        { reason: "model_missing", stepName: "Write", at: "opus-9" },
-      ],
-    });
-    expect(blocks()).toEqual([
-      t("auto.block.noEntry"),
-      tf("auto.block.entryTakesNoTask", { step: "Read" }),
-      tf("auto.block.openExit", { step: "Read", at: "again" }),
-      tf("auto.block.openExitUnnamed", { step: "Read" }),
-      tf("auto.block.unwiredInput", { step: "Write", at: "folder" }),
-      tf("auto.block.unansweredCfg", { step: "Write", at: "filter" }),
-      tf("auto.block.agentMissing", { step: "Write", at: "codex-cli" }),
-      tf("auto.block.modelMissing", { step: "Write", at: "opus-9" }),
-    ]);
-    // Nothing is left standing as a bare reason code: a line nobody wrote words for would ship as
-    // `input_unfed` on the screen.
-    expect(blocks().every((line) => line && !line.includes("_"))).toBe(true);
+    const given = [
+      reason("not_ready_automation_no_entry"),
+      reason("not_ready_automation_entry_takes_no_task", { step: "Read" }),
+      reason("not_ready_automation_open_exit", { step: "Read", exit: "again" }),
+      reason("not_ready_automation_open_exit_unnamed", { step: "Read" }),
+      reason("not_ready_automation_unwired_input", { step: "Write", port: "folder" }),
+      reason("not_ready_automation_unanswered_cfg", { step: "Write", cfg: "filter" }),
+      reason("not_ready_automation_agent_missing", { step: "Write", agent: "codex-cli" }),
+      reason("not_ready_automation_model_missing", { step: "Write", model: "opus-9" }),
+    ];
+    await open({ ready: false, blocks: given });
+    // The same sentences the press's refusal is written from — this list and that one are one set of
+    // words, which is the whole reason the check hands over a code (`AMB-T-5287`).
+    expect(blocks()).toEqual(given.map((one) => errSentence(one)));
+    // Nothing is left standing as a bare code, and nothing falls through to core's English: a reason
+    // nobody wrote a sentence for would ship as `not_ready_automation_no_entry` at the reader.
+    for (const one of given) {
+      expect(blocks()).not.toContain(one.code);
+      expect(blocks()).not.toContain(one.message_en);
+    }
+    // And every value the sentence is about reaches it, rather than leaving `{step}` on the screen.
+    expect(blocks().some((line) => line?.includes("codex-cli"))).toBe(true);
+    expect(blocks().every((line) => line && !line.includes("{"))).toBe(true);
   });
 
   it("holds the button shut while anything is in the way", async () => {
-    await open({ ready: false, blocks: [{ reason: "no_steps" }] });
+    await open({ ready: false, blocks: [reason("not_ready_automation_no_steps")] });
     expect(button(t("auto.start")).disabled).toBe(true);
     expect(container.textContent).toContain(t("auto.notReady"));
   });

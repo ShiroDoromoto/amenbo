@@ -34,43 +34,9 @@ import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
-import { t, tf } from "../core/i18n";
+import { errSentence, t } from "../core/i18n";
 import { Icon } from "../components/Icon";
-import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
-
-/**
- * One reason, in words. The unnamed way out has no name to put in the sentence — it is the one a
- * step with a single way out has — so it takes a line of its own rather than a sentence with a hole
- * where the name goes.
- */
-function blockText(block: AutomationLaunchBlockDto): string {
-  const step = block.stepName ?? "";
-  const at = block.at ?? "";
-  switch (block.reason) {
-    case "no_steps":
-      return t("auto.block.noSteps");
-    case "no_entry":
-      return t("auto.block.noEntry");
-    case "entry_takes_no_task":
-      return tf("auto.block.entryTakesNoTask", { step });
-    case "open_exit":
-      return block.at === undefined
-        ? tf("auto.block.openExitUnnamed", { step })
-        : tf("auto.block.openExit", { step, at });
-    case "unwired_input":
-      return tf("auto.block.unwiredInput", { step, at });
-    case "unanswered_cfg":
-      return tf("auto.block.unansweredCfg", { step, at });
-    case "agent_missing":
-      return tf("auto.block.agentMissing", { step, at });
-    // The model, where the agent it belongs to has already said what it offers. The sentence names
-    // the model alone: the step names one agent, and the picture beside this list already says which.
-    case "model_missing":
-      return tf("auto.block.modelMissing", { step, at });
-    default:
-      return block.reason;
-  }
-}
+import type { AutomationDetailDto } from "../bindings/bindings";
 
 /**
  * What carries out the step a line leaves — the likeliest answer for the step being put in front of
@@ -134,10 +100,11 @@ export function AutomationBuildScreen({
             <>
               <div className="auto__notready">{t("auto.notReady")}</div>
               <ul className="auto__blocks">
+                {/* Each reason names itself, so the sentence comes from the same place the press's
+                    refusal writes its own from (`core/i18n`'s `errSentence`) — this list and that one
+                    are the same words, and holding them apart is what let them drift. */}
                 {check.blocks.map((block, nth) => (
-                  <li key={`${block.reason}-${block.stepName ?? ""}-${block.at ?? ""}-${nth}`}>
-                    {blockText(block)}
-                  </li>
+                  <li key={`${block.code}-${nth}`}>{errSentence(block)}</li>
                 ))}
               </ul>
             </>

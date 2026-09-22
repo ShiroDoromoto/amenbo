@@ -960,13 +960,18 @@ impl Instructor {
             // which words are on the shot, and every one of them is on it whichever line it took. A
             // step asking for the top is left for an eye rather than passed on its presence, which
             // would read green off a build that had stopped pinning anything.
-            (Domain::Task, "found") | (Domain::Decision, "found") if first(with) => None,
+            (Domain::Task, "found") | (Domain::Decision, "found") | (Domain::Automation, "found")
+                if first(with) =>
+            {
+                None
+            }
             (Domain::Task, "listed")
             | (Domain::Task, "narrowed")
             | (Domain::Task, "view-lists")
             | (Domain::Task, "found")
             | (Domain::Decision, "narrowed")
-            | (Domain::Decision, "found") => {
+            | (Domain::Decision, "found")
+            | (Domain::Automation, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Task, "opened") => {
@@ -1139,7 +1144,7 @@ impl Instructor {
             // answers which words are on a shot, so a step naming one would pass on a build that had
             // lost the mark and kept the name. Those are an eye's.
             (Domain::Automation, "pictured")
-                if flagged(with, "from_action") || flagged(with, "unfed") =>
+                if with.contains_key("from_action") || with.contains_key("unfed") =>
             {
                 None
             }
@@ -4139,8 +4144,15 @@ impl Instructor {
             // The asking is inside the confirming, the way `listed`'s filter is: the cross-cutting search
             // answers one question per question put to it, so there is no standing screen for a separate
             // move to arrive at — the words, the narrowing and the reading are one thing a reader does.
-            (Domain::Task, "found") | (Domain::Decision, "found") => {
-                let side = if domain == Domain::Task { "task" } else { "decision" };
+            // An automation is the third kind of record the box narrows to. Its hits are read the same
+            // way the other two are, and what the row points at is the automation — a shared document
+            // carries no reference of its own, one automation holding several of them.
+            (Domain::Task, "found") | (Domain::Decision, "found") | (Domain::Automation, "found") => {
+                let side = match domain {
+                    Domain::Task => "task",
+                    Domain::Decision => "decision",
+                    _ => "automation",
+                };
                 let mut line = format!("Ask the cross-cutting search for {}", self.typed(with)?);
                 if let Some(kind) = arg_str(with, "kind") {
                     line.push_str(&format!(", narrowed to {kind}"));
@@ -5622,13 +5634,15 @@ impl Instructor {
                 true => format!(
                     "In the build screen's picture, confirm a box for the step \"{}\" is drawn{}{}.",
                     req(with, "name")?,
-                    match flagged(with, "from_action") {
-                        true => ", with the coloured edge down its left that says its prompt came from the library",
-                        false => "",
+                    match step_mark(with, "from_action")? {
+                        Some(true) => ", with the coloured edge down its left that says its prompt came from the library",
+                        Some(false) => ", and that it carries no coloured edge down its left — its prompt is its own",
+                        None => "",
                     },
-                    match flagged(with, "unfed") {
-                        true => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
-                        false => "",
+                    match step_mark(with, "unfed")? {
+                        Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
+                        Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and names no input under its name",
+                        None => "",
                     }
                 ),
                 false => format!(
@@ -5673,24 +5687,29 @@ impl Instructor {
             // What the launch place says, which is where a half-built definition is named as such.
             // A road names core's own code for the reason, so what it walks is the refusal rather
             // than a sentence the interface owns.
-            (Domain::Automation, "launch") => match req_bool(with, "ready")? {
-                true => "On the build screen's launch place, confirm it says the automation is ready to be started, and that the button that starts one can be pressed."
+            (Domain::Automation, "launch") => match (req_bool(with, "ready")?, arg_str(with, "reason")) {
+                (true, _) => "On the build screen's launch place, confirm it says the automation is ready to be started, and that the button that starts one can be pressed."
                     .to_string(),
-                false => format!(
-                    "On the build screen's launch place, confirm it says the automation cannot be started yet{}, and that the button that starts one cannot be pressed.",
-                    match arg_str(with, "reason") {
-                        Some(reason) => format!(
-                            ", that one of the reasons it lists is {}{}{}",
-                            launch_reason(reason)?,
-                            match arg_str(with, "step") {
-                                Some(step) => format!(", naming the step \"{step}\""),
-                                None => String::new(),
-                            },
-                            match arg_str(with, "at") {
-                                Some(at) => format!(" and \"{at}\" on it"),
-                                None => String::new(),
-                            }
-                        ),
+                (false, None) => "On the build screen's launch place, confirm it says the automation cannot be started yet, and that the button that starts one cannot be pressed."
+                    .to_string(),
+                // A reason named, either way round. **The absent half is the one a road walks after
+                // fixing something**: the list is read once and drawn from what core answers, so a
+                // build that had kept the first answer would still be listing what is no longer in
+                // the way — and a road that only ever asked for a reason to be there could not
+                // catch it.
+                (false, Some(reason)) => format!(
+                    "On the build screen's launch place, confirm it says the automation cannot be started yet, and that {} of the reasons it lists is {}{}{}.",
+                    match present(with) {
+                        true => "one",
+                        false => "none",
+                    },
+                    launch_reason(reason)?,
+                    match arg_str(with, "step") {
+                        Some(step) => format!(", naming the step \"{step}\""),
+                        None => String::new(),
+                    },
+                    match arg_str(with, "at") {
+                        Some(at) => format!(" and \"{at}\" on it"),
                         None => String::new(),
                     }
                 ),
@@ -5722,7 +5741,12 @@ impl Instructor {
                         None => String::new(),
                     }
                 ),
-                false => "In the workspace, confirm no pane is standing for this run.".to_string(),
+                // Where the road bound no run, there is none to speak of: what it is saying is that
+                // the press it just made stood nothing up.
+                false => match with.contains_key("target") {
+                    true => "In the workspace, confirm no pane is standing for this run.".to_string(),
+                    false => "In the workspace, confirm the press stood no new pane up.".to_string(),
+                },
             },
             // The band over the panes, and the setting that holds its second number.
             (Domain::Automation, "lanes") => format!(
@@ -5784,6 +5808,17 @@ fn decision_filter_pair(axis: &str, value: &str) -> String {
         ("status", "draft") => "draft:yes".to_string(),
         ("status", "superseded") => "superseded:yes".to_string(),
         _ => filter_pair(axis, value),
+    }
+}
+
+/// A mark a road named on a step's box, either way round, or nothing where it named none. Both
+/// marks are worth saying the absence of: a mark that never comes off is a build reading a
+/// definition it had already read, and a road that could only ask for one to be there could not
+/// catch it.
+fn step_mark(with: &Args, key: &str) -> Result<Option<bool>, String> {
+    match with.contains_key(key) {
+        true => Ok(Some(flag(with, key)?)),
+        false => Ok(None),
     }
 }
 

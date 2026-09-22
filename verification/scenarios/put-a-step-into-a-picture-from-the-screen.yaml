@@ -1,0 +1,96 @@
+# A picture already drawn is added to on the line, and nowhere else. There is no "add at the end":
+# a step nothing points at is a step no run reaches, so the only way in is a `+` on a line that
+# already goes somewhere — the way out pressed comes to point at the new step, and the new step goes
+# on to what that way out named. A build that made the step and left the line running past it would
+# leave a picture nobody asked for, and one that made the step and dropped what the line used to
+# reach would quietly throw away a decision somebody had made.
+id: put-a-step-into-a-picture-from-the-screen
+title: A step put in on a line takes over where that line went
+description: >
+  Stand a one-step definition up from the terminal, put a second step in on the line that closes the
+  task, and read both halves of what that press did: the pressed way out now points at the new step,
+  and the new step now closes the task. Then declare what the first step's named way out hands on,
+  and read the one thing that dialog does for a reader — the name starts on the way out's own, that
+  way out having handed on nothing yet.
+given:
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one step, then two" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  # The line the `+` is pressed on. It closes the task, which is the half of this road worth walking:
+  # a way out that ends something carries no limit, and turning it into one that goes on to a step
+  # needs one — so this is the arm where the press has the most to put right.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # What the line says before the press, so that what it says afterwards is a change and not a
+  # reading taken once.
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: got one
+      ends: done
+
+  - type: action
+    domain: automation
+    op: insert-step
+    with:
+      after: take
+      exit: got one
+      name: work
+      prompt: do the work
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      present: true
+
+  # The two halves of the press, each read on its own line. Either one alone would pass on a build
+  # that had lost the other: a step pointed at with nothing after it, or a step after a line that
+  # still runs past it.
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: got one
+      to: work
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: work
+      ends: done
+
+  # And the step the press made is a step like any other: pressing its box puts its contents in the
+  # panel, with the name and the prompt the dialog took.
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: work
+
+  - type: assert
+    domain: automation
+    op: step-shows
+    with:
+      field: prompt
+      value: do the work

@@ -1,0 +1,107 @@
+# The library is what makes a prompt worth writing once. A step points at an action rather than
+# copying it, so rewriting the action is how every step running it changes at the same time — and the
+# number the row carries is what tells a reader how far that reaches before they open the box. It is
+# counted in automations and not in steps, because what changes when the prompt changes is the runs
+# of those automations: two steps of one automation pointing at the same action is one automation
+# whose runs move.
+id: rewrite-a-prompt-the-whole-library-uses
+title: Rewriting a library action reaches every step pointed at it, and the row says how far that is beforehand
+description: >
+  Put one action in the library and point three steps at it — two in one automation and one in
+  another — then read the row that says how many automations use it, rewrite the prompt on that row,
+  and read the new prompt back off a step in each automation. The count is the half worth walking
+  twice: a build counting steps would say three where the answer is two, and a reader would judge a
+  rewrite by a number about the wrong thing.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — review, prompt: read what was written }, as: library }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews twice" }, as: first }
+  - { type: action, domain: automation, op: step-add, with: { target: first, name: check, agent: claude-code, action: library } }
+  - { type: action, domain: automation, op: step-add, with: { target: first, name: check again, agent: claude-code, action: library } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews once" }, as: second }
+  - { type: action, domain: automation, op: step-add, with: { target: second, name: check, agent: claude-code, action: library } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  # Two, not three. Three steps point at this action and two automations run it, and what the number
+  # is read for is how far a rewrite carries — which is measured in automations whose runs change.
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: library
+      used_by: 2
+      reach: project
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: library
+
+  - type: action
+    domain: automation
+    op: action-rewrite
+    with:
+      prompt: read what was written, then say what is wrong with it
+
+  # The rewrite, read back on a step of the first automation. A step running an action carries no
+  # prompt of its own, so what the panel draws here is the library's — and it is drawn to be read
+  # rather than written, the box that takes it being on the tab this road just left.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: first
+
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: check
+
+  - type: assert
+    domain: automation
+    op: step-shows
+    with:
+      field: prompt
+      value: read what was written, then say what is wrong with it
+
+  # And on a step of the other automation, which is the whole claim: one rewrite, every step pointed
+  # at it, across the definitions they sit in.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: second
+
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: check
+
+  - type: assert
+    domain: automation
+    op: step-shows
+    with:
+      field: prompt
+      value: read what was written, then say what is wrong with it

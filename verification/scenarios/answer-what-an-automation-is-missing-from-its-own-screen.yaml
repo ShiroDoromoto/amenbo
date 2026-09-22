@@ -1,0 +1,97 @@
+# Building an automation is always half-finished — a setting nobody answered, an input nothing
+# reaches — and every one of those saves. What decides whether it may be started is read once, on the
+# screen, and the same list the press is refused by is the one a reader is shown before they press.
+# So the screen has to be where they are put right too: a reader who can see what is missing and
+# cannot fix it there is a reader sent back to the terminal for something the screen just told them.
+id: answer-what-an-automation-is-missing-from-its-own-screen
+title: What the launch place says is in the way is put right on the screen, and the line for it goes
+description: >
+  Stand a definition up with a required input nothing reaches, and close it from the screen by
+  picking what fills it out of the list of what fits. It is read three times: the line is on the
+  launch place and the mark is on the step, the input is filled, and both are gone. A build that
+  drew the list once and never read it again would pass the first two and fail the third, which is
+  the failure this road is written against.
+given:
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one hole to close" }, as: auto }
+
+  # The step that takes the task. Its named way out hands on a value, which is what the step after it
+  # is left waiting for.
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+
+  # The hole a wire closes: a required input on the step after it, with nothing joined to it.
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: work, agent: claude-code, prompt: do the work }, as: work }
+  - { type: action, domain: automation, op: port-add, with: { step: work, name: note, kind: value, required: true } }
+
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # The hole, named on the launch place before anything is done about it.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unwired_input
+      step: work
+      at: note
+      present: true
+
+  # And on the picture as well, where the step wears it.
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: true
+
+  # The input, filled from the list of what fits. What is offered is what carries the same kind, so
+  # the way out that hands a value on is the only thing this list can hold.
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: work
+
+  - type: action
+    domain: automation
+    op: pick-wire
+    with:
+      input: note
+      from: take
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unwired_input
+      step: work
+      at: note
+      present: false
+
+  # And the mark the step wore for it comes off, which is the same fact read on the other half of the
+  # screen: the picture and the launch place are two readings of one definition, and a build where
+  # only one of them moved would be answering from a definition it had already read.
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: false

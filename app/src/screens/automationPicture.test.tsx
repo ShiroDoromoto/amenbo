@@ -12,6 +12,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
+import { automationGraph, type PicGraph } from "./automationLayout";
 import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,8 +37,8 @@ function step(
   };
 }
 
-function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
-  return {
+function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
+  return automationGraph({
     id: 7,
     projectId: 1,
     name: "Morning round",
@@ -49,7 +50,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     ...over,
-  };
+  })!;
 }
 
 async function render(props: Parameters<typeof AutomationPicture>[0]) {
@@ -74,28 +75,28 @@ afterEach(() => {
 
 describe("the picture of the steps", () => {
   it("says so where there is nothing to draw", async () => {
-    await render({ automation: detail({ placements: [] }) });
+    await render({ graph: detail({ placements: [] }) });
     expect(container.textContent).toContain(t("auto.pic.empty"));
     expect(nodes()).toHaveLength(0);
   });
 
   it("draws a step as a button carrying its name, and hands its id back when pressed", async () => {
-    const onPickPlacement = vi.fn();
-    await render({ automation: detail(), onPickPlacement });
+    const onPickBox = vi.fn();
+    await render({ graph: detail(), onPickBox });
     expect(nodes()[0]!.textContent).toContain("Take the next task");
     await act(async () => {
       nodes()[0]!.click();
     });
-    expect(onPickPlacement).toHaveBeenCalledWith(1);
+    expect(onPickBox).toHaveBeenCalledWith(1);
   });
 
   it("holds a step shut while nothing is listening for the press", async () => {
-    await render({ automation: detail() });
+    await render({ graph: detail() });
     expect(nodes()[0]!.disabled).toBe(true);
   });
 
   it("marks the step whose contents are being shown", async () => {
-    await render({ automation: detail(), selectedPlacementId: 1, onPickPlacement: vi.fn() });
+    await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
     expect(nodes()[0]!.getAttribute("aria-pressed")).toBe("true");
     expect(nodes()[0]!.className).toContain("autopic__node--on");
   });
@@ -104,21 +105,21 @@ describe("the picture of the steps", () => {
     const one = detail({
       placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, outputs: [] }] })],
       edges: [
-        { id: 1, fromPlacementId: 1, toPlacementId: 2, ends: "go" },
-        { id: 2, fromPlacementId: 2, ends: "done" },
+        { id: 1, fromId: 1, toId: 2, ends: "go" },
+        { id: 2, fromId: 2, ends: "done" },
       ],
     });
-    await render({ automation: one });
+    await render({ graph: one });
     expect(plusses()).toHaveLength(2);
     expect(plusses()[0]!.disabled).toBe(true);
     expect(plusses()[0]!.getAttribute("aria-label")).toBe(t("auto.pic.insert"));
 
-    const onInsertStep = vi.fn();
-    await render({ automation: one, onInsertStep });
+    const onInsert = vi.fn();
+    await render({ graph: one, onInsert });
     await act(async () => {
       plusses()[0]!.click();
     });
-    expect(onInsertStep).toHaveBeenCalledWith(1);
+    expect(onInsert).toHaveBeenCalledWith(1);
   });
 
   it("names the action standing at a spot, and the required input nothing reaches", async () => {
@@ -133,16 +134,16 @@ describe("the picture of the steps", () => {
           inputs: [{ name: "draft", kind: "file", required: true }],
         }),
       ],
-      edges: [{ id: 1, fromPlacementId: 1, toPlacementId: 2, ends: "go" }],
+      edges: [{ id: 1, fromId: 1, toId: 2, ends: "go" }],
     });
-    await render({ automation: one });
+    await render({ graph: one });
     const review = nodes().find((node) => node.textContent?.includes("Review"))!;
     expect(review.textContent).toContain("draft");
     expect(review.className).toContain("autopic__node--unfed");
   });
 
   it("outlines the span of one task and names it", async () => {
-    await render({ automation: detail() });
+    await render({ graph: detail() });
     expect(container.querySelectorAll(".autopic__lap")).toHaveLength(1);
     expect(container.textContent).toContain(t("auto.pic.lap"));
   });

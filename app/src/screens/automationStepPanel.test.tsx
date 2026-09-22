@@ -208,7 +208,7 @@ describe("the panel of one spot", () => {
         }),
       ],
       wires: [
-        { id: 3, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" },
+        { id: 3, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" },
       ],
     });
     await render({ automation: one, placementId: 2, projectId: 1 });
@@ -238,7 +238,7 @@ describe("the panel of one spot", () => {
     await act(async () => {
       line.querySelector<HTMLButtonElement>("button")!.click();
     });
-    expect(hoisted.declareExit).toHaveBeenCalledWith(4, "something to fix");
+    expect(hoisted.declareExit).toHaveBeenCalledWith("action", 4, "something to fix");
     expect(box.value).toBe("");
   });
 
@@ -269,7 +269,10 @@ describe("the panel of one spot", () => {
     await act(async () => {
       line.querySelector<HTMLButtonElement>("button")!.click();
     });
-    expect(hoisted.declareInput).toHaveBeenCalledWith(4, { name: "report", kind: "file" });
+    expect(hoisted.declareInput).toHaveBeenCalledWith("action", 4, {
+      name: "report",
+      kind: "file",
+    });
   });
 
   it("draws what core refused, and leaves the typed name where it can be fixed", async () => {

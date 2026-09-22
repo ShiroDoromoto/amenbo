@@ -3846,14 +3846,17 @@ impl Instructor {
                 "On the automations tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
                 self.target_label(with)
             ),
+            // An action opens into its own build screen, the way a definition does — what is being
+            // looked at is the picture of the steps inside it.
             (Domain::Automation, "action-open") => format!(
-                "On the actions tab, press the row for \"{}\".",
+                "On the actions tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
                 self.target_label(with)
             ),
             // The rewrite that reaches every step pointed at this action, which is what the library
-            // is for and what the screen says before the box is opened.
+            // is for. The prompt is the step's, so it is written on the panel the picture opens, and
+            // it is written as the caret leaves the box — there is no Save on that screen.
             (Domain::Automation, "action-rewrite") => format!(
-                "Rewrite the prompt of the library action that is open so it reads \"{}\", and press the button that saves it.",
+                "On the action build screen, press the step in the picture, rewrite its prompt so it reads \"{}\", and move the caret out of the box.",
                 req(with, "prompt")?
             ),
             // The three fields the definition itself holds, written in the place at the foot of the

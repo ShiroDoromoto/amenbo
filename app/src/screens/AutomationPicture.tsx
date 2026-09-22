@@ -1,4 +1,8 @@
-// The picture of the steps, on the build screen's middle place (`AMB-T-5255`).
+// The picture of one definition, on a build screen's middle place (`AMB-T-5255`).
+//
+// **It draws either picture** (`AMB-D-949`): the actions placed on an automation, or the steps inside
+// one action. What it is handed is the laid-out shape both are read as (`./automationLayout`), so
+// nothing here knows which of the two it is drawing — the screen above it does.
 //
 // **Boxes are elements and lines are one drawing under them.** The boxes carry a name that has to
 // wrap and shorten, a press, and a focus ring, which is all a button already does; the lines are
@@ -11,10 +15,9 @@
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again.
-import { layOut, ERROR_EXIT, type PicLine } from "./automationLayout";
+import { layOut, ERROR_EXIT, type PicGraph, type PicLine } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
-import type { AutomationDetailDto } from "../bindings/bindings";
 
 /** The way out a line hangs on, in a word. Empty for the unnamed one, which has no name to write. */
 function exitWord(line: PicLine): string {
@@ -38,23 +41,34 @@ function lineTitle(line: PicLine): string {
 }
 
 export function AutomationPicture({
-  automation,
-  selectedPlacementId,
-  onPickPlacement,
-  onInsertStep,
+  graph,
+  empty,
+  insertLabel,
+  selectedBoxId,
+  onPickBox,
+  onInsert,
 }: {
-  automation: AutomationDetailDto | null;
-  /** The step whose contents the panel beside this is showing (`AMB-T-5256`). */
-  selectedPlacementId?: number;
-  onPickPlacement?: (placementId: number) => void;
+  graph: PicGraph | null;
   /**
-   * Put a step in on this edge. Absent while the dialog that asks what step is still being built
-   * (`AMB-T-5257`), and every `+` is held shut until it is there.
+   * What an empty picture says, and what the `+` on a line is called. Both name what goes in a box,
+   * which is the one thing the two pictures do not share — an automation takes actions, an action
+   * takes steps — so the screen says it and the drawing stays the same.
    */
-  onInsertStep?: (edgeId: number) => void;
+  empty?: string;
+  insertLabel?: string;
+  /** The box whose contents the panel beside this is showing (`AMB-T-5256`). */
+  selectedBoxId?: number;
+  onPickBox?: (boxId: number) => void;
+  /**
+   * Put a box in on this edge. Absent while the dialog that asks what goes there is still being
+   * built, and every `+` is held shut until it is there.
+   */
+  onInsert?: (edgeId: number) => void;
 }) {
-  const picture = layOut(automation);
-  if (picture.nodes.length === 0) return <div className="auto__empty">{t("auto.pic.empty")}</div>;
+  const picture = layOut(graph);
+  if (picture.nodes.length === 0) {
+    return <div className="auto__empty">{empty ?? t("auto.pic.empty")}</div>;
+  }
 
   return (
     <div className="autopic">
@@ -70,7 +84,7 @@ export function AutomationPicture({
         >
           {picture.laps.map((lap) => (
             <rect
-              key={lap.headPlacementId}
+              key={lap.headBoxId}
               className="autopic__lap"
               x={lap.x}
               y={lap.y}
@@ -102,7 +116,7 @@ export function AutomationPicture({
 
         {picture.laps.map((lap) => (
           <span
-            key={lap.headPlacementId}
+            key={lap.headBoxId}
             className="autopic__lapword"
             style={{ left: `${lap.x + 8}px`, top: `${lap.y}px` }}
           >
@@ -112,12 +126,12 @@ export function AutomationPicture({
 
         {picture.nodes.map((node) => (
           <button
-            key={node.placementId}
+            key={node.boxId}
             type="button"
             className={[
               "autopic__node",
               node.unfed.length > 0 ? "autopic__node--unfed" : "",
-              node.placementId === selectedPlacementId ? "autopic__node--on" : "",
+              node.boxId === selectedBoxId ? "autopic__node--on" : "",
             ]
               .filter((one) => one !== "")
               .join(" ")}
@@ -127,9 +141,9 @@ export function AutomationPicture({
               width: `${node.w}px`,
               height: `${node.h}px`,
             }}
-            aria-pressed={node.placementId === selectedPlacementId}
-            disabled={onPickPlacement === undefined}
-            onClick={() => onPickPlacement?.(node.placementId)}
+            aria-pressed={node.boxId === selectedBoxId}
+            disabled={onPickBox === undefined}
+            onClick={() => onPickBox?.(node.boxId)}
           >
             <span className="autopic__nodename">{node.name}</span>
             {node.unfed.length > 0 && (
@@ -147,9 +161,9 @@ export function AutomationPicture({
             type="button"
             className="autopic__plus"
             style={{ left: `${insert.x}px`, top: `${insert.y}px` }}
-            aria-label={t("auto.pic.insert")}
-            disabled={onInsertStep === undefined}
-            onClick={() => onInsertStep?.(insert.edgeId)}
+            aria-label={insertLabel ?? t("auto.pic.insert")}
+            disabled={onInsert === undefined}
+            onClick={() => onInsert?.(insert.edgeId)}
           >
             <Icon name="plus" />
           </button>

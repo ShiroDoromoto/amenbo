@@ -194,7 +194,92 @@ struct CfgAnswer {
     due: Vec<String>,
 }
 
+/// **Where one of these verbs may be typed** (`AMB-D-948`): inside the terminal a run opened for a
+/// step, outside any run, or either side.
+///
+/// **It is declared per verb rather than read off the namespace they sit under.** What is being kept
+/// apart — building a picture, against a running step reporting on itself — is not the axis the
+/// namespaces divide on: both are Amenbo > Automation > a step, so both land in the same name.
+enum Where {
+    /// Inside a run and nowhere else: the three a step reports through. Outside one there is no step
+    /// for them to speak for.
+    InsideARun,
+    /// Either side. The reading verbs are left with a step so it can see where it stands, and refusing
+    /// them would buy nothing.
+    EitherSide,
+    /// Outside a run and nowhere else. A step that could start a run would let a run make runs; one
+    /// that could rewrite a definition would change what the *next* run is built out of, with the run
+    /// under way unmoved — a change made where the person who started it is not looking.
+    OutsideARun,
+}
+
+/// Which side each verb belongs on, as a match over every one of them.
+///
+/// **There is no `_` arm, deliberately.** A verb added later does not compile until this file says
+/// where it may be typed, which is what keeps the declaration from drifting behind the command list.
+fn typed_in(sub: &AutomationCmd) -> Where {
+    match sub {
+        AutomationCmd::StepTake { .. } | AutomationCmd::StepOut { .. } | AutomationCmd::StepDone { .. } => Where::InsideARun,
+
+        AutomationCmd::List { .. }
+        | AutomationCmd::Show { .. }
+        | AutomationCmd::RunList { .. }
+        | AutomationCmd::RunShow { .. } => Where::EitherSide,
+
+        AutomationCmd::Add { .. }
+        | AutomationCmd::Update { .. }
+        | AutomationCmd::Rm { .. }
+        | AutomationCmd::EntrySet { .. }
+        | AutomationCmd::ActionAdd { .. }
+        | AutomationCmd::ActionList { .. }
+        | AutomationCmd::ActionShow { .. }
+        | AutomationCmd::ActionUpdate { .. }
+        | AutomationCmd::ActionRm { .. }
+        | AutomationCmd::StepAdd { .. }
+        | AutomationCmd::StepUpdate { .. }
+        | AutomationCmd::StepRm { .. }
+        | AutomationCmd::ExitAdd { .. }
+        | AutomationCmd::ExitRename { .. }
+        | AutomationCmd::ExitRm { .. }
+        | AutomationCmd::PortAdd { .. }
+        | AutomationCmd::PortUpdate { .. }
+        | AutomationCmd::PortRm { .. }
+        | AutomationCmd::CfgAdd { .. }
+        | AutomationCmd::CfgUpdate { .. }
+        | AutomationCmd::CfgSet { .. }
+        | AutomationCmd::CfgRm { .. }
+        | AutomationCmd::EdgeAdd { .. }
+        | AutomationCmd::EdgeUpdate { .. }
+        | AutomationCmd::EdgeRm { .. }
+        | AutomationCmd::WireAdd { .. }
+        | AutomationCmd::WireRm { .. }
+        | AutomationCmd::NoteAdd { .. }
+        | AutomationCmd::NoteUpdate { .. }
+        | AutomationCmd::NoteRm { .. }
+        | AutomationCmd::NoteLink { .. }
+        | AutomationCmd::NoteUnlink { .. }
+        | AutomationCmd::Start { .. }
+        | AutomationCmd::Pause { .. }
+        | AutomationCmd::Resume { .. }
+        | AutomationCmd::Stop { .. } => Where::OutsideARun,
+    }
+}
+
 pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -> Result<i32, CliError> {
+    // The place is checked before anything is read or written, so a refusal here has changed nothing.
+    match typed_in(&sub) {
+        // `speaking_for` is where the other direction is refused, in the sentence it has for it — and
+        // the arms below read the step off it again.
+        Where::InsideARun => {
+            speaking_for()?;
+        }
+        Where::OutsideARun => {
+            if amenbo_core::env::automation_step().is_some() {
+                return Err(CliError::automation_outside_only());
+            }
+        }
+        Where::EitherSide => {}
+    }
     match sub {
         AutomationCmd::Add { project, name, notes, preamble } => {
             let pid = project_or_bound(store, project)?;

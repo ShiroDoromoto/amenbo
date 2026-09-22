@@ -512,3 +512,44 @@ fn a_step_execution_that_does_not_exist_is_refused_rather_than_guessed_at() {
     assert_ne!(code, 0, "{err}");
     assert!(err.contains("9999"), "it names the row it was pointed at: {err}");
 }
+
+/// Inside a step's terminal, the verbs that build an automation or drive a run are refused — and the
+/// refusal says which side they are typed on (`AMB-D-948`).
+///
+/// **A run that could start a run, or rewrite the definition the next run is copied from, changes what
+/// is about to happen where the person who started it is not looking.**
+#[test]
+fn inside_a_step_the_building_and_driving_verbs_are_refused() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "one", "--json"]), "automation");
+
+    for args in [
+        vec!["automation", "start", &a, "--json"],
+        vec!["automation", "add", "--project", &p, "--name", "another", "--json"],
+        vec!["automation", "step-add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"],
+        vec!["automation", "rm", &a, "--yes", "--json"],
+    ] {
+        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
+        assert!(err.contains("step-take"), "it names what does reach from there: {args:?}: {err}");
+    }
+}
+
+/// The reading verbs are left with a step, so the agent carrying it out can see where it stands.
+#[test]
+fn inside_a_step_the_reading_verbs_still_answer() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "one", "--json"]), "automation");
+
+    for args in [
+        vec!["automation", "list", "--project", &p, "--json"],
+        vec!["automation", "show", &a, "--json"],
+        vec!["automation", "run-list", "--automation", &a, "--json"],
+    ] {
+        let (out, code) = cli.run_env(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+        assert_eq!(code, 0, "{args:?}: {out}");
+    }
+}

@@ -68,6 +68,11 @@ pub enum CliErrorCode {
     /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
     /// alternative — a quiet success — would leave the caller believing it had spoken.
     TalkOutsideSurface,
+    /// A verb that builds an automation, or drives a run, was typed inside the terminal a run opened
+    /// for a step (`AMB-D-948`). It is the other direction of the refusal the three reporting verbs
+    /// meet outside a step, and a code of its own because what the caller does next is to type it
+    /// somewhere else.
+    AutomationOutsideOnly,
 
     // The refusals `worktree start` / `worktree finish` meet (`AMB-D-881`). One code per refusal, because
     // what a caller does next differs in every one of them: take a different task, commit first, merge
@@ -116,6 +121,7 @@ impl CliErrorCode {
             CliErrorCode::FacetRequired => "facet_required",
             CliErrorCode::AiGuardrail => "ai_guardrail",
             CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
+            CliErrorCode::AutomationOutsideOnly => "automation_outside_only",
             CliErrorCode::WorktreeExists => "worktree_exists",
             CliErrorCode::WorktreeBranchExists => "worktree_branch_exists",
             CliErrorCode::WorktreeElsewhere => "worktree_elsewhere",
@@ -147,6 +153,7 @@ impl CliErrorCode {
         CliErrorCode::FacetRequired,
         CliErrorCode::AiGuardrail,
         CliErrorCode::TalkOutsideSurface,
+        CliErrorCode::AutomationOutsideOnly,
         CliErrorCode::WorktreeExists,
         CliErrorCode::WorktreeBranchExists,
         CliErrorCode::WorktreeElsewhere,
@@ -409,6 +416,23 @@ impl CliError {
         }
     }
 
+
+    /// A verb that builds an automation or drives a run, typed inside the terminal a run opened for a
+    /// step (`AMB-D-948`). The message names the side it is typed on, because the caller is an agent
+    /// that was told what to do and nothing about where it is standing.
+    pub fn automation_outside_only() -> CliError {
+        CliError {
+            code: CliErrorCode::AutomationOutsideOnly.as_str(),
+            message: format!(
+                "this terminal is a step of a run, and `{} automation` builds automations and drives runs from outside one. Nothing was done.",
+                Paths::command_name()
+            ),
+            hint: Some(
+                "From inside a step, what reaches is step-take, step-out and step-done, with list / show / run-list / run-show to read where you stand. The rest is typed in a terminal of the person's own.".to_string()
+            ),
+            exit: 2,
+        }
+    }
 
     /// Nested-worktree guard: the CWD sits in a git worktree cut **inside** an Amenbo-managed folder, so it
     /// inherited that folder's binding by the upward walk. The worktree is throwaway; the store it would
@@ -860,6 +884,7 @@ mod tests {
             "facet_required",
             "ai_guardrail",
             "talk_outside_surface",
+            "automation_outside_only",
             "worktree_exists",
             "worktree_branch_exists",
             "worktree_elsewhere",

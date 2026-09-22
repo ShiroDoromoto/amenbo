@@ -1,0 +1,117 @@
+# A setting whose kind is `choice` is answered off a pulldown, and what that pulldown holds is not
+# the build's to decide: it is the list somebody wrote out under the row, a line to a choice. The
+# writing and the answering are two halves of one thing, and the second is the only reading the panel
+# gives of the first — nothing on this screen shows the list as a list.
+#
+# ── Why the second line is the one chosen ───────────────────────────────────────────────────────
+# The box takes the whole list at once and cuts it on the newlines. A build that cut it wrong — kept
+# the first line and dropped the rest, or took the lot as one choice — still offers something, and a
+# road reaching for the first line it wrote would be answered by any of those. The second line is
+# offered only by a build that read the box the way the row labels it.
+#
+# ── Why the launch place is the reading ─────────────────────────────────────────────────────────
+# The setting is declared as one the step is refused without, so until it is answered the launch
+# place names it. Taking that line away is the screen saying a press on the pulldown was an answer,
+# and not a selection it merely drew: a build that offered the right lines and wrote none of them
+# down would pass the press and fail here.
+id: answer-a-setting-from-the-list-written-under-it
+title: What is written out under a choice setting is what its pulldown offers, and choosing from it answers the setting
+description: >
+  Declare a setting on a step's panel as the kind that is answered off a list, write two choices out
+  under it a line apiece, and say the step is refused without an answer — which puts the setting on
+  the launch place. Then answer it by choosing the second of the two on the pulldown, and the launch
+  place lets the definition go.
+given:
+  # One agent this machine can start, so nothing on the launch place is ever about who carries the
+  # step out.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a setting to answer off its list" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  # Both ways out say what happens after them, so the definition opens with nothing in its way and
+  # the one line the launch place carries below is the one this road put there.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: take
+
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: setting
+      name: which way
+      kind: choice
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: setting
+      name: which way
+      choices:
+        - take the next one
+        - stop here
+
+  # And the box that says the step is refused without an answer, which is what puts the setting where
+  # this road can read it. Declared and left optional it stands in nobody's way.
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: setting
+      name: which way
+      required: true
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      step: take
+      at: which way
+      present: true
+
+  # The second of the two written out above. A pulldown that does not offer it is a box that was
+  # read as something other than a line to a choice.
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      setting: which way
+      value: stop here
+
+  # Nothing in the way again. The name stays on the panel — the setting is still declared — so what
+  # is read here is the whole answer rather than that name going.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true

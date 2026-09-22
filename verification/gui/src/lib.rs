@@ -3909,6 +3909,14 @@ impl Instructor {
                 req(with, "value")?,
                 req(with, "row")?
             ),
+            // A `choice` is answered off the pulldown under it, which holds what was written out
+            // under the row and nothing else. So the line names the words rather than a place in the
+            // list: a road that said "the first one" would pass on a build offering anything at all.
+            (Domain::Automation, "answer-choice") => format!(
+                "In the step panel, under the setting \"{}\", open the pulldown of what it offers and choose \"{}\".",
+                req(with, "setting")?,
+                req(with, "value")?
+            ),
             // **Declaring on the panel.** The three families are one shape on the screen — a row to
             // write a name in, a kind to choose where the family has one, and a press — so the line
             // names the list it is under and what one of them is called, and the rest is the same
@@ -7802,6 +7810,10 @@ steps_gui:
     with: { setting: which, row: assignee, value: My AI }
   - type: action
     domain: automation
+    op: answer-choice
+    with: { setting: which way, value: take the next one }
+  - type: action
+    domain: automation
     op: pick-wire
     with: { input: note, from: take }
   - type: action
@@ -7895,9 +7907,9 @@ steps_gui:
         assert!(lines[1].contains("Morning round") && lines[1].contains("3 steps"), "{}", lines[1]);
         assert!(lines[5].contains("\"got one\"") && lines[5].contains("\"work\""), "{}", lines[5]);
         assert!(lines[6].contains("the task is finished"), "{}", lines[6]);
-        assert!(lines[13].contains("output artefact") && lines[13].contains("a value"), "{}", lines[13]);
-        assert!(lines[14].contains("nothing reaches one of a step's required inputs"), "{}", lines[14]);
-        assert!(lines[19].contains("1 of 3"), "{}", lines[19]);
+        assert!(lines[14].contains("output artefact") && lines[14].contains("a value"), "{}", lines[14]);
+        assert!(lines[15].contains("nothing reaches one of a step's required inputs"), "{}", lines[15]);
+        assert!(lines[20].contains("1 of 3"), "{}", lines[20]);
     }
 
     /// What the dialog that puts a step in is told to declare on it. One of a thing and several read

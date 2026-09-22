@@ -1,0 +1,135 @@
+# A setting says what kind of answer it takes, and one of those kinds brings its own list: a `choice`
+# is answered off a pulldown, and what that pulldown holds is written out by whoever declared it, a
+# line to a choice. The box that takes those lines is drawn under the row and under no other kind's,
+# so declaring the kind and writing what it offers are one move on the panel — and a reader who can
+# declare the setting but not say what it offers has a pulldown with nothing in it.
+#
+# ── Why the move off `choice` is where this road ends ───────────────────────────────────────────
+# A choice list belongs to a `choice` and to nothing else: core refuses a setting carrying one on any
+# other kind. So the row moving to another kind has to take the list with it, in the same call — and
+# a build that left it behind would be refused by core and the reader would watch the kind not move.
+# That is what the last half reads, on the far side: the rows a task filter is answered on are drawn
+# under the same name, and pressing one of them takes the setting off the launch place. Neither would
+# happen to a row whose move was refused.
+#
+# ── What this road does not read ───────────────────────────────────────────────────────────────
+# That the lines written into the box are the lines the pulldown then offers. Answering a `choice`
+# setting on the panel is a press no op in the registry names, and a line needing an op the registry
+# does not have is not written here at all — so the road stops at the kind it can be answered on, and
+# closing it is that op's own work.
+id: write-out-what-a-setting-offers-and-move-it-off-that-kind
+title: What a choice setting offers is written out under it, and moving the setting off that kind takes the list with it
+description: >
+  Declare a setting on a step's panel as the kind that is answered off a list, write the list out
+  under it a line to a choice, and say the step is refused without an answer — which puts the setting
+  on the launch place. Then move it to the kind a task filter is answered on, which it can only reach
+  by taking its list with it, and answer it there. The launch place lets it go.
+given:
+  # One agent this machine can start, so nothing on the launch place is ever about who carries the
+  # step out.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a setting to write a list under" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  # Both ways out say what happens after them, so the definition opens with nothing in its way and
+  # everything the launch place says below is what this road put there.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: take
+
+  # Declared as the kind that is answered off a list. The box that takes the list is drawn for this
+  # kind alone, so the next step is walkable only if the kind on the row took.
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: setting
+      name: which way
+      kind: choice
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: setting
+      name: which way
+      choices:
+        - take the next one
+        - stop here
+
+  # And the box that says the step is refused without an answer, which is what puts the setting where
+  # this road can read it. Declared and left optional it stands in nobody's way.
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: setting
+      name: which way
+      required: true
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      step: take
+      at: which way
+      present: true
+
+  # Moved to the kind a task filter is answered on. The list cannot come along, so the row has to
+  # give it up in the same call — and core refuses the move outright if it does not.
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: setting
+      name: which way
+      kind: taskfilter
+
+  # The far side of that move, read as a reader meets it: the rows a filter is answered on are drawn
+  # under the same name, and one press on one of them is an answer. A row still on the old kind would
+  # offer a pulldown here and nothing to press.
+  - type: action
+    domain: automation
+    op: answer-filter
+    with:
+      setting: which way
+      row: assignee
+      value: My AI
+
+  # And the launch place lets it go. What is read here is the whole answer rather than the line
+  # going: the setting is still declared under that name, so the name is still on the panel, and a
+  # road reading for it gone would be reading the screen wrong.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true

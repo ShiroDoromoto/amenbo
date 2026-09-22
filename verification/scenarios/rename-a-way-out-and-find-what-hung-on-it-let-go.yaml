@@ -1,0 +1,173 @@
+# A way out is named, and the two things built against it name it back: a line hangs on a way out by
+# its name, and a wire leaves by one. So renaming a way out is not a relabelling. Core parts every
+# edge and every wire that named the old name from it rather than rewriting the graph underneath the
+# reader — the parting is then something they can see and act on, which is the whole reason it is
+# done that way (`amenbo_core::ops::automation::exit_rename`).
+#
+# ── Why the picture and the launch place are both read ──────────────────────────────────────────
+# The two halves of what comes off are drawn in different places. The line that hung on the old name
+# is in the picture, still written with the name it always carried — a name nobody declares any more.
+# What the parting costs is on the launch place: the renamed way out now has nothing set to happen
+# after it, and the step the wire fed is left with a required input nothing reaches. A build that
+# rewrote the graph on the quiet would keep the launch place green and draw a line under the new
+# name, and both readings here would go red on it.
+#
+# ── Why the name is given back at the end ───────────────────────────────────────────────────────
+# What was parted was parted by name, so writing the old name back on the row is the whole of the
+# undoing — the line and the wire find their way out again and the definition is ready as it opened.
+# It is the reading that says the edges and the wire were left standing rather than thrown away: a
+# build that dropped them on the rename would pass everything above and leave a definition that
+# cannot be put back.
+id: rename-a-way-out-and-find-what-hung-on-it-let-go
+title: Renaming a way out parts the line and the wire that named it, and writing the name back brings them home
+description: >
+  Open a definition that is ready to start, and rename one step's named way out on its panel. The
+  line that left by the old name is still drawn under that name, the renamed way out is named on the
+  launch place as having nothing after it, and the step the wire fed wears the mark for a required
+  input nothing reaches. Then write the old name back, and every one of those goes.
+given:
+  # One agent this machine can start, so nothing on the launch place is ever about who carries a step
+  # out.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a way out to rename" }, as: auto }
+
+  # The step that takes the task. Its named way out is the one being renamed: it carries the task the
+  # run works on, and the value the step after it is wired to.
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: work, agent: claude-code, prompt: do the work }, as: work }
+  - { type: action, domain: automation, op: port-add, with: { step: work, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: wire-add, with: { target: take, exit: got one, from_port: note, to: work, to_port: note } }
+
+  # Both of `take`'s ways out go on to `work`. The unnamed one is what keeps `work` on the run's road
+  # while the named one is being renamed — a step a run cannot reach is judged for nothing, so the
+  # mark this road reads on `work` would go with it.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take, to: work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Where it opens: nothing in the way, a line leaving by the name that is about to change, and the
+  # step the wire feeds wearing no mark.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: got one
+      to: work
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: false
+
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: take
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: exit
+      name: got one
+      to: found one
+
+  # The renamed way out, with nothing set to happen after it. The line is still there — it is just no
+  # longer this way out's.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: open_exit
+      step: take
+      at: found one
+      present: true
+
+  # And the other half of the parting, a step away: the wire left by a way out under the old name, so
+  # nothing reaches the input it was filling.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unwired_input
+      step: work
+      at: note
+      present: true
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: true
+
+  # The line, read where it was read before and under the name it was read under. This is the one
+  # assert a build that quietly rewrote the graph cannot pass: there, the line would have followed the
+  # rename and be written "found one".
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: got one
+      to: work
+
+  # The name written back, on the same row.
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: exit
+      name: found one
+      to: got one
+
+  # Nothing in the way again, and the name the way out was carrying for the length of the parting is
+  # nowhere on the screen.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+      reason: open_exit
+      step: take
+      at: found one
+      present: false
+
+  # The wire found its way out again, which is the same fact read on the other half of the screen.
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: false

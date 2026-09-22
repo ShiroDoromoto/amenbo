@@ -4108,8 +4108,9 @@ const REGISTRY: &[OpSpec] = &[
     // the row stays where it was and wears it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "listed", required: &[], refs: &["target"], strings: &["name"], binds: false },
     // A library action's row. `used_by` is counted in automations and not in placements — what the
-    // number is read for is how far a rewrite of what it holds carries — `steps` is how many it holds,
-    // and `reach` says which of the two libraries the row is from.
+    // number is read for is how far a rewrite of what it holds carries — `steps` is how many it holds
+    // (the terminal's alone: the tab's row draws no such count), and `reach` says which of the two
+    // libraries the row is from.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach"], binds: false },
     //
     // **And a whole definition, read back as text — the terminal's alone.** It is read in two layers,
@@ -4155,6 +4156,11 @@ const REGISTRY: &[OpSpec] = &[
     // it. The rewrite reaches every automation placing the action, which is what the road that walks
     // this is about.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-open", required: &[], refs: &["target"], strings: &[], binds: false },
+    // Making a library action from the actions tab. It asks for a name and which library it lands in
+    // (`reach`: `project`, the one offered first, or `device`), and no prompt — an action is born
+    // empty — and the press lands on the action build screen of what it made. It binds the action,
+    // so a later step can read its row by it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-make", required: &["name"], refs: &[], strings: &["name", "reach"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-rewrite", required: &["step", "prompt"], refs: &[], strings: &["step", "prompt"], binds: false },
     //
     // The picture. One box, and the mark it may wear: `unfed` is the outline it takes on while a

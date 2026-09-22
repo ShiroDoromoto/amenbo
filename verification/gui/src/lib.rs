@@ -3865,6 +3865,19 @@ impl Instructor {
                 "On the actions tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
                 self.target_label(with)
             ),
+            // **Making an action from the library's own list.** It takes a name and a reach and no
+            // prompt — the prompt is a step's, and there is no step until the build screen the press
+            // lands on puts one in. The reach is left alone where the road names none, the pulldown
+            // starting on this project's library.
+            (Domain::Automation, "action-make") => format!(
+                "On the actions tab, press the button that adds an action, write \"{}\" as its name{}, and press the button that makes it. Confirm the action build screen for it opens in place of the list.",
+                req(with, "name")?,
+                match arg_str(with, "reach") {
+                    None | Some("project") => String::new(),
+                    Some("device") => ", set where it is kept to this device's library".to_string(),
+                    Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
+                }
+            ),
             // The rewrite that reaches every automation placing this action, which is what the library
             // is for. The prompt is one step's, so it is written on the panel the picture opens, and
             // it is written as the caret leaves the box — there is no Save on that screen.
@@ -5928,11 +5941,14 @@ impl Instructor {
                     Some(_) => format!(", saying {} automations use it", count(with, "used_by")?),
                     None => String::new(),
                 },
+                // How many steps it holds is the terminal's to read: the row draws the note, the
+                // reach and the count of automations, and a road asking the screen for a number it
+                // does not draw would be handing the operator nothing to look at.
                 match with.get("steps") {
-                    Some(_) => match count(with, "steps")? {
-                        1 => ", holding 1 step".to_string(),
-                        n => format!(", holding {n} steps"),
-                    },
+                    Some(_) => return Err(
+                        "the actions tab draws no count of steps — read it at the terminal (`steps_cli`)"
+                            .to_string(),
+                    ),
                     None => String::new(),
                 },
                 match arg_str(with, "reach") {
@@ -8037,6 +8053,11 @@ steps_gui:
     with: { target: act, used_by: 2, reach: project }
   - type: action
     domain: automation
+    op: action-make
+    with: { name: Triage, reach: device }
+    as: triage
+  - type: action
+    domain: automation
     op: action-open
     with: { target: act }
   - type: action
@@ -8069,6 +8090,10 @@ steps_gui:
         assert!(lines[15].contains("output artefact") && lines[15].contains("a value"), "{}", lines[15]);
         assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
         assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);
+        assert!(
+            lines.iter().any(|l| l.contains("adds an action") && l.contains("\"Triage\"") && l.contains("this device's library")),
+            "the action made from the list is said with its reach",
+        );
     }
 
     /// What the dialog that puts a box in is told to declare on it. One of a thing and several read

@@ -588,6 +588,15 @@ impl Instructor {
         }
     }
 
+    /// The human label a step's `task:` points at — the reading [`Self::target_label`] makes, on the
+    /// key an op that names two objects uses for the second.
+    fn task_label(&self, with: &Args) -> String {
+        match with.get("task").and_then(|v| v.as_str()) {
+            Some(name) => self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>")),
+            None => "<the task>".to_string(),
+        }
+    }
+
     /// What to call the thing a step's `target:` points at — "task" or "decision". They are opened on
     /// different pages, so an instruction that named the wrong one would send the operator to a screen
     /// the step cannot be walked on. Unbound, it falls back to "task", which is what every road that
@@ -3917,6 +3926,31 @@ impl Instructor {
                 "In the workspace, press the control that takes away the pane this run is drawn in, and confirm the question it puts."
                     .to_string()
             }
+            // **What a step of a run types.** The command is written out because it is the whole of
+            // the step: which step is being answered comes off the environment the window opened that
+            // terminal with, so the same words typed in any other pane are refused.
+            //
+            // The ref is left as a gap for the same reason `workspace run`'s is — the store issues the
+            // number, so a road can name the task but never the characters the command takes.
+            (Domain::Automation, "take-in-pane") => format!(
+                "In the pane this run is drawn in, type `amenbo automation take <ref>` and run it, putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — where the command says `<ref>`. Confirm the line comes back saying the task was taken.",
+                self.task_label(with)
+            ),
+            (Domain::Automation, "out-in-pane") => format!(
+                "In the pane this run is drawn in, type `amenbo automation out \"{}={}\"` and run it, and confirm the line comes back saying it was handed on.",
+                req(with, "name")?,
+                req(with, "value")?
+            ),
+            // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
+            // one — which is the shape of the command and not a default this writes in.
+            (Domain::Automation, "done-in-pane") => format!(
+                "In the pane this run is drawn in, type `amenbo automation done --report \"{}\"{}` and run it, and confirm the line comes back saying the step is done.",
+                req(with, "report")?,
+                match arg_str(with, "exit") {
+                    Some(exit) => format!(" --exit \"{exit}\""),
+                    None => String::new(),
+                }
+            ),
             // The band over the panes is itself the way to the setting that holds its second number.
             (Domain::Automation, "open-lanes") => {
                 "Press the band over the workspace's panes that reads how many lanes the runs are holding."

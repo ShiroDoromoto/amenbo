@@ -725,10 +725,15 @@ settings, the identity it answers `whoami` with, the build in place, and the sto
 (`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
 `.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
 
-One domain carries less at this face than a reader might look for. **`automation` has no assert about
-a definition**, because the binary has no read of one: what reads an automation whole is the build
-screen, through a door of the host's. The build verbs are there to stand a definition up — a road about
-a run needs one — and what is asserted is the run, the listing a run is reached by, and the search.
+One domain is read on one face and written on the other. **`automation`'s asserts about a definition
+are the screen's**, because the binary has no read of one: what reads an automation whole is the build
+screen, through a door of the host's. So the terminal's half of the domain is the verbs that build a
+definition up and the run that walks it — what it asserts is the run, the listing a run is reached by,
+and the search — while the picture, the step panel and the launch place are asserted on the screen
+(`pictured`, `line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half).
+**The ten build verbs stand a world up** rather than being walked: every screen road about an
+automation opens on a definition that is already there, there being no way in on screen for the first
+step of the first one.
 **What a step of a run types is not there at all** (`take` / `out` / `done`): those are refused outside
 the terminal a run opened for a step, and a run started at the terminal opens none.
 

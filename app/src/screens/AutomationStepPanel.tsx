@@ -31,13 +31,15 @@ import {
   answerAutomationCfg,
   clearAutomationWire,
   editAutomationStep,
+  raiseStepToLibrary,
   setAutomationWire,
   useAutomationActions,
 } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
-import { isStatus, statusLabel, t, tf } from "../core/i18n";
+import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
 import { ERROR_EXIT } from "./automationLayout";
 import {
   FILTER_ROWS,
@@ -213,6 +215,72 @@ function CfgRow({ step, cfg }: { step: AutomationStepDto; cfg: AutomationCfgDto 
   );
 }
 
+/**
+ * **Put this step's prompt in the library**, so other automations can run the same one
+ * (`../core/automations`).
+ *
+ * **It is offered only while the step carries a prompt of its own.** A step running an action has
+ * nothing of its own left to raise, and the control above is where it goes back to one.
+ *
+ * **The name is asked for, and starts as the step's.** The two are different things — a step is named
+ * for its place in one automation ("review what was just written"), an action for what it is ("review")
+ * — and a library of names borrowed from whichever automation raised them first reads as one nobody
+ * chose.
+ *
+ * **Which library is asked for too.** The device's is reached by every project on this machine and the
+ * project's by one, and a wrong answer is not undone from this panel — so the reach is a choice rather
+ * than a default the reader finds out about later.
+ */
+function RaiseToLibrary({
+  step,
+  projectId,
+}: {
+  step: AutomationStepDto;
+  projectId: number | null;
+}) {
+  const [name, setName] = useDraft(step.name);
+  const [wide, setWide] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [raising, setRaising] = useState(false);
+
+  const raise = async () => {
+    setError(null);
+    setRaising(true);
+    try {
+      await raiseStepToLibrary(step.id, name.trim(), wide ? null : projectId);
+    } catch (err) {
+      setError(errText(err));
+    } finally {
+      setRaising(false);
+    }
+  };
+
+  return (
+    <div className="autostep__field">
+      <span className="autostep__label">{t("auto.step.raise")}</span>
+      <span className="autostep__note">{t("auto.step.raiseWhat")}</span>
+      <input
+        aria-label={t("auto.step.raiseName")}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <select value={wide ? "device" : "project"} onChange={(e) => setWide(e.target.value === "device")}>
+        <option value="project">{t("auto.step.raiseHere")}</option>
+        <option value="device">{t("auto.step.raiseEverywhere")}</option>
+      </select>
+      <button
+        type="button"
+        className="btn"
+        disabled={raising || name.trim() === "" || (!wide && projectId === null)}
+        onClick={() => void raise()}
+      >
+        {t("auto.step.raise")}
+      </button>
+      {error !== null && <ErrorNote tone="quiet">{error}</ErrorNote>}
+    </div>
+  );
+}
+
 export function AutomationStepPanel({
   automation,
   stepId,
@@ -302,6 +370,10 @@ export function AutomationStepPanel({
           </span>
         )}
       </label>
+
+      {step.actionId === undefined && (
+        <RaiseToLibrary step={step} projectId={projectId} />
+      )}
 
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.cfg")}</span>

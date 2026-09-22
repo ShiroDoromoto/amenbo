@@ -1150,6 +1150,18 @@ const ui = {
   "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
+  // The picture of the steps on the build screen: what it says about a step, and what it writes
+  // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
+  // around a group of steps is.
+  "auto.pic.empty": "This automation has no steps yet.",
+  "auto.pic.lap": "One task",
+  "auto.pic.insert": "Put a step in here",
+  "auto.pic.errorExit": "error",
+  "auto.pic.endsDone": "the task is finished",
+  "auto.pic.endsHalt": "stop and call a person",
+  "auto.pic.fromAction": "from {action}",
+  "auto.pic.unfed": "nothing reaches {names}",
+  "auto.pic.hands": "hands {from} on to {to}",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

@@ -103,7 +103,7 @@ function TalkWindow() {
   //
   // `nth` is what makes the same folder pressed twice two answers, the way it does on the board: a
   // second press is a reader saying it again, not a state that has not moved.
-  const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; nth: number } | null>(null);
+  const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; run?: number; nth: number } | null>(null);
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;

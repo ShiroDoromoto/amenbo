@@ -944,6 +944,23 @@ export const zhHans: Translation = {
     "auto.actions.save": "保存",
     "auto.actions.cancel": "取消",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "没有正在运行的执行。",
+    "auto.run.pause": "暂停",
+    "auto.run.resume": "继续",
+    "auto.run.stop": "停止",
+    "auto.run.queued": "等待通道",
+    "auto.run.running": "运行中",
+    "auto.run.paused": "已暂停",
+    "auto.run.pausing": "将在这一步结束后暂停",
+    "auto.run.stopped": "已停止",
+    "auto.run.crashed": "应用被重新启动",
+    "auto.run.maxTimes": "循环次数超出上限",
+    "auto.run.noAgent": "无法启动它的代理",
+    "auto.run.byHuman": "手动停止",
+    "auto.run.step": "步骤 {n} · {step}",
+
     "mcp.title": "通过 MCP 连接",
     "mcp.setupTitle": "让 AI 可以使用你的项目",
     "mcp.open": "通过 MCP 连接（当你的 AI 无法打开文件夹时）",

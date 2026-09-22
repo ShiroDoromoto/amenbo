@@ -5,9 +5,13 @@
 // the library and takes effect in every automation using it. Three sidebar entries would make three
 // places out of one subject, and each of them would have to carry the way back to the other two.
 //
-// The tabs are "running" (`AMB-T-5259`), "automations" and "actions" — the library
-// (`./AutomationActionsTab`). The one that is not built yet draws nothing rather than a line saying
-// so: a placeholder is a sentence in nineteen languages that exists to be deleted.
+// The tabs are "running" (`./RunningTab`), "automations" — this one — and "actions", the library
+// (`./AutomationActionsTab`).
+//
+// **"Running" crosses projects and the other two do not.** What is under way is a claim on this
+// machine's lanes, and the lanes are not divided up per project; a definition and a library action
+// belong to the project they were built in. So the tab takes no `projectId` and names the project on
+// each row instead (`./RunningTab`).
 //
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
@@ -15,6 +19,7 @@
 import { useState } from "react";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
+import { RunningTab } from "./RunningTab";
 import { useAutomations } from "../core/automations";
 import { t, tf } from "../core/i18n";
 
@@ -32,10 +37,13 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
 export function AutomationsScreen({
   projectId,
   workspaceOpen,
+  onGoToRun,
 }: {
   projectId: number | null;
   /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
   workspaceOpen: boolean;
+  /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const [tab, setTab] = useState<Tab>("automations");
   // Which definition is open, or nothing while the list is. The build screen replaces the list
@@ -72,6 +80,8 @@ export function AutomationsScreen({
               </button>
             ))}
           </div>
+
+          {tab === "running" && <RunningTab onGoToRun={onGoToRun} />}
 
           {tab === "actions" && <AutomationActionsTab projectId={projectId} />}
 

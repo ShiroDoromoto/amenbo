@@ -942,6 +942,23 @@ export const hi: Translation = {
     "auto.actions.save": "सहेजें",
     "auto.actions.cancel": "रद्द करें",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "कुछ भी नहीं चल रहा है।",
+    "auto.run.pause": "रोकें",
+    "auto.run.resume": "जारी रखें",
+    "auto.run.stop": "बंद करें",
+    "auto.run.queued": "लेन की प्रतीक्षा में",
+    "auto.run.running": "चल रहा है",
+    "auto.run.paused": "रुका हुआ",
+    "auto.run.pausing": "इस चरण के बाद रुकेगा",
+    "auto.run.stopped": "बंद",
+    "auto.run.crashed": "ऐप फिर से शुरू हुआ",
+    "auto.run.maxTimes": "बहुत बार दोहराया गया",
+    "auto.run.noAgent": "इसका एजेंट शुरू नहीं हो सका",
+    "auto.run.byHuman": "हाथ से बंद किया गया",
+    "auto.run.step": "चरण {n} · {step}",
+
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",
     "mcp.open": "MCP से जोड़ें (जब आपका AI फ़ोल्डर न खोल सके)",

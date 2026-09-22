@@ -948,6 +948,23 @@ export const ja: Translation = {
     "auto.actions.save": "保存",
     "auto.actions.cancel": "取消",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "走っている実行はありません",
+    "auto.run.pause": "一時停止",
+    "auto.run.resume": "再開",
+    "auto.run.stop": "止める",
+    "auto.run.queued": "レーン待ち",
+    "auto.run.running": "実行中",
+    "auto.run.paused": "一時停止中",
+    "auto.run.pausing": "このステップの終わりで止まります",
+    "auto.run.stopped": "停止",
+    "auto.run.crashed": "アプリが再起動した",
+    "auto.run.maxTimes": "繰り返しの上限を超えた",
+    "auto.run.noAgent": "エージェントを起動できなかった",
+    "auto.run.byHuman": "手で止めた",
+    "auto.run.step": "ステップ {n} · {step}",
+
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",
     "mcp.open": "MCP で接続する（お使いの AI がフォルダを開けない場合）",

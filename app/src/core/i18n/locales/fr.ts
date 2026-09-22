@@ -954,6 +954,23 @@ export const fr: Translation = {
     "auto.actions.save": "Enregistrer",
     "auto.actions.cancel": "Annuler",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Rien n'est en cours.",
+    "auto.run.pause": "Mettre en pause",
+    "auto.run.resume": "Reprendre",
+    "auto.run.stop": "Arrêter",
+    "auto.run.queued": "En attente d'une voie",
+    "auto.run.running": "En cours",
+    "auto.run.paused": "En pause",
+    "auto.run.pausing": "Mise en pause à la fin de cette étape",
+    "auto.run.stopped": "Arrêtée",
+    "auto.run.crashed": "l'application a redémarré",
+    "auto.run.maxTimes": "trop de tours",
+    "auto.run.noAgent": "son agent n'a pas pu démarrer",
+    "auto.run.byHuman": "arrêtée à la main",
+    "auto.run.step": "Étape {n} · {step}",
+
     "mcp.title": "Se connecter en MCP",
     "mcp.setupTitle": "Utiliser vos projets depuis une IA",
     "mcp.open": "Se connecter en MCP (si votre IA ne peut pas ouvrir un dossier)",

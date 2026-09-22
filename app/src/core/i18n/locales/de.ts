@@ -946,6 +946,23 @@ export const de: Translation = {
     "auto.actions.save": "Speichern",
     "auto.actions.cancel": "Abbrechen",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Es läuft nichts.",
+    "auto.run.pause": "Pausieren",
+    "auto.run.resume": "Fortsetzen",
+    "auto.run.stop": "Stoppen",
+    "auto.run.queued": "Wartet auf eine Spur",
+    "auto.run.running": "Läuft",
+    "auto.run.paused": "Pausiert",
+    "auto.run.pausing": "Pausiert nach diesem Schritt",
+    "auto.run.stopped": "Gestoppt",
+    "auto.run.crashed": "die App wurde neu gestartet",
+    "auto.run.maxTimes": "zu viele Durchläufe",
+    "auto.run.noAgent": "der Agent ließ sich nicht starten",
+    "auto.run.byHuman": "von Hand gestoppt",
+    "auto.run.step": "Schritt {n} · {step}",
+
     "mcp.title": "Über MCP verbinden",
     "mcp.setupTitle": "Deine Projekte aus einer KI heraus nutzen",
     "mcp.open": "Über MCP verbinden (wenn deine KI keinen Ordner öffnen kann)",

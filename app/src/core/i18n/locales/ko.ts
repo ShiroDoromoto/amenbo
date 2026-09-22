@@ -939,6 +939,23 @@ export const ko: Translation = {
     "auto.actions.save": "저장",
     "auto.actions.cancel": "취소",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "실행 중인 것이 없습니다.",
+    "auto.run.pause": "일시 중지",
+    "auto.run.resume": "재개",
+    "auto.run.stop": "중지",
+    "auto.run.queued": "레인 대기 중",
+    "auto.run.running": "실행 중",
+    "auto.run.paused": "일시 중지됨",
+    "auto.run.pausing": "이 단계가 끝나면 멈춥니다",
+    "auto.run.stopped": "중지됨",
+    "auto.run.crashed": "앱이 다시 시작됨",
+    "auto.run.maxTimes": "반복 횟수를 넘김",
+    "auto.run.noAgent": "에이전트를 시작하지 못함",
+    "auto.run.byHuman": "직접 중지함",
+    "auto.run.step": "단계 {n} · {step}",
+
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",
     "mcp.open": "MCP로 연결 (사용 중인 AI가 폴더를 열 수 없는 경우)",

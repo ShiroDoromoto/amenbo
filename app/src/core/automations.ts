@@ -26,6 +26,7 @@ import type {
   AutomationCardDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
+  AutomationRunCardDto,
   AutomationRunStartedDto,
   WakeDto,
 } from "../bindings/bindings";
@@ -196,6 +197,24 @@ export function useLanesHeld(): number {
 }
 
 /**
+ * **What is under way right now**, across every project — the rows of the "running" tab.
+ *
+ * It crosses projects because the lanes do, and this is where a reader sees what the count on the
+ * band over the panes is made of (`fetchLanesHeld`). Runs that are `done` are not in it: what a
+ * finished run did is reached from the task it worked, never listed here.
+ */
+export async function fetchLiveRuns(): Promise<AutomationRunCardDto[]> {
+  if (!inTauri()) return [];
+  return invoke<AutomationRunCardDto[]>("automation_running_page", {});
+}
+
+/** Subscribing read of the runs under way. Empty until the first answer lands. */
+export function useLiveRuns(): AutomationRunCardDto[] {
+  const { data } = useQuery<AutomationRunCardDto[]>(["automationRuns"], fetchLiveRuns);
+  return data ?? [];
+}
+
+/**
  * **Stop a run now** — what closing the pane a run is drawn in means (`../shell/TerminalPane`).
  *
  * The cleanup is core's and is the same one every other stop goes through: the lane is handed back,
@@ -212,4 +231,28 @@ export function useLanesHeld(): number {
 export async function stopRun(run: number): Promise<boolean> {
   if (!inTauri()) return false;
   return invoke<boolean>("automation_run_stop", { runId: run });
+}
+
+/**
+ * **Ask a run to pause** — pressed on a row of the "running" tab (`../screens/RunningTab`).
+ *
+ * A step under way cannot be cut in half, so the run goes on until that step reports and settles
+ * there, handing its lane back; a run with nothing under way pauses on the spot
+ * (`amenbo_core::ops::automation_stop::pause`). Not a `WriteAck` write, for `stopRun`'s reason.
+ */
+export async function pauseRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_pause", { runId: run });
+}
+
+/**
+ * **Pick a paused run up again**, from the way out its last step left through. It opens a terminal
+ * where a lane is free and joins the queue where none is.
+ *
+ * Refused for a run that is not paused, which is the answer a reader gets rather than nothing
+ * happening: the row they pressed was drawn from a picture that has since moved.
+ */
+export async function resumeRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_resume", { runId: run });
 }

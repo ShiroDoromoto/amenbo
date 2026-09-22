@@ -943,6 +943,23 @@ export const id: Translation = {
     "auto.actions.save": "Simpan",
     "auto.actions.cancel": "Batal",
 
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Tidak ada yang berjalan.",
+    "auto.run.pause": "Jeda",
+    "auto.run.resume": "Lanjutkan",
+    "auto.run.stop": "Hentikan",
+    "auto.run.queued": "Menunggu jalur",
+    "auto.run.running": "Berjalan",
+    "auto.run.paused": "Dijeda",
+    "auto.run.pausing": "Dijeda setelah langkah ini",
+    "auto.run.stopped": "Dihentikan",
+    "auto.run.crashed": "aplikasi dimulai ulang",
+    "auto.run.maxTimes": "terlalu banyak putaran",
+    "auto.run.noAgent": "agennya tidak bisa dijalankan",
+    "auto.run.byHuman": "dihentikan secara manual",
+    "auto.run.step": "Langkah {n} · {step}",
+
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",
     "mcp.open": "Hubungkan lewat MCP (bila AI Anda tidak bisa membuka folder)",

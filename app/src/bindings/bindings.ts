@@ -349,6 +349,50 @@ export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<Automatio
 export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_take" | "task_make", required: boolean, };
 
 /**
+ * **One run in the "running" tab** — what is going on right now, on one line.
+ *
+ * It crosses projects, so it names the project each run is in: a lane is a terminal on this machine
+ * and the attention of whoever is watching it, and neither is divided up per project. The band over
+ * the panes draws the count and says nothing more, and this is where a reader comes to see what the
+ * count is made of ([`crate::automation::automation_lanes_held`]).
+ *
+ * **The name each row is read by is the automation's, not the run's.** A run has no name — what a
+ * person recognises is the automation they started and the task it is on.
+ */
+export type AutomationRunCardDto = { run: number, 
+/**
+ * The project it was launched from — which project's panes its terminal stands among, and what
+ * the row says it is about.
+ */
+project: number, projectName: string, automation: number, 
+/**
+ * What the automation was called at launch. Read from the run's own copy of the entry step's
+ * automation where the definition has since been deleted, and empty where neither is left.
+ */
+automationName: string, status: "queued" | "running" | "paused" | "stopped", 
+/**
+ * Whether a pause has been asked for and the step under way has not reported yet. The run is
+ * still `running` — this is the gap between the button and the pause
+ * ([`amenbo_core::ops::automation_stop::pause`]).
+ */
+pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "by_human" | null, 
+/**
+ * The step it is on, or the last one it ran. Absent before the first step has opened.
+ */
+stepName?: string, 
+/**
+ * How many steps it has opened so far, the step it is on included — the "how far in is this"
+ * a reader asks of a run they are not watching.
+ */
+stepsDone: number, 
+/**
+ * The task it is working, where it is on one. A run walks a stretch per task
+ * ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same
+ * shape the row over its pane says it in.
+ */
+task?: AutomationRunTaskDto, };
+
+/**
  * **A run, just launched** — what the press is answered with.
  *
  * `queued` is the one thing the press cannot see for itself: every lane was held, so the run is in
@@ -2026,7 +2070,15 @@ dir?: string,
  * where it is not — the id is what a provider's own home is named after, so a place opened
  * again under a new one would be a different place (`crate::pane_home`).
  */
-pane?: string, };
+pane?: string, 
+/**
+ * The run that pane is drawn for, where the ask came off the "running" tab. It says which of
+ * two things to do with `pane` when nothing stands under that id: a place a record was made in
+ * is opened as an ordinary empty pane, and a run's place is stood for the run — so the step it
+ * opens next lands in it rather than in a second pane under the same id
+ * (`app/src/talk/layout.ts`).
+ */
+run?: number, };
 
 /**
  * How much of a page one pane takes ([`amenbo_core::frames::PaneSize`]).

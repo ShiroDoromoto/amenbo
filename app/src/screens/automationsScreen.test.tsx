@@ -30,6 +30,9 @@ vi.mock("../core/automations", () => ({
   useLaunchCheck: () => hoisted.check,
   useAutomationActions: () => [],
   launchAutomation: hoisted.launch,
+  // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
+  // it is the tab being reachable that matters.
+  useLiveRuns: () => [],
 }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
@@ -102,6 +105,14 @@ describe("the automations screen", () => {
       t("auto.tab.actions"),
     ]);
     expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("moves to the running tab, which is about no one project", async () => {
+    await render();
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    await act(async () => { tabs[0].click(); });
+    expect(container.querySelector(".auto__list")).toBeNull();
+    expect(container.textContent).toContain(t("auto.running.empty"));
   });
 
   it("says a project with no automations has none", async () => {

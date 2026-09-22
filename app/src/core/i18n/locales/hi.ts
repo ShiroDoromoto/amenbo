@@ -913,6 +913,7 @@ export const hi: Translation = {
     "auto.start": "शुरू करें",
     "auto.ready": "शुरू किया जा सकता है।",
     "auto.notReady": "अभी शुरू नहीं किया जा सकता:",
+    "auto.queued": "सभी लेन भरी हैं — यह रन कतार में है और एक खाली होते ही शुरू होगा।",
     "auto.block.noSteps": "इसमें कोई चरण नहीं है।",
     "auto.block.noEntry": "कोई चरण ऐसा तय नहीं है जहाँ से रन शुरू हो।",
     "auto.block.entryTakesNoTask": "{step}: शुरू का चरण कोई टास्क नहीं उठाता, इसलिए उसके बाद के चरण किसी चीज़ पर नहीं होंगे।",
@@ -969,6 +970,23 @@ export const hi: Translation = {
     "auto.actions.reaches": "यहाँ सहेजा गया वही हर उस स्टेप तक जाता है जो इस ऐक्शन की ओर इशारा करता है।",
     "auto.actions.save": "सहेजें",
     "auto.actions.cancel": "रद्द करें",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "कुछ भी नहीं चल रहा है।",
+    "auto.run.pause": "रोकें",
+    "auto.run.resume": "जारी रखें",
+    "auto.run.stop": "बंद करें",
+    "auto.run.queued": "लेन की प्रतीक्षा में",
+    "auto.run.running": "चल रहा है",
+    "auto.run.paused": "रुका हुआ",
+    "auto.run.pausing": "इस चरण के बाद रुकेगा",
+    "auto.run.stopped": "बंद",
+    "auto.run.crashed": "ऐप फिर से शुरू हुआ",
+    "auto.run.maxTimes": "बहुत बार दोहराया गया",
+    "auto.run.noAgent": "इसका एजेंट शुरू नहीं हो सका",
+    "auto.run.byHuman": "हाथ से बंद किया गया",
+    "auto.run.step": "चरण {n} · {step}",
 
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",

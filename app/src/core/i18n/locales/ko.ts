@@ -910,6 +910,7 @@ export const ko: Translation = {
     "auto.start": "시작하기",
     "auto.ready": "시작할 수 있습니다.",
     "auto.notReady": "아직 시작할 수 없습니다:",
+    "auto.queued": "레인이 모두 찼습니다. 이 실행은 대기 중이며, 하나가 비면 시작합니다.",
     "auto.block.noSteps": "스텝이 하나도 없습니다.",
     "auto.block.noEntry": "실행이 시작될 스텝이 정해져 있지 않습니다.",
     "auto.block.entryTakesNoTask": "{step}: 시작 스텝이 태스크를 가져오지 않아, 그다음 스텝들이 무엇을 다루는지 정해지지 않습니다.",
@@ -966,6 +967,23 @@ export const ko: Translation = {
     "auto.actions.reaches": "여기서 저장한 내용은 이 액션을 가리키는 모든 단계가 읽습니다.",
     "auto.actions.save": "저장",
     "auto.actions.cancel": "취소",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "실행 중인 것이 없습니다.",
+    "auto.run.pause": "일시 중지",
+    "auto.run.resume": "재개",
+    "auto.run.stop": "중지",
+    "auto.run.queued": "레인 대기 중",
+    "auto.run.running": "실행 중",
+    "auto.run.paused": "일시 중지됨",
+    "auto.run.pausing": "이 단계가 끝나면 멈춥니다",
+    "auto.run.stopped": "중지됨",
+    "auto.run.crashed": "앱이 다시 시작됨",
+    "auto.run.maxTimes": "반복 횟수를 넘김",
+    "auto.run.noAgent": "에이전트를 시작하지 못함",
+    "auto.run.byHuman": "직접 중지함",
+    "auto.run.step": "단계 {n} · {step}",
 
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",

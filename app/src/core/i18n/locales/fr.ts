@@ -925,6 +925,7 @@ export const fr: Translation = {
     "auto.start": "Lancer",
     "auto.ready": "Prête à être lancée.",
     "auto.notReady": "Pas encore prête à être lancée :",
+    "auto.queued": "Toutes les voies sont prises : cette exécution attend son tour et démarre dès qu’une se libère.",
     "auto.block.noSteps": "Elle n’a aucune étape.",
     "auto.block.noEntry": "Aucune étape n’est désignée comme celle par laquelle une exécution commence.",
     "auto.block.entryTakesNoTask": "{step} : l’étape de départ ne prend aucune tâche, donc les étapes suivantes ne porteraient sur rien.",
@@ -981,6 +982,23 @@ export const fr: Translation = {
     "auto.actions.reaches": "Ce qui est enregistré ici est porté par chaque étape qui pointe vers cette action.",
     "auto.actions.save": "Enregistrer",
     "auto.actions.cancel": "Annuler",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Rien n'est en cours.",
+    "auto.run.pause": "Mettre en pause",
+    "auto.run.resume": "Reprendre",
+    "auto.run.stop": "Arrêter",
+    "auto.run.queued": "En attente d'une voie",
+    "auto.run.running": "En cours",
+    "auto.run.paused": "En pause",
+    "auto.run.pausing": "Mise en pause à la fin de cette étape",
+    "auto.run.stopped": "Arrêtée",
+    "auto.run.crashed": "l'application a redémarré",
+    "auto.run.maxTimes": "trop de tours",
+    "auto.run.noAgent": "son agent n'a pas pu démarrer",
+    "auto.run.byHuman": "arrêtée à la main",
+    "auto.run.step": "Étape {n} · {step}",
 
     "mcp.title": "Se connecter en MCP",
     "mcp.setupTitle": "Utiliser vos projets depuis une IA",

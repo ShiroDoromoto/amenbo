@@ -930,6 +930,7 @@ export const uk: Translation = {
     "auto.start": "Запустити",
     "auto.ready": "Можна запустити.",
     "auto.notReady": "Поки запустити не можна:",
+    "auto.queued": "Усі смуги зайняті — цей запуск у черзі й почнеться, щойно звільниться одна.",
     "auto.block.noSteps": "У ній немає жодного кроку.",
     "auto.block.noEntry": "Жоден крок не призначено тим, з якого починається запуск.",
     "auto.block.entryTakesNoTask": "{step}: початковий крок не бере задачу, тож кроки після нього були б ні про що.",
@@ -986,6 +987,23 @@ export const uk: Translation = {
     "auto.actions.reaches": "Те, що збережено тут, несе кожен крок, який вказує на цю дію.",
     "auto.actions.save": "Зберегти",
     "auto.actions.cancel": "Скасувати",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Нічого не виконується.",
+    "auto.run.pause": "Призупинити",
+    "auto.run.resume": "Продовжити",
+    "auto.run.stop": "Зупинити",
+    "auto.run.queued": "Очікує смугу",
+    "auto.run.running": "Виконується",
+    "auto.run.paused": "Призупинено",
+    "auto.run.pausing": "Призупиниться після цього кроку",
+    "auto.run.stopped": "Зупинено",
+    "auto.run.crashed": "застосунок було перезапущено",
+    "auto.run.maxTimes": "забагато кіл",
+    "auto.run.noAgent": "не вдалося запустити агента",
+    "auto.run.byHuman": "зупинено вручну",
+    "auto.run.step": "Крок {n} · {step}",
 
     "mcp.title": "Підключення через MCP",
     "mcp.setupTitle": "Працювати зі своїми проєктами із ШІ",

@@ -89,10 +89,7 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // The ten tables an automation's definition is built in. Nine of them are what the build screen
   // reads as one answer — the definition is fetched whole and its picture, its step panel and its
   // launch check all walk it (`core/automations`) — so they share one scope. A run's own tables are
-  // the exception below. Of the five tables a run is written in, four are folded to nothing for
-  // `notify_target`'s reason: no pane draws them yet, so no query goes stale when one is written, and
-  // falling to gap would buy a full re-read for a change nobody can see. The tabs that will draw them
-  // name their scope here when they arrive.
+  // the exception below, naming the scopes the band and the "running" tab read.
   automation: ["automations"],
   // The library and the pointers into it: the "actions" tab draws every action with how many
   // automations run it, so a step taking up an action or letting one go moves that list as surely as
@@ -106,15 +103,18 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_port: ["automations"],
   automation_edge: ["automations"],
   automation_wire: ["automations"],
-  // A run taking a lane, handing one back or ending moves the number the workspace band draws, so
-  // this one names a scope of its own. The snapshot carries the other half — how many lanes there
-  // are — and that is a setting, written from one screen rather than arriving on the feed.
-  automation_run: ["automationLanes"],
+  // A run taking a lane, handing one back or ending moves the number the workspace band draws and the
+  // row the "running" tab draws for it, so it names both scopes. The snapshot carries the other half
+  // of the band — how many lanes there are — and that is a setting, written from one screen rather
+  // than arriving on the feed.
+  automation_run: ["automationLanes", "automationRuns"],
   // The steps a run copied at launch. Written once, in the same transaction as the run, and read only
   // by what reads that run — so it is folded to nothing rather than made to re-read the band.
   automation_run_def: [],
-  automation_run_task: [],
-  automation_run_step: [],
+  // The stretch a run is spending on one task, and each step it opens. Both move what the "running"
+  // tab says a run is on — which task, which step, how far in — so both fold to that tab's scope.
+  automation_run_task: ["automationRuns"],
+  automation_run_step: ["automationRuns"],
   automation_run_value: [],
 };
 

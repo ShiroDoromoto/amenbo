@@ -925,6 +925,7 @@ export const es: Translation = {
     "auto.start": "Iniciar",
     "auto.ready": "Se puede iniciar.",
     "auto.notReady": "Todavía no se puede iniciar:",
+    "auto.queued": "Todos los carriles están ocupados: esta ejecución queda en cola y empieza cuando se libere uno.",
     "auto.block.noSteps": "No tiene ningún paso.",
     "auto.block.noEntry": "Ningún paso está señalado como aquel por el que empieza una ejecución.",
     "auto.block.entryTakesNoTask": "{step}: el paso inicial no recoge ninguna tarea, así que los pasos siguientes no tratarían de nada.",
@@ -981,6 +982,23 @@ export const es: Translation = {
     "auto.actions.reaches": "Lo que se guarde aquí lo lleva cada paso que apunta a esta acción.",
     "auto.actions.save": "Guardar",
     "auto.actions.cancel": "Cancelar",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "No hay nada en marcha.",
+    "auto.run.pause": "Pausar",
+    "auto.run.resume": "Reanudar",
+    "auto.run.stop": "Detener",
+    "auto.run.queued": "Esperando un carril",
+    "auto.run.running": "En marcha",
+    "auto.run.paused": "En pausa",
+    "auto.run.pausing": "Se pausará al terminar este paso",
+    "auto.run.stopped": "Detenida",
+    "auto.run.crashed": "la aplicación se reinició",
+    "auto.run.maxTimes": "dio demasiadas vueltas",
+    "auto.run.noAgent": "no se pudo iniciar su agente",
+    "auto.run.byHuman": "detenida a mano",
+    "auto.run.step": "Paso {n} · {step}",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar tus proyectos desde una IA",

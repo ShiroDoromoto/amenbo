@@ -26,6 +26,8 @@ import type {
   AutomationCardDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
+  AutomationRunCardDto,
+  AutomationRunStartedDto,
   WakeDto,
 } from "../bindings/bindings";
 
@@ -197,10 +199,49 @@ export async function fetchLaunchCheck(
   folders: readonly string[],
 ): Promise<AutomationLaunchCheckDto | null> {
   if (!inTauri()) return null;
-  const agents = await invoke<WakeDto>("wake_choices", { project: projectId, folders: [...folders] })
+  const agents = await startableAgents(projectId, folders);
+  return invoke<AutomationLaunchCheckDto>("automation_launch_check", { id, agents });
+}
+
+/**
+ * The agent ids this machine can start, over the folders this project works in, or `null` where the
+ * probe did not answer.
+ *
+ * The check asks it and so does the press, and both have to ask the same question: a list that said
+ * one thing while a screen was drawn and another when the button was pressed would refuse a launch
+ * the screen had just called ready.
+ */
+async function startableAgents(
+  projectId: number,
+  folders: readonly string[],
+): Promise<string[] | null> {
+  return invoke<WakeDto>("wake_choices", { project: projectId, folders: [...folders] })
     .then((wake) => wake.candidates.filter((one) => one.installed).map((one) => one.id))
     .catch(() => null);
-  return invoke<AutomationLaunchCheckDto>("automation_launch_check", { id, agents });
+}
+
+/**
+ * **Start a run of this automation.** Answers the run's id, and whether it is in line rather than
+ * under way.
+ *
+ * `workspaceOpen` is this side's to answer and is passed rather than worked out by the host: the
+ * workspace is a face of this window in one shape of the app and a window of its own in the other
+ * (`AMB-D-753`). Core refuses a launch with it closed, last of the three refusals, and the sentence
+ * it raises is what the screen puts in front of the reader.
+ *
+ * It returns no `WriteAck`. What a launch changes on screen is the pane the run's first step opens
+ * in, which arrives as an event (`talk/automationStep`), and the lanes the band draws, which the
+ * change feed carries — neither is a query this side would invalidate.
+ */
+export async function launchAutomation(
+  id: number,
+  projectId: number,
+  folders: readonly string[],
+  workspaceOpen: boolean,
+): Promise<AutomationRunStartedDto | null> {
+  if (!inTauri()) return null;
+  const agents = await startableAgents(projectId, folders);
+  return invoke<AutomationRunStartedDto>("automation_launch", { id, agents, workspaceOpen });
 }
 
 /** Subscribing read of the launch check for one automation. */
@@ -239,6 +280,24 @@ export function useLanesHeld(): number {
 }
 
 /**
+ * **What is under way right now**, across every project — the rows of the "running" tab.
+ *
+ * It crosses projects because the lanes do, and this is where a reader sees what the count on the
+ * band over the panes is made of (`fetchLanesHeld`). Runs that are `done` are not in it: what a
+ * finished run did is reached from the task it worked, never listed here.
+ */
+export async function fetchLiveRuns(): Promise<AutomationRunCardDto[]> {
+  if (!inTauri()) return [];
+  return invoke<AutomationRunCardDto[]>("automation_running_page", {});
+}
+
+/** Subscribing read of the runs under way. Empty until the first answer lands. */
+export function useLiveRuns(): AutomationRunCardDto[] {
+  const { data } = useQuery<AutomationRunCardDto[]>(["automationRuns"], fetchLiveRuns);
+  return data ?? [];
+}
+
+/**
  * **Stop a run now** — what closing the pane a run is drawn in means (`../shell/TerminalPane`).
  *
  * The cleanup is core's and is the same one every other stop goes through: the lane is handed back,
@@ -255,4 +314,28 @@ export function useLanesHeld(): number {
 export async function stopRun(run: number): Promise<boolean> {
   if (!inTauri()) return false;
   return invoke<boolean>("automation_run_stop", { runId: run });
+}
+
+/**
+ * **Ask a run to pause** — pressed on a row of the "running" tab (`../screens/RunningTab`).
+ *
+ * A step under way cannot be cut in half, so the run goes on until that step reports and settles
+ * there, handing its lane back; a run with nothing under way pauses on the spot
+ * (`amenbo_core::ops::automation_stop::pause`). Not a `WriteAck` write, for `stopRun`'s reason.
+ */
+export async function pauseRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_pause", { runId: run });
+}
+
+/**
+ * **Pick a paused run up again**, from the way out its last step left through. It opens a terminal
+ * where a lane is free and joins the queue where none is.
+ *
+ * Refused for a run that is not paused, which is the answer a reader gets rather than nothing
+ * happening: the row they pressed was drawn from a picture that has since moved.
+ */
+export async function resumeRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_resume", { runId: run });
 }

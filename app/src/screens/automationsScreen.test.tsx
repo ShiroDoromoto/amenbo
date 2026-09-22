@@ -21,15 +21,20 @@ const hoisted = vi.hoisted(() => ({
   automations: [] as AutomationCardDto[],
   detail: null as AutomationDetailDto | null,
   check: null as AutomationLaunchCheckDto | null,
+  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1, queued: false })),
 }));
 
 vi.mock("../core/automations", () => ({
   useAutomations: () => hoisted.automations,
   useAutomation: () => hoisted.detail,
   useLaunchCheck: () => hoisted.check,
-  // The step panel's own reads and write door. Nothing here presses a step, so the panel draws its
-  // "press one" line and these are never called (`./automationStepPanel.test.tsx` is where they are).
   useAutomationActions: () => [],
+  launchAutomation: hoisted.launch,
+  // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
+  // it is the tab being reachable that matters.
+  useLiveRuns: () => [],
+  // The step panel's own write door. Nothing here presses a step, so the panel draws its "press one"
+  // line and these are never called (`./automationStepPanel.test.tsx` is where they are).
   editAutomationStep: () => Promise.resolve(),
   answerAutomationCfg: () => Promise.resolve(),
   setAutomationWire: () => Promise.resolve(),
@@ -66,9 +71,9 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
   };
 }
 
-async function render() {
+async function render(workspaceOpen = true) {
   await act(async () => {
-    root.render(createElement(AutomationsScreen, { projectId: 1 }));
+    root.render(createElement(AutomationsScreen, { projectId: 1, workspaceOpen }));
   });
 }
 
@@ -87,6 +92,8 @@ beforeEach(() => {
   hoisted.automations = [];
   hoisted.detail = null;
   hoisted.check = null;
+  hoisted.launch.mockClear();
+  hoisted.launch.mockResolvedValue({ run: 1, queued: false });
 });
 
 afterEach(() => {
@@ -104,6 +111,14 @@ describe("the automations screen", () => {
       t("auto.tab.actions"),
     ]);
     expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("moves to the running tab, which is about no one project", async () => {
+    await render();
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    await act(async () => { tabs[0].click(); });
+    expect(container.querySelector(".auto__list")).toBeNull();
+    expect(container.textContent).toContain(t("auto.running.empty"));
   });
 
   it("says a project with no automations has none", async () => {
@@ -177,11 +192,52 @@ describe("the launch place", () => {
     expect(container.textContent).toContain(t("auto.notReady"));
   });
 
-  it("holds it shut too while nothing can start it yet, ready or not", async () => {
-    // The road that writes a run is `AMB-T-5244`'s; until the screen is handed one, a press would
-    // land nowhere, and the check passing is not a reason to offer it.
+  it("offers the button once nothing is in the way", async () => {
     await open({ ready: true, blocks: [] });
     expect(container.textContent).toContain(t("auto.ready"));
-    expect(button(t("auto.start")).disabled).toBe(true);
+    expect(button(t("auto.start")).disabled).toBe(false);
+  });
+});
+
+describe("the press that starts a run", () => {
+  async function open(check: AutomationLaunchCheckDto, workspaceOpen = true) {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = check;
+    await render(workspaceOpen);
+    await act(async () => { button("Morning round").click(); });
+  }
+
+  it("tells the launch which automation, which project and whether the workspace is standing", async () => {
+    // The workspace is the shell's to know, and core refuses a launch without one — so a press that
+    // did not carry the answer would be refused on a guess made here (`AMB-D-753`).
+    await open({ ready: true, blocks: [] }, false);
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false);
+  });
+
+  it("says a run took no lane, rather than leaving the press unanswered", async () => {
+    hoisted.launch.mockResolvedValue({ run: 3, queued: true });
+    await open({ ready: true, blocks: [] });
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(container.textContent).toContain(t("auto.queued"));
+  });
+
+  it("says nothing about a queue where the run took a lane", async () => {
+    // What it looks like is the pane arriving, which is the workspace's and not this screen's
+    // (`../talk/automationStep`).
+    await open({ ready: true, blocks: [] });
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(container.textContent).not.toContain(t("auto.queued"));
+  });
+
+  it("puts a refusal in front of the reader, in the words core refused with", async () => {
+    hoisted.launch.mockRejectedValue({
+      code: "invalid",
+      message_en: "the workspace is closed — a run draws its steps in its panes",
+    });
+    await open({ ready: true, blocks: [] });
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(container.textContent).toContain("the workspace is closed");
   });
 });

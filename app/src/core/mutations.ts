@@ -1324,6 +1324,31 @@ export async function setAutomationLanes(lanes: number): Promise<void> {
 }
 
 /**
+ * **Ask a run to pause.** A step under way cannot be cut in half — it is an agent in a terminal,
+ * mid-sentence — so the run goes on until that step reports and settles there, handing its lane back
+ * (`amenbo_core::ops::automation_stop::pause`). A run with nothing under way pauses on the spot.
+ *
+ * The browser has no runs to pause: the "running" tab is empty there, so there is no row to press.
+ */
+export async function pauseRun(run: number): Promise<void> {
+  if (inTauri()) return invokeAck("automation_run_pause", { run });
+}
+
+/** **Pick a paused run up again**, from the way out its last step left through. It opens a terminal
+ *  where a lane is free and joins the queue where none is. */
+export async function resumeRun(run: number): Promise<void> {
+  if (inTauri()) return invokeAck("automation_run_resume", { run });
+}
+
+/**
+ * **Stop a run now.** The lane goes back, the task it was holding goes back to `todo`, and a line is
+ * left on that task saying what became of it — which is why the ack names the task scope as well.
+ */
+export async function stopRun(run: number): Promise<void> {
+  if (inTauri()) return invokeAck("automation_run_stop", { run });
+}
+
+/**
  * Change the view a new project opens in (`config.default_view`). `config.json` lives outside the
  * store, so it is the `loadSnapshot` at the tail of the ack that re-reads the snapshot's
  * `defaultView` and brings the pull-down into step **without a restart**. Nothing else on screen

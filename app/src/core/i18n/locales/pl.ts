@@ -930,6 +930,7 @@ export const pl: Translation = {
     "auto.start": "Uruchom",
     "auto.ready": "Można uruchomić.",
     "auto.notReady": "Jeszcze nie można uruchomić:",
+    "auto.queued": "Wszystkie pasy są zajęte — to uruchomienie czeka w kolejce i ruszy, gdy jeden się zwolni.",
     "auto.block.noSteps": "Nie ma żadnego kroku.",
     "auto.block.noEntry": "Żaden krok nie jest wskazany jako ten, od którego zaczyna się przebieg.",
     "auto.block.entryTakesNoTask": "{step}: krok początkowy nie podejmuje żadnego zadania, więc kolejne kroki nie dotyczyłyby niczego.",
@@ -986,6 +987,23 @@ export const pl: Translation = {
     "auto.actions.reaches": "To, co zapisane tutaj, niesie każdy krok wskazujący na tę akcję.",
     "auto.actions.save": "Zapisz",
     "auto.actions.cancel": "Anuluj",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "Nic nie jest uruchomione.",
+    "auto.run.pause": "Wstrzymaj",
+    "auto.run.resume": "Wznów",
+    "auto.run.stop": "Zatrzymaj",
+    "auto.run.queued": "Czeka na tor",
+    "auto.run.running": "W toku",
+    "auto.run.paused": "Wstrzymane",
+    "auto.run.pausing": "Wstrzyma się po tym kroku",
+    "auto.run.stopped": "Zatrzymane",
+    "auto.run.crashed": "aplikacja została uruchomiona ponownie",
+    "auto.run.maxTimes": "za dużo powtórzeń",
+    "auto.run.noAgent": "nie udało się uruchomić jego agenta",
+    "auto.run.byHuman": "zatrzymane ręcznie",
+    "auto.run.step": "Krok {n} · {step}",
 
     "mcp.title": "Połącz przez MCP",
     "mcp.setupTitle": "Korzystaj ze swoich projektów z poziomu AI",

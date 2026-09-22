@@ -915,6 +915,7 @@ export const zhHant: Translation = {
     "auto.start": "啟動",
     "auto.ready": "可以啟動。",
     "auto.notReady": "還不能啟動：",
+    "auto.queued": "所有通道都被占用。這次執行在排隊，有通道空出時開始。",
     "auto.block.noSteps": "一個步驟也沒有。",
     "auto.block.noEntry": "沒有指定執行從哪個步驟開始。",
     "auto.block.entryTakesNoTask": "{step}：起始步驟沒有接到任務，後面的步驟就沒有處理對象。",
@@ -971,6 +972,23 @@ export const zhHant: Translation = {
     "auto.actions.reaches": "在這裡儲存的內容，指向此動作的每個步驟都會讀到。",
     "auto.actions.save": "儲存",
     "auto.actions.cancel": "取消",
+
+    // The "running" tab: what is under way, what each run is on, and the three presses that
+    // move it (`app/src/screens/RunningTab.tsx`).
+    "auto.running.empty": "沒有正在執行的項目。",
+    "auto.run.pause": "暫停",
+    "auto.run.resume": "繼續",
+    "auto.run.stop": "停止",
+    "auto.run.queued": "等待通道",
+    "auto.run.running": "執行中",
+    "auto.run.paused": "已暫停",
+    "auto.run.pausing": "將在這一步結束後暫停",
+    "auto.run.stopped": "已停止",
+    "auto.run.crashed": "應用程式被重新啟動",
+    "auto.run.maxTimes": "循環次數超出上限",
+    "auto.run.noAgent": "無法啟動它的代理",
+    "auto.run.byHuman": "手動停止",
+    "auto.run.step": "步驟 {n} · {step}",
 
     "mcp.title": "透過 MCP 連線",
     "mcp.setupTitle": "讓 AI 可以使用你的專案",

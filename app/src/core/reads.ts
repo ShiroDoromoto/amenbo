@@ -279,8 +279,13 @@ export function useDecisionComments(decisionId: number | null): DecisionComment[
 export type SearchHit = SearchHitDto;
 /** Which face a hit landed on — a title, a body, a comment, an axis label, an attachment's name. */
 export type SearchFace = SearchHitDto["face"];
-/** Which record the words are on — one of the two axes (`AMB-D-562`). `null` keeps both sides. */
-export type SearchKind = "task" | "decision";
+/**
+ * Which record the words are on — one of the two axes (`AMB-D-562`). `null` keeps every side.
+ *
+ * `automation` is the documents an automation's steps share (`AMB-D-944`): one face, no timeline, and no
+ * listing to lend the narrowing box a grammar.
+ */
+export type SearchKind = "task" | "decision" | "automation";
 
 /** How many hits one page of the search screen holds. Core's own default is the same number. */
 export const SEARCH_PAGE = 20;

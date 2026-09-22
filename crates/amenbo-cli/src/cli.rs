@@ -170,8 +170,9 @@ pub enum Command {
         scope: String,
     },
     /// Find where words are written — one line per **place**, not per record. Reaches tasks, decisions,
-    /// the comments on both, the labels either is filed under and the names of what is attached, and
-    /// answers with the face the words landed on, the record it belongs to, and a short excerpt.
+    /// the comments on both, the labels either is filed under, the names of what is attached and the
+    /// documents an automation's steps share, and answers with the face the words landed on, the record
+    /// it belongs to, and a short excerpt.
     ///
     /// Words are ANDed and match as substrings (no word boundaries, so part of a compound word finds
     /// it); full-width,
@@ -192,10 +193,11 @@ pub enum Command {
         project: Option<String>,
         /// narrow structurally, in the grammar of the side `--kind` names — `task list`'s for a task
         /// (e.g. `--kind task --filter "status:todo"`), `decision list`'s for a decision. Requires
-        /// `--kind`: the two grammars share spellings that mean different things
+        /// `--kind`, and takes neither `automation` nor no side at all: the two grammars share spellings
+        /// that mean different things, and an automation has no listing to take one from
         #[arg(long)]
         filter: Option<String>,
-        /// keep one side: task / decision
+        /// keep one side: task / decision / automation (the documents an automation's steps share)
         #[arg(long)]
         kind: Option<String>,
         /// keep one face: title / body / comment / label / attachment. The other axis, judged apart from

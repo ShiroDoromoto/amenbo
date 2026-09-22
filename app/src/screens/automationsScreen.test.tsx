@@ -33,6 +33,12 @@ vi.mock("../core/automations", () => ({
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
   useLiveRuns: () => [],
+  // The step panel's own write door. Nothing here presses a step, so the panel draws its "press one"
+  // line and these are never called (`./automationStepPanel.test.tsx` is where they are).
+  editAutomationStep: () => Promise.resolve(),
+  answerAutomationCfg: () => Promise.resolve(),
+  setAutomationWire: () => Promise.resolve(),
+  clearAutomationWire: () => Promise.resolve(),
 }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
@@ -164,6 +170,7 @@ describe("the launch place", () => {
         { reason: "unwired_input", stepName: "Write", at: "folder" },
         { reason: "unanswered_cfg", stepName: "Write", at: "filter" },
         { reason: "agent_missing", stepName: "Write", at: "codex-cli" },
+        { reason: "model_missing", stepName: "Write", at: "opus-9" },
       ],
     });
     expect(blocks()).toEqual([
@@ -174,6 +181,7 @@ describe("the launch place", () => {
       tf("auto.block.unwiredInput", { step: "Write", at: "folder" }),
       tf("auto.block.unansweredCfg", { step: "Write", at: "filter" }),
       tf("auto.block.agentMissing", { step: "Write", at: "codex-cli" }),
+      tf("auto.block.modelMissing", { step: "Write", at: "opus-9" }),
     ]);
     // Nothing is left standing as a bare reason code: a line nobody wrote words for would ship as
     // `input_unfed` on the screen.

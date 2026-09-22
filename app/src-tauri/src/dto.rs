@@ -3531,21 +3531,23 @@ pub struct AutomationRunTaskDto {
 /// ([`amenbo_core::ops::automation_run::Unmet`]).
 ///
 /// `reason` is what it is, and `stepName` / `at` say where — the way out with nothing after it, the
-/// input nothing feeds, the setting nobody answered, the agent this machine cannot start. A reason
-/// about the automation as a whole carries neither. `at` is absent on `open_exit` for the unnamed way
-/// out, which is the one a step with a single way out has.
+/// input nothing feeds, the setting nobody answered, the agent this machine cannot start, the model
+/// that agent does not offer here. A reason about the automation as a whole carries neither. `at` is
+/// absent on `open_exit` for the unnamed way out, which is the one a step with a single way out has.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationLaunchBlockDto {
     #[ts(
-        type = "\"no_steps\" | \"no_entry\" | \"entry_takes_no_task\" | \"open_exit\" | \"unwired_input\" | \"unanswered_cfg\" | \"agent_missing\""
+        type = "\"no_steps\" | \"no_entry\" | \"entry_takes_no_task\" | \"open_exit\" | \"unwired_input\" | \"unanswered_cfg\" | \"agent_missing\" | \"model_missing\""
     )]
     pub(crate) reason: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step_name: Option<String>,
-    /// What on that step — a way out's name, an input's name, a setting's name, an agent's id.
+    /// What on that step — a way out's name, an input's name, a setting's name, an agent's id, a
+    /// model's id. `model_missing` carries the model and not the agent: the row leads with the step,
+    /// and a step names one agent, so the model is the half the picture does not already say.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) at: Option<String>,

@@ -86,24 +86,23 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   binding_project_dir: ["projects"],
   hook_optout: ["projects"],
   harness_consent: ["projects"],
-  // The ten tables an automation's definition is built in. Two of them are drawn — the library and
-  // the steps pointing into it, which the "actions" tab reads as one list — and name their scope
-  // below. The rest are folded to nothing for `notify_target`'s reason: no pane draws them yet, so no
-  // query goes stale when one is built, and falling to gap would buy a full re-read for a change
-  // nobody can see. The tabs that will draw them name their scope here when they arrive.
-  automation: [],
+  // The ten tables an automation's definition is built in. Nine of them are what the build screen
+  // reads as one answer — the definition is fetched whole and its picture, its step panel and its
+  // launch check all walk it (`core/automations`) — so they share one scope. A run's own tables are
+  // the exception below, naming the scopes the band and the "running" tab read.
+  automation: ["automations"],
   // The library and the pointers into it: the "actions" tab draws every action with how many
   // automations run it, so a step taking up an action or letting one go moves that list as surely as
-  // the action's own row does.
+  // the action's own row does — and it is a step of some definition either way.
   automation_action: ["automationActions"],
-  automation_note: [],
-  automation_step: ["automationActions"],
-  automation_step_note: [],
-  automation_cfg: [],
-  automation_exit: [],
-  automation_port: [],
-  automation_edge: [],
-  automation_wire: [],
+  automation_note: ["automations"],
+  automation_step: ["automationActions", "automations"],
+  automation_step_note: ["automations"],
+  automation_cfg: ["automations"],
+  automation_exit: ["automations"],
+  automation_port: ["automations"],
+  automation_edge: ["automations"],
+  automation_wire: ["automations"],
   // A run taking a lane, handing one back or ending moves the number the workspace band draws and the
   // row the "running" tab draws for it, so it names both scopes. The snapshot carries the other half
   // of the band — how many lanes there are — and that is a setting, written from one screen rather

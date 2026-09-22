@@ -1,12 +1,11 @@
 // One automation, opened — the screen it is built and started from.
 //
 // **Three places, each named on the screen**: "launch", which refuses; "build", the picture of the
-// steps (`./AutomationPicture`); and "step", the panel showing what the pressed step holds, which
-// draws its heading and nothing under it until `AMB-T-5256` fills it.
+// steps (`./AutomationPicture`); and "step", what the pressed step holds (`./AutomationStepPanel`).
 //
-// **The picture is handed the definition and no handlers yet.** Pressing a step is what the step
-// place is for and the `+` on a line opens a dialog nobody has built (`AMB-T-5257`), so both are
-// held shut here rather than wired to something that would do nothing.
+// **Which step is pressed is the screen's, not the picture's.** Two places read it — the picture
+// marks that box and the panel draws that step — so it is held where both can see it. The `+` on a
+// line opens a dialog nobody has built (`AMB-T-5257`), so that one is still held shut.
 //
 // **The launch place refuses, the build place never does.** Building is always half-finished — a step
 // with no way onward, an input nobody has wired — and every one of those saves
@@ -29,6 +28,8 @@
 // among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`). Whether it is
 // standing is handed down from the shell, which is the one place that knows which window holds it.
 import { AutomationPicture } from "./AutomationPicture";
+import { useState } from "react";
+import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
@@ -61,6 +62,10 @@ function blockText(block: AutomationLaunchBlockDto): string {
       return tf("auto.block.unansweredCfg", { step, at });
     case "agent_missing":
       return tf("auto.block.agentMissing", { step, at });
+    // The model, where the agent it belongs to has already said what it offers. The sentence names
+    // the model alone: the step names one agent, and the picture beside this list already says which.
+    case "model_missing":
+      return tf("auto.block.modelMissing", { step, at });
     default:
       return block.reason;
   }
@@ -81,6 +86,9 @@ export function AutomationBuildScreen({
   onBack: () => void;
 }) {
   const automation = useAutomation(id);
+  // Which step the panel is showing. Nothing until a box is pressed — a definition opens on the
+  // picture, and a step picked for the reader would be one they did not choose.
+  const [step, setStep] = useState<number | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -138,14 +146,18 @@ export function AutomationBuildScreen({
       <div className="settings__section">
         <div className="settings__body">
           <h3 className="auto__place">{t("auto.build.picture")}</h3>
-          <AutomationPicture automation={automation} />
+          <AutomationPicture
+            automation={automation}
+            selectedStepId={step ?? undefined}
+            onPickStep={setStep}
+          />
         </div>
       </div>
 
-      {/* What the pressed step holds. `AMB-T-5256` draws it. */}
       <div className="settings__section">
         <div className="settings__body">
           <h3 className="auto__place">{t("auto.build.step")}</h3>
+          <AutomationStepPanel automation={automation} stepId={step} projectId={projectId} />
         </div>
       </div>
     </div>

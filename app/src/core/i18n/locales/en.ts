@@ -1172,6 +1172,10 @@ const ui = {
   "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
+  // Said of the model rather than of the agent, which the step's own row already names. Only ever
+  // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
+  // silence (`app/src-tauri/src/agent_models.rs`).
+  "auto.block.modelMissing": "{step}: its agent here does not offer the model {at}.",
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
   // around a group of steps is.
@@ -1184,6 +1188,38 @@ const ui = {
   "auto.pic.fromAction": "from {action}",
   "auto.pic.unfed": "nothing reaches {names}",
   "auto.pic.hands": "hands {from} on to {to}",
+  // The panel beside the picture: what the pressed step holds, field by field. The three rows a
+  // task filter is answered on borrow the words the board's filters already use
+  // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.
+  "auto.step.none": "Press a step in the picture to see what it holds.",
+  "auto.step.name": "Name",
+  "auto.step.task": "The task it is about",
+  "auto.step.takesTask": "It goes and takes the next task",
+  "auto.step.carriesTask": "It works the task an earlier step took",
+  "auto.step.source": "What it runs",
+  "auto.step.sourceOwn": "A prompt written here",
+  "auto.step.sourceMoves": "Switching takes this step's ways out, settings and inputs with it.",
+  "auto.step.prompt": "Prompt",
+  "auto.step.promptFromAction": "Read only — it comes from {action}. Rewrite it in the actions tab.",
+  "auto.step.cfg": "Settings",
+  "auto.step.declaresNone": "None declared",
+  "auto.step.required": "required",
+  "auto.step.inputs": "Inputs",
+  "auto.step.unwired": "nothing reaches it",
+  "auto.step.exits": "Ways out",
+  "auto.step.exitUnnamed": "the only way out",
+  "auto.step.agent": "Who carries it out",
+  "auto.step.model": "Model",
+  "auto.step.modelDefault": "the agent's own default",
+  "auto.step.notHere": "{agent} — not on this machine",
+  "auto.step.folder": "Where it runs",
+  "auto.step.folderNone": "wherever a pane of this project opens",
+  "auto.step.interactive": "It may stop and wait for a person",
+  "auto.step.reportToTask": "Its report also lands on the task",
+  "auto.step.history": "It is handed the run's story so far",
+  "auto.step.ready": "Premises",
+  "auto.step.readyYes": "Nothing in the way",
+  "auto.step.readyNo": "Something in the way",
   "auto.actions.empty": "The library has no actions yet.",
   "auto.actions.reachDevice": "This device",
   "auto.actions.reachProject": "This project",

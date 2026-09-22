@@ -93,6 +93,12 @@ function applyAck(ack: WriteAck): Promise<void> {
       // stale is the whole list rather than one row: the prompt shown is the row's own, and the
       // count beside it is read off the steps pointing at it.
       case "automationActions": return scopes.has("automationActions");
+      // One automation's whole definition, and whether it could be started. Every write the build
+      // screen makes lands in one of the definition's tables, and what goes stale is the whole
+      // answer — the picture, the step panel and the launch check are three readings of it
+      // (`core/automations`).
+      case "automation":
+      case "automationLaunchCheck": return scopes.has("automations");
       default: return false;
     }
   });

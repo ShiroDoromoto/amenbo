@@ -27,6 +27,13 @@ vi.mock("../core/automations", () => ({
   useAutomations: () => hoisted.automations,
   useAutomation: () => hoisted.detail,
   useLaunchCheck: () => hoisted.check,
+  // The step panel's own reads and write door. Nothing here presses a step, so the panel draws its
+  // "press one" line and these are never called (`./automationStepPanel.test.tsx` is where they are).
+  useAutomationActions: () => [],
+  editAutomationStep: () => Promise.resolve(),
+  answerAutomationCfg: () => Promise.resolve(),
+  setAutomationWire: () => Promise.resolve(),
+  clearAutomationWire: () => Promise.resolve(),
 }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),

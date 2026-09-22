@@ -1186,7 +1186,11 @@ fn one_edge(edge: &amenbo_core::model::AutomationEdge) -> String {
     let where_to = match (edge.ends, edge.to_id) {
         (amenbo_core::model::AutomationEnds::Go, Some(next)) => format!("box {next}"),
         (amenbo_core::model::AutomationEnds::Go, None) => "nowhere".to_string(),
-        (amenbo_core::model::AutomationEnds::Done, _) => "the picture is done".to_string(),
+        (amenbo_core::model::AutomationEnds::Exit, _) => match &edge.exit_to {
+            Some(name) => format!("out of the action by '{name}'"),
+            None => "out of the action by its unnamed way out".to_string(),
+        },
+        (amenbo_core::model::AutomationEnds::Done, _) => "the run is done".to_string(),
         (amenbo_core::model::AutomationEnds::Halt, _) => "the run stops for a person".to_string(),
     };
     match edge.max_times {

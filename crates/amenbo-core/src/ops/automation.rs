@@ -12,6 +12,12 @@
 //! read one hop off: a placement reads its action's ways out and inputs, a step reads its own
 //! ([`box_declarer`]).
 //!
+//! **What an action declares is joined to what is inside it, never merely spelled the same.** Three
+//! lines cross that edge, and all three are the ordinary ones: an [`EdgeTarget::Exit`] edge says which
+//! way out of the action a way out of a step returns to, and a wire with [`ACTION_BOUNDARY`] at one end
+//! carries an input the action was handed into a step, or a value a step produced out of the way out the
+//! run is leaving by. Two names that happen to match join nothing.
+//!
 //! **A setting is declared by an action and answered by a placement.** That is what lets one action be
 //! placed twice on one automation with two different answers, and it is why a step declares none: an
 //! action holds several steps, and each of them reaches a setting by the name the action gave it.
@@ -37,7 +43,7 @@ use crate::model::{
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit, AutomationNote,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementNote,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationWire, DEFAULT_MAX_TIMES, ERROR_EXIT,
+    AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
 use crate::ops::{emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -334,13 +340,20 @@ pub fn action_set_entry(
     Ok(after)
 }
 
-/// **Write a whole action in one act**: the action, one step carrying the prompt, and the ways out and
-/// inputs they are declared with. It is what a build screen reaches for where a person is writing a
-/// prompt rather than picking one out of the library (`AMB-T-5317`).
+/// **Write a whole action in one act**: the action, one step carrying the prompt, the ways out and
+/// inputs they are declared with, and the lines that join the two. It is what a build screen reaches for
+/// where a person is writing a prompt rather than picking one out of the library (`AMB-T-5317`).
 ///
-/// **The declarations are written on both.** The action's are what a placement of it is wired by, and
-/// the step's are what the picture inside the action is drawn with; for an action of one step the two
-/// carry the same names, which is the degenerate case of the mapping between them.
+/// **The declarations are written on both, and joined.** The action's are what a placement of it is
+/// wired by, and the step's are what the picture inside the action is drawn with. Carrying the same name
+/// is not what joins them: each way out of the step is given an `Exit` edge onto the action's way out of
+/// that name, and each input the action declares is wired from the boundary onto the step's. An action
+/// of one step is the degenerate case of the mapping, not the absence of one.
+///
+/// The two ways out the pair is born with are joined as well — the unnamed one, so that an action
+/// nobody named a way out of still leaves, and the error one, so that a step that fell over leaves by
+/// the action's error way out and the picture the placement stands on decides what to do about it,
+/// instead of the run halting inside an action the outer picture never sees.
 pub fn action_from_prompt(
     tx: &WriteTx<'_>,
     project_id: Option<i64>,
@@ -353,6 +366,17 @@ pub fn action_from_prompt(
     for name in exits {
         exit_add(tx, AutomationOwner::Action, action.id, Some(name))?;
         exit_add(tx, AutomationOwner::Step, step.id, Some(name))?;
+    }
+    let born_with = [None, Some(ERROR_EXIT.to_string())];
+    for name in exits.iter().cloned().map(Some).chain(born_with) {
+        edge_add(
+            tx,
+            AutomationPictureOwner::Action,
+            step.id,
+            name.as_deref(),
+            EdgeTarget::Exit(name.clone()),
+            None,
+        )?;
     }
     for (name, kind, required) in inputs {
         port_add(
@@ -372,6 +396,15 @@ pub fn action_from_prompt(
             name,
             *kind,
             *required,
+        )?;
+        wire_add(
+            tx,
+            AutomationPictureOwner::Action,
+            ACTION_BOUNDARY,
+            None,
+            name,
+            step.id,
+            name,
         )?;
     }
     action_set_entry(tx, action.id, Some(step.id))
@@ -920,6 +953,7 @@ fn splice_onto_edge(tx: &WriteTx<'_>, edge: &AutomationEdge, new_box: i64) -> Re
         AutomationEnds::Go => EdgeTarget::Go(
             edge.to_id.ok_or_else(|| Error::invalid("the way out goes on to nothing"))?,
         ),
+        AutomationEnds::Exit => EdgeTarget::Exit(edge.exit_to.clone()),
         AutomationEnds::Done => EdgeTarget::Done,
         AutomationEnds::Halt => EdgeTarget::Halt,
     };
@@ -1467,32 +1501,61 @@ fn box_exit(
 }
 
 /// What an edge does once its way out is taken.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum EdgeTarget {
     /// Open the next box.
     Go(i64),
-    /// Close the picture this line is drawn on.
+    /// Leave the action this picture is inside, by the way out it declares under this name — `None`
+    /// being its unnamed one. An action's picture only: an automation's has nothing outside it.
+    Exit(Option<String>),
+    /// Close the run.
     Done,
     /// Stop the run and call a person.
     Halt,
 }
 
 impl EdgeTarget {
-    fn parts(self) -> (AutomationEnds, Option<i64>) {
+    fn parts(self) -> (AutomationEnds, Option<i64>, Option<String>) {
         match self {
-            EdgeTarget::Go(to) => (AutomationEnds::Go, Some(to)),
-            EdgeTarget::Done => (AutomationEnds::Done, None),
-            EdgeTarget::Halt => (AutomationEnds::Halt, None),
+            EdgeTarget::Go(to) => (AutomationEnds::Go, Some(to), None),
+            EdgeTarget::Exit(name) => (AutomationEnds::Exit, None, name),
+            EdgeTarget::Done => (AutomationEnds::Done, None, None),
+            EdgeTarget::Halt => (AutomationEnds::Halt, None, None),
         }
     }
+}
+
+/// The way out of the action a picture is inside that an `Exit` edge returns to, resolved by name
+/// against that action's own declarations.
+///
+/// It refuses an automation's picture before it refuses a name: an automation is not inside anything, so
+/// there is no way out of it to return to and the edge that says otherwise is the caller's mistake.
+fn returning_exit(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPictureOwner,
+    owner_id: i64,
+    exit_to: Option<&str>,
+) -> Result<AutomationExit> {
+    if owner_kind != AutomationPictureOwner::Action {
+        return Err(Error::invalid(
+            "only a picture inside an action has a way out to return to — an automation's picture ends \
+             the run instead",
+        ));
+    }
+    read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, owner_id, exit_to)?.ok_or_else(
+        || match exit_to {
+            Some(n) => Error::not_found(format!("this action has no way out called '{n}'")),
+            None => Error::not_found("this action has no unnamed way out".to_string()),
+        },
+    )
 }
 
 /// A limit counts something that can be taken twice, and it counts at least once.
 fn checked_max_times(max_times: Option<i64>, ends: AutomationEnds) -> Result<()> {
     if max_times.is_some() && ends != AutomationEnds::Go {
         return Err(Error::invalid(
-            "a limit counts how often an edge is taken, and an edge that closes or stops the run is \
-             taken once",
+            "a limit counts how often an edge is taken, and an edge that leaves the action, closes the \
+             run or stops it is taken once",
         ));
     }
     if let Some(n) = max_times {
@@ -1514,6 +1577,10 @@ fn checked_max_times(max_times: Option<i64>, ends: AutomationEnds) -> Result<()>
 ///
 /// **One way out decides one thing**, so a second edge on the same way out is refused rather than
 /// leaving the run to pick between them.
+///
+/// [`EdgeTarget::Exit`] is an action's picture's alone, and the way out it names has to be one the
+/// action itself declares — that pair is the whole of what joins an action's declarations to the steps
+/// inside it.
 pub fn edge_add(
     tx: &WriteTx<'_>,
     owner_kind: AutomationPictureOwner,
@@ -1524,7 +1591,7 @@ pub fn edge_add(
 ) -> Result<AutomationEdge> {
     let owner_id = box_picture(tx, owner_kind, from_id)?;
     box_exit(tx, owner_kind, from_id, exit_name)?;
-    let (ends, to_id) = target.parts();
+    let (ends, to_id, exit_to) = target.parts();
     if let Some(to_id) = to_id {
         if box_picture(tx, owner_kind, to_id)? != owner_id {
             return Err(Error::invalid(format!(
@@ -1532,6 +1599,9 @@ pub fn edge_add(
                 box_word(owner_kind)
             )));
         }
+    }
+    if ends == AutomationEnds::Exit {
+        returning_exit(tx, owner_kind, owner_id, exit_to.as_deref())?;
     }
     checked_max_times(max_times, ends)?;
     if read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit_name)?.is_some() {
@@ -1552,6 +1622,7 @@ pub fn edge_add(
         exit_name: exit_name.map(str::to_string),
         to_id,
         ends,
+        exit_to,
         max_times,
         order_key,
         created_at: now,
@@ -1573,7 +1644,7 @@ pub fn edge_update(
     let before = live_edge(tx, id)?;
     let mut after = before.clone();
     if let Some(target) = target {
-        let (ends, to_id) = target.parts();
+        let (ends, to_id, exit_to) = target.parts();
         if let Some(to_id) = to_id {
             if box_picture(tx, before.owner_kind, to_id)? != before.owner_id {
                 return Err(Error::invalid(format!(
@@ -1582,8 +1653,12 @@ pub fn edge_update(
                 )));
             }
         }
+        if ends == AutomationEnds::Exit {
+            returning_exit(tx, before.owner_kind, before.owner_id, exit_to.as_deref())?;
+        }
         after.ends = ends;
         after.to_id = to_id;
+        after.exit_to = exit_to;
     }
     if let Some(max_times) = max_times {
         after.max_times = max_times;
@@ -1602,11 +1677,52 @@ pub fn edge_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     Ok(())
 }
 
+/// The picture a wire is drawn on, read off whichever of its ends is a box — since one of them may be
+/// [`ACTION_BOUNDARY`], which belongs to no picture until the other end says which.
+///
+/// It refuses a boundary on an automation's picture, and a wire with a boundary at both ends: the first
+/// has nothing outside it to reach, and the second joins the action to itself.
+fn wire_picture(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPictureOwner,
+    from_id: i64,
+    to_id: i64,
+) -> Result<i64> {
+    if from_id != ACTION_BOUNDARY && to_id != ACTION_BOUNDARY {
+        let owner_id = box_picture(tx, owner_kind, from_id)?;
+        if box_picture(tx, owner_kind, to_id)? != owner_id {
+            return Err(Error::invalid("a wire joins two boxes of one picture — these are on two"));
+        }
+        return Ok(owner_id);
+    }
+    if owner_kind != AutomationPictureOwner::Action {
+        return Err(Error::invalid(
+            "an automation's picture has no boundary to reach across — every wire on it joins two \
+             placements",
+        ));
+    }
+    if from_id == ACTION_BOUNDARY && to_id == ACTION_BOUNDARY {
+        return Err(Error::invalid(
+            "a wire from the action to itself hands nothing on — one of its ends is a step",
+        ));
+    }
+    box_picture(tx, owner_kind, if from_id == ACTION_BOUNDARY { to_id } else { from_id })
+}
+
 /// Join what one way out hands on to what a later box takes in.
 ///
 /// Both ends are checked against what is declared, and the two have to carry the same kind of thing — a
 /// file into a file, a value into a value. Several wires may land on one input: which of them the step
 /// actually reads is the run's to decide, from whichever wrote last in the stretch it is in.
+///
+/// **Inside an action, either end may be [`ACTION_BOUNDARY`]** — the action itself — and that is how
+/// what it declares reaches what is inside it:
+///
+/// - out of the boundary comes an input the action declares, so `from_exit_name` has to be `None`: an
+///   action's inputs hang on the action and not on a way out of it.
+/// - into the boundary goes an output declared on a way out of the action. Which way out is not asked
+///   for — it is the one the wire's source returns to, so the `Exit` edge has to be drawn first and the
+///   refusal says so. That is what keeps a value from being handed out of a way the run never left by.
 ///
 /// **Drawing the same wire twice answers the one already drawn** rather than writing a second row.
 pub fn wire_add(
@@ -1618,40 +1734,75 @@ pub fn wire_add(
     to_id: i64,
     to_port_name: &str,
 ) -> Result<AutomationWire> {
-    let owner_id = box_picture(tx, owner_kind, from_id)?;
-    if box_picture(tx, owner_kind, to_id)? != owner_id {
-        return Err(Error::invalid(
-            "a wire joins two boxes of one picture — these are on two",
-        ));
-    }
-    let exit = box_exit(tx, owner_kind, from_id, from_exit_name)?;
-    let out = read::automation_port_by_name(
-        tx.conn(),
-        AutomationPortOwner::Exit,
-        exit.id,
-        AutomationPortDirection::Out,
-        from_port_name,
-    )?
-    .ok_or_else(|| {
-        Error::not_found(format!(
-            "that way out of {} '{from_id}' hands on no '{from_port_name}'",
-            box_word(owner_kind)
-        ))
-    })?;
-    let (to_owner, to_owner_id) = box_port_declarer(tx, owner_kind, to_id)?;
-    let into = read::automation_port_by_name(
-        tx.conn(),
-        to_owner,
-        to_owner_id,
-        AutomationPortDirection::In,
-        to_port_name,
-    )?
-    .ok_or_else(|| {
-        Error::not_found(format!(
-            "{} '{to_id}' takes in no '{to_port_name}'",
-            box_word(owner_kind)
-        ))
-    })?;
+    let owner_id = wire_picture(tx, owner_kind, from_id, to_id)?;
+    let out = if from_id == ACTION_BOUNDARY {
+        if from_exit_name.is_some() {
+            return Err(Error::invalid(
+                "an action hands its inputs on from itself, not from one of its ways out",
+            ));
+        }
+        read::automation_port_by_name(
+            tx.conn(),
+            AutomationPortOwner::Action,
+            owner_id,
+            AutomationPortDirection::In,
+            from_port_name,
+        )?
+        .ok_or_else(|| Error::not_found(format!("this action takes in no '{from_port_name}'")))?
+    } else {
+        let exit = box_exit(tx, owner_kind, from_id, from_exit_name)?;
+        read::automation_port_by_name(
+            tx.conn(),
+            AutomationPortOwner::Exit,
+            exit.id,
+            AutomationPortDirection::Out,
+            from_port_name,
+        )?
+        .ok_or_else(|| {
+            Error::not_found(format!(
+                "that way out of {} '{from_id}' hands on no '{from_port_name}'",
+                box_word(owner_kind)
+            ))
+        })?
+    };
+    let into = if to_id == ACTION_BOUNDARY {
+        let returns_by = read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, from_exit_name)?
+            .filter(|edge| edge.ends == AutomationEnds::Exit)
+            .ok_or_else(|| {
+                Error::invalid(format!(
+                    "that way out of step '{from_id}' does not leave the action — say which way out of \
+                     the action it returns to before handing anything out of it"
+                ))
+            })?;
+        let exit = returning_exit(tx, owner_kind, owner_id, returns_by.exit_to.as_deref())?;
+        read::automation_port_by_name(
+            tx.conn(),
+            AutomationPortOwner::Exit,
+            exit.id,
+            AutomationPortDirection::Out,
+            to_port_name,
+        )?
+        .ok_or_else(|| {
+            Error::not_found(format!(
+                "that way out of this action hands on no '{to_port_name}'"
+            ))
+        })?
+    } else {
+        let (to_owner, to_owner_id) = box_port_declarer(tx, owner_kind, to_id)?;
+        read::automation_port_by_name(
+            tx.conn(),
+            to_owner,
+            to_owner_id,
+            AutomationPortDirection::In,
+            to_port_name,
+        )?
+        .ok_or_else(|| {
+            Error::not_found(format!(
+                "{} '{to_id}' takes in no '{to_port_name}'",
+                box_word(owner_kind)
+            ))
+        })?
+    };
     if out.kind != into.kind {
         return Err(Error::invalid(format!(
             "'{from_port_name}' carries a {} and '{to_port_name}' takes a {} — a wire joins two of one \
@@ -1758,6 +1909,221 @@ mod tests {
         });
     }
 
+    #[test]
+    fn an_action_written_from_a_prompt_is_joined_to_the_step_inside_it() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(
+                tx,
+                Some(project),
+                NewStep::new("点検する", "見る", "claude"),
+                &["直すところがある".to_string()],
+                &[("差分".to_string(), AutomationPortKind::File, true)],
+            )
+            .expect("write the action");
+            let step = only_step(tx, &action);
+
+            for name in [None, Some(ERROR_EXIT), Some("直すところがある")] {
+                let edge = read::automation_edge_for_exit(
+                    tx.conn(),
+                    AutomationPictureOwner::Action,
+                    step.id,
+                    name,
+                )
+                .expect("read the edge")
+                .expect("every way out of the step leaves the action");
+                assert_eq!(edge.ends, AutomationEnds::Exit);
+                assert_eq!(
+                    edge.exit_to.as_deref(),
+                    name,
+                    "and it returns to the action's way out of that name",
+                );
+            }
+
+            let wires = read::automation_wires_of(tx.conn(), AutomationPictureOwner::Action, action.id)
+                .expect("read the wires");
+            assert_eq!(wires.len(), 1);
+            assert_eq!(wires[0].from_id, ACTION_BOUNDARY, "out of the action itself");
+            assert_eq!(wires[0].from_exit_name, None);
+            assert_eq!(wires[0].from_port_name, "差分");
+            assert_eq!(wires[0].to_id, step.id);
+            assert_eq!(wires[0].to_port_name, "差分");
+        });
+    }
+
+    #[test]
+    fn an_automations_picture_has_no_way_out_of_itself_to_return_to() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, placement) = mk_placed(tx, &automation, "取る");
+            let refused = edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placement.id,
+                Some(ERROR_EXIT),
+                EdgeTarget::Exit(None),
+                None,
+            )
+            .expect_err("an automation is inside nothing");
+            assert!(format!("{refused}").contains("ends the run"), "{refused}");
+        });
+    }
+
+    #[test]
+    fn a_line_out_of_an_action_names_a_way_out_that_action_declares() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, _) = mk_placed(tx, &automation, "取る");
+            let (action, _) = mk_placed(tx, &automation, "点検する");
+            let step = only_step(tx, &action);
+            let refused = edge_add(
+                tx,
+                AutomationPictureOwner::Action,
+                step.id,
+                Some(ERROR_EXIT),
+                EdgeTarget::Exit(Some("書いていない".to_string())),
+                None,
+            )
+            .expect_err("the action declares no such way out");
+            assert!(format!("{refused}").contains("書いていない"), "{refused}");
+        });
+    }
+
+    #[test]
+    fn what_a_step_hands_on_reaches_the_way_out_of_the_action_it_leaves_by() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "点検する");
+            let step = only_step(tx, &action);
+            // The output both sides declare: on the step's unnamed way out, and on the action's.
+            for (owner, owner_id) in
+                [(AutomationOwner::Step, step.id), (AutomationOwner::Action, action.id)]
+            {
+                let exit = read::automation_exit_by_name(tx.conn(), owner, owner_id, None)
+                    .expect("read the way out")
+                    .expect("the unnamed way out");
+                port_add(
+                    tx,
+                    AutomationPortOwner::Exit,
+                    exit.id,
+                    AutomationPortDirection::Out,
+                    "指摘",
+                    AutomationPortKind::File,
+                    true,
+                )
+                .expect("declare the output");
+            }
+
+            let wire = wire_add(
+                tx,
+                AutomationPictureOwner::Action,
+                step.id,
+                None,
+                "指摘",
+                ACTION_BOUNDARY,
+                "指摘",
+            )
+            .expect("hand it out of the action");
+            assert_eq!(wire.owner_id, action.id, "the picture is read off the end that is a step");
+            assert_eq!(wire.to_id, ACTION_BOUNDARY);
+        });
+    }
+
+    #[test]
+    fn nothing_is_handed_out_of_a_way_out_that_does_not_leave_the_action() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "点検する");
+            let step = only_step(tx, &action);
+            let error = read::automation_exit_by_name(
+                tx.conn(),
+                AutomationOwner::Step,
+                step.id,
+                Some(ERROR_EXIT),
+            )
+            .expect("read the way out")
+            .expect("the error way out");
+            port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                error.id,
+                AutomationPortDirection::Out,
+                "言いぶん",
+                AutomationPortKind::Value,
+                false,
+            )
+            .expect("declare the output");
+            // The error way out of this step leaves the action, so take that line away first.
+            let drawn = read::automation_edge_for_exit(
+                tx.conn(),
+                AutomationPictureOwner::Action,
+                step.id,
+                Some(ERROR_EXIT),
+            )
+            .expect("read the edge")
+            .expect("an edge");
+            edge_delete(tx, drawn.id).expect("take the line away");
+
+            let refused = wire_add(
+                tx,
+                AutomationPictureOwner::Action,
+                step.id,
+                Some(ERROR_EXIT),
+                "言いぶん",
+                ACTION_BOUNDARY,
+                "言いぶん",
+            )
+            .expect_err("that way out goes nowhere out of the action");
+            assert!(format!("{refused}").contains("does not leave the action"), "{refused}");
+        });
+    }
+
+    #[test]
+    fn an_automations_picture_has_no_boundary_to_wire_across() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, placement) = mk_placed(tx, &automation, "取る");
+            let refused = wire_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                ACTION_BOUNDARY,
+                None,
+                "差分",
+                placement.id,
+                "差分",
+            )
+            .expect_err("an automation has no outside");
+            assert!(format!("{refused}").contains("no boundary"), "{refused}");
+        });
+    }
+
+    #[test]
+    fn an_action_hands_its_inputs_on_from_itself_and_not_from_a_way_out() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(
+                tx,
+                Some(project),
+                NewStep::new("点検する", "見る", "claude"),
+                &[],
+                &[("差分".to_string(), AutomationPortKind::File, true)],
+            )
+            .expect("write the action");
+            let step = only_step(tx, &action);
+            let refused = wire_add(
+                tx,
+                AutomationPictureOwner::Action,
+                ACTION_BOUNDARY,
+                Some(ERROR_EXIT),
+                "差分",
+                step.id,
+                "差分",
+            )
+            .expect_err("an input hangs on the action");
+            assert!(format!("{refused}").contains("not from one of its ways out"), "{refused}");
+        });
+    }
+
     /// What an edge says, as a pair a test can read at a glance.
     fn edge_of(
         tx: &WriteTx<'_>,
@@ -1817,20 +2183,22 @@ mod tests {
     }
 
     #[test]
-    fn a_step_put_in_on_a_line_that_closed_the_picture_closes_it_from_there_instead() {
+    fn a_step_put_in_on_the_line_out_of_an_action_leaves_by_it_instead() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (action, _) = mk_placed(tx, &automation, "取る");
             let first = only_step(tx, &action);
-            let edge = edge_add(
-                tx,
+            // The line the new step goes in on is the one the action was written with: its one step
+            // leaves the action by its unnamed way out.
+            let edge = read::automation_edge_for_exit(
+                tx.conn(),
                 AutomationPictureOwner::Action,
                 first.id,
                 None,
-                EdgeTarget::Done,
-                None,
             )
-            .expect("edge");
+            .expect("read the edge")
+            .expect("the action leaves by its unnamed way out");
+            assert_eq!(edge.ends, AutomationEnds::Exit);
 
             let put = step_insert(
                 tx,
@@ -1847,8 +2215,8 @@ mod tests {
             );
             assert_eq!(
                 edge_of(tx, AutomationPictureOwner::Action, put.id, None),
-                (AutomationEnds::Done, None),
-                "closing the action is what the new step goes on to do",
+                (AutomationEnds::Exit, None),
+                "leaving the action is what the new step goes on to do",
             );
             assert_eq!(
                 read::automation_edge_for_exit(
@@ -1861,7 +2229,7 @@ mod tests {
                 .unwrap()
                 .max_times,
                 Some(DEFAULT_MAX_TIMES),
-                "a way out that closed the picture carried no limit, and now it needs one",
+                "a way out that left the action carried no limit, and now it needs one",
             );
             assert_eq!(
                 exit_names(tx, AutomationOwner::Step, put.id),

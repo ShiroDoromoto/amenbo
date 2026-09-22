@@ -4142,6 +4142,22 @@ const REGISTRY: &[OpSpec] = &[
     // Closing that pane, which is a way of stopping the run and says so before it does.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     //
+    // **What a step of a run types**, typed where the run opened a terminal for it. Which step is
+    // being answered is not in any of them: it comes off the environment the window set on that
+    // terminal (`amenbo_core::session::STEP_VAR`), and outside one the binary refuses rather than
+    // guessing at the newest run. So these are the screen's, on a run the screen started — a run
+    // begun at a terminal opens no pane, and there is nowhere to type them.
+    //
+    // `target` is which run's pane, read the way `close-run-pane` reads it. `take`'s `task` is the
+    // task the step goes and reserves, named back to an earlier binding because what the command
+    // takes is its ref and a road has no way to know the number in advance.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "take-in-pane", required: &["task"], refs: &["target", "task"], strings: &[], binds: false },
+    // One thing the step produced, under the name the port carrying it was declared with.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "out-in-pane", required: &["name", "value"], refs: &["target"], strings: &["name", "value"], binds: false },
+    // The step finished: which way out it took — left out, the unnamed one — and the report it owes
+    // whichever it took.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
+    //
     // The band over the workspace's panes: how many lanes the runs are holding, out of how many there
     // are. Pressing it lands on the setting that holds the second number.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lanes", required: &["held", "of"], refs: &[], strings: &[], binds: false },

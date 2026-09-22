@@ -735,8 +735,9 @@ and the search — while the picture, the step panel and the launch place are as
 about an automation opens on a definition that is already there, there being no way in on screen for
 the first step of the first one. Answering a setting is not among them — that is a move a reader
 makes, on the rows the screen takes one on or behind the flags the command does.
-**What a step of a run types is not there at all** (`take` / `out` / `done`): those are refused outside
-the terminal a run opened for a step, and a run started at the terminal opens none.
+**What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):
+which step is being answered comes off the environment the window opened that terminal with, so the
+three are refused anywhere else — and a run started at the terminal opens no pane to type them in.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

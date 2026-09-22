@@ -28,11 +28,12 @@ use super::sql::{Col, ColType, NotNull, Nullability, Nullable, Read, Text};
 use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
-    AutomationCfg, AutomationCfgKind, AutomationEdge, AutomationEnds, AutomationExit,
-    AutomationNote, AutomationOwner, AutomationPort, AutomationPortDirection, AutomationPortKind,
+    AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge, AutomationEnds,
+    AutomationExit, AutomationNote, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+    AutomationPlacementNote, AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationStepNote, AutomationStoppedReason, AutomationWire, Database,
+    AutomationStep, AutomationStoppedReason, AutomationWire, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -472,7 +473,7 @@ pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationActio
         id: get(r, C.id)?,
         project_id: get(r, C.project_id)?,
         name: get(r, C.name)?,
-        prompt: get(r, C.prompt)?,
+        entry_step_id: get(r, C.entry_step_id)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -488,7 +489,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         name: get(r, C.name)?,
         notes: get(r, C.notes)?,
         preamble: get(r, C.preamble)?,
-        entry_step_id: get(r, C.entry_step_id)?,
+        entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
         order_key: get(r, C.order_key)?,
         created_at,
@@ -510,14 +511,26 @@ pub(super) fn automation_note_row(r: &Row) -> rusqlite::Result<AutomationNote> {
     })
 }
 
+pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPlacement> {
+    const C: col::automation_placement::Cols = col::automation_placement::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationPlacement {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        action_id: get(r, C.action_id)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
 pub(super) fn automation_step_row(r: &Row) -> rusqlite::Result<AutomationStep> {
     const C: col::automation_step::Cols = col::automation_step::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
     Ok(AutomationStep {
         id: get(r, C.id)?,
-        automation_id: get(r, C.automation_id)?,
-        name: get(r, C.name)?,
         action_id: get(r, C.action_id)?,
+        name: get(r, C.name)?,
         prompt: get(r, C.prompt)?,
         agent: get(r, C.agent)?,
         model: get(r, C.model)?,
@@ -536,7 +549,7 @@ pub(super) fn automation_cfg_row(r: &Row) -> rusqlite::Result<AutomationCfg> {
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
     Ok(AutomationCfg {
         id: get(r, C.id)?,
-        owner_kind: enum_req(r, C.owner_kind, AutomationOwner::parse)?,
+        owner_kind: enum_req(r, C.owner_kind, AutomationCfgOwner::parse)?,
         // Polymorphic (an unconstrained key, not `fk!`): which table it names is `owner_kind`'s to say.
         owner_id: get(r, C.owner_id)?,
         name: get(r, C.name)?,
@@ -550,12 +563,12 @@ pub(super) fn automation_cfg_row(r: &Row) -> rusqlite::Result<AutomationCfg> {
     })
 }
 
-pub(super) fn automation_step_note_row(r: &Row) -> rusqlite::Result<AutomationStepNote> {
-    const C: col::automation_step_note::Cols = col::automation_step_note::ALL;
+pub(super) fn automation_placement_note_row(r: &Row) -> rusqlite::Result<AutomationPlacementNote> {
+    const C: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(AutomationStepNote {
+    Ok(AutomationPlacementNote {
         id: get(r, C.id)?,
-        step_id: get(r, C.step_id)?,
+        placement_id: get(r, C.placement_id)?,
         note_id: get(r, C.note_id)?,
         order_key: get(r, C.order_key)?,
         created_at,
@@ -599,10 +612,11 @@ pub(super) fn automation_edge_row(r: &Row) -> rusqlite::Result<AutomationEdge> {
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
     Ok(AutomationEdge {
         id: get(r, C.id)?,
-        automation_id: get(r, C.automation_id)?,
-        from_step_id: get(r, C.from_step_id)?,
+        owner_kind: enum_req(r, C.owner_kind, AutomationPictureOwner::parse)?,
+        owner_id: get(r, C.owner_id)?,
+        from_id: get(r, C.from_id)?,
         exit_name: get(r, C.exit_name)?,
-        to_step_id: get(r, C.to_step_id)?,
+        to_id: get(r, C.to_id)?,
         ends: enum_req(r, C.ends, AutomationEnds::parse)?,
         max_times: get(r, C.max_times)?,
         order_key: get(r, C.order_key)?,
@@ -616,11 +630,12 @@ pub(super) fn automation_wire_row(r: &Row) -> rusqlite::Result<AutomationWire> {
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
     Ok(AutomationWire {
         id: get(r, C.id)?,
-        automation_id: get(r, C.automation_id)?,
-        from_step_id: get(r, C.from_step_id)?,
+        owner_kind: enum_req(r, C.owner_kind, AutomationPictureOwner::parse)?,
+        owner_id: get(r, C.owner_id)?,
+        from_id: get(r, C.from_id)?,
         from_exit_name: get(r, C.from_exit_name)?,
         from_port_name: get(r, C.from_port_name)?,
-        to_step_id: get(r, C.to_step_id)?,
+        to_id: get(r, C.to_id)?,
         to_port_name: get(r, C.to_port_name)?,
         created_at,
         updated_at,
@@ -653,6 +668,7 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
     Ok(AutomationRunDef {
         id: get(r, C.id)?,
         run_id: get(r, C.run_id)?,
+        placement_id: get(r, C.placement_id)?,
         step_id: get(r, C.step_id)?,
         name: get(r, C.name)?,
         prompt: get(r, C.prompt)?,

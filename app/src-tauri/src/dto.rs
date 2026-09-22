@@ -3219,10 +3219,11 @@ pub struct ViewerRepairedDto {
 // ───────────────────────── automation: the definition, as a screen reads it ─────────────────────────
 //
 // The ten definition tables answer as three shapes: a card for the list, a detail for the build screen,
-// and the launch check's verdict. A step's ways out, its inputs and its settings are read from the
-// library action it points at or from the step itself, and core is what resolves that
-// (amenbo_core::ops::automation_view) — a screen that had to know which of the two declared a name
-// would be drawing the storage rather than the automation. What these shapes add is the naming.
+// and the launch check's verdict. What a spot on the picture can be left by, takes in and is set to
+// is read off the library action standing on it, and core is what resolves that
+// (amenbo_core::ops::automation_view) — a screen that had to walk from the placement to the action
+// to the step would be drawing the storage rather than the automation. What these shapes add is the
+// naming.
 
 /// **One automation in the list** — what the "automations" tab draws a row from.
 #[derive(Serialize, TS)]
@@ -3232,23 +3233,23 @@ pub struct AutomationCardDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
-    /// How many steps it is built out of. The row says it because "what is this" and "is it built
+    /// How many actions are placed on it. The row says it because "what is this" and "is it built
     /// yet" are the two things a list is read for.
     #[ts(type = "number")]
-    pub(crate) steps: usize,
+    pub(crate) placements: usize,
     pub(crate) archived: bool,
 }
 
 /// **One library action in the list** — what the "actions" tab draws a row from.
 ///
 /// `global` is the reach it is held at: an action in the device's own library is one every project on
-/// this machine points steps at, and one in a project's library is that project's alone. It travels as
-/// that fact rather than as the project id, because the screen drawing it is inside one project and
-/// would only ever read an id back as "mine" or "the device's".
+/// this machine can place, and one in a project's library is that project's alone. It travels as that
+/// fact rather than as the project id, because the screen drawing it is inside one project and would
+/// only ever read an id back as "mine" or "the device's".
 ///
-/// `used_by` is **how many automations run it**, not how many steps do. Two steps of one automation
-/// pointing at the same action is one automation whose runs change when the prompt is rewritten, and
-/// that is the number the warning beside the prompt is about.
+/// `used_by` is **how many automations place it**, not how many placements there are. One action
+/// placed twice on one automation is one automation whose runs change when the prompt is rewritten,
+/// and that is the number the warning beside the prompt is about.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3256,18 +3257,28 @@ pub struct AutomationActionCardDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
-    /// The prompt every step pointing at this action carries. It comes with the row rather than being
-    /// fetched when one is opened: a library is tens of rows, and the edit box is opened in place.
+    /// The prompt the step this action opens first runs on — empty where it holds no step yet. It
+    /// comes with the row rather than being fetched when one is opened: a library is tens of rows,
+    /// and the edit box is opened in place.
     pub(crate) prompt: String,
+    /// The step that prompt is written on, so the edit box can name the row it is rewriting. Absent
+    /// where the action holds no step yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) entry_step_id: Option<i64>,
+    /// How many steps it holds. One is the shape every action folded out of a v52 step has.
+    #[ts(type = "number")]
+    pub(crate) steps: usize,
     pub(crate) global: bool,
     #[ts(type = "number")]
     pub(crate) used_by: usize,
 }
 
-/// **One automation's whole definition** — every step, every way out of each, and what joins them.
+/// **One automation's whole definition** — every placement, every way out of each, and what joins
+/// them.
 ///
 /// It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
-/// picture, its launch check and its step panel all read the same walk from the entry step.
+/// picture, its launch check and its panel all read the same walk from the entry.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3279,33 +3290,37 @@ pub struct AutomationDetailDto {
     pub(crate) name: String,
     pub(crate) notes: String,
     pub(crate) preamble: String,
-    /// The step a run opens its first terminal on. Absent while the automation is still being built.
+    /// The placement a run opens first. Absent while the automation is still being built.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
-    pub(crate) entry_step_id: Option<i64>,
+    pub(crate) entry_placement_id: Option<i64>,
     pub(crate) archived: bool,
-    pub(crate) steps: Vec<AutomationStepDto>,
+    pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,
 }
 
-/// **One step**, with the declarations it runs under already resolved.
+/// **One spot on the picture**: the library action standing there, with everything it is read under
+/// already resolved.
+///
+/// `id` is the placement's, which is what an edge and a wire name; `action_id` and `step_id` are what
+/// the panel writes through — a declaration is the action's, and a prompt is its step's.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
-pub struct AutomationStepDto {
+pub struct AutomationPlacementDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
+    /// What the action standing here is called — the name the box is drawn with.
     pub(crate) name: String,
-    /// The library action this step runs. Absent when it carries its own prompt.
+    #[ts(type = "number")]
+    pub(crate) action_id: i64,
+    /// The step this spot opens first. Absent where the action holds no step yet, which the launch
+    /// check names.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
-    pub(crate) action_id: Option<i64>,
-    /// What that action is called, so a row can name it without a second read.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) action_name: Option<String>,
-    /// The prompt this step carries, or the one it reads off the action — whichever it runs on.
+    pub(crate) step_id: Option<i64>,
+    /// The prompt that step runs on — empty where there is no step.
     pub(crate) prompt: String,
     pub(crate) agent: String,
     /// Absent leaves the agent's own default model.
@@ -3320,12 +3335,12 @@ pub struct AutomationStepDto {
     pub(crate) report_to_task: bool,
     pub(crate) show_history: bool,
     pub(crate) exits: Vec<AutomationExitDto>,
-    /// What this step takes in, in declaration order.
+    /// What this spot takes in, in declaration order.
     pub(crate) inputs: Vec<AutomationPortDto>,
     pub(crate) settings: Vec<AutomationCfgDto>,
 }
 
-/// **A way out of a step**, and what leaving through it hands on.
+/// **A way out of a spot**, and what leaving through it hands on.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3340,7 +3355,7 @@ pub struct AutomationExitDto {
     pub(crate) outputs: Vec<AutomationPortDto>,
 }
 
-/// **What a step takes, or what a way out of it hands on.**
+/// **What a spot takes, or what a way out of it hands on.**
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3351,7 +3366,7 @@ pub struct AutomationPortDto {
     pub(crate) required: bool,
 }
 
-/// **A setting, and the answer written for it while building.** An action declares and the step
+/// **A setting, and the answer written for it while building.** An action declares and the placement
 /// answers, so both are folded into one row here.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -3379,14 +3394,14 @@ pub struct AutomationEdgeDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     #[ts(type = "number")]
-    pub(crate) from_step_id: i64,
+    pub(crate) from_placement_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) exit_name: Option<String>,
     /// Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
-    pub(crate) to_step_id: Option<i64>,
+    pub(crate) to_placement_id: Option<i64>,
     #[ts(type = "\"go\" | \"done\" | \"halt\"")]
     pub(crate) ends: &'static str,
     /// How often this edge may be taken for one task. Absent is no limit.
@@ -3395,7 +3410,7 @@ pub struct AutomationEdgeDto {
     pub(crate) max_times: Option<i64>,
 }
 
-/// **What is handed from one step to the next.**
+/// **What is handed from one spot to the next.**
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3403,13 +3418,13 @@ pub struct AutomationWireDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     #[ts(type = "number")]
-    pub(crate) from_step_id: i64,
+    pub(crate) from_placement_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) from_exit_name: Option<String>,
     pub(crate) from_port_name: String,
     #[ts(type = "number")]
-    pub(crate) to_step_id: i64,
+    pub(crate) to_placement_id: i64,
     pub(crate) to_port_name: String,
 }
 

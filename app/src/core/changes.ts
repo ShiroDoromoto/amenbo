@@ -86,22 +86,24 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   binding_project_dir: ["projects"],
   hook_optout: ["projects"],
   harness_consent: ["projects"],
-  // The ten tables an automation's definition is built in. Nine of them are what the build screen
-  // reads as one answer — the definition is fetched whole and its picture, its step panel and its
-  // launch check all walk it (`core/automations`) — so they share one scope. A run's own tables are
-  // the exception below, naming the scopes the band and the "running" tab read.
+  // The eleven tables an automation's definition is built in. Most of them are what the build screen
+  // reads as one answer — the definition is fetched whole and its picture, its panel and its launch
+  // check all walk it (`core/automations`) — so they share one scope. A run's own tables are the
+  // exception below, naming the scopes the band and the "running" tab read.
   automation: ["automations"],
-  // The library and the pointers into it: the "actions" tab draws every action with how many
-  // automations run it, so a step taking up an action or letting one go moves that list as surely as
-  // the action's own row does — and it is a step of some definition either way.
+  // The library and the three layers' seams. The "actions" tab draws every action with how many
+  // automations place it, so a placement being drawn or taken off moves that list as surely as the
+  // action's own row does — and a step, a way out, a port and a setting are all read through the
+  // action a spot on some picture stands on (`AMB-D-949`).
   automation_action: ["automationActions"],
+  automation_placement: ["automationActions", "automations"],
   automation_note: ["automations"],
   automation_step: ["automationActions", "automations"],
-  automation_step_note: ["automations"],
-  automation_cfg: ["automations"],
-  automation_exit: ["automations"],
-  automation_port: ["automations"],
-  automation_edge: ["automations"],
+  automation_placement_note: ["automations"],
+  automation_cfg: ["automationActions", "automations"],
+  automation_exit: ["automationActions", "automations"],
+  automation_port: ["automationActions", "automations"],
+  automation_edge: ["automationActions", "automations"],
   automation_wire: ["automations"],
   // A run being launched, moving on or ending moves the row the "running" tab draws for it.
   automation_run: ["automationRuns"],

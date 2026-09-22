@@ -6280,7 +6280,7 @@ pub fn live_task_titles(conn: &Connection, project: Option<i64>) -> Result<Vec<(
 
 // ───────────────────────── automation: what is built ─────────────────────────
 //
-// Reads for the ten definition tables. Every one of them is taken inside the building operation's
+// Reads for the eleven definition tables. Every one of them is taken inside the building operation's
 // transaction (crate::ops::automation): placing an order_key, minting an id and checking that a name is
 // free are all read-then-write, and two writers that read the same answer both act on it.
 //
@@ -6331,6 +6331,14 @@ pub fn automation_note(conn: &Connection, id: i64) -> Result<Option<crate::model
     super::hydrate::row_by_id(conn, "automation_note", id, super::hydrate::automation_note_row)
 }
 
+/// The `automation_placement` record with this id.
+pub fn automation_placement(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::AutomationPlacement>> {
+    super::hydrate::row_by_id(conn, "automation_placement", id, super::hydrate::automation_placement_row)
+}
+
 /// The `automation_step` record with this id.
 pub fn automation_step(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationStep>> {
     super::hydrate::row_by_id(conn, "automation_step", id, super::hydrate::automation_step_row)
@@ -6341,12 +6349,17 @@ pub fn automation_cfg(conn: &Connection, id: i64) -> Result<Option<crate::model:
     super::hydrate::row_by_id(conn, "automation_cfg", id, super::hydrate::automation_cfg_row)
 }
 
-/// The `automation_step_note` record with this id.
-pub fn automation_step_note(
+/// The `automation_placement_note` record with this id.
+pub fn automation_placement_note(
     conn: &Connection,
     id: i64,
-) -> Result<Option<crate::model::AutomationStepNote>> {
-    super::hydrate::row_by_id(conn, "automation_step_note", id, super::hydrate::automation_step_note_row)
+) -> Result<Option<crate::model::AutomationPlacementNote>> {
+    super::hydrate::row_by_id(
+        conn,
+        "automation_placement_note",
+        id,
+        super::hydrate::automation_placement_note_row,
+    )
 }
 
 /// The `automation_exit` record with this id.
@@ -6393,14 +6406,24 @@ pub fn automation_action_siblings(
     order_siblings(conn, A.id, A.order_key, Some(scope), exclude)
 }
 
-/// Live step siblings within one automation.
+/// Live step siblings within one library action.
 pub fn automation_step_siblings(
+    conn: &Connection,
+    action_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const S: col::automation_step::Cols = col::automation_step::ALL;
+    order_siblings(conn, S.id, S.order_key, Some(Pred::eq(S.action_id, action_id)), exclude)
+}
+
+/// Live placement siblings within one automation.
+pub fn automation_placement_siblings(
     conn: &Connection,
     automation_id: i64,
     exclude: Option<i64>,
 ) -> Result<Vec<(i64, String)>> {
-    const S: col::automation_step::Cols = col::automation_step::ALL;
-    order_siblings(conn, S.id, S.order_key, Some(Pred::eq(S.automation_id, automation_id)), exclude)
+    const P: col::automation_placement::Cols = col::automation_placement::ALL;
+    order_siblings(conn, P.id, P.order_key, Some(Pred::eq(P.automation_id, automation_id)), exclude)
 }
 
 /// Live shared-document siblings within one automation.
@@ -6413,24 +6436,26 @@ pub fn automation_note_siblings(
     order_siblings(conn, N.id, N.order_key, Some(Pred::eq(N.automation_id, automation_id)), exclude)
 }
 
-/// Live edge siblings within one automation.
+/// Live edge siblings within one picture.
 pub fn automation_edge_siblings(
     conn: &Connection,
-    automation_id: i64,
+    owner_kind: crate::model::AutomationPictureOwner,
+    owner_id: i64,
     exclude: Option<i64>,
 ) -> Result<Vec<(i64, String)>> {
     const E: col::automation_edge::Cols = col::automation_edge::ALL;
-    order_siblings(conn, E.id, E.order_key, Some(Pred::eq(E.automation_id, automation_id)), exclude)
+    let scope = Pred::eq(E.owner_kind, owner_kind.as_str()).and(Pred::eq(E.owner_id, owner_id));
+    order_siblings(conn, E.id, E.order_key, Some(scope), exclude)
 }
 
-/// Live document-link siblings on one step.
-pub fn automation_step_note_siblings(
+/// Live document-link siblings on one placement.
+pub fn automation_placement_note_siblings(
     conn: &Connection,
-    step_id: i64,
+    placement_id: i64,
     exclude: Option<i64>,
 ) -> Result<Vec<(i64, String)>> {
-    const L: col::automation_step_note::Cols = col::automation_step_note::ALL;
-    order_siblings(conn, L.id, L.order_key, Some(Pred::eq(L.step_id, step_id)), exclude)
+    const L: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
+    order_siblings(conn, L.id, L.order_key, Some(Pred::eq(L.placement_id, placement_id)), exclude)
 }
 
 /// Live way-out siblings on one owner (a step or a library action).
@@ -6463,7 +6488,7 @@ pub fn automation_port_siblings(
 /// Live settings siblings on one owner.
 pub fn automation_cfg_siblings(
     conn: &Connection,
-    owner_kind: crate::model::AutomationOwner,
+    owner_kind: crate::model::AutomationCfgOwner,
     owner_id: i64,
     exclude: Option<i64>,
 ) -> Result<Vec<(i64, String)>> {
@@ -6548,7 +6573,7 @@ pub fn automation_port_by_name(
 /// The settings one owner carries, in display order.
 pub fn automation_cfgs_of(
     conn: &Connection,
-    owner_kind: crate::model::AutomationOwner,
+    owner_kind: crate::model::AutomationCfgOwner,
     owner_id: i64,
 ) -> Result<Vec<crate::model::AutomationCfg>> {
     const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
@@ -6565,7 +6590,7 @@ pub fn automation_cfgs_of(
 /// One owner's setting under this name.
 pub fn automation_cfg_by_name(
     conn: &Connection,
-    owner_kind: crate::model::AutomationOwner,
+    owner_kind: crate::model::AutomationCfgOwner,
     owner_id: i64,
     name: &str,
 ) -> Result<Option<crate::model::AutomationCfg>> {
@@ -6578,73 +6603,147 @@ pub fn automation_cfg_by_name(
         .next())
 }
 
-/// What is set to happen after one step leaves through one way out. At most one row: a way out decides
+/// What is set to happen after one box leaves through one way out. At most one row: a way out decides
 /// one thing.
 pub fn automation_edge_for_exit(
     conn: &Connection,
-    from_step_id: i64,
+    owner_kind: crate::model::AutomationPictureOwner,
+    from_id: i64,
     exit_name: Option<&str>,
 ) -> Result<Option<crate::model::AutomationEdge>> {
     const E: col::automation_edge::Cols = col::automation_edge::ALL;
-    let pred = Pred::eq(E.from_step_id, from_step_id).and(named_or_unnamed(E.exit_name, exit_name));
+    let pred = Pred::eq(E.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(E.from_id, from_id))
+        .and(named_or_unnamed(E.exit_name, exit_name));
     Ok(automation_rows(conn, E.table, &pred, &[Sort::by(E.id)], super::hydrate::automation_edge_row)?
         .into_iter()
         .next())
+}
+
+/// The edges leaving one box, in display order — what a picture is walked along.
+pub fn automation_edges_from(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    from_id: i64,
+) -> Result<Vec<crate::model::AutomationEdge>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    let pred = Pred::eq(E.owner_kind, owner_kind.as_str()).and(Pred::eq(E.from_id, from_id));
+    automation_rows(
+        conn,
+        E.table,
+        &pred,
+        &[Sort::by(E.order_key), Sort::by(E.id)],
+        super::hydrate::automation_edge_row,
+    )
+}
+
+/// Every edge of one picture, in display order.
+pub fn automation_edges_of(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    owner_id: i64,
+) -> Result<Vec<crate::model::AutomationEdge>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    let pred = Pred::eq(E.owner_kind, owner_kind.as_str()).and(Pred::eq(E.owner_id, owner_id));
+    automation_rows(
+        conn,
+        E.table,
+        &pred,
+        &[Sort::by(E.order_key), Sort::by(E.id)],
+        super::hydrate::automation_edge_row,
+    )
+}
+
+/// Every wire of one picture, oldest first.
+pub fn automation_wires_of(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    owner_id: i64,
+) -> Result<Vec<crate::model::AutomationWire>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let pred = Pred::eq(W.owner_kind, owner_kind.as_str()).and(Pred::eq(W.owner_id, owner_id));
+    automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)
 }
 
 /// The wire drawn between exactly these two ends, if one is drawn — what a second `wire add` for the
 /// same pair reads to find itself already there.
 pub fn automation_wire_between(
     conn: &Connection,
-    from_step_id: i64,
+    owner_kind: crate::model::AutomationPictureOwner,
+    from_id: i64,
     from_exit_name: Option<&str>,
     from_port_name: &str,
-    to_step_id: i64,
+    to_id: i64,
     to_port_name: &str,
 ) -> Result<Option<crate::model::AutomationWire>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
-    let pred = Pred::eq(W.from_step_id, from_step_id)
+    let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(W.from_id, from_id))
         .and(named_or_unnamed(W.from_exit_name, from_exit_name))
         .and(Pred::eq(W.from_port_name, from_port_name))
-        .and(Pred::eq(W.to_step_id, to_step_id))
+        .and(Pred::eq(W.to_id, to_id))
         .and(Pred::eq(W.to_port_name, to_port_name));
     Ok(automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)?
         .into_iter()
         .next())
 }
 
-/// The steps of one automation, in display order — what the launch check walks and what the launch
+/// The steps of one library action, in display order — what the launch check walks and what the launch
 /// copies into the run.
 pub fn automation_steps_of(
     conn: &Connection,
-    automation_id: i64,
+    action_id: i64,
 ) -> Result<Vec<crate::model::AutomationStep>> {
     const S: col::automation_step::Cols = col::automation_step::ALL;
     automation_rows(
         conn,
         S.table,
-        &Pred::eq(S.automation_id, automation_id),
+        &Pred::eq(S.action_id, action_id),
         &[Sort::by(S.order_key), Sort::by(S.id)],
         super::hydrate::automation_step_row,
     )
 }
 
-/// Every wire feeding one step's input — usually one, and more than one where the same input is fed
+/// The placements of one automation, in display order.
+pub fn automation_placements_of(
+    conn: &Connection,
+    automation_id: i64,
+) -> Result<Vec<crate::model::AutomationPlacement>> {
+    const P: col::automation_placement::Cols = col::automation_placement::ALL;
+    automation_rows(
+        conn,
+        P.table,
+        &Pred::eq(P.automation_id, automation_id),
+        &[Sort::by(P.order_key), Sort::by(P.id)],
+        super::hydrate::automation_placement_row,
+    )
+}
+
+/// Every wire feeding one box's input — usually one, and more than one where the same input is fed
 /// from two ways out that cannot both be taken.
 pub fn automation_wires_to_port(
     conn: &Connection,
-    to_step_id: i64,
+    owner_kind: crate::model::AutomationPictureOwner,
+    to_id: i64,
     to_port_name: &str,
 ) -> Result<Vec<crate::model::AutomationWire>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
-    let pred = Pred::eq(W.to_step_id, to_step_id).and(Pred::eq(W.to_port_name, to_port_name));
+    let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(W.to_id, to_id))
+        .and(Pred::eq(W.to_port_name, to_port_name));
     automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)
 }
 
-/// The steps of one automation, oldest key first — the subtree a delete walks.
-pub fn automation_step_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+/// The steps of one library action, oldest key first — the subtree a delete walks.
+pub fn automation_step_ids(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
     const S: col::automation_step::Cols = col::automation_step::ALL;
-    select_ids(conn, S.id, Some(&Pred::eq(S.automation_id, automation_id)))
+    select_ids(conn, S.id, Some(&Pred::eq(S.action_id, action_id)))
+}
+
+/// The placements of one automation, oldest key first — the subtree a delete walks.
+pub fn automation_placement_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const P: col::automation_placement::Cols = col::automation_placement::ALL;
+    select_ids(conn, P.id, Some(&Pred::eq(P.automation_id, automation_id)))
 }
 
 /// The shared documents of one automation.
@@ -6653,42 +6752,62 @@ pub fn automation_note_ids(conn: &Connection, automation_id: i64) -> Result<Vec<
     select_ids(conn, N.id, Some(&Pred::eq(N.automation_id, automation_id)))
 }
 
-/// The edges of one automation.
-pub fn automation_edge_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+/// The edges of one picture.
+pub fn automation_edge_ids(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    owner_id: i64,
+) -> Result<Vec<i64>> {
     const E: col::automation_edge::Cols = col::automation_edge::ALL;
-    select_ids(conn, E.id, Some(&Pred::eq(E.automation_id, automation_id)))
-}
-
-/// The wires of one automation.
-pub fn automation_wire_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
-    const W: col::automation_wire::Cols = col::automation_wire::ALL;
-    select_ids(conn, W.id, Some(&Pred::eq(W.automation_id, automation_id)))
-}
-
-/// The edges that name one step at either end — what goes when the step does, since an edge pointing at
-/// a step that is gone is an edge that decides nothing.
-pub fn automation_edge_ids_naming_step(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
-    const E: col::automation_edge::Cols = col::automation_edge::ALL;
-    let pred = Pred::eq(E.from_step_id, step_id).or(Pred::eq(E.to_step_id, step_id));
+    let pred = Pred::eq(E.owner_kind, owner_kind.as_str()).and(Pred::eq(E.owner_id, owner_id));
     select_ids(conn, E.id, Some(&pred))
 }
 
-/// The wires that name one step at either end.
-pub fn automation_wire_ids_naming_step(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
+/// The wires of one picture.
+pub fn automation_wire_ids(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    owner_id: i64,
+) -> Result<Vec<i64>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
-    let pred = Pred::eq(W.from_step_id, step_id).or(Pred::eq(W.to_step_id, step_id));
+    let pred = Pred::eq(W.owner_kind, owner_kind.as_str()).and(Pred::eq(W.owner_id, owner_id));
     select_ids(conn, W.id, Some(&pred))
 }
 
-/// The document links on one step.
-pub fn automation_step_note_ids(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
-    const L: col::automation_step_note::Cols = col::automation_step_note::ALL;
-    select_ids(conn, L.id, Some(&Pred::eq(L.step_id, step_id)))
+/// The edges that name one box at either end — what goes when the box does, since an edge pointing at a
+/// box that is gone is an edge that decides nothing.
+pub fn automation_edge_ids_naming_box(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    box_id: i64,
+) -> Result<Vec<i64>> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    let pred = Pred::eq(E.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(E.from_id, box_id).or(Pred::eq(E.to_id, box_id)));
+    select_ids(conn, E.id, Some(&pred))
+}
+
+/// The wires that name one box at either end.
+pub fn automation_wire_ids_naming_box(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    box_id: i64,
+) -> Result<Vec<i64>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(W.from_id, box_id).or(Pred::eq(W.to_id, box_id)));
+    select_ids(conn, W.id, Some(&pred))
+}
+
+/// The document links on one placement.
+pub fn automation_placement_note_ids(conn: &Connection, placement_id: i64) -> Result<Vec<i64>> {
+    const L: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.placement_id, placement_id)))
 }
 
 /// The document links naming one shared document.
-pub fn automation_step_note_ids_of_note(conn: &Connection, note_id: i64) -> Result<Vec<i64>> {
-    const L: col::automation_step_note::Cols = col::automation_step_note::ALL;
+pub fn automation_placement_note_ids_of_note(conn: &Connection, note_id: i64) -> Result<Vec<i64>> {
+    const L: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
     select_ids(conn, L.id, Some(&Pred::eq(L.note_id, note_id)))
 }
 
@@ -6717,7 +6836,7 @@ pub fn automation_port_ids(
 /// The settings one owner carries.
 pub fn automation_cfg_ids(
     conn: &Connection,
-    owner_kind: crate::model::AutomationOwner,
+    owner_kind: crate::model::AutomationCfgOwner,
     owner_id: i64,
 ) -> Result<Vec<i64>> {
     const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
@@ -6725,11 +6844,11 @@ pub fn automation_cfg_ids(
     select_ids(conn, C.id, Some(&pred))
 }
 
-/// The steps that run one library action — what a delete of the action is refused by, since the step
-/// would be left pointing at a prompt that is gone.
-pub fn automation_step_ids_using_action(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
-    const S: col::automation_step::Cols = col::automation_step::ALL;
-    select_ids(conn, S.id, Some(&Pred::eq(S.action_id, action_id)))
+/// The placements of one library action — what a delete of the action is refused by, since the
+/// placement would be left standing on nothing.
+pub fn automation_placement_ids_using_action(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
+    const P: col::automation_placement::Cols = col::automation_placement::ALL;
+    select_ids(conn, P.id, Some(&Pred::eq(P.action_id, action_id)))
 }
 
 /// The runs one automation has behind it. A definition with a run is not deleted: the run reads its own

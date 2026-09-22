@@ -274,13 +274,18 @@ fn next_after_the_pause(
 ) -> Result<Option<AutomationRunDef>> {
     let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else { return Ok(None) };
     let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
-    let Some(step_id) = def.step_id else { return Ok(None) };
-    let Some(edge) = read::automation_edge_for_exit(conn, step_id, last.exit_name.as_deref())?
+    let Some(placement_id) = def.placement_id else { return Ok(None) };
+    let Some(edge) = read::automation_edge_for_exit(
+        conn,
+        crate::model::AutomationPictureOwner::Automation,
+        placement_id,
+        last.exit_name.as_deref(),
+    )?
     else {
         return Ok(None);
     };
-    let Some(to) = edge.to_step_id else { return Ok(None) };
-    Ok(read::automation_run_defs_of(conn, run.id)?.into_iter().find(|d| d.step_id == Some(to)))
+    let Some(to) = edge.to_id else { return Ok(None) };
+    Ok(read::automation_run_defs_of(conn, run.id)?.into_iter().find(|d| d.placement_id == Some(to)))
 }
 
 /// **Stop a run now** — the terminal is closed wherever it is, and the cleanup runs.
@@ -327,24 +332,24 @@ mod tests {
     use super::*;
     use crate::model::{
         Automation, AutomationOwner, AutomationPortDirection, AutomationPortKind,
-        AutomationPortOwner, AutomationStep,
+        AutomationPortOwner,
     };
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
-    use crate::ops::test_support::{mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
 
 
-    /// The picture these tests walk: a step that takes a task and goes on to a second, and the second
+    /// The picture these tests walk: a spot that takes a task and goes on to a second, and the second
     /// closing the run. `back` gives the second a way round to itself, capped at one turn — a way back
-    /// into the step that takes a task would begin a fresh stretch, which is the one case the limit
+    /// into the spot that takes a task would begin a fresh stretch, which is the one case the limit
     /// deliberately does not count.
     struct Picture {
         automation: Automation,
         project: i64,
-        first: AutomationStep,
-        second: AutomationStep,
+        first: crate::model::AutomationPlacement,
+        second: crate::model::AutomationPlacement,
     }
 
     fn picture(tx: &WriteTx<'_>, back: bool) -> Picture {
@@ -355,30 +360,36 @@ mod tests {
             NewAutomation { name: "1件やりきる".into(), ..Default::default() },
         )
         .expect("add automation");
-        let first =
-            automation::step_add(tx, automation.id, NewStep::with_prompt("調べる", "look", "claude"))
-                .expect("first step");
-        let second =
-            automation::step_add(tx, automation.id, NewStep::with_prompt("直す", "fix", "claude"))
-                .expect("second step");
-        takes_a_task(tx, &first);
-        automation::edge_add(tx, first.id, None, EdgeTarget::Go(second.id), None).expect("onward");
+        let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
+        let (second_action, second) = mk_placed(tx, &automation, "直す", "fix", "claude");
+        takes_a_task(tx, first_action.id);
+        let on = crate::model::AutomationPictureOwner::Automation;
+        automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None)
+            .expect("onward");
         if back {
-            automation::exit_add(tx, AutomationOwner::Step, second.id, Some("again"))
+            automation::exit_add(tx, AutomationOwner::Action, second_action.id, Some("again"))
                 .expect("way back");
-            automation::edge_add(tx, second.id, Some("again"), EdgeTarget::Go(second.id), Some(1))
-                .expect("back");
+            automation::edge_add(
+                tx,
+                on,
+                second.id,
+                Some("again"),
+                EdgeTarget::Go(second.id),
+                Some(1),
+            )
+            .expect("back");
         }
-        automation::edge_add(tx, second.id, None, EdgeTarget::Done, None).expect("closes");
+        automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
         let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, project, first, second }
     }
 
-    /// Declare the `task_take` output that makes a step usable as the one a run starts on.
-    fn takes_a_task(tx: &WriteTx<'_>, step: &AutomationStep) {
-        let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, None)
-            .expect("read")
-            .expect("the unnamed way out");
+    /// Declare the `task_take` output that makes a spot usable as the one a run starts on.
+    fn takes_a_task(tx: &WriteTx<'_>, action_id: i64) {
+        let exit =
+            read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action_id, None)
+                .expect("read")
+                .expect("the unnamed way out");
         automation::port_add(
             tx,
             AutomationPortOwner::Exit,
@@ -402,16 +413,24 @@ mod tests {
         launch(tx, automation.id, &by).expect("launch")
     }
 
-    fn def_of(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> AutomationRunDef {
+    fn def_of(
+        tx: &WriteTx<'_>,
+        run: &AutomationRun,
+        placement: &crate::model::AutomationPlacement,
+    ) -> AutomationRunDef {
         read::automation_run_defs_of(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.step_id == Some(step.id))
-            .expect("the step's snapshot")
+            .find(|d| d.placement_id == Some(placement.id))
+            .expect("the spot's snapshot")
     }
 
-    fn opened(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> Opening {
-        match open(tx, run.id, def_of(tx, run, step).id).expect("open") {
+    fn opened(
+        tx: &WriteTx<'_>,
+        run: &AutomationRun,
+        placement: &crate::model::AutomationPlacement,
+    ) -> Opening {
+        match open(tx, run.id, def_of(tx, run, placement).id).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
         }

@@ -227,23 +227,28 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
 
         // ── automation ──
         //
-        // The whole family hangs on one automation, and that automation hangs on a project. A library
-        // action is the exception: like an unplaced task it may belong to no project at all
-        // (`project_id IS NULL` is the device's own), and that row is outside every closed reach.
+        // Three layers hanging off two roots. An automation hangs on a project; a library action hangs
+        // on a project or on nothing at all (`project_id IS NULL` is the device's own, and that row is
+        // outside every closed reach, the way an unplaced task is). Everything else reaches a project
+        // through whichever of the two holds it: a placement and the documents it is handed through
+        // the automation, a step through its action.
         //
-        // A step whose `action_id` names such a device-wide action still travels. It is the one place
+        // A placement whose `action_id` names a device-wide action still travels. It is the one place
         // rule 2 is not applied, and deliberately: what rule 2 guards against is an id telling the
         // carrier that a project it may not see exists, and an action belonging to no project tells it
-        // nothing of the kind — while dropping the step would leave the automation with a hole in the
-        // middle of it.
+        // nothing of the kind — while dropping the placement would leave the automation with a hole in
+        // the middle of it.
         "automation_action" => "project_id = ?1",
         "automation" => "project_id = ?1",
         "automation_run" => "project_id = ?1",
 
         "automation_note" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
-        "automation_step" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
-        "automation_edge" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
-        "automation_wire" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
+        "automation_placement" => {
+            "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
+        }
+        "automation_step" => {
+            "action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)"
+        }
         "automation_run_def" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_task" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_step" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
@@ -252,36 +257,44 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
             " (SELECT id FROM automation_run WHERE project_id = ?1))",
         ),
 
-        // Hangs on a step of one automation.
-        "automation_step_note" => concat!(
-            "step_id IN (SELECT id FROM automation_step WHERE automation_id IN",
+        // Hangs on a placement of one automation.
+        "automation_placement_note" => concat!(
+            "placement_id IN (SELECT id FROM automation_placement WHERE automation_id IN",
             " (SELECT id FROM automation WHERE project_id = ?1))",
         ),
 
         // Polymorphic on `owner_kind`, the way `attachment` is on `target_type`: one arm per owner the
-        // column admits, each reaching the project the way its own kind does. A step reaches it through
-        // its automation; an action is already a project's row, or the device's and outside.
-        "automation_cfg" => concat!(
-            "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
-            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+        // column admits, each reaching the project the way its own kind does. A line is drawn on an
+        // automation or inside an action, and both of those are already a project's row — or the
+        // device's, and outside.
+        "automation_edge" | "automation_wire" => concat!(
+            "(owner_kind = 'automation'",
+            " AND owner_id IN (SELECT id FROM automation WHERE project_id = ?1))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
         ),
+        // The two halves of a setting: the action declares, and a placement of it answers.
+        "automation_cfg" => concat!(
+            "(owner_kind = 'action'",
+            " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
+            " OR (owner_kind = 'placement' AND owner_id IN (SELECT id FROM automation_placement",
+            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+        ),
         "automation_exit" => concat!(
             "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
-            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " WHERE action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
         ),
         // The same two owners and one more: a port may hang on the way out of either of them.
         "automation_port" => concat!(
             "(owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
-            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " WHERE action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))",
             " OR (owner_kind = 'exit' AND owner_id IN (SELECT id FROM automation_exit",
             " WHERE (owner_kind = 'step' AND owner_id IN (SELECT id FROM automation_step",
-            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1)))",
+            " WHERE action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)))",
             " OR (owner_kind = 'action'",
             " AND owner_id IN (SELECT id FROM automation_action WHERE project_id = ?1))))",
         ),
@@ -1018,8 +1031,8 @@ mod tests {
     /// written through an op would — which is why the definition half is seeded the same way rather than
     /// split across two idioms.
     ///
-    /// The shapes are the smallest that are still true to the model: a step that points at a library
-    /// action, one way out of it with a port that takes a task, an edge that closes the run, and one run
+    /// The shapes are the smallest that are still true to the model: an action of one step, placed
+    /// once, one way out of it with a port that takes a task, an edge that closes the run, and one run
     /// that walked one task and produced one file.
     fn seed_one_automation(conn: &rusqlite::Connection, project: i64, task: i64, comment: i64) {
         let at = "2026-01-02T03:04:05Z";
@@ -1029,8 +1042,8 @@ mod tests {
         };
 
         let action = put(
-            "INSERT INTO automation_action (project_id, name, prompt, order_key, created_at, updated_at) \
-             VALUES (?1, 'worktree を切る', 'あなたは…', 'a0', ?2, ?2)",
+            "INSERT INTO automation_action (project_id, name, order_key, created_at, updated_at) \
+             VALUES (?1, 'worktree を切る', 'a0', ?2, ?2)",
             rusqlite::params![project, at],
         );
         let automation = put(
@@ -1047,32 +1060,49 @@ mod tests {
         );
         let step = put(
             "INSERT INTO automation_step \
-                 (automation_id, name, action_id, agent, model, interactive, work_dir_ref, \
+                 (action_id, name, prompt, agent, model, interactive, work_dir_ref, \
                   report_to_task, show_history, order_key, created_at, updated_at) \
-             VALUES (?1, 'worktree を切る', ?2, 'claude-code', 'opus', 0, 'リポジトリの場所', \
-                     0, 1, 'a0', ?3, ?3)",
+             VALUES (?1, 'worktree を切る', 'あなたは…', 'claude-code', 'opus', 0, 'リポジトリの場所', \
+                     0, 1, 'a0', ?2, ?2)",
+            rusqlite::params![action, at],
+        );
+        put(
+            "UPDATE automation_action SET entry_step_id = ?2 WHERE id = ?1",
+            rusqlite::params![action, step],
+        );
+        let placement = put(
+            "INSERT INTO automation_placement \
+                 (automation_id, action_id, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, 'a0', ?3, ?3)",
             rusqlite::params![automation, action, at],
         );
         put(
-            "UPDATE automation SET entry_step_id = ?2 WHERE id = ?1",
-            rusqlite::params![automation, step],
+            "UPDATE automation SET entry_placement_id = ?2 WHERE id = ?1",
+            rusqlite::params![automation, placement],
+        );
+        put(
+            "INSERT INTO automation_cfg \
+                 (owner_kind, owner_id, name, kind, required, order_key, created_at, updated_at) \
+             VALUES ('action', ?1, 'リポジトリの場所', 'folder', 1, 'a0', ?2, ?2)",
+            rusqlite::params![action, at],
         );
         put(
             "INSERT INTO automation_cfg \
                  (owner_kind, owner_id, name, kind, required, value, order_key, created_at, updated_at) \
-             VALUES ('step', ?1, 'リポジトリの場所', 'folder', 1, '\"~/work/amenbo\"', 'a0', ?2, ?2)",
-            rusqlite::params![step, at],
+             VALUES ('placement', ?1, 'リポジトリの場所', 'folder', 1, '\"~/work/amenbo\"', 'a0', ?2, ?2)",
+            rusqlite::params![placement, at],
         );
         put(
-            "INSERT INTO automation_step_note (step_id, note_id, order_key, created_at, updated_at) \
+            "INSERT INTO automation_placement_note \
+                 (placement_id, note_id, order_key, created_at, updated_at) \
              VALUES (?1, ?2, 'a0', ?3, ?3)",
-            rusqlite::params![step, note, at],
+            rusqlite::params![placement, note, at],
         );
         let exit = put(
             "INSERT INTO automation_exit \
                  (owner_kind, owner_id, name, order_key, created_at, updated_at) \
-             VALUES ('step', ?1, '進行中にした', 'a0', ?2, ?2)",
-            rusqlite::params![step, at],
+             VALUES ('action', ?1, '進行中にした', 'a0', ?2, ?2)",
+            rusqlite::params![action, at],
         );
         put(
             "INSERT INTO automation_port \
@@ -1082,16 +1112,16 @@ mod tests {
         );
         put(
             "INSERT INTO automation_edge \
-                 (automation_id, from_step_id, exit_name, ends, order_key, created_at, updated_at) \
-             VALUES (?1, ?2, '進行中にした', 'done', 'a0', ?3, ?3)",
-            rusqlite::params![automation, step, at],
+                 (owner_kind, owner_id, from_id, exit_name, ends, order_key, created_at, updated_at) \
+             VALUES ('automation', ?1, ?2, '進行中にした', 'done', 'a0', ?3, ?3)",
+            rusqlite::params![automation, placement, at],
         );
         put(
             "INSERT INTO automation_wire \
-                 (automation_id, from_step_id, from_exit_name, from_port_name, to_step_id, to_port_name, \
+                 (owner_kind, owner_id, from_id, from_exit_name, from_port_name, to_id, to_port_name, \
                   created_at, updated_at) \
-             VALUES (?1, ?2, '進行中にした', '進行中のタスク', ?2, '扱うタスク', ?3, ?3)",
-            rusqlite::params![automation, step, at],
+             VALUES ('automation', ?1, ?2, '進行中にした', '進行中のタスク', ?2, '扱うタスク', ?3, ?3)",
+            rusqlite::params![automation, placement, at],
         );
 
         let run = put(
@@ -1103,11 +1133,11 @@ mod tests {
         );
         let run_def = put(
             "INSERT INTO automation_run_def \
-                 (run_id, step_id, name, agent, model, interactive, work_dir_ref, report_to_task, \
-                  show_history, exits, ins, cfg, created_at, updated_at) \
-             VALUES (?1, ?2, 'worktree を切る', 'claude-code', 'opus', 0, 'リポジトリの場所', 0, 1, \
-                     '[]', '[]', '{}', ?3, ?3)",
-            rusqlite::params![run, step, at],
+                 (run_id, placement_id, step_id, name, prompt, agent, model, interactive, \
+                  work_dir_ref, report_to_task, show_history, exits, ins, cfg, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'worktree を切る', 'あなたは…', 'claude-code', 'opus', 0, \
+                     'リポジトリの場所', 0, 1, '[]', '[]', '{}', ?4, ?4)",
+            rusqlite::params![run, placement, step, at],
         );
         let run_task = put(
             "INSERT INTO automation_run_task \

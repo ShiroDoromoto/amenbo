@@ -22,9 +22,10 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
-    AutomationExit, AutomationNote, AutomationPort, AutomationRun, AutomationRunDef,
+    AutomationExit, AutomationNote, AutomationPlacement, AutomationPlacementNote, AutomationPort,
+    AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationStepNote,
+    AutomationStep,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -509,7 +510,7 @@ pub fn automation_action(a: &AutomationAction) -> Record {
             vec![
                 ("project_id", kv_opt(&a.project_id)),
                 ("name", tv(&a.name)),
-                ("prompt", tv(&a.prompt)),
+                ("entry_step_id", kv_opt(&a.entry_step_id)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,
@@ -528,7 +529,7 @@ pub fn automation(a: &Automation) -> Record {
                 ("name", tv(&a.name)),
                 ("notes", tv(&a.notes)),
                 ("preamble", tv(&a.preamble)),
-                ("entry_step_id", kv_opt(&a.entry_step_id)),
+                ("entry_placement_id", kv_opt(&a.entry_placement_id)),
                 ("archived", bv(a.archived)),
                 ("order_key", tv(&a.order_key)),
             ],
@@ -555,16 +556,31 @@ pub fn automation_note(n: &AutomationNote) -> Record {
     )
 }
 
+pub fn automation_placement(p: &AutomationPlacement) -> Record {
+    Record::new(
+        "automation_placement",
+        p.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(p.automation_id)),
+                ("action_id", kv(p.action_id)),
+                ("order_key", tv(&p.order_key)),
+            ],
+            &p.created_at,
+            &p.updated_at,
+        ),
+    )
+}
+
 pub fn automation_step(s: &AutomationStep) -> Record {
     Record::new(
         "automation_step",
         s.id,
         with_audit(
             vec![
-                ("automation_id", kv(s.automation_id)),
+                ("action_id", kv(s.action_id)),
                 ("name", tv(&s.name)),
-                ("action_id", kv_opt(&s.action_id)),
-                ("prompt", ov(&s.prompt)),
+                ("prompt", tv(&s.prompt)),
                 ("agent", tv(&s.agent)),
                 ("model", ov(&s.model)),
                 ("interactive", bv(s.interactive)),
@@ -600,13 +616,13 @@ pub fn automation_cfg(c: &AutomationCfg) -> Record {
     )
 }
 
-pub fn automation_step_note(n: &AutomationStepNote) -> Record {
+pub fn automation_placement_note(n: &AutomationPlacementNote) -> Record {
     Record::new(
-        "automation_step_note",
+        "automation_placement_note",
         n.id,
         with_audit(
             vec![
-                ("step_id", kv(n.step_id)),
+                ("placement_id", kv(n.placement_id)),
                 ("note_id", kv(n.note_id)),
                 ("order_key", tv(&n.order_key)),
             ],
@@ -659,10 +675,11 @@ pub fn automation_edge(e: &AutomationEdge) -> Record {
         e.id,
         with_audit(
             vec![
-                ("automation_id", kv(e.automation_id)),
-                ("from_step_id", kv(e.from_step_id)),
+                ("owner_kind", tv(e.owner_kind.as_str())),
+                ("owner_id", kv(e.owner_id)),
+                ("from_id", kv(e.from_id)),
                 ("exit_name", ov(&e.exit_name)),
-                ("to_step_id", kv_opt(&e.to_step_id)),
+                ("to_id", kv_opt(&e.to_id)),
                 ("ends", tv(e.ends.as_str())),
                 ("max_times", e.max_times.map(iv).unwrap_or(Value::Null)),
                 ("order_key", tv(&e.order_key)),
@@ -679,11 +696,12 @@ pub fn automation_wire(w: &AutomationWire) -> Record {
         w.id,
         with_audit(
             vec![
-                ("automation_id", kv(w.automation_id)),
-                ("from_step_id", kv(w.from_step_id)),
+                ("owner_kind", tv(w.owner_kind.as_str())),
+                ("owner_id", kv(w.owner_id)),
+                ("from_id", kv(w.from_id)),
                 ("from_exit_name", ov(&w.from_exit_name)),
                 ("from_port_name", tv(&w.from_port_name)),
-                ("to_step_id", kv(w.to_step_id)),
+                ("to_id", kv(w.to_id)),
                 ("to_port_name", tv(&w.to_port_name)),
             ],
             &w.created_at,
@@ -724,6 +742,7 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
         with_audit(
             vec![
                 ("run_id", kv(d.run_id)),
+                ("placement_id", kv_opt(&d.placement_id)),
                 ("step_id", kv_opt(&d.step_id)),
                 ("name", tv(&d.name)),
                 ("prompt", ov(&d.prompt)),

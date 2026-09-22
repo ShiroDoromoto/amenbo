@@ -45,7 +45,7 @@ import type { AutomationDetailDto } from "../bindings/bindings";
  */
 function agentOn(automation: AutomationDetailDto | null, edgeId: number): string {
   const edge = automation?.edges.find((one) => one.id === edgeId);
-  return automation?.steps.find((one) => one.id === edge?.fromStepId)?.agent ?? "claude-code";
+  return automation?.placements.find((one) => one.id === edge?.fromPlacementId)?.agent ?? "claude-code";
 }
 
 export function AutomationBuildScreen({
@@ -128,8 +128,8 @@ export function AutomationBuildScreen({
           <h3 className="auto__place">{t("auto.build.picture")}</h3>
           <AutomationPicture
             automation={automation}
-            selectedStepId={step ?? undefined}
-            onPickStep={setStep}
+            selectedPlacementId={step ?? undefined}
+            onPickPlacement={setStep}
             onInsertStep={setInserting}
           />
         </div>
@@ -138,7 +138,7 @@ export function AutomationBuildScreen({
       <div className="settings__section">
         <div className="settings__body">
           <h3 className="auto__place">{t("auto.build.step")}</h3>
-          <AutomationStepPanel automation={automation} stepId={step} projectId={projectId} />
+          <AutomationStepPanel automation={automation} placementId={step} projectId={projectId} />
         </div>
       </div>
 

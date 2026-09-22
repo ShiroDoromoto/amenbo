@@ -241,7 +241,8 @@ fn this_devices_own_tables_move_nobodys_version() {
 #[test]
 fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in() {
     use amenbo_core::model::{
-        AutomationOwner, AutomationPortKind, AutomationPortOwner, AutomationPortDirection,
+        AutomationOwner, AutomationPictureOwner, AutomationPortDirection, AutomationPortKind,
+        AutomationPortOwner,
     };
     use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
     use amenbo_core::ops::automation_run::Launcher;
@@ -251,16 +252,22 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let other = store.project_add(new_project("隣")).unwrap().id;
     let _ = filed(&mut store, new_task("隣の1件", other));
 
-    // The smallest automation that launches: one step that takes a task and closes the run, with
-    // every way out of it answered for.
+    // The smallest automation that launches: one action of one step that takes a task and closes the
+    // run, placed once, with every way out of it answered for.
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
         .unwrap();
-    let step = store
-        .automation_step_add(automation.id, NewStep::with_prompt("取る", "take one", "claude"))
+    let action = store
+        .automation_action_from_prompt(
+            Some(mine),
+            NewStep::new("取る", "take one", "claude"),
+            &[],
+            &[],
+        )
         .unwrap();
+    let placement = store.automation_placement_add(automation.id, action.id).unwrap();
     let took = store
-        .automation_exit_add(AutomationOwner::Step, step.id, Some("取った"))
+        .automation_exit_add(AutomationOwner::Action, action.id, Some("取った"))
         .unwrap();
     store
         .automation_port_add(
@@ -272,9 +279,10 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
             true,
         )
         .unwrap();
-    store.automation_set_entry(automation.id, Some(step.id)).unwrap();
-    store.automation_edge_add(step.id, Some("取った"), EdgeTarget::Done, None).unwrap();
-    store.automation_edge_add(step.id, None, EdgeTarget::Done, None).unwrap();
+    store.automation_set_entry(automation.id, Some(placement.id)).unwrap();
+    let on = AutomationPictureOwner::Automation;
+    store.automation_edge_add(on, placement.id, Some("取った"), EdgeTarget::Done, None).unwrap();
+    store.automation_edge_add(on, placement.id, None, EdgeTarget::Done, None).unwrap();
 
     let startable = ["claude".to_string()];
     let by = Launcher {

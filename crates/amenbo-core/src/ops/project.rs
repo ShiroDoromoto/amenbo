@@ -322,14 +322,12 @@ mod tests {
 
     /// Deleting a project takes the automations built in it, the runs launched from them and its own
     /// library of actions. Each of the three refuses to go in the wrong order — an automation with a run
-    /// behind it, an action a step still runs — so this is also the check that the sweep walks them the
-    /// way round it does.
+    /// behind it, an action a placement still stands on — so this is also the check that the sweep
+    /// walks them the way round it does.
     #[test]
     fn delete_takes_the_automations_the_runs_and_the_library_with_it() {
         with_tx(|tx| {
             let p = mk_project(tx, "消えるPJ");
-            let action = crate::ops::automation::action_add(tx, Some(p), "点検する", "look at it")
-                .unwrap();
             let automation = crate::ops::automation::add(
                 tx,
                 p,
@@ -339,20 +337,18 @@ mod tests {
                 },
             )
             .unwrap();
-            let step = crate::ops::automation::step_add(
-                tx,
-                automation.id,
-                crate::ops::automation::NewStep::with_action("点検", action.id, "claude"),
-            )
-            .unwrap();
-            crate::ops::automation::set_entry(tx, automation.id, Some(step.id)).unwrap();
+            let (action, placement) =
+                crate::ops::test_support::mk_placed(tx, &automation, "点検する", "look at it", "claude");
+            let step = action.entry_step_id.expect("an entry step");
+            crate::ops::automation::set_entry(tx, automation.id, Some(placement.id)).unwrap();
             mk_run(tx, automation.id, p);
 
             delete(tx, p).unwrap();
 
             assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
             assert!(read::automation(tx.conn(), automation.id).unwrap().is_none());
-            assert!(read::automation_step(tx.conn(), step.id).unwrap().is_none());
+            assert!(read::automation_placement(tx.conn(), placement.id).unwrap().is_none());
+            assert!(read::automation_step(tx.conn(), step).unwrap().is_none());
             assert!(read::automation_action(tx.conn(), action.id).unwrap().is_none());
             assert!(read::automation_run_ids_in_project(tx.conn(), p).unwrap().is_empty());
         });

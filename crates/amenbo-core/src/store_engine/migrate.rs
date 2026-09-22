@@ -24,6 +24,7 @@
 //! **Downgrades do not exist.** A store stamped above [`LATEST_VERSION`] has nothing pending here
 //! ([`pending`] returns nothing); refusing to open it by name is the gate's job.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::ControlFlow;
 use std::path::Path;
 
@@ -884,6 +885,11 @@ pub const STEPS: &[Step] = &[
         to: 52,
         name: "admit no_way_on as a reason a run stopped",
         apply: Apply::Custom(admit_the_run_with_nowhere_to_go),
+    },
+    Step {
+        to: 53,
+        name: "fold the automation definition into three layers — automation, action, step",
+        apply: Apply::Custom(fold_the_automation_into_three_layers),
     },
 ];
 
@@ -3075,6 +3081,872 @@ fn stamp(tx: &Transaction<'_>, version: i64) -> Result<()> {
     Ok(())
 }
 
+/// The three tables v53 lays down or rebuilds under a name of its own, and the four it rebuilds in
+/// place — frozen text, like every step's: the registry may reshape them tomorrow, and what this step
+/// built must keep meaning what it meant.
+const THREE_LAYER_TABLES: &str = r"
+CREATE TABLE IF NOT EXISTS automation_placement (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_placement_note (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    placement_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    note_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_note(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_action (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    project_id BIGINT REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    entry_step_id BIGINT REFERENCES automation_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_step (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    prompt TEXT NOT NULL DEFAULT '',
+    agent TEXT NOT NULL DEFAULT '',
+    model TEXT,
+    interactive BOOLEAN NOT NULL DEFAULT 0 CHECK(interactive IN (0, 1)),
+    work_dir_ref TEXT,
+    report_to_task BOOLEAN NOT NULL DEFAULT 0 CHECK(report_to_task IN (0, 1)),
+    show_history BOOLEAN NOT NULL DEFAULT 0 CHECK(show_history IN (0, 1)),
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_cfg (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    owner_kind TEXT NOT NULL DEFAULT '' CHECK(owner_kind IN ('', 'action', 'placement')),
+    owner_id BIGINT NOT NULL DEFAULT 0,
+    name TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT '' CHECK(kind IN ('', 'taskfilter', 'folder', 'choice', 'number', 'text')),
+    required BOOLEAN NOT NULL DEFAULT 0 CHECK(required IN (0, 1)),
+    options TEXT,
+    value TEXT,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_edge (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    owner_kind TEXT NOT NULL DEFAULT '' CHECK(owner_kind IN ('', 'automation', 'action')),
+    owner_id BIGINT NOT NULL DEFAULT 0,
+    from_id BIGINT NOT NULL DEFAULT 0,
+    exit_name TEXT,
+    to_id BIGINT,
+    ends TEXT NOT NULL DEFAULT '' CHECK(ends IN ('', 'go', 'done', 'halt')),
+    max_times BIGINT,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_wire (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    owner_kind TEXT NOT NULL DEFAULT '' CHECK(owner_kind IN ('', 'automation', 'action')),
+    owner_id BIGINT NOT NULL DEFAULT 0,
+    from_id BIGINT NOT NULL DEFAULT 0,
+    from_exit_name TEXT,
+    from_port_name TEXT NOT NULL DEFAULT '',
+    to_id BIGINT NOT NULL DEFAULT 0,
+    to_port_name TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+";
+
+/// `automation.entry_step_id` as every store from v50 on declares it — frozen text.
+const AUTOMATION_ENTRY_STEP: &str = "entry_step_id BIGINT REFERENCES automation_step(id) ON DELETE \
+     RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+/// The same column pointed at the picture's new boxes.
+const AUTOMATION_ENTRY_PLACEMENT: &str = "entry_placement_id BIGINT REFERENCES \
+     automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+
+/// One step as v52 held it: either it pointed at a library action or it carried its own prompt.
+struct StepAtV52 {
+    id: i64,
+    automation_id: i64,
+    name: String,
+    action_id: Option<i64>,
+    prompt: Option<String>,
+    agent: String,
+    model: Option<String>,
+    interactive: i64,
+    work_dir_ref: Option<String>,
+    report_to_task: i64,
+    show_history: i64,
+    order_key: String,
+    created_at: String,
+    updated_at: String,
+}
+
+/// One library action as v52 held it: a prompt, and no steps.
+struct ActionAtV52 {
+    id: i64,
+    project_id: Option<i64>,
+    name: String,
+    prompt: String,
+    order_key: String,
+    created_at: String,
+    updated_at: String,
+}
+
+/// One way out or one port, whichever table it came out of — the two are mirrored the same way.
+struct ExitAtV52 {
+    id: i64,
+    owner_kind: String,
+    owner_id: i64,
+    name: Option<String>,
+    order_key: String,
+    created_at: String,
+    updated_at: String,
+}
+
+struct PortAtV52 {
+    id: i64,
+    owner_kind: String,
+    owner_id: i64,
+    direction: String,
+    name: String,
+    kind: String,
+    required: i64,
+    order_key: String,
+    created_at: String,
+    updated_at: String,
+}
+
+/// One edge of one automation's picture, drawn between two steps.
+struct EdgeAtV52 {
+    id: i64,
+    automation_id: i64,
+    from_step_id: i64,
+    exit_name: Option<String>,
+    to_step_id: Option<i64>,
+    ends: String,
+    max_times: Option<i64>,
+    order_key: String,
+    created_at: String,
+    updated_at: String,
+}
+
+/// One wire of one automation's picture, drawn between two steps.
+struct WireAtV52 {
+    id: i64,
+    automation_id: i64,
+    from_step_id: i64,
+    from_exit_name: Option<String>,
+    from_port_name: String,
+    to_step_id: i64,
+    to_port_name: String,
+    created_at: String,
+    updated_at: String,
+}
+
+struct CfgAtV52 {
+    id: i64,
+    owner_kind: String,
+    owner_id: i64,
+    name: String,
+    kind: String,
+    required: i64,
+    options: Option<String>,
+    value: Option<String>,
+    order_key: String,
+    created_at: String,
+    updated_at: String,
+}
+
+/// The counters the new rows are numbered from — max + 1 of what is already there, walked in source-id
+/// order so that two machines upgrading the same store land on the same numbers.
+struct Minting {
+    action: i64,
+    step: i64,
+    placement: i64,
+    exit: i64,
+    port: i64,
+    cfg: i64,
+}
+
+impl Minting {
+    fn next(slot: &mut i64) -> i64 {
+        let id = *slot;
+        *slot += 1;
+        id
+    }
+}
+
+/// v53: fold the automation definition into **three layers** — an automation places actions, an action
+/// holds steps, one step is one terminal (`AMB-D-949`).
+///
+/// At v52 `automation_step` meant two things: a row with a prompt of its own was one terminal, and a row
+/// with an `action_id` was a call of a library action. The same word named both on the build screen, and
+/// what could be re-used was one terminal's worth. This step gives each word one layer.
+///
+/// **Every v52 step becomes a placement**, and what it stood for becomes an action:
+///
+/// - A step that carried its own prompt gives a new library action of its own, in the project the
+///   automation is in. The step row stays where it is and becomes that action's one step; what it
+///   declared stays on it and is mirrored onto the action, which is what a placement of it is wired by.
+/// - A step that pointed at a library action gives a placement of that action. The step row goes: what
+///   it carried — the prompt's agent, its model, the three flags — is the action's one step's from here
+///   on.
+///
+/// **Every v52 library action gains one step**, carrying the prompt the action itself used to carry.
+///
+/// **The one thing this cannot carry across** is two spots running one library action under two
+/// different agents. `agent` and `model` are a step's now (`AMB-D-950`), and an action has one step
+/// here, so the first spot's answer becomes the action's and the second's is not written. An action
+/// nothing pointed at gets no agent at all, which the launch check names rather than guesses at.
+///
+/// **Settings are split in two.** A v52 step declared and answered on one row; an action declared and
+/// the step answered on a row of its own. Both become the one shape: the action declares, and the
+/// placement answers.
+///
+/// **Why the tables are rebuilt and `automation` is not.** `automation_step`, `automation_action`,
+/// `automation_cfg`, `automation_edge` and `automation_wire` are each either unreferenced or referenced
+/// only by rows this step has already taken away, so SQLite's own build-copy-drop-rename is open to
+/// them. `automation` is not: `automation_run.automation_id` is `RESTRICT`, and dropping a referenced
+/// table performs an implicit `DELETE` that fires it — so for that one table the declaration is
+/// rewritten where it stands, v9's procedure met an eighth time. It is one column's `REFERENCES` and its
+/// name, never the shape, so the rows are exactly as wide afterwards as before.
+///
+/// **Skipped whole where there is nothing to fold**: a store born below v50 is handed today's registry
+/// by genesis and arrives here already in three layers. What says so is `automation_step.automation_id`
+/// — the column that only the two-layer shape has. The new tables are no test of it: genesis creates
+/// every table a store is *missing* from today's registry, so `automation_placement` is there on a
+/// store whose other tables are still v50's.
+fn fold_the_automation_into_three_layers(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let two_layer: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation_step') WHERE name = 'automation_id'",
+        [],
+        |r| r.get(0),
+    )?;
+    if two_layer == 0 {
+        return Ok(());
+    }
+
+    // ── read the whole definition side before a row moves ──
+    let steps: Vec<StepAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, automation_id, name, action_id, prompt, agent, model, interactive, \
+                    work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at \
+             FROM automation_step ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(StepAtV52 {
+                id: r.get(0)?,
+                automation_id: r.get(1)?,
+                name: r.get(2)?,
+                action_id: r.get(3)?,
+                prompt: r.get(4)?,
+                agent: r.get(5)?,
+                model: r.get(6)?,
+                interactive: r.get(7)?,
+                work_dir_ref: r.get(8)?,
+                report_to_task: r.get(9)?,
+                show_history: r.get(10)?,
+                order_key: r.get(11)?,
+                created_at: r.get(12)?,
+                updated_at: r.get(13)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let actions: Vec<ActionAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, project_id, name, prompt, order_key, created_at, updated_at \
+             FROM automation_action ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(ActionAtV52 {
+                id: r.get(0)?,
+                project_id: r.get(1)?,
+                name: r.get(2)?,
+                prompt: r.get(3)?,
+                order_key: r.get(4)?,
+                created_at: r.get(5)?,
+                updated_at: r.get(6)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let exits: Vec<ExitAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, owner_kind, owner_id, name, order_key, created_at, updated_at \
+             FROM automation_exit ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(ExitAtV52 {
+                id: r.get(0)?,
+                owner_kind: r.get(1)?,
+                owner_id: r.get(2)?,
+                name: r.get(3)?,
+                order_key: r.get(4)?,
+                created_at: r.get(5)?,
+                updated_at: r.get(6)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let ports: Vec<PortAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, owner_kind, owner_id, direction, name, kind, required, order_key, \
+                    created_at, updated_at FROM automation_port ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(PortAtV52 {
+                id: r.get(0)?,
+                owner_kind: r.get(1)?,
+                owner_id: r.get(2)?,
+                direction: r.get(3)?,
+                name: r.get(4)?,
+                kind: r.get(5)?,
+                required: r.get(6)?,
+                order_key: r.get(7)?,
+                created_at: r.get(8)?,
+                updated_at: r.get(9)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let cfgs: Vec<CfgAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, owner_kind, owner_id, name, kind, required, options, value, order_key, \
+                    created_at, updated_at FROM automation_cfg ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(CfgAtV52 {
+                id: r.get(0)?,
+                owner_kind: r.get(1)?,
+                owner_id: r.get(2)?,
+                name: r.get(3)?,
+                kind: r.get(4)?,
+                required: r.get(5)?,
+                options: r.get(6)?,
+                value: r.get(7)?,
+                order_key: r.get(8)?,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let edges: Vec<EdgeAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, automation_id, from_step_id, exit_name, to_step_id, ends, max_times, \
+                    order_key, created_at, updated_at FROM automation_edge ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(EdgeAtV52 {
+                id: r.get(0)?,
+                automation_id: r.get(1)?,
+                from_step_id: r.get(2)?,
+                exit_name: r.get(3)?,
+                to_step_id: r.get(4)?,
+                ends: r.get(5)?,
+                max_times: r.get(6)?,
+                order_key: r.get(7)?,
+                created_at: r.get(8)?,
+                updated_at: r.get(9)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let wires: Vec<WireAtV52> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, automation_id, from_step_id, from_exit_name, from_port_name, to_step_id, \
+                    to_port_name, created_at, updated_at FROM automation_wire ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(WireAtV52 {
+                id: r.get(0)?,
+                automation_id: r.get(1)?,
+                from_step_id: r.get(2)?,
+                from_exit_name: r.get(3)?,
+                from_port_name: r.get(4)?,
+                to_step_id: r.get(5)?,
+                to_port_name: r.get(6)?,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let step_notes: Vec<(i64, i64, i64, String, String, String)> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, step_id, note_id, order_key, created_at, updated_at \
+             FROM automation_step_note ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let run_defs: Vec<(i64, Option<i64>)> = {
+        let mut stmt =
+            tx.prepare("SELECT id, step_id FROM automation_run_def ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    // Which project each automation is in — the shelf a new action made from one of its steps lands on.
+    let in_project: BTreeMap<i64, i64> = {
+        let mut stmt = tx.prepare("SELECT id, project_id FROM automation ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
+        rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?
+    };
+    let entries: Vec<(i64, Option<i64>)> = {
+        let mut stmt = tx.prepare("SELECT id, entry_step_id FROM automation ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    let mut mint = Minting {
+        action: actions.iter().map(|a| a.id).max().unwrap_or(0) + 1,
+        step: steps.iter().map(|s| s.id).max().unwrap_or(0) + 1,
+        placement: 1,
+        exit: exits.iter().map(|e| e.id).max().unwrap_or(0) + 1,
+        port: ports.iter().map(|p| p.id).max().unwrap_or(0) + 1,
+        cfg: cfgs.iter().map(|c| c.id).max().unwrap_or(0) + 1,
+    };
+
+    // ── take the old rows out of the way, then lay the new tables down ──
+    tx.execute_batch(
+        "UPDATE automation SET entry_step_id = NULL;
+         DELETE FROM automation_step_note;
+         DELETE FROM automation_edge;
+         DELETE FROM automation_wire;
+         DELETE FROM automation_cfg;
+         DELETE FROM automation_step;
+         DROP TABLE automation_step_note;
+         DROP TABLE automation_edge;
+         DROP TABLE automation_wire;
+         DROP TABLE automation_cfg;
+         DROP TABLE automation_step;
+         DROP TABLE automation_action;",
+    )?;
+    tx.execute_batch(THREE_LAYER_TABLES)?;
+    // `automation_run_def` is the one table here that is neither rebuilt nor dropped — the run half
+    // stands where it is — so the column is appended, and only where the store does not already carry
+    // it (a store whose run table genesis created from today's registry does).
+    let carries_placement: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation_run_def') WHERE name = 'placement_id'",
+        [],
+        |r| r.get(0),
+    )?;
+    if carries_placement == 0 {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_def ADD COLUMN placement_id BIGINT \
+                 REFERENCES automation_placement(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    point_the_entry_at_a_placement(ctx)?;
+
+    // ── the library: every action keeps its row and gains the one step its prompt becomes ──
+    let mut inner_step: BTreeMap<i64, i64> = BTreeMap::new();
+    for action in &actions {
+        let carried = steps.iter().find(|s| s.action_id == Some(action.id));
+        let step_id = Minting::next(&mut mint.step);
+        tx.execute(
+            "INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, \
+                 work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![
+                step_id,
+                action.id,
+                action.name,
+                action.prompt,
+                carried.map(|s| s.agent.as_str()).unwrap_or(""),
+                carried.and_then(|s| s.model.as_deref()),
+                carried.map(|s| s.interactive).unwrap_or(0),
+                carried.and_then(|s| s.work_dir_ref.as_deref()),
+                carried.map(|s| s.report_to_task).unwrap_or(0),
+                carried.map(|s| s.show_history).unwrap_or(1),
+                "a0",
+                action.created_at,
+                action.updated_at,
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO automation_action (id, project_id, name, entry_step_id, order_key, \
+                 created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                action.id,
+                action.project_id,
+                action.name,
+                step_id,
+                action.order_key,
+                action.created_at,
+                action.updated_at,
+            ],
+        )?;
+        mirror_declarations(tx, &mut mint, &exits, &ports, ("action", action.id), ("step", step_id))?;
+        inner_step.insert(action.id, step_id);
+    }
+
+    // ── every v52 step becomes a placement, and an action of its own where it carried a prompt ──
+    let mut placement_of: BTreeMap<i64, i64> = BTreeMap::new();
+    let mut step_now: BTreeMap<i64, i64> = BTreeMap::new();
+    let mut kept_steps: BTreeSet<i64> = inner_step.values().copied().collect();
+    let mut action_of_step: BTreeMap<i64, i64> = BTreeMap::new();
+    for step in &steps {
+        let action_id = match step.action_id {
+            Some(action_id) => {
+                step_now.insert(step.id, *inner_step.get(&action_id).unwrap_or(&0));
+                action_id
+            }
+            None => {
+                let action_id = Minting::next(&mut mint.action);
+                tx.execute(
+                    "INSERT INTO automation_action (id, project_id, name, entry_step_id, order_key, \
+                         created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    rusqlite::params![
+                        action_id,
+                        in_project.get(&step.automation_id),
+                        step.name,
+                        step.id,
+                        step.order_key,
+                        step.created_at,
+                        step.updated_at,
+                    ],
+                )?;
+                tx.execute(
+                    "INSERT INTO automation_step (id, action_id, name, prompt, agent, model, \
+                         interactive, work_dir_ref, report_to_task, show_history, order_key, \
+                         created_at, updated_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                    rusqlite::params![
+                        step.id,
+                        action_id,
+                        step.name,
+                        step.prompt.clone().unwrap_or_default(),
+                        step.agent,
+                        step.model,
+                        step.interactive,
+                        step.work_dir_ref,
+                        step.report_to_task,
+                        step.show_history,
+                        "a0",
+                        step.created_at,
+                        step.updated_at,
+                    ],
+                )?;
+                mirror_declarations(
+                    tx,
+                    &mut mint,
+                    &exits,
+                    &ports,
+                    ("step", step.id),
+                    ("action", action_id),
+                )?;
+                kept_steps.insert(step.id);
+                step_now.insert(step.id, step.id);
+                action_id
+            }
+        };
+        let placement_id = Minting::next(&mut mint.placement);
+        tx.execute(
+            "INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, \
+                 updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                placement_id,
+                step.automation_id,
+                action_id,
+                step.order_key,
+                step.created_at,
+                step.updated_at,
+            ],
+        )?;
+        placement_of.insert(step.id, placement_id);
+        action_of_step.insert(step.id, action_id);
+    }
+
+    // ── the ways out and ports of a step that is gone go with it ──
+    for exit in &exits {
+        if exit.owner_kind == "step" && !kept_steps.contains(&exit.owner_id) {
+            tx.execute(
+                "DELETE FROM automation_port WHERE owner_kind = 'exit' AND owner_id = ?1",
+                [exit.id],
+            )?;
+            tx.execute("DELETE FROM automation_exit WHERE id = ?1", [exit.id])?;
+        }
+    }
+    for port in &ports {
+        if port.owner_kind == "step" && !kept_steps.contains(&port.owner_id) {
+            tx.execute("DELETE FROM automation_port WHERE id = ?1", [port.id])?;
+        }
+    }
+
+    // ── settings: the action declares, the placement answers ──
+    for cfg in &cfgs {
+        if cfg.owner_kind == "action" {
+            write_cfg(tx, cfg, cfg.id, "action", cfg.owner_id, None)?;
+            continue;
+        }
+        let Some(&placement_id) = placement_of.get(&cfg.owner_id) else { continue };
+        let carried_its_own = steps
+            .iter()
+            .find(|s| s.id == cfg.owner_id)
+            .is_some_and(|s| s.action_id.is_none());
+        if carried_its_own {
+            // One row was both halves. The declaration goes onto the action the step became, and the
+            // answer — where there is one — onto the placement of it.
+            let action_id = *action_of_step.get(&cfg.owner_id).unwrap_or(&0);
+            write_cfg(tx, cfg, cfg.id, "action", action_id, None)?;
+            if cfg.value.is_some() {
+                let id = Minting::next(&mut mint.cfg);
+                write_cfg(tx, cfg, id, "placement", placement_id, cfg.value.as_deref())?;
+            }
+        } else {
+            write_cfg(tx, cfg, cfg.id, "placement", placement_id, cfg.value.as_deref())?;
+        }
+    }
+
+    // ── the picture: the same lines, between placements now ──
+    for edge in &edges {
+        let Some(&from_id) = placement_of.get(&edge.from_step_id) else { continue };
+        let to_id = match edge.to_step_id {
+            Some(to_step) => match placement_of.get(&to_step) {
+                Some(&to_id) => Some(to_id),
+                // The step it went on to did not become a placement, so the line decides nothing.
+                None => continue,
+            },
+            None => None,
+        };
+        tx.execute(
+            "INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_name, to_id, ends, \
+                 max_times, order_key, created_at, updated_at) \
+             VALUES (?1, 'automation', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                edge.id,
+                edge.automation_id,
+                from_id,
+                edge.exit_name,
+                to_id,
+                edge.ends,
+                edge.max_times,
+                edge.order_key,
+                edge.created_at,
+                edge.updated_at,
+            ],
+        )?;
+    }
+    for wire in &wires {
+        let (Some(&from_id), Some(&to_id)) =
+            (placement_of.get(&wire.from_step_id), placement_of.get(&wire.to_step_id))
+        else {
+            continue;
+        };
+        tx.execute(
+            "INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_name, \
+                 from_port_name, to_id, to_port_name, created_at, updated_at) \
+             VALUES (?1, 'automation', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                wire.id,
+                wire.automation_id,
+                from_id,
+                wire.from_exit_name,
+                wire.from_port_name,
+                to_id,
+                wire.to_port_name,
+                wire.created_at,
+                wire.updated_at,
+            ],
+        )?;
+    }
+    for (id, step_id, note_id, order_key, created, updated) in &step_notes {
+        let Some(&placement_id) = placement_of.get(step_id) else { continue };
+        tx.execute(
+            "INSERT INTO automation_placement_note (id, placement_id, note_id, order_key, \
+                 created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![id, placement_id, note_id, order_key, created, updated],
+        )?;
+    }
+
+    // ── what the entry and the runs point at ──
+    for (automation_id, entry_step) in &entries {
+        let Some(entry_step) = entry_step else { continue };
+        let Some(&placement_id) = placement_of.get(entry_step) else { continue };
+        tx.execute(
+            "UPDATE automation SET entry_placement_id = ?1 WHERE id = ?2",
+            rusqlite::params![placement_id, automation_id],
+        )?;
+    }
+    for (def_id, step_id) in &run_defs {
+        let Some(step_id) = step_id else { continue };
+        tx.execute(
+            "UPDATE automation_run_def SET placement_id = ?1, step_id = ?2 WHERE id = ?3",
+            rusqlite::params![
+                placement_of.get(step_id),
+                step_now.get(step_id),
+                def_id,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// Write one `automation_cfg` row, taking everything but the owner and the answer from the v52 row it
+/// came out of.
+fn write_cfg(
+    tx: &Transaction<'_>,
+    from: &CfgAtV52,
+    id: i64,
+    owner_kind: &str,
+    owner_id: i64,
+    value: Option<&str>,
+) -> Result<()> {
+    tx.execute(
+        "INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, required, options, \
+             value, order_key, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![
+            id,
+            owner_kind,
+            owner_id,
+            from.name,
+            from.kind,
+            from.required,
+            from.options,
+            value,
+            from.order_key,
+            from.created_at,
+            from.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// **Copy one owner's ways out and inputs onto another**, with the outputs hanging on each way out.
+///
+/// An action of one step declares the same names twice over: on the action, which is what a placement of
+/// it is wired by, and on the step, which is what the picture inside it is drawn with. Linking the two
+/// instead of copying them is `AMB-T-5311`'s; until then the copy is what makes an action of one step
+/// behave exactly as the step it was folded out of did.
+fn mirror_declarations(
+    tx: &Transaction<'_>,
+    mint: &mut Minting,
+    exits: &[ExitAtV52],
+    ports: &[PortAtV52],
+    from: (&str, i64),
+    to: (&str, i64),
+) -> Result<()> {
+    for exit in exits.iter().filter(|e| e.owner_kind == from.0 && e.owner_id == from.1) {
+        let exit_id = Minting::next(&mut mint.exit);
+        tx.execute(
+            "INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, \
+                 updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                exit_id,
+                to.0,
+                to.1,
+                exit.name,
+                exit.order_key,
+                exit.created_at,
+                exit.updated_at,
+            ],
+        )?;
+        for port in ports
+            .iter()
+            .filter(|p| p.owner_kind == "exit" && p.owner_id == exit.id && p.direction == "out")
+        {
+            let port_id = Minting::next(&mut mint.port);
+            tx.execute(
+                "INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind, \
+                     required, order_key, created_at, updated_at) \
+                 VALUES (?1, 'exit', ?2, 'out', ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![
+                    port_id,
+                    exit_id,
+                    port.name,
+                    port.kind,
+                    port.required,
+                    port.order_key,
+                    port.created_at,
+                    port.updated_at,
+                ],
+            )?;
+        }
+    }
+    for port in ports
+        .iter()
+        .filter(|p| p.owner_kind == from.0 && p.owner_id == from.1 && p.direction == "in")
+    {
+        let port_id = Minting::next(&mut mint.port);
+        tx.execute(
+            "INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind, \
+                 required, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'in', ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                port_id,
+                to.0,
+                to.1,
+                port.name,
+                port.kind,
+                port.required,
+                port.order_key,
+                port.created_at,
+                port.updated_at,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// Rewrite `automation`'s entry column where it stands: a new name and a new table to point at, and not
+/// one column more or fewer. v9's procedure, and its reasons — the table is referenced by
+/// `automation_run` with `RESTRICT`, so the build-copy-drop-rename SQLite prescribes would take every
+/// run of it, and `PRAGMA foreign_keys = OFF` is a no-op inside the transaction a step is.
+///
+/// Checked both ways round it: the declaration must carry the clause this step knows, and the column
+/// count must be the same afterwards. `writable_schema` is shut before anything else can fail, since it
+/// is connection state that would outlive this step's rolled-back transaction.
+fn point_the_entry_at_a_placement(ctx: &Ctx<'_>) -> Result<()> {
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains("entry_placement_id") {
+        return Ok(());
+    }
+    if !declared.contains(AUTOMATION_ENTRY_STEP) {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation",
+            expected: AUTOMATION_ENTRY_STEP,
+        });
+    }
+    let pointed = declared.replace(AUTOMATION_ENTRY_STEP, AUTOMATION_ENTRY_PLACEMENT);
+
+    let before = column_names(ctx.tx, "automation")?.len();
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation'",
+        [&pointed],
+    );
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(ctx.tx, "automation")?;
+    if after.len() != before || !after.iter().any(|c| c == "entry_placement_id") {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation",
+            expected: AUTOMATION_ENTRY_STEP,
+        });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4990,6 +5862,140 @@ mod tests {
                 vec![(10, "next".to_string())],
                 "v{born}: the number a deleted axis held is still retired — the rebuild carried the \
                  high-water mark across",
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// **v53 folds a two-layer definition into three** (`AMB-D-949`).
+    ///
+    /// The store is written in v50's shape — a library action carrying a prompt, one step running it and
+    /// one step carrying a prompt of its own — and comes out with every step a placement, every prompt
+    /// an action holding one step, and the picture drawn between placements instead of steps.
+    #[test]
+    fn the_chain_folds_the_automation_into_three_layers() {
+        // The versions whose automation tables are the two-layer shape, named literally: a store born
+        // below v50 is handed today's registry by genesis and arrives already folded.
+        for born in 50..=52 {
+            let dir = scratch(&format!("three-layers-v{born}"));
+            let engine = store_at(&dir, born);
+            engine
+                .conn()
+                .execute_batch(
+                    "INSERT INTO project (id, name, notes, order_key, created_at, updated_at) \
+                       VALUES (1, 'amenbo', '', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_action (id, project_id, name, prompt, order_key, created_at, updated_at) \
+                       VALUES (7, 1, '点検する', 'look at it', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation (id, project_id, name, notes, preamble, archived, order_key, created_at, updated_at) \
+                       VALUES (3, 1, '1件やりきる', '', '', 0, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_step (id, automation_id, name, action_id, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                       VALUES (11, 3, '取る', NULL, 'take one', 'claude', NULL, 0, NULL, 0, 1, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_step (id, automation_id, name, action_id, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                       VALUES (12, 3, '点検', 7, NULL, 'codex-cli', 'gpt', 0, NULL, 0, 1, 'a1', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     UPDATE automation SET entry_step_id = 11 WHERE id = 3;
+                     INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at) \
+                       VALUES (21, 'step', 11, NULL, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at) \
+                       VALUES (22, 'action', 7, NULL, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind, required, order_key, created_at, updated_at) \
+                       VALUES (31, 'exit', 21, 'out', 'タスク', 'task_take', 1, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, required, options, value, order_key, created_at, updated_at) \
+                       VALUES (41, 'action', 7, 'どこまで', 'text', 0, NULL, NULL, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, required, options, value, order_key, created_at, updated_at) \
+                       VALUES (42, 'step', 12, 'どこまで', 'text', 0, NULL, '\"全部\"', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, required, options, value, order_key, created_at, updated_at) \
+                       VALUES (43, 'step', 11, '作業フォルダ', 'folder', 1, NULL, '\"~/work\"', 'a1', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_edge (id, automation_id, from_step_id, exit_name, to_step_id, ends, max_times, order_key, created_at, updated_at) \
+                       VALUES (51, 3, 11, NULL, 12, 'go', 10, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_note (id, automation_id, name, body, order_key, created_at, updated_at) \
+                       VALUES (61, 3, '運転規約', '…', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                     INSERT INTO automation_step_note (id, step_id, note_id, order_key, created_at, updated_at) \
+                       VALUES (71, 11, 61, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');",
+                )
+                .unwrap();
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let conn = engine.conn();
+            let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+            let text = |sql: &str| -> String { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+
+            // Every v52 step is a placement, in the order it was added.
+            assert_eq!(
+                one("SELECT COUNT(*) FROM automation_placement WHERE automation_id = 3"),
+                2,
+                "v{born}: one placement per step",
+            );
+            let took = one("SELECT id FROM automation_placement WHERE order_key = 'a0'");
+            let looked = one("SELECT id FROM automation_placement WHERE order_key = 'a1'");
+            // The step that ran the library action is that action's placement, and the prompt the
+            // action used to carry is now the one step inside it.
+            assert_eq!(
+                one(&format!("SELECT action_id FROM automation_placement WHERE id = {looked}")),
+                7,
+                "v{born}: the step pointing at action 7 is a placement of it",
+            );
+            let inside = one("SELECT entry_step_id FROM automation_action WHERE id = 7");
+            assert_eq!(text(&format!("SELECT prompt FROM automation_step WHERE id = {inside}")), "look at it");
+            assert_eq!(
+                text(&format!("SELECT agent FROM automation_step WHERE id = {inside}")),
+                "codex-cli",
+                "v{born}: the agent is the step's now, and the spot that ran it is where it comes from",
+            );
+            assert_eq!(one("SELECT COUNT(*) FROM automation_step WHERE id = 12"), 0,
+                "v{born}: the row that only called an action is not a step any more");
+
+            // The step that carried its own prompt keeps its row, inside an action written for it.
+            let mine = one("SELECT action_id FROM automation_step WHERE id = 11");
+            assert_eq!(one(&format!("SELECT entry_step_id FROM automation_action WHERE id = {mine}")), 11);
+            assert_eq!(
+                one(&format!("SELECT action_id FROM automation_placement WHERE id = {took}")),
+                mine,
+            );
+            assert_eq!(text("SELECT prompt FROM automation_step WHERE id = 11"), "take one");
+            assert_eq!(
+                one(&format!(
+                    "SELECT COUNT(*) FROM automation_exit WHERE owner_kind = 'action' AND owner_id = {mine}"
+                )),
+                1,
+                "v{born}: what the step declared is mirrored onto the action a placement is wired by",
+            );
+            assert_eq!(
+                one(&format!(
+                    "SELECT COUNT(*) FROM automation_port p JOIN automation_exit x ON p.owner_id = x.id \
+                     WHERE p.owner_kind = 'exit' AND x.owner_kind = 'action' AND x.owner_id = {mine} \
+                       AND p.name = 'タスク'"
+                )),
+                1,
+                "v{born}: and so is what that way out hands on",
+            );
+
+            // The entry, the picture and the documents all name placements now.
+            assert_eq!(one("SELECT entry_placement_id FROM automation WHERE id = 3"), took);
+            assert_eq!(text("SELECT owner_kind FROM automation_edge WHERE id = 51"), "automation");
+            assert_eq!(one("SELECT owner_id FROM automation_edge WHERE id = 51"), 3);
+            assert_eq!(one("SELECT from_id FROM automation_edge WHERE id = 51"), took);
+            assert_eq!(one("SELECT to_id FROM automation_edge WHERE id = 51"), looked);
+            assert_eq!(one("SELECT placement_id FROM automation_placement_note WHERE id = 71"), took);
+
+            // A setting was one row where the step declared it and two where the action did; both come
+            // out as the one shape — the action declares, the placement answers.
+            assert_eq!(text("SELECT owner_kind FROM automation_cfg WHERE id = 41"), "action");
+            assert_eq!(text("SELECT owner_kind FROM automation_cfg WHERE id = 42"), "placement");
+            assert_eq!(one("SELECT owner_id FROM automation_cfg WHERE id = 42"), looked);
+            assert_eq!(text("SELECT owner_kind FROM automation_cfg WHERE id = 43"), "action");
+            assert_eq!(
+                one("SELECT COUNT(*) FROM automation_cfg WHERE id = 43 AND value IS NULL"),
+                1,
+                "v{born}: the half that was a declaration keeps no answer",
+            );
+            assert_eq!(
+                one(&format!(
+                    "SELECT COUNT(*) FROM automation_cfg WHERE owner_kind = 'placement' \
+                       AND owner_id = {took} AND name = '作業フォルダ' AND value = '\"~/work\"'"
+                )),
+                1,
+                "v{born}: and the answer it carried is the placement's",
             );
             std::fs::remove_dir_all(&dir).ok();
         }

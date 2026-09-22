@@ -31,7 +31,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
-  return { id: 7, name: "Morning round", steps: 3, archived: false, ...over };
+  return { id: 7, name: "Morning round", placements: 3, archived: false, ...over };
 }
 
 async function render(over: { workspaceOpen?: boolean; folders?: string[] } = {}) {

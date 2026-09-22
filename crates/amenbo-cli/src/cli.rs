@@ -545,7 +545,7 @@ pub enum Command {
         sub: ViewerCmd,
     },
 
-    /// Automations: a library of prompts, and the pictures built out of them — steps, the ways out of
+    /// Automations: a library of actions, and the pictures built out of them — placements, the ways out of
     /// each one, what runs after each way out is taken, and what is handed along.
     ///
     /// These are the building commands. Nothing here refuses an unfinished automation — a step with no
@@ -1803,15 +1803,15 @@ pub enum AutomationCmd {
         #[arg(long)]
         preamble: Option<String>,
     },
-    /// The automations of one project — what each is called, how many steps it is built out of, and
+    /// The automations of one project — what each is called, how many actions are placed on it, and
     /// whether it is archived
     List {
         /// project (name or ID; defaults to the bound project)
         #[arg(long)]
         project: Option<String>,
     },
-    /// One automation in full: each step with the prompt, ways out, inputs and settings it runs
-    /// under, what happens after each way out, what is handed along, and the documents it shares
+    /// One automation in full: each placement with the ways out, inputs and settings it runs under,
+    /// what happens after each way out, what is handed along, and the documents it shares
     Show {
         /// automation id
         id: i64,
@@ -1832,23 +1832,37 @@ pub enum AutomationCmd {
         #[arg(long)]
         archived: Option<bool>,
     },
-    /// Delete an automation with every step, way out, edge and wire built into it — confirms unless -y
+    /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y
     Rm {
         /// automation id
         id: i64,
     },
-    /// Name the step a run starts at, or clear it
+    /// Name the placement a run starts at, or clear it
     EntrySet {
         /// automation id
         id: i64,
-        /// the step to start at
+        /// the placement to start at
         #[arg(long, value_name = "ID", conflicts_with = "clear")]
-        step: Option<i64>,
+        placement: Option<i64>,
         /// leave the automation with no entry
         #[arg(long)]
         clear: bool,
     },
-    /// Add a prompt to the library
+    /// Put a library action on an automation. What stands on a picture is a placement of an action,
+    /// never a prompt of its own
+    PlaceAdd {
+        /// automation id
+        automation: i64,
+        /// the library action to place
+        #[arg(long, value_name = "ID")]
+        action: i64,
+    },
+    /// Take a placement off its automation with the answers and lines hanging on it — confirms unless -y
+    PlaceRm {
+        /// placement id
+        id: i64,
+    },
+    /// Add an action to the library. It is born empty — `step add` writes what it holds
     ActionAdd {
         /// project (name or ID; defaults to the bound project)
         #[arg(long, conflicts_with = "global")]
@@ -1859,9 +1873,6 @@ pub enum AutomationCmd {
         /// what this action is called
         #[arg(long)]
         name: String,
-        /// the prompt itself (`-` reads it from stdin)
-        #[arg(long)]
-        prompt: String,
     },
     /// The library this project reaches — the device's actions, then the project's own
     ActionList {
@@ -1872,40 +1883,44 @@ pub enum AutomationCmd {
         #[arg(long)]
         global: bool,
     },
-    /// One library action: its prompt, what it declares, and how many automations run it
+    /// One library action: the steps inside it, what it declares, and how many automations place it
     ActionShow {
         /// action id
         id: i64,
     },
-    /// Rename a library action, or rewrite its prompt (only the given fields change)
+    /// Rename a library action
     ActionUpdate {
         /// action id
         id: i64,
         #[arg(long)]
         name: Option<String>,
-        /// the prompt itself (`-` reads it from stdin)
-        #[arg(long)]
-        prompt: Option<String>,
     },
-    /// Delete a library action with everything it declared — refused while a step runs it; confirms unless -y
+    /// Name the step a placement of this action opens first, or clear it
+    ActionEntrySet {
+        /// action id
+        id: i64,
+        /// the step to open first
+        #[arg(long, value_name = "ID", conflicts_with = "clear")]
+        step: Option<i64>,
+        /// leave the action with no entry
+        #[arg(long)]
+        clear: bool,
+    },
+    /// Delete a library action with the steps inside it — refused while it is placed; confirms unless -y
     ActionRm {
         /// action id
         id: i64,
     },
-    /// Add a step to an automation. It either runs a library action (--action) or carries a prompt of
-    /// its own (--prompt), and which it is decides where its ways out, settings and inputs are read from
+    /// Add a step to a library action. One step is one terminal, and it carries its own prompt
     StepAdd {
-        /// automation id
-        automation: i64,
+        /// action id
+        action: i64,
         /// what this step is called
         #[arg(long)]
         name: String,
-        /// run this library action
-        #[arg(long, value_name = "ID", conflicts_with = "prompt")]
-        action: Option<i64>,
-        /// the prompt written for this step alone (`-` reads it from stdin)
+        /// the prompt this step runs on (`-` reads it from stdin)
         #[arg(long)]
-        prompt: Option<String>,
+        prompt: String,
         /// who is asked to carry it out (e.g. claude)
         #[arg(long)]
         agent: String,
@@ -1925,17 +1940,13 @@ pub enum AutomationCmd {
         #[arg(long)]
         no_history: bool,
     },
-    /// Change a step (only the given fields change). Switching where its prompt comes from takes its
-    /// declarations with it
+    /// Change a step (only the given fields change)
     StepUpdate {
         /// step id
         id: i64,
         #[arg(long)]
         name: Option<String>,
-        /// run this library action instead
-        #[arg(long, value_name = "ID", conflicts_with = "prompt")]
-        action: Option<i64>,
-        /// carry this prompt instead (`-` reads it from stdin)
+        /// the prompt this step runs on (`-` reads it from stdin)
         #[arg(long)]
         prompt: Option<String>,
         /// who is asked to carry it out
@@ -1971,7 +1982,7 @@ pub enum AutomationCmd {
     /// Declare a way out of a step or a library action. Both are born carrying the unnamed way out and
     /// the error one (`*`), so this is for the second and every one after it
     ExitAdd {
-        /// the step that declares it (one carrying its own prompt)
+        /// the step that declares it
         #[arg(long, value_name = "ID", conflicts_with = "action")]
         step: Option<i64>,
         /// the library action that declares it
@@ -2001,7 +2012,7 @@ pub enum AutomationCmd {
     /// Declare a port. An input belongs to the step or the action that reads it (--step / --action); an
     /// output belongs to the way out that produced it (--exit)
     PortAdd {
-        /// the step that takes it in (one carrying its own prompt)
+        /// the step that takes it in
         #[arg(long, value_name = "ID", conflicts_with_all = ["action", "exit"])]
         step: Option<i64>,
         /// the library action that takes it in
@@ -2039,14 +2050,11 @@ pub enum AutomationCmd {
         /// port id
         id: i64,
     },
-    /// Declare a setting on a step or a library action
+    /// Declare a setting on a library action. A placement of it is where the answer goes
     CfgAdd {
-        /// the step that declares it (one carrying its own prompt)
-        #[arg(long, value_name = "ID", conflicts_with = "action")]
-        step: Option<i64>,
         /// the library action that declares it
         #[arg(long, value_name = "ID")]
-        action: Option<i64>,
+        action: i64,
         /// what this setting is called
         #[arg(long)]
         name: String,
@@ -2079,12 +2087,12 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear_options: bool,
     },
-    /// Answer a setting on one step. The answer is written in the shape its kind takes, never as one
-    /// filter string: for `taskfilter`, the same option twice is any-of and two different options are
-    /// both
+    /// Answer a setting on one placement. The answer is written in the shape its kind takes, never as
+    /// one filter string: for `taskfilter`, the same option twice is any-of and two different options
+    /// are both
     CfgSet {
-        /// step id
-        step: i64,
+        /// placement id
+        placement: i64,
         /// the setting's name, as it was declared
         #[arg(long)]
         name: String,
@@ -2130,13 +2138,17 @@ pub enum AutomationCmd {
         /// setting id
         id: i64,
     },
-    /// Say what happens after one step leaves through one way out. The way out is the whole condition:
+    /// Say what happens after one box leaves through one way out. The way out is the whole condition:
     /// the edge carries none of its own
     EdgeAdd {
-        /// where it leaves from, `<step>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
-        #[arg(long, value_name = "STEP:EXIT")]
+        /// draw it inside a library action, between its steps (left out: on an automation, between
+        /// its placements)
+        #[arg(long)]
+        in_action: bool,
+        /// where it leaves from, `<box>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
+        #[arg(long, value_name = "BOX:EXIT")]
         from: String,
-        /// go on to this step
+        /// go on to this box
         #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt"])]
         to: Option<i64>,
         /// close the run
@@ -2156,7 +2168,7 @@ pub enum AutomationCmd {
     EdgeUpdate {
         /// edge id
         id: i64,
-        /// go on to this step
+        /// go on to this box
         #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt"])]
         to: Option<i64>,
         /// close the run
@@ -2177,18 +2189,22 @@ pub enum AutomationCmd {
         /// edge id
         id: i64,
     },
-    /// Join what one way out hands on to what a later step takes in. Both ends are named, never keyed
+    /// Join what one way out hands on to what a later box takes in. Both ends are named, never keyed
     WireAdd {
-        /// where it comes from, `<step>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
-        #[arg(long, value_name = "STEP:EXIT")]
+        /// draw it inside a library action, between its steps (left out: on an automation, between
+        /// its placements)
+        #[arg(long)]
+        in_action: bool,
+        /// where it comes from, `<box>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
+        #[arg(long, value_name = "BOX:EXIT")]
         from: String,
         /// the output's name on that way out
         #[arg(long, value_name = "NAME")]
         from_port: String,
-        /// the step that takes it in
+        /// the box that takes it in
         #[arg(long, value_name = "ID")]
         to: i64,
-        /// the input's name on that step
+        /// the input's name on that box
         #[arg(long, value_name = "NAME")]
         to_port: String,
     },
@@ -2197,8 +2213,8 @@ pub enum AutomationCmd {
         /// wire id
         id: i64,
     },
-    /// Write a document the steps of one automation share. Long is fine here — which steps are handed
-    /// it is `note link`'s to say
+    /// Write a document the placements of one automation share. Long is fine here — which placements
+    /// are handed it is `note link`'s to say
     NoteAdd {
         /// automation id
         automation: i64,
@@ -2219,22 +2235,22 @@ pub enum AutomationCmd {
         #[arg(long)]
         body: Option<String>,
     },
-    /// Delete a shared document with the links that hand it to steps — confirms unless -y
+    /// Delete a shared document with the links that hand it to placements — confirms unless -y
     NoteRm {
         /// document id
         id: i64,
     },
-    /// Hand a shared document to a step
+    /// Hand a shared document to a placement
     NoteLink {
-        /// step id
-        step: i64,
+        /// placement id
+        placement: i64,
         /// document id
         note: i64,
     },
-    /// Stop handing a shared document to a step
+    /// Stop handing a shared document to a placement
     NoteUnlink {
-        /// step id
-        step: i64,
+        /// placement id
+        placement: i64,
         /// document id
         note: i64,
     },
@@ -2257,7 +2273,7 @@ pub enum AutomationCmd {
         id: i64,
     },
 
-    /// Start an automation: check it, copy its steps into a run, and start it. It takes nothing
+    /// Start an automation: check it, copy what is placed on it into a run, and start it. It takes nothing
     /// else — the tasks a step works on and the folder it runs in are the automation's own answers,
     /// given while it was built
     Start {

@@ -39,14 +39,14 @@ function lineTitle(line: PicLine): string {
 
 export function AutomationPicture({
   automation,
-  selectedStepId,
-  onPickStep,
+  selectedPlacementId,
+  onPickPlacement,
   onInsertStep,
 }: {
   automation: AutomationDetailDto | null;
   /** The step whose contents the panel beside this is showing (`AMB-T-5256`). */
-  selectedStepId?: number;
-  onPickStep?: (stepId: number) => void;
+  selectedPlacementId?: number;
+  onPickPlacement?: (placementId: number) => void;
   /**
    * Put a step in on this edge. Absent while the dialog that asks what step is still being built
    * (`AMB-T-5257`), and every `+` is held shut until it is there.
@@ -70,7 +70,7 @@ export function AutomationPicture({
         >
           {picture.laps.map((lap) => (
             <rect
-              key={lap.headStepId}
+              key={lap.headPlacementId}
               className="autopic__lap"
               x={lap.x}
               y={lap.y}
@@ -102,7 +102,7 @@ export function AutomationPicture({
 
         {picture.laps.map((lap) => (
           <span
-            key={lap.headStepId}
+            key={lap.headPlacementId}
             className="autopic__lapword"
             style={{ left: `${lap.x + 8}px`, top: `${lap.y}px` }}
           >
@@ -112,13 +112,12 @@ export function AutomationPicture({
 
         {picture.nodes.map((node) => (
           <button
-            key={node.stepId}
+            key={node.placementId}
             type="button"
             className={[
               "autopic__node",
-              node.action !== undefined ? "autopic__node--action" : "",
               node.unfed.length > 0 ? "autopic__node--unfed" : "",
-              node.stepId === selectedStepId ? "autopic__node--on" : "",
+              node.placementId === selectedPlacementId ? "autopic__node--on" : "",
             ]
               .filter((one) => one !== "")
               .join(" ")}
@@ -128,14 +127,11 @@ export function AutomationPicture({
               width: `${node.w}px`,
               height: `${node.h}px`,
             }}
-            aria-pressed={node.stepId === selectedStepId}
-            disabled={onPickStep === undefined}
-            onClick={() => onPickStep?.(node.stepId)}
+            aria-pressed={node.placementId === selectedPlacementId}
+            disabled={onPickPlacement === undefined}
+            onClick={() => onPickPlacement?.(node.placementId)}
           >
             <span className="autopic__nodename">{node.name}</span>
-            {node.action !== undefined && (
-              <span className="autopic__from">{tf("auto.pic.fromAction", { action: node.action })}</span>
-            )}
             {node.unfed.length > 0 && (
               <span className="autopic__unfed">
                 <Icon name="warning" />

@@ -1365,19 +1365,13 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__node:disabled { cursor: default; }
 .autopic__node:enabled:hover { background: var(--c-hover); }
-/* The prompt came from the library rather than from the step. */
-.autopic__node--action { border-inline-start: 3px solid var(--c-auto-action); }
-/* A required input nothing reaches. The border is the step saying it, and the line under the name
-   says which input — a mark on its own would send the reader to the step panel to find out. */
+/* A required input nothing reaches. The border is the box saying it, and the line under the name
+   says which input — a mark on its own would send the reader to the panel to find out. */
 .autopic__node--unfed { border-color: var(--c-stop); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 .autopic__nodename {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; overflow-wrap: anywhere;
-}
-.autopic__from {
-  font-size: var(--fs-xs); color: var(--c-text-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .autopic__unfed {
   display: flex; align-items: center; gap: var(--s-1);
@@ -1385,7 +1379,7 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__unfed .icon { flex: none; }
 .autopic__unfed > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Put a step in on this line. It sits on the line's first leg, under the step it leaves. */
+/* Put an action in on this line. It sits on the line's first leg, under the box it leaves. */
 .autopic__plus {
   position: absolute; transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;

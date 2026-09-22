@@ -106,7 +106,7 @@ export function AutomationsScreen({
                   <button type="button" className="auto__row" onClick={() => setOpen(one.id)}>
                     <span className="auto__name">{one.name}</span>
                     {one.archived && <span className="auto__mark">{t("auto.archived")}</span>}
-                    <span className="auto__steps">{tf("auto.stepCount", { count: one.steps })}</span>
+                    <span className="auto__steps">{tf("auto.stepCount", { count: one.placements })}</span>
                   </button>
                 </li>
               ))}

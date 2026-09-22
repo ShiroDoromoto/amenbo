@@ -8,17 +8,23 @@ import { choiceKey, wireChoices, wireInto } from "./automationWires";
 import type {
   AutomationDetailDto,
   AutomationPortDto,
-  AutomationStepDto,
+  AutomationPlacementDto,
 } from "../bindings/bindings";
 
 function port(name: string, kind: AutomationPortDto["kind"]): AutomationPortDto {
   return { name, kind, required: true };
 }
 
-function step(id: number, name: string, outputs: AutomationPortDto[], inputs: AutomationPortDto[] = []): AutomationStepDto {
+function step(
+  id: number,
+  name: string,
+  outputs: AutomationPortDto[],
+  inputs: AutomationPortDto[] = [],
+): AutomationPlacementDto {
   return {
     id,
     name,
+    actionId: 900 + id,
     prompt: "",
     agent: "claude-code",
     interactive: false,
@@ -30,7 +36,7 @@ function step(id: number, name: string, outputs: AutomationPortDto[], inputs: Au
   };
 }
 
-function detail(steps: AutomationStepDto[], wires: AutomationDetailDto["wires"] = []): AutomationDetailDto {
+function detail(steps: AutomationPlacementDto[], wires: AutomationDetailDto["wires"] = []): AutomationDetailDto {
   return {
     id: 7,
     projectId: 1,
@@ -38,7 +44,7 @@ function detail(steps: AutomationStepDto[], wires: AutomationDetailDto["wires"] 
     notes: "",
     preamble: "",
     archived: false,
-    steps,
+    placements: steps,
     edges: [],
     wires,
   };
@@ -55,21 +61,21 @@ describe("what can fill an input", () => {
     expect(choices.map((c) => c.portName)).toEqual(["note"]);
   });
 
-  it("does not offer a step its own ways out", () => {
+  it("does not offer a spot its own ways out", () => {
     const choices = wireChoices(one, 2, port("report", "value"));
-    expect(choices.every((c) => c.stepId !== 2)).toBe(true);
+    expect(choices.every((c) => c.placementId !== 2)).toBe(true);
     expect(choices.map((c) => c.portName)).toEqual(["note"]);
   });
 
-  it("names a choice by the step, the way out and the output together", () => {
+  it("names a choice by the spot, the way out and the output together", () => {
     const choices = wireChoices(one, 2, port("note", "value"));
     expect(choices[0]!.key).toBe(choiceKey(1, undefined, "note"));
   });
 
   it("shows the wire drawn last where several land on one input", () => {
-    const wired = detail(one.steps, [
-      { id: 1, fromStepId: 1, fromPortName: "note", toStepId: 2, toPortName: "note" },
-      { id: 2, fromStepId: 1, fromPortName: "other", toStepId: 2, toPortName: "note" },
+    const wired = detail(one.placements, [
+      { id: 1, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" },
+      { id: 2, fromPlacementId: 1, fromPortName: "other", toPlacementId: 2, toPortName: "note" },
     ]);
     expect(wireInto(wired, 2, "note")?.id).toBe(2);
     expect(wireInto(wired, 2, "missing")).toBeUndefined();

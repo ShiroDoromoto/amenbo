@@ -430,8 +430,13 @@ fn whats_next(
 ) -> Result<Next> {
     let conn = tx.conn();
     let run = read::automation_run(conn, def.run_id)?.ok_or_else(|| not_found("run", def.run_id))?;
-    let edge = match def.step_id {
-        Some(step_id) => read::automation_edge_for_exit(conn, step_id, taken)?,
+    let edge = match def.placement_id {
+        Some(placement_id) => read::automation_edge_for_exit(
+            conn,
+            crate::model::AutomationPictureOwner::Automation,
+            placement_id,
+            taken,
+        )?,
         None => None,
     };
     let Some(edge) = edge else {
@@ -443,12 +448,12 @@ fn whats_next(
         }
         AutomationEnds::Halt => Ok(Next::Halted(stopped(tx, run, None)?)),
         AutomationEnds::Go => {
-            let to = edge.to_step_id;
+            let to = edge.to_id;
             let next = read::automation_run_defs_of(conn, run.id)?
                 .into_iter()
-                .find(|d| d.step_id == to && to.is_some());
-            // The edge goes to a step the run never copied down — one added after the launch. The run
-            // has no snapshot of it and will not read a live one, so there is nowhere to go.
+                .find(|d| d.placement_id == to && to.is_some());
+            // The edge goes to a placement the run never copied down — one added after the launch. The
+            // run has no snapshot of it and will not read a live one, so there is nowhere to go.
             let Some(next) = next else {
                 return Ok(Next::Halted(stopped(tx, run, None)?));
             };
@@ -476,13 +481,13 @@ fn stopped(
 
 /// **Has this way back been taken as often as it is allowed to be?**
 ///
-/// What is counted is this edge, within this stretch of the run: how many times the step it leaves
+/// What is counted is this edge, within this stretch of the run: how many times the spot it leaves
 /// from has already reported that way out for the task under way. The count starts again at every
 /// task, because the limit is there to catch a review that never converges on one piece of work rather
 /// than to cap how much work a run may do.
 ///
 /// An edge with no limit is never over its turns — which is the right answer for one leading into a
-/// step that takes a fresh task, since that edge is walked once per task by design
+/// spot that takes a fresh task, since that edge is walked once per task by design
 /// ([`crate::model::AutomationEdge::max_times`]).
 ///
 /// The execution that has just reported is counted with the rest: it is already stamped `done` and
@@ -503,7 +508,7 @@ fn over_its_turns(
             continue;
         }
         let Some(def) = read::automation_run_def(tx.conn(), step.run_def_id)? else { continue };
-        if def.step_id == Some(edge.from_step_id) {
+        if def.placement_id == Some(edge.from_id) {
             taken += 1;
         }
     }
@@ -522,19 +527,23 @@ fn named(exit: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Automation, AutomationOwner, AutomationPortOwner, AutomationStep};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
+    use crate::model::{
+        Automation, AutomationAction, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+        AutomationPortOwner,
+    };
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
-    use crate::ops::test_support::{mk_project, with_tx};
+    use crate::ops::test_support::{mk_placed, mk_project, with_tx};
 
-    /// The picture these tests walk: a step that takes a task and hands a note on through "found", and
-    /// a second step wired to read it. Both ways out of both steps are decided, so it launches.
+    /// The picture these tests walk: a spot that takes a task and hands a note on through "found", and
+    /// a second spot wired to read it. Both ways out of both are decided, so it launches.
     struct Picture {
         automation: Automation,
         project: i64,
-        first: AutomationStep,
-        second: AutomationStep,
+        first_action: AutomationAction,
+        first: AutomationPlacement,
+        second: AutomationPlacement,
     }
 
     fn picture(tx: &WriteTx<'_>, note_required: bool) -> Picture {
@@ -545,55 +554,58 @@ mod tests {
             NewAutomation { name: "1件やりきる".into(), notes: String::new(), preamble: String::new() },
         )
         .expect("add automation");
-        let first = automation::step_add(
-            tx,
-            automation.id,
-            NewStep::with_prompt("調べる", "look at it", "claude"),
-        )
-        .expect("first step");
-        let second = automation::step_add(
-            tx,
-            automation.id,
-            NewStep::with_prompt("直す", "fix it", "claude"),
-        )
-        .expect("second step");
+        let (first_action, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");
+        let (second_action, second) = mk_placed(tx, &automation, "直す", "fix it", "claude");
 
-        automation::exit_add(tx, AutomationOwner::Step, first.id, Some("found")).expect("way out");
-        out_on(tx, &first, Some("found"), "タスク", AutomationPortKind::TaskTake, true);
-        out_on(tx, &first, Some("found"), "note", AutomationPortKind::Value, note_required);
+        automation::exit_add(tx, AutomationOwner::Action, first_action.id, Some("found"))
+            .expect("way out");
+        out_on(tx, &first_action, Some("found"), "タスク", AutomationPortKind::TaskTake, true);
+        out_on(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, note_required);
         automation::port_add(
             tx,
-            AutomationPortOwner::Step,
-            second.id,
+            AutomationPortOwner::Action,
+            second_action.id,
             AutomationPortDirection::In,
             "note",
             AutomationPortKind::Value,
             false,
         )
         .expect("input");
-        automation::wire_add(tx, first.id, Some("found"), "note", second.id, "note").expect("wire");
+        automation::wire_add(
+            tx,
+            AutomationPictureOwner::Automation,
+            first.id,
+            Some("found"),
+            "note",
+            second.id,
+            "note",
+        )
+        .expect("wire");
 
-        automation::edge_add(tx, first.id, Some("found"), EdgeTarget::Go(second.id), None)
+        let on = AutomationPictureOwner::Automation;
+        automation::edge_add(tx, on, first.id, Some("found"), EdgeTarget::Go(second.id), None)
             .expect("onward");
-        automation::edge_add(tx, first.id, None, EdgeTarget::Done, None).expect("closes");
-        automation::edge_add(tx, first.id, Some(ERROR_EXIT), EdgeTarget::Halt, None).expect("error");
-        automation::edge_add(tx, second.id, None, EdgeTarget::Done, None).expect("second closes");
-        automation::edge_add(tx, second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
+        automation::edge_add(tx, on, first.id, None, EdgeTarget::Done, None).expect("closes");
+        automation::edge_add(tx, on, first.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
+            .expect("error");
+        automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None)
+            .expect("second closes");
+        automation::edge_add(tx, on, second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
             .expect("second error");
         let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
-        Picture { automation, project, first, second }
+        Picture { automation, project, first_action, first, second }
     }
 
     fn out_on(
         tx: &WriteTx<'_>,
-        step: &AutomationStep,
+        action: &AutomationAction,
         exit_name: Option<&str>,
         name: &str,
         kind: AutomationPortKind,
         required: bool,
     ) {
         let exit =
-            read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, exit_name)
+            read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, exit_name)
                 .expect("read")
                 .expect("the way out");
         automation::port_add(
@@ -619,16 +631,20 @@ mod tests {
         launch(tx, automation.id, &by).expect("launch")
     }
 
-    fn def_of(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> AutomationRunDef {
+    fn def_of(
+        tx: &WriteTx<'_>,
+        run: &AutomationRun,
+        placement: &AutomationPlacement,
+    ) -> AutomationRunDef {
         read::automation_run_defs_of(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.step_id == Some(step.id))
-            .expect("the step's snapshot")
+            .find(|d| d.placement_id == Some(placement.id))
+            .expect("the spot's snapshot")
     }
 
-    fn opened(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> Opening {
-        match open(tx, run.id, def_of(tx, run, step).id).expect("open") {
+    fn opened(tx: &WriteTx<'_>, run: &AutomationRun, placement: &AutomationPlacement) -> Opening {
+        match open(tx, run.id, def_of(tx, run, placement).id).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
         }
@@ -670,7 +686,7 @@ mod tests {
     fn what_a_declared_name_carries_is_readable_by_that_name() {
         with_tx(|tx| {
             let p = picture(tx, false);
-            out_on(tx, &p.first, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            out_on(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first).run_step;
 
@@ -690,7 +706,7 @@ mod tests {
     fn a_task_raised_along_the_way_is_handed_on_without_being_reserved() {
         with_tx(|tx| {
             let p = picture(tx, false);
-            out_on(tx, &p.first, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            out_on(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first).run_step;
             let working = a_task(tx, p.project, "調べる");

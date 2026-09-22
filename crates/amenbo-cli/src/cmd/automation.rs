@@ -1,12 +1,17 @@
-//! `automation`: the library of prompts, and the pictures built out of them — steps, the ways out of
-//! each one, what runs after each way out is taken, and what is handed along.
+//! `automation`: the library of actions, and the pictures built out of them — placements, the ways out
+//! of each one, what runs after each way out is taken, and what is handed along.
+//!
+//! **Three layers, one word each** (`AMB-D-949`): an automation places actions, an action holds steps,
+//! one step is one terminal. Both pictures — the automation's, drawn between placements, and the
+//! action's, drawn between its steps — are built with the same `edge` and `wire` verbs, told apart by
+//! `--in-action`.
 //!
 //! **Only the building side is here** — what a run does is written elsewhere. Nothing in this file
 //! refuses an unfinished automation, for the reason [`amenbo_core::ops::automation`] gives: the launch
 //! check is where a person is about to be let down by one.
 //!
-//! **The parts are named by id.** They carry no conversational ref: a step is named by the automation
-//! it sits in, not by a number anybody types back, so every `add` here prints the id the next command
+//! **The parts are named by id.** They carry no conversational ref: a step is named by the action it
+//! sits in, not by a number anybody types back, so every `add` here prints the id the next command
 //! takes.
 
 use serde_json::{json, Value};
@@ -19,11 +24,12 @@ use amenbo_core::model::{
     AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
 };
 use amenbo_core::model::{AttachmentTarget, AutomationStoppedReason};
-use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep, StepSource};
+use amenbo_core::model::AutomationPictureOwner;
+use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::Launcher;
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
-use amenbo_core::ops::automation_view::{ActionView, AutomationView, StepView};
+use amenbo_core::ops::automation_view::{ActionView, AutomationView, PlacementView, StepView};
 use amenbo_core::time::Timestamp;
 use amenbo_core::Store;
 
@@ -34,25 +40,34 @@ use crate::cmd::place::project_or_bound;
 use crate::cmd::task::resolve_task;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
-/// Where an edge or a wire leaves from, as one token: `<step>:<way out>`. `4` and `4:` are both the
+/// Where an edge or a wire leaves from, as one token: `<box>:<way out>`. `4` and `4:` are both the
 /// unnamed way out, `4:*` the error one.
 ///
 /// **Written as one token because the two halves are one place.** A way out is named against whichever
-/// of the step and its library action declares it, so a name without the step it is read on names
+/// of the box and the action standing on it declares it, so a name without the box it is read on names
 /// nothing — and splitting them across two flags lets a caller pass a name that belongs to some other
-/// step's list.
+/// box's list.
 fn parse_point(s: &str) -> Result<(i64, Option<String>), CliError> {
-    let (step, exit) = match s.split_once(':') {
-        Some((step, exit)) => (step, (!exit.is_empty()).then(|| exit.to_string())),
+    let (whose, exit) = match s.split_once(':') {
+        Some((whose, exit)) => (whose, (!exit.is_empty()).then(|| exit.to_string())),
         None => (s, None),
     };
-    let step: i64 = step.trim().parse().map_err(|_| CliError {
+    let whose: i64 = whose.trim().parse().map_err(|_| CliError {
         code: "invalid_value",
-        message: format!("'{s}' does not name a step and a way out."),
-        hint: Some("Write it as <step>:<way out> — `4:` is the unnamed way out, `4:*` the error one.".to_string()),
+        message: format!("'{s}' does not name a box and a way out."),
+        hint: Some("Write it as <box>:<way out> — `4:` is the unnamed way out, `4:*` the error one.".to_string()),
         exit: 2,
     })?;
-    Ok((step, exit))
+    Ok((whose, exit))
+}
+
+/// Which picture a line is drawn on: an automation's, between placements, or one action's, between its
+/// steps.
+fn picture(in_action: bool) -> AutomationPictureOwner {
+    match in_action {
+        true => AutomationPictureOwner::Action,
+        false => AutomationPictureOwner::Automation,
+    }
 }
 
 /// What a port carries. Spelled out here rather than left to the model's own parse so the refusal names
@@ -84,14 +99,14 @@ fn declarer_from_flags(step: Option<i64>, action: Option<i64>) -> Result<(Automa
         _ => Err(CliError {
             code: "invalid_value",
             message: "name what declares this — one of --step or --action.".to_string(),
-            hint: Some("A step that runs a library action declares nothing of its own; write it on the action.".to_string()),
+            hint: Some("A way out and a port are a step's or an action's; a setting is the action's alone.".to_string()),
             exit: 2,
         }),
     }
 }
 
-/// Where an edge goes, from the three flags that say so. `--to` names the next step; the other two end
-/// the run.
+/// Where an edge goes, from the three flags that say so. `--to` names the next box; the other two end
+/// the picture it is drawn on.
 fn edge_target(to: Option<i64>, done: bool, halt: bool) -> Result<EdgeTarget, CliError> {
     match (to, done, halt) {
         (Some(to), false, false) => Ok(EdgeTarget::Go(to)),
@@ -99,7 +114,7 @@ fn edge_target(to: Option<i64>, done: bool, halt: bool) -> Result<EdgeTarget, Cl
         (None, false, true) => Ok(EdgeTarget::Halt),
         _ => Err(CliError {
             code: "invalid_value",
-            message: "say what happens after this way out — one of --to <step>, --done or --halt.".to_string(),
+            message: "say what happens after this way out — one of --to <box>, --done or --halt.".to_string(),
             hint: None,
             exit: 2,
         }),
@@ -230,10 +245,13 @@ fn typed_in(sub: &AutomationCmd) -> Where {
         | AutomationCmd::Update { .. }
         | AutomationCmd::Rm { .. }
         | AutomationCmd::EntrySet { .. }
+        | AutomationCmd::PlaceAdd { .. }
+        | AutomationCmd::PlaceRm { .. }
         | AutomationCmd::ActionAdd { .. }
         | AutomationCmd::ActionList { .. }
         | AutomationCmd::ActionShow { .. }
         | AutomationCmd::ActionUpdate { .. }
+        | AutomationCmd::ActionEntrySet { .. }
         | AutomationCmd::ActionRm { .. }
         | AutomationCmd::StepAdd { .. }
         | AutomationCmd::StepUpdate { .. }
@@ -311,8 +329,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     human(
                         flags,
                         format!(
-                            "  {}  {}  {} step(s){archived}",
-                            card.automation.id, card.automation.name, card.steps
+                            "  {}  {}  {} placement(s){archived}",
+                            card.automation.id, card.automation.name, card.placements
                         ),
                     );
                 }
@@ -345,24 +363,35 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.rm", "automation", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted automation: {id}"));
         }
-        AutomationCmd::EntrySet { id, step, clear } => {
-            if step.is_none() && !clear {
+        AutomationCmd::EntrySet { id, placement, clear } => {
+            if placement.is_none() && !clear {
                 return Err(CliError {
                     code: "invalid_value",
-                    message: "name the step a run starts at with --step, or --clear to leave none.".to_string(),
+                    message: "name the placement a run starts at with --placement, or --clear to leave none.".to_string(),
                     hint: None,
                     exit: 2,
                 });
             }
-            let a = store.automation_set_entry(id, step).map_err(CliError::from)?;
-            let line = match a.entry_step_id {
-                Some(s) => format!("✓ Automation {} starts at step {s}", a.id),
+            let a = store.automation_set_entry(id, placement).map_err(CliError::from)?;
+            let line = match a.entry_placement_id {
+                Some(p) => format!("✓ Automation {} starts at placement {p}", a.id),
                 None => format!("✓ Automation {} starts nowhere", a.id),
             };
-            write_envelope(flags, "automation.entry-set", "automation", serde_json::to_value(&a).unwrap(), Some(vec!["entry_step_id".to_string()]), false, line);
+            write_envelope(flags, "automation.entry-set", "automation", serde_json::to_value(&a).unwrap(), Some(vec!["entry_placement_id".to_string()]), false, line);
+        }
+        AutomationCmd::PlaceAdd { automation, action } => {
+            let p = store.automation_placement_add(automation, action).map_err(CliError::from)?;
+            write_envelope(flags, "automation.place-add", "automation_placement", serde_json::to_value(&p).unwrap(), None, false, format!("✓ Placed action {action} on automation {automation} ({})", p.id));
+        }
+        AutomationCmd::PlaceRm { id } => {
+            if !confirm(flags, "take placement off")? {
+                return Ok(0);
+            }
+            store.automation_placement_delete(id).map_err(CliError::from)?;
+            write_envelope(flags, "automation.place-rm", "automation_placement", json!({ "id": id, "deleted": true }), None, false, format!("✓ Took placement off: {id}"));
         }
 
-        AutomationCmd::ActionAdd { project, global, name, prompt } => {
+        AutomationCmd::ActionAdd { project, global, name } => {
             // The device's library is reached by every project on this machine, so it is nobody's
             // project to put something in: `None` is what core reads as that shelf, and an AI bound to
             // a project is turned away from it there.
@@ -370,8 +399,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 true => None,
                 false => Some(project_or_bound(store, project)?),
             };
-            let prompt = body_arg(prompt)?;
-            let a = store.automation_action_add(pid, &name, &prompt).map_err(CliError::from)?;
+            let a = store.automation_action_add(pid, &name).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-add", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Added action: {} ({})", a.name, a.id));
         }
         AutomationCmd::ActionList { project, global } => {
@@ -400,8 +428,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     human(
                         flags,
                         format!(
-                            "  {}  {}{shelf}  used by {} automation(s)",
-                            card.action.id, card.action.name, card.used_by
+                            "  {}  {}{shelf}  {} step(s)  used by {} automation(s)",
+                            card.action.id, card.action.name, card.steps, card.used_by
                         ),
                     );
                 }
@@ -417,12 +445,25 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 render_action(flags, &view);
             }
         }
-        AutomationCmd::ActionUpdate { id, name, prompt } => {
-            let prompt = body_arg_opt(prompt)?;
-            let a = store
-                .automation_action_update(id, name.as_deref(), prompt.as_deref())
-                .map_err(CliError::from)?;
+        AutomationCmd::ActionUpdate { id, name } => {
+            let a = store.automation_action_update(id, name.as_deref()).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-update", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated action: {} ({})", a.name, a.id));
+        }
+        AutomationCmd::ActionEntrySet { id, step, clear } => {
+            if step.is_none() && !clear {
+                return Err(CliError {
+                    code: "invalid_value",
+                    message: "name the step this action opens first with --step, or --clear to leave none.".to_string(),
+                    hint: None,
+                    exit: 2,
+                });
+            }
+            let a = store.automation_action_set_entry(id, step).map_err(CliError::from)?;
+            let line = match a.entry_step_id {
+                Some(s) => format!("✓ Action {} opens step {s} first", a.id),
+                None => format!("✓ Action {} opens nothing", a.id),
+            };
+            write_envelope(flags, "automation.action-entry-set", "automation_action", serde_json::to_value(&a).unwrap(), Some(vec!["entry_step_id".to_string()]), false, line);
         }
         AutomationCmd::ActionRm { id } => {
             if !confirm(flags, "delete library action")? {
@@ -431,23 +472,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::StepAdd { automation, name, action, prompt, agent, model, interactive, work_dir, report_to_task, no_history } => {
-            let prompt = body_arg_opt(prompt)?;
-            let source = match (action, prompt) {
-                (Some(id), None) => StepSource::Action(id),
-                (None, Some(p)) => StepSource::Prompt(p),
-                _ => {
-                    return Err(CliError {
-                        code: "invalid_value",
-                        message: "say where this step's prompt comes from — one of --action <id> or --prompt <text>.".to_string(),
-                        hint: None,
-                        exit: 2,
-                    })
-                }
-            };
+        AutomationCmd::StepAdd { action, name, prompt, agent, model, interactive, work_dir, report_to_task, no_history } => {
+            let prompt = body_arg(prompt)?;
             let new = NewStep {
                 name,
-                source,
+                prompt,
                 agent,
                 model,
                 interactive,
@@ -457,16 +486,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 // takes it away is the one written.
                 show_history: !no_history,
             };
-            let s = store.automation_step_add(automation, new).map_err(CliError::from)?;
+            let s = store.automation_step_add(action, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added step: {} ({})", s.name, s.id));
         }
-        AutomationCmd::StepUpdate { id, name, action, prompt, agent, model, clear_model, interactive, work_dir, clear_work_dir, report_to_task, history } => {
+        AutomationCmd::StepUpdate { id, name, prompt, agent, model, clear_model, interactive, work_dir, clear_work_dir, report_to_task, history } => {
             let prompt = body_arg_opt(prompt)?;
-            let source = match (action, prompt) {
-                (Some(id), None) => Some(StepSource::Action(id)),
-                (None, Some(p)) => Some(StepSource::Prompt(p)),
-                _ => None,
-            };
             let model = match clear_model {
                 true => Some(None),
                 false => model.as_deref().map(Some),
@@ -476,7 +500,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 false => work_dir.as_deref().map(Some),
             };
             let s = store
-                .automation_step_update(id, name.as_deref(), source, agent.as_deref(), model, interactive, work_dir, report_to_task, history)
+                .automation_step_update(id, name.as_deref(), prompt.as_deref(), agent.as_deref(), model, interactive, work_dir, report_to_task, history)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Updated step: {} ({})", s.name, s.id));
         }
@@ -547,11 +571,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_port_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.port-rm", "automation_port", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted port: {id}"));
         }
-        AutomationCmd::CfgAdd { step, action, name, kind, required, options } => {
-            let (owner_kind, owner_id) = declarer_from_flags(step, action)?;
+        AutomationCmd::CfgAdd { action, name, kind, required, options } => {
             let kind = parse_cfg_kind(&kind)?;
             let c = store
-                .automation_cfg_add(owner_kind, owner_id, &name, kind, required, options.as_deref())
+                .automation_cfg_add(action, &name, kind, required, options.as_deref())
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.cfg-add", "automation_cfg", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Declared setting: {} ({})", c.name, c.id));
         }
@@ -564,11 +587,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let c = store.automation_cfg_update(id, name.as_deref(), kind, required, options).map_err(CliError::from)?;
             write_envelope(flags, "automation.cfg-update", "automation_cfg", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Updated setting: {} ({})", c.name, c.id));
         }
-        AutomationCmd::CfgSet { step, name, clear, folder, choice, number, text, status, priority, assignee, dim, ready, done, due } => {
+        AutomationCmd::CfgSet { placement, name, clear, folder, choice, number, text, status, priority, assignee, dim, ready, done, due } => {
             let answer = CfgAnswer { clear, folder, choice, number, text, status, priority, assignee, dim, ready, done, due };
             let value = cfg_value(&answer)?;
             let value = value.map(|v| v.to_string());
-            let c = store.automation_cfg_set(step, &name, value.as_deref()).map_err(CliError::from)?;
+            let c = store.automation_cfg_set(placement, &name, value.as_deref()).map_err(CliError::from)?;
             let line = match &c.value {
                 Some(v) => format!("✓ Answered setting: {} = {v}", c.name),
                 None => format!("✓ Left setting unanswered: {}", c.name),
@@ -582,10 +605,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_cfg_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.cfg-rm", "automation_cfg", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted setting: {id}"));
         }
-        AutomationCmd::EdgeAdd { from, to, done, halt, max_times, no_max } => {
-            let (from_step, exit_name) = parse_point(&from)?;
+        AutomationCmd::EdgeAdd { in_action, from, to, done, halt, max_times, no_max } => {
+            let (from_id, exit_name) = parse_point(&from)?;
             let target = edge_target(to, done, halt)?;
-            // An edge into a step is capped unless somebody says otherwise: what the limit guards
+            // An edge into a box is capped unless somebody says otherwise: what the limit guards
             // against is a loop that never converges, and a caller who never thought about it is the
             // one that loop happens to. An edge that closes or stops the run is taken once, so it
             // carries no limit at all — core refuses one there.
@@ -595,7 +618,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 _ => max_times,
             };
             let e = store
-                .automation_edge_add(from_step, exit_name.as_deref(), target, max_times)
+                .automation_edge_add(picture(in_action), from_id, exit_name.as_deref(), target, max_times)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.edge-add", "automation_edge", serde_json::to_value(&e).unwrap(), None, false, format!("✓ Added edge: {} ({})", from, e.id));
         }
@@ -619,10 +642,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_edge_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.edge-rm", "automation_edge", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted edge: {id}"));
         }
-        AutomationCmd::WireAdd { from, from_port, to, to_port } => {
-            let (from_step, exit_name) = parse_point(&from)?;
+        AutomationCmd::WireAdd { in_action, from, from_port, to, to_port } => {
+            let (from_id, exit_name) = parse_point(&from)?;
             let w = store
-                .automation_wire_add(from_step, exit_name.as_deref(), &from_port, to, &to_port)
+                .automation_wire_add(picture(in_action), from_id, exit_name.as_deref(), &from_port, to, &to_port)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), None, false, format!("✓ Added wire: {from}.{from_port} → {to}.{to_port} ({})", w.id));
         }
@@ -650,13 +673,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_note_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.note-rm", "automation_note", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted shared document: {id}"));
         }
-        AutomationCmd::NoteLink { step, note } => {
-            let l = store.automation_note_link(step, note).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-link", "automation_step_note", serde_json::to_value(&l).unwrap(), None, false, format!("✓ Step {step} is handed document {note}"));
+        AutomationCmd::NoteLink { placement, note } => {
+            let l = store.automation_note_link(placement, note).map_err(CliError::from)?;
+            write_envelope(flags, "automation.note-link", "automation_placement_note", serde_json::to_value(&l).unwrap(), None, false, format!("✓ Placement {placement} is handed document {note}"));
         }
-        AutomationCmd::NoteUnlink { step, note } => {
-            let took = store.automation_note_unlink(step, note).map_err(CliError::from)?;
-            write_envelope(flags, "automation.note-unlink", "automation_step_note", json!({ "step_id": step, "note_id": note, "unlinked": took }), None, !took, format!("✓ Step {step} is no longer handed document {note}"));
+        AutomationCmd::NoteUnlink { placement, note } => {
+            let took = store.automation_note_unlink(placement, note).map_err(CliError::from)?;
+            write_envelope(flags, "automation.note-unlink", "automation_placement_note", json!({ "placement_id": placement, "note_id": note, "unlinked": took }), None, !took, format!("✓ Placement {placement} is no longer handed document {note}"));
         }
         AutomationCmd::RunList { task, automation, limit } => {
             let (runs, about) = match (task, automation) {
@@ -937,37 +960,40 @@ fn next_line(next: &Next) -> String {
 
 // ───────────────────────── what was built ─────────────────────────
 
-/// One automation's whole definition on the terminal: the automation's own lines, then each step with
-/// what it runs under and what follows each of its ways out, then the documents its steps share.
-///
-/// **Prompts and documents are written out in full.** A definition is read back to check what was
-/// built — that is the whole of what this command is for — and a snippet would send the reader to a
-/// screen to finish the sentence.
+/// One automation in full: the placements on it, what each runs under, and the documents they share.
 fn render_automation(flags: &Flags, view: &AutomationView) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
-    let entry = match a.entry_step_id {
-        Some(step) => format!("starts at step {step}"),
+    let entry = match a.entry_placement_id {
+        Some(placement) => format!("starts at placement {placement}"),
         None => "starts nowhere".to_string(),
     };
     let archived = if a.archived { "  archived" } else { "" };
-    human(flags, format!("project {}  {}  {} step(s){archived}", a.project_id, entry, view.steps.len()));
+    human(
+        flags,
+        format!(
+            "project {}  {}  {} placement(s){archived}",
+            a.project_id,
+            entry,
+            view.placements.len()
+        ),
+    );
     write_body(flags, "notes", &a.notes);
     write_body(flags, "preamble", &a.preamble);
-    for step in &view.steps {
-        render_step(flags, view, step);
+    for placement in &view.placements {
+        render_placement(flags, view, placement);
     }
     if !view.notes.is_empty() {
         human(flags, format!("\ndocuments ({})", view.notes.len()));
         for note in &view.notes {
-            let steps = match note.step_ids.is_empty() {
-                true => "handed to no step".to_string(),
+            let handed = match note.placement_ids.is_empty() {
+                true => "handed to no placement".to_string(),
                 false => format!(
-                    "handed to step {}",
-                    note.step_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
+                    "handed to placement {}",
+                    note.placement_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
                 ),
             };
-            human(flags, format!("  {} — {}  ({steps})", note.note.id, note.note.name));
+            human(flags, format!("  {} — {}  ({handed})", note.note.id, note.note.name));
             for line in note.note.body.lines() {
                 human(flags, format!("      | {line}"));
             }
@@ -975,8 +1001,97 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     }
 }
 
-/// One step: what it runs on, what it takes, what it is set to, and what happens after each way out.
-fn render_step(flags: &Flags, view: &AutomationView, step: &StepView) {
+/// One placement: which action stands there, what it takes, what it is set to, and what happens after
+/// each way out.
+fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementView) {
+    let row = &placement.placement;
+    let named = match &placement.action {
+        Some(action) => format!("action {} ({})", action.id, action.name),
+        None => "no action".to_string(),
+    };
+    human(flags, format!("\nplacement {} — {named}", row.id));
+    for port in &placement.inputs {
+        human(flags, format!("    takes  {}", one_port(port)));
+    }
+    for cfg in &placement.settings {
+        human(flags, format!("    set  {}", one_cfg(cfg)));
+    }
+    for exit in &placement.exits {
+        human(flags, format!("    way out {}", one_exit(exit.exit.name.as_deref())));
+        for port in &exit.outputs {
+            human(flags, format!("        hands on  {}", one_port(port)));
+        }
+        for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_name == exit.exit.name)
+        {
+            human(flags, format!("        then  {}", one_edge(edge)));
+        }
+        for wire in
+            view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_name == exit.exit.name)
+        {
+            human(
+                flags,
+                format!(
+                    "        wire  {} → placement {} . {}",
+                    wire.from_port_name, wire.to_id, wire.to_port_name
+                ),
+            );
+        }
+    }
+    // An edge hanging on a name the action no longer declares is what a way out being renamed or
+    // deleted leaves behind, and it is the reason a picture stops walking — so it is written out
+    // rather than left off the account.
+    let declared: Vec<Option<String>> = placement.exits.iter().map(|e| e.exit.name.clone()).collect();
+    for edge in
+        view.edges.iter().filter(|e| e.from_id == row.id && !declared.contains(&e.exit_name))
+    {
+        human(
+            flags,
+            format!(
+                "    way out {} — no longer declared\n        then  {}",
+                one_exit(edge.exit_name.as_deref()),
+                one_edge(edge)
+            ),
+        );
+    }
+}
+
+/// One library action: the steps inside it, the picture they are drawn into, and what it declares to
+/// every placement of it.
+fn render_action(flags: &Flags, view: &ActionView) {
+    let a = &view.action;
+    let shelf = match a.project_id {
+        Some(project_id) => format!("the library of project {project_id}"),
+        None => "the device's library".to_string(),
+    };
+    human(flags, format!("Action {}  {}", a.id, a.name));
+    let entry = match a.entry_step_id {
+        Some(step) => format!("opens step {step} first"),
+        None => "opens nothing".to_string(),
+    };
+    human(
+        flags,
+        format!("{shelf}  {entry}  used by {} automation(s)", view.used_by),
+    );
+    for port in &view.inputs {
+        human(flags, format!("takes  {}", one_port(port)));
+    }
+    for cfg in &view.settings {
+        human(flags, format!("declares  {}", one_cfg(cfg)));
+    }
+    for exit in &view.exits {
+        human(flags, format!("way out {}", one_exit(exit.exit.name.as_deref())));
+        for port in &exit.outputs {
+            human(flags, format!("    hands on  {}", one_port(port)));
+        }
+    }
+    for step in &view.steps {
+        render_step(flags, view, step);
+    }
+}
+
+/// One step inside an action: the prompt it runs on, what it takes, and what happens after each way
+/// out.
+fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
     let row = &step.step;
     let mut marks = vec![format!("agent {}", row.agent)];
     if let Some(model) = &row.model {
@@ -995,80 +1110,31 @@ fn render_step(flags: &Flags, view: &AutomationView, step: &StepView) {
         marks.push("no history".to_string());
     }
     human(flags, format!("\nstep {} — {}  [{}]", row.id, row.name, marks.join(" · ")));
-    match &step.action {
-        Some(action) => human(flags, format!("    library action {} ({})", action.id, action.name)),
-        None => human(flags, "    its own prompt"),
-    }
-    for line in step.prompt.lines() {
+    for line in row.prompt.lines() {
         human(flags, format!("      | {line}"));
     }
     for port in &step.inputs {
         human(flags, format!("    takes  {}", one_port(port)));
-    }
-    for cfg in &step.settings {
-        human(flags, format!("    set  {}", one_cfg(cfg)));
     }
     for exit in &step.exits {
         human(flags, format!("    way out {}", one_exit(exit.exit.name.as_deref())));
         for port in &exit.outputs {
             human(flags, format!("        hands on  {}", one_port(port)));
         }
-        for edge in view.edges.iter().filter(|e| e.from_step_id == row.id && e.exit_name == exit.exit.name) {
+        for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_name == exit.exit.name)
+        {
             human(flags, format!("        then  {}", one_edge(edge)));
         }
-        for wire in view.wires.iter().filter(|w| w.from_step_id == row.id && w.from_exit_name == exit.exit.name) {
+        for wire in
+            view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_name == exit.exit.name)
+        {
             human(
                 flags,
                 format!(
                     "        wire  {} → step {} . {}",
-                    wire.from_port_name, wire.to_step_id, wire.to_port_name
+                    wire.from_port_name, wire.to_id, wire.to_port_name
                 ),
             );
-        }
-    }
-    // An edge hanging on a name this step no longer declares is what a way out being renamed or
-    // deleted leaves behind, and it is the reason a picture stops walking — so it is written out
-    // rather than left off the account.
-    let declared: Vec<Option<String>> = step.exits.iter().map(|e| e.exit.name.clone()).collect();
-    for edge in view
-        .edges
-        .iter()
-        .filter(|e| e.from_step_id == row.id && !declared.contains(&e.exit_name))
-    {
-        human(
-            flags,
-            format!(
-                "    way out {} — no longer declared\n        then  {}",
-                one_exit(edge.exit_name.as_deref()),
-                one_edge(edge)
-            ),
-        );
-    }
-}
-
-/// One library action: its prompt, and the ways out, inputs and settings it declares for every step
-/// pointing at it.
-fn render_action(flags: &Flags, view: &ActionView) {
-    let a = &view.action;
-    let shelf = match a.project_id {
-        Some(project_id) => format!("the library of project {project_id}"),
-        None => "the device's library".to_string(),
-    };
-    human(flags, format!("Action {}  {}", a.id, a.name));
-    human(flags, format!("{shelf}  used by {} automation(s)", view.used_by));
-    for line in a.prompt.lines() {
-        human(flags, format!("  | {line}"));
-    }
-    for port in &view.inputs {
-        human(flags, format!("takes  {}", one_port(port)));
-    }
-    for cfg in &view.settings {
-        human(flags, format!("declares  {}", one_cfg(cfg)));
-    }
-    for exit in &view.exits {
-        human(flags, format!("way out {}", one_exit(exit.exit.name.as_deref())));
-        for port in &exit.outputs {
-            human(flags, format!("    hands on  {}", one_port(port)));
         }
     }
 }
@@ -1117,10 +1183,10 @@ fn one_cfg(cfg: &amenbo_core::model::AutomationCfg) -> String {
 
 /// What happens after a way out is taken, as one phrase.
 fn one_edge(edge: &amenbo_core::model::AutomationEdge) -> String {
-    let where_to = match (edge.ends, edge.to_step_id) {
-        (amenbo_core::model::AutomationEnds::Go, Some(step)) => format!("step {step}"),
+    let where_to = match (edge.ends, edge.to_id) {
+        (amenbo_core::model::AutomationEnds::Go, Some(next)) => format!("box {next}"),
         (amenbo_core::model::AutomationEnds::Go, None) => "nowhere".to_string(),
-        (amenbo_core::model::AutomationEnds::Done, _) => "the run is done".to_string(),
+        (amenbo_core::model::AutomationEnds::Done, _) => "the picture is done".to_string(),
         (amenbo_core::model::AutomationEnds::Halt, _) => "the run stops for a person".to_string(),
     };
     match edge.max_times {

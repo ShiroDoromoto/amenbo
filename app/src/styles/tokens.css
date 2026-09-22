@@ -100,13 +100,6 @@
   --c-git-added: #2b9d5b;
   --c-git-untracked: #7d7a2c;
 
-  /* ----- where a step of an automation got its prompt (`screens/AutomationPicture.tsx`) -----
-     The edge down the left of a box whose prompt came from the library rather than being written on
-     the step itself. Off the ladder, like `--c-human` and the three above: it asks the reader for
-     nothing — it says where to go to change what that step says, and a reader who ignores it loses
-     nothing, because the step panel says the same in words. */
-  --c-auto-action: #c6791f;
-
   /* ----- what carries a notification (`AMB-D-885`) -----
      The ground a notification target's tile is drawn on, one per kind. Off the ladder like the two
      above and like `--c-human`: the tile says which kind a row is, and the word beside it says the
@@ -324,8 +317,6 @@
   --c-git-modified: #e0a04a;
   --c-git-added: #46c97e;
   --c-git-untracked: #b6b25a;
-
-  --c-auto-action: #e0a04a;
 
   /* The two steps that hold a value of their own; the third and everything derived from the
      three follow from the light side, which names them once. */

@@ -247,7 +247,7 @@ amenbo task list --filter "time_axis:v2 done:false" --json
 # Words are not one of the filter keys: `search` is the one place they go. It answers
 # with the places a word is written — tasks, decisions, the comments on both, the labels
 # either is filed under, the names of what is attached, the documents an automation's
-# steps share — one line per place, with an
+# placements share — one line per place, with an
 # excerpt and where the record it points at stands. Words are ANDed; --filter takes the
 # same grammar as `task list`, and since
 # that grammar is task vocabulary, a search carrying one is a search of tasks. A project
@@ -342,22 +342,25 @@ amenbo decision list --filter "status:decided draft:no" --json
 amenbo decision list --filter "dim:Area=Design" --json           # the same axes the tasks are filed on, folded the same way (`=none` is unclassified)
 amenbo decision list --filter "status:decided superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
-# Automations: a picture drawn once and walked by agents. A step is a prompt, an agent to
-# carry it out, and the ways out it may leave through; an edge says what happens after each
-# way out is taken, and a wire hands one step's result to the next. A run opens a terminal
-# per step and waits for that step to report, so the loop belongs to the store.
+# Automations: a picture drawn once and walked by agents, in three layers. An automation
+# places library actions; an action holds steps; one step is one prompt, an agent to carry it
+# out and the ways out it may leave through. An edge says what happens after each way out is
+# taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
+# waits for that step to report, so the loop belongs to the store.
 amenbo automation add --name "Review and fix"          # ...and the preamble every step of it is told
-amenbo automation action-add --name "Review" --prompt - # a prompt worth using twice, in the library
-amenbo automation step-add 3 --name "Review" --action 7 --agent claude # a step made of one
-amenbo automation exit-add --step 11 --name "something to fix"  # a way out it may leave through
+amenbo automation action-add --name "Review"           # a unit worth using twice, in the library
+amenbo automation step-add 7 --name "Review" --prompt - --agent claude # one step of it = one terminal
+amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first
+amenbo automation place-add 3 --action 7               # put that action on the picture
+amenbo automation exit-add --action 7 --name "something to fix" # a way out a placement may leave by
 amenbo automation port-add --exit 21 --name report --kind file  # what that way out hands on
-amenbo automation edge-add --from "11:something to fix" --to 12 --max-times 3 # what happens after it
-amenbo automation wire-add --from "11:something to fix" --from-port report --to 12 --to-port report
-amenbo automation entry-set 3 --step 11                # where a run starts
+amenbo automation edge-add --from "31:something to fix" --to 32 --max-times 3 # what happens after it
+amenbo automation wire-add --from "31:something to fix" --from-port report --to 32 --to-port report
+amenbo automation entry-set 3 --placement 31           # where a run starts
 amenbo automation list                                 # what this project has, and how built each is
-amenbo automation show 3                               # one whole definition, every step resolved
+amenbo automation show 3                               # one whole definition, every spot resolved
 amenbo automation action-list                          # the library this project reaches
-amenbo automation action-show 7                        # one prompt, and what it declares
+amenbo automation action-show 7                        # one action, and the picture inside it
 amenbo automation start 3                              # away it goes
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo

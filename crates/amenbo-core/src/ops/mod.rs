@@ -177,6 +177,41 @@ pub(crate) mod test_support {
         StoreEngine::open_in_memory().expect("in-memory engine")
     }
 
+    /// **One action of one step, placed on one automation** — the smallest thing a run can walk
+    /// (`AMB-D-949`), and what a test that needs one spot on a picture asks for.
+    pub(crate) fn mk_placed(
+        tx: &WriteTx<'_>,
+        automation: &crate::model::Automation,
+        name: &str,
+        prompt: &str,
+        agent: &str,
+    ) -> (crate::model::AutomationAction, crate::model::AutomationPlacement) {
+        let action = crate::ops::automation::action_from_prompt(
+            tx,
+            Some(automation.project_id),
+            crate::ops::automation::NewStep::new(name, prompt, agent),
+            &[],
+            &[],
+        )
+        .expect("write the action");
+        let placement = crate::ops::automation::placement_add(tx, automation.id, action.id)
+            .expect("place it");
+        (action, placement)
+    }
+
+    /// The one step a [`mk_placed`] action holds.
+    pub(crate) fn only_step(
+        tx: &WriteTx<'_>,
+        action: &crate::model::AutomationAction,
+    ) -> crate::model::AutomationStep {
+        crate::store_engine::read::automation_step(
+            tx.conn(),
+            action.entry_step_id.expect("an entry step"),
+        )
+        .expect("read")
+        .expect("the step")
+    }
+
     /// One axis carrying one value, in the given project. Returns the value's id — what a classification
     /// names.
     pub(crate) fn mk_value(tx: &WriteTx<'_>, project_id: i64, axis: &str, value: &str) -> i64 {

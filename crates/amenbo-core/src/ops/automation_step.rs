@@ -187,10 +187,16 @@ fn latest_for(
     opens_a_stretch: bool,
 ) -> Result<Option<Handed>> {
     let conn = tx.conn();
-    let (Some(step_id), Some(stretch), false) = (def.step_id, stretch, opens_a_stretch) else {
+    let (Some(placement_id), Some(stretch), false) = (def.placement_id, stretch, opens_a_stretch)
+    else {
         return Ok(None);
     };
-    let wires = read::automation_wires_to_port(conn, step_id, &port.name)?;
+    let wires = read::automation_wires_to_port(
+        conn,
+        crate::model::AutomationPictureOwner::Automation,
+        placement_id,
+        &port.name,
+    )?;
     if wires.is_empty() {
         return Ok(None);
     }
@@ -204,7 +210,7 @@ fn latest_for(
                 continue;
             }
             let joined = wires.iter().any(|w| {
-                Some(w.from_step_id) == from_def.step_id
+                Some(w.from_id) == from_def.placement_id
                     && w.from_exit_name.as_deref() == value.exit_name.as_deref()
                     && w.from_port_name == value.name
             });
@@ -371,16 +377,16 @@ fn push_block(out: &mut String, block: &str) {
     out.push_str(block.trim_end());
 }
 
-/// The documents this step is handed, in the order they were hung on it. A step whose definition has
-/// since been deleted is handed none — the links went with it.
+/// The documents this step is handed, in the order they were hung on the spot it was opened from. A
+/// placement taken off the picture since hands none — the links went with it.
 fn shared_documents(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<(String, String)>> {
     let conn = tx.conn();
-    let Some(step_id) = def.step_id else {
+    let Some(placement_id) = def.placement_id else {
         return Ok(Vec::new());
     };
     let mut out = Vec::new();
-    for (link_id, _) in read::automation_step_note_siblings(conn, step_id, None)? {
-        let Some(link) = read::automation_step_note(conn, link_id)? else {
+    for (link_id, _) in read::automation_placement_note_siblings(conn, placement_id, None)? {
+        let Some(link) = read::automation_placement_note(conn, link_id)? else {
             continue;
         };
         if let Some(note) = read::automation_note(conn, link.note_id)? {
@@ -525,19 +531,21 @@ fn handing_back(exits: &[RunDefExit]) -> String {
 mod tests {
     use super::*;
     use crate::model::{
-        Automation, AutomationOwner, AutomationPortOwner, AutomationStep, ActorKind,
+        ActorKind, Automation, AutomationAction, AutomationOwner, AutomationPictureOwner,
+        AutomationPlacement, AutomationPortOwner,
     };
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_run::{launch, Launcher};
-    use crate::ops::test_support::{mk_project, with_tx};
+    use crate::ops::test_support::{mk_placed, mk_project, with_tx};
 
-    /// The picture every test here starts from: a step that takes a task and hands a note on through
-    /// "found", and a second step that is wired to read that note. Both ways out of both steps are
-    /// decided, so it launches as it stands.
+    /// The picture every test here starts from: a spot that takes a task and hands a note on through
+    /// "found", and a second spot that is wired to read that note. Both ways out of both are decided,
+    /// so it launches as it stands.
     struct Picture {
         automation: Automation,
-        first: AutomationStep,
-        second: AutomationStep,
+        first_action: AutomationAction,
+        first: AutomationPlacement,
+        second: AutomationPlacement,
     }
 
     fn picture(tx: &WriteTx<'_>, required_in: bool, wired: bool) -> Picture {
@@ -552,27 +560,19 @@ mod tests {
             },
         )
         .expect("add automation");
-        let first = automation::step_add(
-            tx,
-            automation.id,
-            NewStep::with_prompt("調べる", "look at it", "claude"),
-        )
-        .expect("first step");
-        let second = automation::step_add(
-            tx,
-            automation.id,
-            NewStep::with_prompt("直す", "fix what the note says", "claude"),
-        )
-        .expect("second step");
+        let (first_action, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");
+        let (second_action, second) =
+            mk_placed(tx, &automation, "直す", "fix what the note says", "claude");
 
-        // The first step takes the task on its unnamed way out, and hands a note on through "found".
-        out_on(tx, &first, None, "タスク", AutomationPortKind::TaskTake, true);
-        automation::exit_add(tx, AutomationOwner::Step, first.id, Some("found")).expect("way out");
-        out_on(tx, &first, Some("found"), "note", AutomationPortKind::Value, false);
+        // The first spot takes the task on its unnamed way out, and hands a note on through "found".
+        out_on(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+        automation::exit_add(tx, AutomationOwner::Action, first_action.id, Some("found"))
+            .expect("way out");
+        out_on(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);
         automation::port_add(
             tx,
-            AutomationPortOwner::Step,
-            second.id,
+            AutomationPortOwner::Action,
+            second_action.id,
             AutomationPortDirection::In,
             "note",
             AutomationPortKind::Value,
@@ -580,26 +580,37 @@ mod tests {
         )
         .expect("input");
         if wired {
-            automation::wire_add(tx, first.id, Some("found"), "note", second.id, "note")
-                .expect("wire");
+            automation::wire_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                first.id,
+                Some("found"),
+                "note",
+                second.id,
+                "note",
+            )
+            .expect("wire");
         }
 
-        automation::edge_add(tx, first.id, Some("found"), EdgeTarget::Go(second.id), None)
+        let on = AutomationPictureOwner::Automation;
+        automation::edge_add(tx, on, first.id, Some("found"), EdgeTarget::Go(second.id), None)
             .expect("onward");
-        automation::edge_add(tx, first.id, None, EdgeTarget::Done, None).expect("closes");
-        automation::edge_add(tx, first.id, Some(ERROR_EXIT), EdgeTarget::Halt, None).expect("error");
-        automation::edge_add(tx, second.id, None, EdgeTarget::Done, None).expect("second closes");
-        automation::edge_add(tx, second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
+        automation::edge_add(tx, on, first.id, None, EdgeTarget::Done, None).expect("closes");
+        automation::edge_add(tx, on, first.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
+            .expect("error");
+        automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None)
+            .expect("second closes");
+        automation::edge_add(tx, on, second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
             .expect("second error");
         let automation =
             automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
-        Picture { automation, first, second }
+        Picture { automation, first_action, first, second }
     }
 
-    /// Declare an output on one way out of a step.
+    /// Declare an output on one way out of a library action.
     fn out_on(
         tx: &WriteTx<'_>,
-        step: &AutomationStep,
+        action: &AutomationAction,
         exit_name: Option<&str>,
         name: &str,
         kind: AutomationPortKind,
@@ -607,8 +618,8 @@ mod tests {
     ) {
         let exit = read::automation_exit_by_name(
             tx.conn(),
-            AutomationOwner::Step,
-            step.id,
+            AutomationOwner::Action,
+            action.id,
             exit_name,
         )
         .expect("read")
@@ -636,13 +647,17 @@ mod tests {
         launch(tx, automation.id, &by).expect("launch")
     }
 
-    /// The snapshot taken of one live step at launch.
-    fn def_of(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> AutomationRunDef {
+    /// The snapshot taken of one live spot at launch.
+    fn def_of(
+        tx: &WriteTx<'_>,
+        run: &AutomationRun,
+        placement: &AutomationPlacement,
+    ) -> AutomationRunDef {
         read::automation_run_defs_of(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.step_id == Some(step.id))
-            .expect("the step's snapshot")
+            .find(|d| d.placement_id == Some(placement.id))
+            .expect("the spot's snapshot")
     }
 
     fn ready(opened: Opened) -> Opening {
@@ -715,8 +730,7 @@ mod tests {
             let p = picture(tx, false, true);
             automation::cfg_add(
                 tx,
-                AutomationOwner::Step,
-                p.first.id,
+                p.first_action.id,
                 "作業フォルダ",
                 crate::model::AutomationCfgKind::Folder,
                 true,
@@ -726,7 +740,7 @@ mod tests {
             automation::cfg_set(tx, p.first.id, "作業フォルダ", Some("\"/work/here\"")).expect("answer");
             automation::step_update(
                 tx,
-                p.first.id,
+                p.first_action.entry_step_id.expect("an entry step"),
                 None,
                 None,
                 None,
@@ -788,7 +802,7 @@ mod tests {
     fn the_text_names_a_command_per_kind_and_not_out_for_the_task_it_takes() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
-            out_on(tx, &p.first, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            out_on(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open")).text;
 

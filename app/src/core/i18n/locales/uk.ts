@@ -1060,6 +1060,7 @@ export const uk: Translation = {
     "auto.run.byHuman": "зупинено вручну",
     "auto.run.noWayOn": "відкривати вже не було чого",
     "auto.run.step": "Крок {n} · {step}",
+    "auto.run.inAction": "{step} у {action}",
 
     "mcp.title": "Підключення через MCP",
     "mcp.setupTitle": "Працювати зі своїми проєктами із ШІ",

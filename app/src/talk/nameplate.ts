@@ -19,6 +19,13 @@
 // which is the whole of what this row stopped saying (`AMB-D-858`). **What the step printed is not
 // here**: that is in the terminal under the row, where a reader can scroll it.
 //
+// **Which step says the action it is inside as well as its own name** (`AMB-D-949`). A launch opens
+// one spot of the picture into a column of steps, so a step's name on its own no longer says which
+// spot of the automation a reader is watching — two spots standing on the same action run steps of
+// the same names. The two are one value and not two, because a language orders them its own way
+// (`auto.run.inAction`), and because the row gives values up whole as a pane narrows: half of "which
+// step" would be a name pointing at nothing.
+//
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
 // (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
 // back to: the panel drops under the header, wraps inside the pane's own width, and takes no pointer
@@ -76,6 +83,9 @@ export type Say = {
   readonly seq: number;
   /** The step running now, by the name it was built under. */
   readonly step: string;
+  /** The action the spot this step was opened from stands on, or null where that spot has been taken
+   *  off the picture since — and then the row says the step alone. */
+  readonly action: string | null;
   /** The task the run is working, or null where it is on none yet. */
   readonly task: Worked | null;
 };
@@ -179,7 +189,9 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     auto.hidden = plate.run === null;
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
-      stepName.textContent = plate.run.step;
+      stepName.textContent = plate.run.action === null
+        ? plate.run.step
+        : tf("auto.run.inAction", { action: plate.run.action, step: plate.run.step });
       seq.textContent = tf("face.runStep", { n: plate.run.seq });
       runNo.textContent = tf("face.runNo", { n: plate.run.run });
       taskRef.textContent = plate.run.task?.ref ?? "";

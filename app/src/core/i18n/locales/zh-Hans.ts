@@ -1045,6 +1045,7 @@ export const zhHans: Translation = {
     "auto.run.byHuman": "手动停止",
     "auto.run.noWayOn": "没有可打开的步骤了",
     "auto.run.step": "步骤 {n} · {step}",
+    "auto.run.inAction": "{action} 的 {step}",
 
     "mcp.title": "通过 MCP 连接",
     "mcp.setupTitle": "让 AI 可以使用你的项目",

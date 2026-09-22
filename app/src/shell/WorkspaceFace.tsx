@@ -1623,6 +1623,9 @@ export function WorkspaceFace({
                       run: frame.run,
                       seq: step.seq,
                       step: step.name,
+                      // Which spot of the picture this step was opened from, said by the action
+                      // standing there (`AMB-D-949`). Null where that spot has since been taken off.
+                      action: step.actionName ?? null,
                       task: step.task ?? null,
                     }}
                     // A place that came back holding a way into what was running in it is opened

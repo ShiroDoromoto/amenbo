@@ -14,6 +14,11 @@
 // **The row goes to the pane, the buttons move the run.** Pressing the row is "show me this", so it
 // stands the run's place in the workspace and goes to it — including for a run still waiting for a
 // lane, whose place is stood empty and is the one its first step opens in (`../talk/layout`).
+//
+// **How far in it is says the action as well as the step** (`AMB-D-949`), for the reason the row over
+// a run's pane does (`../talk/nameplate`): a launch opens one spot of the picture into a column of
+// steps, so a step's name alone no longer says which spot of the automation this is. Where the spot
+// has been taken off the picture since, the line says the step alone.
 import { useState } from "react";
 import { pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
@@ -98,7 +103,17 @@ export function RunningTab({
                   <span className="autorun__of">{run.automationName}</span>
                   {run.stepName !== undefined && (
                     <span className="autorun__step">
-                      {tf("auto.run.step", { n: run.stepsDone, step: run.stepName })}
+                      {tf("auto.run.step", {
+                        n: run.stepsDone,
+                        // Which step, in full — the action and the step as one value, so the
+                        // language orders the two and the count is counted of the pair.
+                        step: run.actionName === undefined
+                          ? run.stepName
+                          : tf("auto.run.inAction", {
+                              action: run.actionName,
+                              step: run.stepName,
+                            }),
+                      })}
                     </span>
                   )}
                   {run.task !== undefined && (

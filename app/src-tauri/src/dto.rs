@@ -3566,6 +3566,15 @@ pub struct AutomationStepRunDto {
     pub(crate) seq: i64,
     /// What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
     pub(crate) name: String,
+    /// **The action the spot this step was opened from stands on** (`AMB-D-949`). A launch opens a
+    /// placement into one column of steps, so the step's own name no longer says which of the
+    /// automation's spots a reader is watching — this is that half.
+    ///
+    /// Absent where the placement or its action has since been taken away, and then the row says the
+    /// step alone rather than a name nothing answers to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) action_name: Option<String>,
     /// The task this stretch of the run is working, where it is on one. Absent until a step takes
     /// one — a run whose first step has not reported is on no task yet.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3668,6 +3677,12 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step_name: Option<String>,
+    /// **The action that step's spot stands on** — [`AutomationStepRunDto::action_name`], on the row
+    /// rather than over the pane. Absent for the same two reasons: no step has opened yet, or the
+    /// spot it was opened from is no longer on the picture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) action_name: Option<String>,
     /// How many steps it has opened so far, the step it is on included — the "how far in is this"
     /// a reader asks of a run they are not watching.
     #[ts(type = "number")]

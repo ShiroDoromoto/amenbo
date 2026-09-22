@@ -1044,6 +1044,7 @@ export const vi: Translation = {
     "auto.run.byHuman": "đã dừng bằng tay",
     "auto.run.noWayOn": "không còn gì để mở",
     "auto.run.step": "Bước {n} · {step}",
+    "auto.run.inAction": "{step} trong {action}",
 
     "mcp.title": "Kết nối qua MCP",
     "mcp.setupTitle": "Dùng các dự án của bạn từ AI",

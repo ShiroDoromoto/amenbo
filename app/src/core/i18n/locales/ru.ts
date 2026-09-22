@@ -1060,6 +1060,7 @@ export const ru: Translation = {
     "auto.run.byHuman": "остановлен вручную",
     "auto.run.noWayOn": "открывать было больше нечего",
     "auto.run.step": "Шаг {n} · {step}",
+    "auto.run.inAction": "{step} в {action}",
 
     "mcp.title": "Подключение по MCP",
     "mcp.setupTitle": "Работать со своими проектами из ИИ",

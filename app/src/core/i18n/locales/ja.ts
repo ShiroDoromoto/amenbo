@@ -1049,6 +1049,7 @@ export const ja: Translation = {
     "auto.run.byHuman": "手で止めた",
     "auto.run.noWayOn": "開けるステップが無くなった",
     "auto.run.step": "ステップ {n} · {step}",
+    "auto.run.inAction": "{action} の {step}",
 
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",

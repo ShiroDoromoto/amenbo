@@ -1018,6 +1018,7 @@ export const de: Translation = {
     "auto.run.maxTimes": "zu viele Durchläufe",
     "auto.run.noAgent": "der Agent ließ sich nicht starten",
     "auto.run.byHuman": "von Hand gestoppt",
+    "auto.run.noWayOn": "es gab nichts mehr zu öffnen",
     "auto.run.step": "Schritt {n} · {step}",
 
     "mcp.title": "Über MCP verbinden",

@@ -1015,6 +1015,7 @@ export const vi: Translation = {
     "auto.run.maxTimes": "lặp quá nhiều vòng",
     "auto.run.noAgent": "không khởi động được tác nhân của nó",
     "auto.run.byHuman": "đã dừng bằng tay",
+    "auto.run.noWayOn": "không còn gì để mở",
     "auto.run.step": "Bước {n} · {step}",
 
     "mcp.title": "Kết nối qua MCP",

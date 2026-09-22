@@ -25,6 +25,8 @@
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
+use amenbo_core::ops::automation_run::Waiting;
+
 /// How long between looks while something is running. A step takes minutes, so a second is under
 /// what anybody notices — and it is a second rather than half of one because there is no reason to
 /// wake a laptop twice as often for a number nobody can see move.
@@ -112,8 +114,13 @@ fn sleep(how_long: Duration) {
     *nudged = false;
 }
 
-/// **One look**: open whatever each running run is waiting for, and answer whether anything is
-/// running at all — which is what decides how long to wait before the next one.
+/// **One look**: move each running run on as far as it can go, and answer whether anything is running
+/// at all — which is what decides how long to wait before the next one.
+///
+/// A run answers one of three things ([`amenbo_core::ops::automation_run::Waiting`]) and each is acted
+/// on here. A step waiting to be opened is opened. A run with a step under way is left alone. A run
+/// with nowhere left to go is ended — it would otherwise be read again every second for the rest of
+/// the session, holding a lane and a task nobody is working.
 ///
 /// A run whose step could not be opened is left where it is and looked at again next time. The one
 /// that stops a run — a required input with nothing in it — stops it inside the op that found it, so
@@ -130,10 +137,39 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
             let store = crate::commands::open_store_read()?;
             amenbo_core::ops::automation_run::next_def(store.read_model().conn(), *run)?
         };
-        let Some(def) = waiting else { continue };
-        if let Err(e) = crate::automation::automation_step_open(app.clone(), *run, Some(def.id)) {
-            log::warn!("run {run} could not open step {}: {}", def.id, e.message_en);
+        match waiting {
+            Waiting::Step(def) => {
+                if let Err(e) =
+                    crate::automation::automation_step_open(app.clone(), *run, Some(def.id))
+                {
+                    log::warn!("run {run} could not open step {}: {}", def.id, e.message_en);
+                }
+            }
+            Waiting::Nothing => {}
+            // Ended here rather than by whatever changed the definition: what a run can still do is
+            // read off the run's own copies, and an edit that leaves one of a dozen runs with nowhere
+            // to go does not know which. A stop hands the task back with a comment saying how far it
+            // got, which is where the reader finds it.
+            Waiting::NoWayOn => {
+                if let Err(e) = give_up(*run) {
+                    log::warn!("run {run} has nowhere to go and could not be stopped: {}", e.message_en);
+                }
+            }
         }
     }
     Ok(!running.is_empty())
+}
+
+/// **End a run that cannot go on**, with the reason that says so
+/// ([`amenbo_core::model::AutomationStoppedReason::NoWayOn`]).
+fn give_up(run: i64) -> Result<(), crate::error::CmdError> {
+    let mut store = crate::commands::open_store()?;
+    let lanes = store.config.automation_lanes;
+    let ended = store.automation_stop(
+        run,
+        amenbo_core::model::AutomationStoppedReason::NoWayOn,
+        lanes,
+    )?;
+    log::info!("run {} had nowhere left to go and was stopped", ended.run.id);
+    Ok(())
 }

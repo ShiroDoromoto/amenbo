@@ -393,7 +393,7 @@ automationName: string, status: "queued" | "running" | "paused" | "stopped",
  * still `running` — this is the gap between the button and the pause
  * ([`amenbo_core::ops::automation_stop::pause`]).
  */
-pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "by_human" | null, 
+pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "by_human" | "no_way_on" | null, 
 /**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */

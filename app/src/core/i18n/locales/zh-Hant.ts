@@ -1016,6 +1016,7 @@ export const zhHant: Translation = {
     "auto.run.maxTimes": "循環次數超出上限",
     "auto.run.noAgent": "無法啟動它的代理",
     "auto.run.byHuman": "手動停止",
+    "auto.run.noWayOn": "沒有可開啟的步驟了",
     "auto.run.step": "步驟 {n} · {step}",
 
     "mcp.title": "透過 MCP 連線",

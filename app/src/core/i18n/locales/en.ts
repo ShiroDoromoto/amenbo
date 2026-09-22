@@ -1271,6 +1271,7 @@ const ui = {
   "auto.run.maxTimes": "it went round too many times",
   "auto.run.noAgent": "its agent could not be started",
   "auto.run.byHuman": "stopped by hand",
+  "auto.run.noWayOn": "there was nothing left to open",
   "auto.run.step": "Step {n} · {step}",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead

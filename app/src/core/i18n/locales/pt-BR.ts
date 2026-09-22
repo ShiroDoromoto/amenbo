@@ -1027,6 +1027,7 @@ export const ptBR: Translation = {
     "auto.run.maxTimes": "deu voltas demais",
     "auto.run.noAgent": "não foi possível iniciar seu agente",
     "auto.run.byHuman": "parada à mão",
+    "auto.run.noWayOn": "não restava nada para abrir",
     "auto.run.step": "Passo {n} · {step}",
 
     "mcp.title": "Conectar por MCP",

@@ -1014,6 +1014,7 @@ export const hi: Translation = {
     "auto.run.maxTimes": "बहुत बार दोहराया गया",
     "auto.run.noAgent": "इसका एजेंट शुरू नहीं हो सका",
     "auto.run.byHuman": "हाथ से बंद किया गया",
+    "auto.run.noWayOn": "खोलने के लिए कुछ नहीं बचा था",
     "auto.run.step": "चरण {n} · {step}",
 
     "mcp.title": "MCP से जोड़ें",

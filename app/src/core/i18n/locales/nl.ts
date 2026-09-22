@@ -1014,6 +1014,7 @@ export const nl: Translation = {
     "auto.run.maxTimes": "te vaak rondgegaan",
     "auto.run.noAgent": "de agent kon niet worden gestart",
     "auto.run.byHuman": "met de hand gestopt",
+    "auto.run.noWayOn": "er viel niets meer te openen",
     "auto.run.step": "Stap {n} · {step}",
 
     "mcp.title": "Verbinden via MCP",

@@ -1,0 +1,123 @@
+# A step of a run reserves the task it is about, which is what keeps two runs off the same work. So
+# a run that ends without finishing has something to give back: the task goes to `todo`, where
+# anybody can pick it up. Without that, a reader looking at that task would find it held by a run
+# that no longer exists.
+#
+# The road it is walked by is the pane, because that is where a person ends a run — the press is
+# about being rid of the pane, and the handing back happens behind it.
+#
+# **The line the stop writes on the task is not read here.** Reading a task's timeline is
+# `task commented`, which the screen harness has no mapping for yet, and the line carries the run's
+# own number, which no road can spell in advance. Until both are answered, what this road reads is
+# the half that decides whether the work can be picked up again.
+id: get-back-the-task-a-stopped-run-had-taken
+title: Ending a run hands the task it had taken back to where anybody can pick it up
+description: >
+  Start a run, let its first step take a task, then take the pane away. Read what that leaves
+  behind: the task is `todo` again and the run is stopped. What separates this road from
+  close-the-pane-a-run-is-drawn-in is the task — that one stops a run that never took any, and the
+  giving back is not on it.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task a run will take and give back }, as: seed }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes a task" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task }, as: take }
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: automation
+    op: take-in-pane
+    with:
+      target: run
+      task: seed
+
+  # The reservation, which is the half of this that has to be undone.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: take
+      task: seed
+      present: true
+
+  - type: action
+    domain: automation
+    op: close-run-pane
+    with:
+      target: run
+
+  # Back where anybody can pick it up. A task left `in_progress` behind a run that is gone is work
+  # nobody is doing and nobody can take.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: stopped

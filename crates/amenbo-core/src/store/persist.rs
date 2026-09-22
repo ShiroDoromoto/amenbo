@@ -1746,37 +1746,35 @@ impl Store {
         )
     }
 
-    /// **Stop every run a previous launch left standing** — the ones that are `running` or `queued`
+    /// **Stop every run a previous launch left standing** — the ones that are `running`
     /// when the app comes up, which cannot be either (one operation = one transaction).
     ///
     /// A run's steps are terminals of the app, so nothing it was carrying out survived the app
     /// ending: a `running` row on the way up is a record of what was true before, and left alone it
-    /// holds a lane nobody is using and a task nobody is working.
+    /// holds a task nobody is working.
     ///
     /// **The runs it will catch are read first, so the write declares them.** The guard itself is
     /// nothing to this caller — the app's reach is every project — but the declaration is also what
     /// says which projects the write touched, and a sweep that named none would move no project's
     /// sync version while moving its rows. Nothing else writes runs while the app is coming up, so
     /// the list read here is the list the sweep finds.
-    pub fn automation_sweep(&mut self, lanes: i64) -> Result<Vec<crate::model::AutomationRun>> {
+    pub fn automation_sweep(&mut self) -> Result<Vec<crate::model::AutomationRun>> {
         let conn = self.engine.conn();
-        let mut caught = crate::store_engine::read::automation_run_ids_queued(conn)?;
-        caught.extend(crate::store_engine::read::automation_run_ids_running(conn)?);
+        let caught = crate::store_engine::read::automation_run_ids_running(conn)?;
         let targets: Vec<WriteTarget> = caught
             .into_iter()
             .map(|id| WriteTarget::AutomationPart(AutomationPart::Run, id))
             .collect();
-        self.write_one(&targets, |tx| crate::ops::automation_stop::sweep(tx, lanes))
+        self.write_one(&targets, crate::ops::automation_stop::sweep)
     }
 
-    /// **Launch an automation** — check it, copy its steps into a run, and take a lane if one is free
-    /// (one operation = one transaction).
+    /// **Launch an automation** — check it, copy its steps into a run, and start it (one operation =
+    /// one transaction).
     ///
     /// The reach is the automation's, the run being made under it.
     ///
-    /// `by` carries what the store cannot answer — which agents this machine can start, how many
-    /// lanes there are, whether the workspace is open, and who pressed
-    /// ([`crate::ops::automation_run::Launcher`]).
+    /// `by` carries what the store cannot answer — which agents this machine can start, whether the
+    /// workspace is open, and who pressed ([`crate::ops::automation_run::Launcher`]).
     pub fn automation_launch(
         &mut self,
         automation_id: i64,
@@ -1815,11 +1813,10 @@ impl Store {
         run_step_id: i64,
         exit_name: Option<&str>,
         report: &str,
-        lanes: i64,
     ) -> Result<crate::ops::automation_report::Next> {
         self.write_one(
             &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
-            |tx| crate::ops::automation_report::done(tx, run_step_id, exit_name, report, lanes),
+            |tx| crate::ops::automation_report::done(tx, run_step_id, exit_name, report),
         )
     }
 
@@ -1827,10 +1824,9 @@ impl Store {
     pub fn automation_pause(
         &mut self,
         run_id: i64,
-        lanes: i64,
     ) -> Result<crate::ops::automation_stop::Paused> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::pause(tx, run_id, lanes)
+            crate::ops::automation_stop::pause(tx, run_id)
         })
     }
 
@@ -1838,10 +1834,9 @@ impl Store {
     pub fn automation_resume(
         &mut self,
         run_id: i64,
-        lanes: i64,
     ) -> Result<crate::ops::automation_stop::Resumed> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::resume(tx, run_id, lanes)
+            crate::ops::automation_stop::resume(tx, run_id)
         })
     }
 
@@ -1850,17 +1845,14 @@ impl Store {
     /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
     /// it was holding, and the line left on that task.
     ///
-    /// `reason` is which of the four stops this is, and `lanes` is how many runs may be under way at
-    /// once ([`crate::config::Config::automation_lanes`]) — a lane handed back promotes whatever has
-    /// waited longest, and that run is in the answer.
+    /// `reason` is which of the four stops this is.
     pub fn automation_stop(
         &mut self,
         run_id: i64,
         reason: crate::model::AutomationStoppedReason,
-        lanes: i64,
     ) -> Result<crate::ops::automation_stop::Ended> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::stop(tx, run_id, reason, lanes)
+            crate::ops::automation_stop::stop(tx, run_id, reason)
         })
     }
 
@@ -1870,18 +1862,13 @@ impl Store {
     /// The reach is the run's, not the automation's: what this writes are the run's own rows, and a
     /// run is filed under the project it was launched from.
     ///
-    /// `lanes` is how many runs may be under way at once
-    /// ([`crate::config::Config::automation_lanes`]). It is handed in rather than read here because a
-    /// setting lives outside the store: a step that cannot be opened stops the run, and stopping one
-    /// hands its lane back to whatever was waiting for it.
     pub fn automation_step_open(
         &mut self,
         run_id: i64,
         run_def_id: i64,
-        lanes: i64,
     ) -> Result<crate::ops::automation_step::Opened> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_step::open(tx, run_id, run_def_id, lanes)
+            crate::ops::automation_step::open(tx, run_id, run_def_id)
         })
     }
 

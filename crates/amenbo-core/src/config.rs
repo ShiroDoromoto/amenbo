@@ -790,17 +790,6 @@ pub struct Config {
     /// to type into with nothing under it is where this started.
     #[serde(default)]
     pub agent_model_history: std::collections::BTreeMap<String, Vec<AgentModel>>,
-    /// **How many automation runs may hold a lane at once** ([`crate::model::DEFAULT_LANES`]) — the one
-    /// number the whole app shares, read where a launch decides between `running` and `queued`.
-    ///
-    /// **It crosses projects**, because a lane is a terminal on this machine and the attention of the
-    /// person watching it: neither is divided up per project, so a number held per project would let
-    /// three projects open nine terminals on somebody who set it to three.
-    ///
-    /// A device-level setting; **never synced**, for the reason [`Config::installed_agents`] is not —
-    /// how many runs one machine can carry is a fact about that machine.
-    #[serde(default = "default_lanes")]
-    pub automation_lanes: i64,
 }
 
 /// One command the reader registered themselves — a row in [`Config::custom_agents`] (`AMB-D-794`).
@@ -931,32 +920,9 @@ fn parse_bytes(key: &str, value: &str) -> crate::error::Result<u64> {
     })
 }
 
-/// Parse the value of `config set automation_lanes`: a whole number of lanes, at least one and at most
-/// [`LANES_MAX`].
-///
-/// The ceiling is there because the number is a promise to start that many terminals at once, and a
-/// mistyped one would be kept.
-fn parse_lanes(value: &str) -> crate::error::Result<i64> {
-    match value.trim().parse::<i64>() {
-        Ok(n) if (1..=LANES_MAX).contains(&n) => Ok(n),
-        _ => Err(crate::error::Error::invalid(format!(
-            "automation_lanes must be a whole number from 1 to {LANES_MAX}; '{value}' is invalid"
-        ))),
-    }
-}
-
-/// The most lanes anybody may ask for ([`Config::automation_lanes`]).
-pub const LANES_MAX: i64 = 32;
-
 /// For `serde(default)`: the value (on) an existing config gets when it predates the field.
 fn default_true() -> bool {
     true
-}
-
-/// For `serde(default)`: the lane count an existing config gets when it predates the field
-/// ([`crate::model::DEFAULT_LANES`]).
-fn default_lanes() -> i64 {
-    crate::model::DEFAULT_LANES
 }
 
 impl Default for Config {
@@ -965,7 +931,6 @@ impl Default for Config {
             default_view: View::Board,
             language: None,
             date_locale: None,
-            automation_lanes: crate::model::DEFAULT_LANES,
             ai_allow_project_ops: false,
             startup_integrity_check: true,
             update_check: true,
@@ -1498,10 +1463,6 @@ impl Config {
                     }
                 };
             }
-            // The one number the automations share. A lane is a terminal somebody watches, so the
-            // ceiling is what one person can read rather than what the machine can run — and the
-            // floor is 1, because 0 would leave every launch queued behind nothing.
-            "automation_lanes" => self.automation_lanes = parse_lanes(value)?,
             "attachment.image_max" => self.attachment_limits.image_max = parse_bytes("attachment.image_max", value)?,
             "attachment.audio_max" => self.attachment_limits.audio_max = parse_bytes("attachment.audio_max", value)?,
             "attachment.video_max" => self.attachment_limits.video_max = parse_bytes("attachment.video_max", value)?,
@@ -1509,7 +1470,7 @@ impl Config {
             "attachment.other_max" => self.attachment_limits.other_max = parse_bytes("attachment.other_max", value)?,
             other => {
                 return Err(crate::error::Error::invalid(
-                    format!("unknown config key '{other}' (known: default_view / language / date_locale / human_name / ai_name / human_avatar / ai_avatar / ai_allow_project_ops / startup_integrity_check / update_check / perf_log / automation_lanes / attachment.image_max / attachment.audio_max / attachment.video_max / attachment.document_max / attachment.other_max)"),
+                    format!("unknown config key '{other}' (known: default_view / language / date_locale / human_name / ai_name / human_avatar / ai_avatar / ai_allow_project_ops / startup_integrity_check / update_check / perf_log / attachment.image_max / attachment.audio_max / attachment.video_max / attachment.document_max / attachment.other_max)"),
                 ))
             }
         }
@@ -1541,32 +1502,17 @@ mod tests {
         assert_eq!(round(&Config::default()).installed_agents(), None);
     }
 
-    /// The lane count takes a whole number inside its bounds and nothing else. Zero is refused
-    /// rather than read as "stop launching": it would leave every launch queued behind nothing at
-    /// all, which is a state nobody could get out of from the screen that set it.
+    /// A config written while the lane count existed still reads (`AMB-D-947`). The key is left in the
+    /// file rather than stripped, so what has to hold is that reading walks past it — and `config set`
+    /// no longer knows the name, which is how somebody asking for it is told it is gone.
     #[test]
-    fn the_lane_count_takes_a_whole_number_inside_its_bounds() {
+    fn a_config_that_still_carries_the_lane_count_reads_past_it() {
+        let old: Config = serde_json::from_str(r#"{"default_view":"board","automation_lanes":8}"#)
+            .expect("a file from before the lanes went");
+        assert_eq!(old.default_view, View::Board);
+
         let mut config = Config::default();
-        assert_eq!(config.automation_lanes, crate::model::DEFAULT_LANES);
-
-        config.set("automation_lanes", "1").expect("one lane is a number somebody may want");
-        assert_eq!(config.automation_lanes, 1);
-        config.set("automation_lanes", &LANES_MAX.to_string()).expect("and so is the ceiling");
-        assert_eq!(config.automation_lanes, LANES_MAX);
-
-        for refused in ["0", "-1", &(LANES_MAX + 1).to_string(), "2.5", "two", ""] {
-            assert!(config.set("automation_lanes", refused).is_err(), "'{refused}' is not a lane count");
-        }
-        assert_eq!(config.automation_lanes, LANES_MAX, "and a refusal leaves the last answer alone");
-    }
-
-    /// A config written before the lane count existed comes back on the default rather than on zero,
-    /// which is what a plain `serde(default)` would have given it.
-    #[test]
-    fn a_config_from_before_the_lane_count_reads_the_default() {
-        let old: Config =
-            serde_json::from_str(r#"{"default_view":"board"}"#).expect("an older file");
-        assert_eq!(old.automation_lanes, crate::model::DEFAULT_LANES);
+        assert!(config.set("automation_lanes", "3").is_err(), "the key is not one to set any more");
     }
 
     /// A config written before the field existed reads back as never asked, not as a machine with

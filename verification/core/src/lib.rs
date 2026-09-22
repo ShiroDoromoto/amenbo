@@ -4189,9 +4189,6 @@ const REGISTRY: &[OpSpec] = &[
     // (`unwired_input`, `unanswered_cfg`, …) so a road says which refusal it is walking rather than
     // quoting a sentence the interface owns.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "step", "at"], binds: false },
-    // What the press answered where no lane was free. The run is made either way — what is different
-    // is that no terminal stands for it yet.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "queued", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // The pane a run is drawn in, and the four things its header carries: which step, how many tasks
     // in, the run's own number and the task it is on. `label` reads a pane's name and nothing else,

@@ -1171,7 +1171,7 @@ datasets! {
     automation_run {
         automation_id: fk("automation", "RESTRICT"),
         project_id: fk("project", "RESTRICT"),
-        status: enum_col("queued", "running", "paused", "done", "stopped"),
+        status: enum_col("running", "paused", "done", "stopped"),
         pause_requested: bool_col,
         stopped_reason: enum_opt("crashed", "max_times", "no_agent", "by_human"),
         started_by_kind: actor_kind,

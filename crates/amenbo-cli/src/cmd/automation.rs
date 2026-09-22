@@ -296,7 +296,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 // app's own process (`amenbo_core::agent_models`). So a step naming a model this
                 // machine does not have is caught when the pane comes up, rather than here.
                 models: amenbo_core::ops::automation_run::nothing_asked(),
-                lanes: store.config.automation_lanes,
                 // Nothing is claimed about the window: a terminal cannot see what is on screen, and a
                 // `false` written here would refuse a launch the reader can see perfectly well
                 // (`amenbo_core::ops::automation_run::Launcher`).
@@ -304,18 +303,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 by: Some(flags.facet()?),
             };
             let r = store.automation_launch(id, &by).map_err(CliError::from)?;
-            let line = match r.status {
-                amenbo_core::model::AutomationRunStatus::Queued => {
-                    format!("✓ Run {} is waiting for a lane", r.id)
-                }
-                _ => format!("✓ Run {} started", r.id),
-            };
+            let line = format!("✓ Run {} started", r.id);
             write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
         }
         AutomationCmd::Pause { run } => {
-            let paused = store
-                .automation_pause(run, store.config.automation_lanes)
-                .map_err(CliError::from)?;
+            let paused = store.automation_pause(run).map_err(CliError::from)?;
             let (value, line) = match &paused {
                 Paused::Asked(r) => (
                     json!({ "run": r.id, "state": "asked" }),
@@ -329,24 +321,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.pause", "automation_run", value, None, false, line);
         }
         AutomationCmd::Resume { run } => {
-            let resumed = store
-                .automation_resume(run, store.config.automation_lanes)
-                .map_err(CliError::from)?;
-            let (value, line) = match &resumed {
-                Resumed::Step { run: r, next } => (
-                    json!({ "run": r.id, "state": "running", "step": next.id }),
-                    format!("✓ Run {} picks up at {} ({})", r.id, next.name, next.id),
-                ),
-                Resumed::Queued(r) => (
-                    json!({ "run": r.id, "state": "queued" }),
-                    format!("✓ Run {} is waiting for a lane", r.id),
-                ),
-            };
+            let Resumed { run: r, next } = store.automation_resume(run).map_err(CliError::from)?;
+            let value = json!({ "run": r.id, "state": "running", "step": next.id });
+            let line = format!("✓ Run {} picks up at {} ({})", r.id, next.name, next.id);
             write_envelope(flags, "automation.resume", "automation_run", value, None, false, line);
         }
         AutomationCmd::Stop { run } => {
             let ended = store
-                .automation_stop(run, AutomationStoppedReason::ByHuman, store.config.automation_lanes)
+                .automation_stop(run, AutomationStoppedReason::ByHuman)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} stopped", ended.run.id));
         }
@@ -386,7 +368,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             let report = body_arg(report)?;
             let next = store
-                .automation_done(step, exit.as_deref(), &report, store.config.automation_lanes)
+                .automation_done(step, exit.as_deref(), &report)
                 .map_err(CliError::from)?;
             let value = json!({ "step": step, "next": next_word(&next) });
             write_envelope(flags, "automation.done", "automation_run_step", value, None, false, next_line(&next));

@@ -282,7 +282,6 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         // Nobody was asked which models are here, which is what every caller outside the app answers
         // — and it leaves the model check unmade rather than made and failed (`AMB-D-792`).
         models: amenbo_core::ops::automation_run::nothing_asked(),
-        lanes: 3,
         workspace_open: None,
         by: Some(ActorKind::Ai),
     };
@@ -291,7 +290,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let mine_before = version_of(&store, mine);
     let other_before = version_of(&store, other);
 
-    let swept = store.automation_sweep(3).unwrap();
+    let swept = store.automation_sweep().unwrap();
     assert_eq!(swept.len(), 1, "the one run that was standing");
     assert_eq!(swept[0].id, run.id);
 

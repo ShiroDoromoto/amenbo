@@ -358,7 +358,7 @@ amenbo automation list                                 # what this project has, 
 amenbo automation show 3                               # one whole definition, every step resolved
 amenbo automation action list                          # the library this project reaches
 amenbo automation action show 7                        # one prompt, and what it declares
-amenbo automation start 3                              # away it goes (queued when every lane is held)
+amenbo automation start 3                              # away it goes
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo
 # Inside a step's own terminal, the agent carrying it out reports through three more:

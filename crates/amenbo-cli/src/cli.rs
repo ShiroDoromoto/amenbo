@@ -1919,27 +1919,26 @@ pub enum AutomationCmd {
         sub: AutomationRunCmd,
     },
 
-    /// Start an automation: check it, copy its steps into a run, and take a lane if one is free.
-    /// It takes nothing else — the tasks a step works on and the folder it runs in are the
-    /// automation's own answers, given while it was built
+    /// Start an automation: check it, copy its steps into a run, and start it. It takes nothing
+    /// else — the tasks a step works on and the folder it runs in are the automation's own answers,
+    /// given while it was built
     Start {
         /// automation id
         id: i64,
     },
-    /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it; one
-    /// with nothing under way pauses now. Either way the lane goes back
+    /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it,
+    /// keeping the task it is working
     Pause {
         /// run id
         run: i64,
     },
-    /// Pick a paused run up again, from the way out the step before it left through. With every lane
-    /// held it waits for one
+    /// Pick a paused run up again, from the way out the step before it left through
     Resume {
         /// run id
         run: i64,
     },
-    /// Stop a run: hand the task it was working back, give up the lane, and leave a comment on the
-    /// task saying how far it got
+    /// Stop a run: hand the task it was working back, and leave a comment on the task saying how
+    /// far it got
     Stop {
         /// run id
         run: i64,
@@ -2083,7 +2082,7 @@ pub enum AutomationStepCmd {
         /// which model; left out, the agent's own default stands
         #[arg(long)]
         model: Option<String>,
-        /// let this step wait for a person (it then holds a lane while nobody answers)
+        /// let this step wait for a person
         #[arg(long)]
         interactive: bool,
         /// the name of the setting or the input the working folder is taken from — a name, not a path

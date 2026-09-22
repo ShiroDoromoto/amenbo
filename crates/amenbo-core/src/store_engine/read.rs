@@ -6767,46 +6767,23 @@ pub fn automation_run_def(conn: &Connection, id: i64) -> Result<Option<crate::mo
     super::hydrate::row_by_id(conn, "automation_run_def", id, super::hydrate::automation_run_def_row)
 }
 
-/// **The runs holding a lane right now** — the ones that are `running`, across every project.
+/// **The runs going right now** — the ones that are `running`, across every project.
 ///
-/// The count crosses projects because the lanes do: what a lane holds is a terminal on this machine and
-/// the reader's attention with it, and neither of those is divided up per project.
+/// It crosses projects because a terminal does: what a run holds is a terminal on this machine, and
+/// this machine is not divided up per project.
 pub fn automation_run_ids_running(conn: &Connection) -> Result<Vec<i64>> {
     const R: col::automation_run::Cols = col::automation_run::ALL;
     let pred = Pred::eq(R.status, crate::model::AutomationRunStatus::Running.as_str());
     select_ids(conn, R.id, Some(&pred))
 }
 
-/// **The runs waiting for a lane** — the ones that are `queued`, across every project.
-///
-/// A queue is what a restart catches out: nobody is holding these, and nothing will promote one once the
-/// process that would have is gone ([`crate::ops::automation_stop::sweep`]).
-pub fn automation_run_ids_queued(conn: &Connection) -> Result<Vec<i64>> {
-    const R: col::automation_run::Cols = col::automation_run::ALL;
-    let pred = Pred::eq(R.status, crate::model::AutomationRunStatus::Queued.as_str());
-    select_ids(conn, R.id, Some(&pred))
-}
-
-/// **The run that has waited longest for a lane**, or `None` when nothing is queued — what a lane coming
-/// free hands itself to.
-///
-/// Oldest id first, which is the order they were launched in: a queue anybody can jump is not a queue,
-/// and `created_at` has a second's resolution while an id does not repeat.
-pub fn automation_run_first_queued(conn: &Connection) -> Result<Option<crate::model::AutomationRun>> {
-    const R: col::automation_run::Cols = col::automation_run::ALL;
-    let pred = Pred::eq(R.status, crate::model::AutomationRunStatus::Queued.as_str());
-    Ok(automation_rows(conn, R.table, &pred, &[Sort::by(R.id)], super::hydrate::automation_run_row)?
-        .into_iter()
-        .next())
-}
 
 /// **The runs a reader has to be able to see right now**, newest first — everything that is still
 /// going, and the ones that stopped most recently.
 ///
-/// It crosses projects because the lanes do: what a lane holds is a terminal on this machine and the
-/// attention of whoever is watching it, and neither of those is divided up per project. The under-way
-/// runs come first and are all of them — there are at most as many as there are lanes, plus whatever is
-/// queued behind them. The stopped ones follow and are capped at `stopped`, because a stop is kept so
+/// It crosses projects because a terminal does: what a run holds is a terminal on this machine, and
+/// this machine is not divided up per project. The under-way runs come first and are all of them,
+/// however many that is. The stopped ones follow and are capped at `stopped`, because a stop is kept so
 /// that a failure nobody was watching is still seen, not so that every failure since the store was made
 /// is listed. **A run that is `done` is not here at all**: what it did is read from the task it worked
 /// or the automation it came from ([`automation_run_ids`]).
@@ -6816,8 +6793,7 @@ pub fn automation_runs_live(
 ) -> Result<Vec<crate::model::AutomationRun>> {
     use crate::model::AutomationRunStatus as S;
     const R: col::automation_run::Cols = col::automation_run::ALL;
-    let under_way =
-        Pred::is_in(R.status, [S::Running.as_str(), S::Queued.as_str(), S::Paused.as_str()]);
+    let under_way = Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]);
     let mut out = automation_run_rows(conn, &under_way, None)?;
     out.extend(automation_run_rows(
         conn,

@@ -5886,12 +5886,6 @@ impl Instructor {
                     }
                 ),
             },
-            // The press that found no lane free. The run is made either way; what is different is
-            // that no terminal stands for it yet.
-            (Domain::Automation, "queued") => {
-                "Confirm the press answered that the run is waiting for a lane, and that no new pane stood up for it."
-                    .to_string()
-            }
             // The pane a run is drawn in, and the four things the line over it carries. `label`
             // reads a pane's name and nothing else, which is why this one is here.
             (Domain::Automation, "run-pane") => match present(with) {
@@ -6225,13 +6219,12 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
 fn run_state(state: &str) -> Result<&'static str, String> {
     Ok(match state {
         "running" => "under way",
-        "queued" => "waiting for a lane",
         "paused" => "held",
         "stopped" => "stopped",
         "done" => "finished",
         other => {
             return Err(format!(
-                "`state` does not know `{other}` — it is running / queued / paused / stopped / done"
+                "`state` does not know `{other}` — it is running / paused / stopped / done"
             ))
         }
     })
@@ -7869,10 +7862,6 @@ steps_gui:
     as: run
   - type: assert
     domain: automation
-    op: queued
-    with: { target: run }
-  - type: assert
-    domain: automation
     op: run-pane
     with: { target: run, step: work, nth: 1, task: seed, present: true }
   - type: assert
@@ -7947,7 +7936,7 @@ steps_gui:
         assert!(lines[6].contains("the task is finished"), "{}", lines[6]);
         assert!(lines[14].contains("output artefact") && lines[14].contains("a value"), "{}", lines[14]);
         assert!(lines[15].contains("nothing reaches one of a step's required inputs"), "{}", lines[15]);
-        assert!(lines[20].contains("1 of 3"), "{}", lines[20]);
+        assert!(lines[19].contains("1 of 3"), "{}", lines[19]);
     }
 
     /// What the dialog that puts a step in is told to declare on it. One of a thing and several read

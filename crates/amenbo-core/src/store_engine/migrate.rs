@@ -875,7 +875,87 @@ pub const STEPS: &[Step] = &[
         name: "lay the automation tables down, and let a comment and an attachment name a step of a run",
         apply: Apply::Custom(lay_the_automation_tables_down),
     },
+    Step {
+        to: 51,
+        name: "take the queue out of automation_run.status",
+        apply: Apply::Custom(take_the_run_queue_away),
+    },
 ];
+
+/// v51: `automation_run.status` loses `queued` (`AMB-D-947`).
+///
+/// **Why the value cannot simply be left declared and unused.** A row still reading `queued` is one no
+/// build from here on can hydrate — the value has no variant to parse into — and nothing would ever
+/// clear it: what promoted a queued run was a lane being handed back, and there are no lanes any more.
+/// It would sit there holding its automation undeletable (`RESTRICT`) for as long as the store lives.
+///
+/// **Where those rows land: `stopped`, reason `crashed`.** That is the answer the startup sweep already
+/// gave them ([`crate::ops::automation_stop::sweep`]), and it is the true one — the run was waiting for
+/// a terminal in a window that is gone, and no window since has been able to give it one. `ended_at` is
+/// stamped with the moment of the migration, because a run with no end is one a face reads as still
+/// going.
+///
+/// **The declaration first, the rows second, one transaction** — v48's order, and for its reason.
+/// SQLite checks a `CHECK` on write and never on the rows already there, so narrowing the set while
+/// `queued` is still written in the column is safe, and `stopped` is in both sets either way.
+///
+/// **This is v9's procedure met a sixth time, copied rather than called.** SQLite has no
+/// `ALTER TABLE … DROP CONSTRAINT`, and the rebuild-and-swap its documentation prescribes is closed for
+/// the reason [`admit_rejected_task_status`] gives at length — enforcement is on and four tables
+/// reference `automation_run`. A step is frozen at the meaning it had when it was written, so it names
+/// its own clause in its own text.
+fn take_the_run_queue_away(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from v50 on declares it — frozen text, like every step's.
+    const WITH_QUEUE: &str =
+        "CHECK(status IN ('', 'queued', 'running', 'paused', 'done', 'stopped'))";
+    /// The same column with the four states a run can still be in.
+    const WITHOUT_QUEUE: &str = "CHECK(status IN ('', 'running', 'paused', 'done', 'stopped'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_run'",
+        [],
+        |r| r.get(0),
+    )?;
+    if !declared.contains(WITHOUT_QUEUE) {
+        // Not already narrowed: a store born from a registry that no longer carries the value, stamped
+        // back to an earlier version, is the one that arrives here with nothing to rewrite.
+        if !declared.contains(WITH_QUEUE) {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_run",
+                expected: WITH_QUEUE,
+            });
+        }
+        let narrowed = declared.replace(WITH_QUEUE, WITHOUT_QUEUE);
+
+        let before = column_names(ctx.tx, "automation_run")?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_run'",
+            [&narrowed],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the `UPDATE` below
+        // sees the new set instead of the one this connection read at open.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, "automation_run")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_run",
+                expected: WITH_QUEUE,
+            });
+        }
+    }
+
+    ctx.tx.execute_batch(
+        "UPDATE automation_run
+            SET status = 'stopped',
+                stopped_reason = 'crashed',
+                ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+          WHERE status = 'queued';",
+    )?;
+    Ok(())
+}
 
 /// v50: the floor the automation feature stands on — fifteen tables, and three widenings of what the
 /// store already had.
@@ -5132,6 +5212,64 @@ mod tests {
                     "UPDATE decision SET status = 'accepted' WHERE id = 1",
                     [],
                 )
+                .is_err(),
+            "and the retired value is refused on the way in, not merely absent"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v51 in full: the closed set loses `queued`, and the runs that were sitting in it are stopped
+    /// as crashes (`AMB-D-947`). That is the answer the startup sweep already gave them, and it is
+    /// the only honest one left — nothing promotes a run any more, so a row left `queued` would hold
+    /// its automation undeletable for as long as the store lived. Every other state is untouched,
+    /// and the empty status a row caught mid-create carries is left where it is.
+    #[test]
+    fn the_runs_that_were_waiting_for_a_lane_are_stopped_and_the_value_goes() {
+        let dir = scratch("run-queue-away");
+        let engine = store_at(&dir, 50);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, created_at, updated_at) VALUES
+                     (1, 1, 1, 'queued',  '2025-12-01T00:00:00Z', '2025-12-01T00:00:00Z'),
+                     (2, 1, 1, 'running', '2025-12-01T00:00:00Z', '2025-12-01T00:00:00Z'),
+                     (3, 1, 1, 'done',    '2025-12-01T00:00:00Z', '2025-12-01T00:00:00Z'),
+                     (4, 1, 1, '',        '',                     '');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let after: Vec<(i64, String, Option<String>, Option<String>)> = {
+            let conn = engine.conn();
+            let mut stmt = conn
+                .prepare("SELECT id, status, stopped_reason, ended_at FROM automation_run ORDER BY id")
+                .unwrap();
+            let rows =
+                stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(after[0].1, "stopped", "the one that was waiting");
+        assert_eq!(after[0].2.as_deref(), Some("crashed"));
+        assert!(after[0].3.is_some(), "and it is over, so it has an end");
+        assert_eq!(
+            after[1..].iter().map(|r| r.1.as_str()).collect::<Vec<_>>(),
+            vec!["running", "done", ""],
+            "nothing else is touched",
+        );
+
+        let declared = declared_sql(&engine, "automation_run");
+        assert!(
+            declared.contains("CHECK(status IN ('', 'running', 'paused', 'done', 'stopped'))"),
+            "the closed set is the new one: {declared}"
+        );
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE automation_run SET status = 'queued' WHERE id = 2", [])
                 .is_err(),
             "and the retired value is refused on the way in, not merely absent"
         );

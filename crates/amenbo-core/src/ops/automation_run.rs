@@ -1,5 +1,4 @@
-//! **Launching an automation** — what refuses to start one, the run the launch writes, and the lane
-//! that decides whether it starts now or waits.
+//! **Launching an automation** — what refuses to start one, and the run the launch writes.
 //!
 //! Nothing on the definition side refuses an unfinished automation ([`crate::ops::automation`]): a step
 //! with no way onward, an automation with no entry, a required setting nobody answered — each of them
@@ -7,8 +6,8 @@
 //! refused**, which is the moment a person is actually about to be let down by them.
 //!
 //! **There are four entrances and one launch** — the CLI, a workspace's empty frame, a task's own
-//! screen, and the automation tab. Putting the check, the copy and the lane in one place is what keeps
-//! them from behaving differently depending on which was pressed.
+//! screen, and the automation tab. Putting the check and the copy in one place is what keeps them
+//! from behaving differently depending on which was pressed.
 //!
 //! **The check ([`check`]) and the refusal ([`launch`]) are separate doors on purpose.** A build screen
 //! draws the list while nobody has pressed anything, so it asks for the list; a launch that cannot go
@@ -169,8 +168,6 @@ pub struct Launcher<'a> {
     /// The models each agent offers on this machine ([`ModelsHere`]) — empty from a caller that has
     /// asked nobody, which is every caller outside the app.
     pub models: &'a ModelsHere,
-    /// How many runs may hold a lane at once ([`crate::config::Config::automation_lanes`]).
-    pub lanes: i64,
     /// Whether the talk window is open — `Some(false)` refuses, and **`None` is a caller that cannot
     /// see** (`AMB-D-792`'s discipline, the same one [`Launcher::startable`] takes).
     ///
@@ -417,7 +414,7 @@ pub fn settings_of(conn: &Connection, step: &AutomationStep) -> Result<Vec<Autom
     Ok(out)
 }
 
-/// **Launch an automation**: check it, copy its steps into a run, and take a lane if one is free.
+/// **Launch an automation**: check it, copy its steps into a run, and start it.
 ///
 /// Three things refuse, in this order.
 ///
@@ -428,8 +425,8 @@ pub fn settings_of(conn: &Connection, step: &AutomationStep) -> Result<Vec<Autom
 ///   and stays wrong after a window is opened, so saying "open a window" first would send somebody to do
 ///   that and then tell them the automation was never going to run.
 ///
-/// The run is born `running` where a lane is free and `queued` where none is, and `started_at` marks the
-/// first of those — so "launched" and "started" are two moments and a queue's wait is readable.
+/// The run is born `running`: nothing caps how many may be under way at once, so a launch never waits
+/// (`AMB-D-947`). `started_at` is the moment of the launch itself.
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
@@ -458,17 +455,15 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
         ));
     }
     let now = Timestamp::now();
-    let held = read::automation_run_ids_running(tx.conn())?.len() as i64;
-    let status = if held < by.lanes { AutomationRunStatus::Running } else { AutomationRunStatus::Queued };
     let run = AutomationRun {
         id: read::next_id(tx.conn(), "automation_run")?,
         automation_id,
         project_id: automation.project_id,
-        status,
+        status: AutomationRunStatus::Running,
         pause_requested: false,
         stopped_reason: None,
         started_by_kind: by.by,
-        started_at: status.holds_a_lane().then_some(now),
+        started_at: Some(now),
         ended_at: None,
         created_at: now,
         updated_at: now,
@@ -580,7 +575,7 @@ pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunD
 ///
 /// The two that are not a step were one answer once, and a watcher that cannot tell them apart reads
 /// a run it must leave alone and a run nobody will ever move again as the same thing — so the second
-/// sits `running` for good, holding a lane and a task nobody is working.
+/// sits `running` for good, holding a task nobody is working.
 #[derive(Debug, Clone)]
 pub enum Waiting {
     /// This step is waiting to be opened. Boxed because the other two carry nothing, and a copy of a
@@ -619,8 +614,8 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     }
     let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else {
         // Nothing has run yet, so what is waiting to be opened is where the run starts. A run that
-        // carries no copy of its entry cannot start at all — the entry was taken off the definition
-        // while this one waited for a lane — and that is the whole of `NoWayOn`'s narrow case today.
+        // carries no copy of its entry cannot start at all: the entry was taken off the definition
+        // between the launch and this look.
         return Ok(entry_def(conn, run_id)?
             .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
     };
@@ -644,32 +639,6 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
         .into_iter()
         .find(|def| def.step_id == Some(to))
         .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))))
-}
-
-/// **A lane came free: wake the run that has waited longest**, and answer which one it was.
-///
-/// This is called by whatever handed a lane back — a run that finished, one that was paused, one that
-/// was stopped — rather than by anything watching the clock. A queue polled on a timer would leave a run
-/// sitting for however long the timer was, in exchange for nothing: the only moment the answer can
-/// change is the moment a lane is released, and that moment is code, not a tick.
-///
-/// It wakes **one** run, because one lane came free. Answers `None` where nothing was waiting, and where
-/// the lanes are full anyway — the caller does not have to know which of those it is, and a lane that
-/// was released and immediately re-taken is not an error.
-pub fn promote_next(tx: &WriteTx<'_>, lanes: i64) -> Result<Option<AutomationRun>> {
-    if read::automation_run_ids_running(tx.conn())?.len() as i64 >= lanes {
-        return Ok(None);
-    }
-    let Some(before) = read::automation_run_first_queued(tx.conn())? else {
-        return Ok(None);
-    };
-    let now = Timestamp::now();
-    let mut after = before.clone();
-    after.status = AutomationRunStatus::Running;
-    after.started_at = Some(now);
-    after.updated_at = now;
-    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
-    Ok(Some(after))
 }
 
 #[cfg(test)]
@@ -729,13 +698,12 @@ mod tests {
         .expect("port");
     }
 
-    /// The machine every test launches on: one that can start `claude`, with three lanes and a window
+    /// The machine every test launches on: one that can start `claude`, with a window
     /// open.
     fn here<'a>(startable: &'a [String]) -> Launcher<'a> {
         Launcher {
             startable: Some(startable),
             models: nothing_asked(),
-            lanes: 3,
             workspace_open: Some(true),
             by: Some(ActorKind::Ai),
         }
@@ -754,8 +722,8 @@ mod tests {
                 vec![],
             );
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
-            assert_eq!(run.status, AutomationRunStatus::Running, "a lane was free");
-            assert!(run.started_at.is_some(), "taking a lane is what starts it");
+            assert_eq!(run.status, AutomationRunStatus::Running);
+            assert!(run.started_at.is_some(), "a launch starts on the spot");
             assert_eq!(run.project_id, automation.project_id);
         });
     }
@@ -1202,7 +1170,7 @@ mod tests {
             assert_eq!(first.step_id, Some(step.id));
 
             // A step under way is nobody's to open a second time.
-            let opening = match crate::ops::automation_step::open(tx, run.id, first.id, 3)
+            let opening = match crate::ops::automation_step::open(tx, run.id, first.id)
                 .expect("open")
             {
                 crate::ops::automation_step::Opened::Ready(ready) => *ready,
@@ -1219,7 +1187,7 @@ mod tests {
 
             // And once it has reported, the answer is read off the way out it took — here the unnamed
             // one, which closes the run, so there is nothing waiting and the run is no longer running.
-            crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it", 3)
+            crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it")
                 .expect("report");
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
@@ -1234,7 +1202,7 @@ mod tests {
     /// The two are one answer to look at — nothing is open either way — and telling them apart is the
     /// whole of why there are three. A definition goes on being edited while runs of it are out, so a
     /// run that has lost the step it would start at is a shape that happens rather than one that
-    /// cannot; left as "nothing to do" it holds a lane for the rest of the session.
+    /// cannot; left as "nothing to do" it holds its task for the rest of the session.
     #[test]
     fn a_run_that_has_lost_the_step_it_would_start_at_says_it_cannot_go_on() {
         with_tx(|tx| {
@@ -1255,35 +1223,25 @@ mod tests {
         });
     }
 
+    /// **A second launch does not wait for the first** (`AMB-D-947`). Nothing caps how many runs may be
+    /// under way, so both are `running` from the moment they are made and both carry a `started_at`.
     #[test]
-    fn a_launch_with_every_lane_held_waits_its_turn_and_is_woken_when_one_comes_free() {
+    fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {
             let (automation, _) = launchable(tx);
             let startable = claude();
-            let one_lane = Launcher { lanes: 1, ..here(&startable) };
-            let first = launch(tx, automation.id, &one_lane).expect("launch");
-            let second = launch(tx, automation.id, &one_lane).expect("launch");
-            assert_eq!(first.status, AutomationRunStatus::Running);
-            assert_eq!(second.status, AutomationRunStatus::Queued);
-            assert!(second.started_at.is_none(), "a queued run has not started");
+            let first = launch(tx, automation.id, &here(&startable)).expect("launch");
+            let second = launch(tx, automation.id, &here(&startable)).expect("launch");
 
-            assert!(
-                promote_next(tx, 1).expect("promote").is_none(),
-                "the lane is still held, so nothing is woken",
+            for run in [&first, &second] {
+                assert_eq!(run.status, AutomationRunStatus::Running);
+                assert!(run.started_at.is_some(), "a launch starts on the spot");
+            }
+            assert_eq!(
+                read::automation_run_ids_running(tx.conn()).expect("running").len(),
+                2,
+                "both are going at once",
             );
-            let mut done = first.clone();
-            done.status = AutomationRunStatus::Done;
-            crate::ops::emit_update(
-                tx,
-                record::automation_run(&first),
-                record::automation_run(&done),
-            )
-            .expect("hand the lane back");
-            let woken = promote_next(tx, 1).expect("promote").expect("the one that waited");
-            assert_eq!(woken.id, second.id);
-            assert_eq!(woken.status, AutomationRunStatus::Running);
-            assert!(woken.started_at.is_some());
-            assert!(promote_next(tx, 1).expect("promote").is_none(), "nothing left waiting");
         });
     }
 }

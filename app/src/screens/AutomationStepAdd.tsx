@@ -1,18 +1,23 @@
-// **Put a step in on a line** (`AMB-T-5257`), asked from the `+` on that line.
+// **Put an action in on a line** (`AMB-T-5257`), asked from the `+` on that line.
 //
-// **There is no "add at the end".** A step nothing points at is a step no run reaches, so the only
-// road in is a line that already goes somewhere: the way out that was pressed comes to point at the
-// new step, and the new step goes on to whatever that way out used to reach
-// (`amenbo_core::ops::automation::step_insert`).
+// **What it puts in is a placement** (`AMB-D-949`): a spot on the picture, with a library action
+// standing on it. The way out that was pressed comes to point at the new spot, and the new spot goes
+// on to whatever that way out used to reach (`amenbo_core::ops::automation::placement_insert`) — one
+// act, so no line is ever left running past a box that was meant to be on it.
 //
-// **A step either runs a library action or carries a prompt written here**, which is the same one
-// control the step panel puts it on (`./AutomationStepPanel`). One that runs an action declares
-// nothing of its own — its ways out and its inputs are the action's — so those two sections are not
-// drawn for it rather than drawn and refused.
+// **It is not the only road in.** A box that belongs beside the picture rather than on a line is put
+// down by the row under it (`./AutomationPlaceRow`), which is also how the first one arrives: this
+// dialog needs a line, and a picture with nothing on it has none.
+//
+// **The action is picked from the library, or written here and made one.** A prompt typed here
+// becomes an ordinary action in this project's library and is placed in the same act
+// (`AMB-T-5317`); an action picked from the library declares nothing of its own — its ways out and
+// its inputs are the action's — so those two sections are not drawn for it rather than drawn and
+// refused.
 //
 // **What it declares is what a dialog can take without becoming a screen**: the named ways out, and
-// the inputs with what each carries. Everything else a step holds is on the panel, which is where a
-// reader lands the moment this closes.
+// the inputs with what each carries. Everything else is on the panel, which is where a reader lands
+// the moment this closes.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { insertAutomationStep, useAutomationActions } from "../core/automations";

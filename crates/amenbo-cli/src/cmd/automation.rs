@@ -236,8 +236,14 @@ fn typed_in(sub: &AutomationCmd) -> Where {
     match sub {
         AutomationCmd::StepTake { .. } | AutomationCmd::StepOut { .. } | AutomationCmd::StepDone { .. } => Where::InsideARun,
 
+        // `action-list` and `action-show` are on this side because the prompts are: a definition is
+        // read back over two commands now, `show` for the automation and the placements on it and
+        // `action-show` for the steps inside one, and an agent that could reach only the first would
+        // be left unable to read the action it is carrying out a step of.
         AutomationCmd::List { .. }
         | AutomationCmd::Show { .. }
+        | AutomationCmd::ActionList { .. }
+        | AutomationCmd::ActionShow { .. }
         | AutomationCmd::RunList { .. }
         | AutomationCmd::RunShow { .. } => Where::EitherSide,
 
@@ -248,8 +254,6 @@ fn typed_in(sub: &AutomationCmd) -> Where {
         | AutomationCmd::PlaceAdd { .. }
         | AutomationCmd::PlaceRm { .. }
         | AutomationCmd::ActionAdd { .. }
-        | AutomationCmd::ActionList { .. }
-        | AutomationCmd::ActionShow { .. }
         | AutomationCmd::ActionUpdate { .. }
         | AutomationCmd::ActionEntrySet { .. }
         | AutomationCmd::ActionRm { .. }

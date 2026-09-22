@@ -1,16 +1,19 @@
 // One automation, opened — the screen it is built and started from.
 //
 // **Four places, each named on the screen**: "launch", which refuses; "build", the picture of the
-// steps (`./AutomationPicture`); "step", what the pressed step holds (`./AutomationStepPanel`); and
-// last, the definition's own name, notes and archiving, with the press that deletes it
-// (`./AutomationAboutPanel`).
+// placements with the row that puts another action on it (`./AutomationPicture`); "placement", what
+// the pressed spot holds (`./AutomationStepPanel`); and last, the definition's own name, notes and
+// archiving, with the press that deletes it (`./AutomationAboutPanel`).
+//
+// **What stands on the picture is a placement of a library action** (`AMB-D-949`). Nothing here
+// writes a step: a step is inside the action, and the screen that draws those is the action's own.
 //
 // **The delete takes the screen with it**, so the press hands back the same way out the "back"
 // button does: there is no definition left for this screen to be drawn from.
 //
-// **Which step is pressed is the screen's, not the picture's.** Two places read it — the picture
-// marks that box and the panel draws that step — so it is held where both can see it. The `+` on a
-// line opens a dialog nobody has built (`AMB-T-5257`), so that one is still held shut.
+// **Which spot is pressed is the screen's, not the picture's.** Two places read it — the picture
+// marks that box and the panel draws that spot — so it is held where both can see it, and the panel
+// hands it back when the spot it was drawn from is taken off.
 //
 // **The launch place refuses, the build place never does.** Building is always half-finished — a step
 // with no way onward, an input nobody has wired — and every one of those saves
@@ -35,6 +38,7 @@
 import { useState } from "react";
 import { AutomationAboutPanel } from "./AutomationAboutPanel";
 import { AutomationPicture } from "./AutomationPicture";
+import { AutomationPlaceRow } from "./AutomationPlaceRow";
 import { AutomationStepAdd } from "./AutomationStepAdd";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
@@ -138,13 +142,19 @@ export function AutomationBuildScreen({
             onPickPlacement={setStep}
             onInsertStep={setInserting}
           />
+          <AutomationPlaceRow automationId={id} projectId={projectId} />
         </div>
       </div>
 
       <div className="settings__section">
         <div className="settings__body">
           <h3 className="auto__place">{t("auto.build.step")}</h3>
-          <AutomationStepPanel automation={automation} placementId={step} projectId={projectId} />
+          <AutomationStepPanel
+            automation={automation}
+            placementId={step}
+            projectId={projectId}
+            onRemoved={() => setStep(null)}
+          />
         </div>
       </div>
 

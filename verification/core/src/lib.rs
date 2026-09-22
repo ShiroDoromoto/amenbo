@@ -365,7 +365,7 @@ pub enum Domain {
     /// see what the definition did. Splitting them would put the halves of every road in two
     /// vocabularies and leave each of them unable to say what it was about.
     ///
-    /// **What a step of a run types is not here** (`automation take` / `out` / `done`). Those are
+    /// **What a step of a run types is not here** (`automation step-take` / `step-out` / `step-done`). Those are
     /// typed inside the terminal a run opened, which this driver has none of — and a run started at
     /// the terminal opens no step, there being no window to draw one in. A road for them waits on the
     /// door that opens a step without a screen.
@@ -4074,7 +4074,7 @@ const REGISTRY: &[OpSpec] = &[
     // ---- reading a definition back --------------------------------------------------------------
     // **The two listings are read on both faces**, which is why they stand here rather than under the
     // screen's heading below: the automations tab draws a row per definition and the actions tab one
-    // per library action, and `automation list` / `automation action list` print the same two rows.
+    // per library action, and `automation list` / `automation action-list` print the same two rows.
     // A road asking either face whether a row is there is asking the one question.
     //
     // A definition on the list, and how many steps the row says it is built out of. `steps` is asked

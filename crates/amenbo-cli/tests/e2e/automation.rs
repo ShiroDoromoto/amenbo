@@ -22,7 +22,7 @@ fn an_automation(cli: &Cli) -> (String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
     let s = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]),
         "automation_step",
     );
     (a, s)
@@ -38,47 +38,47 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
 
     let p = cli.a_project();
     let action = id_of(
-        &cli.json(&["automation", "action", "add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
+        &cli.json(&["automation", "action-add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
         "automation_action",
     );
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
 
     let review = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "review", "--action", &action, "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "review", "--action", &action, "--agent", "claude", "--json"]),
         "automation_step",
     );
     let fix = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "fix", "--prompt", "fix it", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "fix", "--prompt", "fix it", "--agent", "claude", "--json"]),
         "automation_step",
     );
 
     // The way out is declared on the action, since the step that runs one declares nothing of its own.
     let found = id_of(
-        &cli.json(&["automation", "exit", "add", "--action", &action, "--name", "something to fix", "--json"]),
+        &cli.json(&["automation", "exit-add", "--action", &action, "--name", "something to fix", "--json"]),
         "automation_exit",
     );
     // What that way out hands on, and what the later step takes in.
-    cli.json(&["automation", "port", "add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]);
-    cli.json(&["automation", "port", "add", "--step", &fix, "--name", "report", "--kind", "file", "--required", "--json"]);
+    cli.json(&["automation", "port-add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]);
+    cli.json(&["automation", "port-add", "--step", &fix, "--name", "report", "--kind", "file", "--required", "--json"]);
 
-    cli.json(&["automation", "entry", "set", &a, "--step", &review, "--json"]);
+    cli.json(&["automation", "entry-set", &a, "--step", &review, "--json"]);
 
-    let onward = cli.json(&["automation", "edge", "add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
+    let onward = cli.json(&["automation", "edge-add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
     assert_eq!(onward["automation_edge"]["ends"].as_str(), Some("go"));
     assert_eq!(onward["automation_edge"]["to_step_id"], serde_json::json!(fix.parse::<i64>().unwrap()));
-    let closes = cli.json(&["automation", "edge", "add", "--from", &format!("{review}:"), "--done", "--json"]);
+    let closes = cli.json(&["automation", "edge-add", "--from", &format!("{review}:"), "--done", "--json"]);
     assert_eq!(closes["automation_edge"]["ends"].as_str(), Some("done"));
 
     let wire = cli.json(&[
-        "automation", "wire", "add",
+        "automation", "wire-add",
         "--from", &format!("{review}:something to fix"), "--from-port", "report",
         "--to", &fix, "--to-port", "report", "--json",
     ]);
     assert_eq!(wire["automation_wire"]["from_port_name"].as_str(), Some("report"));
 
-    let note = id_of(&cli.json(&["automation", "note", "add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
-    cli.json(&["automation", "note", "link", &review, &note, "--json"]);
-    let unlinked = cli.json(&["automation", "note", "unlink", &review, &note, "--json"]);
+    let note = id_of(&cli.json(&["automation", "note-add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
+    cli.json(&["automation", "note-link", &review, &note, "--json"]);
+    let unlinked = cli.json(&["automation", "note-unlink", &review, &note, "--json"]);
     assert_eq!(unlinked["automation_step_note"]["unlinked"], serde_json::json!(true));
 }
 
@@ -110,19 +110,19 @@ fn an_edge_names_its_way_out_on_the_step_it_leaves_from() {
     let cli = Cli::new();
     let (_, step) = an_automation(&cli);
 
-    let unnamed = cli.json(&["automation", "edge", "add", "--from", &format!("{step}:"), "--halt", "--json"]);
+    let unnamed = cli.json(&["automation", "edge-add", "--from", &format!("{step}:"), "--halt", "--json"]);
     assert_eq!(unnamed["automation_edge"]["exit_name"], Value::Null);
     assert_eq!(unnamed["automation_edge"]["ends"].as_str(), Some("halt"));
 
-    let errored = cli.json(&["automation", "edge", "add", "--from", &format!("{step}:*"), "--done", "--json"]);
+    let errored = cli.json(&["automation", "edge-add", "--from", &format!("{step}:*"), "--done", "--json"]);
     assert_eq!(errored["automation_edge"]["exit_name"].as_str(), Some("*"));
 
     // No colon at all reads as the unnamed way out too — and that one already says what happens.
-    let (again, code) = cli.run_err(&["automation", "edge", "add", "--from", &step, "--done", "--json"]);
+    let (again, code) = cli.run_err(&["automation", "edge-add", "--from", &step, "--done", "--json"]);
     assert_ne!(code, 0, "the unnamed way out already says what happens after it");
     assert!(again.contains("unnamed"), "{again}");
 
-    let (refused, code) = cli.run_err(&["automation", "edge", "add", "--from", "not-a-step", "--done", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "edge-add", "--from", "not-a-step", "--done", "--json"]);
     assert_eq!(code, 2, "{refused}");
     assert!(refused.contains("<step>:<way out>"), "the refusal says how to write it: {refused}");
 }
@@ -135,21 +135,21 @@ fn an_edge_into_a_step_is_capped_unless_the_cap_is_taken_off() {
     let cli = Cli::new();
     let (a, one) = an_automation(&cli);
     let two = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "two", "--prompt", "again", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "two", "--prompt", "again", "--agent", "claude", "--json"]),
         "automation_step",
     );
 
-    let capped = cli.json(&["automation", "edge", "add", "--from", &format!("{one}:"), "--to", &two, "--json"]);
+    let capped = cli.json(&["automation", "edge-add", "--from", &format!("{one}:"), "--to", &two, "--json"]);
     assert_eq!(capped["automation_edge"]["max_times"], serde_json::json!(10));
 
-    let open = cli.json(&["automation", "edge", "add", "--from", &format!("{two}:"), "--to", &one, "--no-max", "--json"]);
+    let open = cli.json(&["automation", "edge-add", "--from", &format!("{two}:"), "--to", &one, "--no-max", "--json"]);
     assert_eq!(open["automation_edge"]["max_times"], Value::Null);
 
     let edge = id_of(&open, "automation_edge");
-    let again = cli.json(&["automation", "edge", "update", &edge, "--max-times", "3", "--json"]);
+    let again = cli.json(&["automation", "edge-update", &edge, "--max-times", "3", "--json"]);
     assert_eq!(again["automation_edge"]["max_times"], serde_json::json!(3));
 
-    let closes = cli.json(&["automation", "edge", "add", "--from", &format!("{one}:*"), "--done", "--json"]);
+    let closes = cli.json(&["automation", "edge-add", "--from", &format!("{one}:*"), "--done", "--json"]);
     assert_eq!(closes["automation_edge"]["max_times"], Value::Null, "an edge that closes the run counts nothing");
 }
 
@@ -160,17 +160,17 @@ fn an_edge_into_a_step_is_capped_unless_the_cap_is_taken_off() {
 fn a_task_filter_is_answered_in_parts_and_read_before_it_is_written() {
     let cli = Cli::new();
     let (_, step) = an_automation(&cli);
-    cli.json(&["automation", "cfg", "add", "--step", &step, "--name", "queue", "--kind", "taskfilter", "--json"]);
+    cli.json(&["automation", "cfg-add", "--step", &step, "--name", "queue", "--kind", "taskfilter", "--json"]);
 
     let set = cli.json(&[
-        "automation", "cfg", "set", &step, "--name", "queue",
+        "automation", "cfg-set", &step, "--name", "queue",
         "--status", "todo", "--status", "in_progress", "--priority", "high", "--json",
     ]);
     let written: Value = serde_json::from_str(set["automation_cfg"]["value"].as_str().unwrap()).unwrap();
     assert_eq!(written["status"], serde_json::json!(["todo", "in_progress"]));
     assert_eq!(written["priority"], serde_json::json!(["high"]));
 
-    let (refused, code) = cli.run_err(&["automation", "cfg", "set", &step, "--name", "queue", "--status", "sideways", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "cfg-set", &step, "--name", "queue", "--status", "sideways", "--json"]);
     assert_ne!(code, 0, "a status nothing accepts is refused here: {refused}");
 }
 
@@ -180,16 +180,16 @@ fn a_task_filter_is_answered_in_parts_and_read_before_it_is_written() {
 fn a_setting_takes_one_answer_or_none_at_all() {
     let cli = Cli::new();
     let (_, step) = an_automation(&cli);
-    cli.json(&["automation", "cfg", "add", "--step", &step, "--name", "depth", "--kind", "text", "--json"]);
+    cli.json(&["automation", "cfg-add", "--step", &step, "--name", "depth", "--kind", "text", "--json"]);
 
-    let (both, code) = cli.run_err(&["automation", "cfg", "set", &step, "--name", "depth", "--text", "deep", "--number", "3", "--json"]);
+    let (both, code) = cli.run_err(&["automation", "cfg-set", &step, "--name", "depth", "--text", "deep", "--number", "3", "--json"]);
     assert_eq!(code, 2, "{both}");
 
-    let (silent, code) = cli.run_err(&["automation", "cfg", "set", &step, "--name", "depth", "--json"]);
+    let (silent, code) = cli.run_err(&["automation", "cfg-set", &step, "--name", "depth", "--json"]);
     assert_eq!(code, 2, "{silent}");
 
-    cli.json(&["automation", "cfg", "set", &step, "--name", "depth", "--text", "deep", "--json"]);
-    let cleared = cli.json(&["automation", "cfg", "set", &step, "--name", "depth", "--clear", "--json"]);
+    cli.json(&["automation", "cfg-set", &step, "--name", "depth", "--text", "deep", "--json"]);
+    let cleared = cli.json(&["automation", "cfg-set", &step, "--name", "depth", "--clear", "--json"]);
     assert_eq!(cleared["automation_cfg"]["value"], Value::Null);
 }
 
@@ -201,17 +201,17 @@ fn a_port_takes_its_direction_from_what_it_hangs_off() {
     let cli = Cli::new();
     let (_, step) = an_automation(&cli);
     let exit = id_of(
-        &cli.json(&["automation", "exit", "add", "--step", &step, "--name", "found", "--json"]),
+        &cli.json(&["automation", "exit-add", "--step", &step, "--name", "found", "--json"]),
         "automation_exit",
     );
 
-    let takes = cli.json(&["automation", "port", "add", "--step", &step, "--name", "in", "--kind", "value", "--json"]);
+    let takes = cli.json(&["automation", "port-add", "--step", &step, "--name", "in", "--kind", "value", "--json"]);
     assert_eq!(takes["automation_port"]["direction"].as_str(), Some("in"));
 
-    let hands = cli.json(&["automation", "port", "add", "--exit", &exit, "--name", "out", "--kind", "file", "--json"]);
+    let hands = cli.json(&["automation", "port-add", "--exit", &exit, "--name", "out", "--kind", "file", "--json"]);
     assert_eq!(hands["automation_port"]["direction"].as_str(), Some("out"));
 
-    let (refused, code) = cli.run_err(&["automation", "port", "add", "--name", "x", "--kind", "value", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "port-add", "--name", "x", "--kind", "value", "--json"]);
     assert_eq!(code, 2, "{refused}");
     assert!(refused.contains("--step"), "the refusal names the three: {refused}");
 }
@@ -239,12 +239,12 @@ fn a_run_is_reached_from_a_task_or_from_an_automation_and_never_listed_whole() {
     let cli = Cli::new();
     let (a, _) = an_automation(&cli);
 
-    let (refused, code) = cli.run_err(&["automation", "run", "list", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "run-list", "--json"]);
     assert_eq!(code, 2, "{refused}");
     assert!(refused.contains("--task"), "the refusal names both roads: {refused}");
     assert!(refused.contains("--automation"), "{refused}");
 
-    let none = cli.json(&["automation", "run", "list", "--automation", &a, "--json"]);
+    let none = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
     assert_eq!(none["count"], serde_json::json!(0));
     assert_eq!(none["about"].as_str(), Some(format!("automation {a}").as_str()));
 }
@@ -256,7 +256,7 @@ fn a_task_no_run_has_worked_reads_as_none() {
     let p = cli.a_project();
     let task = id_str(&cli.json(&["task", "add", "--project", &p, "--title", "T", "--json"])["task"]["id"]);
 
-    let none = cli.json(&["automation", "run", "list", "--task", &task_ref(&task), "--json"]);
+    let none = cli.json(&["automation", "run-list", "--task", &task_ref(&task), "--json"]);
     assert_eq!(none["count"], serde_json::json!(0));
     assert_eq!(none["about"].as_str(), Some(task_ref(&task).as_str()));
 }
@@ -265,7 +265,7 @@ fn a_task_no_run_has_worked_reads_as_none() {
 #[test]
 fn a_run_that_does_not_exist_is_said_to_be_missing() {
     let cli = Cli::new();
-    let (refused, code) = cli.run_err(&["automation", "run", "show", "404", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "run-show", "404", "--json"]);
     assert_ne!(code, 0, "{refused}");
     assert!(refused.contains("404"), "{refused}");
 }
@@ -281,31 +281,31 @@ fn a_definition_is_read_back_whole_with_each_step_resolved() {
     let cli = Cli::new();
     let p = cli.a_project();
     let action = id_of(
-        &cli.json(&["automation", "action", "add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
+        &cli.json(&["automation", "action-add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
         "automation_action",
     );
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
     let review = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "review", "--action", &action, "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "review", "--action", &action, "--agent", "claude", "--json"]),
         "automation_step",
     );
     let fix = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "fix", "--prompt", "fix it", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "fix", "--prompt", "fix it", "--agent", "claude", "--json"]),
         "automation_step",
     );
     let found = id_of(
-        &cli.json(&["automation", "exit", "add", "--action", &action, "--name", "something to fix", "--json"]),
+        &cli.json(&["automation", "exit-add", "--action", &action, "--name", "something to fix", "--json"]),
         "automation_exit",
     );
-    cli.json(&["automation", "port", "add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]);
-    cli.json(&["automation", "port", "add", "--step", &fix, "--name", "report", "--kind", "file", "--required", "--json"]);
-    cli.json(&["automation", "cfg", "add", "--action", &action, "--name", "depth", "--kind", "number", "--json"]);
-    cli.json(&["automation", "cfg", "set", &review, "--name", "depth", "--number", "3", "--json"]);
-    cli.json(&["automation", "entry", "set", &a, "--step", &review, "--json"]);
-    cli.json(&["automation", "edge", "add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
-    cli.json(&["automation", "wire", "add", "--from", &format!("{review}:something to fix"), "--from-port", "report", "--to", &fix, "--to-port", "report", "--json"]);
-    let note = id_of(&cli.json(&["automation", "note", "add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
-    cli.json(&["automation", "note", "link", &review, &note, "--json"]);
+    cli.json(&["automation", "port-add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]);
+    cli.json(&["automation", "port-add", "--step", &fix, "--name", "report", "--kind", "file", "--required", "--json"]);
+    cli.json(&["automation", "cfg-add", "--action", &action, "--name", "depth", "--kind", "number", "--json"]);
+    cli.json(&["automation", "cfg-set", &review, "--name", "depth", "--number", "3", "--json"]);
+    cli.json(&["automation", "entry-set", &a, "--step", &review, "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
+    cli.json(&["automation", "wire-add", "--from", &format!("{review}:something to fix"), "--from-port", "report", "--to", &fix, "--to-port", "report", "--json"]);
+    let note = id_of(&cli.json(&["automation", "note-add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
+    cli.json(&["automation", "note-link", &review, &note, "--json"]);
 
     let shown = cli.json(&["automation", "show", &a, "--json"]);
     assert_eq!(shown["automation"]["name"].as_str(), Some("Review and fix"));
@@ -346,7 +346,7 @@ fn the_listing_counts_the_steps_and_keeps_an_archived_one() {
     // bound.
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
-    cli.json(&["automation", "step", "add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]);
+    cli.json(&["automation", "step-add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]);
 
     let listed = cli.json(&["automation", "list", "--project", &p, "--json"]);
     assert_eq!(listed["count"], serde_json::json!(1));
@@ -366,28 +366,28 @@ fn the_library_is_one_list_and_global_narrows_it() {
     let cli = Cli::new();
     let p = cli.a_project();
     let action = id_of(
-        &cli.json(&["automation", "action", "add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
+        &cli.json(&["automation", "action-add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
         "automation_action",
     );
 
-    let listed = cli.json(&["automation", "action", "list", "--project", &p, "--json"]);
+    let listed = cli.json(&["automation", "action-list", "--project", &p, "--json"]);
     assert_eq!(listed["count"], serde_json::json!(1));
     assert_eq!(listed["actions"][0]["action"]["name"].as_str(), Some("Review"));
     assert_eq!(listed["actions"][0]["used_by"], serde_json::json!(0));
 
-    let device = cli.json(&["automation", "action", "list", "--global", "--json"]);
+    let device = cli.json(&["automation", "action-list", "--global", "--json"]);
     assert_eq!(device["count"], serde_json::json!(0));
 
     // Two steps of one automation running the same action is one automation whose runs change when
     // the prompt is rewritten, which is what the count is about.
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
     for name in ["one", "two"] {
-        cli.json(&["automation", "step", "add", &a, "--name", name, "--action", &action, "--agent", "claude", "--json"]);
+        cli.json(&["automation", "step-add", &a, "--name", name, "--action", &action, "--agent", "claude", "--json"]);
     }
-    let again = cli.json(&["automation", "action", "list", "--project", &p, "--json"]);
+    let again = cli.json(&["automation", "action-list", "--project", &p, "--json"]);
     assert_eq!(again["actions"][0]["used_by"], serde_json::json!(1));
 
-    let shown = cli.json(&["automation", "action", "show", &action, "--json"]);
+    let shown = cli.json(&["automation", "action-show", &action, "--json"]);
     assert_eq!(shown["action"]["prompt"].as_str(), Some("review it"));
     assert_eq!(shown["used_by"], serde_json::json!(1));
     // Every declarer is born carrying the unnamed way out and the error one.
@@ -400,7 +400,7 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
     let cli = Cli::new();
     let both: [&[&str]; 2] = [
         &["automation", "show", "404", "--json"],
-        &["automation", "action", "show", "404", "--json"],
+        &["automation", "action-show", "404", "--json"],
     ];
     for args in both {
         let (refused, code) = cli.run_err(args);
@@ -417,20 +417,20 @@ fn a_launchable(cli: &Cli) -> String {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
     let step = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "take one", "--prompt", "take one", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "take one", "--prompt", "take one", "--agent", "claude", "--json"]),
         "automation_step",
     );
     // The way out the task comes out on, which is what makes this step usable as an entry.
     let took = id_of(
-        &cli.json(&["automation", "exit", "add", "--step", &step, "--name", "took one", "--json"]),
+        &cli.json(&["automation", "exit-add", "--step", &step, "--name", "took one", "--json"]),
         "automation_exit",
     );
-    cli.json(&["automation", "port", "add", "--exit", &took, "--name", "task", "--kind", "task_take", "--required", "--json"]);
-    cli.json(&["automation", "entry", "set", &a, "--step", &step, "--json"]);
+    cli.json(&["automation", "port-add", "--exit", &took, "--name", "task", "--kind", "task_take", "--required", "--json"]);
+    cli.json(&["automation", "entry-set", &a, "--step", &step, "--json"]);
     // Every way out of a reachable step is answered for, which is the whole of what the launch check
     // asks about the picture.
-    cli.json(&["automation", "edge", "add", "--from", &format!("{step}:took one"), "--done", "--json"]);
-    cli.json(&["automation", "edge", "add", "--from", &format!("{step}:"), "--done", "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{step}:took one"), "--done", "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{step}:"), "--done", "--json"]);
     a
 }
 
@@ -467,10 +467,10 @@ fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--json"]), "automation");
     let step = id_of(
-        &cli.json(&["automation", "step", "add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]),
         "automation_step",
     );
-    cli.json(&["automation", "entry", "set", &a, "--step", &step, "--json"]);
+    cli.json(&["automation", "entry-set", &a, "--step", &step, "--json"]);
 
     let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
     assert_ne!(code, 0, "an unfinished automation does not launch: {err}");
@@ -490,9 +490,9 @@ fn the_verbs_a_step_types_refuse_outside_a_step() {
     cli.finish_creating(&t);
 
     for args in [
-        vec!["automation", "take", &t, "--json"],
-        vec!["automation", "out", "note=done", "--json"],
-        vec!["automation", "done", "--report", "did it", "--json"],
+        vec!["automation", "step-take", &t, "--json"],
+        vec!["automation", "step-out", "note=done", "--json"],
+        vec!["automation", "step-done", "--report", "did it", "--json"],
     ] {
         let (err, code) = cli.run_err(&args);
         assert_eq!(code, 2, "{args:?}: {err}");
@@ -507,7 +507,7 @@ fn a_step_execution_that_does_not_exist_is_refused_rather_than_guessed_at() {
     let cli = Cli::new();
     let (err, code) = cli.run_env_err(
         &[("AMENBO_AUTOMATION_STEP", "9999")],
-        &["automation", "done", "--report", "did it", "--json"],
+        &["automation", "step-done", "--report", "did it", "--json"],
     );
     assert_ne!(code, 0, "{err}");
     assert!(err.contains("9999"), "it names the row it was pointed at: {err}");

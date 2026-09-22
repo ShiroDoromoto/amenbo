@@ -347,25 +347,25 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # way out is taken, and a wire hands one step's result to the next. A run opens a terminal
 # per step and waits for that step to report, so the loop belongs to the store.
 amenbo automation add --name "Review and fix"          # ...and the preamble every step of it is told
-amenbo automation action add --name "Review" --prompt - # a prompt worth using twice, in the library
-amenbo automation step add 3 --name "Review" --action 7 --agent claude # a step made of one
-amenbo automation exit add --step 11 --name "something to fix"  # a way out it may leave through
-amenbo automation port add --exit 21 --name report --kind file  # what that way out hands on
-amenbo automation edge add --from "11:something to fix" --to 12 --max-times 3 # what happens after it
-amenbo automation wire add --from "11:something to fix" --from-port report --to 12 --to-port report
-amenbo automation entry set 3 --step 11                # where a run starts
+amenbo automation action-add --name "Review" --prompt - # a prompt worth using twice, in the library
+amenbo automation step-add 3 --name "Review" --action 7 --agent claude # a step made of one
+amenbo automation exit-add --step 11 --name "something to fix"  # a way out it may leave through
+amenbo automation port-add --exit 21 --name report --kind file  # what that way out hands on
+amenbo automation edge-add --from "11:something to fix" --to 12 --max-times 3 # what happens after it
+amenbo automation wire-add --from "11:something to fix" --from-port report --to 12 --to-port report
+amenbo automation entry-set 3 --step 11                # where a run starts
 amenbo automation list                                 # what this project has, and how built each is
 amenbo automation show 3                               # one whole definition, every step resolved
-amenbo automation action list                          # the library this project reaches
-amenbo automation action show 7                        # one prompt, and what it declares
+amenbo automation action-list                          # the library this project reaches
+amenbo automation action-show 7                        # one prompt, and what it declares
 amenbo automation start 3                              # away it goes
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo
 # Inside a step's own terminal, the agent carrying it out reports through three more:
-# `automation take` (the task the step is about), `automation out` (each thing it hands on)
-# and `automation done` (the way out taken, and what it did).
-amenbo automation run list --task AMB-T-<n> --json     # the runs that worked one task
-amenbo automation run show 7                           # one run in full, step by step
+# `automation step-take` (the task the step is about), `automation step-out` (each thing it hands on)
+# and `automation step-done` (the way out taken, and what it did).
+amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task
+amenbo automation run-show 7                           # one run in full, step by step
 
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary

@@ -1868,139 +1868,8 @@ pub enum AutomationCmd {
         /// automation id
         id: i64,
     },
-    /// The step a run starts at
-    Entry {
-        #[command(subcommand)]
-        sub: AutomationEntryCmd,
-    },
-    /// The library: prompts worth using twice
-    Action {
-        #[command(subcommand)]
-        sub: AutomationActionCmd,
-    },
-    /// The steps of one automation
-    Step {
-        #[command(subcommand)]
-        sub: AutomationStepCmd,
-    },
-    /// The ways out of a step or a library action
-    Exit {
-        #[command(subcommand)]
-        sub: AutomationExitCmd,
-    },
-    /// What a step takes in, and what a way out of it hands on
-    Port {
-        #[command(subcommand)]
-        sub: AutomationPortCmd,
-    },
-    /// Settings: declared by a step or a library action, answered on the step that uses them
-    Cfg {
-        #[command(subcommand)]
-        sub: AutomationCfgCmd,
-    },
-    /// What happens after a way out is taken
-    Edge {
-        #[command(subcommand)]
-        sub: AutomationEdgeCmd,
-    },
-    /// What is handed from one step to the next
-    Wire {
-        #[command(subcommand)]
-        sub: AutomationWireCmd,
-    },
-    /// Documents the steps of one automation share
-    Note {
-        #[command(subcommand)]
-        sub: AutomationNoteCmd,
-    },
-    /// What a run did — reached from the task it worked, or from the automation it came from
-    Run {
-        #[command(subcommand)]
-        sub: AutomationRunCmd,
-    },
-
-    /// Start an automation: check it, copy its steps into a run, and start it. It takes nothing
-    /// else — the tasks a step works on and the folder it runs in are the automation's own answers,
-    /// given while it was built
-    Start {
-        /// automation id
-        id: i64,
-    },
-    /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it,
-    /// keeping the task it is working
-    Pause {
-        /// run id
-        run: i64,
-    },
-    /// Pick a paused run up again, from the way out the step before it left through
-    Resume {
-        /// run id
-        run: i64,
-    },
-    /// Stop a run: hand the task it was working back, and leave a comment on the task saying how
-    /// far it got
-    Stop {
-        /// run id
-        run: i64,
-    },
-
-    /// **Take the task this stretch of the run is about** — reserve it and declare it in one act.
-    /// Typed by the agent carrying a step out; which step that is comes from the environment the
-    /// window opened its terminal with
-    Take {
-        /// the task to take (AMB-T-n)
-        task: String,
-    },
-    /// **Put down one thing this step produced**, under the name its port was declared with. Written
-    /// `<name>=<value>`, or `<name> --file <path>` for a file
-    Out {
-        /// `<name>=<value>`, or just `<name>` beside --file
-        value: String,
-        /// a file to hand on, instead of a value
-        #[arg(long, value_name = "PATH")]
-        file: Option<String>,
-    },
-    /// **This step is finished**: say which way out it took and what it did. The run reads the way out
-    /// to decide what happens next
-    Done {
-        /// what this step did, for the record and for the steps after it (`-` reads stdin)
-        #[arg(long, value_name = "TEXT")]
-        report: String,
-        /// the way out taken, as the step declared it. Left out is the unnamed one
-        #[arg(long, value_name = "NAME")]
-        exit: Option<String>,
-        /// one more thing produced, `<name>=<value>` — repeat for several
-        #[arg(long = "out", value_name = "NAME=VALUE")]
-        outs: Vec<String>,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationRunCmd {
-    /// The runs that worked one task, or the runs one automation has behind it (newest first)
-    List {
-        /// the task a run worked (AMB-T-n)
-        #[arg(long, value_name = "ID", conflicts_with = "automation")]
-        task: Option<String>,
-        /// the automation the runs came from
-        #[arg(long, value_name = "ID")]
-        automation: Option<i64>,
-        /// max count (newest first)
-        #[arg(long)]
-        limit: Option<usize>,
-    },
-    /// One run in full: every step it ran, the way out each took, how long it stood, what it handed on,
-    /// and the whole of what it reported
-    Show {
-        /// run id
-        id: i64,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationEntryCmd {
     /// Name the step a run starts at, or clear it
-    Set {
+    EntrySet {
         /// automation id
         id: i64,
         /// the step to start at
@@ -2010,12 +1879,8 @@ pub enum AutomationEntryCmd {
         #[arg(long)]
         clear: bool,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationActionCmd {
     /// Add a prompt to the library
-    Add {
+    ActionAdd {
         /// project (name or ID; defaults to the bound project)
         #[arg(long, conflicts_with = "global")]
         project: Option<String>,
@@ -2030,7 +1895,7 @@ pub enum AutomationActionCmd {
         prompt: String,
     },
     /// The library this project reaches — the device's actions, then the project's own
-    List {
+    ActionList {
         /// project (name or ID; defaults to the bound project)
         #[arg(long, conflicts_with = "global")]
         project: Option<String>,
@@ -2039,12 +1904,12 @@ pub enum AutomationActionCmd {
         global: bool,
     },
     /// One library action: its prompt, what it declares, and how many automations run it
-    Show {
+    ActionShow {
         /// action id
         id: i64,
     },
     /// Rename a library action, or rewrite its prompt (only the given fields change)
-    Update {
+    ActionUpdate {
         /// action id
         id: i64,
         #[arg(long)]
@@ -2054,17 +1919,13 @@ pub enum AutomationActionCmd {
         prompt: Option<String>,
     },
     /// Delete a library action with everything it declared — refused while a step runs it; confirms unless -y
-    Rm {
+    ActionRm {
         /// action id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationStepCmd {
     /// Add a step to an automation. It either runs a library action (--action) or carries a prompt of
     /// its own (--prompt), and which it is decides where its ways out, settings and inputs are read from
-    Add {
+    StepAdd {
         /// automation id
         automation: i64,
         /// what this step is called
@@ -2097,7 +1958,7 @@ pub enum AutomationStepCmd {
     },
     /// Change a step (only the given fields change). Switching where its prompt comes from takes its
     /// declarations with it
-    Update {
+    StepUpdate {
         /// step id
         id: i64,
         #[arg(long)]
@@ -2134,17 +1995,13 @@ pub enum AutomationStepCmd {
         history: Option<bool>,
     },
     /// Delete a step with its declarations and every edge and wire naming it — confirms unless -y
-    Rm {
+    StepRm {
         /// step id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationExitCmd {
     /// Declare a way out of a step or a library action. Both are born carrying the unnamed way out and
     /// the error one (`*`), so this is for the second and every one after it
-    Add {
+    ExitAdd {
         /// the step that declares it (one carrying its own prompt)
         #[arg(long, value_name = "ID", conflicts_with = "action")]
         step: Option<i64>,
@@ -2157,7 +2014,7 @@ pub enum AutomationExitCmd {
     },
     /// Rename a way out. Whatever named the old name is parted from it — the edges and wires that named
     /// it stop resolving, visibly, rather than being rewritten underneath
-    Rename {
+    ExitRename {
         /// way out id
         id: i64,
         /// the new name
@@ -2168,17 +2025,13 @@ pub enum AutomationExitCmd {
         clear: bool,
     },
     /// Delete a way out with the outputs declared on it — confirms unless -y
-    Rm {
+    ExitRm {
         /// way out id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationPortCmd {
     /// Declare a port. An input belongs to the step or the action that reads it (--step / --action); an
     /// output belongs to the way out that produced it (--exit)
-    Add {
+    PortAdd {
         /// the step that takes it in (one carrying its own prompt)
         #[arg(long, value_name = "ID", conflicts_with_all = ["action", "exit"])]
         step: Option<i64>,
@@ -2200,7 +2053,7 @@ pub enum AutomationPortCmd {
     },
     /// Change a port's name, what it carries, or whether it is required (only the given fields change).
     /// Renaming parts every wire that named the old name
-    Update {
+    PortUpdate {
         /// port id
         id: i64,
         #[arg(long)]
@@ -2213,16 +2066,12 @@ pub enum AutomationPortCmd {
         required: Option<bool>,
     },
     /// Delete a port — confirms unless -y. The wires that named it are left where they are, parted
-    Rm {
+    PortRm {
         /// port id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationCfgCmd {
     /// Declare a setting on a step or a library action
-    Add {
+    CfgAdd {
         /// the step that declares it (one carrying its own prompt)
         #[arg(long, value_name = "ID", conflicts_with = "action")]
         step: Option<i64>,
@@ -2243,7 +2092,7 @@ pub enum AutomationCfgCmd {
         options: Option<String>,
     },
     /// Change a setting's declaration (only the given fields change). The answer is `cfg set`
-    Update {
+    CfgUpdate {
         /// setting id
         id: i64,
         #[arg(long)]
@@ -2264,7 +2113,7 @@ pub enum AutomationCfgCmd {
     /// Answer a setting on one step. The answer is written in the shape its kind takes, never as one
     /// filter string: for `taskfilter`, the same option twice is any-of and two different options are
     /// both
-    Set {
+    CfgSet {
         /// step id
         step: i64,
         /// the setting's name, as it was declared
@@ -2308,17 +2157,13 @@ pub enum AutomationCfgCmd {
         due: Vec<String>,
     },
     /// Delete a setting — confirms unless -y
-    Rm {
+    CfgRm {
         /// setting id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationEdgeCmd {
     /// Say what happens after one step leaves through one way out. The way out is the whole condition:
     /// the edge carries none of its own
-    Add {
+    EdgeAdd {
         /// where it leaves from, `<step>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
         #[arg(long, value_name = "STEP:EXIT")]
         from: String,
@@ -2339,7 +2184,7 @@ pub enum AutomationEdgeCmd {
         no_max: bool,
     },
     /// Change where an edge goes, or how often it may be taken (only the given fields change)
-    Update {
+    EdgeUpdate {
         /// edge id
         id: i64,
         /// go on to this step
@@ -2359,16 +2204,12 @@ pub enum AutomationEdgeCmd {
         no_max: bool,
     },
     /// Delete an edge — confirms unless -y
-    Rm {
+    EdgeRm {
         /// edge id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationWireCmd {
     /// Join what one way out hands on to what a later step takes in. Both ends are named, never keyed
-    Add {
+    WireAdd {
         /// where it comes from, `<step>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
         #[arg(long, value_name = "STEP:EXIT")]
         from: String,
@@ -2383,17 +2224,13 @@ pub enum AutomationWireCmd {
         to_port: String,
     },
     /// Delete a wire — confirms unless -y
-    Rm {
+    WireRm {
         /// wire id
         id: i64,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AutomationNoteCmd {
     /// Write a document the steps of one automation share. Long is fine here — which steps are handed
     /// it is `note link`'s to say
-    Add {
+    NoteAdd {
         /// automation id
         automation: i64,
         /// what this document is called
@@ -2404,7 +2241,7 @@ pub enum AutomationNoteCmd {
         body: String,
     },
     /// Rename a shared document, or rewrite it (only the given fields change)
-    Update {
+    NoteUpdate {
         /// document id
         id: i64,
         #[arg(long)]
@@ -2414,22 +2251,105 @@ pub enum AutomationNoteCmd {
         body: Option<String>,
     },
     /// Delete a shared document with the links that hand it to steps — confirms unless -y
-    Rm {
+    NoteRm {
         /// document id
         id: i64,
     },
     /// Hand a shared document to a step
-    Link {
+    NoteLink {
         /// step id
         step: i64,
         /// document id
         note: i64,
     },
     /// Stop handing a shared document to a step
-    Unlink {
+    NoteUnlink {
         /// step id
         step: i64,
         /// document id
         note: i64,
     },
+    /// The runs that worked one task, or the runs one automation has behind it (newest first)
+    RunList {
+        /// the task a run worked (AMB-T-n)
+        #[arg(long, value_name = "ID", conflicts_with = "automation")]
+        task: Option<String>,
+        /// the automation the runs came from
+        #[arg(long, value_name = "ID")]
+        automation: Option<i64>,
+        /// max count (newest first)
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// One run in full: every step it ran, the way out each took, how long it stood, what it handed on,
+    /// and the whole of what it reported
+    RunShow {
+        /// run id
+        id: i64,
+    },
+
+    /// Start an automation: check it, copy its steps into a run, and start it. It takes nothing
+    /// else — the tasks a step works on and the folder it runs in are the automation's own answers,
+    /// given while it was built
+    Start {
+        /// automation id
+        id: i64,
+    },
+    /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it,
+    /// keeping the task it is working
+    Pause {
+        /// run id
+        run: i64,
+    },
+    /// Pick a paused run up again, from the way out the step before it left through
+    Resume {
+        /// run id
+        run: i64,
+    },
+    /// Stop a run: hand the task it was working back, and leave a comment on the task saying how
+    /// far it got
+    Stop {
+        /// run id
+        run: i64,
+    },
+
+    /// **Take the task this stretch of the run is about** — reserve it and declare it in one act.
+    /// Typed by the agent carrying a step out; which step that is comes from the environment the
+    /// window opened its terminal with
+    StepTake {
+        /// the task to take (AMB-T-n)
+        task: String,
+    },
+    /// **Put down one thing this step produced**, under the name its port was declared with. Written
+    /// `<name>=<value>`, or `<name> --file <path>` for a file
+    StepOut {
+        /// `<name>=<value>`, or just `<name>` beside --file
+        value: String,
+        /// a file to hand on, instead of a value
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+    },
+    /// **This step is finished**: say which way out it took and what it did. The run reads the way out
+    /// to decide what happens next
+    StepDone {
+        /// what this step did, for the record and for the steps after it (`-` reads stdin)
+        #[arg(long, value_name = "TEXT")]
+        report: String,
+        /// the way out taken, as the step declared it. Left out is the unnamed one
+        #[arg(long, value_name = "NAME")]
+        exit: Option<String>,
+        /// one more thing produced, `<name>=<value>` — repeat for several
+        #[arg(long = "out", value_name = "NAME=VALUE")]
+        outs: Vec<String>,
+    },
 }
+
+
+
+
+
+
+
+
+
+

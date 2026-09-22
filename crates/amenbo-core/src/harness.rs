@@ -1472,7 +1472,7 @@ mod tests {
     #[test]
     fn a_step_is_started_on_its_own_text_and_not_on_the_launch_instruction() {
         let said = crate::agents::pane_instruction("amenbo");
-        let step = "take one, and report with `amenbo automation done`";
+        let step = "take one, and report with `amenbo automation step-done`";
         for launch in LAUNCHES {
             let ordinary = opening(launch, "amenbo", None, None);
             let mine = opening_saying(launch, step, None, None);

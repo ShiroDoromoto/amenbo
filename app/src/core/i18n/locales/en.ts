@@ -1164,18 +1164,6 @@ const ui = {
   "auto.notReady": "Not ready to start:",
   "auto.queued": "Every lane is taken — this run is in line, and starts when one is handed back.",
   "auto.startOne": "Start an automation",
-  "auto.block.noSteps": "It has no steps.",
-  "auto.block.noEntry": "No step is named as the one a run starts on.",
-  "auto.block.entryTakesNoTask": "{step}: the step a run starts on takes no task, so every step after it would be about nothing.",
-  "auto.block.openExit": "{step}: nothing is set to happen after {at}.",
-  "auto.block.openExitUnnamed": "{step}: nothing is set to happen after it.",
-  "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
-  "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
-  "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
-  // Said of the model rather than of the agent, which the step's own row already names. Only ever
-  // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
-  // silence (`app/src-tauri/src/agent_models.rs`).
-  "auto.block.modelMissing": "{step}: its agent here does not offer the model {at}.",
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
   // around a group of steps is.
@@ -1498,21 +1486,26 @@ const err: Partial<Record<ErrorCode, string>> = {
   // Core's English names the command that moves the day; a reader in the window has the field instead.
   not_ready_not_started: "it does not start until {start} — change the start date if that is wrong",
   not_ready_draft: "it is still being created — finish creating it first",
-  // Pressing launch. The build screen lists the same reasons before anybody presses (`auto.block.*`);
-  // these are what the press answers with where the machine changed between the two, so they say the
-  // same things — an agent uninstalled since the list was drawn is one sentence, not two.
+  // Pressing launch, and the list the build screen draws before anybody presses — one set of
+  // sentences, because they are the same sentences. The list is a read that succeeded and the refusal
+  // is a write that did not, so both hand over the code and the values, and both are written from
+  // here (`core/i18n`'s `errSentence`).
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",
   invalid_automation_workspace_closed:
     "The workspace is closed, and a run draws its steps in its panes. Open it and start again.",
   not_ready_automation: "“{automation}” is not ready to start: {reasons}",
   not_ready_automation_no_steps: "it has no steps",
   not_ready_automation_no_entry: "no step is named as the one a run starts on",
-  not_ready_automation_entry_takes_no_task: "{step}: the step a run starts on takes no task",
+  not_ready_automation_entry_takes_no_task:
+    "{step}: the step a run starts on takes no task, so every step after it would be about nothing",
   not_ready_automation_open_exit: "{step}: nothing is set to happen after {exit}",
   not_ready_automation_open_exit_unnamed: "{step}: nothing is set to happen after it",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input {port}",
   not_ready_automation_unanswered_cfg: "{step}: the required setting {cfg} is unanswered",
   not_ready_automation_agent_missing: "{step}: this machine cannot start {agent}",
+  // Said of the model rather than of the agent, which the step's own row already names. Only ever
+  // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
+  // silence (`app/src-tauri/src/agent_models.rs`).
   not_ready_automation_model_missing: "{step}: its agent here does not offer the model {model}",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.

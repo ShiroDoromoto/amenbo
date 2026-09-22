@@ -319,20 +319,36 @@ name?: string, outputs: Array<AutomationPortDto>, };
 
 /**
  * **One thing standing in the way of a launch**, as core named it
- * ([`amenbo_core::ops::automation_run::Unmet`]).
+ * ([`amenbo_core::ops::automation_run::Unmet`]) — written in the shape a refusal's own reasons travel
+ * in (`CmdErrorPart`): the code naming the sentence, the values it is built from, and the English it
+ * falls back to.
  *
- * `reason` is what it is, and `stepName` / `at` say where — the way out with nothing after it, the
- * input nothing feeds, the setting nobody answered, the agent this machine cannot start, the model
- * that agent does not offer here. A reason about the automation as a whole carries neither. `at` is
- * absent on `open_exit` for the unnamed way out, which is the one a step with a single way out has.
+ * **The same shape because it is the same sentence.** This list is drawn before anybody presses; the
+ * press answers with that list again where the machine changed in between, and it comes back as a
+ * refusal's parts. Written in two shapes they would be two sets of words to keep in step, in nineteen
+ * languages each — which they were, and which drifted the moment one of them was reworded
+ * (`AMB-T-5287`). One shape means one dictionary entry per reason, and the front end writes both from
+ * it (`app/src/core/i18n`).
+ *
+ * `message_en` keeps its snake spelling where the rest of this file is camel, because the shape it
+ * matches is the error contract's and not this file's — a front end holding one of these beside a
+ * refusal's part must not have to tell them apart.
  */
-export type AutomationLaunchBlockDto = { reason: "no_steps" | "no_entry" | "entry_takes_no_task" | "open_exit" | "unwired_input" | "unanswered_cfg" | "agent_missing" | "model_missing", stepName?: string, 
+export type AutomationLaunchBlockDto = { 
 /**
- * What on that step — a way out's name, an input's name, a setting's name, an agent's id, a
- * model's id. `model_missing` carries the model and not the agent: the row leads with the step,
- * and a step names one agent, so the model is the half the picture does not already say.
+ * The code naming this one sentence ([`amenbo_core::ops::automation_run::Unmet::code`]).
  */
-at?: string, };
+code: string, 
+/**
+ * The English sentence, for a reason whose code the front end holds no template for.
+ */
+message_en: string, 
+/**
+ * The values the sentence is built from, under the names its template interpolates them by —
+ * `step`, `exit`, `port`, `cfg`, `agent`, `model`. Empty for a reason about the automation as a
+ * whole, and for the unnamed way out, which has no name to put in a sentence.
+ */
+fields: { [key in string]: string }, };
 
 /**
  * **Whether this automation can be started, and what is in the way** — what the build screen's

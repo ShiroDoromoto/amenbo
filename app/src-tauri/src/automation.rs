@@ -436,24 +436,19 @@ pub fn automation_launch_check(
     })
 }
 
-/// One of core's reasons, as a screen draws it: what it is, which step it is about, and what on that
-/// step. The words are the front end's — core's own English is what a surface holding no dictionary
-/// falls back to ([`amenbo_core::ops::automation_run::Unmet::say`]).
+/// One of core's reasons, in the shape a refusal's own parts travel in: the code naming the sentence,
+/// the values it is built from, and core's English underneath ([`crate::dto::AutomationLaunchBlockDto`]
+/// says why the two are one shape). The words are the front end's.
 fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
-    let (reason, step, at) = match unmet {
-        Unmet::NoSteps => ("no_steps", None, None),
-        Unmet::NoEntry => ("no_entry", None, None),
-        Unmet::EntryTakesNoTask { step } => ("entry_takes_no_task", Some(step), None),
-        Unmet::OpenExit { step, exit } => ("open_exit", Some(step), exit.as_ref()),
-        Unmet::UnwiredInput { step, port } => ("unwired_input", Some(step), Some(port)),
-        Unmet::UnansweredCfg { step, cfg } => ("unanswered_cfg", Some(step), Some(cfg)),
-        Unmet::AgentMissing { step, agent } => ("agent_missing", Some(step), Some(agent)),
-        // The model, not the agent, in the one slot a block carries: the row leads with the step, and a
-        // step names one agent, so what the reader cannot see from the picture is which model it asked
-        // for. Core's own sentence names both (`amenbo_core::ops::automation_run::Unmet::say`).
-        Unmet::ModelMissing { step, model, .. } => ("model_missing", Some(step), Some(model)),
-    };
-    AutomationLaunchBlockDto { reason, step_name: step.cloned(), at: at.cloned() }
+    // Built from the very message the refusal would carry, rather than from a second reading of the
+    // reason: the code, the values and the English are one answer, and asking `Unmet` twice is how the
+    // two came apart before.
+    let msg = unmet.msg();
+    AutomationLaunchBlockDto {
+        code: msg.code().map_or_else(String::new, |code| code.as_str().to_string()),
+        message_en: msg.en().to_string(),
+        fields: msg.fields().iter().map(|(key, value)| (key.to_string(), value.to_string())).collect(),
+    }
 }
 
 /// **How many lanes are held right now** — the runs that are `running`, across every project.

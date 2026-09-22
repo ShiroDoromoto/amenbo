@@ -268,6 +268,10 @@ pub fn automation_step_open(
         // and not this door's: what a step's pane is told about is its own step.
         Opened::Stopped { run, missing, .. } => (run.project_id, None, missing),
     };
+    // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
+    // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,
+    // where it costs nothing: that loop is about to come round anyway.
+    crate::automation_watch::wake();
     let dto = AutomationStepOpenDto { run: run_id, project, step, missing };
     if let Err(e) = app.emit(STEP_EVENT, dto.clone()) {
         log::warn!("failed to emit {STEP_EVENT}: {e}");

@@ -915,6 +915,7 @@ export const zhHans: Translation = {
     "auto.start": "启动",
     "auto.ready": "可以启动。",
     "auto.notReady": "还不能启动：",
+    "auto.queued": "所有通道都被占用。这次运行在排队，有通道空出时开始。",
     "auto.block.noSteps": "一个步骤也没有。",
     "auto.block.noEntry": "没有指定运行从哪个步骤开始。",
     "auto.block.entryTakesNoTask": "{step}：起始步骤没有接到任务，后面的步骤就没有处理对象。",

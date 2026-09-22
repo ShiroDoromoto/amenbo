@@ -145,6 +145,11 @@ export function AppShell() {
   // it stays true, because the face is hidden rather than taken down (`WorkspaceFace`).
   const [workspaceAsked, setWorkspaceAsked] = useState(false);
   const hostsWorkspace = shape === "one" && workspaceAsked;
+  // Whether there is a workspace for a run to draw its panes in — what the press that starts one is
+  // refused on when there is not (`../screens/AutomationBuildScreen`). Split out, it is the belief
+  // this window works from everywhere else: the other window is asked for rather than checked, and
+  // where the belief is wrong the raise is what discovers it (`goToTalkWindow`).
+  const workspaceOpen = shape === "two" || hostsWorkspace;
   // The project the reader came to the workspace from, and nothing where they came from nowhere. A
   // launch puts the ledger on the first project by itself (`initialNav`), which is not a reader
   // saying what their workspace is about — a face handed that would open on it every launch instead
@@ -720,6 +725,7 @@ export function AppShell() {
               onComposeTask={openCompose}
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
               onStartTerminal={startTerminalIn}
+              workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
             />
           )}

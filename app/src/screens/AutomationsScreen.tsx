@@ -36,9 +36,12 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
 
 export function AutomationsScreen({
   projectId,
+  workspaceOpen,
   onGoToRun,
 }: {
   projectId: number | null;
+  /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
+  workspaceOpen: boolean;
   /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
   onGoToRun?: (project: number, run: number) => void;
 }) {
@@ -53,6 +56,7 @@ export function AutomationsScreen({
       <AutomationBuildScreen
         id={open}
         projectId={projectId}
+        workspaceOpen={workspaceOpen}
         onBack={() => setOpen(null)}
       />
     );

@@ -1731,11 +1731,14 @@ impl Store {
         )
     }
 
-    /// Add a step to an automation (one operation = one transaction).
     /// **Launch an automation** — check it, copy its steps into a run, and take a lane if one is free
     /// (one operation = one transaction).
     ///
     /// The reach is the automation's, the run being made under it.
+    ///
+    /// `by` carries what the store cannot answer — which agents this machine can start, how many
+    /// lanes there are, whether the workspace is open, and who pressed
+    /// ([`crate::ops::automation_run::Launcher`]).
     pub fn automation_launch(
         &mut self,
         automation_id: i64,

@@ -913,6 +913,7 @@ export const tr: Translation = {
     "auto.start": "Başlat",
     "auto.ready": "Başlatılabilir.",
     "auto.notReady": "Henüz başlatılamaz:",
+    "auto.queued": "Tüm şeritler dolu — bu çalışma sırada bekliyor ve bir şerit boşalınca başlıyor.",
     "auto.block.noSteps": "Hiç adımı yok.",
     "auto.block.noEntry": "Bir çalışmanın başlayacağı adım belirlenmemiş.",
     "auto.block.entryTakesNoTask": "{step}: başlangıç adımı hiçbir görev almıyor, bu yüzden sonraki adımlar hiçbir şeyle ilgili olmaz.",

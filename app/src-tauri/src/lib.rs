@@ -470,6 +470,7 @@ pub fn run() {
       automation::automation_action_edit,
       automation::automation_detail,
       automation::automation_launch_check,
+      automation::automation_launch,
       automation::automation_lanes_held,
       automation::automation_step_open,
       automation::automation_running_page,

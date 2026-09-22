@@ -915,6 +915,7 @@ export const zhHant: Translation = {
     "auto.start": "啟動",
     "auto.ready": "可以啟動。",
     "auto.notReady": "還不能啟動：",
+    "auto.queued": "所有通道都被占用。這次執行在排隊，有通道空出時開始。",
     "auto.block.noSteps": "一個步驟也沒有。",
     "auto.block.noEntry": "沒有指定執行從哪個步驟開始。",
     "auto.block.entryTakesNoTask": "{step}：起始步驟沒有接到任務，後面的步驟就沒有處理對象。",

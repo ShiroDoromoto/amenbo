@@ -393,6 +393,16 @@ stepsDone: number,
 task?: AutomationRunTaskDto, };
 
 /**
+ * **A run, just launched** — what the press is answered with.
+ *
+ * `queued` is the one thing the press cannot see for itself: every lane was held, so the run is in
+ * line rather than under way and no pane stands for it yet. A run that took a lane says nothing
+ * beyond its id — the pane arriving is what it looks like, and that comes as an event
+ * ([`AutomationStepOpenDto`]).
+ */
+export type AutomationRunStartedDto = { run: number, queued: boolean, };
+
+/**
  * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
  *
  * Both halves are the ledger's own — the reference a person types to reach the task, and the title

@@ -914,6 +914,7 @@ export const vi: Translation = {
     "auto.start": "Chạy",
     "auto.ready": "Có thể chạy.",
     "auto.notReady": "Chưa thể chạy:",
+    "auto.queued": "Mọi làn đều đã bận — lần chạy này đang xếp hàng và bắt đầu khi có làn trống.",
     "auto.block.noSteps": "Chưa có bước nào.",
     "auto.block.noEntry": "Chưa đặt bước nào là nơi một lượt chạy bắt đầu.",
     "auto.block.entryTakesNoTask": "{step}: bước mở đầu không nhận công việc nào, nên các bước sau đó sẽ không làm gì cả.",

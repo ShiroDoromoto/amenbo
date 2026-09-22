@@ -212,6 +212,82 @@ pub(crate) mod test_support {
         .expect("the step")
     }
 
+    /// **A way out of a [`mk_placed`] action**, declared the way an action of one step carries it: on
+    /// the action, on its step, and joined by the line inside that returns the step's to the action's.
+    pub(crate) fn mk_exit(tx: &WriteTx<'_>, action: &crate::model::AutomationAction, name: &str) {
+        use crate::model::{AutomationOwner, AutomationPictureOwner};
+        use crate::ops::automation::{edge_add, exit_add, EdgeTarget};
+        let step = only_step(tx, action);
+        exit_add(tx, AutomationOwner::Action, action.id, Some(name)).expect("the action's way out");
+        exit_add(tx, AutomationOwner::Step, step.id, Some(name)).expect("the step's way out");
+        edge_add(
+            tx,
+            AutomationPictureOwner::Action,
+            step.id,
+            Some(name),
+            EdgeTarget::Exit(Some(name.to_string())),
+            None,
+        )
+        .expect("the line back to the action's way out");
+    }
+
+    /// **An output on one way out of a [`mk_placed`] action**, declared on the action's way out and on
+    /// the step's of the same name, and wired from the step's into the action's across its edge.
+    pub(crate) fn mk_out(
+        tx: &WriteTx<'_>,
+        action: &crate::model::AutomationAction,
+        exit: Option<&str>,
+        name: &str,
+        kind: crate::model::AutomationPortKind,
+        required: bool,
+    ) {
+        use crate::model::{
+            AutomationOwner, AutomationPictureOwner, AutomationPortDirection, AutomationPortOwner,
+            ACTION_BOUNDARY,
+        };
+        use crate::ops::automation::{port_add, wire_add};
+        let step = only_step(tx, action);
+        for (owner, id) in [(AutomationOwner::Action, action.id), (AutomationOwner::Step, step.id)] {
+            let way_out = crate::store_engine::read::automation_exit_by_name(tx.conn(), owner, id, exit)
+                .expect("read")
+                .expect("the way out");
+            port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                way_out.id,
+                AutomationPortDirection::Out,
+                name,
+                kind,
+                required,
+            )
+            .expect("output");
+        }
+        wire_add(tx, AutomationPictureOwner::Action, step.id, exit, name, ACTION_BOUNDARY, name)
+            .expect("the wire out to the action");
+    }
+
+    /// **An input of a [`mk_placed`] action**, declared on the action and on its step, and wired from
+    /// the action to the step across its edge.
+    pub(crate) fn mk_in(
+        tx: &WriteTx<'_>,
+        action: &crate::model::AutomationAction,
+        name: &str,
+        kind: crate::model::AutomationPortKind,
+        required: bool,
+    ) {
+        use crate::model::{
+            AutomationPictureOwner, AutomationPortDirection, AutomationPortOwner, ACTION_BOUNDARY,
+        };
+        use crate::ops::automation::{port_add, wire_add};
+        let step = only_step(tx, action);
+        let owners = [(AutomationPortOwner::Action, action.id), (AutomationPortOwner::Step, step.id)];
+        for (owner, id) in owners {
+            port_add(tx, owner, id, AutomationPortDirection::In, name, kind, required).expect("input");
+        }
+        wire_add(tx, AutomationPictureOwner::Action, ACTION_BOUNDARY, None, name, step.id, name)
+            .expect("the wire in from the action");
+    }
+
     /// One axis carrying one value, in the given project. Returns the value's id — what a classification
     /// names.
     pub(crate) fn mk_value(tx: &WriteTx<'_>, project_id: i64, axis: &str, value: &str) -> i64 {

@@ -24,10 +24,11 @@
 use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::model::{
-    AutomationPortDirection, AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStoppedReason, RunDefExit, RunDefPort, ERROR_EXIT,
+    AutomationPictureOwner, AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
+    AutomationStoppedReason, RunDefExit, RunDefPort, ACTION_BOUNDARY, ERROR_EXIT,
 };
+use crate::ops::automation_run;
 use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -211,17 +212,13 @@ fn latest_for(
     opens_a_stretch: bool,
 ) -> Result<Option<Handed>> {
     let conn = tx.conn();
-    let (Some(placement_id), Some(stretch), false) = (def.placement_id, stretch, opens_a_stretch)
+    let (Some(placement_id), Some(step_id), Some(stretch), false) =
+        (def.placement_id, def.step_id, stretch, opens_a_stretch)
     else {
         return Ok(None);
     };
-    let wires = read::automation_wires_to_port(
-        conn,
-        crate::model::AutomationPictureOwner::Automation,
-        placement_id,
-        &port.name,
-    )?;
-    if wires.is_empty() {
+    let sources = sources_of(conn, placement_id, step_id, &port.name)?;
+    if sources.is_empty() {
         return Ok(None);
     }
     let mut best: Option<(i64, AutomationRunValue)> = None;
@@ -233,10 +230,11 @@ fn latest_for(
             if value.direction != AutomationPortDirection::Out {
                 continue;
             }
-            let joined = wires.iter().any(|w| {
-                Some(w.from_id) == from_def.placement_id
-                    && w.from_exit_name.as_deref() == value.exit_name.as_deref()
-                    && w.from_port_name == value.name
+            let joined = sources.iter().any(|source| {
+                Some(source.placement_id) == from_def.placement_id
+                    && Some(source.step_id) == from_def.step_id
+                    && source.exit.as_deref() == value.exit_name.as_deref()
+                    && source.port == value.name
             });
             if !joined {
                 continue;
@@ -247,6 +245,80 @@ fn latest_for(
         }
     }
     Ok(best.map(|(_, from)| Handed { port: port.clone(), from }))
+}
+
+/// One output of one step of one placement — a place a value an input is handed can come from.
+struct Source {
+    placement_id: i64,
+    step_id: i64,
+    exit: Option<String>,
+    port: String,
+}
+
+/// **Every step output the wires join to one input of one step**, followed across the action's edge.
+///
+/// A wire inside the action from another of its steps is a source as it stands. A wire from the
+/// action itself ([`ACTION_BOUNDARY`]) hands on one of the action's inputs, so it is followed out to the
+/// automation's picture: to the wires feeding that input on this placement, and from each of them back
+/// into the action placed at the far end, to the wires that fill the output it names. Those are drawn
+/// into the boundary from a step's way out, and they count only where that way out returns to the very
+/// way out of the action the automation's wire leaves by ([`automation_run::returns_to`]) — the wire
+/// into the boundary does not name one, and the line from the step's way out is what says which.
+///
+/// All of it is read live, like the edges: the wires are the picture rather than the step.
+fn sources_of(
+    conn: &rusqlite::Connection,
+    placement_id: i64,
+    step_id: i64,
+    port_name: &str,
+) -> Result<Vec<Source>> {
+    let Some(placement) = read::automation_placement(conn, placement_id)? else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for wire in read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)? {
+        if wire.to_id != step_id || wire.to_port_name != port_name {
+            continue;
+        }
+        if wire.from_id != ACTION_BOUNDARY {
+            out.push(Source {
+                placement_id,
+                step_id: wire.from_id,
+                exit: wire.from_exit_name,
+                port: wire.from_port_name,
+            });
+            continue;
+        }
+        for outer in read::automation_wires_to_port(
+            conn,
+            AutomationPictureOwner::Automation,
+            placement_id,
+            &wire.from_port_name,
+        )? {
+            let Some(far) = read::automation_placement(conn, outer.from_id)? else { continue };
+            for inner in
+                read::automation_wires_of(conn, AutomationPictureOwner::Action, far.action_id)?
+            {
+                if inner.to_id != ACTION_BOUNDARY || inner.to_port_name != outer.from_port_name {
+                    continue;
+                }
+                let leaves_by = automation_run::returns_to(
+                    conn,
+                    inner.from_id,
+                    inner.from_exit_name.as_deref(),
+                )?;
+                if leaves_by.is_some_and(|to| to == outer.from_exit_name) {
+                    out.push(Source {
+                        placement_id: far.id,
+                        step_id: inner.from_id,
+                        exit: inner.from_exit_name,
+                        port: inner.from_port_name,
+                    });
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Stop a run because a required input had nothing to fill it, through the one cleanup every ending
@@ -569,12 +641,11 @@ fn handing_back(exits: &[RunDefExit]) -> String {
 mod tests {
     use super::*;
     use crate::model::{
-        ActorKind, Automation, AutomationAction, AutomationOwner, AutomationPictureOwner,
-        AutomationPlacement, AutomationPortOwner,
+        ActorKind, Automation, AutomationAction, AutomationPictureOwner, AutomationPlacement,
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_run::{launch, Launcher};
-    use crate::ops::test_support::{mk_placed, mk_project, with_tx};
+    use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, with_tx};
 
     /// The picture every test here starts from: a spot that takes a task and hands a note on through
     /// "found", and a second spot that is wired to read that note. Both ways out of both are decided,
@@ -603,20 +674,10 @@ mod tests {
             mk_placed(tx, &automation, "直す", "fix what the note says", "claude");
 
         // The first spot takes the task on its unnamed way out, and hands a note on through "found".
-        out_on(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
-        automation::exit_add(tx, AutomationOwner::Action, first_action.id, Some("found"))
-            .expect("way out");
-        out_on(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);
-        automation::port_add(
-            tx,
-            AutomationPortOwner::Action,
-            second_action.id,
-            AutomationPortDirection::In,
-            "note",
-            AutomationPortKind::Value,
-            required_in,
-        )
-        .expect("input");
+        mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+        mk_exit(tx, &first_action, "found");
+        mk_out(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);
+        mk_in(tx, &second_action, "note", AutomationPortKind::Value, required_in);
         if wired {
             automation::wire_add(
                 tx,
@@ -643,35 +704,6 @@ mod tests {
         let automation =
             automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, first_action, first, second }
-    }
-
-    /// Declare an output on one way out of a library action.
-    fn out_on(
-        tx: &WriteTx<'_>,
-        action: &AutomationAction,
-        exit_name: Option<&str>,
-        name: &str,
-        kind: AutomationPortKind,
-        required: bool,
-    ) {
-        let exit = read::automation_exit_by_name(
-            tx.conn(),
-            AutomationOwner::Action,
-            action.id,
-            exit_name,
-        )
-        .expect("read")
-        .expect("the way out");
-        automation::port_add(
-            tx,
-            AutomationPortOwner::Exit,
-            exit.id,
-            AutomationPortDirection::Out,
-            name,
-            kind,
-            required,
-        )
-        .expect("output");
     }
 
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -841,7 +873,7 @@ mod tests {
     fn the_text_names_a_command_per_kind_and_not_out_for_the_task_it_takes() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
-            out_on(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            mk_out(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 

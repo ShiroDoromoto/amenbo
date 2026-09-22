@@ -16,6 +16,14 @@
 // the prompt, the agent, the model and the three flags are the action's step's. The doors take
 // whichever of the three the field lives on (`../core/automations`).
 //
+// **Two rows write on the automation rather than on any of the three**: whether a run opens here, and
+// what happens after each way out is taken. Neither belongs to the action — one action placed on two
+// pictures opens one of them and goes on to different boxes on each — so they are drawn beside the
+// spot and written on the definition.
+//
+// **Taking the spot off is here too**, because this is what a reader has in front of them when they
+// decide against it. It leaves the library action where it is.
+//
 // **A setting is answered by the control its kind takes** — never by writing a filter expression. The
 // shape each one is kept in is `./automationCfg`'s.
 //
@@ -39,10 +47,13 @@ import {
   removeAutomationCfg,
   removeAutomationExit,
   removeAutomationInput,
+  removeAutomationPlacement,
   renameAutomationExit,
+  setAutomationEntry,
   setAutomationWire,
   type CfgKind,
 } from "../core/automations";
+import { confirmDialog } from "../core/dialog";
 import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
@@ -52,6 +63,7 @@ import {
   DeclareRow,
   DeclEdit,
   exitLabel,
+  NextRow,
   useAgents,
   useDraft,
   useModels,
@@ -122,11 +134,16 @@ function writeChoices(text: string): string | null {
 
 /** One way out: what it is called, what leaving by it hands on, and the presses that change either. */
 function ExitRow({
+  automation,
+  placementId,
   actionId,
   exit,
   onAddOutput,
   run,
 }: {
+  /** The picture the edge below the row is drawn on — a way out is the action's, an edge is not. */
+  automation: AutomationDetailDto;
+  placementId: number;
   /** The library action that declares it — what a way out belongs to, never the placement. */
   actionId: number;
   exit: AutomationExitDto;
@@ -137,35 +154,44 @@ function ExitRow({
   const was = exit.name ?? null;
   return (
     <li className="autostep__exit">
-      <input
-        className="autostep__declname"
-        placeholder={t("auto.step.exitUnnamed")}
-        aria-label={t("auto.step.exits")}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => {
-          const now = name.trim() === "" ? null : name.trim();
-          if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
-        }}
+      <div className="autostep__exithead">
+        <input
+          className="autostep__declname"
+          placeholder={t("auto.step.exitUnnamed")}
+          aria-label={t("auto.step.exits")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            const now = name.trim() === "" ? null : name.trim();
+            if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
+          }}
+        />
+        {/* What leaving by this way out hands on. It hangs off the way out and not off the action,
+            because an action with three ways out hands on three different things. */}
+        {exit.outputs.map((port) => (
+          <span key={port.name} className="autostep__out">
+            {port.name}
+            <span className="autostep__outkind">{kindLabel(port.kind)}</span>
+          </span>
+        ))}
+        <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
+          {t("auto.step.outputAdd")}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void run(removeAutomationExit("action", actionId, was))}
+        >
+          {t("auto.step.remove")}
+        </button>
+      </div>
+      <NextRow
+        graph={automationGraph(automation)!}
+        picture="automation"
+        boxId={placementId}
+        exitName={exit.name}
+        run={run}
       />
-      {/* What leaving by this way out hands on. It hangs off the way out and not off the action,
-          because an action with three ways out hands on three different things. */}
-      {exit.outputs.map((port) => (
-        <span key={port.name} className="autostep__out">
-          {port.name}
-          <span className="autostep__outkind">{kindLabel(port.kind)}</span>
-        </span>
-      ))}
-      <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
-        {t("auto.step.outputAdd")}
-      </button>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => void run(removeAutomationExit("action", actionId, was))}
-      >
-        {t("auto.step.remove")}
-      </button>
     </li>
   );
 }
@@ -356,11 +382,14 @@ export function AutomationStepPanel({
   automation,
   placementId,
   projectId,
+  onRemoved,
 }: {
   automation: AutomationDetailDto | null;
   /** The spot the picture is showing as pressed, or nothing while none is. */
   placementId: number | null;
   projectId: number | null;
+  /** The spot this panel was drawn from is gone — there is nothing left for the picture to mark. */
+  onRemoved: () => void;
 }) {
   const placement = automation?.placements.find((one) => one.id === placementId) ?? null;
   const agents = useAgents(projectId);
@@ -394,6 +423,13 @@ export function AutomationStepPanel({
   const takesTask = placement.exits.some((exit) =>
     exit.outputs.some((port) => port.kind === "task_take"),
   );
+  // Taking the spot away takes the answers written on it and every line naming it, so it asks first
+  // — and what it leaves is the library action, which outlives any one picture. The panel is drawn
+  // from that spot, so the screen is told to stop showing it.
+  const remove = async () => {
+    if (!(await confirmDialog(t("auto.step.placementRemoveConfirm")))) return;
+    if (await run(removeAutomationPlacement(placement.id))) onRemoved();
+  };
   // Where the working folder may be taken from: a setting or an input this action holds, by name.
   const folderNames = [
     ...placement.settings.filter((one) => one.kind === "folder").map((one) => one.name),
@@ -412,6 +448,18 @@ export function AutomationStepPanel({
           onBlur={() => name !== placement.name && void run(editAutomationAction(actionId, { name }))}
         />
       </label>
+
+      <label className="autostep__check">
+        <input
+          type="checkbox"
+          checked={automation.entryPlacementId === placement.id}
+          onChange={(e) =>
+            void run(setAutomationEntry(automation.id, e.target.checked ? placement.id : null))
+          }
+        />
+        {t("auto.step.entry")}
+      </label>
+      <div className="autostep__said">{t("auto.step.entryWhat")}</div>
 
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.task")}</span>
@@ -494,6 +542,8 @@ export function AutomationStepPanel({
             .map((one) => (
               <ExitRow
                 key={one.id}
+                automation={automation}
+                placementId={placement.id}
                 actionId={actionId}
                 exit={one}
                 onAddOutput={() => setAdding(one.id)}
@@ -503,8 +553,19 @@ export function AutomationStepPanel({
           {/* The error way out, always drawn and always last: every action carries one, and a list
               that left it off where nobody had said anything about it would read as a spot that
               cannot fail. It hands nothing on — what a step that fell over has to say is its report
-              — and nothing here renames or removes it, which core refuses either way. */}
-          <li className="autostep__exiterr">{t("auto.pic.errorExit")}</li>
+              — and nothing here renames or removes it, which core refuses either way. What it does
+              take is an edge: saying nothing stops the run and calls a person, and the row below is
+              where a picture says otherwise. */}
+          <li className="autostep__exiterr">
+            <span className="autostep__label">{t("auto.pic.errorExit")}</span>
+            <NextRow
+              graph={automationGraph(automation)!}
+              picture="automation"
+              boxId={placement.id}
+              exitName={ERROR_EXIT}
+              run={run}
+            />
+          </li>
         </ul>
         <DeclareRow
           what={t("auto.step.exitName")}
@@ -611,6 +672,13 @@ export function AutomationStepPanel({
           </label>
         </>
       )}
+
+      <div className="settings__row">
+        <button type="button" className="btn btn--danger" onClick={() => void remove()}>
+          {t("auto.step.placementRemove")}
+        </button>
+      </div>
+      <div className="autostep__said">{t("auto.step.placementRemoveWhat")}</div>
 
       {adding !== null && (
         <AutomationOutputAdd

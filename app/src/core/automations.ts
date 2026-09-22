@@ -31,6 +31,7 @@ import type {
   AutomationCardDto,
   AutomationCfgDto,
   AutomationDetailDto,
+  AutomationEdgeDto,
   AutomationLaunchCheckDto,
   AutomationPortDto,
   AutomationRunCardDto,
@@ -163,6 +164,93 @@ export async function editAutomationAction(
 export async function removeAutomationPlacement(id: number): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_placement_remove", { id });
+}
+
+/**
+ * **Put an action on the picture**, standing on its own with nothing pointing at it yet.
+ *
+ * It is the road `insertAutomationStep` is not: that one joins a picture already drawn, by the line
+ * the `+` was pressed on, and an automation with nothing on it has no line to press. Where a run
+ * begins is said separately (`setAutomationEntry`) — putting a box down is not choosing the entry.
+ */
+export async function placeAutomationAction(automationId: number, actionId: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_placement_add", { automationId, actionId });
+}
+
+/**
+ * **Say which placement a run opens first**, or take the entry away with `null`.
+ *
+ * Whether the action standing there takes a task — what actually makes it a usable entry — is the
+ * launch check's to say. A picture is built in whatever order its author likes, so naming an entry
+ * that is not usable yet is allowed and drawn among the reasons a launch is not offered.
+ */
+export async function setAutomationEntry(id: number, placementId: number | null): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_entry_set", { id, placementId });
+}
+
+/** What a way out is said to do: open a placement, close the task, or stop the run. */
+/** Which picture a line is drawn on: an automation's boxes are placements, an action's are steps. */
+export type Picture = "automation" | "action";
+
+export type EdgeEnds = AutomationEdgeDto["ends"];
+
+/**
+ * **Say what happens after one box leaves through one way out** — a placement on an automation, a
+ * step inside an action, as `picture` says (`AMB-D-949`).
+ *
+ * One way out decides one thing, so a second edge on the same one is refused rather than leaving the
+ * run to pick between them — which is why the panels edit the edge already there instead of drawing
+ * another (`editAutomationEdge`).
+ *
+ * A new `go` edge is born with the limit core's callers give the silence; nothing is passed here, and
+ * the number is then a field on the panel.
+ */
+export async function addAutomationEdge(
+  picture: Picture,
+  from: { boxId: number; exitName?: string },
+  target: { ends: EdgeEnds; to?: number },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_edge_add", {
+    picture,
+    fromId: from.boxId,
+    exitName: from.exitName ?? null,
+    ends: target.ends,
+    toId: target.to ?? null,
+  });
+}
+
+/**
+ * **Change where an edge goes, or how often it may be taken.** Only what is passed is written.
+ *
+ * `maxTimes` takes `null` to mean "no limit", as against not being passed, which leaves it alone.
+ * The way out it hangs on is not a field: that pair is what the edge is, so moving it to another way
+ * out is a remove and an add.
+ */
+export async function editAutomationEdge(
+  id: number,
+  patch: { ends?: EdgeEnds; to?: number; maxTimes?: number | null },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_edge_edit", {
+    id,
+    ends: patch.ends ?? null,
+    toId: patch.to ?? null,
+    maxTimes: patch.maxTimes ?? null,
+    clearMaxTimes: patch.maxTimes === null,
+  });
+}
+
+/**
+ * **Take away what a way out said it did.** The way out then says nothing: the error one stops the
+ * run and calls a person, and any other leaves a run that takes it with nowhere to go — which the
+ * launch check names.
+ */
+export async function removeAutomationEdge(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_edge_remove", { id });
 }
 
 /** One automation's whole definition, or nothing where that id names none. */
@@ -482,9 +570,6 @@ export async function removeAutomationInput(
   return invokeAck("automation_input_remove", { owner, ownerId, name });
 }
 
-/** Which picture a line is drawn on: an automation's boxes are placements, an action's are steps. */
-export type Picture = "automation" | "action";
-
 /**
  * **Say what fills one of a box's inputs.** Naming the same input twice answers the wire already
  * there rather than drawing a second one, so the control sends what was picked without first taking
@@ -503,46 +588,6 @@ export async function setAutomationWire(
     fromPortName: from.portName,
     toId: to.boxId,
     toPortName: to.portName,
-  });
-}
-
-/**
- * **Say what happens after one box is left through one way out** — written where nothing was said,
- * and rewritten where something was. One way out decides one thing, so a second press on the same
- * way out moves the line already there.
- *
- * `go` names the box to open next; `done` closes the picture, and `halt` stops the run and calls a
- * person.
- */
-export async function setAutomationEdge(
-  picture: Picture,
-  from: { boxId: number; exitName?: string },
-  onward: { ends: "go"; to: number } | { ends: "done" | "halt" },
-): Promise<void> {
-  if (!inTauri()) return;
-  return invokeAck("automation_edge_set", {
-    picture,
-    fromId: from.boxId,
-    exitName: from.exitName ?? null,
-    ends: onward.ends,
-    toId: onward.ends === "go" ? onward.to : null,
-    maxTimes: null,
-  });
-}
-
-/**
- * **Unsay what happens after one way out**, leaving the run with nowhere to go from it. A way out
- * nothing was ever said about is not a refusal — it is already the state the reader asked for.
- */
-export async function clearAutomationEdge(
-  picture: Picture,
-  from: { boxId: number; exitName?: string },
-): Promise<void> {
-  if (!inTauri()) return;
-  return invokeAck("automation_edge_clear", {
-    picture,
-    fromId: from.boxId,
-    exitName: from.exitName ?? null,
   });
 }
 

@@ -129,6 +129,25 @@ pub fn automation_edit(
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Name the placement a run opens first**, or clear it with `null`
+/// ([`amenbo_core::ops::automation::set_entry`]).
+///
+/// Placing an action and saying where a run begins are two presses, because they are two thoughts: a
+/// picture is built in whatever order its author likes, and the box put down first is not always the
+/// one a run should open on.
+///
+/// Whether the action standing there takes a task — what actually makes it a usable entry — is the
+/// launch check's to say rather than this door's. Refusing the entry until the port is declared would
+/// make the order of building the tool's to choose.
+#[tauri::command]
+pub fn automation_entry_set(id: i64, placement_id: Option<i64>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_set_entry(id, placement_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **Delete an automation and everything built into it** — its steps with their declarations, the
 /// edges and wires between them, and the documents they share
 /// ([`amenbo_core::ops::automation::delete`]).
@@ -314,6 +333,25 @@ pub fn automation_step_add(
         if first {
             store.automation_action_set_entry(action_id, Some(step.id))?;
         }
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Put an action on a picture**, standing on its own with no line reaching it
+/// ([`amenbo_core::ops::automation::placement_add`]).
+///
+/// It is the road `automation_step_insert` is not. That one joins a picture already drawn, by the
+/// line the `+` was pressed on — and a picture with nothing on it has no line to press. So this is
+/// what the first box comes in by, and what a reader reaches for when the next one belongs beside the
+/// picture rather than on it.
+///
+/// The library card is re-read as well: how many automations place an action is drawn on its row, and
+/// this press is what changes it.
+#[tauri::command]
+pub fn automation_placement_add(automation_id: i64, action_id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_placement_add(automation_id, action_id)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -792,6 +830,103 @@ pub fn automation_step_insert(
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
+// ───────────────────────── what happens after a way out ─────────────────────────
+//
+// An edge belongs to the picture, so these doors name the placement it leaves and the placement it
+// opens — never the action, whose ways out are declared elsewhere on this file. One way out decides
+// one thing, and core refuses a second edge on the same one.
+
+/// What a way out is said to do, as the screen sends it: the word, and the placement a `go` opens.
+fn edge_target(ends: &str, to_id: Option<i64>) -> Result<EdgeTarget, CmdError> {
+    match (ends, to_id) {
+        ("go", Some(to)) => Ok(EdgeTarget::Go(to)),
+        ("go", None) => {
+            Err(amenbo_core::Error::invalid("say which box this way out opens").into())
+        }
+        ("done", _) => Ok(EdgeTarget::Done),
+        ("halt", _) => Ok(EdgeTarget::Halt),
+        _ => Err(amenbo_core::Error::invalid(format!(
+            "'{ends}' is not one of the three things a way out does — open another box, close the \
+             task, or stop the run"
+        ))
+        .into()),
+    }
+}
+
+/// **Say what happens after one box leaves through one way out**
+/// ([`amenbo_core::ops::automation::edge_add`]) — a placement on an automation, a step inside an
+/// action, as `picture` says.
+///
+/// **A new `go` edge is born capped**, at [`amenbo_core::model::DEFAULT_MAX_TIMES`], which is the
+/// answer the command line gives the same silence: what a limit guards against is a loop that never
+/// converges, and a builder who never thought about one is who that loop happens to. The limit is
+/// then a field like any other (`automation_edge_edit`), and a picture that wants no limit says so
+/// there. An edge that closes the task or stops the run is taken once and carries none — core
+/// refuses one.
+#[tauri::command]
+pub fn automation_edge_add(
+    picture: String,
+    from_id: i64,
+    exit_name: Option<String>,
+    ends: String,
+    to_id: Option<i64>,
+) -> Result<WriteAck, CmdError> {
+    let picture = picture_owner(&picture)?;
+    let target = edge_target(&ends, to_id)?;
+    let max_times = match target {
+        EdgeTarget::Go(_) => Some(amenbo_core::model::DEFAULT_MAX_TIMES),
+        _ => None,
+    };
+    with_store_mut(|store| {
+        store.automation_edge_add(picture, from_id, exit_name.as_deref(), target, max_times)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Change where an edge goes, or how often it may be taken.** Only what is `Some` is written, and
+/// `clear_max_times` is how the limit is taken away — an absent `max_times` leaves it alone
+/// ([`amenbo_core::ops::automation::edge_update`]).
+///
+/// The way out it hangs on is not among the fields: that pair is what the edge *is*, so moving it to
+/// another way out is a remove and an add.
+#[tauri::command]
+pub fn automation_edge_edit(
+    id: i64,
+    ends: Option<String>,
+    to_id: Option<i64>,
+    max_times: Option<i64>,
+    clear_max_times: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    let target = match ends {
+        Some(ends) => Some(edge_target(&ends, to_id)?),
+        None => None,
+    };
+    let max_times = match (clear_max_times, max_times) {
+        (Some(true), _) => Some(None),
+        (_, Some(n)) => Some(Some(n)),
+        _ => None,
+    };
+    with_store_mut(|store| {
+        store.automation_edge_update(id, target, max_times)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Take away what a way out said it did.** The way out is then read as saying nothing, which for
+/// the error one means stopping the run and calling a person, and for any other means a run that
+/// leaves through it has nowhere to go — which the launch check names
+/// ([`amenbo_core::ops::automation::edge_delete`]).
+#[tauri::command]
+pub fn automation_edge_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_edge_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
 /// **Declare what a way out hands on.**
 ///
 /// It belongs to the way out and not to the step, because what is handed on is produced by leaving
@@ -864,98 +999,6 @@ pub fn automation_wire_set(
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
-/// **Say what happens after one box is left through one way out** — written where nothing was said,
-/// and rewritten where something was.
-///
-/// The way out is named rather than keyed, the way the panel holds it, and the pair of it and the box
-/// is what an edge *is*: one way out decides one thing
-/// ([`amenbo_core::ops::automation::edge_add`]). So a second press on the same way out moves the
-/// line already there instead of being refused for saying twice what the reader said once.
-///
-/// `to_id` is the box to go on to and belongs to `go` alone; `done` closes the picture and `halt`
-/// stops the run and calls a person.
-#[tauri::command]
-pub fn automation_edge_set(
-    picture: String,
-    from_id: i64,
-    exit_name: Option<String>,
-    ends: String,
-    to_id: Option<i64>,
-    max_times: Option<i64>,
-) -> Result<WriteAck, CmdError> {
-    let picture = picture_owner(&picture)?;
-    let target = edge_target(&ends, to_id)?;
-    with_store_mut(|store| {
-        let standing = read::automation_edge_for_exit(
-            store.read_model().conn(),
-            picture,
-            from_id,
-            exit_name.as_deref(),
-        )?;
-        match standing {
-            Some(edge) => {
-                store.automation_edge_update(edge.id, Some(target), Some(max_times))?;
-            }
-            None => {
-                store.automation_edge_add(
-                    picture,
-                    from_id,
-                    exit_name.as_deref(),
-                    target,
-                    max_times,
-                )?;
-            }
-        }
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
-/// **Unsay what happens after one way out**, leaving the run with nowhere to go from it — which for
-/// the error way out means stopping and calling a person, and is what every box carries from birth.
-///
-/// A way out nothing was ever said about is not a refusal: the answer a reader wanted is the state
-/// they are already in.
-#[tauri::command]
-pub fn automation_edge_clear(
-    picture: String,
-    from_id: i64,
-    exit_name: Option<String>,
-) -> Result<WriteAck, CmdError> {
-    let picture = picture_owner(&picture)?;
-    with_store_mut(|store| {
-        let standing = read::automation_edge_for_exit(
-            store.read_model().conn(),
-            picture,
-            from_id,
-            exit_name.as_deref(),
-        )?;
-        if let Some(edge) = standing {
-            store.automation_edge_delete(edge.id)?;
-        }
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
-/// What an edge does once its way out is taken, as a screen sends it. A `go` with no box to go on to
-/// is refused here rather than stored as a line pointing at nothing.
-fn edge_target(ends: &str, to_id: Option<i64>) -> Result<EdgeTarget, CmdError> {
-    match (ends, to_id) {
-        ("go", Some(to)) => Ok(EdgeTarget::Go(to)),
-        ("go", None) => Err(amenbo_core::Error::invalid(
-            "say which box the run goes on to, or that the way out closes or stops it",
-        )
-        .into()),
-        ("done", _) => Ok(EdgeTarget::Done),
-        ("halt", _) => Ok(EdgeTarget::Halt),
-        _ => Err(amenbo_core::Error::invalid(format!(
-            "'{ends}' is not what an edge can do (go, done, halt)"
-        ))
-        .into()),
-    }
 }
 
 /// **Take a wire away**, leaving the input it fed with nothing reaching it.

@@ -17,7 +17,6 @@
 // and the last refusal stands where the reader is looking.
 import { useState } from "react";
 import {
-  clearAutomationEdge,
   clearAutomationWire,
   declareAutomationExit,
   declareAutomationInput,
@@ -28,7 +27,6 @@ import {
   removeAutomationStep,
   renameAutomationExit,
   setAutomationActionEntry,
-  setAutomationEdge,
   setAutomationWire,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
@@ -40,6 +38,7 @@ import {
   DeclareRow,
   DeclEdit,
   exitLabel,
+  NextRow,
   useAgents,
   useDraft,
   useModels,
@@ -54,14 +53,6 @@ import type {
   AutomationPortDto,
   AutomationStepDto,
 } from "../bindings/bindings";
-
-/** What the pulldown on a way out hands back — the three things an edge can say. */
-const ENDS = ["go", "done", "halt"] as const;
-
-/** What one way out says happens next, as the pulldown holds it. Empty is nothing said yet. */
-function onwardKey(ends: (typeof ENDS)[number], to?: number): string {
-  return ends === "go" ? `go:${to}` : ends;
-}
 
 /**
  * One way out of a step: what it is called, what leaving by it hands on, where the run goes next, and
@@ -87,62 +78,30 @@ function ExitRow({
   const [name, setName] = useDraft(exit.name ?? "");
   const was = exit.name ?? null;
   const isError = exit.name === ERROR_EXIT;
-  const edge = action.edges.find(
-    (one) => one.fromId === step.id && (one.exitName ?? null) === was,
-  );
-  const picked = edge === undefined ? "" : onwardKey(edge.ends, edge.toId);
-
-  const say = (chosen: string) => {
-    if (chosen === "") {
-      void run(clearAutomationEdge("action", { boxId: step.id, exitName: exit.name }));
-      return;
-    }
-    const onward = chosen.startsWith("go:")
-      ? ({ ends: "go", to: Number(chosen.slice("go:".length)) } as const)
-      : ({ ends: chosen as "done" | "halt" } as const);
-    void run(setAutomationEdge("action", { boxId: step.id, exitName: exit.name }, onward));
-  };
 
   return (
     <li className={isError ? "autostep__exiterr" : "autostep__exit"}>
       {isError ? (
-        <span className="autostep__said">{t("auto.pic.errorExit")}</span>
+        <span className="autostep__label">{t("auto.pic.errorExit")}</span>
       ) : (
-        <input
-          className="autostep__declname"
-          placeholder={t("auto.step.exitUnnamed")}
-          aria-label={t("auto.step.exits")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            const now = name.trim() === "" ? null : name.trim();
-            if (now !== was) void run(renameAutomationExit("step", step.id, was, now));
-          }}
-        />
-      )}
-
-      {exit.outputs.map((port) => (
-        <span key={port.name} className="autostep__out">
-          {port.name}
-          <span className="autostep__outkind">{kindLabel(port.kind)}</span>
-        </span>
-      ))}
-
-      <select aria-label={t("auto.act.next")} value={picked} onChange={(e) => say(e.target.value)}>
-        <option value="">{t("auto.act.nextNone")}</option>
-        {action.steps
-          .filter((one) => one.id !== step.id)
-          .map((one) => (
-            <option key={one.id} value={onwardKey("go", one.id)}>
-              {tf("auto.act.nextGo", { step: one.name })}
-            </option>
+        <div className="autostep__exithead">
+          <input
+            className="autostep__declname"
+            placeholder={t("auto.step.exitUnnamed")}
+            aria-label={t("auto.step.exits")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              const now = name.trim() === "" ? null : name.trim();
+              if (now !== was) void run(renameAutomationExit("step", step.id, was, now));
+            }}
+          />
+          {exit.outputs.map((port) => (
+            <span key={port.name} className="autostep__out">
+              {port.name}
+              <span className="autostep__outkind">{kindLabel(port.kind)}</span>
+            </span>
           ))}
-        <option value="done">{t("auto.pic.endsDone")}</option>
-        <option value="halt">{t("auto.pic.endsHalt")}</option>
-      </select>
-
-      {!isError && (
-        <>
           <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
             {t("auto.step.outputAdd")}
           </button>
@@ -153,8 +112,15 @@ function ExitRow({
           >
             {t("auto.step.remove")}
           </button>
-        </>
+        </div>
       )}
+      <NextRow
+        graph={actionGraph(action)!}
+        picture="action"
+        boxId={step.id}
+        exitName={exit.name}
+        run={run}
+      />
     </li>
   );
 }

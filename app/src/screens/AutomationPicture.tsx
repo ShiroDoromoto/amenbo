@@ -4,6 +4,10 @@
 // one action. What it is handed is the laid-out shape both are read as (`./automationLayout`), so
 // nothing here knows which of the two it is drawing — the screen above it does.
 //
+// **A box is one placement, and the name on it is the action standing there** (`AMB-D-949`). Nothing
+// on the picture is a step: a step is inside the action, and which of them a run opens is read on the
+// action's own screen.
+//
 // **Boxes are elements and lines are one drawing under them.** The boxes carry a name that has to
 // wrap and shorten, a press, and a focus ring, which is all a button already does; the lines are
 // geometry and belong in one `svg` behind the lot. Boxes drawn inside the `svg` would mean laying
@@ -145,6 +149,12 @@ export function AutomationPicture({
             disabled={onPickBox === undefined}
             onClick={() => onPickBox?.(node.boxId)}
           >
+            {/* Where a run opens. It is drawn on the box rather than worked out from the picture: the
+                walk starts here, so a reader looking at two disconnected stretches has no other way
+                to tell which of them a launch enters by. */}
+            {node.boxId === graph?.entryId && (
+              <span className="autopic__entry">{t("auto.pic.entry")}</span>
+            )}
             <span className="autopic__nodename">{node.name}</span>
             {node.unfed.length > 0 && (
               <span className="autopic__unfed">

@@ -11,13 +11,25 @@
 // another one in the picture. A box of text writes when the caret leaves it, so a name is not
 // written a letter at a time.
 import { useEffect, useState } from "react";
+import {
+  addAutomationEdge,
+  editAutomationEdge,
+  removeAutomationEdge,
+  type CfgKind,
+  type EdgeEnds,
+  type Picture,
+} from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
-import { t } from "../core/i18n";
-import { ERROR_EXIT } from "./automationLayout";
-import type { CfgKind } from "../core/automations";
-import type { AgentModelListDto, WakeCandidateDto, WakeDto } from "../bindings/bindings";
+import { t, tf } from "../core/i18n";
+import { ERROR_EXIT, type PicGraph } from "./automationLayout";
+import type {
+  AgentModelListDto,
+  AutomationEdgeDto,
+  WakeCandidateDto,
+  WakeDto,
+} from "../bindings/bindings";
 
 /**
  * Send a write and say whether it was taken. Every control on the panel goes through it, so a refusal
@@ -197,6 +209,111 @@ export function DeclEdit({
       <button type="button" className="btn" onClick={onRemove}>
         {t("auto.step.remove")}
       </button>
+    </div>
+  );
+}
+
+/**
+ * What one way out is said to do, in the one word the pulldown holds it under: nothing said, an
+ * ending, or the box it opens.
+ */
+function edgeKey(edge: AutomationEdgeDto | undefined): string {
+  if (edge === undefined) return "";
+  return edge.ends === "go" ? `go:${edge.toId ?? ""}` : edge.ends;
+}
+
+/**
+ * **What happens after this way out is taken** — the one row that writes an edge, on either picture
+ * (`AMB-D-949`).
+ *
+ * A way out decides one thing, so there is one edge per way out and the pulldown writes that one:
+ * picking where nothing was said adds it, picking again changes it, and picking "nothing said" takes
+ * it away. Adding and changing are separate doors because they are separate writes in core, and this
+ * row is where the screen knows which of the two it is looking at.
+ *
+ * **Nothing said is a real answer and not an empty field.** On the error way out it is what stops the
+ * run and calls a person; on any other it leaves a run that takes it with nowhere to go, which the
+ * launch check names rather than this row refusing it.
+ *
+ * The limit is drawn for a `go` edge alone. An edge that closes the task or stops the run is taken
+ * once and carries none, and core refuses one there.
+ */
+export function NextRow({
+  graph,
+  picture,
+  boxId,
+  exitName,
+  run,
+}: {
+  /** The picture the line is drawn on, which is where the boxes to go on to are read from. */
+  graph: PicGraph;
+  picture: Picture;
+  /** The box this way out leaves — an edge is the picture's, never the library action's. */
+  boxId: number;
+  /** The way out it hangs on, `undefined` being the unnamed one. */
+  exitName: string | undefined;
+  run: Run;
+}) {
+  const edge = graph.edges.find((one) => one.fromId === boxId && one.exitName === exitName);
+  const [limit, setLimit] = useDraft(
+    edge === undefined || edge.maxTimes === undefined ? "" : String(edge.maxTimes),
+  );
+
+  const pick = (key: string) => {
+    if (key === "") {
+      if (edge !== undefined) void run(removeAutomationEdge(edge.id));
+      return;
+    }
+    const target = key.startsWith("go:")
+      ? { ends: "go" as EdgeEnds, to: Number(key.slice("go:".length)) }
+      : { ends: key as EdgeEnds };
+    void run(
+      edge === undefined
+        ? addAutomationEdge(picture, { boxId, exitName }, target)
+        : editAutomationEdge(edge.id, target),
+    );
+  };
+
+  const writeLimit = () => {
+    if (edge === undefined) return;
+    const typed = limit.trim();
+    const now = typed === "" ? null : Number(typed);
+    if (now !== null && !Number.isFinite(now)) return;
+    if (now !== (edge.maxTimes ?? null)) void run(editAutomationEdge(edge.id, { maxTimes: now }));
+  };
+
+  return (
+    <div className="autostep__next">
+      <span className="autostep__label">{t("auto.step.next")}</span>
+      <select
+        aria-label={exitLabel(exitName)}
+        value={edgeKey(edge)}
+        onChange={(e) => pick(e.target.value)}
+      >
+        <option value="">{t("auto.step.nextNothing")}</option>
+        {/* Every box of this picture, the one this way out leaves included: a line back to it is a
+            loop, which is what the limit beside this pulldown is there to cap. */}
+        {graph.boxes.map((one) => (
+          <option key={one.id} value={`go:${one.id}`}>
+            {tf("auto.step.nextGo", { name: one.name })}
+          </option>
+        ))}
+        <option value="done">{t("auto.pic.endsDone")}</option>
+        <option value="halt">{t("auto.pic.endsHalt")}</option>
+      </select>
+      {edge?.ends === "go" && (
+        <label className="autostep__limit">
+          <span className="autostep__label">{t("auto.step.maxTimes")}</span>
+          <input
+            type="number"
+            min={1}
+            placeholder={t("auto.step.maxTimesNone")}
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            onBlur={writeLimit}
+          />
+        </label>
+      )}
     </div>
   );
 }

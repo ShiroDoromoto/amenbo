@@ -1,26 +1,29 @@
 // **Put a box in on a line** (`AMB-T-5257`), asked from the `+` on that line — and, on a picture with
 // nothing on it, the first box of all (`AMB-T-5315`).
 //
-// **It serves both pictures** (`AMB-D-949`): on an automation what goes in is an action placed on
-// the line, and inside an action it is a step carrying its own prompt. The fields are the same ones
-// either way, so what differs is the door the press goes through (`../core/automations`) and whether
-// the library is offered at all — an action places no actions.
+// **It serves both pictures** (`AMB-D-949`): on an automation what goes in is a placement, a spot
+// with a library action standing on it; inside an action it is a step carrying its own prompt. The
+// fields are the same ones either way, so what differs is the door the press goes through
+// (`../core/automations`) and whether the library is offered at all — an action places no actions.
 //
-// **There is no "add at the end" on a line-bearing picture.** A box nothing points at is one no run
-// reaches, so the road in is a line that already goes somewhere: the way out that was pressed comes
-// to point at the new box, and the new box goes on to whatever that way out used to reach
-// (`amenbo_core::ops::automation::step_insert`). The one exception is a picture with nothing on it,
-// which has no line to press — there the box is simply added, and an empty action takes it as the
-// step a placement opens first.
+// **On a line, nothing is left running past a box.** The way out that was pressed comes to point at
+// the new box, and the new box goes on to whatever that way out used to reach
+// (`amenbo_core::ops::automation::placement_insert`, `…::step_insert`) — one act.
 //
-// **A box on an automation either runs a library action or carries a prompt written here**, which is
-// the same one control the step panel puts it on (`./AutomationStepPanel`). One that runs an action
-// declares nothing of its own — its ways out and its inputs are the action's — so those two sections
-// are not drawn for it rather than drawn and refused.
+// **It is not the only road in.** A box that belongs beside the picture rather than on a line is put
+// down by the row under it (`./AutomationPlaceRow`, and the press above an action's picture), which
+// is also how the first one arrives: this dialog needs a line, and a picture with nothing on it has
+// none.
+//
+// **A box on an automation runs a library action, or carries a prompt written here and becomes
+// one.** A prompt typed here becomes an ordinary action in this project's library and is placed in
+// the same act (`AMB-T-5317`); an action picked from the library declares nothing of its own — its
+// ways out and its inputs are the action's — so those two sections are not drawn for it rather than
+// drawn and refused.
 //
 // **What it declares is what a dialog can take without becoming a screen**: the named ways out, and
-// the inputs with what each carries. Everything else a step holds is on the panel, which is where a
-// reader lands the moment this closes.
+// the inputs with what each carries. Everything else is on the panel, which is where a reader lands
+// the moment this closes.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import {

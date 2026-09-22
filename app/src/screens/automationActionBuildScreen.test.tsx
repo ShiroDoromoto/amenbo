@@ -3,10 +3,10 @@
 // stubbed; the picture, the panels and what each press opens run for real.
 //
 // What these guard: **the steps inside the action are the boxes of the picture** (`AMB-D-949`), so a
-// reader presses a step rather than reading a list; **the way to write the first one is there while
-// the picture is empty**, which is where there is no line to press and nowhere else to start; **it
-// is gone once there is a step**, the road in from then on being the `+` on a line; and **an action
-// nothing opens says so**, that being what the launch check would refuse a placement of it for.
+// reader presses a step rather than reading a list; **the press that writes the first one says so
+// while the picture is empty**, that being where there is no line to press and nowhere else to
+// start; and **an action nothing opens says so**, that being what the launch check would refuse a
+// placement of it for.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,8 +24,9 @@ vi.mock("../core/automations", () => ({
   editAutomationStep: vi.fn(),
   setAutomationWire: vi.fn(),
   clearAutomationWire: vi.fn(),
-  setAutomationEdge: vi.fn(),
-  clearAutomationEdge: vi.fn(),
+  addAutomationEdge: vi.fn(),
+  editAutomationEdge: vi.fn(),
+  removeAutomationEdge: vi.fn(),
   declareAutomationExit: vi.fn(),
   renameAutomationExit: vi.fn(),
   removeAutomationExit: vi.fn(),
@@ -124,7 +125,8 @@ describe("the action build screen", () => {
     });
     await render();
     expect(nodes().map((one) => one.textContent)).toEqual([
-      "Take the next task",
+      // The step a placement opens first wears the mark the automation picture puts on its entry.
+      `${t("auto.pic.entry")}Take the next task`,
       "Review",
     ]);
   });

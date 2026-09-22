@@ -6,7 +6,7 @@
 // What these guard: **nothing pressed says so** rather than drawing an empty form; **every field
 // writes on the step** (`AMB-D-950`) — the prompt, the agent and the flags are the terminal's, and
 // what it declares is the step's rather than the action's; **the way out says where the run goes
-// next**, on the action's own picture, and choosing "nothing said yet" takes that line away;
+// next**, on the action's own picture, and choosing "nothing said" takes that line away;
 // **the error way out is drawn with that pulldown and nothing else**, being carried from birth and
 // neither renamed nor removed; **the entry is named from the step it names**; and **deleting asks
 // first**, taking the panel's selection with it.
@@ -19,8 +19,9 @@ const hoisted = vi.hoisted(() => ({
   editStep: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
-  setEdge: vi.fn(),
-  clearEdge: vi.fn(),
+  addEdge: vi.fn(),
+  editEdge: vi.fn(),
+  removeEdge: vi.fn(),
   declareExit: vi.fn(),
   renameExit: vi.fn(),
   removeExit: vi.fn(),
@@ -36,8 +37,9 @@ vi.mock("../core/automations", () => ({
   editAutomationStep: hoisted.editStep,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
-  setAutomationEdge: hoisted.setEdge,
-  clearAutomationEdge: hoisted.clearEdge,
+  addAutomationEdge: hoisted.addEdge,
+  editAutomationEdge: hoisted.editEdge,
+  removeAutomationEdge: hoisted.removeEdge,
   declareAutomationExit: hoisted.declareExit,
   renameAutomationExit: hoisted.renameExit,
   removeAutomationExit: hoisted.removeExit,
@@ -109,7 +111,10 @@ const button = (label: string) => buttons().find((one) => one.textContent === la
 
 /** The pulldown that says what happens after one way out, in the order the ways out are drawn. */
 const nextPicks = () =>
-  selects().filter((one) => one.getAttribute("aria-label") === t("auto.act.next"));
+  selects().filter((one) => {
+    const label = one.getAttribute("aria-label");
+    return label === t("auto.step.exitUnnamed") || label === t("auto.pic.errorExit");
+  });
 
 /** The line that declares one more of a family, found by what its empty box asks for. */
 const declareLine = (what: string) =>
@@ -182,10 +187,10 @@ describe("what happens after a way out", () => {
     await render({ action: two, stepId: 11, projectId: 1, onRemoved: () => undefined });
     const next = nextPicks()[0]!;
     expect([...next.options].map((one) => one.textContent)).toContain(
-      t("auto.act.nextGo").replace("{step}", "Review"),
+      t("auto.step.nextGo").replace("{name}", "Review"),
     );
     await pick(next, "go:12");
-    expect(hoisted.setEdge).toHaveBeenCalledWith(
+    expect(hoisted.addEdge).toHaveBeenCalledWith(
       "action",
       { boxId: 11, exitName: undefined },
       { ends: "go", to: 12 },
@@ -200,7 +205,7 @@ describe("what happens after a way out", () => {
     await render({ action: wired, stepId: 11, projectId: 1, onRemoved: () => undefined });
     expect(nextPicks()[0]!.value).toBe("go:12");
     await pick(nextPicks()[0]!, "");
-    expect(hoisted.clearEdge).toHaveBeenCalledWith("action", { boxId: 11, exitName: undefined });
+    expect(hoisted.removeEdge).toHaveBeenCalledWith(5);
   });
 
   it("gives the error way out that pulldown and nothing else", async () => {

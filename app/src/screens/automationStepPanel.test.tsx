@@ -29,6 +29,11 @@ const hoisted = vi.hoisted(() => ({
   declareInput: vi.fn(),
   editInput: vi.fn(),
   removeInput: vi.fn(),
+  setEntry: vi.fn(),
+  addEdge: vi.fn(),
+  editEdge: vi.fn(),
+  removeEdge: vi.fn(),
+  removePlacement: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -46,7 +51,14 @@ vi.mock("../core/automations", () => ({
   declareAutomationInput: hoisted.declareInput,
   editAutomationInput: hoisted.editInput,
   removeAutomationInput: hoisted.removeInput,
+  setAutomationEntry: hoisted.setEntry,
+  addAutomationEdge: hoisted.addEdge,
+  editAutomationEdge: hoisted.editEdge,
+  removeAutomationEdge: hoisted.removeEdge,
+  removeAutomationPlacement: hoisted.removePlacement,
 }));
+// Taking a spot off asks first, and what the machine would put up is not this test's business.
+vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(true) }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
@@ -97,9 +109,12 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
   };
 }
 
-async function render(props: Parameters<typeof AutomationStepPanel>[0]) {
+type Props = Parameters<typeof AutomationStepPanel>[0];
+
+/** `onRemoved` is the screen's business, so a test that is not about it does not have to pass one. */
+async function render(props: Omit<Props, "onRemoved"> & { onRemoved?: () => void }) {
   await act(async () => {
-    root.render(createElement(AutomationStepPanel, props));
+    root.render(createElement(AutomationStepPanel, { onRemoved: () => undefined, ...props }));
   });
 }
 
@@ -114,6 +129,26 @@ async function typeInto(box: HTMLInputElement, value: string) {
   });
 }
 const boxes = () => [...container.querySelectorAll<HTMLInputElement>("input")];
+
+/** The tick box of the row that reads like this, found by the words beside it. */
+const checkFor = (label: string) =>
+  [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
+    .find((one) => one.textContent?.includes(label))!
+    .querySelector<HTMLInputElement>("input")!;
+
+/** The pulldown that says what happens after one way out, found by the way out it hangs on. */
+const nextFor = (exit: string) =>
+  [...container.querySelectorAll<HTMLSelectElement>("select")].find(
+    (one) => one.getAttribute("aria-label") === exit,
+  )!;
+
+/** Pick a value on a pulldown the way a reader does. */
+async function pick(control: HTMLSelectElement, value: string) {
+  await act(async () => {
+    control.value = value;
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
 
 /** The line that declares one more of a family, found by what its empty box asks for. */
 const declareLine = (what: string) =>
@@ -226,8 +261,10 @@ describe("the panel of one spot", () => {
     expect(ways).toHaveLength(2);
     expect(ways[0]!.querySelector("input")!.placeholder).toBe(t("auto.step.exitUnnamed"));
     expect(ways[1]!.className).toContain("autostep__exiterr");
-    expect(ways[1]!.textContent).toBe(t("auto.pic.errorExit"));
+    expect(ways[1]!.textContent).toContain(t("auto.pic.errorExit"));
+    // It takes an edge like any other way out — what it does not take is a rename or a delete.
     expect(ways[1]!.querySelectorAll("input, button")).toHaveLength(0);
+    expect(nextFor(t("auto.pic.errorExit"))).toBeDefined();
   });
 
   it("declares a way out on the action under the name that was typed, and empties the box", async () => {
@@ -290,10 +327,80 @@ describe("the panel of one spot", () => {
 
   it("takes a flag on the spot, onto the step it is a flag of", async () => {
     await render({ automation: detail(), placementId: 1, projectId: 1 });
-    const check = boxes().find((b) => b.type === "checkbox")!;
     await act(async () => {
-      check.click();
+      checkFor(t("auto.step.interactive")).click();
     });
     expect(hoisted.editStep).toHaveBeenCalledWith(11, { interactive: true });
+  });
+
+  /// Where a run opens is the automation's, not the spot's — so the tick box writes on the
+  /// definition, and unticking it leaves the automation with no entry at all rather than refusing.
+  it("names this spot as where a run opens, and gives the entry back", async () => {
+    await render({ automation: detail({ entryPlacementId: undefined }), placementId: 1, projectId: 1 });
+    const entry = checkFor(t("auto.step.entry"));
+    expect(entry.checked).toBe(false);
+    await act(async () => entry.click());
+    expect(hoisted.setEntry).toHaveBeenCalledWith(7, 1);
+
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
+    await act(async () => checkFor(t("auto.step.entry")).click());
+    expect(hoisted.setEntry).toHaveBeenCalledWith(7, null);
+  });
+
+  /// One way out decides one thing, so the row writes the one edge on it: adding where nothing was
+  /// said, changing the one that is there, and taking it away for "nothing said yet".
+  it("says what happens after a way out, changes it, and takes it back", async () => {
+    await render({ automation: detail(), placementId: 1, projectId: 1 });
+    await pick(nextFor(t("auto.step.exitUnnamed")), "done");
+    expect(hoisted.addEdge).toHaveBeenCalledWith(
+      "automation",
+      { boxId: 1, exitName: undefined },
+      { ends: "done" },
+    );
+
+    const said = detail({
+      edges: [{ id: 8, fromId: 1, ends: "done" }],
+    });
+    await render({ automation: said, placementId: 1, projectId: 1 });
+    await pick(nextFor(t("auto.step.exitUnnamed")), "go:1");
+    expect(hoisted.editEdge).toHaveBeenCalledWith(8, { ends: "go", to: 1 });
+
+    await render({ automation: said, placementId: 1, projectId: 1 });
+    await pick(nextFor(t("auto.step.exitUnnamed")), "");
+    expect(hoisted.removeEdge).toHaveBeenCalledWith(8);
+  });
+
+  /// The limit is a `go` edge's alone: an edge that closes the task or stops the run is taken once,
+  /// and core refuses one there.
+  it("writes the limit of a go edge, and draws none on one that ends the task", async () => {
+    const looping = detail({
+      edges: [{ id: 8, fromId: 1, ends: "go", toId: 1, maxTimes: 10 }],
+    });
+    await render({ automation: looping, placementId: 1, projectId: 1 });
+    const limit = boxes().find((b) => b.type === "number")!;
+    expect(limit.value).toBe("10");
+    await typeInto(limit, "");
+    await act(async () => limit.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(hoisted.editEdge).toHaveBeenCalledWith(8, { maxTimes: null });
+
+    await render({
+      automation: detail({ edges: [{ id: 8, fromId: 1, ends: "done" }] }),
+      placementId: 1,
+      projectId: 1,
+    });
+    expect(boxes().some((b) => b.type === "number")).toBe(false);
+  });
+
+  /// The panel is drawn from the spot, so the screen has to be told to stop showing it — and what
+  /// stays behind is the library action, which outlives any one picture.
+  it("takes the spot off and tells the screen there is nothing left to draw", async () => {
+    const onRemoved = vi.fn();
+    await render({ automation: detail(), placementId: 1, projectId: 1, onRemoved });
+    const press = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.textContent === t("auto.step.placementRemove"),
+    )!;
+    await act(async () => press.click());
+    expect(hoisted.removePlacement).toHaveBeenCalledWith(1);
+    expect(onRemoved).toHaveBeenCalled();
   });
 });

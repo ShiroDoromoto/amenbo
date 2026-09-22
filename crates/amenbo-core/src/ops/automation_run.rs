@@ -230,7 +230,7 @@ fn not_found(what: &str, id: i64) -> Error {
 ///
 /// **What is asked of a placement is asked of the action standing on it**, except the agent and the
 /// model: those are each inner step's own answer (`AMB-D-950`), so they are asked of every step the
-/// action holds.
+/// action could open ([`steps_opened_by`]) rather than of the placement.
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
@@ -326,13 +326,34 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
         .unwrap_or_else(|| format!("action '{action_id}'")))
 }
 
-/// **The steps a run opens when it reaches one action.** Today that is the one the action starts at,
-/// and an action with no entry opens nothing; walking the whole column inside is `AMB-T-5313`'s.
+/// **The steps a run opens when it reaches one action** — the one it starts at, and every step the
+/// picture inside leads on to from there. An action with no entry opens none of them, which is what
+/// [`Unmet::ActionEmpty`] is raised on.
+///
+/// Which of them one run walks is decided by the ways out taken while it goes; this is every one it
+/// could walk, in display order, and that is what the agent and the model are asked of (`AMB-D-950`).
+/// A step nothing inside leads to is left out for the reason [`reachable`] leaves a placement out: no
+/// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
+/// a box still being drawn.
 fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model::AutomationStep>> {
     let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
         return Ok(Vec::new());
     };
-    Ok(read::automation_step(conn, entry)?.into_iter().collect())
+    let steps = read::automation_steps_of(conn, action_id)?;
+    let ids: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
+    let mut seen = BTreeSet::new();
+    let mut todo = vec![entry];
+    while let Some(id) = todo.pop() {
+        if !ids.contains(&id) || !seen.insert(id) {
+            continue;
+        }
+        for edge in read::automation_edges_from(conn, AutomationPictureOwner::Action, id)? {
+            if let Some(next) = edge.to_id {
+                todo.push(next);
+            }
+        }
+    }
+    Ok(steps.into_iter().filter(|step| seen.contains(&step.id)).collect())
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
@@ -724,7 +745,7 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
 mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
     use crate::ops::test_support::{mk_placed, mk_project, only_step, with_tx};
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
@@ -1020,6 +1041,50 @@ mod tests {
                 check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
                 vec![],
                 "a machine nobody asked is not a machine with nothing on it (AMB-D-792)",
+            );
+        });
+    }
+
+    /// **A second step inside an action**, joined onto the way out of the step it starts at. An action
+    /// written from one prompt carries no line inside it, so the first one is drawn here.
+    fn goes_on_to(tx: &WriteTx<'_>, action: &AutomationAction, name: &str, agent: &str) {
+        let entry = only_step(tx, action);
+        let step = automation::step_add(tx, action.id, NewStep::new(name, "続ける", agent))
+            .expect("the second step");
+        automation::edge_add(
+            tx,
+            AutomationPictureOwner::Action,
+            entry.id,
+            None,
+            EdgeTarget::Go(step.id),
+            Some(crate::model::DEFAULT_MAX_TIMES),
+        )
+        .expect("the line inside");
+    }
+
+    #[test]
+    fn a_step_further_inside_an_action_is_asked_for_its_agent_too() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            goes_on_to(tx, &action, "書く", "codex");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::AgentMissing { step: "書く".into(), agent: "codex".into() }],
+                "the check walks the picture inside the action, not its entry alone",
+            );
+        });
+    }
+
+    #[test]
+    fn a_step_inside_an_action_that_nothing_leads_to_is_left_out() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            automation::step_add(tx, action.id, NewStep::new("書く", "続ける", "codex"))
+                .expect("a step with no line into it");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
+                "no pane comes up on it, so the agent it names cannot hold the launch back",
             );
         });
     }

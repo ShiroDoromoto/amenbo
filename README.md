@@ -281,7 +281,7 @@ amenbo task attach 12 ./design.png --name "the first cut"   # ...under a name of
 amenbo task attach 12 https://example.com/spec --url --name spec   # external link
 amenbo decision attach AMB-D-<n> ./benchmark.csv
 amenbo comment attach 42 ./note.png             # attach to one task comment (id from `comment list`)
-amenbo decision comment attach 7 ./note.png     # attach to one decision comment (id from `decision comment list`)
+amenbo decision comment-attach 7 ./note.png     # attach to one decision comment (id from `decision comment-list`)
 amenbo attach ls AMB-T-<n>                       # list a task's or decision's attachments (the kind code names the space)
 amenbo attach ls --task-comment 42              # a comment is named by a flag: the two comment tables number apart
 amenbo attach open 3                            # open a blob (OS opener) or the URL (id from `attach ls`)
@@ -294,9 +294,9 @@ amenbo task move 12 --project "Mobile app"
 # Commit SHAs: anchor a task to the git commits that implemented it (1 task : many).
 # amenbo stores each SHA opaquely — it never reads git or knows which forge it lives on;
 # the chain runs history -> task, since a public commit carries no store-local reference.
-amenbo task commit add 12 0123456789abcdef0123456789abcdef01234567   # full-length hex only
-amenbo task commit list 12                   # oldest first (git show <sha> goes the other way)
-amenbo task commit rm 12 <sha> --yes         # forget one (permanent)
+amenbo task commit-add 12 0123456789abcdef0123456789abcdef01234567   # full-length hex only
+amenbo task commit-list 12                   # oldest first (git show <sha> goes the other way)
+amenbo task commit-rm 12 <sha> --yes         # forget one (permanent)
 amenbo task list --filter "commit:<full-sha>" --json # walk history -> task inside amenbo: which task(s) recorded this commit (an unknown SHA is empty, not an error)
 
 # Dependencies: this task must wait for a blocker to be done first
@@ -326,10 +326,10 @@ amenbo decision finish-writing AMB-D-<n>      # end the writing: the draft flag 
 amenbo decision finish-writing AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
 amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # turn down one still being written (draft -> rejected), with a reason comment
 amenbo decision edit AMB-D-<n> --body "…refined rationale…" # edit title/body in place — still being written or settled alike (supersede to overturn; rejected is terminal)
-amenbo decision comment add AMB-D-<n> --text "revisited after the 10k benchmark — still holds" # discuss on the timeline (comments are the discussion around the body)
-amenbo decision comment list AMB-D-<n> --json # oldest first; --limit/--offset page
-amenbo decision comment edit 7 --text "corrected" # rewrite one in place (this edits a comment, not the decision's own body)
-amenbo decision comment rm 7 --yes           # delete one posted by mistake (permanent, attachments go too)
+amenbo decision comment-add AMB-D-<n> --text "revisited after the 10k benchmark — still holds" # discuss on the timeline (comments are the discussion around the body)
+amenbo decision comment-list AMB-D-<n> --json # oldest first; --limit/--offset page
+amenbo decision comment-edit 7 --text "corrected" # rewrite one in place (this edits a comment, not the decision's own body)
+amenbo decision comment-rm 7 --yes           # delete one posted by mistake (permanent, attachments go too)
 amenbo decision reopen AMB-D-<n>              # raise the draft flag again on one finished too soon (the status stays decided; editing needs no reopen)
 amenbo decision supersede AMB-D-<n> --replaces AMB-D-<m> # record a replacement (chain)
 amenbo decision amend AMB-D-<n> --amends AMB-D-<m> # partial revision (target stays current, not superseded)
@@ -387,10 +387,10 @@ amenbo worktree finish 123 --force          # ...or discard both on purpose, whi
 # Notifications: where this device can send, and what each project reports through it. A
 # connection is written once under a name, and a project selects from that shelf — so a
 # webhook that changes is one edit rather than one per project.
-amenbo notify target add --kind slack team  # raise it on the shelf under a name; the connection itself is written next
-printf %s "$WEBHOOK" | amenbo notify target set 1 --secret -   # `-` reads it from stdin, keeping it off argv and out of shell history
-amenbo notify target list                   # the shelf: every connection, its kind, and which one a new project starts on
-amenbo notify target test 1                 # send one message through it, to see it arrive
+amenbo notify target-add --kind slack team  # raise it on the shelf under a name; the connection itself is written next
+printf %s "$WEBHOOK" | amenbo notify target-set 1 --secret -   # `-` reads it from stdin, keeping it off argv and out of shell history
+amenbo notify target-list                   # the shelf: every connection, its kind, and which one a new project starts on
+amenbo notify target-test 1                 # send one message through it, to see it arrive
 amenbo notify use 1                         # this project reports through that connection (`notify unuse` takes it back off)
 amenbo notify event task.done               # ...and reports this (`--off` stops one); `notify on` / `notify off` is the whole project's switch
 amenbo notify                               # both halves at once: the shelf, and what this project does with it

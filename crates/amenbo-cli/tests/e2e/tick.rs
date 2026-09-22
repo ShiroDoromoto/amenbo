@@ -71,7 +71,7 @@ fn a_day_that_has_come_is_carried_out_through_the_tick() {
 
     // Somewhere for the warning to go. The connection is never written, so the post is refused — which is
     // the trace that says the message was built, addressed and handed over.
-    cli.json(&["notify", "target", "add", "--kind", "slack", "unreachable", "--json"]);
+    cli.json(&["notify", "target-add", "--kind", "slack", "unreachable", "--json"]);
     cli.json(&["notify", "on", "--json"]);
     cli.json(&["notify", "use", "1", "--json"]);
     cli.json(&["notify", "event", "task.due", "--json"]);

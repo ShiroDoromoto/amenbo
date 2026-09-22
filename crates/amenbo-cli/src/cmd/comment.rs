@@ -59,7 +59,7 @@ pub(crate) fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Resu
     Ok(0)
 }
 
-/// One comment as a human-readable line, shared by `comment list` and `decision comment list` — which is
+/// One comment as a human-readable line, shared by `comment list` and `decision comment-list` — which is
 /// why the ref's kind is passed in: the two listings read different tables, and the same id names a row in
 /// each (`AMB-D-377`). It leads with the comment's ref: a comment carries no conversational number, so this
 /// id is the only handle that can be passed to `comment rm` / `comment attach`, and a comment left out of
@@ -144,7 +144,7 @@ pub(crate) fn comment_not_found(reference: &str) -> CliError {
     CliError {
         code: "not_found",
         message: format!("comment '{reference}' not found"),
-        hint: Some("list the comments to find the id (`comment list <task>` / `decision comment list <decision>`)".to_string()),
+        hint: Some("list the comments to find the id (`comment list <task>` / `decision comment-list <decision>`)".to_string()),
         exit: 1,
     }
 }

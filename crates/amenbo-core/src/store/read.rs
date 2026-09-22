@@ -147,7 +147,7 @@ impl Store {
         crate::query::activity(&self.paths.activity_file, self.engine.conn(), self.reach, params)
     }
 
-    /// The read behind `decision comment list`, served by indexed SQL
+    /// The read behind `decision comment-list`, served by indexed SQL
     /// ([`crate::query::decision_comment_list`]) — the decision-side twin of [`Self::comment_list`].
     /// `decision_id` is an already-resolved id.
     pub fn decision_comment_list(&self, decision_id: i64, offset: Option<usize>, limit: Option<usize>) -> Result<crate::query::DecisionCommentListResult> {
@@ -441,7 +441,7 @@ impl Store {
     }
 
     /// A task's recorded commit SHAs, oldest first (created_at, id). The list read behind
-    /// `task commit list`; the caller resolves the task ref first, so reach is already settled.
+    /// `task commit-list`; the caller resolves the task ref first, so reach is already settled.
     pub fn task_commits(&self, task_id: i64) -> Result<Vec<crate::model::TaskCommit>> {
         Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
     }

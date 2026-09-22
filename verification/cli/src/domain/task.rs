@@ -190,14 +190,14 @@ impl Driver<'_> {
             "commit-add" => {
                 let target = self.resolve(with)?;
                 let sha = req_str(with, "sha")?;
-                self.run_json(&["task", "commit", "add", &target.to_string(), sha, "--json"])?;
+                self.run_json(&["task", "commit-add", &target.to_string(), sha, "--json"])?;
                 Ok(Outcome::action(format!("recorded commit {sha} on task {target}")))
             }
             "commit-rm" => {
                 let target = self.resolve(with)?;
                 let sha = req_str(with, "sha")?;
                 // A hard delete asks first; the driver is unattended, so it answers up front.
-                self.run_json(&["task", "commit", "rm", &target.to_string(), sha, "--yes", "--json"])?;
+                self.run_json(&["task", "commit-rm", &target.to_string(), sha, "--yes", "--json"])?;
                 Ok(Outcome::action(format!("forgot commit {sha} on task {target}")))
             }
             _ => Err(unmapped(Domain::Task, op)),
@@ -296,7 +296,7 @@ impl Driver<'_> {
                 let target = self.resolve(with)?;
                 let sha = req_str(with, "sha")?;
                 let present = opt_bool(with, "present").unwrap_or(true);
-                let v = self.run_json(&["task", "commit", "list", &target.to_string(), "--json"])?;
+                let v = self.run_json(&["task", "commit-list", &target.to_string(), "--json"])?;
                 let found = v["commits"]
                     .as_array()
                     .map(|a| a.iter().any(|c| c["sha"].as_str() == Some(sha)))

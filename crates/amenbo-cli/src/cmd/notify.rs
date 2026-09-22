@@ -17,7 +17,7 @@ use amenbo_core::config::Paths;
 use amenbo_core::model::{NotifyKind, NotifyTarget};
 use amenbo_core::Store;
 
-use crate::cli::{NotifyCmd, NotifyTargetCmd};
+use crate::cli::NotifyCmd;
 use crate::cmd::place::bound_project;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
@@ -28,64 +28,13 @@ pub(crate) fn notify(
 ) -> Result<i32, CliError> {
     match sub {
         None => show(store, flags),
-        Some(NotifyCmd::Target { sub }) => target(store, flags, sub),
         Some(NotifyCmd::On) => switch(store, flags, true),
         Some(NotifyCmd::Off) => switch(store, flags, false),
         Some(NotifyCmd::Use { target }) => select(store, flags, target, true),
         Some(NotifyCmd::Unuse { target }) => select(store, flags, target, false),
         Some(NotifyCmd::To { addresses }) => addressed(store, flags, &addresses),
         Some(NotifyCmd::Event { name, off }) => event(store, flags, &name, !off),
-    }
-}
-
-/// Both halves at once: the shelf, and what the bound project does with it.
-///
-/// It is one answer rather than two commands because that is the question — *where do this project's
-/// notifications go* — and reading it in two places is what `AMB-D-885` turned the per-project connection
-/// down to avoid.
-fn show(store: &Store, flags: &Flags) -> Result<i32, CliError> {
-    let shelf = shelf_json(store)?;
-    let project = bound_project(store);
-    let mine = match project {
-        Some(id) => project_json(store, id)?,
-        None => serde_json::Value::Null,
-    };
-    let value = json!({ "targets": shelf, "project": mine });
-    if flags.json {
-        print_json(&value);
-        return Ok(0);
-    }
-    if shelf.as_array().is_some_and(|rows| rows.is_empty()) {
-        human(flags, format!("No notification targets yet. Raise one with `{} notify target add --kind slack <name>`.", Paths::command_name()));
-    }
-    for row in shelf.as_array().into_iter().flatten() {
-        human(flags, format!("  {}", target_line(row)));
-    }
-    match &mine {
-        serde_json::Value::Null => {
-            human(flags, "This folder is not bound to a project, so there is nothing it reports.");
-        }
-        mine => {
-            human(
-                flags,
-                format!(
-                    "This project: {}, through {}, reporting {}",
-                    if mine["enabled"].as_bool() == Some(true) { "on" } else { "off" },
-                    joined(&mine["targets"]),
-                    joined(&mine["events"]),
-                ),
-            );
-            if let Some(to) = mine["mail_to"].as_str().filter(|to| !to.is_empty()) {
-                human(flags, format!("Mail is addressed to: {to}"));
-            }
-        }
-    }
-    Ok(0)
-}
-
-fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32, CliError> {
-    match sub {
-        NotifyTargetCmd::List => {
+        Some(NotifyCmd::TargetList) => {
             let shelf = shelf_json(store)?;
             if flags.json {
                 print_json(&json!({ "targets": shelf }));
@@ -96,7 +45,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             }
             Ok(0)
         }
-        NotifyTargetCmd::Add { kind, name } => {
+        Some(NotifyCmd::TargetAdd { kind, name }) => {
             let kind = NotifyKind::parse(&kind).ok_or_else(|| {
                 CliError::from(amenbo_core::Error::invalid(format!(
                     "'{kind}' is not a kind a target can be (slack, mail)"
@@ -114,7 +63,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             );
             Ok(0)
         }
-        NotifyTargetCmd::Set {
+        Some(NotifyCmd::TargetSet {
             target,
             name,
             smtp_host,
@@ -122,7 +71,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             smtp_user,
             mail_from,
             secret,
-        } => {
+        }) => {
             let before = live(store, target)?;
             let mut changed: Vec<String> = Vec::new();
             if let Some(name) = &name {
@@ -175,7 +124,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             );
             Ok(0)
         }
-        NotifyTargetCmd::Default { target } => {
+        Some(NotifyCmd::TargetDefault { target }) => {
             let marked = store.notify_target_set_default(target).map_err(CliError::from)?;
             write_envelope(
                 flags,
@@ -188,7 +137,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             );
             Ok(0)
         }
-        NotifyTargetCmd::Rm { target } => {
+        Some(NotifyCmd::TargetRm { target }) => {
             let row = live(store, target)?;
             // What the press costs is said before it is made: after the delete there is nobody left to ask
             // which projects were sending through it.
@@ -217,7 +166,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             );
             Ok(0)
         }
-        NotifyTargetCmd::Check { target } => {
+        Some(NotifyCmd::TargetCheck { target }) => {
             let row = live(store, target)?;
             let reached = match row.kind {
                 NotifyKind::Slack => {
@@ -245,7 +194,7 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             }
             Ok(0)
         }
-        NotifyTargetCmd::Test { target } => {
+        Some(NotifyCmd::TargetTest { target }) => {
             let row = live(store, target)?;
             let language = store.config.language.clone().unwrap_or_else(|| "en".to_string());
             let said = amenbo_core::notify_wording::test_line(&language);
@@ -272,6 +221,51 @@ fn target(store: &mut Store, flags: &Flags, sub: NotifyTargetCmd) -> Result<i32,
             Ok(0)
         }
     }
+}
+
+/// Both halves at once: the shelf, and what the bound project does with it.
+///
+/// It is one answer rather than two commands because that is the question — *where do this project's
+/// notifications go* — and reading it in two places is what `AMB-D-885` turned the per-project connection
+/// down to avoid.
+fn show(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    let shelf = shelf_json(store)?;
+    let project = bound_project(store);
+    let mine = match project {
+        Some(id) => project_json(store, id)?,
+        None => serde_json::Value::Null,
+    };
+    let value = json!({ "targets": shelf, "project": mine });
+    if flags.json {
+        print_json(&value);
+        return Ok(0);
+    }
+    if shelf.as_array().is_some_and(|rows| rows.is_empty()) {
+        human(flags, format!("No notification targets yet. Raise one with `{} notify target-add --kind slack <name>`.", Paths::command_name()));
+    }
+    for row in shelf.as_array().into_iter().flatten() {
+        human(flags, format!("  {}", target_line(row)));
+    }
+    match &mine {
+        serde_json::Value::Null => {
+            human(flags, "This folder is not bound to a project, so there is nothing it reports.");
+        }
+        mine => {
+            human(
+                flags,
+                format!(
+                    "This project: {}, through {}, reporting {}",
+                    if mine["enabled"].as_bool() == Some(true) { "on" } else { "off" },
+                    joined(&mine["targets"]),
+                    joined(&mine["events"]),
+                ),
+            );
+            if let Some(to) = mine["mail_to"].as_str().filter(|to| !to.is_empty()) {
+                human(flags, format!("Mail is addressed to: {to}"));
+            }
+        }
+    }
+    Ok(0)
 }
 
 fn switch(store: &mut Store, flags: &Flags, on: bool) -> Result<i32, CliError> {
@@ -400,7 +394,7 @@ fn read_secret(value: String) -> Result<String, CliError> {
             code: "invalid_value",
             message: "`-` says the credential comes in on stdin, but stdin is a terminal".to_string(),
             hint: Some(format!(
-                "Pipe it in (`… | {} notify target set <id> --secret -`).",
+                "Pipe it in (`… | {} notify target-set <id> --secret -`).",
                 Paths::command_name()
             )),
             exit: 2,

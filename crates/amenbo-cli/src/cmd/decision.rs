@@ -207,7 +207,7 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                         human(flags, format!("  [{check}] {} {}{state}", task_label(t.id), t.name));
                     }
                 }
-                for line in comment_section(&comments, &format!("{} decision comment list {}", Paths::command_name(), decision_label(did))) {
+                for line in comment_section(&comments, &format!("{} decision comment-list {}", Paths::command_name(), decision_label(did))) {
                     human(flags, line);
                 }
             }
@@ -374,7 +374,47 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 human(flags, still_to_classify(&unmet, did));
             }
         }
-        DecisionCmd::Comment { sub } => return decision_comment(store, flags, sub),
+        // A decision's timeline — the mirror of `comment` on the task side.
+        DecisionCmd::CommentAdd { decision, text } => {
+            let text = body_arg(text)?;
+            let did = resolve_decision(store, &decision).map_err(CliError::from)?;
+            // The author is our own facet; add_comment's author argument is the trace string for the audit log.
+            let c = store.add_decision_comment(did, flags.facet()?, &text).map_err(CliError::from)?;
+            warn_body(&text); // non-blocking readability hint on write (stderr)
+            write_envelope(flags, "decision.comment.add", "comment", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Added comment: {}", decision_label(did)));
+        }
+        DecisionCmd::CommentList { decision, limit, offset } => {
+            let did = resolve_decision(store, &decision).map_err(CliError::from)?;
+            let result = store.decision_comment_list(did, offset, limit).map_err(CliError::from)?;
+            if flags.json {
+                print_json(&result);
+            } else {
+                human(flags, format!("{} — {}", count_header(result.count, result.total_matched, "comment"), decision_ref_name(&result.decision.name)));
+                for c in &result.comments {
+                    human(flags, comment_line(amenbo_core::idref::RefKind::DecisionComment, c));
+                }
+            }
+        }
+        DecisionCmd::CommentRm { comment } => {
+            let cid = resolve_live_decision_comment(store, &comment)?;
+            if !confirm(flags, "delete comment")? {
+                return Ok(0);
+            }
+            let changed = store.remove_decision_comment(cid).map_err(CliError::from)?;
+            write_envelope(flags, "decision.comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", decision_comment_label(cid)));
+        }
+        DecisionCmd::CommentEdit { comment, text } => {
+            let text = body_arg(text)?;
+            let cid = resolve_live_decision_comment(store, &comment)?;
+            let c = store.edit_decision_comment(cid, &text).map_err(CliError::from)?;
+            warn_body(&text);
+            write_envelope(flags, "decision.comment.edit", "comment", serde_json::to_value(&c).unwrap(), Some(vec!["text".to_string()]), false, format!("✓ Edited comment: {}", decision_comment_label(cid)));
+        }
+        DecisionCmd::CommentAttach { comment, source, url, name } => {
+            // Look only in the decision-comment table (symmetric with the task side of `comment attach`).
+            let cid = resolve_live_decision_comment(store, &comment)?;
+            return attach_add(store, flags, AttachmentTarget::DecisionComment, cid, &source, url, name);
+        }
         DecisionCmd::Attach { id, source, url, name } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             return attach_add(store, flags, AttachmentTarget::Decision, did, &source, url, name);
@@ -508,51 +548,4 @@ fn add_reason_comment(store: &mut Store, flags: &Flags, decision_id: i64, reason
         store.add_decision_comment(decision_id, flags.facet()?, r).map_err(CliError::from)?;
     }
     Ok(())
-}
-
-/// `decision comment add/list` — mirrors [`comment`](crate::cmd::comment::comment) on the task side.
-pub(crate) fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -> Result<i32, CliError> {
-    match sub {
-        DecisionCommentCmd::Add { decision, text } => {
-            let text = body_arg(text)?;
-            let did = resolve_decision(store, &decision).map_err(CliError::from)?;
-            // The author is our own facet; add_comment's author argument is the trace string for the audit log.
-            let c = store.add_decision_comment(did, flags.facet()?, &text).map_err(CliError::from)?;
-            warn_body(&text); // non-blocking readability hint on write (stderr)
-            write_envelope(flags, "decision.comment.add", "comment", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Added comment: {}", decision_label(did)));
-        }
-        DecisionCommentCmd::List { decision, limit, offset } => {
-            let did = resolve_decision(store, &decision).map_err(CliError::from)?;
-            let result = store.decision_comment_list(did, offset, limit).map_err(CliError::from)?;
-            if flags.json {
-                print_json(&result);
-            } else {
-                human(flags, format!("{} — {}", count_header(result.count, result.total_matched, "comment"), decision_ref_name(&result.decision.name)));
-                for c in &result.comments {
-                    human(flags, comment_line(amenbo_core::idref::RefKind::DecisionComment, c));
-                }
-            }
-        }
-        DecisionCommentCmd::Rm { comment } => {
-            let cid = resolve_live_decision_comment(store, &comment)?;
-            if !confirm(flags, "delete comment")? {
-                return Ok(0);
-            }
-            let changed = store.remove_decision_comment(cid).map_err(CliError::from)?;
-            write_envelope(flags, "decision.comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", decision_comment_label(cid)));
-        }
-        DecisionCommentCmd::Edit { comment, text } => {
-            let text = body_arg(text)?;
-            let cid = resolve_live_decision_comment(store, &comment)?;
-            let c = store.edit_decision_comment(cid, &text).map_err(CliError::from)?;
-            warn_body(&text);
-            write_envelope(flags, "decision.comment.edit", "comment", serde_json::to_value(&c).unwrap(), Some(vec!["text".to_string()]), false, format!("✓ Edited comment: {}", decision_comment_label(cid)));
-        }
-        DecisionCommentCmd::Attach { comment, source, url, name } => {
-            // Look only in the decision-comment table (symmetric with the task side of `comment attach`).
-            let cid = resolve_live_decision_comment(store, &comment)?;
-            return attach_add(store, flags, AttachmentTarget::DecisionComment, cid, &source, url, name);
-        }
-    }
-    Ok(0)
 }

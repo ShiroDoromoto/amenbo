@@ -91,8 +91,8 @@ fn a_body_option_reads_stdin_on_dash() {
     let did = id_str(&d["decision"]["id"]);
     assert_eq!(d["decision"]["body"], BODY, "decision add --body - too");
 
-    let dc = cli.json_stdin(&["decision", "comment", "add", &did, "--text", "-", "--json"], BODY);
-    assert_eq!(dc["comment"]["text"], BODY, "decision comment add --text - too");
+    let dc = cli.json_stdin(&["decision", "comment-add", &did, "--text", "-", "--json"], BODY);
+    assert_eq!(dc["comment"]["text"], BODY, "decision comment-add --text - too");
 
     // The ordinary path is untouched: a value that is not `-` is the body, stdin unread.
     let plain = cli.json(&["comment", "add", &tid, "--text", "そのまま", "--json"]);

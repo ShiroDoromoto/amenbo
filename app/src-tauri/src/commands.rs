@@ -2556,7 +2556,7 @@ pub fn decision_pane_opens_again(
     Ok(())
 }
 
-/// Record a commit SHA on a task. Same shape as the CLI's `task commit add`: the SHA is validated
+/// Record a commit SHA on a task. Same shape as the CLI's `task commit-add`: the SHA is validated
 /// and normalised at the ops door (full-length lower-case hex only; case folded), and a SHA already
 /// on the task is a no-op. Invalidates the task so any open detail view refetches.
 #[tauri::command]

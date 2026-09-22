@@ -118,8 +118,8 @@ impl Driver<'_> {
             "comment" => {
                 let target = self.resolve(with)?;
                 let text = req_str(with, "text")?;
-                let v = self.run_json(&["decision", "comment", "add", &target.to_string(), "--text", text, "--json"])?;
-                let id = v["comment"]["id"].as_i64().ok_or("decision comment add did not report an id")?;
+                let v = self.run_json(&["decision", "comment-add", &target.to_string(), "--text", text, "--json"])?;
+                let id = v["comment"]["id"].as_i64().ok_or("decision comment-add did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
                 }
@@ -128,12 +128,12 @@ impl Driver<'_> {
             "comment-edit" => {
                 let target = self.resolve(with)?;
                 let text = req_str(with, "text")?;
-                self.run_json(&["decision", "comment", "edit", &target.to_string(), "--text", text, "--json"])?;
+                self.run_json(&["decision", "comment-edit", &target.to_string(), "--text", text, "--json"])?;
                 Ok(Outcome::action(format!("rewrote decision comment {target}")))
             }
             "comment-rm" => {
                 let target = self.resolve(with)?;
-                self.run_json(&["decision", "comment", "rm", &target.to_string(), "--yes", "--json"])?;
+                self.run_json(&["decision", "comment-rm", &target.to_string(), "--yes", "--json"])?;
                 Ok(Outcome::action(format!("deleted decision comment {target}")))
             }
             "comment-promote" => {
@@ -186,7 +186,7 @@ impl Driver<'_> {
         match op {
             "commented" => {
                 let target = self.resolve(with)?;
-                let v = self.run_json(&["decision", "comment", "list", &target.to_string(), "--json"])?;
+                let v = self.run_json(&["decision", "comment-list", &target.to_string(), "--json"])?;
                 judge_timeline("decision", target, with, &v["comments"])
             }
             "found" => {

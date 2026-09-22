@@ -348,7 +348,7 @@ fn an_ai_writes_only_inside_the_project_its_folder_is_bound_to() {
     let their_comment =
         id_str(&cli.json(&["comment", "add", &theirs, "--text", "彼らの投稿", "--json"])["comment"]["id"]);
     let their_dec_comment = id_str(
-        &cli.json(&["decision", "comment", "add", &their_dec, "--text", "彼らの投稿", "--json"])["comment"]["id"],
+        &cli.json(&["decision", "comment-add", &their_dec, "--text", "彼らの投稿", "--json"])["comment"]["id"],
     );
     let their_attachment = id_str(
         &cli.json(&["task", "attach", &theirs, "https://example.com/spec", "--url", "--json"])["attachment"]["id"],
@@ -359,8 +359,8 @@ fn an_ai_writes_only_inside_the_project_its_folder_is_bound_to() {
     for args in [
         vec!["comment", "edit", their_comment.as_str(), "--text", "書き換え", "--json"],
         vec!["comment", "rm", their_comment.as_str(), "--yes", "--json"],
-        vec!["decision", "comment", "edit", their_dec_comment.as_str(), "--text", "書き換え", "--json"],
-        vec!["decision", "comment", "rm", their_dec_comment.as_str(), "--yes", "--json"],
+        vec!["decision", "comment-edit", their_dec_comment.as_str(), "--text", "書き換え", "--json"],
+        vec!["decision", "comment-rm", their_dec_comment.as_str(), "--yes", "--json"],
         vec!["attach", "rm", their_attachment.as_str(), "--yes", "--json"],
     ] {
         let (err, code) = cli.run_err(&[args.clone(), vec!["--actor", "ai"]].concat());
@@ -369,7 +369,7 @@ fn an_ai_writes_only_inside_the_project_its_folder_is_bound_to() {
     }
     // The refusal comes before the mutation: nothing outside the binding changed.
     assert_eq!(cli.json(&["comment", "list", &theirs, "--json"])["count"], 1);
-    assert_eq!(cli.json(&["decision", "comment", "list", &their_dec, "--json"])["count"], 1);
+    assert_eq!(cli.json(&["decision", "comment-list", &their_dec, "--json"])["count"], 1);
     assert_eq!(cli.json(&["attach", "ls", &format!("T-{theirs}"), "--json"])["count"], 1);
 
     // A new entity has no id yet, so the check is on **where it would land**: not in a project outside the

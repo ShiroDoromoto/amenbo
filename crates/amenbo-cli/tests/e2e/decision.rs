@@ -19,15 +19,15 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     // comment add shows up in list, oldest first.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
     let did = id_str(&d["decision"]["id"]);
-    cli.json(&["decision", "comment", "add", &did, "--text", "初回コメント", "--json"]);
-    let listed = cli.json(&["decision", "comment", "list", &did, "--json"]);
+    cli.json(&["decision", "comment-add", &did, "--text", "初回コメント", "--json"]);
+    let listed = cli.json(&["decision", "comment-list", &did, "--json"]);
     assert_eq!(listed["count"], 1);
     assert_eq!(id_str(&listed["decision"]["id"]), did);
     assert_eq!(listed["comments"][0]["text"], "初回コメント");
 
     // finish-writing --reason appends one comment: the reason lands on the timeline, not in the body.
     cli.json(&["decision", "finish-writing", &did, "--reason", "レビュー後に合意", "--json"]);
-    let after_accept = cli.json(&["decision", "comment", "list", &did, "--json"]);
+    let after_accept = cli.json(&["decision", "comment-list", &did, "--json"]);
     assert_eq!(after_accept["count"], 2, "one reason comment is added");
     assert_eq!(after_accept["comments"][1]["text"], "レビュー後に合意");
     // The writing ends — the sugar does not get in the way of the transition.
@@ -37,7 +37,7 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     let d2 = cli.json(&["decision", "add", "--project", &pid, "--title", "却下される案", "--json"]);
     let did2 = id_str(&d2["decision"]["id"]);
     cli.json(&["decision", "reject", &did2, "--reason", "D-1 で代替", "--json"]);
-    let rej = cli.json(&["decision", "comment", "list", &did2, "--json"]);
+    let rej = cli.json(&["decision", "comment-list", &did2, "--json"]);
     assert_eq!(rej["count"], 1);
     assert_eq!(rej["comments"][0]["text"], "D-1 で代替");
 
@@ -45,7 +45,7 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     let d3 = cli.json(&["decision", "add", "--project", &pid, "--title", "理由なし", "--json"]);
     let did3 = id_str(&d3["decision"]["id"]);
     cli.json(&["decision", "finish-writing", &did3, "--reason", "   ", "--json"]);
-    assert_eq!(cli.json(&["decision", "comment", "list", &did3, "--json"])["count"], 0);
+    assert_eq!(cli.json(&["decision", "comment-list", &did3, "--json"])["count"], 0);
 }
 
 /// The door `AMB-D-918` puts a decision's second stage behind: `decision finish-writing` ends the
@@ -73,14 +73,14 @@ fn finishing_the_writing_settles_a_decision_and_releases_the_work_on_it() {
     assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "decided");
     assert_eq!(cli.json(&["decision", "list", "--filter", "draft:no", "--json"])["count"], 1);
     assert_eq!(cli.json(&["task", "show", &tid, "--json"])["ready"], true);
-    let said = cli.json(&["decision", "comment", "list", &did, "--json"]);
+    let said = cli.json(&["decision", "comment-list", &did, "--json"]);
     assert_eq!(said["count"], 1);
     assert_eq!(said["comments"][0]["text"], "レビュー後に合意");
 
     // Written already: reported as no change, and the reason does not pile up.
     let again = cli.json(&["decision", "finish-writing", &did, "--reason", "二度目", "--json"]);
     assert_eq!(again["noop"], true);
-    assert_eq!(cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 1);
+    assert_eq!(cli.json(&["decision", "comment-list", &did, "--json"])["count"], 1);
 }
 
 /// Re-running `finish-writing` on a decision already written is an idempotent noop that **says so**
@@ -107,7 +107,7 @@ fn re_settling_a_decision_is_a_reported_noop_and_does_not_overwrite_or_pile_a_re
     assert_eq!(again["changed"].as_array().unwrap().len(), 0, "nothing changed");
     assert_eq!(again["decision"]["decided_by"]["name"], "human", "the recorded facet is untouched");
     assert_eq!(
-        cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 0,
+        cli.json(&["decision", "comment-list", &did, "--json"])["count"], 0,
         "a reason on a noop re-settle must not pile a comment"
     );
 
@@ -118,7 +118,7 @@ fn re_settling_a_decision_is_a_reported_noop_and_does_not_overwrite_or_pile_a_re
     let rej_again = cli.json(&["decision", "reject", &didr, "--reason", "二度目", "--json"]);
     assert_eq!(rej_again["noop"], true);
     assert_eq!(
-        cli.json(&["decision", "comment", "list", &didr, "--json"])["count"], 0,
+        cli.json(&["decision", "comment-list", &didr, "--json"])["count"], 0,
         "a reason on a noop re-reject must not pile a comment"
     );
 
@@ -153,7 +153,7 @@ fn a_decision_comment_promotes_into_a_record_that_stands_alone() {
 
     let post_task = |text: &str| id_str(&cli.json(&["comment", "add", &tid, "--text", text, "--json"])["comment"]["id"]);
     let post_decision =
-        |text: &str| id_str(&cli.json(&["decision", "comment", "add", &did, "--text", text, "--json"])["comment"]["id"]);
+        |text: &str| id_str(&cli.json(&["decision", "comment-add", &did, "--text", text, "--json"])["comment"]["id"]);
     // The two tables number apart, so one key names a row in each — whichever side is behind posts until
     // they meet there. That collision is what makes a bare number ambiguous, and the spelling the way through.
     let mut tcid = post_task("タスク側");
@@ -223,7 +223,7 @@ fn a_decision_page_says_how_much_was_said_on_it_and_previews_the_latest() {
     // The reason an acceptance was given lands on the timeline, and is what the page has to carry.
     cli.json(&["decision", "finish-writing", &did, "--reason", "この形で行く", "--json"]);
     let long = "あ".repeat(80);
-    cli.json(&["decision", "comment", "add", &did, "--text", &long, "--json"]);
+    cli.json(&["decision", "comment-add", &did, "--text", &long, "--json"]);
 
     let (human, code) = cli.run(&["decision", "show", &did]);
     assert_eq!(code, 0);
@@ -238,7 +238,7 @@ fn a_decision_page_says_how_much_was_said_on_it_and_previews_the_latest() {
     // hardcoded one points at something that is not installed.
     assert!(
         human.contains(&format!(
-            "full text: {} decision comment list AMB-D-{did}",
+            "full text: {} decision comment-list AMB-D-{did}",
             amenbo_core::config::Paths::command_name()
         )),
         "the way to what the preview cut is named: {human}",
@@ -426,7 +426,7 @@ fn search_reaches_every_face_of_a_decision_and_folds_the_spellings() {
     let titled = a_decision("全文検索を索引に載せる", "本文はそのまま持つ");
     let bodied = a_decision("別の決定", "ＡＩ が読む Search の面");
     let commented = a_decision("三件目", "本文には無い");
-    cli.json(&["decision", "comment", "add", &commented, "--text", "さーばの側で寄せる", "--json"]);
+    cli.json(&["decision", "comment-add", &commented, "--text", "さーばの側で寄せる", "--json"]);
 
     // The decisions the word reached, read off `search`'s hits: a word may land on several faces of the
     // same decision, so the refs are folded back to one id apiece.
@@ -469,11 +469,11 @@ fn search_reaches_what_is_attached_to_a_decision() {
 
     cli.json(&["decision", "attach", &carrying, "https://example.com/latency-profile", "--url", "--json"]);
     let cid = id_str(
-        &cli.json(&["decision", "comment", "add", &carrying, "--text", "測ったものを付ける", "--json"])["comment"]["id"],
+        &cli.json(&["decision", "comment-add", &carrying, "--text", "測ったものを付ける", "--json"])["comment"]["id"],
     );
     let file = cli.home.join("実測メモ.md");
     std::fs::write(&file, "# numbers\n").unwrap();
-    cli.json(&["decision", "comment", "attach", &cid, file.to_str().unwrap(), "--json"]);
+    cli.json(&["decision", "comment-attach", &cid, file.to_str().unwrap(), "--json"]);
 
     // The decisions the word reached, read off `search`'s hits: a word may land on several faces of the
     // same decision, so the refs are folded back to one id apiece.
@@ -509,7 +509,7 @@ fn search_narrows_by_face_as_an_axis_apart_from_the_side() {
     let did = id_str(
         &cli.json(&["decision", "add", "--project", &pid, "--title", "掃引の決定", "--json"])["decision"]["id"],
     );
-    cli.json(&["decision", "comment", "add", &did, "--text", "掃引は夜に回す", "--json"]);
+    cli.json(&["decision", "comment-add", &did, "--text", "掃引は夜に回す", "--json"]);
     let tid = id_str(
         &cli.json(&["task", "add", "--project", &pid, "--title", "掃引を書く", "--json"])["task"]["id"],
     );
@@ -572,7 +572,7 @@ fn search_narrows_by_side_while_several_words_ask_the_record() {
     let did = id_str(
         &cli.json(&["decision", "add", "--project", &pid, "--title", "遠泳の決定", "--json"])["decision"]["id"],
     );
-    cli.json(&["decision", "comment", "add", &did, "--text", "帆走はここで測る", "--json"]);
+    cli.json(&["decision", "comment-add", &did, "--text", "帆走はここで測る", "--json"]);
     let tid = id_str(
         &cli.json(&["task", "add", "--project", &pid, "--title", "遠泳を書く", "--json"])["task"]["id"],
     );

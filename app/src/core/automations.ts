@@ -102,6 +102,89 @@ export function useAutomation(id: number | null): AutomationDetailDto | null {
 }
 
 /**
+ * **Change one step.** Only what is passed is written, and the answer comes back as an ack, so the
+ * definition and the launch check are both re-read (`./mutations`).
+ *
+ * `source` is where the prompt comes from, as one value rather than two fields: a step runs a library
+ * action or carries a prompt of its own, and there is no state between the two. Switching it takes
+ * the step's ways out, its settings and its inputs with it, which is why the panel says so beside the
+ * control (`amenbo_core::ops::automation::step_update`).
+ *
+ * `model` and `workDir` each take `null` to mean "leave it to the default" — the agent's own model,
+ * and a step that names no folder — as against not being passed, which leaves them alone.
+ */
+export async function editAutomationStep(
+  id: number,
+  patch: {
+    name?: string;
+    source?: { action: number } | { prompt: string };
+    agent?: string;
+    model?: string | null;
+    interactive?: boolean;
+    workDir?: string | null;
+    reportToTask?: boolean;
+    history?: boolean;
+  },
+): Promise<void> {
+  if (!inTauri()) return;
+  const source = patch.source;
+  return invokeAck("automation_step_edit", {
+    id,
+    name: patch.name ?? null,
+    action: source !== undefined && "action" in source ? source.action : null,
+    prompt: source !== undefined && "prompt" in source ? source.prompt : null,
+    agent: patch.agent ?? null,
+    model: patch.model ?? null,
+    clearModel: patch.model === null,
+    interactive: patch.interactive ?? null,
+    workDir: patch.workDir ?? null,
+    clearWorkDir: patch.workDir === null,
+    reportToTask: patch.reportToTask ?? null,
+    history: patch.history ?? null,
+  });
+}
+
+/**
+ * **Answer one setting on one step**, or leave it unanswered with `null`.
+ *
+ * The answer is already in the shape its kind takes — the screen's control built it
+ * (`../screens/automationCfg`) — and travels as the JSON text core keeps.
+ */
+export async function answerAutomationCfg(
+  stepId: number,
+  name: string,
+  value: string | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_cfg_answer", { stepId, name, value });
+}
+
+/**
+ * **Say what fills one of a step's inputs.** Naming the same input twice answers the wire already
+ * there rather than drawing a second one, so the control sends what was picked without first taking
+ * the old one away.
+ */
+export async function setAutomationWire(
+  from: { stepId: number; exitName?: string; portName: string },
+  to: { stepId: number; portName: string },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_wire_set", {
+    fromStepId: from.stepId,
+    fromExitName: from.exitName ?? null,
+    fromPortName: from.portName,
+    toStepId: to.stepId,
+    toPortName: to.portName,
+  });
+}
+
+/** **Take a wire away**, leaving the input it fed with nothing reaching it. */
+export async function clearAutomationWire(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_wire_clear", { id });
+}
+
+/**
  * Whether this automation could be started, and what is in the way.
  *
  * `folders` are the project's bound folders: whether an agent is installed is asked of the machine

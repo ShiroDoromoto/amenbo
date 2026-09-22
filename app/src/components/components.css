@@ -1414,3 +1414,44 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorun__state--stopped { color: var(--c-stop); font-weight: var(--fw-bold); }
 .autorun__why { color: var(--c-text-muted); font-weight: var(--fw-normal); }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }
+
+/* ----- what the pressed step holds (`screens/AutomationStepPanel.tsx`) -----
+   A column of fields, each a label over its control. There is no Save, so there is no button row and
+   nothing is laid out around one: every control writes on the spot, and a box of text writes when the
+   caret leaves it. */
+.autostep { display: flex; flex-direction: column; gap: var(--s-3); }
+.autostep__field { display: flex; flex-direction: column; gap: var(--s-1); }
+.autostep__label { font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* A fact the panel states rather than takes: which task the step is about, and what a declaration
+   holds where it holds nothing. */
+.autostep__said { font-size: var(--fs-md); color: var(--c-text-muted); }
+/* What a control does beyond taking a value — that switching where the prompt comes from moves the
+   declarations, that a prompt from the library is read here and written in the actions tab. It sits
+   under its control because it is read on the way back from the press, not on the way to it. */
+.autostep__note { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autostep__prompt { width: 100%; }
+/* One setting: the name it was declared under, then the control its kind takes. */
+.autostep__cfg { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
+.autostep__cfgname { font-size: var(--fs-md); }
+.autostep__req { margin-inline-start: var(--s-1); font-size: var(--fs-xs); color: var(--c-heed); }
+/* A task filter: one row per part, the values on it pressed. Two on one row is any-of and one on each
+   of two rows is both, which is what the rows themselves say — so nothing here draws the word "or". */
+.autostep__rows { display: flex; flex-direction: column; gap: var(--s-1); }
+.autostep__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autostep__rowname { flex: none; min-width: 6rem; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autostep__chip {
+  background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+  padding: 2px var(--s-2); font: inherit; font-size: var(--fs-xs); cursor: pointer;
+}
+.autostep__chip--on {
+  background: var(--c-accent-weak);
+  border-color: var(--c-accent); color: var(--c-accent-text);
+}
+/* One input, and what fills it. */
+.autostep__wire { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
+.autostep__exits { margin: 0; padding-inline-start: var(--s-4); font-size: var(--fs-md); }
+/* The error way out, always last and always drawn. Muted because nothing is being asked about it: a
+   step that says nothing about it stops the run and calls a person, which is already the answer. */
+.autostep__exiterr { color: var(--c-text-muted); }
+.autostep__check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }

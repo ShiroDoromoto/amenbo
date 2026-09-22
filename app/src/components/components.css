@@ -1315,3 +1315,6 @@ button.feed__target:hover { color: var(--c-accent); }
    an automation still being built is short of something, not broken. */
 .auto__notready { font-size: var(--fs-md); color: var(--c-heed); font-weight: var(--fw-bold); }
 .auto__blocks { margin: 0; padding-inline-start: var(--s-4); font-size: var(--fs-md); }
+/* What a rewrite in the library reaches, said where the rewrite is happening: under the prompt box
+   and over Save, so it is read on the way to the press rather than after it. */
+.auto__reaches { font-size: var(--fs-md); color: var(--c-text-muted); }

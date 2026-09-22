@@ -1338,7 +1338,12 @@ fn open_one(
     // What this machine can start, as the device's settings last had it from a probe
     // (`crate::wake`). Taken before the write because the store is borrowed for it, and `None` where
     // nothing has ever probed — which is nobody asked, not "nothing is installed" (`AMB-D-792`).
-    let startable: Option<Vec<String>> = store.config.installed_agents().map(<[String]>::to_vec);
+    //
+    // **Through the catalog, because the two ends speak different words**: the probe remembers
+    // commands (`claude`) and a step names an agent id (`claude-code`). Handing the remembered list
+    // straight down stopped every run `no_agent` on its first step, on a launch the check had just
+    // called ready (`amenbo_core::wake::startable_ids`).
+    let startable: Option<Vec<String>> = amenbo_core::wake::startable_ids(&store.config);
     let opened = store.automation_step_open(run_id, def_id, startable.as_deref())?;
     let (project, step, missing) = match opened {
         Opened::Ready(ready) => {

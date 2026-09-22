@@ -34,6 +34,10 @@ which an agent writes through the CLI and you read in the desktop app.
 - **The spec is in the binary** — `amenbo agent --json` is what an agent reads to work
   here: how to work in this folder, plus every command's flags, arguments and examples.
   It ships with the build, so there is no command reference to drift out of date.
+- **Automations** — a picture drawn once and walked by agents: each step is a prompt and
+  an agent to carry it out, and the way out a step leaves through decides what runs next.
+  A run opens one terminal per step and reads back what the step reports, so what has been
+  done and what comes next is in the store rather than in an agent's memory of it.
 
 <!-- Folded, not dropped: these three say how the store is built rather than what it is for,
      and the opening screen is for the latter. -->
@@ -158,7 +162,7 @@ is in this device's own settings.
 </div>
 
 <details>
-<summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, worktrees, notifications, the Viewer, hooks</summary>
+<summary>The full command tour — projects, tasks, dimensions, decisions, automations, attachments, backup/restore, worktrees, notifications, the Viewer, hooks</summary>
 
 The CLI surface is self-documenting: `amenbo <cmd> --help` and `amenbo agent --json`
 are the authoritative spec (there is no separate command reference to drift out of date).
@@ -335,6 +339,27 @@ amenbo decision list --filter "task:AMB-T-<n>" --json          # ...and the othe
 amenbo decision list --filter "status:decided draft:no" --json
 amenbo decision list --filter "dim:Area=Design" --json           # the same axes the tasks are filed on, folded the same way (`=none` is unclassified)
 amenbo decision list --filter "status:decided superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
+
+# Automations: a picture drawn once and walked by agents. A step is a prompt, an agent to
+# carry it out, and the ways out it may leave through; an edge says what happens after each
+# way out is taken, and a wire hands one step's result to the next. A run opens a terminal
+# per step and waits for that step to report, so the loop belongs to the store.
+amenbo automation add --name "Review and fix"          # ...and the preamble every step of it is told
+amenbo automation action add --name "Review" --prompt - # a prompt worth using twice, in the library
+amenbo automation step add 3 --name "Review" --action 7 --agent claude # a step made of one
+amenbo automation exit add --step 11 --name "something to fix"  # a way out it may leave through
+amenbo automation port add --exit 21 --name report --kind file  # what that way out hands on
+amenbo automation edge add --from "11:something to fix" --to 12 --max-times 3 # what happens after it
+amenbo automation wire add --from "11:something to fix" --from-port report --to 12 --to-port report
+amenbo automation entry set 3 --step 11                # where a run starts
+amenbo automation start 3                              # away it goes (queued when every lane is held)
+amenbo automation pause 7                              # ...at the end of the step under way
+amenbo automation stop 7                               # ...now, handing the task back to todo
+# Inside a step's own terminal, the agent carrying it out reports through three more:
+# `automation take` (the task the step is about), `automation out` (each thing it hands on)
+# and `automation done` (the way out taken, and what it did).
+amenbo automation run list --task AMB-T-<n> --json     # the runs that worked one task
+amenbo automation run show 7                           # one run in full, step by step
 
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary

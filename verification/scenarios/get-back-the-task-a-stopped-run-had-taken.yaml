@@ -5,18 +5,13 @@
 #
 # The road it is walked by is the pane, because that is where a person ends a run — the press is
 # about being rid of the pane, and the handing back happens behind it.
-#
-# **The line the stop writes on the task is not read here.** Reading a task's timeline is
-# `task commented`, which the screen harness has no mapping for yet, and the line carries the run's
-# own number, which no road can spell in advance. Until both are answered, what this road reads is
-# the half that decides whether the work can be picked up again.
 id: get-back-the-task-a-stopped-run-had-taken
-title: Ending a run hands the task it had taken back to where anybody can pick it up
+title: Ending a run hands the task it had taken back, and says on the task what happened
 description: >
-  Start a run, let its first step take a task, then take the pane away. Read what that leaves
-  behind: the task is `todo` again and the run is stopped. What separates this road from
-  close-the-pane-a-run-is-drawn-in is the task — that one stops a run that never took any, and the
-  giving back is not on it.
+  Start a run, let its first step take a task, then take the pane away. Read the three things that
+  leaves behind: the task is `todo` again, its timeline says a run was stopped, and the run's row
+  says so too. What separates this road from close-the-pane-a-run-is-drawn-in is the task — that one
+  stops a run that never took any, and the giving back is not on it.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
 
@@ -108,6 +103,16 @@ steps_gui:
       target: seed
       field: status
       equals: todo
+
+  # And the reason, on the task itself. Only the first sentence is named: the rest of the line
+  # carries the run's own number, which the store issues and no road can spell in advance.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: An automation run was stopped.
+      present: true
 
   - type: action
     domain: automation

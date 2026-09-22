@@ -93,11 +93,6 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
         "--to", &fix, "--to-port", "report", "--json",
     ]);
     assert_eq!(wire["automation_wire"]["from_port_name"].as_str(), Some("report"));
-
-    let note = id_of(&cli.json(&["automation", "note-add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
-    cli.json(&["automation", "note-link", &review, &note, "--json"]);
-    let unlinked = cli.json(&["automation", "note-unlink", &review, &note, "--json"]);
-    assert_eq!(unlinked["automation_placement_note"]["unlinked"], serde_json::json!(true));
 }
 
 /// What every step is told before its own prompt is Amenbo's own and the same on every automation
@@ -400,8 +395,6 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     cli.json(&["automation", "entry-set", &a, "--placement", &review, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
     cli.json(&["automation", "wire-add", "--from", &format!("{review}:something to fix"), "--from-port", "report", "--to", &fix, "--to-port", "report", "--json"]);
-    let note = id_of(&cli.json(&["automation", "note-add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
-    cli.json(&["automation", "note-link", &review, &note, "--json"]);
 
     let shown = cli.json(&["automation", "show", &a, "--json"]);
     assert_eq!(shown["automation"]["name"].as_str(), Some("Review and fix"));
@@ -427,8 +420,6 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     assert_eq!(shown["placements"][1]["inputs"][0]["name"].as_str(), Some("report"));
     assert_eq!(shown["edges"][0]["to_id"], serde_json::json!(fix.parse::<i64>().unwrap()));
     assert_eq!(shown["wires"][0]["to_port_name"].as_str(), Some("report"));
-    assert_eq!(shown["notes"][0]["note"]["name"].as_str(), Some("House style"));
-    assert_eq!(shown["notes"][0]["placement_ids"][0], serde_json::json!(review.parse::<i64>().unwrap()));
 
     // And the prompts are inside the action, which is the picture `action show` reads.
     let inside = cli.json(&["automation", "action-show", &review_action, "--json"]);
@@ -485,6 +476,35 @@ fn the_library_is_one_list_and_global_narrows_it() {
     assert_eq!(shown["used_by"], serde_json::json!(1));
     // Every declarer is born carrying the unnamed way out and the error one.
     assert_eq!(shown["exits"].as_array().map(|x| x.len()), Some(2));
+}
+
+/// **What an action is for is written on the action** (`AMB-D-952`), and it is the build screen's
+/// alone: a launch carries the preamble and the step's own prompt, and never this. An action written
+/// without one carries the empty string rather than nothing, which is what lets it be rewritten later
+/// without a second shape to read.
+#[test]
+fn an_action_says_what_it_is_for_and_a_rewrite_reaches_it() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+
+    let bare = cli.json(&["automation", "action-add", "--project", &p, "--name", "Review", "--json"]);
+    assert_eq!(bare["automation_action"]["note"].as_str(), Some(""));
+
+    let told = cli.json(&[
+        "automation", "action-add", "--project", &p, "--name", "Fix",
+        "--note", "点検で見つかった分だけ直す", "--json",
+    ]);
+    assert_eq!(told["automation_action"]["note"].as_str(), Some("点検で見つかった分だけ直す"));
+
+    let id = id_of(&told, "automation_action");
+    let rewritten =
+        cli.json(&["automation", "action-update", &id, "--note", "直すのは一度に1件", "--json"]);
+    assert_eq!(rewritten["automation_action"]["note"].as_str(), Some("直すのは一度に1件"));
+    assert_eq!(
+        rewritten["automation_action"]["name"].as_str(),
+        Some("Fix"),
+        "only the fields given change",
+    );
 }
 
 /// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.

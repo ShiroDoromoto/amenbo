@@ -148,9 +148,8 @@ pub fn automation_entry_set(id: i64, placement_id: Option<i64>) -> Result<WriteA
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Delete an automation and everything built into it** — its steps with their declarations, the
-/// edges and wires between them, and the documents they share
-/// ([`amenbo_core::ops::automation::delete`]).
+/// **Delete an automation and everything built into it** — its steps with their declarations and
+/// the edges and wires between them ([`amenbo_core::ops::automation::delete`]).
 ///
 /// **Core refuses it while a run stands behind it**, naming how many. A run carries its own copy of
 /// the steps and would go on reading correctly, but it is filed under the automation it was
@@ -204,7 +203,7 @@ pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCar
 #[tauri::command]
 pub fn automation_action_add(project: Option<i64>, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_action_add(project, &name)?;
+        store.automation_action_add(project, &name, "")?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automationActions"]))
@@ -220,7 +219,7 @@ pub fn automation_action_add(project: Option<i64>, name: String) -> Result<Write
 #[tauri::command]
 pub fn automation_action_edit(id: i64, name: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_action_update(id, name.as_deref())?;
+        store.automation_action_update(id, name.as_deref(), None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))

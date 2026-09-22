@@ -1866,6 +1866,9 @@ pub enum AutomationCmd {
         /// what this action is called
         #[arg(long)]
         name: String,
+        /// what it is for, in Markdown — shown where it is built, never carried into a launch
+        #[arg(long, default_value = "")]
+        note: String,
     },
     /// The library this project reaches — the device's actions, then the project's own
     ActionList {
@@ -1881,12 +1884,15 @@ pub enum AutomationCmd {
         /// action id
         id: i64,
     },
-    /// Rename a library action
+    /// Rename a library action, or rewrite what it is for (only the given fields change)
     ActionUpdate {
         /// action id
         id: i64,
         #[arg(long)]
         name: Option<String>,
+        /// what it is for, in Markdown — shown where it is built, never carried into a launch
+        #[arg(long)]
+        note: Option<String>,
     },
     /// Name the step a placement of this action opens first, or clear it
     ActionEntrySet {
@@ -2215,47 +2221,6 @@ pub enum AutomationCmd {
     WireRm {
         /// wire id
         id: i64,
-    },
-    /// Write a document the placements of one automation share. Long is fine here — which placements
-    /// are handed it is `note link`'s to say
-    NoteAdd {
-        /// automation id
-        automation: i64,
-        /// what this document is called
-        #[arg(long)]
-        name: String,
-        /// the document itself, in Markdown (`-` reads it from stdin)
-        #[arg(long)]
-        body: String,
-    },
-    /// Rename a shared document, or rewrite it (only the given fields change)
-    NoteUpdate {
-        /// document id
-        id: i64,
-        #[arg(long)]
-        name: Option<String>,
-        /// the document itself, in Markdown (`-` reads it from stdin)
-        #[arg(long)]
-        body: Option<String>,
-    },
-    /// Delete a shared document with the links that hand it to placements — confirms unless -y
-    NoteRm {
-        /// document id
-        id: i64,
-    },
-    /// Hand a shared document to a placement
-    NoteLink {
-        /// placement id
-        placement: i64,
-        /// document id
-        note: i64,
-    },
-    /// Stop handing a shared document to a placement
-    NoteUnlink {
-        /// placement id
-        placement: i64,
-        /// document id
-        note: i64,
     },
     /// The runs that worked one task, or the runs one automation has behind it (newest first)
     RunList {

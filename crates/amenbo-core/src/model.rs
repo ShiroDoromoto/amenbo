@@ -1593,6 +1593,9 @@ pub struct AutomationAction {
     #[serde(default)]
     pub project_id: Option<i64>,
     pub name: String,
+    /// What this action is for, in the builder's own words. It is shown on the build screen and
+    /// nowhere else — a launch never carries it, the same way [`Automation::notes`] does not.
+    pub note: String,
     /// The step this action opens first. `None` while it is still being built; launching an
     /// automation that places it is refused at the launch check, not here.
     #[serde(default)]
@@ -1636,19 +1639,6 @@ pub struct AutomationPlacement {
     pub id: i64,
     pub automation_id: i64,
     pub action_id: i64,
-    pub order_key: String,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-}
-
-/// **A document the placements of one automation share.** Long is fine here; which placements are
-/// handed it is [`AutomationPlacementNote`]'s to say.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct AutomationNote {
-    pub id: i64,
-    pub automation_id: i64,
-    pub name: String,
-    pub body: String,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1701,17 +1691,6 @@ pub struct AutomationCfg {
     /// The answer written while building, as JSON. `None` on the action's declaration row.
     #[serde(default)]
     pub value: Option<String>,
-    pub order_key: String,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-}
-
-/// **Which shared documents a placement is handed**, and with it every step opened under it.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct AutomationPlacementNote {
-    pub id: i64,
-    pub placement_id: i64,
-    pub note_id: i64,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

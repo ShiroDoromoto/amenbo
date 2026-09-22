@@ -4,7 +4,7 @@
 # in the conversation alone, with nothing for the next session to pick up. So the road that builds one
 # is the road that reads it, and every claim is made against `automation show`: the prompt each step
 # runs on with the library already read in, the ways out, the inputs, the settings and their answers,
-# where each way out takes the run, and the documents the steps share.
+# and where each way out takes the run.
 id: build-an-automation-from-the-terminal
 title: An automation built at the terminal is read back whole at the terminal
 description: >
@@ -116,17 +116,6 @@ steps_cli:
     op: entry
     with: { target: auto, step: take }
 
-  # A document the steps share, handed to one of them.
-  - type: action
-    domain: automation
-    op: note-add
-    with: { target: auto, name: house style, body: SCENARIOWORD is how it is written here }
-    as: house_style
-  - type: action
-    domain: automation
-    op: note-link
-    with: { target: house_style, step: take }
-
   # Built, and the row says so. A definition that had lost its steps would still be listed, so the
   # count is the half worth asking for.
   - type: assert
@@ -202,14 +191,3 @@ steps_cli:
     domain: automation
     op: edge-read
     with: { target: auto, from: review, ends: done }
-
-  # The shared document, and which of the steps was handed it. Handed to nobody and handed to
-  # everybody are two different definitions, so the list is read whole.
-  - type: assert
-    domain: automation
-    op: note-read
-    with:
-      target: auto
-      name: house style
-      body: SCENARIOWORD is how it is written here
-      handed_to: [take]

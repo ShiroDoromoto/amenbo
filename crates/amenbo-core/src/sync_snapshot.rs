@@ -242,7 +242,6 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation" => "project_id = ?1",
         "automation_run" => "project_id = ?1",
 
-        "automation_note" => "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
         "automation_placement" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
         }
@@ -255,12 +254,6 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_run_value" => concat!(
             "run_step_id IN (SELECT id FROM automation_run_step WHERE run_id IN",
             " (SELECT id FROM automation_run WHERE project_id = ?1))",
-        ),
-
-        // Hangs on a placement of one automation.
-        "automation_placement_note" => concat!(
-            "placement_id IN (SELECT id FROM automation_placement WHERE automation_id IN",
-            " (SELECT id FROM automation WHERE project_id = ?1))",
         ),
 
         // Polymorphic on `owner_kind`, the way `attachment` is on `target_type`: one arm per owner the
@@ -1042,8 +1035,9 @@ mod tests {
         };
 
         let action = put(
-            "INSERT INTO automation_action (project_id, name, order_key, created_at, updated_at) \
-             VALUES (?1, 'worktree を切る', 'a0', ?2, ?2)",
+            "INSERT INTO automation_action \
+                 (project_id, name, note, order_key, created_at, updated_at) \
+             VALUES (?1, 'worktree を切る', '', 'a0', ?2, ?2)",
             rusqlite::params![project, at],
         );
         let automation = put(
@@ -1051,12 +1045,6 @@ mod tests {
                  (project_id, name, notes, archived, order_key, created_at, updated_at) \
              VALUES (?1, '1件やる', '', 0, 'a0', ?2, ?2)",
             rusqlite::params![project, at],
-        );
-        let note = put(
-            "INSERT INTO automation_note \
-                 (automation_id, name, body, order_key, created_at, updated_at) \
-             VALUES (?1, 'リポジトリの作法', 'ここに長い説明が入る', 'a0', ?2, ?2)",
-            rusqlite::params![automation, at],
         );
         let step = put(
             "INSERT INTO automation_action_step \
@@ -1091,12 +1079,6 @@ mod tests {
                  (owner_kind, owner_id, name, kind, required, value, order_key, created_at, updated_at) \
              VALUES ('placement', ?1, 'リポジトリの場所', 'folder', 1, '\"~/work/amenbo\"', 'a0', ?2, ?2)",
             rusqlite::params![placement, at],
-        );
-        put(
-            "INSERT INTO automation_placement_note \
-                 (placement_id, note_id, order_key, created_at, updated_at) \
-             VALUES (?1, ?2, 'a0', ?3, ?3)",
-            rusqlite::params![placement, note, at],
         );
         let exit = put(
             "INSERT INTO automation_exit \

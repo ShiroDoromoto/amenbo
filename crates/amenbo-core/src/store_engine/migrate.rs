@@ -929,7 +929,54 @@ pub const STEPS: &[Step] = &[
         name: "wire what a lone step hands on out to the action it is inside",
         apply: Apply::Custom(wire_the_step_s_outputs_out_to_the_action),
     },
+    Step {
+        to: 59,
+        name: "drop the shared documents, and give an action a note of its own",
+        apply: Apply::Custom(take_the_shared_documents_away),
+    },
 ];
+
+/// v59: the shared documents go, and `automation_action.note` arrives (`AMB-D-952`).
+///
+/// **Why the rows are not carried anywhere.** A document was a place to write material a prompt would
+/// otherwise repeat, handed to a placement and read into every step opened under it. There are two ways
+/// into a prompt from here on — the preamble and the step's own prompt — and neither takes a row: the
+/// preamble is Amenbo's own text, and a step's prompt is the one a person wrote in it. So there is no
+/// column these bodies belong in, and copying them into one would put the same words in two places
+/// where the point of the change is that they are in one.
+///
+/// The order is the `RESTRICT` clause's: a link names the document, so the link table goes before the
+/// document table does — dropping a table something still points rows at is refused. The third name of
+/// that family, `automation_step_note`, went at v56 (the_note_table_v50_lays_down_is_dropped).
+///
+/// **`DROP` alone, with no `DELETE` in front of it.** A `DROP` takes the rows with it and is prepared
+/// against no parent, which is what keeps this two statements rather than four.
+///
+/// **The word index is swept by hand.** A document's `body` was the one face on the automation side
+/// (`search::FACES`), and its copies in `search_doc` are not reached by dropping the table they were
+/// taken from — nothing joins them back. `search_fts` follows on its own: the triggers on `search_doc`
+/// carry every delete into it.
+///
+/// **The column is appended only where it is missing**, v53's guard and for its reason: a store born
+/// from today's registry already carries it, stamped back to a version below this one.
+fn take_the_shared_documents_away(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(
+        "DROP TABLE IF EXISTS automation_placement_note;
+         DROP TABLE IF EXISTS automation_note;",
+    )?;
+    tx.execute("DELETE FROM search_doc WHERE owner_kind = 'automation_note'", [])?;
+
+    let carries_note: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation_action') WHERE name = 'note'",
+        [],
+        |r| r.get(0),
+    )?;
+    if carries_note == 0 {
+        tx.execute_batch("ALTER TABLE automation_action ADD COLUMN note TEXT NOT NULL DEFAULT '';")?;
+    }
+    Ok(())
+}
 
 /// v52: `automation_run.stopped_reason` admits `no_way_on`.
 ///
@@ -6341,13 +6388,14 @@ mod tests {
                 "v{born}: and so is what that way out hands on",
             );
 
-            // The entry, the picture and the documents all name placements now.
+            // The entry and the picture both name placements now. What v53 did with the documents is
+            // not readable here — v55 takes their tables away, and the chain runs whole
+            // (the_shared_documents_and_their_leftover_table_go).
             assert_eq!(one("SELECT entry_placement_id FROM automation WHERE id = 3"), took);
             assert_eq!(text("SELECT owner_kind FROM automation_edge WHERE id = 51"), "automation");
             assert_eq!(one("SELECT owner_id FROM automation_edge WHERE id = 51"), 3);
             assert_eq!(one("SELECT from_id FROM automation_edge WHERE id = 51"), took);
             assert_eq!(one("SELECT to_id FROM automation_edge WHERE id = 51"), looked);
-            assert_eq!(one("SELECT placement_id FROM automation_placement_note WHERE id = 71"), took);
 
             // A setting was one row where the step declared it and two where the action did; both come
             // out as the one shape — the action declares, the placement answers.
@@ -6458,8 +6506,8 @@ mod tests {
     ///
     /// The store that carries it this far is the one the fold passed over: born below v50, handed
     /// today's registry by genesis, and then handed v50's frozen text on top of that. The chain is
-    /// run to v55 first so the table is seen standing — what the assertion after it names is this
-    /// step's work and no other's.
+    /// run to v55 first so the table is seen standing, and stopped at v56 rather than run whole —
+    /// what the assertions after it name is this step's work and no other's.
     #[test]
     fn the_note_table_v50_lays_down_is_dropped() {
         let dir = scratch("step-note-baseline");
@@ -6482,13 +6530,30 @@ mod tests {
             "v50 lays the table down on a store that never asked for it",
         );
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(56), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(standing("automation_step_note"), 0, "and the step after v55 takes it away");
+        std::fs::remove_dir_all(&dir).ok();
+
+        // That this step reaches **only** the name no registry ever had is drawn on a store that
+        // carries the declared one: a store born at v53 gets `automation_placement_note` from that
+        // version's frozen text, and stands there at v56 — v59 is what takes it
+        // (the_shared_documents_go_and_an_action_says_what_it_is_for).
+        let dir = scratch("step-note-v53");
+        let engine = store_at(&dir, 53);
+        run(&engine, &dir, steps_through(56), &mut crate::progress::ignore).unwrap();
         assert_eq!(
-            standing("automation_placement_note"),
+            engine
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master \
+                     WHERE type = 'table' AND name = 'automation_placement_note'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .unwrap(),
             1,
-            "the note table the registry does declare is left where it stands",
+            "the note table the registry did declare is left where it stands",
         );
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -6665,6 +6730,65 @@ mod tests {
             0,
             "an action of two steps is left to its author",
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **v59 takes the shared documents away and gives an action a note** (`AMB-D-952`).
+    ///
+    /// The store reached v53 with a document on it and a link handing it to a placement, and with
+    /// the document's body copied into the word index. It comes out with neither table, with
+    /// nothing left of the document in `search_doc`, and with the column the build screen draws
+    /// what an action is for from. The third name of that family went at v56
+    /// (the_note_table_v50_lays_down_is_dropped).
+    #[test]
+    fn the_shared_documents_go_and_an_action_says_what_it_is_for() {
+        let dir = scratch("shared-documents-v53");
+        let engine = store_at(&dir, 53);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name, notes, order_key, created_at, updated_at) \
+                   VALUES (1, 'amenbo', '', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation_action (id, project_id, name, order_key, created_at, updated_at) \
+                   VALUES (7, 1, '点検する', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation (id, project_id, name, notes, preamble, archived, order_key, created_at, updated_at) \
+                   VALUES (3, 1, '1件やりきる', '', '', 0, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at) \
+                   VALUES (11, 3, 7, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation_note (id, automation_id, name, body, order_key, created_at, updated_at) \
+                   VALUES (61, 3, '運転規約', '…', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation_placement_note (id, placement_id, note_id, order_key, created_at, updated_at) \
+                   VALUES (71, 11, 61, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO search_doc (owner_kind, owner_id, field, norm) \
+                   VALUES ('automation_note', 61, 'body', '…');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        for gone in ["automation_note", "automation_placement_note"] {
+            assert_eq!(
+                one(&format!(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{gone}'"
+                )),
+                0,
+                "`{gone}` is gone",
+            );
+        }
+        assert_eq!(
+            one("SELECT COUNT(*) FROM search_doc WHERE owner_kind = 'automation_note'"),
+            0,
+            "and the copies the index took of their bodies went with them",
+        );
+        assert_eq!(
+            one("SELECT COUNT(*) FROM pragma_table_info('automation_action') WHERE name = 'note'"),
+            1,
+            "an action says what it is for",
+        );
+        conn.execute("UPDATE automation_action SET note = 'ここを読んでから' WHERE id = 7", [])
+            .expect("and the column takes a write");
         std::fs::remove_dir_all(&dir).ok();
     }
 

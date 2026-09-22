@@ -2205,10 +2205,6 @@ pub enum SearchKind {
     Task,
     /// The words on a decision, the same way.
     Decision,
-    /// The words in the documents an automation's steps share (`AMB-D-944`). The one face on this side:
-    /// an automation's own name and notes are not indexed, and what a run *did* is reached from
-    /// the task it worked on rather than searched for.
-    Automation,
 }
 
 impl SearchKind {
@@ -2217,9 +2213,8 @@ impl SearchKind {
         match value.trim() {
             "task" => Ok(Self::Task),
             "decision" => Ok(Self::Decision),
-            "automation" => Ok(Self::Automation),
             other => Err(Error::invalid(format!(
-                "unknown kind '{other}' (task/decision/automation — which record the words are on; which face of it is the other axis)"
+                "unknown kind '{other}' (task/decision — which record the words are on; which face of it is the other axis)"
             ))),
         }
     }
@@ -2229,7 +2224,6 @@ impl SearchKind {
         match self {
             Self::Task => "task",
             Self::Decision => "decision",
-            Self::Automation => "automation",
         }
     }
 }
@@ -2441,11 +2435,6 @@ pub fn search(
             f.project_id = reach.narrow(f.project_id)?;
             Some(SearchNarrowing::Decision(f))
         }
-        (Some(_), Some(SearchKind::Automation)) => {
-            return Err(Error::invalid(
-                "--kind automation takes no --filter: a narrowing is written in the vocabulary of a listing (`AMB-D-563`), and an automation has none — narrow it by --project, or search the words alone",
-            ))
-        }
         (Some(_), None) => {
             return Err(Error::invalid(
                 "a --filter is one side's vocabulary or the other's, so say which with --kind task or --kind decision (the same key can mean different things: `status:rejected` is work decided against on a task, and a decision turned down on a decision)",
@@ -2492,11 +2481,8 @@ pub fn search(
             face: h.face,
             r#ref: match h.owner_kind.as_str() {
                 idx::DATASET_TASK => crate::idref::task(h.owner_id),
-                idx::OWNER_AUTOMATION => crate::idref::automation(h.owner_id),
                 _ => crate::idref::decision(h.owner_id),
             },
-            // Only the two sides that have a timeline carry one: an automation's documents are read in
-            // the automation, and carry no ref of their own (`AMB-D-944`).
             comment: h.comment_id.map(|id| {
                 if is_task {
                     crate::idref::task_comment(id)
@@ -2627,9 +2613,6 @@ fn pinned(
             match kind {
                 Some(SearchKind::Task) => vec![(TypedKind::Task, number)],
                 Some(SearchKind::Decision) => vec![(TypedKind::Decision, number)],
-                // An automation is not a conversational number space — its ref is display-only
-                // (`crate::idref::RefKind::Automation`) — so a bare number names nothing on that side.
-                Some(SearchKind::Automation) => Vec::new(),
                 None => vec![(TypedKind::Task, number), (TypedKind::Decision, number)],
             }
         } else {

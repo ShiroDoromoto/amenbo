@@ -818,8 +818,8 @@ impl Store {
         crate::ops::automation_view::cards(self.engine.conn(), project_id)
     }
 
-    /// **One automation's whole definition** — every step with what it runs under, what joins them,
-    /// and the documents its steps share. `None` where that id names none.
+    /// **One automation's whole definition** — every step with what it runs under, and what joins
+    /// them. `None` where that id names none.
     pub fn automation_detail(&self, id: i64) -> Result<Option<crate::ops::automation_view::AutomationView>> {
         self.reachable(&format!("automation #{id}"), |c| super::owner::automation(c, id))?;
         crate::ops::automation_view::detail(self.engine.conn(), id)

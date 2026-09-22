@@ -1,18 +1,16 @@
 //! Opening one step of a run: the text its terminal is launched with, and the values it is handed.
 //!
 //! **A step's agent never goes looking.** By the time the terminal is open, everything the step is to
-//! work from is already written into the prompt — the preamble, the documents its automation shares,
-//! what the run has done so far, and the values wired into it. An agent that had to fetch would need a
+//! work from is already written into the prompt — the preamble, what the run has done so far, and
+//! the values wired into it. An agent that had to fetch would need a
 //! vocabulary for fetching, and every step would spend its first turns on it.
 //!
 //! **What is read from the snapshot, what is read live, and what is neither.** The step's own
 //! declarations — its ways out, its inputs, its settings — come from
 //! [`crate::model::AutomationRunDef`], the copy taken at launch, so editing an automation cannot
-//! change what a run under way is doing. Two things are read live because there is no copy of them:
-//! the shared documents, which are the words a person writes for the run and would be worth
-//! correcting mid-run rather than frozen, and the wires, a wire being the picture rather than the
-//! step and the picture being walked afresh at every move. The preamble is neither: no row holds it,
-//! so it is composed from the build ([`crate::agents::preamble`]) at every launch.
+//! change what a run under way is doing. What is read live is the wires: a wire is the picture
+//! rather than the step, and the picture is walked afresh at every move. The preamble is neither: no
+//! row holds it, so it is composed from the build ([`crate::agents::preamble`]) at every launch.
 //!
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
@@ -444,8 +442,8 @@ fn write_in(
 /// holds for this one, then what it is being asked to do, and last how to hand the work back.
 ///
 /// **English, like every other sentence this crate writes.** The words that carry the work — the
-/// shared documents, the prompt — are the person's own and arrive in whatever language they were
-/// written in; what is added around them, the preamble included, is the frame.
+/// prompt — is the person's own and arrives in whatever language it was written in; what is added
+/// around it, the preamble included, is the frame.
 fn compose(
     tx: &WriteTx<'_>,
     def: &AutomationRunDef,
@@ -455,9 +453,6 @@ fn compose(
 ) -> Result<String> {
     let mut out = String::new();
     push_block(&mut out, &crate::agents::preamble(crate::config::Paths::command_name()));
-    for (name, body) in shared_documents(tx, def)? {
-        push_block(&mut out, &format!("## {name}\n\n{}", body.trim()));
-    }
     if def.show_history {
         if let Some(story) = story_so_far(tx, stretch)? {
             push_block(&mut out, &story);
@@ -483,25 +478,6 @@ fn push_block(out: &mut String, block: &str) {
         out.push_str("\n\n");
     }
     out.push_str(block.trim_end());
-}
-
-/// The documents this step is handed, in the order they were hung on the spot it was opened from. A
-/// placement taken off the picture since hands none — the links went with it.
-fn shared_documents(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<(String, String)>> {
-    let conn = tx.conn();
-    let Some(placement_id) = def.placement_id else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    for (link_id, _) in read::automation_placement_note_siblings(conn, placement_id, None)? {
-        let Some(link) = read::automation_placement_note(conn, link_id)? else {
-            continue;
-        };
-        if let Some(note) = read::automation_note(conn, link.note_id)? {
-            out.push((note.name, note.body));
-        }
-    }
-    Ok(out)
 }
 
 /// What the run has done on **this task** so far — one line per step that has already reported, in the
@@ -835,17 +811,13 @@ mod tests {
     }
 
     #[test]
-    fn the_text_carries_the_preamble_the_documents_the_prompt_and_the_ways_out() {
+    fn the_text_carries_the_preamble_the_prompt_and_the_ways_out() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
-            let note = automation::note_add(tx, p.automation.id, "House style", "Short lines.")
-                .expect("document");
-            automation::note_link(tx, p.first.id, note.id).expect("link");
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
             assert!(text.starts_with("You are one step of an automation run"), "{text}");
-            assert!(text.contains("## House style\n\nShort lines."), "{text}");
             assert!(text.contains("## What to do\n\nlook at it"), "{text}");
             assert!(text.contains("\"found\" — `note` (value)"), "{text}");
             assert!(text.contains("the unnamed way out — `タスク` (task_take, required)"), "{text}");

@@ -97,8 +97,8 @@ export async function editAutomation(
 }
 
 /**
- * **Delete an automation and everything built into it** — its steps with their declarations, the
- * lines between them, and the documents they share.
+ * **Delete an automation and everything built into it** — its steps with their declarations and
+ * the lines between them.
  *
  * **Refused while a run stands behind it**, naming how many: a run is filed under the automation it
  * was launched from, so core will not let that record lose what was run. The refusal reaches the

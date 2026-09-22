@@ -18,7 +18,6 @@
 
 use amenbo_scenario::{Args, Domain};
 
-use crate::judge::judge_found;
 use crate::{opt_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
 impl Driver<'_> {
@@ -271,34 +270,6 @@ impl Driver<'_> {
                 self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 Ok(Outcome::action(format!("setting `{name}` on step {step} {said}")))
             }
-            "note-add" => {
-                let automation = self.resolve(with)?;
-                let name = req_str(with, "name")?;
-                let args = [
-                    "automation".into(),
-                    "note-add".into(),
-                    automation.to_string(),
-                    "--name".into(),
-                    name.to_string(),
-                    "--body".into(),
-                    req_str(with, "body")?.to_string(),
-                    "--json".into(),
-                ];
-                let id = self.bound_id(&args, "automation_note", bind)?;
-                Ok(Outcome::action(format!("wrote shared document {id} `{name}` on automation {automation}")))
-            }
-            "note-link" => {
-                let note = self.resolve(with)?;
-                let step = self.resolve_key(with, "step")?;
-                self.run_json(&[
-                    "automation",
-                    "note-link",
-                    &step.to_string(),
-                    &note.to_string(),
-                    "--json",
-                ])?;
-                Ok(Outcome::action(format!("handed document {note} to step {step}")))
-            }
             "action-add" => {
                 let name = req_str(with, "name")?;
                 let mut args: Vec<String> = vec!["automation".into(), "action-add".into()];
@@ -517,19 +488,6 @@ impl Driver<'_> {
                 let automation = self.resolve(with)?;
                 judge_edge(automation, &self.definition(automation)?, with)
             }
-            // A document the steps share, and which of them were handed it. The second is asked for
-            // whole: a document nobody was handed and one everybody was are two definitions, and a
-            // road naming one step would read the same against both.
-            "note-read" => {
-                let automation = self.resolve(with)?;
-                judge_note(automation, &self.definition(automation)?, with)
-            }
-            "found" => {
-                let target = self.resolve(with)?;
-                let words = self.query(with)?;
-                let hits = self.search(with)?;
-                judge_found("automation", &format!("AMB-AUT-{target}"), &words, with, &hits["hits"])
-            }
             _ => Err(unmapped(Domain::Automation, op)),
         }
     }
@@ -747,40 +705,6 @@ fn judge_edge(automation: i64, view: &serde_json::Value, with: &Args) -> Result<
     Ok(Outcome::assert(pass, said))
 }
 
-/// A document the steps share, and — read whole — which of them were handed it.
-fn judge_note(automation: i64, view: &serde_json::Value, with: &Args) -> Result<Outcome, String> {
-    let name = req_str(with, "name")?;
-    let Some(note) =
-        rows_of(view, "notes").iter().find(|one| one["note"]["name"].as_str() == Some(name))
-    else {
-        return Ok(Outcome::assert(
-            false,
-            format!("automation {automation} shares no document `{name}` (MISMATCH)"),
-        ));
-    };
-    let mut pass = true;
-    let mut said = format!("document `{name}` of automation {automation} is shared");
-    if let Some(want) = with.get("body").and_then(|v| v.as_str()) {
-        let got = note["note"]["body"].as_str().unwrap_or("(none reported)");
-        pass = pass && got == want;
-        said.push_str(&format!(", reading `{got}` (expected `{want}`)"));
-    }
-    if with.contains_key("handed_to") {
-        let want = word_list(with, "handed_to")?;
-        let got: Vec<String> = rows_of(note, "step_ids")
-            .iter()
-            .map(|one| {
-                step_name_of(view, one.as_i64())
-                    .unwrap_or_else(|| "(a step that is gone)".to_string())
-            })
-            .collect();
-        pass = pass && got == want;
-        said.push_str(&format!(", handed to {got:?} (expected {want:?})"));
-    }
-    said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
-    Ok(Outcome::assert(pass, said))
-}
-
 /// The rows under one key of a read, or none where the key carries no list. A key the output does not
 /// have comes back empty rather than erroring, for the reason a `field` path that runs off one does:
 /// what a road is asserting about is the shape of the shipped output as much as what is in it, and an
@@ -794,8 +718,8 @@ fn step_named<'a>(view: &'a serde_json::Value, name: &str) -> Option<&'a serde_j
     rows_of(view, "steps").iter().find(|one| one["step"]["name"].as_str() == Some(name))
 }
 
-/// The name a step id carries in this definition — what turns the ids an edge and a document link
-/// hold back into the words a road wrote.
+/// The name a step id carries in this definition — what turns the ids an edge holds back into the
+/// words a road wrote.
 fn step_name_of(view: &serde_json::Value, id: Option<i64>) -> Option<String> {
     let id = id?;
     rows_of(view, "steps")
@@ -970,9 +894,6 @@ mod tests {
                 { "id": 2, "from_step_id": 2, "exit_name": null, "to_step_id": null, "ends": "done" },
             ],
             "wires": [],
-            "notes": [
-                { "note": { "id": 1, "name": "house style", "body": "written this way" }, "step_ids": [1] },
-            ],
         })
     }
 
@@ -1073,26 +994,5 @@ mod tests {
         let elsewhere =
             judge_edge(1, &definition(), &with("{ from: take, to: review }")).expect("a verdict");
         assert!(!elsewhere.pass, "{}", elsewhere.note);
-    }
-
-    /// A document, and the steps it was handed to read as one list: handed to nobody and handed to
-    /// everybody are two different definitions.
-    #[test]
-    fn a_shared_document_is_read_back_with_who_holds_it() {
-        let read = judge_note(
-            1,
-            &definition(),
-            &with("{ name: house style, body: written this way, handed_to: [take] }"),
-        )
-        .expect("a verdict");
-        assert!(read.pass, "{}", read.note);
-
-        let everybody = judge_note(
-            1,
-            &definition(),
-            &with("{ name: house style, handed_to: [take, review] }"),
-        )
-        .expect("a verdict");
-        assert!(!everybody.pass, "{}", everybody.note);
     }
 }

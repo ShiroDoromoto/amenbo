@@ -29,8 +29,8 @@ use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
     AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge, AutomationEnds,
-    AutomationExit, AutomationNote, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
-    AutomationPlacementNote, AutomationPort, AutomationPortDirection, AutomationPortKind,
+    AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+    AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationStoppedReason, AutomationWire, Database,
@@ -473,6 +473,7 @@ pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationActio
         id: get(r, C.id)?,
         project_id: get(r, C.project_id)?,
         name: get(r, C.name)?,
+        note: get(r, C.note)?,
         entry_step_id: get(r, C.entry_step_id)?,
         order_key: get(r, C.order_key)?,
         created_at,
@@ -490,20 +491,6 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         notes: get(r, C.notes)?,
         entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
-        order_key: get(r, C.order_key)?,
-        created_at,
-        updated_at,
-    })
-}
-
-pub(super) fn automation_note_row(r: &Row) -> rusqlite::Result<AutomationNote> {
-    const C: col::automation_note::Cols = col::automation_note::ALL;
-    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(AutomationNote {
-        id: get(r, C.id)?,
-        automation_id: get(r, C.automation_id)?,
-        name: get(r, C.name)?,
-        body: get(r, C.body)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -556,19 +543,6 @@ pub(super) fn automation_cfg_row(r: &Row) -> rusqlite::Result<AutomationCfg> {
         required: get(r, C.required)?,
         options: get(r, C.options)?,
         value: get(r, C.value)?,
-        order_key: get(r, C.order_key)?,
-        created_at,
-        updated_at,
-    })
-}
-
-pub(super) fn automation_placement_note_row(r: &Row) -> rusqlite::Result<AutomationPlacementNote> {
-    const C: col::automation_placement_note::Cols = col::automation_placement_note::ALL;
-    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(AutomationPlacementNote {
-        id: get(r, C.id)?,
-        placement_id: get(r, C.placement_id)?,
-        note_id: get(r, C.note_id)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

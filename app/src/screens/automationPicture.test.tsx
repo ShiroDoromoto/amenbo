@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-// What the picture of the steps puts on the screen (`AMB-T-5255`). Where each thing goes is
+// What the picture of the placements puts on the screen (`AMB-T-5255`). Where each thing goes is
 // `automationLayout.test.ts`'s; this is what a reader can press and read.
 //
-// What these guard: **a step is a button carrying its name**, which is what the step panel beside
-// the picture is opened from (`AMB-T-5256`); **a `+` stands on every edge** and is held shut while
-// the dialog behind it is unbuilt (`AMB-T-5257`), so a press never lands on nothing; **a step whose
-// prompt came from the library says so**, and **one a required input does not reach names that
-// input** rather than only turning red; and **an automation with no steps says so in words**.
+// What these guard: **a spot is a button carrying the name of the action standing there**
+// (`AMB-D-949`), which is what the panel beside the picture is opened from (`AMB-T-5256`); **a `+`
+// stands on every edge** and is held shut while nothing is listening for the press, so one never
+// lands on nothing; **where a run opens is marked on the box**; **a spot a required input does not
+// reach names that input** rather than only turning red; and **an automation with nothing on it says
+// so in words**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,7 +101,7 @@ describe("the picture of the steps", () => {
     expect(nodes()[0]!.className).toContain("autopic__node--on");
   });
 
-  it("stands a + on every edge, shut until there is a dialog behind it", async () => {
+  it("stands a + on every edge, shut while nothing is listening for the press", async () => {
     const one = detail({
       placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, outputs: [] }] })],
       edges: [
@@ -139,6 +140,29 @@ describe("the picture of the steps", () => {
     const review = nodes().find((node) => node.textContent?.includes("Review"))!;
     expect(review.textContent).toContain("draft");
     expect(review.className).toContain("autopic__node--unfed");
+  });
+
+  /// Which box a launch enters by cannot be read off the lines: two stretches nothing joins are
+  /// drawn the same, so the box says it.
+  it("marks the placement a run opens, and only that one", async () => {
+    const one = detail({
+      placements: [
+        step({ id: 1, name: "take" }),
+        step({ id: 2, name: "work", exits: [{ id: 20, outputs: [] }] }),
+      ],
+      edges: [{ id: 1, fromPlacementId: 1, toPlacementId: 2, ends: "go" }],
+      entryPlacementId: 2,
+    });
+    await render({ automation: one });
+    const marked = nodes().filter((node) => node.querySelector(".autopic__entry") !== null);
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.textContent).toContain("work");
+    expect(marked[0]!.textContent).toContain(t("auto.pic.entry"));
+  });
+
+  it("marks nothing while no placement is named the entry", async () => {
+    await render({ automation: detail({ entryPlacementId: undefined }) });
+    expect(container.querySelectorAll(".autopic__entry")).toHaveLength(0);
   });
 
   it("outlines the span of one task and names it", async () => {

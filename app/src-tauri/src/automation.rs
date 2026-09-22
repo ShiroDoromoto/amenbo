@@ -20,6 +20,11 @@
 //! `null` and not an empty list: an unanswered probe drawn as an answer would tell a reader with
 //! four agents installed that they have none (`AMB-D-792`).
 //!
+//! **Which models it can start on is read here rather than passed in**, because that answer is kept on
+//! this side ([`crate::agent_models`]) and the face never holds it. Read and never asked: a provider
+//! nobody has put the question to says nothing, which leaves that step's model unjudged — the same
+//! silence, drawn from the same rule.
+//!
 //! **A step that is ready to run is told to the window rather than answered back**, as an event.
 //! The press that starts a run is on the ledger and the pane it opens is in the workspace — the same
 //! window in one shape of the app and the other window in the other (`AMB-D-753`) — so an answer
@@ -35,7 +40,7 @@ use amenbo_core::model::{
     ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
     AutomationPortOwner, AutomationRunStatus, AutomationStep, AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::declarer;
+use amenbo_core::ops::automation::{declarer, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::{Ended, Paused, Resumed, TookALane};
 use amenbo_core::ops::automation_step::Opened;
@@ -122,6 +127,136 @@ pub fn automation_action_edit(
     Ok(WriteAck::new(&["automationActions"]))
 }
 
+/// **Change one step of an automation.** Only what is `Some` is written.
+///
+/// `action` and `prompt` are the two halves of where the prompt comes from, and exactly one may be
+/// given: switching from one to the other takes the step's ways out, its settings and its inputs with
+/// it, because those are read off whichever of the two declares them
+/// ([`amenbo_core::ops::automation::step_update`]). The panel puts that switch on one control for the
+/// same reason — there is no state where a step has both and none where it has neither.
+///
+/// `model` and `work_dir` are each a field with a third answer: written, cleared, or left alone. The
+/// pair of arguments says which — `clear_model` beats a `model` beside it, and the same for the
+/// folder — rather than a single `Option<Option<..>>`, which does not cross the IPC boundary as a
+/// shape a screen can write.
+///
+/// The ack names the library as well as the definition. Pointing a step at an action, or away from
+/// one, moves how many automations that action is used by, which is a column of the actions tab
+/// (`automations_using`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_step_edit(
+    id: i64,
+    name: Option<String>,
+    action: Option<i64>,
+    prompt: Option<String>,
+    agent: Option<String>,
+    model: Option<String>,
+    clear_model: Option<bool>,
+    interactive: Option<bool>,
+    work_dir: Option<String>,
+    clear_work_dir: Option<bool>,
+    report_to_task: Option<bool>,
+    history: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    let source = match (action, prompt.as_deref()) {
+        (Some(_), Some(_)) => {
+            return Err(amenbo_core::Error::invalid(
+                "a step runs a library action or carries a prompt of its own, never both",
+            )
+            .into())
+        }
+        (Some(action), None) => Some(StepSource::Action(action)),
+        (None, Some(prompt)) => Some(StepSource::Prompt(prompt.to_string())),
+        (None, None) => None,
+    };
+    let model = match (clear_model, model.as_deref()) {
+        (Some(true), _) => Some(None),
+        (_, Some(model)) => Some(Some(model)),
+        _ => None,
+    };
+    let work_dir = match (clear_work_dir, work_dir.as_deref()) {
+        (Some(true), _) => Some(None),
+        (_, Some(name)) => Some(Some(name)),
+        _ => None,
+    };
+    with_store_mut(|store| {
+        store.automation_step_update(
+            id,
+            name.as_deref(),
+            source,
+            agent.as_deref(),
+            model,
+            interactive,
+            work_dir,
+            report_to_task,
+            history,
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Answer one setting on one step**, or leave it unanswered with no `value`.
+///
+/// The answer travels as the JSON its kind takes — a string for a folder, a choice and a text, a
+/// number for a number, and an object naming each part of a task filter. The shape is the screen's to
+/// build, because the control that took it is the screen's too
+/// (`app/src/screens/automationCfg.ts`); core keeps the text as it is handed and the run reads it
+/// ([`amenbo_core::ops::automation::cfg_set`]).
+///
+/// A step running a library action answers on a row of its own under the declared name, so a second
+/// step running the same action is not answering for both. That split is core's, and this door does
+/// not have to know which of the two it is writing.
+#[tauri::command]
+pub fn automation_cfg_answer(
+    step_id: i64,
+    name: String,
+    value: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_cfg_set(step_id, &name, value.as_deref())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Say what fills one of a step's inputs**, by naming the way out and the output it comes from.
+///
+/// Drawing the same wire twice answers the one already drawn rather than writing a second row
+/// ([`amenbo_core::ops::automation::wire_add`]), so the screen's control can send what the reader
+/// picked without first working out whether anything was there.
+#[tauri::command]
+pub fn automation_wire_set(
+    from_step_id: i64,
+    from_exit_name: Option<String>,
+    from_port_name: String,
+    to_step_id: i64,
+    to_port_name: String,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_wire_add(
+            from_step_id,
+            from_exit_name.as_deref(),
+            &from_port_name,
+            to_step_id,
+            &to_port_name,
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take a wire away**, leaving the input it fed with nothing reaching it.
+#[tauri::command]
+pub fn automation_wire_clear(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_wire_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **How many automations run this action**, counted by the automation each step is in.
 ///
 /// Two steps of one automation pointing at the same action is one automation: what the number is
@@ -154,6 +289,12 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
 /// not ask", and then no step is judged on its agent: a reason drawn off an answer nobody got would
 /// tell a reader to install what they already have.
 ///
+/// **The models are not passed in — they are read here**, off what each provider has already been asked
+/// ([`crate::agent_models::offered_here`]). It is the same silence that `agents` takes and for the same
+/// reason: an agent nobody has asked leaves its steps' models unjudged, rather than judged and failed.
+/// The face has no part in it because the answers are kept on this side, and putting the question would
+/// mean a login shell and a provider starting up behind every draw of a build screen.
+///
 /// **The workspace is not asked about here.** A closed one refuses the launch rather than the
 /// definition, and it stops being true the moment a window opens — so it belongs to the press
 /// ([`amenbo_core::ops::automation_run::launch`]) and not to the list a build screen draws.
@@ -164,7 +305,12 @@ pub fn automation_launch_check(
 ) -> Result<AutomationLaunchCheckDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch_check");
     let store = open_store_read()?;
-    let unmet = automation_run::check(store.read_model().conn(), id, agents.as_deref())?;
+    let unmet = automation_run::check(
+        store.read_model().conn(),
+        id,
+        agents.as_deref(),
+        &crate::agent_models::offered_here(),
+    )?;
     Ok(AutomationLaunchCheckDto {
         ready: unmet.is_empty(),
         blocks: unmet.iter().map(block_dto).collect(),
@@ -183,6 +329,10 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
         Unmet::UnwiredInput { step, port } => ("unwired_input", Some(step), Some(port)),
         Unmet::UnansweredCfg { step, cfg } => ("unanswered_cfg", Some(step), Some(cfg)),
         Unmet::AgentMissing { step, agent } => ("agent_missing", Some(step), Some(agent)),
+        // The model, not the agent, in the one slot a block carries: the row leads with the step, and a
+        // step names one agent, so what the reader cannot see from the picture is which model it asked
+        // for. Core's own sentence names both (`amenbo_core::ops::automation_run::Unmet::say`).
+        Unmet::ModelMissing { step, model, .. } => ("model_missing", Some(step), Some(model)),
     };
     AutomationLaunchBlockDto { reason, step_name: step.cloned(), at: at.cloned() }
 }
@@ -228,8 +378,13 @@ pub fn automation_launch(
     let _perf = amenbo_core::perf::Timer::start("automation_launch");
     let paths = amenbo_core::config::Paths::resolve()?;
     let lanes = amenbo_core::config::Config::load(&paths.config_file).automation_lanes;
+    // The models are read here, as the check reads them (`automation_launch_check`): the press is
+    // inside the process that keeps the answers, so a step naming a model its agent does not have is
+    // refused at the press rather than met inside the pane the run just opened.
+    let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
         startable: agents.as_deref(),
+        models: &offered,
         lanes,
         workspace_open: Some(workspace_open),
         by: Some(ActorKind::Human),

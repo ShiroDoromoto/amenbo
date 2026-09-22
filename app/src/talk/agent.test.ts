@@ -19,7 +19,14 @@ const hoisted = vi.hoisted(() => ({
   /** Every command that crossed, as `[name, args]`. */
   sent: [] as [string, Record<string, unknown> | undefined][],
   /** Where each pane was started, most recent last. */
-  panes: [] as { frame?: string | null; cwd?: string | null; agent?: string | null }[],
+  panes: [] as {
+    frame?: string | null;
+    cwd?: string | null;
+    agent?: string | null;
+    say?: string | null;
+    fresh?: boolean;
+    runStep?: number | null;
+  }[],
   /** Ends the pane most recently mounted, the way the host's `pty://closed` does. */
   end: null as (() => void) | null,
   /** What `pty_sessions` answers with — a terminal already running is one nothing is asked about. */
@@ -82,6 +89,9 @@ vi.mock("./terminal", () => ({
         adopt?: boolean;
         session?: string | null;
         resume?: string | null;
+        say?: string | null;
+        fresh?: boolean;
+        runStep?: number | null;
       },
     ) => {
       hoisted.panes.push(start);
@@ -327,7 +337,58 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
 
     expect(hoisted.chose, "the folder was asked for a second time").toBe(0);
     expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/adopted", project: null }]);
-    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({ adopt: false, cwd: "/work/here", agent: "claude-code" });
+    expect(hoisted.panes[hoisted.panes.length - 1])
+      .toEqual({ adopt: false, cwd: "/work/here", agent: "claude-code" });
+  });
+});
+
+describe("a frame opened for a step of an automation run", () => {
+  /** A frame handed what a step's pane is handed: where it runs, who carries it out, and the text
+   *  core composed for that step (`../shell/WorkspaceFace`). */
+  async function stepFrame(): Promise<HTMLElement> {
+    hoisted.answers = [wake({ settled: "claude-code" })];
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+    await mountAgentFrame(root, "en", events, {
+      frame: "run-7",
+      cwd: "/work/here",
+      agent: "claude-code",
+      adopt: false,
+      say: "You are one step of an automation run…",
+      fresh: true,
+      runStep: 3,
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    return root;
+  }
+
+  it("starts the terminal on the step's own text, in a session of its own", async () => {
+    // The road a step comes by is the one that is handed an agent to start, and it reached the
+    // terminal with a choice and nothing else — so the step came up on the sentence that points an
+    // agent at `agent --json`, which is what the host writes where there is no text (`AMB-T-5281`).
+    await stepFrame();
+
+    const started = hoisted.panes[hoisted.panes.length - 1]!;
+    expect(started.say).toBe("You are one step of an automation run…");
+    expect(started.fresh, "a step opens a session of its own").toBe(true);
+    expect(started.runStep, "the execution the terminal speaks for").toBe(3);
+    expect(started.agent).toBe("claude-code");
+  });
+
+  it("does not start a second terminal on it", async () => {
+    // A row pressed after the step's own terminal ended is a person asking for a terminal, not the
+    // step being carried out again.
+    const root = await stepFrame();
+    hoisted.end?.();
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const again = hoisted.panes[hoisted.panes.length - 1]!;
+    expect(hoisted.panes.length, "a second terminal was started").toBeGreaterThan(1);
+    expect(again.say ?? null, "the step's text was sent twice").toBe(null);
+    // Where the place stands for is not spent: it is what the frame is, for as long as it is up.
+    expect(again.fresh).toBe(true);
+    expect(again.runStep).toBe(3);
   });
 });
 

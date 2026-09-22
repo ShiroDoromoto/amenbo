@@ -20,7 +20,7 @@
 import { useQuery } from "./query";
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
-import { invokeAck } from "./mutations";
+import { invokeAck, invokeForAck } from "./mutations";
 import type {
   AutomationActionCardDto,
   AutomationCardDto,
@@ -49,6 +49,24 @@ export function useAutomations(projectId: number | null): AutomationCardDto[] {
     () => (projectId === null ? Promise.resolve([]) : fetchAutomations(projectId)),
   );
   return data ?? [];
+}
+
+/**
+ * **Make an automation** in this project, and answer with its id so the screen can open the build
+ * screen on it.
+ *
+ * A name is the whole press. There are no steps and no entry yet, and what refuses to launch one in
+ * that state is the launch check rather than this — an automation is built in whatever order its
+ * author likes (`amenbo_core::ops::automation::add`).
+ *
+ * The id is lifted out of the ack the write already returns (`./mutations`), so the list and the new
+ * definition arrive from one call. `null` outside Tauri, where the browser mock holds no
+ * automations.
+ */
+export async function addAutomation(projectId: number, name: string): Promise<number | null> {
+  if (!inTauri()) return null;
+  const ack = await invokeForAck("automation_add", { projectId, name });
+  return ack.automations[0] ?? null;
 }
 
 /**

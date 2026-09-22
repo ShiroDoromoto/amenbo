@@ -16,11 +16,17 @@
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
 // picture needs (`./AutomationBuildScreen`).
+//
+// **A new one is made from the list**, which is where this side of the app makes one at all. The
+// press takes a name and nothing else, and lands in the build screen on what it just made — what an
+// automation is for is the picture, and a form asking for notes and a preamble first would be asked
+// before there is anything to write them about (`AutomationNew`).
 import { useEffect, useState } from "react";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { RunningTab } from "./RunningTab";
-import { useAutomations } from "../core/automations";
+import { addAutomation, useAutomations } from "../core/automations";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { t, tf } from "../core/i18n";
 
 /** Which of the three tabs the screen is on. */
@@ -95,6 +101,8 @@ export function AutomationsScreen({
 
           {tab === "actions" && <AutomationActionsTab projectId={projectId} />}
 
+          {tab === "automations" && <AutomationNew projectId={projectId} onMade={setOpen} />}
+
           {tab === "automations" && automations.length === 0 && (
             <div className="auto__empty">{t("auto.empty")}</div>
           )}
@@ -113,6 +121,96 @@ export function AutomationsScreen({
             </ul>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * **Make an automation from the list** — a name, and then the build screen it was made for.
+ *
+ * It is drawn above the list and above the empty text alike, because the press a reader with no
+ * automations needs is the same one, and a screen that offered it only when the list was empty would
+ * take it away as soon as it had been used once.
+ *
+ * The name is held here while it is being typed and the box closes on the press, so nothing is left
+ * open behind the build screen that arrives. A blank name is refused by not making anything: core
+ * refuses it too, and a message about it would be a sentence in place of a button that simply does
+ * not fire.
+ *
+ * With no project there is nowhere to make one, so there is no press — the screen is standing on a
+ * project that has not been chosen.
+ */
+function AutomationNew({
+  projectId,
+  onMade,
+}: {
+  projectId: number | null;
+  /** Open the build screen on what was just made. */
+  onMade: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  // The press is held down while the write is under way, so a second Enter does not make a second
+  // automation out of one name.
+  const [making, setMaking] = useState(false);
+
+  if (projectId === null) return null;
+
+  async function make() {
+    if (projectId === null || making || name.trim() === "") return;
+    setMaking(true);
+    try {
+      const id = await addAutomation(projectId, name.trim());
+      setOpen(false);
+      setName("");
+      if (id !== null) onMade(id);
+    } finally {
+      setMaking(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="settings__row">
+        <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
+          {t("auto.new")}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings__form">
+      <label className="field">
+        <span className="fieldlabel">{t("auto.new.name")}</span>
+        <input
+          {...asTyped}
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (isEnterSubmit(e)) void make(); }}
+        />
+      </label>
+      <div className="settings__row">
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={making || name.trim() === ""}
+          onClick={() => void make()}
+        >
+          {t("auto.new.make")}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            setOpen(false);
+            setName("");
+          }}
+        >
+          {t("auto.new.cancel")}
+        </button>
       </div>
     </div>
   );

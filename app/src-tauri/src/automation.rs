@@ -42,7 +42,7 @@ use amenbo_core::model::{
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
     AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::{NewStep, StepSource};
+use amenbo_core::ops::automation::{NewAutomation, NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -77,6 +77,24 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
             archived: card.automation.archived,
         })
         .collect())
+}
+
+/// **Make an automation**, born with no steps and no entry
+/// ([`amenbo_core::ops::automation::add`]).
+///
+/// A name is all it takes. Notes and a preamble are written on the build screen, once there is a
+/// picture to write them about — asking for them at the press would put a form in front of the one
+/// road into the screen where the work actually happens.
+///
+/// The ack names the new automation, which is what the screen opens the build screen on: a creation
+/// that answered with the scope alone would leave the press having to go and find the row that was
+/// not there a moment ago.
+#[tauri::command]
+pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdError> {
+    let made = with_store_mut(|store| {
+        Ok(store.automation_add(project_id, NewAutomation { name, ..Default::default() })?)
+    })?;
+    Ok(WriteAck::new(&["automations"]).automation(made.id))
 }
 
 /// **The library this project reaches** — the device's own actions first, then the project's own.

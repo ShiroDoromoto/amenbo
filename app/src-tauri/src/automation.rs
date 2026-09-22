@@ -127,6 +127,34 @@ pub fn automation_action_edit(
     Ok(WriteAck::new(&["automationActions"]))
 }
 
+/// **Raise a step's own prompt into the library**: make an action of it, move the step's declarations
+/// onto that action, and point the step at it
+/// ([`amenbo_core::ops::automation::action_from_step`]).
+///
+/// It is the one road from the build screen into the library, which until now could only be filled
+/// from the CLI. The declarations **move** rather than being copied — a step that runs an action
+/// declares nothing of its own — and the picture around the step goes on reading because an edge and
+/// a wire name a way out by its name.
+///
+/// `project` is which library it lands in: the project's own, or the device's where every project on
+/// this machine reaches it. The device's is the wider reach, and the panel says which is which rather
+/// than picking for the reader.
+///
+/// The ack names both: the definition, whose step now points somewhere else, and the library, which
+/// has one more action in it.
+#[tauri::command]
+pub fn automation_action_from_step(
+    step: i64,
+    project: Option<i64>,
+    name: String,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_from_step(step, project, &name)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
 /// **Change one step of an automation.** Only what is `Some` is written.
 ///
 /// `action` and `prompt` are the two halves of where the prompt comes from, and exactly one may be

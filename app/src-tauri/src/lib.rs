@@ -478,6 +478,7 @@ pub fn run() {
       automation::automation_page,
       automation::automation_action_page,
       automation::automation_action_edit,
+      automation::automation_action_from_step,
       automation::automation_step_edit,
       automation::automation_cfg_answer,
       automation::automation_wire_set,

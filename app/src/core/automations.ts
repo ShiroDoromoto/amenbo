@@ -86,6 +86,26 @@ export async function editAutomationAction(
   });
 }
 
+/**
+ * **Raise a step's own prompt into the library**: make an action of it, move the step's declarations
+ * onto that action, and point the step at it.
+ *
+ * It is the one road from the build screen into the library. The declarations **move** rather than
+ * being copied — a step running an action declares nothing of its own — and the picture around the
+ * step goes on reading, because an edge and a wire name a way out by its name.
+ *
+ * `project` is which library it lands in: the project's own, or `null` for the device's, which every
+ * project on this machine reaches.
+ */
+export async function raiseStepToLibrary(
+  step: number,
+  name: string,
+  project: number | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_from_step", { step, project, name });
+}
+
 /** One automation's whole definition, or nothing where that id names none. */
 export async function fetchAutomation(id: number): Promise<AutomationDetailDto | null> {
   if (!inTauri()) return null;

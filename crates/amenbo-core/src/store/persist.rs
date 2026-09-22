@@ -1576,6 +1576,21 @@ impl Store {
     }
 
     /// Rename a library action, or rewrite its prompt (one operation = one transaction).
+    /// **Raise a step's own prompt into the library** (one operation = one transaction): the action is
+    /// made, the step's declarations move onto it, and the step is pointed at it
+    /// ([`crate::ops::automation::action_from_step`]). Half of it would be an automation that has lost
+    /// its wiring, which is why it is one write.
+    pub fn automation_action_from_step(
+        &mut self,
+        step_id: i64,
+        project_id: Option<i64>,
+        name: &str,
+    ) -> Result<crate::model::AutomationAction> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, step_id)], |tx| {
+            crate::ops::automation::action_from_step(tx, step_id, project_id, name)
+        })
+    }
+
     pub fn automation_action_update(
         &mut self,
         id: i64,

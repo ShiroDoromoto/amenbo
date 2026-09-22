@@ -77,6 +77,18 @@ async function render(workspaceOpen = true) {
   });
 }
 
+/** Draw the screen with an ask on it — what a press on a search hit leaves here
+ *  (`../shell/AppShell`). */
+async function asked(automation: number, nth = 1) {
+  await act(async () => {
+    root.render(createElement(AutomationsScreen, {
+      projectId: 1,
+      workspaceOpen: true,
+      openBuild: { automation, nth },
+    }));
+  });
+}
+
 const buttons = () => [...container.querySelectorAll("button")];
 function button(label: string): HTMLButtonElement {
   const found = buttons().find((b) => b.textContent?.includes(label));
@@ -146,6 +158,32 @@ describe("the automations screen", () => {
     expect(container.textContent).toContain(t("auto.build.picture"));
     expect(container.textContent).toContain(t("auto.build.step"));
   });
+
+  it("opens the build screen on the definition an ask from outside names", async () => {
+    // The road a search hit travels: the ref carries the number, and the screen it reaches is the one
+    // that can draw the documents its steps share (`AMB-D-944`, `./SearchScreen`).
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+
+    await asked(7);
+
+    expect(container.querySelector(".auto__list")).toBeNull();
+    expect(container.textContent).toContain(t("auto.build.picture"));
+  });
+
+  it("lets the reader back to the list, and does not put them straight back", async () => {
+    // The ask is answered once. Held as what the screen is drawn from, the way back would land on the
+    // same picture again.
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+    await asked(7);
+
+    await act(async () => { button(t("auto.build.back")).click(); });
+
+    expect(container.querySelector(".auto__list")).not.toBeNull();
+  });
 });
 
 describe("the launch place", () => {
@@ -170,6 +208,7 @@ describe("the launch place", () => {
         { reason: "unwired_input", stepName: "Write", at: "folder" },
         { reason: "unanswered_cfg", stepName: "Write", at: "filter" },
         { reason: "agent_missing", stepName: "Write", at: "codex-cli" },
+        { reason: "model_missing", stepName: "Write", at: "opus-9" },
       ],
     });
     expect(blocks()).toEqual([
@@ -180,6 +219,7 @@ describe("the launch place", () => {
       tf("auto.block.unwiredInput", { step: "Write", at: "folder" }),
       tf("auto.block.unansweredCfg", { step: "Write", at: "filter" }),
       tf("auto.block.agentMissing", { step: "Write", at: "codex-cli" }),
+      tf("auto.block.modelMissing", { step: "Write", at: "opus-9" }),
     ]);
     // Nothing is left standing as a bare reason code: a line nobody wrote words for would ship as
     // `input_unfed` on the screen.

@@ -16,7 +16,7 @@
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
 // picture needs (`./AutomationBuildScreen`).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { RunningTab } from "./RunningTab";
@@ -38,17 +38,27 @@ export function AutomationsScreen({
   projectId,
   workspaceOpen,
   onGoToRun,
+  openBuild,
 }: {
   projectId: number | null;
   /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
   workspaceOpen: boolean;
   /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
   onGoToRun?: (project: number, run: number) => void;
+  /** Which definition to open the build screen on, asked from outside this screen — a press on a
+   *  search hit, which reaches the documents its steps share and nothing else (`AMB-D-944`). */
+  openBuild?: { automation: number; nth: number } | null;
 }) {
   const [tab, setTab] = useState<Tab>("automations");
   // Which definition is open, or nothing while the list is. The build screen replaces the list
   // rather than standing beside it, so this is where the screen is and not a selection within it.
   const [open, setOpen] = useState<number | null>(null);
+  // An ask from outside opens the build screen on what it names. It is a state and not a prop the
+  // screen is drawn from, because the reader may go back to the list from there — and a prop would
+  // put them straight back into the picture they just left.
+  useEffect(() => {
+    if (openBuild) setOpen(openBuild.automation);
+  }, [openBuild]);
   const automations = useAutomations(projectId);
 
   if (open !== null) {

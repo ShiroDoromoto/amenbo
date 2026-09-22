@@ -493,6 +493,7 @@ mod tests {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
             startable: Some(&startable),
+            models: crate::ops::automation_run::nothing_asked(),
             lanes,
             workspace_open: Some(true),
             by: Some(ActorKind::Ai),
@@ -598,6 +599,42 @@ mod tests {
             ended(tx, running, AutomationRunStatus::Done, None, 1).expect("done");
             let after = read::automation_runs_live(tx.conn(), 20).expect("live");
             assert!(after.iter().all(|one| one.status != AutomationRunStatus::Done));
+        });
+    }
+
+    /// What the app ending leaves behind, and what the next launch does with it.
+    ///
+    /// **Both states are caught, not just the one that is going.** A queued run holds no lane, but it
+    /// is waiting for a terminal in a window that is gone — left alone it would be woken by the first
+    /// lane handed back in the *new* launch and start a step whose run has no history to stand on.
+    #[test]
+    fn a_launch_stops_every_run_the_last_one_left_standing_and_hands_their_tasks_back() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            // One lane, so the second launch has to wait for it — which is the queued row.
+            let going = a_run(tx, &p.automation, 1);
+            let waiting = a_run(tx, &p.automation, 1);
+            assert_eq!(status_of(tx, going.id), AutomationRunStatus::Running);
+            assert_eq!(status_of(tx, waiting.id), AutomationRunStatus::Queued);
+            let opening = opened(tx, &going, &p.first);
+            let task = a_task_in_hand(tx, p.automation.project_id, opening.run_step.id);
+
+            let swept = sweep(tx, 1).expect("sweep");
+            assert_eq!(swept.len(), 2, "the one that was going and the one that was waiting");
+
+            for run in [&going, &waiting] {
+                assert_eq!(status_of(tx, run.id), AutomationRunStatus::Stopped);
+            }
+            assert_eq!(
+                read::automation_run(tx.conn(), going.id).expect("read").expect("it").stopped_reason,
+                Some(AutomationStoppedReason::Crashed),
+            );
+            // The task the run was holding is back where somebody can pick it up, and it says why.
+            assert_eq!(
+                read::task(tx.conn(), task).expect("read").expect("the task").status,
+                crate::model::TaskStatus::Todo,
+            );
+            assert!(!comments_on(tx, task).is_empty(), "and it was told what happened");
         });
     }
 

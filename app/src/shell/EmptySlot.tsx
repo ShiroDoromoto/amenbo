@@ -10,10 +10,16 @@ import { SHELL } from "../talk/terminal";
 import { MANY } from "../talk/models";
 import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
+import { StartAutomation } from "../components/StartAutomation";
 
 /**
- * The empty frame on a page with room: the dashed place that says a terminal can be opened here, and
- * the one press that opens it.
+ * The empty frame on a page with room: the dashed place that says something can be opened here, and
+ * the presses that open it — a terminal, or a run of one of this project's automations
+ * (`../components/StartAutomation`).
+ *
+ * **The automations come after the terminal and not instead of it.** What a frame with room is for
+ * is opening a terminal, and that press is the one that has to be in front of the reader; a run is
+ * the other thing the same room can be used for, and it opens a pane of its own here.
  *
  * **It says there is room, and nothing else.** A frame with nothing open on it once carried the
  * project's leftovers as well — work reserved with nobody at it, decisions nobody would close — and
@@ -641,6 +647,11 @@ export function EmptySlot({
       >
         {asking ? t("face.openPick") : t("face.open")}
       </button>
+
+      {/* The other thing a frame with room can be used for: starting an automation, whose own pane
+          is where its steps are drawn (`../components/StartAutomation`). The workspace is standing —
+          this frame is drawn in it — so the answer core needs is known here rather than asked for. */}
+      <StartAutomation projectId={project} folders={folders} workspaceOpen />
     </div>
   );
 }

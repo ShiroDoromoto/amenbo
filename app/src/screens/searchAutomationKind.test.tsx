@@ -5,8 +5,8 @@
 // What these guard: **the side is reachable** — a fourth chip, so a reader can ask for the automations
 // alone; **the narrowing box is off on it, and says why** — that side has no listing to lend the box a
 // grammar, and the line a reader is shown there is not the one shown before any side is picked; and
-// **the hit's ref is a name rather than a button** — an automation's documents are read in the build
-// screen, which this screen cannot reach, so a ref dressed as a link would go nowhere.
+// **the hit's ref opens the build screen** — which is where an automation's documents are read, and the
+// row carries the number to open it by and nothing else (`AMB-T-5278`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,8 @@ import type { SearchHitDto } from "../bindings/bindings";
 const hoisted = vi.hoisted(() => ({
   hits: [] as SearchHitDto[],
   asked: [] as { kind: string | null; filter: string }[],
+  /** The automations the row asked to open, in order. */
+  opened: [] as number[],
 }));
 
 vi.mock("../core/reads", async (real) => {
@@ -62,7 +64,11 @@ function hit(over: Partial<SearchHitDto> = {}): SearchHitDto {
 
 async function render() {
   await act(async () => {
-    root.render(createElement(SearchScreen, { onOpenTask: () => {}, onOpenDecision: () => {} }));
+    root.render(createElement(SearchScreen, {
+      onOpenTask: () => {},
+      onOpenDecision: () => {},
+      onOpenAutomation: (id: number) => hoisted.opened.push(id),
+    }));
   });
 }
 
@@ -96,6 +102,7 @@ function chip(label: string): HTMLButtonElement {
 beforeEach(() => {
   hoisted.hits = [];
   hoisted.asked = [];
+  hoisted.opened = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -142,16 +149,18 @@ describe("the automations are a side of their own", () => {
     expect(lastAsked().filter).toBe("");
   });
 
-  it("draws the hit's ref as a name, not as a button", async () => {
+  it("opens the automation the ref names, which is where its documents are read", async () => {
     hoisted.hits = [hit()];
     await render();
     await ask("house style");
-    const ref = container.querySelector(".srch__ref")!;
-    expect(ref.tagName).toBe("SPAN");
+    const ref = container.querySelector<HTMLElement>(".srch__ref")!;
+    expect(ref.tagName).toBe("BUTTON");
     expect(ref.textContent).toBe("AMB-AUT-1");
-    // Unpressable because it leads nowhere — not because what it led to is gone.
-    expect(ref.classList.contains("feed__target--plain")).toBe(true);
-    expect(ref.classList.contains("feed__target--gone")).toBe(false);
+
+    await act(async () => ref.click());
+
+    // The number and nothing else: which project it is in is answered on the way there.
+    expect(hoisted.opened).toEqual([1]);
   });
 
   it("still opens a task's hit, which is the side that has somewhere to lead", async () => {

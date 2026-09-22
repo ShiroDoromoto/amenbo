@@ -1163,6 +1163,7 @@ const ui = {
   "auto.ready": "Ready to start.",
   "auto.notReady": "Not ready to start:",
   "auto.queued": "Every lane is taken — this run is in line, and starts when one is handed back.",
+  "auto.startOne": "Start an automation",
   "auto.block.noSteps": "It has no steps.",
   "auto.block.noEntry": "No step is named as the one a run starts on.",
   "auto.block.entryTakesNoTask": "{step}: the step a run starts on takes no task, so every step after it would be about nothing.",
@@ -1171,6 +1172,10 @@ const ui = {
   "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
+  // Said of the model rather than of the agent, which the step's own row already names. Only ever
+  // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
+  // silence (`app/src-tauri/src/agent_models.rs`).
+  "auto.block.modelMissing": "{step}: its agent here does not offer the model {at}.",
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
   // around a group of steps is.

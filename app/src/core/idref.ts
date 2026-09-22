@@ -55,3 +55,19 @@ export function parseRef(raw: string, side?: RefSpace): { num: number; space: Re
   if ((m = /^#(\d+)$/.exec(s))) return { num: Number(m[1]), space: "task" };
   return null;
 }
+
+/**
+ * The automation an `AMB-AUT-<n>` names, or null where the text is not one.
+ *
+ * **Read apart from `parseRef`, because an automation is not one of the two spaces.** A space travels
+ * as a space and a number through the pane's links and the made-in chip (`RefSpace`), where what is
+ * named is a record the board opens on its own. An automation is read inside its build screen
+ * (`AMB-D-944`), so what its ref carries is a number and a place that already knows what to do with
+ * one — the search row (`../screens/SearchScreen`).
+ *
+ * The namespaced form only: this reads a ref Amenbo rendered, never text somebody typed.
+ */
+export function automationRefNum(raw: string): number | null {
+  const m = /^AMB-AUT-(\d+)$/i.exec(raw.trim());
+  return m ? Number(m[1]) : null;
+}

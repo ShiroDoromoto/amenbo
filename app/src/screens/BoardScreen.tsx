@@ -97,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal, workspaceOpen, onGoToRun,
+  onStartTerminal, workspaceOpen, onGoToRun, openAutomation,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -112,6 +112,10 @@ export function BoardScreen({
   /** Work in this folder, in this project, in the terminal — the first loop's one move, carried out
    *  by the shell (`../shell/AppShell`). */
   onStartTerminal: (project: number, dir: string) => void;
+  /** Which automation's build screen to open, asked from a screen that is not this one — a press on a
+   *  search hit (`../shell/AppShell`). A project of its own is on it, because the ask travels with the
+   *  move to that project and arrives while this screen is still drawn for the one left behind. */
+  openAutomation?: { project: number; automation: number; nth: number } | null;
   /** Whether the workspace is standing, for the press that starts a run (`./AutomationsScreen`). */
   workspaceOpen: boolean;
   /** Go to the pane a run is drawn in — a press on a row of the automations screen's "running" tab,
@@ -122,6 +126,12 @@ export function BoardScreen({
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
   // The tasks surface (list/board/…) or the decisions one. Decisions shows only what sits under this project.
   const [tab, setTab] = useState<"tasks" | "decisions" | "automations">("tasks");
+  // An ask from outside this screen goes to the automations tab, which is where the build screen it
+  // names is opened (`./AutomationsScreen`). It is answered here rather than passed straight through,
+  // because which tab is up is this screen's own state and nobody else's.
+  useEffect(() => {
+    if (openAutomation?.project === projectId) setTab("automations");
+  }, [openAutomation, projectId]);
   const [sel, setSel] = useState<FilterSelection>({});
   // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
   // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
@@ -338,6 +348,7 @@ export function BoardScreen({
           projectId={projectId}
           workspaceOpen={workspaceOpen}
           onGoToRun={onGoToRun}
+          openBuild={openAutomation?.project === projectId ? openAutomation : null}
         />
       )}
       {/* The loop speaks about a folder, and `linkFolder` standing ahead of it is what guarantees there

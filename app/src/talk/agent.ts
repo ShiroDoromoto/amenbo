@@ -113,6 +113,17 @@ export async function mountAgentFrame(
   // answered, by the person choosing one or by a terminal this frame took up saying where it runs,
   // it is not asked for again.
   let folder: string | null = start.cwd ?? null;
+  // **What this frame was asked to start its terminal on**, until it has been started on it
+  // (`./terminal`'s `PaneStart.say`). A step of an automation run comes up on the text core composed
+  // for it, and every other pane on the sentence that points an agent at `agent --json` — which is
+  // what the host puts there when this is null (`crate::pty::pty_open`).
+  //
+  // **It is held rather than read off `start` at the moment a terminal opens**, because it is spent
+  // once: the road that takes a terminal up is handed `start` whole, and every other road reaches
+  // `open` with a choice and nothing else, so a step opened through one of those came up on the
+  // sentence any pane comes up on (`AMB-T-5281`). Spent, because a second terminal started in the
+  // same place — a row pressed after the step's own ended — would be carrying the step out again.
+  let saying: string | null = start.say ?? null;
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
   // while one is in flight — so what comes back is checked against this and thrown away if the frame
   // has moved on. Without it a pane nobody can see keeps its PTY open for the life of the window.
@@ -197,7 +208,20 @@ export async function mountAgentFrame(
     // The place stays this frame's whichever road the pane came by, because it is what a way back
     // into the session is written down against (`AMB-D-869`): a press on the row starts something
     // here, and it has to be *here* that the handle lands.
-    void mountTerminal(pane, events, { ...take, frame: start.frame, cwd, agent })
+    // What the place stands for goes with every terminal started in it, and the text goes with the
+    // first one alone. `take` is `start` itself on the one road that takes a terminal up, and its
+    // own answer wins there for the same reason it does for the folder.
+    //
+    // Each is put on only where there is one to put, so an ordinary pane is started with exactly
+    // what it was started with before any of this: three keys carrying nothing would be three
+    // answers where the pane has none.
+    const started: PaneStart = { ...take, frame: start.frame, cwd, agent };
+    const opening = take.say ?? saying;
+    saying = null;
+    if (opening != null) started.say = opening;
+    if (started.fresh === undefined && start.fresh !== undefined) started.fresh = start.fresh;
+    if (started.runStep == null && start.runStep != null) started.runStep = start.runStep;
+    void mountTerminal(pane, events, started)
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();

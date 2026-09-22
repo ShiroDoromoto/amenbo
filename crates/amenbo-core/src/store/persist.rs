@@ -1731,6 +1731,29 @@ impl Store {
         )
     }
 
+    /// **Stop every run a previous launch left standing** — the ones that are `running` or `queued`
+    /// when the app comes up, which cannot be either (one operation = one transaction).
+    ///
+    /// A run's steps are terminals of the app, so nothing it was carrying out survived the app
+    /// ending: a `running` row on the way up is a record of what was true before, and left alone it
+    /// holds a lane nobody is using and a task nobody is working.
+    ///
+    /// **The runs it will catch are read first, so the write declares them.** The guard itself is
+    /// nothing to this caller — the app's reach is every project — but the declaration is also what
+    /// says which projects the write touched, and a sweep that named none would move no project's
+    /// sync version while moving its rows. Nothing else writes runs while the app is coming up, so
+    /// the list read here is the list the sweep finds.
+    pub fn automation_sweep(&mut self, lanes: i64) -> Result<Vec<crate::model::AutomationRun>> {
+        let conn = self.engine.conn();
+        let mut caught = crate::store_engine::read::automation_run_ids_queued(conn)?;
+        caught.extend(crate::store_engine::read::automation_run_ids_running(conn)?);
+        let targets: Vec<WriteTarget> = caught
+            .into_iter()
+            .map(|id| WriteTarget::AutomationPart(AutomationPart::Run, id))
+            .collect();
+        self.write_one(&targets, |tx| crate::ops::automation_stop::sweep(tx, lanes))
+    }
+
     /// **Launch an automation** — check it, copy its steps into a run, and take a lane if one is free
     /// (one operation = one transaction).
     ///

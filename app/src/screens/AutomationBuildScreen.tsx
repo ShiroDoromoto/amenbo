@@ -31,9 +31,10 @@ import { useState } from "react";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd } from "./AutomationStepAdd";
 import { AutomationStepPanel } from "./AutomationStepPanel";
-import { launchAutomation, useAutomation, useLaunchCheck } from "../core/automations";
+import { useAutomationStart } from "../components/StartAutomation";
+import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
-import { errText, t, tf } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
 
@@ -62,6 +63,10 @@ function blockText(block: AutomationLaunchBlockDto): string {
       return tf("auto.block.unansweredCfg", { step, at });
     case "agent_missing":
       return tf("auto.block.agentMissing", { step, at });
+    // The model, where the agent it belongs to has already said what it offers. The sentence names
+    // the model alone: the step names one agent, and the picture beside this list already says which.
+    case "model_missing":
+      return tf("auto.block.modelMissing", { step, at });
     default:
       return block.reason;
   }
@@ -100,34 +105,9 @@ export function AutomationBuildScreen({
   const [inserting, setInserting] = useState<number | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
-  // What the last press came back with: the sentence core refused with, or that the run is in line
-  // behind the lanes. Both are cleared by the next press — what a reader is owed is the outcome of
-  // the press they just made.
-  const [refused, setRefused] = useState<string | null>(null);
-  const [queued, setQueued] = useState(false);
-  // A press already under way. The answer carries the pane the run opens in, so a second press
-  // before the first lands would be a second run nobody asked for.
-  const [starting, setStarting] = useState(false);
-
-  async function start() {
-    if (projectId === null) return;
-    setRefused(null);
-    setQueued(false);
-    setStarting(true);
-    try {
-      const started = await launchAutomation(
-        id,
-        projectId,
-        folders.live.map((one) => one.path),
-        workspaceOpen,
-      );
-      setQueued(started?.queued ?? false);
-    } catch (e) {
-      setRefused(errText(e));
-    } finally {
-      setStarting(false);
-    }
-  }
+  // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
+  // is where an automation is built, not a third place for a launch to behave differently.
+  const { start, refused, queued, starting } = useAutomationStart(projectId, workspaceOpen);
 
   return (
     <div className="settings">
@@ -167,7 +147,7 @@ export function AutomationBuildScreen({
             type="button"
             className="btn btn--primary"
             disabled={!check?.ready || starting || projectId === null}
-            onClick={start}
+            onClick={() => void start(id, folders.live.map((one) => one.path))}
           >
             {t("auto.start")}
           </button>

@@ -8,6 +8,7 @@
 //! size where the answer can be found by opening one file.
 
 pub(crate) mod attachment;
+pub(crate) mod automation;
 pub(crate) mod comment;
 pub(crate) mod decision;
 pub(crate) mod dimension;

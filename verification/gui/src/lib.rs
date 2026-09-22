@@ -6823,6 +6823,7 @@ pub fn domain_str(d: Domain) -> &'static str {
         Domain::Store => "store",
         Domain::Folder => "folder",
         Domain::Attachment => "attachment",
+        Domain::Automation => "automation",
         Domain::Repo => "repo",
         Domain::Mcp => "mcp",
         Domain::Tick => "tick",

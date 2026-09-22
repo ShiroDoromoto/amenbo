@@ -628,9 +628,10 @@ mod tests {
     }
 
     fn opened(tx: &WriteTx<'_>, run: &AutomationRun, step: &AutomationStep) -> Opening {
-        match open(tx, run.id, def_of(tx, run, step).id).expect("open") {
+        match open(tx, run.id, def_of(tx, run, step).id, None).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
+            Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
         }
     }
 

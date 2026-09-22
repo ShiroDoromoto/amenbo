@@ -871,7 +871,11 @@ fn open_one(
     run_id: i64,
     def_id: i64,
 ) -> Result<AutomationStepOpenDto, CmdError> {
-    let opened = store.automation_step_open(run_id, def_id)?;
+    // What this machine can start, as the device's settings last had it from a probe
+    // (`crate::wake`). Taken before the write because the store is borrowed for it, and `None` where
+    // nothing has ever probed — which is nobody asked, not "nothing is installed" (`AMB-D-792`).
+    let startable: Option<Vec<String>> = store.config.installed_agents().map(<[String]>::to_vec);
+    let opened = store.automation_step_open(run_id, def_id, startable.as_deref())?;
     let (project, step, missing) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
@@ -898,6 +902,13 @@ fn open_one(
         // What a step's pane is told about is its own step. No other run is in the event and none is
         // opened here: what the watch looks for is a run `running` with nothing open (`AMB-D-945`).
         Opened::Stopped { run, missing, .. } => (run.project_id, None, missing),
+        // Nothing is named in the event for this one. `missing` is about inputs, and what a reader is
+        // owed here is on the run's own row — the running tab says which ending it was, and the line
+        // core left on the task says how far it got (`amenbo_core::ops::automation_stop`).
+        Opened::NoAgent { run, agent } => {
+            log::info!("run {run_id} asked for {agent}, which this machine cannot start");
+            (run.project_id, None, Vec::new())
+        }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,

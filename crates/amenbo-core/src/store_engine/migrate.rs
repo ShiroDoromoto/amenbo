@@ -898,6 +898,11 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 55,
+        name: "join what an action declares to the step inside it",
+        apply: Apply::Custom(join_the_action_to_its_step),
+    },
+    Step {
+        to: 56,
         name: "drop automation_step_note, the last name v50 lays down that no registry has",
         // `AMB-D-949`. v50 lays `automation_step_note` down in frozen text, and v53's fold drops it
         // wherever the fold runs. The fold is skipped whole on a store born below v50 — genesis
@@ -3856,9 +3861,10 @@ fn write_cfg(
 /// **Copy one owner's ways out and inputs onto another**, with the outputs hanging on each way out.
 ///
 /// An action of one step declares the same names twice over: on the action, which is what a placement of
-/// it is wired by, and on the step, which is what the picture inside it is drawn with. Linking the two
-/// instead of copying them is `AMB-T-5311`'s; until then the copy is what makes an action of one step
-/// behave exactly as the step it was folded out of did.
+/// it is wired by, and on the step, which is what the picture inside it is drawn with. The copy is what
+/// makes an action of one step behave exactly as the step it was folded out of did; what joins the two
+/// copies is drawn a step later, by [`join_the_action_to_its_step`], off the names this one left
+/// matching.
 fn mirror_declarations(
     tx: &Transaction<'_>,
     mint: &mut Minting,
@@ -3925,6 +3931,162 @@ fn mirror_declarations(
                 port.updated_at,
             ],
         )?;
+    }
+    Ok(())
+}
+
+/// v55: an action's declarations are **joined** to the step inside it (`AMB-T-5311`).
+///
+/// v53 left an action of one step declaring the same names twice over — on the action, which is what a
+/// placement of it is wired by, and on the step, which is what the picture inside it is drawn with
+/// ([`mirror_declarations`]). Carrying the same name is not a join: nothing said that leaving the step
+/// leaves the action, and nothing said that what the action is handed reaches the step. A run walking
+/// into such an action would reach its one step and find no way out of the action at all.
+///
+/// Three things happen here, in this order:
+///
+/// 1. **`automation_edge` gains `exit_to`** — the way out of the action an `Exit` edge returns to. A
+///    plain `ALTER TABLE … ADD COLUMN`: it is nullable, so every row already there reads as saying
+///    nothing, which is what they mean.
+/// 2. **`ends` admits `'exit'`.** v9's procedure met a ninth time, copied rather than called, for the
+///    reasons [`admit_rejected_task_status`] gives at length — the set is widened in place because four
+///    tables reference this picture's neighbours and the rebuild SQLite prescribes is shut. Nothing is
+///    written to the rows: no row can be carrying a value the column never accepted.
+/// 3. **The lines are drawn.** For every action holding exactly one step — which is every action v53
+///    made — each of the step's ways out is given an `Exit` edge onto the action's way out of the same
+///    name, and each input the action declares is wired from the boundary (`0`) onto the step's input of
+///    the same name. The name is what the mirror left behind, so it is what the join is read off; from
+///    here on the line is the truth and the names may part.
+///
+/// **Only where nothing is drawn yet.** A way out that already says what happens after it is left
+/// alone, and so is a wire already drawn between the same two ends — a store stamped back and run
+/// forward again lands on what it had, rather than a second copy of it.
+///
+/// An action with two steps or more is skipped whole: which of them leaves by which way out is a
+/// picture only its author can draw, and guessing it would draw a wrong one that looks deliberate.
+fn join_the_action_to_its_step(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from v50 on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(ends IN ('', 'go', 'done', 'halt'))";
+    /// The same set with the way out of an action a picture inside it returns to.
+    const WIDE: &str = "CHECK(ends IN ('', 'go', 'done', 'halt', 'exit'))";
+
+    let tx = ctx.tx;
+    let has_column: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation_edge') WHERE name = 'exit_to'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_column == 0 {
+        tx.execute_batch("ALTER TABLE automation_edge ADD COLUMN exit_to TEXT;")?;
+    }
+
+    let declared: String = tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_edge'",
+        [],
+        |r| r.get(0),
+    )?;
+    if !declared.contains(WIDE) {
+        if !declared.contains(NARROW) {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_edge",
+                expected: NARROW,
+            });
+        }
+        let widened = declared.replace(NARROW, WIDE);
+        let before = column_names(tx, "automation_edge")?;
+        tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_edge'",
+            [&widened],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+        // statement sees the widened `CHECK` instead of the one this connection read at open.
+        tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(tx, "automation_edge")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_edge",
+                expected: NARROW,
+            });
+        }
+    }
+
+    // ── the lines ──
+    let lone_steps: Vec<(i64, i64)> = {
+        let mut stmt = tx.prepare(
+            "SELECT action_id, MIN(id) FROM automation_action_step GROUP BY action_id \
+             HAVING COUNT(*) = 1",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    if lone_steps.is_empty() {
+        return Ok(());
+    }
+    let mut edge_id: i64 =
+        tx.query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM automation_edge", [], |r| r.get(0))?;
+    let mut wire_id: i64 =
+        tx.query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM automation_wire", [], |r| r.get(0))?;
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+
+    for (action_id, step_id) in lone_steps {
+        let mut last_key: Option<String> = tx.query_row(
+            "SELECT MAX(order_key) FROM automation_edge WHERE owner_kind = 'action' AND owner_id = ?1",
+            [action_id],
+            |r| r.get(0),
+        )?;
+        let shared_exits: Vec<Option<String>> = {
+            let mut stmt = tx.prepare(
+                "SELECT s.name FROM automation_exit s \
+                 WHERE s.owner_kind = 'step' AND s.owner_id = ?1 \
+                   AND EXISTS (SELECT 1 FROM automation_exit a \
+                               WHERE a.owner_kind = 'action' AND a.owner_id = ?2 \
+                                 AND a.name IS s.name) \
+                   AND NOT EXISTS (SELECT 1 FROM automation_edge e \
+                                   WHERE e.owner_kind = 'action' AND e.from_id = ?1 \
+                                     AND e.exit_name IS s.name) \
+                 ORDER BY s.order_key, s.id",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![step_id, action_id], |r| r.get(0))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        for name in shared_exits {
+            let order_key = crate::order::key_between(last_key.as_deref(), None);
+            tx.execute(
+                "INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_name, to_id, \
+                     ends, exit_to, max_times, order_key, created_at, updated_at) \
+                 VALUES (?1, 'action', ?2, ?3, ?4, NULL, 'exit', ?4, NULL, ?5, ?6, ?6)",
+                rusqlite::params![edge_id, action_id, step_id, name, order_key, now],
+            )?;
+            edge_id += 1;
+            last_key = Some(order_key);
+        }
+        let shared_inputs: Vec<String> = {
+            let mut stmt = tx.prepare(
+                "SELECT a.name FROM automation_port a \
+                 WHERE a.owner_kind = 'action' AND a.owner_id = ?1 AND a.direction = 'in' \
+                   AND EXISTS (SELECT 1 FROM automation_port s \
+                               WHERE s.owner_kind = 'step' AND s.owner_id = ?2 \
+                                 AND s.direction = 'in' AND s.name = a.name) \
+                   AND NOT EXISTS (SELECT 1 FROM automation_wire w \
+                                   WHERE w.owner_kind = 'action' AND w.owner_id = ?1 \
+                                     AND w.from_id = 0 AND w.from_port_name = a.name \
+                                     AND w.to_id = ?2 AND w.to_port_name = a.name) \
+                 ORDER BY a.order_key, a.id",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![action_id, step_id], |r| r.get(0))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        for name in shared_inputs {
+            tx.execute(
+                "INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_name, \
+                     from_port_name, to_id, to_port_name, created_at, updated_at) \
+                 VALUES (?1, 'action', ?2, 0, NULL, ?3, ?4, ?3, ?5, ?5)",
+                rusqlite::params![wire_id, action_id, name, step_id, now],
+            )?;
+            wire_id += 1;
+        }
     }
     Ok(())
 }
@@ -6165,11 +6327,11 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// **v55 drops the note table no registry has** (`AMB-D-949`).
+    /// **v56 drops the note table no registry has** (`AMB-D-949`).
     ///
     /// The store that carries it this far is the one the fold passed over: born below v50, handed
     /// today's registry by genesis, and then handed v50's frozen text on top of that. The chain is
-    /// run to v54 first so the table is seen standing — what the assertion after it names is this
+    /// run to v55 first so the table is seen standing — what the assertion after it names is this
     /// step's work and no other's.
     #[test]
     fn the_note_table_v50_lays_down_is_dropped() {
@@ -6186,7 +6348,7 @@ mod tests {
                 .unwrap()
         };
 
-        run(&engine, &dir, steps_through(54), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(55), &mut crate::progress::ignore).unwrap();
         assert_eq!(
             standing("automation_step_note"),
             1,
@@ -6195,11 +6357,101 @@ mod tests {
 
         run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(standing("automation_step_note"), 0, "and the step after v54 takes it away");
+        assert_eq!(standing("automation_step_note"), 0, "and the step after v55 takes it away");
         assert_eq!(
             standing("automation_placement_note"),
             1,
             "the note table the registry does declare is left where it stands",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **v55 joins what an action declares to the step inside it** (`AMB-T-5311`).
+    ///
+    /// The store is written in v53's shape — an action of one step, declaring the same names twice over
+    /// — and comes out with a line drawn for every name the two share, and none for a name only one of
+    /// them carries. An action of two steps is left alone: which of them leaves by which way out is
+    /// nobody's to guess.
+    #[test]
+    fn the_chain_joins_the_action_to_the_step_inside_it() {
+        const STAMP: &str = "'2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z'";
+        let dir = scratch("join-the-action-v53");
+        let engine = store_at(&dir, 53);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name, notes, order_key, created_at, updated_at) \
+                   VALUES (1, 'amenbo', '', 'a0', {STAMP});
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, order_key, created_at, updated_at) \
+                   VALUES (7, 1, '点検する', NULL, 'a0', {STAMP});
+                 INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                   VALUES (11, 7, '点検する', 'look', 'claude', NULL, 0, NULL, 0, 1, 'a0', {STAMP});
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, order_key, created_at, updated_at) \
+                   VALUES (8, 1, '二手で直す', NULL, 'a1', {STAMP});
+                 INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                   VALUES (12, 8, '直す', 'fix', 'claude', NULL, 0, NULL, 0, 1, 'a0', {STAMP});
+                 INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                   VALUES (13, 8, '確かめる', 'check', 'claude', NULL, 0, NULL, 0, 1, 'a1', {STAMP});
+                 UPDATE automation_action SET entry_step_id = 11 WHERE id = 7;
+                 UPDATE automation_action SET entry_step_id = 12 WHERE id = 8;
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at) VALUES \
+                   (21, 'step', 11, NULL, 'a0', {STAMP}), \
+                   (22, 'step', 11, '*', 'a1', {STAMP}), \
+                   (23, 'step', 11, '直すところがある', 'a2', {STAMP}), \
+                   (24, 'step', 11, '中だけの終わり', 'a3', {STAMP}), \
+                   (25, 'action', 7, NULL, 'a0', {STAMP}), \
+                   (26, 'action', 7, '*', 'a1', {STAMP}), \
+                   (27, 'action', 7, '直すところがある', 'a2', {STAMP}), \
+                   (28, 'step', 12, NULL, 'a0', {STAMP}), \
+                   (29, 'action', 8, NULL, 'a0', {STAMP});
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind, required, order_key, created_at, updated_at) VALUES \
+                   (31, 'action', 7, 'in', '差分', 'file', 1, 'a0', {STAMP}), \
+                   (32, 'step', 11, 'in', '差分', 'file', 1, 'a0', {STAMP}), \
+                   (33, 'action', 7, 'in', '誰も読まない', 'value', 0, 'a1', {STAMP});",
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        let names = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT exit_name, exit_to FROM automation_edge \
+                     WHERE owner_kind = 'action' AND owner_id = 7 AND ends = 'exit' \
+                     ORDER BY order_key",
+                )
+                .unwrap();
+            let rows = stmt
+                .query_map([], |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)))
+                .unwrap();
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names,
+            vec![
+                (None, None),
+                (Some("*".to_string()), Some("*".to_string())),
+                (Some("直すところがある".to_string()), Some("直すところがある".to_string())),
+            ],
+            "every way out the two share is joined, and the one only the step has is not",
+        );
+        assert_eq!(
+            one("SELECT COUNT(*) FROM automation_edge WHERE owner_kind = 'action' AND owner_id = 8"),
+            0,
+            "an action of two steps is left to its author",
+        );
+        assert_eq!(
+            one("SELECT COUNT(*) FROM automation_wire WHERE owner_kind = 'action' AND owner_id = 7 \
+                   AND from_id = 0 AND from_port_name = '差分' AND to_id = 11 AND to_port_name = '差分'"),
+            1,
+            "the input both declare is wired from the action onto the step",
+        );
+        assert_eq!(
+            one("SELECT COUNT(*) FROM automation_wire WHERE from_port_name = '誰も読まない'"),
+            0,
+            "and the one the step does not take in reaches nothing",
         );
         std::fs::remove_dir_all(&dir).ok();
     }

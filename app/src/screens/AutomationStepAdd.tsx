@@ -1,26 +1,37 @@
-// **Put an action in on a line** (`AMB-T-5257`), asked from the `+` on that line.
+// **Put a box in on a line** (`AMB-T-5257`), asked from the `+` on that line — and, on a picture with
+// nothing on it, the first box of all (`AMB-T-5315`).
 //
-// **What it puts in is a placement** (`AMB-D-949`): a spot on the picture, with a library action
-// standing on it. The way out that was pressed comes to point at the new spot, and the new spot goes
-// on to whatever that way out used to reach (`amenbo_core::ops::automation::placement_insert`) — one
-// act, so no line is ever left running past a box that was meant to be on it.
+// **It serves both pictures** (`AMB-D-949`): on an automation what goes in is a placement, a spot
+// with a library action standing on it; inside an action it is a step carrying its own prompt. The
+// fields are the same ones either way, so what differs is the door the press goes through
+// (`../core/automations`) and whether the library is offered at all — an action places no actions.
+//
+// **On a line, nothing is left running past a box.** The way out that was pressed comes to point at
+// the new box, and the new box goes on to whatever that way out used to reach
+// (`amenbo_core::ops::automation::placement_insert`, `…::step_insert`) — one act.
 //
 // **It is not the only road in.** A box that belongs beside the picture rather than on a line is put
-// down by the row under it (`./AutomationPlaceRow`), which is also how the first one arrives: this
-// dialog needs a line, and a picture with nothing on it has none.
+// down by the row under it (`./AutomationPlaceRow`, and the press above an action's picture), which
+// is also how the first one arrives: this dialog needs a line, and a picture with nothing on it has
+// none.
 //
-// **The action is picked from the library, or written here and made one.** A prompt typed here
-// becomes an ordinary action in this project's library and is placed in the same act
-// (`AMB-T-5317`); an action picked from the library declares nothing of its own — its ways out and
-// its inputs are the action's — so those two sections are not drawn for it rather than drawn and
-// refused.
+// **A box on an automation runs a library action, or carries a prompt written here and becomes
+// one.** A prompt typed here becomes an ordinary action in this project's library and is placed in
+// the same act (`AMB-T-5317`); an action picked from the library declares nothing of its own — its
+// ways out and its inputs are the action's — so those two sections are not drawn for it rather than
+// drawn and refused.
 //
 // **What it declares is what a dialog can take without becoming a screen**: the named ways out, and
 // the inputs with what each carries. Everything else is on the panel, which is where a reader lands
 // the moment this closes.
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { insertAutomationStep, useAutomationActions } from "../core/automations";
+import {
+  addAutomationStep,
+  insertAutomationActionStep,
+  insertAutomationStep,
+  useAutomationActions,
+} from "../core/automations";
 import { t } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { PORT_KINDS } from "./automationPortKinds";
@@ -28,16 +39,24 @@ import { PORT_KINDS } from "./automationPortKinds";
 /** One input being written, before it is anything core knows about. */
 type Draft = { name: string; kind: string; required: boolean };
 
+/**
+ * Where the new box goes: onto a line of either picture, or into an action that has no line to press
+ * yet.
+ */
+export type AddTarget =
+  | { picture: "automation"; edgeId: number }
+  | { picture: "action"; edgeId: number }
+  | { picture: "action"; actionId: number };
+
 export function AutomationStepAdd({
-  edgeId,
+  into,
   projectId,
   agent,
   onClose,
 }: {
-  /** The line the `+` was on — what the new step is put in front of. */
-  edgeId: number;
+  into: AddTarget;
   projectId: number | null;
-  /** What the step this line leaves is carried out by, which is the likeliest answer for the new one. */
+  /** What the box this line leaves is carried out by, which is the likeliest answer for the new one. */
   agent: string;
   onClose: () => void;
 }) {
@@ -48,19 +67,34 @@ export function AutomationStepAdd({
   const [interactive, setInteractive] = useState(false);
   const [exits, setExits] = useState<string[]>([]);
   const [inputs, setInputs] = useState<Draft[]>([]);
-  const own = action === "";
+  // Inside an action there is no library to pick from, so what goes in always carries its own words.
+  const own = into.picture === "action" || action === "";
 
   const ready = name.trim() !== "" && (!own || prompt.trim() !== "");
   const put = () => {
     if (!ready) return;
-    void insertAutomationStep(edgeId, {
-      name: name.trim(),
-      source: own ? { prompt: prompt.trim() } : { action: Number(action) },
-      agent,
-      interactive,
+    const declared = {
       exits: own ? exits.map((one) => one.trim()).filter((one) => one !== "") : [],
-      inputs: own ? inputs.filter((one) => one.name.trim() !== "").map((one) => ({ ...one, name: one.name.trim() })) : [],
-    });
+      inputs: own
+        ? inputs
+            .filter((one) => one.name.trim() !== "")
+            .map((one) => ({ ...one, name: one.name.trim() }))
+        : [],
+    };
+    if (into.picture === "automation") {
+      void insertAutomationStep(into.edgeId, {
+        name: name.trim(),
+        source: own ? { prompt: prompt.trim() } : { action: Number(action) },
+        agent,
+        interactive,
+        ...declared,
+      });
+    } else {
+      const step = { name: name.trim(), prompt: prompt.trim(), agent, interactive, ...declared };
+      void ("edgeId" in into
+        ? insertAutomationActionStep(into.edgeId, step)
+        : addAutomationStep(into.actionId, step));
+    }
     onClose();
   };
 
@@ -72,24 +106,28 @@ export function AutomationStepAdd({
         aria-modal="true"
         aria-labelledby="auto-add-title"
       >
-        <h2 className="autodlg__title" id="auto-add-title">{t("auto.add.title")}</h2>
+        <h2 className="autodlg__title" id="auto-add-title">
+          {into.picture === "action" ? t("auto.act.addTitle") : t("auto.add.title")}
+        </h2>
 
         <label className="autostep__field">
           <span className="autostep__label">{t("auto.step.name")}</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
-        <label className="autostep__field">
-          <span className="autostep__label">{t("auto.step.source")}</span>
-          <select value={action} onChange={(e) => setAction(e.target.value)}>
-            <option value="">{t("auto.step.sourceOwn")}</option>
-            {actions.map((one) => (
-              <option key={one.id} value={String(one.id)}>
-                {one.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {into.picture === "automation" && (
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.step.source")}</span>
+            <select value={action} onChange={(e) => setAction(e.target.value)}>
+              <option value="">{t("auto.step.sourceOwn")}</option>
+              {actions.map((one) => (
+                <option key={one.id} value={String(one.id)}>
+                  {one.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {own && (
           <label className="autostep__field">

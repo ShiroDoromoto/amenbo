@@ -447,6 +447,10 @@ fn whats_next(
             Ok(Next::Closed(automation_stop::ended(tx, run, AutomationRunStatus::Done, None)?))
         }
         AutomationEnds::Halt => Ok(Next::Halted(stopped(tx, run, None)?)),
+        // An `Exit` edge is drawn inside an action, and the edge read here is the automation's — the
+        // write side refuses that pair, so nothing reaches this arm. Opening the picture inside an
+        // action is `AMB-T-5313`'s, and until it lands a run that somehow met one has nowhere to go.
+        AutomationEnds::Exit => Ok(Next::Halted(stopped(tx, run, None)?)),
         AutomationEnds::Go => {
             let to = edge.to_id;
             let next = read::automation_run_defs_of(conn, run.id)?

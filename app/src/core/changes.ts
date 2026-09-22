@@ -104,7 +104,9 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_exit: ["automationActions", "automations"],
   automation_port: ["automationActions", "automations"],
   automation_edge: ["automationActions", "automations"],
-  automation_wire: ["automations"],
+  // A wire is drawn on either picture — between two spots of an automation, or between two steps
+  // inside one action (`AMB-D-949`) — so it moves both surfaces.
+  automation_wire: ["automationActions", "automations"],
   // A run being launched, moving on or ending moves the row the "running" tab draws for it.
   automation_run: ["automationRuns"],
   // The steps a run copied at launch. Written once, in the same transaction as the run, and read only

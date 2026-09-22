@@ -2,10 +2,12 @@
 // The dialog that puts a step in on a line, and the one that declares what a way out hands on
 // (`AMB-T-5257`).
 //
-// What these guard: **a step runs a library action or carries a prompt written here**, and one that
-// runs an action is not asked to declare what the action declares; **what the dialog took is what is
-// sent**, ways out and inputs together with the line it was opened from; **nothing is sent until the
-// dialog has what a step cannot be made without**; and, for the output artefact, **the name starts on
+// What these guard: **a box on an automation runs a library action or carries a prompt written
+// here**, and one that runs an action is not asked to declare what the action declares; **inside an
+// action there is no library to pick from** (`AMB-D-949`) and the press goes through that picture's
+// own door — the line it was opened from, or the action itself where there is no line yet
+// (`AMB-T-5315`); **what the dialog took is what is sent**, ways out and inputs together; **nothing
+// is sent until the dialog has what a step cannot be made without**; and, for the output artefact, **the name starts on
 // the way out's own and stops following once somebody writes their own** — but only where that way
 // out hands on nothing yet.
 import { act, createElement } from "react";
@@ -14,12 +16,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   insert: vi.fn(),
+  insertInside: vi.fn(),
+  add: vi.fn(),
   output: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
-  useAutomationActions: () => [{ id: 4, name: "Review", prompt: "", global: false, usedBy: 1 }],
+  useAutomationActions: () => [{ id: 4, name: "Review", steps: 1, global: false, usedBy: 1 }],
   insertAutomationStep: hoisted.insert,
+  insertAutomationActionStep: hoisted.insertInside,
+  addAutomationStep: hoisted.add,
   addAutomationOutput: hoisted.output,
 }));
 
@@ -59,6 +65,8 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   hoisted.insert.mockReset();
+  hoisted.insertInside.mockReset();
+  hoisted.add.mockReset();
   hoisted.output.mockReset();
 });
 
@@ -72,7 +80,7 @@ describe("putting a step in on a line", () => {
     await act(async () => {
       root.render(
         createElement(AutomationStepAdd, {
-          edgeId: 9,
+          into: { picture: "automation", edgeId: 9 },
           projectId: 1,
           agent: "claude-code",
           onClose: () => undefined,
@@ -120,6 +128,58 @@ describe("putting a step in on a line", () => {
     await act(async () => button(t("auto.add.put")).click());
     expect(hoisted.insert.mock.calls[0]![1]).toMatchObject({
       source: { action: 4 },
+      exits: [],
+      inputs: [],
+    });
+  });
+});
+
+describe("putting a step in inside an action", () => {
+  async function open(into: { picture: "action"; edgeId: number } | { picture: "action"; actionId: number }) {
+    await act(async () => {
+      root.render(
+        createElement(AutomationStepAdd, {
+          into,
+          projectId: 1,
+          agent: "claude-code",
+          onClose: () => undefined,
+        }),
+      );
+    });
+  }
+
+  it("offers no library to pick from — an action places no actions", async () => {
+    await open({ picture: "action", edgeId: 9 });
+    expect(selects().some((one) => one.value === "" && one.options.length > 1)).toBe(false);
+    expect(document.body.querySelector("textarea")).not.toBeNull();
+  });
+
+  it("sends a step to the line it was opened from", async () => {
+    await open({ picture: "action", edgeId: 9 });
+    await typeInto(boxes()[0]!, "直す");
+    await typeInto(document.body.querySelector("textarea")!, "やる");
+    await act(async () => button(t("auto.add.put")).click());
+    expect(hoisted.insertInside).toHaveBeenCalledWith(9, {
+      name: "直す",
+      prompt: "やる",
+      agent: "claude-code",
+      interactive: false,
+      exits: [],
+      inputs: [],
+    });
+    expect(hoisted.insert).not.toHaveBeenCalled();
+  });
+
+  it("adds the first step where the picture has no line to press", async () => {
+    await open({ picture: "action", actionId: 4 });
+    await typeInto(boxes()[0]!, "取る");
+    await typeInto(document.body.querySelector("textarea")!, "やる");
+    await act(async () => button(t("auto.add.put")).click());
+    expect(hoisted.add).toHaveBeenCalledWith(4, {
+      name: "取る",
+      prompt: "やる",
+      agent: "claude-code",
+      interactive: false,
       exits: [],
       inputs: [],
     });

@@ -1605,8 +1605,10 @@ pub struct AutomationAction {
     pub updated_at: Timestamp,
 }
 
-/// **One automation** — the actions placed on it, what runs after what, and the preamble every step's
-/// launch carries.
+/// **One automation** — the actions placed on it and what runs after what.
+///
+/// What every step of every run is told before its own prompt is not here: it is Amenbo's own fixed
+/// sentences ([`crate::agents::preamble`]), the same for every automation (`AMB-D-952`).
 ///
 /// `entry_placement_id` is where a run starts; from it the edges are walked, and the place a
 /// placement sits in the picture and the number it is drawn with both fall out of that walk rather
@@ -1617,8 +1619,6 @@ pub struct Automation {
     pub project_id: i64,
     pub name: String,
     pub notes: String,
-    /// Prepended to every step's launch.
-    pub preamble: String,
     /// The placement a run opens first. `None` while the automation is still being built; launching
     /// without one is refused at the launch check, not here.
     #[serde(default)]

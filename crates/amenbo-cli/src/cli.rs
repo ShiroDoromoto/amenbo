@@ -1798,10 +1798,6 @@ pub enum AutomationCmd {
         /// what it is for, in Markdown (`-` reads it from stdin)
         #[arg(long, default_value = "")]
         notes: String,
-        /// the text prepended to every step's launch. Left out, the standing operating rules go in;
-        /// pass an empty string for none (`-` reads it from stdin)
-        #[arg(long)]
-        preamble: Option<String>,
     },
     /// The automations of one project — what each is called, how many actions are placed on it, and
     /// whether it is archived
@@ -1816,7 +1812,7 @@ pub enum AutomationCmd {
         /// automation id
         id: i64,
     },
-    /// Change an automation's name, notes, preamble, or whether it is archived (only the given fields change)
+    /// Change an automation's name, notes, or whether it is archived (only the given fields change)
     Update {
         /// automation id
         id: i64,
@@ -1825,9 +1821,6 @@ pub enum AutomationCmd {
         /// what it is for, in Markdown (`-` reads it from stdin)
         #[arg(long)]
         notes: Option<String>,
-        /// the text prepended to every step's launch (`-` reads it from stdin)
-        #[arg(long)]
-        preamble: Option<String>,
         /// whether it is archived (`--archived true|false`)
         #[arg(long)]
         archived: Option<bool>,

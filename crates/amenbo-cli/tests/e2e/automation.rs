@@ -95,24 +95,18 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     assert_eq!(wire["automation_wire"]["from_port_name"].as_str(), Some("report"));
 }
 
-/// What every step is told before its own prompt is the same for every automation until somebody
-/// writes otherwise, so leaving `--preamble` out puts the standing rules there. Carrying none is a
-/// thing to ask for, not a thing to fall into.
+/// What every step is told before its own prompt is Amenbo's own and the same on every automation
+/// (`AMB-D-952`), so a definition carries no field for it and the door offers no way to write one.
 #[test]
-fn the_standing_rules_go_in_unless_a_preamble_is_given() {
+fn an_automation_carries_no_preamble_of_its_own() {
     let cli = Cli::new();
 
     let p = cli.a_project();
     let stood = cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]);
-    let preamble = stood["automation"]["preamble"].as_str().unwrap_or_default();
-    assert!(!preamble.is_empty(), "a new automation carries the standing rules: {preamble:?}");
-    assert!(preamble.contains("one step of an automation run"), "{preamble}");
+    assert!(stood["automation"]["preamble"].is_null(), "{stood}");
 
-    let bare = cli.json(&["automation", "add", "--project", &p, "--name", "B", "--preamble", "", "--json"]);
-    assert_eq!(bare["automation"]["preamble"].as_str(), Some(""));
-
-    let own = cli.json(&["automation", "add", "--project", &p, "--name", "C", "--preamble", "keep it short", "--json"]);
-    assert_eq!(own["automation"]["preamble"].as_str(), Some("keep it short"));
+    let (said, code) = cli.run_err(&["automation", "add", "--project", &p, "--name", "B", "--preamble", "mine"]);
+    assert_ne!(code, 0, "--preamble is not a flag any more: {said}");
 }
 
 /// `--from` is one token, `<box>:<way out>`, because a way out is named against whichever of the box

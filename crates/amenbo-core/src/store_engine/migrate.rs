@@ -921,12 +921,17 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 57,
+        name: "take the preamble off an automation — the build writes it now",
+        apply: Apply::Custom(take_the_preamble_off_the_definition),
+    },
+    Step {
+        to: 58,
         name: "drop the shared documents, and give an action a note of its own",
         apply: Apply::Custom(take_the_shared_documents_away),
     },
 ];
 
-/// v57: the shared documents go, and `automation_action.note` arrives (`AMB-D-952`).
+/// v58: the shared documents go, and `automation_action.note` arrives (`AMB-D-952`).
 ///
 /// **Why the rows are not carried anywhere.** A document was a place to write material a prompt would
 /// otherwise repeat, handed to a placement and read into every step opened under it. There are two ways
@@ -4235,6 +4240,39 @@ fn name_the_step_after_its_action(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
+/// v57: `automation.preamble` goes (`AMB-D-952`).
+///
+/// What a step is told before its own prompt says how a run works, not what this automation does, so
+/// it reads the same on every automation there is. It is written in the build from here on
+/// ([`crate::agents::preamble`]) and composed into each launch from there, which leaves the column
+/// written by nobody and read by nobody — and a column in that state is one every later reader has to
+/// work out again. It goes with the reason for it.
+///
+/// **Nothing is carried across.** What a row holds is either the standing text a build put there or a
+/// sentence somebody typed over it, and neither has anywhere to go: no launch looks at the row again.
+/// A store's own history is what the pre-migration backup keeps.
+///
+/// **Dropped where it stands.** The column is plain text with no index, no key and no `CHECK` naming
+/// it, which is the case SQLite's own `DROP COLUMN` takes. Rebuilding the table is not open to this
+/// step anyway — `automation_run` and `automation_placement` both reference `automation`, and v30's
+/// note says what a `DROP TABLE` does to a `RESTRICT` that points at it.
+///
+/// **Probed, not bare.** A store born from today's registry never had the column: genesis creates a
+/// table it is missing whole, from a registry this change has already taken it out of. Such a store
+/// arrives here finished, and a bare `ALTER TABLE` would fail on it rather than pass over it.
+fn take_the_preamble_off_the_definition(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation') WHERE name = 'preamble'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held == 0 {
+        return Ok(());
+    }
+    ctx.tx.execute_batch("ALTER TABLE automation DROP COLUMN preamble;")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6410,7 +6448,7 @@ mod tests {
 
         // That this step reaches **only** the name no registry ever had is drawn on a store that
         // carries the declared one: a store born at v53 gets `automation_placement_note` from that
-        // version's frozen text, and stands there at v56 — v57 is what takes it
+        // version's frozen text, and stands there at v56 — v58 is what takes it
         // (the_shared_documents_go_and_an_action_says_what_it_is_for).
         let dir = scratch("step-note-v53");
         let engine = store_at(&dir, 53);
@@ -6521,7 +6559,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// **v57 takes the shared documents away and gives an action a note** (`AMB-D-952`).
+    /// **v58 takes the shared documents away and gives an action a note** (`AMB-D-952`).
     ///
     /// The store reached v53 with a document on it and a link handing it to a placement, and with
     /// the document's body copied into the word index. It comes out with neither table, with

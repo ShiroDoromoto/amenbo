@@ -326,7 +326,7 @@ value?: string, };
  * It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
  * picture, its launch check and its panel all read the same walk from the entry.
  */
-export type AutomationDetailDto = { id: number, projectId: number, name: string, notes: string, preamble: string, 
+export type AutomationDetailDto = { id: number, projectId: number, name: string, notes: string, 
 /**
  * The placement a run opens first. Absent while the automation is still being built.
  */

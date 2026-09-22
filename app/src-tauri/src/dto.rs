@@ -3289,7 +3289,6 @@ pub struct AutomationDetailDto {
     pub(crate) project_id: i64,
     pub(crate) name: String,
     pub(crate) notes: String,
-    pub(crate) preamble: String,
     /// The placement a run opens first. Absent while the automation is still being built.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]

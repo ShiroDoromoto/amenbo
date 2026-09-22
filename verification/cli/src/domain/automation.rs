@@ -37,7 +37,7 @@ impl Driver<'_> {
                 }
                 args.push("--name".into());
                 args.push(name.into());
-                for key in ["notes", "preamble"] {
+                for key in ["notes"] {
                     if let Some(v) = with.get(key).and_then(|v| v.as_str()) {
                         args.push(format!("--{key}"));
                         args.push(v.to_string());

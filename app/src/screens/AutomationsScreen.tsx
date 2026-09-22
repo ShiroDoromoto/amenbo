@@ -23,8 +23,8 @@
 //
 // **A new one is made from the list**, which is where this side of the app makes one at all. The
 // press takes a name and nothing else, and lands in the build screen on what it just made — what an
-// automation is for is the picture, and a form asking for notes and a preamble first would be asked
-// before there is anything to write them about (`AutomationNew`).
+// automation is for is the picture, and a form asking for its notes first would be asked before
+// there is anything to write them about (`AutomationNew`).
 import { useEffect, useState } from "react";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab } from "./AutomationActionsTab";

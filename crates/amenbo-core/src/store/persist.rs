@@ -11,6 +11,20 @@ use crate::store_engine::WriteTx;
 use super::write_reach::{self, AutomationPart, WriteTarget};
 use super::{ensure_dir, write_atomic, Store};
 
+/// The one target a "write an action here" press adds beyond the picture it is pressed on: the
+/// device's library, where an action belongs to no project at all.
+///
+/// The project's shelf needs none — the picture's own row already declares that project, so the guard
+/// and the sync version read it from there. Only "no project" is a place the picture does not name,
+/// and a narrowed reach is refused it (`super::write_reach`), which is the guard doing its job: a
+/// facet bound to one project must not write onto the shelf every project reads.
+fn device_shelf(shelf: crate::ops::automation::ActionShelf) -> Option<WriteTarget> {
+    match shelf {
+        crate::ops::automation::ActionShelf::Device => Some(WriteTarget::NewIn(None)),
+        crate::ops::automation::ActionShelf::Project => None,
+    }
+}
+
 /// Take the next activity sequence number for a system event and mark it used **in the same
 /// transaction**. A system event has no row in the DB (only a line in the ledger), so the next
 /// `MAX(id)` would not see this id — without the high-water mark, two events in a row would be
@@ -1645,17 +1659,16 @@ impl Store {
         })
     }
 
-    /// Change an automation's name, notes, preamble or archived flag (one operation = one transaction).
+    /// Change an automation's name, notes or archived flag (one operation = one transaction).
     pub fn automation_update(
         &mut self,
         id: i64,
         name: Option<&str>,
         notes: Option<&str>,
-        preamble: Option<&str>,
         archived: Option<bool>,
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::update(tx, id, name, notes, preamble, archived)
+            crate::ops::automation::update(tx, id, name, notes, archived)
         })
     }
 
@@ -1708,15 +1721,49 @@ impl Store {
     /// Write an action from one prompt and put it in on a line (one operation = one transaction): the
     /// action, its one step, the ways out and inputs they are declared with, the placement, and the
     /// two edges that leave nothing pointing at nothing.
+    ///
+    /// The write declares the shelf as well as the line, because the action being born is what the
+    /// device's library would gain — a target the edge alone does not name.
     pub fn automation_placement_insert_from_prompt(
         &mut self,
         edge_id: i64,
+        shelf: crate::ops::automation::ActionShelf,
         new: crate::ops::automation::NewStep,
         exits: &[String],
         inputs: &[(String, crate::model::AutomationPortKind, bool)],
     ) -> Result<crate::model::AutomationPlacement> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
-            crate::ops::automation::placement_insert_from_prompt(tx, edge_id, new, exits, inputs)
+        let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)];
+        targets.extend(device_shelf(shelf));
+        self.write_one(&targets, |tx| {
+            crate::ops::automation::placement_insert_from_prompt(
+                tx, edge_id, shelf, new, exits, inputs,
+            )
+        })
+    }
+
+    /// Write an action from one prompt and put it on a picture, standing on its own (one operation =
+    /// one transaction) — [`Self::automation_placement_insert_from_prompt`] for a picture that has no
+    /// line to put one in on.
+    pub fn automation_placement_add_from_prompt(
+        &mut self,
+        automation_id: i64,
+        shelf: crate::ops::automation::ActionShelf,
+        new: crate::ops::automation::NewStep,
+        exits: &[String],
+        inputs: &[(String, crate::model::AutomationPortKind, bool)],
+    ) -> Result<crate::model::AutomationPlacement> {
+        let mut targets =
+            vec![WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)];
+        targets.extend(device_shelf(shelf));
+        self.write_one(&targets, |tx| {
+            crate::ops::automation::placement_add_from_prompt(
+                tx,
+                automation_id,
+                shelf,
+                new,
+                exits,
+                inputs,
+            )
         })
     }
 

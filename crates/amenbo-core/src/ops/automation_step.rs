@@ -5,12 +5,12 @@
 //! the values wired into it. An agent that had to fetch would need a
 //! vocabulary for fetching, and every step would spend its first turns on it.
 //!
-//! **What is read from the snapshot, and what is read live.** The step's own declarations — its ways
-//! out, its inputs, its settings — come from [`crate::model::AutomationRunDef`], the copy taken at
-//! launch, so editing an automation cannot change what a run under way is doing. Two things are read
-//! live because there is no copy of them: the preamble and the wires. A wire is the picture rather
-//! than the step, and the picture is walked afresh at every move; the preamble is the words a person
-//! writes for the run and would be worth correcting mid-run rather than frozen.
+//! **What is read from the snapshot, what is read live, and what is neither.** The step's own
+//! declarations — its ways out, its inputs, its settings — come from
+//! [`crate::model::AutomationRunDef`], the copy taken at launch, so editing an automation cannot
+//! change what a run under way is doing. What is read live is the wires: a wire is the picture
+//! rather than the step, and the picture is walked afresh at every move. The preamble is neither: no
+//! row holds it, so it is composed from the build ([`crate::agents::preamble`]) at every launch.
 //!
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
@@ -24,10 +24,11 @@
 use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::model::{
-    AutomationPortDirection, AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStoppedReason, RunDefExit, RunDefPort, ERROR_EXIT,
+    AutomationPictureOwner, AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
+    AutomationStoppedReason, RunDefExit, RunDefPort, ACTION_BOUNDARY, ERROR_EXIT,
 };
+use crate::ops::automation_run;
 use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -154,7 +155,7 @@ pub fn open(
     for found in &handed {
         write_in(tx, &run_step, found, now)?;
     }
-    let text = compose(tx, &run, &def, &exits, &handed, stretch.as_ref())?;
+    let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
     let folder = working_folder(&def, &handed)?;
     Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text, folder })))
 }
@@ -211,17 +212,13 @@ fn latest_for(
     opens_a_stretch: bool,
 ) -> Result<Option<Handed>> {
     let conn = tx.conn();
-    let (Some(placement_id), Some(stretch), false) = (def.placement_id, stretch, opens_a_stretch)
+    let (Some(placement_id), Some(step_id), Some(stretch), false) =
+        (def.placement_id, def.step_id, stretch, opens_a_stretch)
     else {
         return Ok(None);
     };
-    let wires = read::automation_wires_to_port(
-        conn,
-        crate::model::AutomationPictureOwner::Automation,
-        placement_id,
-        &port.name,
-    )?;
-    if wires.is_empty() {
+    let sources = sources_of(conn, placement_id, step_id, &port.name)?;
+    if sources.is_empty() {
         return Ok(None);
     }
     let mut best: Option<(i64, AutomationRunValue)> = None;
@@ -233,10 +230,11 @@ fn latest_for(
             if value.direction != AutomationPortDirection::Out {
                 continue;
             }
-            let joined = wires.iter().any(|w| {
-                Some(w.from_id) == from_def.placement_id
-                    && w.from_exit_name.as_deref() == value.exit_name.as_deref()
-                    && w.from_port_name == value.name
+            let joined = sources.iter().any(|source| {
+                Some(source.placement_id) == from_def.placement_id
+                    && Some(source.step_id) == from_def.step_id
+                    && source.exit.as_deref() == value.exit_name.as_deref()
+                    && source.port == value.name
             });
             if !joined {
                 continue;
@@ -247,6 +245,80 @@ fn latest_for(
         }
     }
     Ok(best.map(|(_, from)| Handed { port: port.clone(), from }))
+}
+
+/// One output of one step of one placement — a place a value an input is handed can come from.
+struct Source {
+    placement_id: i64,
+    step_id: i64,
+    exit: Option<String>,
+    port: String,
+}
+
+/// **Every step output the wires join to one input of one step**, followed across the action's edge.
+///
+/// A wire inside the action from another of its steps is a source as it stands. A wire from the
+/// action itself ([`ACTION_BOUNDARY`]) hands on one of the action's inputs, so it is followed out to the
+/// automation's picture: to the wires feeding that input on this placement, and from each of them back
+/// into the action placed at the far end, to the wires that fill the output it names. Those are drawn
+/// into the boundary from a step's way out, and they count only where that way out returns to the very
+/// way out of the action the automation's wire leaves by ([`automation_run::returns_to`]) — the wire
+/// into the boundary does not name one, and the line from the step's way out is what says which.
+///
+/// All of it is read live, like the edges: the wires are the picture rather than the step.
+fn sources_of(
+    conn: &rusqlite::Connection,
+    placement_id: i64,
+    step_id: i64,
+    port_name: &str,
+) -> Result<Vec<Source>> {
+    let Some(placement) = read::automation_placement(conn, placement_id)? else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for wire in read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)? {
+        if wire.to_id != step_id || wire.to_port_name != port_name {
+            continue;
+        }
+        if wire.from_id != ACTION_BOUNDARY {
+            out.push(Source {
+                placement_id,
+                step_id: wire.from_id,
+                exit: wire.from_exit_name,
+                port: wire.from_port_name,
+            });
+            continue;
+        }
+        for outer in read::automation_wires_to_port(
+            conn,
+            AutomationPictureOwner::Automation,
+            placement_id,
+            &wire.from_port_name,
+        )? {
+            let Some(far) = read::automation_placement(conn, outer.from_id)? else { continue };
+            for inner in
+                read::automation_wires_of(conn, AutomationPictureOwner::Action, far.action_id)?
+            {
+                if inner.to_id != ACTION_BOUNDARY || inner.to_port_name != outer.from_port_name {
+                    continue;
+                }
+                let leaves_by = automation_run::returns_to(
+                    conn,
+                    inner.from_id,
+                    inner.from_exit_name.as_deref(),
+                )?;
+                if leaves_by.is_some_and(|to| to == outer.from_exit_name) {
+                    out.push(Source {
+                        placement_id: far.id,
+                        step_id: inner.from_id,
+                        exit: inner.from_exit_name,
+                        port: inner.from_port_name,
+                    });
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Stop a run because a required input had nothing to fill it, through the one cleanup every ending
@@ -370,21 +442,17 @@ fn write_in(
 /// holds for this one, then what it is being asked to do, and last how to hand the work back.
 ///
 /// **English, like every other sentence this crate writes.** The words that carry the work — the
-/// preamble and the prompt — are the person's own and arrive in whatever language they were written
-/// in; what is added around them is the frame.
+/// prompt — is the person's own and arrives in whatever language it was written in; what is added
+/// around it, the preamble included, is the frame.
 fn compose(
     tx: &WriteTx<'_>,
-    run: &AutomationRun,
     def: &AutomationRunDef,
     exits: &[RunDefExit],
     handed: &[Handed],
     stretch: Option<&AutomationRunTask>,
 ) -> Result<String> {
-    let conn = tx.conn();
     let mut out = String::new();
-    if let Some(automation) = read::automation(conn, run.automation_id)? {
-        push_block(&mut out, automation.preamble.trim());
-    }
+    push_block(&mut out, &crate::agents::preamble(crate::config::Paths::command_name()));
     if def.show_history {
         if let Some(story) = story_so_far(tx, stretch)? {
             push_block(&mut out, &story);
@@ -400,8 +468,8 @@ fn compose(
 }
 
 /// Add one block, with a blank line between it and whatever came before. An empty one is left out
-/// rather than left as a gap: an automation with no preamble should read as one that has nothing to say
-/// first, not as one that opens on white space.
+/// rather than left as a gap: a step handed no documents and no values should read as one with
+/// nothing to say about them, not as one with white space where they would have gone.
 fn push_block(out: &mut String, block: &str) {
     if block.trim().is_empty() {
         return;
@@ -547,12 +615,11 @@ fn handing_back(exits: &[RunDefExit]) -> String {
 mod tests {
     use super::*;
     use crate::model::{
-        ActorKind, Automation, AutomationAction, AutomationOwner, AutomationPictureOwner,
-        AutomationPlacement, AutomationPortOwner,
+        ActorKind, Automation, AutomationAction, AutomationPictureOwner, AutomationPlacement,
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_run::{launch, Launcher};
-    use crate::ops::test_support::{mk_placed, mk_project, with_tx};
+    use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, with_tx};
 
     /// The picture every test here starts from: a spot that takes a task and hands a note on through
     /// "found", and a second spot that is wired to read that note. Both ways out of both are decided,
@@ -569,11 +636,7 @@ mod tests {
         let automation = automation::add(
             tx,
             project,
-            NewAutomation {
-                name: "1件やりきる".into(),
-                notes: String::new(),
-                preamble: "You are one step of a run.".into(),
-            },
+            NewAutomation { name: "1件やりきる".into(), notes: String::new() },
         )
         .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");
@@ -581,20 +644,10 @@ mod tests {
             mk_placed(tx, &automation, "直す", "fix what the note says", "claude");
 
         // The first spot takes the task on its unnamed way out, and hands a note on through "found".
-        out_on(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
-        automation::exit_add(tx, AutomationOwner::Action, first_action.id, Some("found"))
-            .expect("way out");
-        out_on(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);
-        automation::port_add(
-            tx,
-            AutomationPortOwner::Action,
-            second_action.id,
-            AutomationPortDirection::In,
-            "note",
-            AutomationPortKind::Value,
-            required_in,
-        )
-        .expect("input");
+        mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+        mk_exit(tx, &first_action, "found");
+        mk_out(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);
+        mk_in(tx, &second_action, "note", AutomationPortKind::Value, required_in);
         if wired {
             automation::wire_add(
                 tx,
@@ -621,35 +674,6 @@ mod tests {
         let automation =
             automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, first_action, first, second }
-    }
-
-    /// Declare an output on one way out of a library action.
-    fn out_on(
-        tx: &WriteTx<'_>,
-        action: &AutomationAction,
-        exit_name: Option<&str>,
-        name: &str,
-        kind: AutomationPortKind,
-        required: bool,
-    ) {
-        let exit = read::automation_exit_by_name(
-            tx.conn(),
-            AutomationOwner::Action,
-            action.id,
-            exit_name,
-        )
-        .expect("read")
-        .expect("the way out");
-        automation::port_add(
-            tx,
-            AutomationPortOwner::Exit,
-            exit.id,
-            AutomationPortDirection::Out,
-            name,
-            kind,
-            required,
-        )
-        .expect("output");
     }
 
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -793,15 +817,31 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
-            assert!(text.starts_with("You are one step of a run."), "{text}");
+            assert!(text.starts_with("You are one step of an automation run"), "{text}");
             assert!(text.contains("## What to do\n\nlook at it"), "{text}");
             assert!(text.contains("\"found\" — `note` (value)"), "{text}");
             assert!(text.contains("the unnamed way out — `タスク` (task_take, required)"), "{text}");
             assert!(text.contains("the error way out — nothing to hand on"), "{text}");
             assert!(
-                !text.contains("What you have been handed"),
+                !text.contains("## What you have been handed"),
                 "the first step is handed nothing: {text}"
             );
+        });
+    }
+
+    /// **The preamble is Amenbo's, not the automation's** (`AMB-D-952`). No row carries it, so every
+    /// run of every automation opens on the same sentences — and since nobody types them any more,
+    /// they may name the commands a step reads its run back with (`AMB-T-5325`).
+    #[test]
+    fn every_step_opens_on_the_standing_sentences_and_is_told_how_to_read_what_came_before() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+
+            assert!(text.starts_with(&crate::agents::preamble("amenbo")), "{text}");
+            assert!(text.contains("`amenbo automation run-show <run>`"), "{text}");
+            assert!(text.contains("`amenbo attach show`"), "{text}");
         });
     }
 
@@ -815,7 +855,7 @@ mod tests {
     fn the_text_names_a_command_per_kind_and_not_out_for_the_task_it_takes() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
-            out_on(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            mk_out(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
@@ -982,7 +1022,7 @@ mod tests {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
             let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
-            assert!(!opening.text.contains("What you have been handed"), "{}", opening.text);
+            assert!(!opening.text.contains("## What you have been handed"), "{}", opening.text);
         });
     }
 
@@ -1026,7 +1066,7 @@ mod tests {
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
             let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
-            assert!(!second.text.contains("What has happened so far"), "{}", second.text);
+            assert!(!second.text.contains("## What has happened so far"), "{}", second.text);
             assert!(second.text.contains("- note: the note"), "the values still go: {}", second.text);
         });
     }

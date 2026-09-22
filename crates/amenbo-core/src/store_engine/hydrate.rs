@@ -489,7 +489,6 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         project_id: get(r, C.project_id)?,
         name: get(r, C.name)?,
         notes: get(r, C.notes)?,
-        preamble: get(r, C.preamble)?,
         entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
         order_key: get(r, C.order_key)?,

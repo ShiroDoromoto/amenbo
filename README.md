@@ -345,7 +345,7 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # out and the ways out it may leave through. An edge says what happens after each way out is
 # taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
 # waits for that step to report, so the loop belongs to the store.
-amenbo automation add --name "Review and fix"          # ...and the preamble every step of it is told
+amenbo automation add --name "Review and fix"          # the picture itself; what every step is told first is Amenbo's own
 amenbo automation action-add --name "Review"           # a unit worth using twice, in the library
 amenbo automation step-add 7 --name "Review" --prompt - --agent claude # one step of it = one terminal
 amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first

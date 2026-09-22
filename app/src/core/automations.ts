@@ -1,6 +1,6 @@
 // The automations screen's own seam: a project's definitions, one definition whole, whether that one
-// could be started, the library the actions on it are placed from — and the one write that is not the
-// screen's at all, a run being stopped from the pane it is drawn in.
+// could be started, the library the actions on it are placed from, one library action whole — and the
+// one write that is not the screen's at all, a run being stopped from the pane it is drawn in.
 //
 // **Three layers, and each write names the one the field lives on** (`AMB-D-949`): a placement is a
 // spot on the picture, what it declares is its action's, and what it runs on is that action's step.
@@ -8,7 +8,8 @@
 // It sits beside `core/reads.ts` rather than in it because what it reads is a different shape of
 // thing: a task list is paged and an automation is not. An automation is tens of rows, and the build
 // screen's picture, its panel and its launch check all walk the same definition — so it is fetched
-// whole, once, and every part of the screen reads that one answer.
+// whole, once, and every part of the screen reads that one answer. One library action is fetched the
+// same way, by the screen its steps are built in (`AMB-T-5315`).
 //
 // **The writes here sit beside their reads** rather than in `core/mutations`, because what they are
 // about is this screen and nothing else. What the screen's own write does not do for itself is the
@@ -26,6 +27,7 @@ import { invoke } from "./ipc";
 import { invokeAck, invokeForAck } from "./mutations";
 import type {
   AutomationActionCardDto,
+  AutomationActionDetailDto,
   AutomationCardDto,
   AutomationCfgDto,
   AutomationDetailDto,
@@ -131,8 +133,9 @@ export function useAutomationActions(projectId: number | null): AutomationAction
  * **Make a library action** — its name, and which library it lands in.
  *
  * `project` is `null` for the device's library, which every project on this machine reaches, and the
- * project's id for its own. There is no prompt: it is written afterwards in the box the list opens
- * on the new row (`editAutomationAction`), which is the only place a prompt is written.
+ * project's id for its own. **It is born empty** — no steps, no entry — and the first step, with its
+ * prompt and the agent asked to carry it out, is written in the build screen the press lands in
+ * (`../screens/AutomationActionBuildScreen`).
  */
 export async function addAutomationAction(name: string, project: number | null): Promise<void> {
   if (!inTauri()) return;
@@ -140,25 +143,18 @@ export async function addAutomationAction(name: string, project: number | null):
 }
 
 /**
- * Rename a library action, and rewrite the prompt the step it opens runs on. Only what is passed is
- * written, and `step` names the row the prompt is on — the action's entry, as the listing hands it
- * back.
+ * Rename a library action. The name is all that is the action's own: the prompt, the agent and the
+ * flags belong to its steps (`editAutomationStep`).
  *
- * **The rewrite reaches every placement of this action**, which is what a library is for — and why
- * the screen says how many automations that is before the box is opened. A run already under way is
- * not reached: a run takes its copy at the launch, and what an open step carries is settled.
+ * **Every picture standing on this action reads the new name at once**, a placement pointing at it
+ * by key — which is what a library is for.
  */
 export async function editAutomationAction(
   id: number,
-  patch: { name?: string; step?: number; prompt?: string },
+  patch: { name?: string },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_edit", {
-    id,
-    name: patch.name ?? null,
-    step: patch.step ?? null,
-    prompt: patch.prompt ?? null,
-  });
+  return invokeAck("automation_action_edit", { id, name: patch.name ?? null });
 }
 
 /**
@@ -195,28 +191,34 @@ export async function setAutomationEntry(id: number, placementId: number | null)
 }
 
 /** What a way out is said to do: open a placement, close the task, or stop the run. */
+/** Which picture a line is drawn on: an automation's boxes are placements, an action's are steps. */
+export type Picture = "automation" | "action";
+
 export type EdgeEnds = AutomationEdgeDto["ends"];
 
 /**
- * **Say what happens after one placement leaves through one way out.**
+ * **Say what happens after one box leaves through one way out** — a placement on an automation, a
+ * step inside an action, as `picture` says (`AMB-D-949`).
  *
  * One way out decides one thing, so a second edge on the same one is refused rather than leaving the
- * run to pick between them — which is why the panel edits the edge already there instead of drawing
+ * run to pick between them — which is why the panels edit the edge already there instead of drawing
  * another (`editAutomationEdge`).
  *
  * A new `go` edge is born with the limit core's callers give the silence; nothing is passed here, and
  * the number is then a field on the panel.
  */
 export async function addAutomationEdge(
-  from: { placementId: number; exitName?: string },
-  target: { ends: EdgeEnds; toPlacementId?: number },
+  picture: Picture,
+  from: { boxId: number; exitName?: string },
+  target: { ends: EdgeEnds; to?: number },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_edge_add", {
-    fromPlacementId: from.placementId,
+    picture,
+    fromId: from.boxId,
     exitName: from.exitName ?? null,
     ends: target.ends,
-    toPlacementId: target.toPlacementId ?? null,
+    toId: target.to ?? null,
   });
 }
 
@@ -229,13 +231,13 @@ export async function addAutomationEdge(
  */
 export async function editAutomationEdge(
   id: number,
-  patch: { ends?: EdgeEnds; toPlacementId?: number; maxTimes?: number | null },
+  patch: { ends?: EdgeEnds; to?: number; maxTimes?: number | null },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_edge_edit", {
     id,
     ends: patch.ends ?? null,
-    toPlacementId: patch.toPlacementId ?? null,
+    toId: patch.to ?? null,
     maxTimes: patch.maxTimes ?? null,
     clearMaxTimes: patch.maxTimes === null,
   });
@@ -264,6 +266,103 @@ export function useAutomation(id: number | null): AutomationDetailDto | null {
     () => (id === null ? Promise.resolve(null) : fetchAutomation(id)),
   );
   return data ?? null;
+}
+
+/** One library action's whole definition, or nothing where that id names none. */
+export async function fetchAutomationAction(
+  id: number,
+): Promise<AutomationActionDetailDto | null> {
+  if (!inTauri()) return null;
+  return invoke<AutomationActionDetailDto | null>("automation_action_detail", { id });
+}
+
+/** Subscribing read of one library action's definition. */
+export function useAutomationAction(id: number | null): AutomationActionDetailDto | null {
+  const { data } = useQuery<AutomationActionDetailDto | null>(
+    ["automationAction", id ?? null],
+    () => (id === null ? Promise.resolve(null) : fetchAutomationAction(id)),
+  );
+  return data ?? null;
+}
+
+/**
+ * **Add a step to an action**, with the ways out and the inputs it is written with.
+ *
+ * It is the one way into an action whose picture is empty — every other way in is a line to put a
+ * step on (`insertAutomationActionStep`). **An empty picture takes this step as its entry**, the
+ * first box being the only one a run could open.
+ */
+export async function addAutomationStep(
+  actionId: number,
+  step: {
+    name: string;
+    prompt: string;
+    agent: string;
+    interactive?: boolean;
+    exits?: readonly string[];
+    inputs?: readonly { name: string; kind: string; required: boolean }[];
+  },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_step_add", {
+    actionId,
+    name: step.name,
+    prompt: step.prompt,
+    agent: step.agent,
+    interactive: step.interactive ?? false,
+    exits: [...(step.exits ?? [])],
+    inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
+  });
+}
+
+/**
+ * **Put a step in on a line inside an action.** The way out that was pressed comes to point at the
+ * new step, and the new step goes on to whatever that way out used to reach — one act.
+ *
+ * A step inside an action always carries its own prompt: an action places no actions (`AMB-D-949`),
+ * so there is nothing to pick out of the library here.
+ */
+export async function insertAutomationActionStep(
+  edgeId: number,
+  step: {
+    name: string;
+    prompt: string;
+    agent: string;
+    interactive?: boolean;
+    exits?: readonly string[];
+    inputs?: readonly { name: string; kind: string; required: boolean }[];
+  },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_step_insert", {
+    edgeId,
+    name: step.name,
+    prompt: step.prompt,
+    agent: step.agent,
+    interactive: step.interactive ?? false,
+    exits: [...(step.exits ?? [])],
+    inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
+  });
+}
+
+/**
+ * **Take a step out of its action**, with what it declared and every line naming it.
+ *
+ * Losing the entry clears it rather than being refused — an action under construction has to be able
+ * to lose any step, and one left without an entry is what the launch check names.
+ */
+export async function removeAutomationStep(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_step_remove", { id });
+}
+
+/** **Name the step a placement of this action opens first**, or clear it with `null`. */
+export async function setAutomationActionEntry(
+  actionId: number,
+  step: number | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_entry_set", { actionId, step });
 }
 
 /**
@@ -321,19 +420,26 @@ export async function answerAutomationCfg(
   return invokeAck("automation_cfg_answer", { placementId, name, value });
 }
 
+/** Which of the two declares a way out or an input: the library action, or one step inside it. */
+export type Declarer = "action" | "step";
+
 /**
- * **Declare another way out of this action.**
+ * **Declare another way out** — of a library action, or of one step inside it.
  *
- * Every action is born carrying the unnamed way out and the error one, so this is the second and
- * every one after it. `*` is refused as a name — every action is read as carrying that one already.
+ * Both are born carrying the unnamed way out and the error one, so this is the second and every one
+ * after it. `*` is refused as a name — every declarer is read as carrying that one already.
  *
- * The three declaration families below name a row by **the action and the name**, the way the panel
- * holds it: a setting and an input have no id on screen, a setting's declaration and each placement's
+ * The declaration families below name a row by **the owner and the name**, the way the panels hold
+ * it: a setting and an input have no id on screen, a setting's declaration and each placement's
  * answer being folded into the one row a screen draws.
  */
-export async function declareAutomationExit(actionId: number, name: string): Promise<void> {
+export async function declareAutomationExit(
+  owner: Declarer,
+  ownerId: number,
+  name: string,
+): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_exit_declare", { actionId, name });
+  return invokeAck("automation_exit_declare", { owner, ownerId, name });
 }
 
 /**
@@ -344,18 +450,23 @@ export async function declareAutomationExit(actionId: number, name: string): Pro
  * the picture — which is where a reader can act on it.
  */
 export async function renameAutomationExit(
-  actionId: number,
+  owner: Declarer,
+  ownerId: number,
   from: string | null,
   to: string | null,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_exit_rename", { actionId, from, to });
+  return invokeAck("automation_exit_rename", { owner, ownerId, from, to });
 }
 
 /** **Take one way out away**, with the outputs declared on it. The error one is refused. */
-export async function removeAutomationExit(actionId: number, name: string | null): Promise<void> {
+export async function removeAutomationExit(
+  owner: Declarer,
+  ownerId: number,
+  name: string | null,
+): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_exit_remove", { actionId, name });
+  return invokeAck("automation_exit_remove", { owner, ownerId, name });
 }
 
 /**
@@ -414,12 +525,14 @@ export async function removeAutomationCfg(actionId: number, name: string): Promi
  * declared here.
  */
 export async function declareAutomationInput(
-  actionId: number,
+  owner: Declarer,
+  ownerId: number,
   decl: { name: string; kind: AutomationPortDto["kind"]; required?: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_input_declare", {
-    actionId,
+    owner,
+    ownerId,
     name: decl.name,
     kind: decl.kind,
     required: decl.required ?? false,
@@ -431,13 +544,15 @@ export async function declareAutomationInput(
  * `renameAutomationExit`'s reason.
  */
 export async function editAutomationInput(
-  actionId: number,
+  owner: Declarer,
+  ownerId: number,
   name: string,
   patch: { name?: string; kind?: AutomationPortDto["kind"]; required?: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_input_edit", {
-    actionId,
+    owner,
+    ownerId,
     name,
     rename: patch.name ?? null,
     kind: patch.kind ?? null,
@@ -446,26 +561,32 @@ export async function editAutomationInput(
 }
 
 /** **Take an input away.** The wires that fed it are left where they are, parted. */
-export async function removeAutomationInput(actionId: number, name: string): Promise<void> {
+export async function removeAutomationInput(
+  owner: Declarer,
+  ownerId: number,
+  name: string,
+): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_input_remove", { actionId, name });
+  return invokeAck("automation_input_remove", { owner, ownerId, name });
 }
 
 /**
- * **Say what fills one of a spot's inputs.** Naming the same input twice answers the wire already
+ * **Say what fills one of a box's inputs.** Naming the same input twice answers the wire already
  * there rather than drawing a second one, so the control sends what was picked without first taking
  * the old one away.
  */
 export async function setAutomationWire(
-  from: { placementId: number; exitName?: string; portName: string },
-  to: { placementId: number; portName: string },
+  picture: Picture,
+  from: { boxId: number; exitName?: string; portName: string },
+  to: { boxId: number; portName: string },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_wire_set", {
-    fromPlacementId: from.placementId,
+    picture,
+    fromId: from.boxId,
     fromExitName: from.exitName ?? null,
     fromPortName: from.portName,
-    toPlacementId: to.placementId,
+    toId: to.boxId,
     toPortName: to.portName,
   });
 }

@@ -243,7 +243,7 @@ describe("the panel of one spot", () => {
         }),
       ],
       wires: [
-        { id: 3, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" },
+        { id: 3, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" },
       ],
     });
     await render({ automation: one, placementId: 2, projectId: 1 });
@@ -275,7 +275,7 @@ describe("the panel of one spot", () => {
     await act(async () => {
       line.querySelector<HTMLButtonElement>("button")!.click();
     });
-    expect(hoisted.declareExit).toHaveBeenCalledWith(4, "something to fix");
+    expect(hoisted.declareExit).toHaveBeenCalledWith("action", 4, "something to fix");
     expect(box.value).toBe("");
   });
 
@@ -306,7 +306,10 @@ describe("the panel of one spot", () => {
     await act(async () => {
       line.querySelector<HTMLButtonElement>("button")!.click();
     });
-    expect(hoisted.declareInput).toHaveBeenCalledWith(4, { name: "report", kind: "file" });
+    expect(hoisted.declareInput).toHaveBeenCalledWith("action", 4, {
+      name: "report",
+      kind: "file",
+    });
   });
 
   it("draws what core refused, and leaves the typed name where it can be fixed", async () => {
@@ -349,14 +352,18 @@ describe("the panel of one spot", () => {
   it("says what happens after a way out, changes it, and takes it back", async () => {
     await render({ automation: detail(), placementId: 1, projectId: 1 });
     await pick(nextFor(t("auto.step.exitUnnamed")), "done");
-    expect(hoisted.addEdge).toHaveBeenCalledWith({ placementId: 1, exitName: undefined }, { ends: "done" });
+    expect(hoisted.addEdge).toHaveBeenCalledWith(
+      "automation",
+      { boxId: 1, exitName: undefined },
+      { ends: "done" },
+    );
 
     const said = detail({
-      edges: [{ id: 8, fromPlacementId: 1, ends: "done" }],
+      edges: [{ id: 8, fromId: 1, ends: "done" }],
     });
     await render({ automation: said, placementId: 1, projectId: 1 });
     await pick(nextFor(t("auto.step.exitUnnamed")), "go:1");
-    expect(hoisted.editEdge).toHaveBeenCalledWith(8, { ends: "go", toPlacementId: 1 });
+    expect(hoisted.editEdge).toHaveBeenCalledWith(8, { ends: "go", to: 1 });
 
     await render({ automation: said, placementId: 1, projectId: 1 });
     await pick(nextFor(t("auto.step.exitUnnamed")), "");
@@ -367,7 +374,7 @@ describe("the panel of one spot", () => {
   /// and core refuses one there.
   it("writes the limit of a go edge, and draws none on one that ends the task", async () => {
     const looping = detail({
-      edges: [{ id: 8, fromPlacementId: 1, ends: "go", toPlacementId: 1, maxTimes: 10 }],
+      edges: [{ id: 8, fromId: 1, ends: "go", toId: 1, maxTimes: 10 }],
     });
     await render({ automation: looping, placementId: 1, projectId: 1 });
     const limit = boxes().find((b) => b.type === "number")!;
@@ -377,7 +384,7 @@ describe("the panel of one spot", () => {
     expect(hoisted.editEdge).toHaveBeenCalledWith(8, { maxTimes: null });
 
     await render({
-      automation: detail({ edges: [{ id: 8, fromPlacementId: 1, ends: "done" }] }),
+      automation: detail({ edges: [{ id: 8, fromId: 1, ends: "done" }] }),
       placementId: 1,
       projectId: 1,
     });

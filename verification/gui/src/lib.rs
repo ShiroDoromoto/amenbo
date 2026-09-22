@@ -1188,7 +1188,9 @@ impl Instructor {
             // The way out's name, written along the line that leaves by it. It is the name the road
             // gave that way out, so the picture is where it stands. A line leaving by the unnamed way
             // out carries no name at all, and where it ends is the interface's own wording — an eye
-            // closes both of those.
+            // closes both of those. So is a line that is not there: the way out's name may still be
+            // written on the box it leaves, and a reading would find it and call the line drawn.
+            (Domain::Automation, "line-pictured") if !present(with) => None,
             (Domain::Automation, "line-pictured") => {
                 Some(Expectation { text: arg_str(with, "exit")?.to_string(), present: true })
             }
@@ -3845,14 +3847,17 @@ impl Instructor {
                 "On the automations tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
                 self.target_label(with)
             ),
+            // An action opens into its own build screen, the way a definition does — what is being
+            // looked at is the picture of the steps inside it.
             (Domain::Automation, "action-open") => format!(
-                "On the actions tab, press the row for \"{}\".",
+                "On the actions tab, press the row for \"{}\" — the build screen for it opens in place of the list.",
                 self.target_label(with)
             ),
             // The rewrite that reaches every step pointed at this action, which is what the library
-            // is for and what the screen says before the box is opened.
+            // is for. The prompt is the step's, so it is written on the panel the picture opens, and
+            // it is written as the caret leaves the box — there is no Save on that screen.
             (Domain::Automation, "action-rewrite") => format!(
-                "Rewrite the prompt of the library action that is open so it reads \"{}\", and press the button that saves it.",
+                "On the action build screen, press the step in the picture, rewrite its prompt so it reads \"{}\", and move the caret out of the box.",
                 req(with, "prompt")?
             ),
             // The three fields the definition itself holds, written in the place at the foot of the
@@ -3953,6 +3958,59 @@ impl Instructor {
                     false => ", and set it to optional",
                 }
             ),
+            // The press above an action's picture, which adds a step on its own rather than on a
+            // line. It is named by what it does and not by its words: it reads one way while the
+            // action holds no step and another once it does, and the dialog it opens is the same.
+            (Domain::Automation, "add-step") => format!(
+                "On the action build screen, press the button under the picture that adds a step on its own. In the dialog, write the name \"{}\" and write \"{}\" as its prompt{}{}, then press the button that puts it in.",
+                req(with, "name")?,
+                req(with, "prompt")?,
+                match declared_exits(with)?.as_slice() {
+                    [] => String::new(),
+                    [one] => format!(", add a way out called {one}"),
+                    ways => format!(", add a way out for each of {}", listed(ways)),
+                },
+                match declared_inputs(with)?.as_slice() {
+                    [] => String::new(),
+                    [one] => format!(", add an input {one}"),
+                    ports => format!(", add an input for each of {}", listed(ports)),
+                }
+            ),
+            // What leaving by one way out leads to, picked off the pulldown on that way out's row.
+            // Picking the first line of it takes what was said away, which is the road's `to` and
+            // `ends` both left out — a state of its own, and not a way out that ends anything.
+            (Domain::Automation, "set-next") => format!(
+                "In the step panel, on the line for {}, open the pulldown of what happens next and {}{}.",
+                way_out(with),
+                match (arg_str(with, "to"), arg_str(with, "ends")) {
+                    (Some(to), None) => format!("choose the line that opens \"{to}\""),
+                    (None, Some("done")) => "choose the line saying the task is finished".to_string(),
+                    (None, Some("halt")) => "choose the line saying the run stops and calls a person".to_string(),
+                    (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt")),
+                    (None, None) => "choose the line saying nothing is said yet".to_string(),
+                    (Some(_), Some(_)) => return Err(
+                        "a way out goes on to a step (`to`) or ends the task or the run (`ends`), never both"
+                            .to_string(),
+                    ),
+                },
+                // The limit is drawn only beside a way out that goes on to a step, so it is written
+                // after the pick and never on a pick that ends something.
+                match (with.get("max_times"), arg_str(with, "to")) {
+                    (None, _) => String::new(),
+                    (Some(_), None) => return Err(
+                        "`max_times` is the limit on a way out that goes on to a step — name the step in `to`"
+                            .to_string(),
+                    ),
+                    (Some(v), Some(_)) if v.is_null() => ", then empty the box beside it that caps how many times it is taken, and move off it".to_string(),
+                    (Some(v), Some(_)) => match v.as_u64() {
+                        Some(n) if n > 0 => format!(", then write {n} in the box beside it that caps how many times it is taken, and move off it"),
+                        _ => return Err("`max_times` is a count of one or more, or `~` to empty it".to_string()),
+                    },
+                }
+            ),
+            // **The one press on the step panel that cannot be taken back**, so the machine's own
+            // question stands between it and the write, the way it does for deleting an automation.
+            (Domain::Automation, "remove-step") => "In the step panel, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
             // One row of the step panel, written. Every control there writes on the spot, and a box
             // of text writes as the caret leaves it — so the instruction says to leave the box.
             (Domain::Automation, "step-set") => format!(
@@ -5880,7 +5938,18 @@ impl Instructor {
                 ),
             },
             // A line leaving one step, and what is written along it: the way out's own name, and
-            // where leaving by it goes.
+            // where leaving by it goes. `present: false` is the line taken away — nothing said about
+            // where that way out goes, which names no end because there is none.
+            (Domain::Automation, "line-pictured") if !present(with) => match (arg_str(with, "to"), arg_str(with, "ends")) {
+                (None, None) => format!(
+                    "In the build screen's picture, confirm no line leaves the step \"{}\" by {}.",
+                    req(with, "from")?,
+                    way_out(with)
+                ),
+                _ => return Err(
+                    "a line that is not drawn goes nowhere — leave `to` and `ends` out of it".to_string(),
+                ),
+            },
             (Domain::Automation, "line-pictured") => format!(
                 "In the build screen's picture, confirm a line leaves the step \"{}\" by {}, {}.",
                 req(with, "from")?,
@@ -7994,6 +8063,69 @@ steps_gui:
             "{line}",
         );
         assert!(line.contains("\"draft\" carrying a file, marked optional"), "{line}");
+    }
+
+    /// The action build screen's three: a step added from the press above the picture, what leaving a
+    /// way out leads to said on its row — and taken back — and a step deleted past the question the
+    /// machine puts. A line taken away is read by an eye, the way out's name standing on its box.
+    #[test]
+    fn an_action_is_built_from_its_own_screen() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: add-step
+    with: { name: draft, prompt: write it, exits: [drafted] }
+  - type: action
+    domain: automation
+    op: set-next
+    with: { exit: drafted, to: review, max_times: 3 }
+  - type: action
+    domain: automation
+    op: set-next
+    with: { exit: drafted }
+  - type: action
+    domain: automation
+    op: set-next
+    with: { exit: drafted, ends: halt }
+  - type: action
+    domain: automation
+    op: remove-step
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with: { from: draft, exit: drafted, present: false }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> =
+            steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("adds a step on its own") && lines[0].contains("called \"drafted\""), "{}", lines[0]);
+        assert!(lines[1].contains("opens \"review\"") && lines[1].contains("write 3"), "{}", lines[1]);
+        assert!(lines[2].contains("nothing is said yet"), "{}", lines[2]);
+        assert!(lines[3].contains("stops and calls a person"), "{}", lines[3]);
+        assert!(lines[4].contains("deletes this step") && lines[4].contains("goes ahead"), "{}", lines[4]);
+        assert!(lines[5].contains("no line leaves the step \"draft\""), "{}", lines[5]);
+        assert!(ins.expectation(&steps[5]).is_none(), "a line gone is an eye's");
+    }
+
+    /// A limit belongs to a way out going on to a step, so a road writing one on an end is refused
+    /// rather than handed a box the panel never draws.
+    #[test]
+    fn a_limit_on_a_way_out_that_ends_is_refused() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: set-next
+    with: { exit: drafted, ends: done, max_times: 2 }
+"#);
+        let mut ins = Instructor::new();
+        assert!(ins.render(&s.steps(Driver::Gui)[0]).is_err());
     }
 
     /// The name the output dialog's box starts on is the one thing it does for a reader, so a road

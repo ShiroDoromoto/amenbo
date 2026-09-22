@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS automation_action (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     project_id BIGINT REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     name TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
     entry_step_id BIGINT REFERENCES automation_action_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     order_key TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
@@ -249,15 +250,6 @@ CREATE TABLE IF NOT EXISTS automation_placement (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
-    order_key TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
-);
-CREATE TABLE IF NOT EXISTS automation_note (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
-    name TEXT NOT NULL DEFAULT '',
-    body TEXT NOT NULL DEFAULT '',
     order_key TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
@@ -286,14 +278,6 @@ CREATE TABLE IF NOT EXISTS automation_cfg (
     required BOOLEAN NOT NULL DEFAULT 0 CHECK(required IN (0, 1)),
     options TEXT,
     value TEXT,
-    order_key TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
-);
-CREATE TABLE IF NOT EXISTS automation_placement_note (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    placement_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
-    note_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_note(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     order_key TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')

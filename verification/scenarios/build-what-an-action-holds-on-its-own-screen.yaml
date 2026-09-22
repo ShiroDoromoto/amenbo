@@ -1,0 +1,141 @@
+# An action is built on a screen of its own, one layer under an automation's: the boxes are the
+# steps inside it, and one step is one terminal. What a reader does there that no other screen asks
+# of them is three things. A picture with no line yet has no `+` to press, so a step is added by the
+# press above it. What leaving a step leads to is said on that way out's row, not drawn. And a step
+# is deleted outright, with every line naming it. A build that lost any of the three would leave an
+# action nobody could finish from the screen.
+id: build-what-an-action-holds-on-its-own-screen
+title: An action's steps are added, joined, let go of and deleted on the action's own screen
+description: >
+  Open a library action, add two steps with the press above the picture, and say on the first
+  one's way out that leaving by it opens the second — then read the line that draws. Take that back
+  and read the line gone, say instead that leaving it finishes the task, and delete the second step.
+  Each half is read on the picture, because the panel alone could say a thing the picture never
+  drew.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — draft and review, prompt: write the draft }, as: act }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: act
+
+  # Two steps, each from the press above the picture. The first is added on a picture with no line
+  # at all, which is the case the `+` on a line cannot reach.
+  - type: action
+    domain: automation
+    op: add-step
+    with:
+      name: draft
+      prompt: write the draft
+      exits:
+        - drafted
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      present: true
+
+  - type: action
+    domain: automation
+    op: add-step
+    with:
+      name: review
+      prompt: read the draft back
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: review
+      present: true
+
+  # Said on the way out's row, read on the picture. Neither half alone would catch a build that
+  # wrote the answer and drew nothing, or drew a line nobody asked for.
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: draft
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      to: review
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      to: review
+
+  # Taken back: nothing said about that way out, which is a state of its own rather than an end.
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      present: false
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      ends: done
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      ends: done
+
+  # Deleting a step takes its box off the picture. It is the step nothing leads to any longer, so
+  # what the first step says is left as it was.
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: review
+
+  - type: action
+    domain: automation
+    op: remove-step
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: review
+      present: false
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      ends: done

@@ -2155,8 +2155,12 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "BOX:EXIT")]
         from: String,
         /// go on to this box
-        #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt"])]
+        #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt", "exit_to"])]
         to: Option<i64>,
+        /// leave the action by the way out it declares under this name — bare, its unnamed one. With
+        /// --in-action only: an automation's picture has nothing outside it
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
+        exit_to: Option<String>,
         /// close the run
         #[arg(long, conflicts_with = "halt")]
         done: bool,
@@ -2175,8 +2179,12 @@ pub enum AutomationCmd {
         /// edge id
         id: i64,
         /// go on to this box
-        #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt"])]
+        #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt", "exit_to"])]
         to: Option<i64>,
+        /// leave the action by the way out it declares under this name — bare, its unnamed one. With
+        /// --in-action only: an automation's picture has nothing outside it
+        #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
+        exit_to: Option<String>,
         /// close the run
         #[arg(long, conflicts_with = "halt")]
         done: bool,
@@ -2201,16 +2209,18 @@ pub enum AutomationCmd {
         /// its placements)
         #[arg(long)]
         in_action: bool,
-        /// where it comes from, `<box>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
+        /// where it comes from, `<box>:<way out>` — `4:` is the unnamed way out, `4:*` the error one.
+        /// With --in-action, `0` is the action itself, handing on an input it declares
         #[arg(long, value_name = "BOX:EXIT")]
         from: String,
-        /// the output's name on that way out
+        /// the output's name on that way out, or the input's name on the action when --from is `0`
         #[arg(long, value_name = "NAME")]
         from_port: String,
-        /// the box that takes it in
+        /// the box that takes it in. With --in-action, `0` is the action itself: the output lands on
+        /// the way out of the action that --from's way out returns to (draw that edge first)
         #[arg(long, value_name = "ID")]
         to: i64,
-        /// the input's name on that box
+        /// the input's name on that box, or the output's name on the action's way out when --to is `0`
         #[arg(long, value_name = "NAME")]
         to_port: String,
     },

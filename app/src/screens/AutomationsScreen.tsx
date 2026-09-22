@@ -17,11 +17,16 @@
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
 // picture needs (`./AutomationBuildScreen`).
 //
+// **A library action opens the same way**, into the screen its steps are drawn in
+// (`./AutomationActionBuildScreen`). It is the same move one layer down (`AMB-D-949`), so the list
+// it replaces is the "actions" tab's rather than the "automations" tab's.
+//
 // **A new one is made from the list**, which is where this side of the app makes one at all. The
 // press takes a name and nothing else, and lands in the build screen on what it just made — what an
 // automation is for is the picture, and a form asking for notes and a preamble first would be asked
 // before there is anything to write them about (`AutomationNew`).
 import { useEffect, useState } from "react";
+import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { RunningTab } from "./RunningTab";
@@ -59,6 +64,9 @@ export function AutomationsScreen({
   // Which definition is open, or nothing while the list is. The build screen replaces the list
   // rather than standing beside it, so this is where the screen is and not a selection within it.
   const [open, setOpen] = useState<number | null>(null);
+  // Which library action is open, for the same reason and in the same spot: the build screen stands
+  // in place of the list rather than beside it.
+  const [openAction, setOpenAction] = useState<number | null>(null);
   // An ask from outside opens the build screen on what it names. It is a state and not a prop the
   // screen is drawn from, because the reader may go back to the list from there — and a prop would
   // put them straight back into the picture they just left.
@@ -66,6 +74,16 @@ export function AutomationsScreen({
     if (openBuild) setOpen(openBuild.automation);
   }, [openBuild]);
   const automations = useAutomations(projectId);
+
+  if (openAction !== null) {
+    return (
+      <AutomationActionBuildScreen
+        id={openAction}
+        projectId={projectId}
+        onBack={() => setOpenAction(null)}
+      />
+    );
+  }
 
   if (open !== null) {
     return (
@@ -99,7 +117,9 @@ export function AutomationsScreen({
 
           {tab === "running" && <RunningTab onGoToRun={onGoToRun} />}
 
-          {tab === "actions" && <AutomationActionsTab projectId={projectId} />}
+          {tab === "actions" && (
+            <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />
+          )}
 
           {tab === "automations" && <AutomationNew projectId={projectId} onMade={setOpen} />}
 

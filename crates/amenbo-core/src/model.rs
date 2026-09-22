@@ -1513,8 +1513,14 @@ impl AutomationPortKind {
     }
 }
 
-/// What happens once a way out is taken: go on to another step, close the run, or stop it and call a
-/// person.
+/// What happens once a way out is taken: go on to another box, leave the action through one of the ways
+/// out it declares, close the run, or stop it and call a person.
+///
+/// `Exit` is an action's picture's alone. It is the line that joins what an action declares to what is
+/// inside it: the inner step ends, and the run leaves the action by the way out
+/// [`AutomationEdge::exit_to`] names, which is the way out the picture the placement stands on then
+/// reads. On an automation's picture there is nothing outside to leave to, so `Done` is where a run
+/// ends there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationEnds {
@@ -1522,6 +1528,7 @@ pub enum AutomationEnds {
     Go,
     Done,
     Halt,
+    Exit,
 }
 
 impl AutomationEnds {
@@ -1530,6 +1537,7 @@ impl AutomationEnds {
             AutomationEnds::Go => "go",
             AutomationEnds::Done => "done",
             AutomationEnds::Halt => "halt",
+            AutomationEnds::Exit => "exit",
         }
     }
 
@@ -1538,6 +1546,7 @@ impl AutomationEnds {
             "go" => Some(AutomationEnds::Go),
             "done" => Some(AutomationEnds::Done),
             "halt" => Some(AutomationEnds::Halt),
+            "exit" => Some(AutomationEnds::Exit),
             _ => None,
         }
     }
@@ -1559,6 +1568,15 @@ pub const ERROR_EXIT: &str = "*";
 /// ([`AutomationEdge::max_times`]). Ten, because the thing it guards against is a loop that never
 /// converges, not a review that goes round three times.
 pub const DEFAULT_MAX_TIMES: i64 = 10;
+
+/// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
+/// that crosses the action's edge. A wire out of it hands an input the action declares to a step
+/// inside; a wire into it fills an output declared on the way out the run is leaving by.
+///
+/// `0` is the id no row holds — SQLite's rowid aliases start at 1, the same sentinel a reference column
+/// defaults to — so it can never be read as one of the steps the picture is drawn with. It is an
+/// action's picture's alone: an automation's boxes have nothing outside them to reach.
+pub const ACTION_BOUNDARY: i64 = 0;
 
 /// **A unit worth using twice** — one entry of the library. `project_id` `None` is one held by the
 /// device rather than by a project, and it is reachable from every project on it.
@@ -1723,10 +1741,14 @@ pub struct AutomationEdge {
     /// The way out this edge hangs on — `None` for the unnamed one, [`ERROR_EXIT`] for the error one.
     #[serde(default)]
     pub exit_name: Option<String>,
-    /// Where it goes, for `ends = Go`. `None` for `Done` and `Halt`, which go nowhere.
+    /// Where it goes, for `ends = Go`. `None` for the three that go to no box of this picture.
     #[serde(default)]
     pub to_id: Option<i64>,
     pub ends: AutomationEnds,
+    /// The way out of the action the run leaves by, for `ends = Exit` — a name among the action this
+    /// picture belongs to declares, `None` being its unnamed one. Read on no other `ends`.
+    #[serde(default)]
+    pub exit_to: Option<String>,
     /// How often this edge may be taken for one task. `None` is no limit, which is the right answer for
     /// an edge into a box that takes a fresh task.
     #[serde(default)]
@@ -1740,6 +1762,11 @@ pub struct AutomationEdge {
 /// drawn on. Both ends are named rather than keyed: one action placed twice on an automation gives two
 /// placements whose ports carry the same names, so only `from_id` + `from_exit_name` + `from_port_name`
 /// says which of them is meant.
+///
+/// On an action's picture either end may be [`ACTION_BOUNDARY`] instead of a step, which is how what the
+/// action declares reaches what is inside it. Out of the boundary comes an input the action declares
+/// (`from_exit_name` is `None` — an action's inputs hang on the action, not on a way out); into it goes
+/// an output declared on the way out of the action that this way out of the step returns to.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationWire {
     pub id: i64,

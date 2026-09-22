@@ -1147,7 +1147,12 @@ datasets! {
     // `exit_name` NULL is the unnamed exit; `'*'` is the error one, which every step and every action
     // has and nobody can delete. A box with no `'*'` row of its own stops the run rather than
     // guessing, which is what `ends = 'halt'` says — and `'go'` moves to `to_id`, while `'done'`
-    // closes the picture the line is drawn on.
+    // closes the run.
+    //
+    // `'exit'` is an action's picture's alone, and it is the line that joins what an action declares
+    // to what is inside it: the inner step ends and the run leaves the action by the way out
+    // `exit_to` names, which is the way out the placement standing on that action is then read by.
+    // `exit_to` NULL is the action's unnamed way out, and no other `ends` reads the column.
     //
     // `max_times` is how often this edge may be taken **for one task**: the count is kept per
     // `automation_run_task` row and starts again at the next task, so a loop that goes back to fix
@@ -1160,7 +1165,8 @@ datasets! {
         from_id: col(KEY_REF),
         exit_name: col(OPT),
         to_id: col(KEY_REF_OPT),
-        ends: enum_col("go", "done", "halt"),
+        ends: enum_col("go", "done", "halt", "exit"),
+        exit_to: col(OPT),
         max_times: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
@@ -1171,6 +1177,11 @@ datasets! {
     // `from_port_name` says which of them is meant. The names are also what survives a library
     // action's ports being re-declared underneath, where an id would be left pointing at a row that
     // is gone.
+    //
+    // On an action's picture either end may be `0` — the action itself, which no step's id can be
+    // (`crate::model::ACTION_BOUNDARY`). That is how what the action declares reaches what is inside
+    // it: out of the boundary comes an input the action declares, into it goes an output declared on
+    // the way out of the action that the wire's source returns to.
     automation_wire {
         owner_kind: enum_col("automation", "action"),
         owner_id: col(KEY_REF),

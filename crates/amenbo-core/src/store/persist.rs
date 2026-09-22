@@ -2135,6 +2135,10 @@ impl Store {
     }
 
     /// Join what one way out hands on to what a later box takes in (one operation = one transaction).
+    ///
+    /// An end at [`crate::model::ACTION_BOUNDARY`] is the action itself, not a step, so only the other
+    /// end is checked for reach — the action is the one that step is inside. A wire with the boundary at
+    /// both ends is left for the op to refuse.
     pub fn automation_wire_add(
         &mut self,
         owner_kind: crate::model::AutomationPictureOwner,
@@ -2144,8 +2148,13 @@ impl Store {
         to_id: i64,
         to_port_name: &str,
     ) -> Result<crate::model::AutomationWire> {
+        let targets: Vec<WriteTarget> = [from_id, to_id]
+            .into_iter()
+            .filter(|&id| id != crate::model::ACTION_BOUNDARY)
+            .map(|id| box_target(owner_kind, id))
+            .collect();
         self.write_one(
-            &[box_target(owner_kind, from_id), box_target(owner_kind, to_id)],
+            &targets,
             |tx| {
                 crate::ops::automation::wire_add(
                     tx,

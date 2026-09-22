@@ -30,7 +30,6 @@ import type { AutomationRunCardDto } from "../bindings/bindings";
 function statusText(run: AutomationRunCardDto): string {
   if (run.status === "running" && run.pauseRequested) return t("auto.run.pausing");
   switch (run.status) {
-    case "queued": return t("auto.run.queued");
     case "running": return t("auto.run.running");
     case "paused": return t("auto.run.paused");
     case "stopped": return t("auto.run.stopped");

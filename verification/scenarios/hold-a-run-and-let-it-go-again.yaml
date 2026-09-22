@@ -1,7 +1,7 @@
 # A run is a thing somebody can put a hand on. Holding one lets the step that is open finish and
-# stops the next from opening; letting it go picks it up where it was; stopping it hands the lane
-# back and is final. The three are one road because they are read against each other: a build where
-# holding stopped, or where letting go started a second run, would answer every one of them on its
+# stops the next from opening; letting it go picks it up where it was; stopping it is final. The
+# three are one road because they are read against each other: a build where holding stopped, or
+# where letting go started a second run, would answer every one of them on its
 # own and still be wrong about the pair.
 id: hold-a-run-and-let-it-go-again
 title: A run is held, picked up again and stopped, and says which of the three it is at each turn

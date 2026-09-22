@@ -159,10 +159,6 @@ function TalkWindow() {
           // Nothing here is the shell's to say about the face — the window that could not be built
           // is the board's news, and this is the window that was.
           note={null}
-          // The settings are read on the board, which is the other window from here, and a webview
-          // cannot raise its sibling — so the press goes to the host (`crate::windows::show_settings`),
-          // exactly as a ref followed out of a pane does.
-          onSettings={() => void invoke("show_settings").catch(() => {})}
           openIn={openIn}
         />
       </div>

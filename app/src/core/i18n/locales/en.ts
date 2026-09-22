@@ -393,14 +393,6 @@ const ui = {
   "settings.skinFontMissing": "This font has no letters for: {langs}. Those read in the machine’s own face.",
   "settings.skinFont": "Font: {family} ({license})",
   "settings.skinFontLicence": "Licence in full",
-  // How many automation runs may be under way at once, and the one control that changes it
-  // (`app/src/screens/SettingsScreen.tsx`, `AMB-T-5244`). "Lanes" is the word the band over the panes
-  // draws as `2/3`, so the setting and the number on screen are called the same thing. The note says
-  // the one thing a reader cannot see from the control: lowering it takes no lane off a run already
-  // going, because a lane is handed back when its run ends or is paused.
-  "settings.automation": "Automations",
-  "settings.lanes": "Lanes",
-  "settings.lanesNote": "How many automation runs may be under way at once. A lane is a terminal you watch, and the count crosses projects. Lowering it stops nothing already running — the next launch waits longer for a lane.",
   "settings.developer": "Developer",
   "settings.perfLog": "Perf log (instrumentation)",
   "settings.perfLogNote": "Times the read/write layers and WARNs on a budget bust (core to a rolling file, front to the console). Applies live.",
@@ -729,10 +721,6 @@ const ui = {
   // (`app/src/shell/ProjectTabs.tsx`). As words rather than a bare digit: what stands beside the
   // number is a name, so nothing but this says what the number counts.
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
-  // The lane count on the band over the panes (`app/src/shell/WorkspaceFace.tsx`). The band draws
-  // `2/3`; this is what the control is called and what it reads out, because two bare digits with a
-  // slash say nothing on their own to a screen reader or to anybody hovering over them.
-  "face.lanesHeld": "Automation lanes: {held} of {lanes} in use",
   "face.pages": "Pages",
   "face.page": "Page {n}",
   // Moving a pane to another page (`app/src/shell/PaneOrder.tsx`). The button carries only an icon,
@@ -1162,7 +1150,6 @@ const ui = {
   "auto.start": "Start",
   "auto.ready": "Ready to start.",
   "auto.notReady": "Not ready to start:",
-  "auto.queued": "Every lane is taken — this run is in line, and starts when one is handed back.",
   "auto.startOne": "Start an automation",
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
@@ -1262,7 +1249,6 @@ const ui = {
   "auto.run.pause": "Pause",
   "auto.run.resume": "Resume",
   "auto.run.stop": "Stop",
-  "auto.run.queued": "Waiting for a lane",
   "auto.run.running": "Running",
   "auto.run.paused": "Paused",
   "auto.run.pausing": "Pausing after this step",

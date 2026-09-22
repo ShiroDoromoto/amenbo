@@ -73,7 +73,7 @@ export function AutomationBuildScreen({
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
   // is where an automation is built, not a third place for a launch to behave differently.
-  const { start, refused, queued, starting } = useAutomationStart(projectId, workspaceOpen);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
 
   return (
     <div className="settings">
@@ -119,7 +119,6 @@ export function AutomationBuildScreen({
             {t("auto.start")}
           </button>
 
-          {queued && <div className="auto__ready">{t("auto.queued")}</div>}
           {refused !== null && <div className="auto__notready">{refused}</div>}
         </div>
       </div>

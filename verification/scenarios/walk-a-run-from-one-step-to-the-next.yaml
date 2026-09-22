@@ -1,7 +1,7 @@
 # A run is a picture walked one step at a time, and the whole of it happens inside one pane. When a
 # step reports, what changes is the terminal standing in that pane: the next step opens in the same
-# place, on the same lane, carrying what the step before it handed on. Nothing new is stood up — a
-# second pane per step would leave a run of six steps with six panes and a reader with no way to say
+# place, carrying what the step before it handed on. Nothing new is stood up — a second pane per
+# step would leave a run of six steps with six panes and a reader with no way to say
 # which one is live.
 #
 # This is the only road that walks a run **forward**. The others start one and stop one; between the
@@ -12,7 +12,7 @@ title: A step reporting swaps the terminal in the run's own pane for the next st
 description: >
   Start a run of a two-step automation, work the first step the way its agent would — take a task,
   hand a value on, report the way out taken — and read what the press did: the pane is still the
-  run's, the line over it now names the second step, and the lane is the one the run already held.
+  run's, and the line over it now names the second step.
   The value is handed along a wire so that the second step has a reason to open at all.
 given:
   # One agent this machine can start, so no step is refused for who carries it out. `reads` keeps the
@@ -79,8 +79,8 @@ steps_gui:
       target: auto
     as: run
 
-  # One pane, on the first step, and one lane. Both numbers are read again at the end, where what
-  # they say is that the run went on in the place it was already in.
+  # One pane, on the first step. It is read again at the end, where what it says is that the run went
+  # on in the place it was already in.
   - type: assert
     domain: automation
     op: run-pane
@@ -89,12 +89,6 @@ steps_gui:
       step: take
       present: true
 
-  - type: assert
-    domain: automation
-    op: lanes
-    with:
-      held: 1
-      of: 3
 
   # What the step's agent types, in the pane the run opened for it. Which step is being answered
   # comes off that terminal's own environment, so these are only typeable here.
@@ -151,11 +145,3 @@ steps_gui:
       task: seed
       present: true
 
-  # And the lane is the one it already held. A second lane here would mean the run had been stood up
-  # again rather than walked on.
-  - type: assert
-    domain: automation
-    op: lanes
-    with:
-      held: 1
-      of: 3

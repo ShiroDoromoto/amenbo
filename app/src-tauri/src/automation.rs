@@ -691,21 +691,6 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
     }
 }
 
-/// **How many runs are going right now**, across every project.
-///
-/// It crosses projects because a terminal does: what a run holds is a terminal on this machine, and
-/// this machine is not divided up per project. So this answers a bare number, and the band that draws
-/// it says nothing about which project each one is in — the "running" tab is where a reader goes to
-/// see that.
-///
-/// Nothing caps the number any more (`AMB-D-947`), so the band it feeds is on its way out with
-/// `AMB-T-5302`, and this door with it.
-#[tauri::command]
-pub fn automation_lanes_held() -> Result<i64, CmdError> {
-    let store = open_store_read()?;
-    Ok(read::automation_run_ids_running(store.read_model().conn())?.len() as i64)
-}
-
 /// **Start a run of this automation** — the press behind the build screen's "start".
 ///
 /// What the store cannot answer is handed in, each from the side that holds it
@@ -744,9 +729,7 @@ pub fn automation_launch(
     };
     let run = with_store_mut(|store| Ok(store.automation_launch(id, &by)?))?;
     crate::automation_watch::wake();
-    // Never in line: a launch starts on the spot (`AMB-D-947`). The field is what the screen still
-    // reads, and it goes with the screen's own half of this (`AMB-T-5302`).
-    Ok(AutomationRunStartedDto { run: run.id, queued: false })
+    Ok(AutomationRunStartedDto { run: run.id })
 }
 
 /// **How many stopped runs the "running" tab is shown.** A stop is kept on the list so that a failure
@@ -756,9 +739,9 @@ const STOPPED_SHOWN: usize = 20;
 
 /// **What is under way right now**, across every project — the rows of the "running" tab.
 ///
-/// It crosses projects for the same reason [`automation_lanes_held`] does, and it is the tab that says
-/// which project each of those runs is in. Runs that are `done` are not here: what a finished run did
-/// is reached from the task it worked or the automation it came from, never searched for
+/// It crosses projects because a terminal does — what a run holds is a terminal on this machine, and
+/// this machine is not divided up per project. Runs that are `done` are not here: what a finished
+/// run did is reached from the task it worked or the automation it came from, never searched for
 /// (`amenbo_core::store::Store`'s run reads).
 #[tauri::command]
 pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> {

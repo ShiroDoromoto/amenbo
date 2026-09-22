@@ -68,7 +68,6 @@ const EMPTY: Snapshot = {
   tickConsent: null, // nobody has been asked about the hourly tick yet
   tickRemovalLeavesARow: false, // a build fact; the real one arrives with the first snapshot
   defaultView: "board", // what a project created without a view of its own opens in (core's default)
-  automationLanes: 3, // how many runs may hold a lane at once (core's default)
 };
 
 let cache: Snapshot = EMPTY;
@@ -477,7 +476,6 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
       tickConsent: null, // and no scheduler to hold a timer, so the question is never put
       tickRemovalLeavesARow: false, // …so there is no row for a removal to leave behind either
       defaultView: "board",
-      automationLanes: 3, // the browser runs nothing, so this is core's default and never moves
     };
   }
   // Real data came back from the source of truth, so the mailbox owes itself a re-derive — unless the caller said this re-read cannot touch membership.

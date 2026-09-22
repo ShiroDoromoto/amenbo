@@ -370,9 +370,8 @@ export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_t
  * **One run in the "running" tab** — what is going on right now, on one line.
  *
  * It crosses projects, so it names the project each run is in: a run holds a terminal on this
- * machine, and this machine is not divided up per project. The band over the panes draws the count
- * and says nothing more, and this is where a reader comes to see what the count is made of
- * ([`crate::automation::automation_lanes_held`]).
+ * machine, and this machine is not divided up per project. This tab is the one place a reader sees
+ * everything that is under way at once.
  *
  * **The name each row is read by is the automation's, not the run's.** A run has no name — what a
  * person recognises is the automation they started and the task it is on.
@@ -387,7 +386,7 @@ project: number, projectName: string, automation: number,
  * What the automation was called at launch. Read from the run's own copy of the entry step's
  * automation where the definition has since been deleted, and empty where neither is left.
  */
-automationName: string, status: "queued" | "running" | "paused" | "stopped", 
+automationName: string, status: "running" | "paused" | "stopped", 
 /**
  * Whether a pause has been asked for and the step under way has not reported yet. The run is
  * still `running` — this is the gap between the button and the pause
@@ -413,12 +412,11 @@ task?: AutomationRunTaskDto, };
 /**
  * **A run, just launched** — what the press is answered with.
  *
- * `queued` is always `false`: a launch starts on the spot, nothing being in line ahead of it
- * (`AMB-D-947`). It is still here because the screen still reads it, and goes when that does
- * (`AMB-T-5302`). A run says nothing beyond its id — the pane arriving is what it looks like, and
- * that comes as an event ([`AutomationStepOpenDto`]).
+ * A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
+ * (`AMB-D-947`), and the pane arriving is what it looks like — that comes as an event
+ * ([`AutomationStepOpenDto`]).
  */
-export type AutomationRunStartedDto = { run: number, queued: boolean, };
+export type AutomationRunStartedDto = { run: number, };
 
 /**
  * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
@@ -2926,14 +2924,7 @@ tickRemovalLeavesARow: boolean,
  * board). Exposed so the settings screen can show and change it. It is only the answer nobody
  * gave: a project already carries its own `view`, and this never repaints one.
  */
-defaultView: "list" | "board" | "calendar" | "timeline", 
-/**
- * The lane count the settings row and the workspace band still draw. There is no such setting
- * any more (`AMB-D-947`) — nothing caps how many runs may be under way — so what goes out is a
- * fixed figure ([`crate::commands`]) and it stops moving. It goes when those two places do
- * (`AMB-T-5302`).
- */
-automationLanes: number, };
+defaultView: "list" | "board" | "calendar" | "timeline", };
 
 /**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's

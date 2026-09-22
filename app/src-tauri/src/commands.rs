@@ -483,15 +483,8 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         tick_consent: config.tick_consent.map(|c| c.as_str().to_string()),
         tick_removal_leaves_a_row: amenbo_core::tick::removal_leaves_a_row(),
         default_view: config.default_view.as_str().to_string(),
-        automation_lanes: LANES_THE_SCREEN_STILL_DRAWS,
     })
 }
-
-/// **The lane count the settings row and the workspace band still draw.** Core holds no such number
-/// any more (`AMB-D-947`) — nothing caps how many runs may be under way — so what goes out is the
-/// figure those two places were built around, and it stops moving. Both go, and this with them, when
-/// the screen's own half lands (`AMB-T-5302`).
-const LANES_THE_SCREEN_STILL_DRAWS: i64 = 3;
 
 /// Return the read data for every screen in one sheet (the seam in adapter.ts receives it).
 #[tauri::command]
@@ -3820,19 +3813,6 @@ pub fn config_set_update_check(enabled: bool) -> Result<WriteAck, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;
     let mut config = amenbo_core::config::Config::load(&paths.config_file);
     config.set("update_check", if enabled { "true" } else { "false" })?;
-    config.save(&paths.config_file)?;
-    Ok(WriteAck::new(&[]))
-}
-
-/// **The settings row that set the lane count, refusing.** There is no such setting any more
-/// (`AMB-D-947`): core no longer knows the key, so `Config::set` answers that it is unknown and the
-/// row cannot write anything. The door is left standing only until the row itself goes
-/// (`AMB-T-5302`) — taking it away first would leave the screen calling a command that is not there.
-#[tauri::command]
-pub fn config_set_automation_lanes(lanes: i64) -> Result<WriteAck, CmdError> {
-    let paths = amenbo_core::config::Paths::resolve()?;
-    let mut config = amenbo_core::config::Config::load(&paths.config_file);
-    config.set("automation_lanes", &lanes.to_string())?;
     config.save(&paths.config_file)?;
     Ok(WriteAck::new(&[]))
 }

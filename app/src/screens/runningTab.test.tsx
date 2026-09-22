@@ -118,7 +118,7 @@ describe("the running tab", () => {
     expect(labels()).toContain(t("auto.run.resume"));
     expect(labels()).not.toContain(t("auto.run.pause"));
 
-    await render([run({ status: "queued" })]);
+    await render([run({ status: "running" })]);
     expect(labels()).toContain(t("auto.run.pause"));
 
     await render([run({ status: "stopped", stoppedReason: "by_human" })]);

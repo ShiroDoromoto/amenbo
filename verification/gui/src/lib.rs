@@ -1179,12 +1179,6 @@ impl Instructor {
             (Domain::Automation, "launch") => {
                 Some(Expectation { text: arg_str(with, "at")?.to_string(), present: present(with) })
             }
-            // The two numbers the band carries, read together: half of that pair is not a state the
-            // band is ever in, and the pair is drawn as one word.
-            (Domain::Automation, "lanes") => Some(Expectation {
-                text: format!("{}/{}", count(with, "held").ok()?, count(with, "of").ok()?),
-                present: true,
-            }),
             _ => None,
         }
     }
@@ -4023,11 +4017,6 @@ impl Instructor {
                     None => String::new(),
                 }
             ),
-            // The band over the panes is itself the way to the setting that holds its second number.
-            (Domain::Automation, "open-lanes") => {
-                "Press the band over the workspace's panes that reads how many lanes the runs are holding."
-                    .to_string()
-            }
             (Domain::Automation, "press-run") => format!(
                 "On the running tab, on the row for this run, {}.",
                 run_press(req(with, "press")?)?
@@ -5906,16 +5895,6 @@ impl Instructor {
                     false => "In the workspace, confirm the press stood no new pane up.".to_string(),
                 },
             },
-            // The band over the panes, and the setting that holds its second number.
-            (Domain::Automation, "lanes") => format!(
-                "Confirm the band over the workspace's panes reads {} of {}.",
-                count(with, "held")?,
-                count(with, "of")?
-            ),
-            (Domain::Automation, "lanes-setting") => format!(
-                "In Amenbo's own settings, under the automations section, confirm the row saying how many lanes there are reads {}.",
-                count(with, "of")?
-            ),
             // A row of the running tab. It draws every run this device is carrying, across projects,
             // so the row names the project as well as where the run has got to.
             (Domain::Automation, "run-row") => match present(with) {
@@ -7858,18 +7837,6 @@ steps_gui:
     with: { target: run, step: work, nth: 1, task: seed, present: true }
   - type: assert
     domain: automation
-    op: lanes
-    with: { held: 1, of: 3 }
-  - type: action
-    domain: automation
-    op: open-lanes
-    with: {}
-  - type: assert
-    domain: automation
-    op: lanes-setting
-    with: { of: 3 }
-  - type: assert
-    domain: automation
     op: run-row
     with: { target: run, state: running }
   - type: assert
@@ -7924,7 +7891,6 @@ steps_gui:
         assert!(lines[6].contains("the task is finished"), "{}", lines[6]);
         assert!(lines[14].contains("output artefact") && lines[14].contains("a value"), "{}", lines[14]);
         assert!(lines[15].contains("nothing reaches one of a step's required inputs"), "{}", lines[15]);
-        assert!(lines[19].contains("1 of 3"), "{}", lines[19]);
     }
 
     /// What the dialog that puts a step in is told to declare on it. One of a thing and several read

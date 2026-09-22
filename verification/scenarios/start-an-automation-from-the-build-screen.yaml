@@ -8,8 +8,8 @@ title: The press that starts a run is turned away while no workspace is open, an
 description: >
   Stand a definition up that has nothing missing, and press the button that starts a run twice: once
   with the ledger on the screen and no workspace open, and once with the workspace standing. The
-  first is refused and says why, the second takes a lane and draws the run's own pane. The launch
-  place is read first, so that the refusal is known to be about the window — a definition still short
+  first is refused and says why, the second draws the run's own pane. The launch place is read
+  first, so that the refusal is known to be about the window — a definition still short
   of something would refuse for its own reasons and the road would prove nothing.
 given:
   # One agent this machine can start, so the launch check has nothing to say about who carries the
@@ -100,13 +100,6 @@ steps_gui:
       target: auto
     as: run
 
-  # A lane taken, which is the band's half of the same fact, and the pane the run is drawn in.
-  - type: assert
-    domain: automation
-    op: lanes
-    with:
-      held: 1
-      of: 3
 
   - type: assert
     domain: automation

@@ -182,20 +182,6 @@ input[type="color"] {
 /* A toggle whose side is on the screen. It is the same button either way — what it says is whether
    pressing it opens something or puts it away. */
 .workspace__action--on { color: var(--c-text); border-color: var(--c-edge); }
-/* How many lanes the automations are holding, out of how many there are — the band's own number, and
-   the way to the setting that is the second half of it. It is the shape of an action rather than a
-   plain reading because it is one: what it says is a number, and what it does is open the screen the
-   number is set on. The digits are tabular so the band does not shift as the first one changes. */
-.workspace__lanes {
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  background: none; border: 0; padding: var(--s-1) var(--s-2);
-  border-radius: var(--r-md);
-  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
-}
-.workspace__lanes:hover:not(:disabled) { color: var(--c-text); }
-/* Nowhere to go — neither window can put the settings up — so the number is read and not pressed. */
-.workspace__lanes:disabled { cursor: default; }
-.workspace__lanesCount { font-variant-numeric: tabular-nums; }
 /* The file face's two halves, at the far end of the row: they are about the other side of the
    screen, and the controls for what is in the middle sit between them and the way out. */
 .workspace__sides { display: flex; gap: var(--s-2); margin-left: auto; }

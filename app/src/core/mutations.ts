@@ -1312,18 +1312,6 @@ export async function setUpdateCheck(enabled: boolean): Promise<void> {
 }
 
 /**
- * Set how many automation runs may hold a lane at once (`config.automation_lanes`). Core refuses
- * anything outside 1..=32, and the refusal comes back as it does from any other setting.
- *
- * **It reaches no run already going.** Lowering the number stops nothing: a lane is handed back when
- * its run ends or is paused, and the next launch simply waits longer for one.
- */
-export async function setAutomationLanes(lanes: number): Promise<void> {
-  if (inTauri()) return invokeAck("config_set_automation_lanes", { lanes });
-  mockMutate((s) => ({ ...s, automationLanes: lanes }));
-}
-
-/**
  * **Ask a run to pause.** A step under way cannot be cut in half — it is an agent in a terminal,
  * mid-sentence — so the run goes on until that step reports and settles there, handing its lane back
  * (`amenbo_core::ops::automation_stop::pause`). A run with nothing under way pauses on the spot.

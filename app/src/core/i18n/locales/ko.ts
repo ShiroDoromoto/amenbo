@@ -1040,6 +1040,7 @@ export const ko: Translation = {
     "auto.run.byHuman": "직접 중지함",
     "auto.run.noWayOn": "열 단계가 남아 있지 않았다",
     "auto.run.step": "단계 {n} · {step}",
+    "auto.run.inAction": "{action}의 {step}",
 
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",

@@ -1044,6 +1044,7 @@ export const id: Translation = {
     "auto.run.byHuman": "dihentikan secara manual",
     "auto.run.noWayOn": "tidak ada lagi yang bisa dibuka",
     "auto.run.step": "Langkah {n} · {step}",
+    "auto.run.inAction": "{step} di {action}",
 
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",

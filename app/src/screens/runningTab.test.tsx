@@ -4,6 +4,9 @@
 //
 // What these guard: **a row says what the run is, how far in it is and what it is on** — the four
 // things a reader opens this tab to see, and the project it is in, because the tab crosses projects;
+// **how far in it is names the action the step was opened from**, two spots standing on the same
+// action running steps of the same names (`AMB-D-949`), **and falls back to the step alone where that
+// spot has been taken off the picture**;
 // **a pause that has been asked for reads as neither of the two states it sits between**, since a run
 // told "running" would be pressed again and one told "paused" is not stopped yet; **the buttons match
 // the state** — a paused run is picked up rather than paused again, and a stopped one carries none at
@@ -96,15 +99,26 @@ describe("the running tab", () => {
   });
 
   it("says what each run is, how far in it is, and what it is on", async () => {
-    await render([run({ stepName: "Take one", stepsDone: 2, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab" } })]);
+    await render([run({ stepName: "Take one", actionName: "Groundwork", stepsDone: 2, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab" } })]);
     const row = container.querySelector(".autorun__go")?.textContent ?? "";
     expect(row).toContain("Morning round");
-    expect(row).toContain(tf("auto.run.step", { n: 2, step: "Take one" }));
+    expect(row).toContain(tf("auto.run.step", {
+      n: 2,
+      step: tf("auto.run.inAction", { action: "Groundwork", step: "Take one" }),
+    }));
     expect(row).toContain("AMB-T-51");
     expect(row).toContain("Draw the tab");
     // The tab crosses projects, so each row says which one it is about.
     expect(row).toContain("amenbo");
     expect(row).toContain(t("auto.run.running"));
+  });
+
+  /// A spot taken off the picture while its run walks on leaves the step with nothing to be inside
+  /// of. The line says the step alone rather than a name the picture no longer holds.
+  it("says the step alone where the spot it was opened from has gone", async () => {
+    await render([run({ stepName: "Take one", stepsDone: 2 })]);
+    const row = container.querySelector(".autorun__go")?.textContent ?? "";
+    expect(row).toContain(tf("auto.run.step", { n: 2, step: "Take one" }));
   });
 
   it("reads a pause that has been asked for as neither running nor paused", async () => {

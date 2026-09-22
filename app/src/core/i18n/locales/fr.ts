@@ -1055,6 +1055,7 @@ export const fr: Translation = {
     "auto.run.byHuman": "arrêtée à la main",
     "auto.run.noWayOn": "il ne restait rien à ouvrir",
     "auto.run.step": "Étape {n} · {step}",
+    "auto.run.inAction": "{step} dans {action}",
 
     "mcp.title": "Se connecter en MCP",
     "mcp.setupTitle": "Utiliser vos projets depuis une IA",

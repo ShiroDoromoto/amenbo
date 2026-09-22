@@ -1043,6 +1043,7 @@ export const tr: Translation = {
     "auto.run.byHuman": "elle durduruldu",
     "auto.run.noWayOn": "açılacak bir şey kalmamıştı",
     "auto.run.step": "Adım {n} · {step}",
+    "auto.run.inAction": "{action} içindeki {step}",
 
     "mcp.title": "MCP ile bağlan",
     "mcp.setupTitle": "Projelerinizi bir yapay zekâdan kullanın",

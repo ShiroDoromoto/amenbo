@@ -1045,6 +1045,7 @@ export const zhHant: Translation = {
     "auto.run.byHuman": "手動停止",
     "auto.run.noWayOn": "沒有可開啟的步驟了",
     "auto.run.step": "步驟 {n} · {step}",
+    "auto.run.inAction": "{action} 的 {step}",
 
     "mcp.title": "透過 MCP 連線",
     "mcp.setupTitle": "讓 AI 可以使用你的專案",

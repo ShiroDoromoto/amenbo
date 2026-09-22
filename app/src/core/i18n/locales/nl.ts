@@ -1043,6 +1043,7 @@ export const nl: Translation = {
     "auto.run.byHuman": "met de hand gestopt",
     "auto.run.noWayOn": "er viel niets meer te openen",
     "auto.run.step": "Stap {n} · {step}",
+    "auto.run.inAction": "{step} in {action}",
 
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",

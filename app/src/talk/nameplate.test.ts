@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { tf } from "../core/i18n";
 import { faceOf, mountNameplate, type Dot } from "./nameplate";
 
 /** The lamp in front of the name, at rest. These cases are about the name on the row; what the lamp
@@ -77,6 +78,7 @@ describe("the row above a run's pane", () => {
     run: 7,
     seq: 3,
     step: "取る",
+    action: "下ごしらえ",
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く" },
   };
 
@@ -91,7 +93,11 @@ describe("the row above a run's pane", () => {
 
     expect(host.querySelector(".plate__auto")?.textContent).toBeTruthy();
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(false);
-    expect(host.querySelector(".plate-run__step")?.textContent).toBe("取る");
+    // Which step, with the spot of the picture it was opened from: two spots standing on the same
+    // action run steps of the same names, so the step's own name does not say which this is
+    // (`AMB-D-949`).
+    expect(host.querySelector(".plate-run__step")?.textContent)
+      .toBe(tf("auto.run.inAction", { action: "下ごしらえ", step: "取る" }));
     expect(host.querySelector(".plate-run__seq")?.textContent).toContain("3");
     expect(host.querySelector(".plate-run__no")?.textContent).toContain("7");
     expect(host.querySelector(".plate-run__task")?.textContent).toBe("AMB-T-5252");
@@ -99,6 +105,17 @@ describe("the row above a run's pane", () => {
     // which task it is without going to look it up.
     expect(host.querySelector(".plate-peek__task")?.textContent)
       .toBe("AMB-T-5252 ペインのヘッダを描く");
+  });
+
+  /// A spot taken off the picture while its run walks on leaves the step with nothing to be inside
+  /// of. The row says the step alone rather than a name the picture no longer holds.
+  it("says the step alone where the spot it was opened from has gone", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, action: null } });
+
+    expect(host.querySelector(".plate-run__step")?.textContent).toBe("取る");
   });
 
   it("says nothing of a run on a pane that is not one", () => {

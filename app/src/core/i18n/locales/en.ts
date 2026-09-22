@@ -1292,6 +1292,7 @@ const ui = {
   "auto.run.byHuman": "stopped by hand",
   "auto.run.noWayOn": "there was nothing left to open",
   "auto.run.step": "Step {n} · {step}",
+  "auto.run.inAction": "{step} in {action}",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

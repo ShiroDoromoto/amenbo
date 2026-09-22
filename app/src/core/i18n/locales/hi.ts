@@ -1043,6 +1043,7 @@ export const hi: Translation = {
     "auto.run.byHuman": "हाथ से बंद किया गया",
     "auto.run.noWayOn": "खोलने के लिए कुछ नहीं बचा था",
     "auto.run.step": "चरण {n} · {step}",
+    "auto.run.inAction": "{action} का {step}",
 
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",

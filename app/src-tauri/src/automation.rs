@@ -1198,6 +1198,23 @@ pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> 
     Ok(out)
 }
 
+/// **The action a spot on the picture stands on**, named — the half a step's own name stopped saying
+/// when a launch began opening a placement into a column of steps (`AMB-D-949`).
+///
+/// It is walked from the live picture rather than kept in the run's copy, the same way the row reads
+/// the automation's name: what a reader is being told is which spot of the automation in front of
+/// them this is, and a name the picture no longer holds would point at nothing. `None` where the spot
+/// or its action has gone, and then what is drawn is the step alone.
+fn placed_action_name(
+    store: &amenbo_core::Store,
+    placement_id: Option<i64>,
+) -> Result<Option<String>, CmdError> {
+    let Some(placement_id) = placement_id else { return Ok(None) };
+    let conn = store.read_model().conn();
+    let Some(placement) = read::automation_placement(conn, placement_id)? else { return Ok(None) };
+    Ok(read::automation_action(conn, placement.action_id)?.map(|one| one.name))
+}
+
 /// One run as the tab draws it: what it is, how far in, and what it is on.
 fn run_card(
     store: &amenbo_core::Store,
@@ -1207,10 +1224,13 @@ fn run_card(
     let steps = read::automation_run_steps_of(conn, run.id)?;
     // The step it is on, or the last one it ran — read through the run's own copy of the definition,
     // which is what says what was asked at launch rather than what the automation says now.
-    let step_name = match steps.last() {
-        Some(last) => read::automation_run_def(conn, last.run_def_id)?.map(|def| def.name),
+    let last_def = match steps.last() {
+        Some(last) => read::automation_run_def(conn, last.run_def_id)?,
         None => None,
     };
+    let action_name =
+        placed_action_name(store, last_def.as_ref().and_then(|def| def.placement_id))?;
+    let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
     Ok(AutomationRunCardDto {
@@ -1225,6 +1245,7 @@ fn run_card(
         pause_requested: run.pause_requested,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         step_name,
+        action_name,
         steps_done: steps.len(),
         task: worked_task(store, stretch)?,
     })
@@ -1333,6 +1354,7 @@ fn open_one(
                     run_step: ready.run_step.id,
                     seq: ready.run_step.seq,
                     name: def.name.clone(),
+                    action_name: placed_action_name(store, def.placement_id)?,
                     task: worked_task(store, ready.run_step.run_task_id)?,
                     say: ready.text.clone(),
                     agent: def.agent.clone(),

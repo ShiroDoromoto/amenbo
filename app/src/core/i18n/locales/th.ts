@@ -1044,6 +1044,7 @@ export const th: Translation = {
     "auto.run.byHuman": "หยุดด้วยมือ",
     "auto.run.noWayOn": "ไม่มีขั้นตอนให้เปิดต่อแล้ว",
     "auto.run.step": "ขั้นตอน {n} · {step}",
+    "auto.run.inAction": "{step} ใน {action}",
 
     "mcp.title": "เชื่อมต่อผ่าน MCP",
     "mcp.setupTitle": "ใช้โปรเจกต์ของคุณจาก AI",

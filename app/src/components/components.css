@@ -1334,7 +1334,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__lap { fill: none; stroke: var(--c-rule); stroke-width: 1; stroke-dasharray: 6 4; }
 .autopic__lapword {
   position: absolute; transform: translateY(-50%);
-  padding: 0 var(--s-1); background: var(--c-surface);
+  padding: 0 var(--s-1); background: var(--c-surface-pic) var(--c-surface);
   font-size: var(--fs-xs); line-height: 1; color: var(--c-text-muted); white-space: nowrap;
 }
 /* What comes after a step runs down the left, what is handed on runs down the right, and the two are
@@ -1350,7 +1350,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__node {
   position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 2px;
   box-sizing: border-box; padding: var(--s-2);
-  background: var(--c-surface); color: var(--c-text);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   font: inherit; font-size: var(--fs-md); text-align: start; overflow: hidden; cursor: pointer;
 }
@@ -1381,7 +1381,7 @@ button.feed__target:hover { color: var(--c-accent); }
   position: absolute; transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; padding: 0;
-  background: var(--c-surface); color: var(--c-text-muted);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text-muted);
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: 50%;
   cursor: pointer;
 }

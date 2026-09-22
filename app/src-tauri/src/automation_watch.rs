@@ -40,8 +40,8 @@ const WHILE_IDLE: Duration = Duration::from_secs(5);
 static NUDGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 
 /// **Look now rather than at the end of the wait.** Called where this process is the one that moved a
-/// run — opening a step of it — so what comes after that step is picked up at once instead of up to
-/// `WHILE_IDLE` later.
+/// run — launching it, or opening a step of it — so what the run is waiting for next is picked up at
+/// once instead of up to `WHILE_IDLE` later.
 ///
 /// **A `start` typed in a terminal cannot reach here.** The CLI is another process, so a run launched
 /// there is found by the next look rather than announced — which is what `WHILE_IDLE` is sized for.

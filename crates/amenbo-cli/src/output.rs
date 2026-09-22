@@ -519,6 +519,17 @@ impl From<amenbo_core::Error> for CliError {
             E::AlreadyReserved(_) => Some(format!(
                 "Another session reserved it first. Pick the next task (`{cmd} agent --json`), or hand it back with `{cmd} task status <id> todo` if the reservation is stale."
             )),
+            // Launching an unfinished automation, which is the other `not_ready` and shares none of the
+            // reservation's ways out below: nothing here is a blocker, a premise or a creation. The
+            // refusal already names every reason, so what is left to say is where they are fixed.
+            E::NotReady(m) if m.code() == Some(ErrorCode::NotReadyAutomation) => Some(format!(
+                "Every reason is named above, and each is answered by writing on the automation: `{cmd} automation step add`, `automation entry set`, `automation edge add`, `automation wire add`, `automation cfg set`."
+            )),
+            // An automation kept out of the way, which archiving is for — so the way out is to bring it
+            // back rather than to launch past it.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationArchived) => Some(format!(
+                "Bring it back first: `{cmd} automation update <id> --archived false`."
+            )),
             // The counterpart to `already_reserved`. That one means someone else holds it (→ move on to
             // the next task); this one means a premise you declared is unmet (→ resolve the premise).
             // The two point in opposite directions, so keep them apart.

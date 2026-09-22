@@ -373,6 +373,30 @@ pub enum ErrorCode {
     InvalidMigrationNoSpace,
     InvalidMigrationRolledBack,
     InvalidMigrationRollbackFailed,
+
+    // Launching an automation. The two that refuse alone carry the automation's name; the third is one
+    // refusal over a list, and the reasons under it are the launch check's
+    // (`ops::automation_run::Unmet`) — a list whose length is only known at the moment of refusing, so
+    // each names itself and rides as a part (`Msg::part`), the way a reservation's reasons do.
+    //
+    // They are the build screen's list said a second time. The screen draws it while nobody has pressed
+    // anything, and this is what the press answers with where the machine changed in between — so the
+    // two are the same sentences, and neither can be the other's: one is drawn from a read that
+    // succeeded, this one is raised by a write that did not.
+    InvalidAutomationArchived,
+    InvalidAutomationWorkspaceClosed,
+    NotReadyAutomation,
+    NotReadyAutomationNoSteps,
+    NotReadyAutomationNoEntry,
+    NotReadyAutomationEntryTakesNoTask,
+    NotReadyAutomationOpenExit,
+    // The unnamed way out has no name to put in the sentence, so it is a sentence of its own rather
+    // than one with a hole where the name goes — as the screen's list writes it.
+    NotReadyAutomationOpenExitUnnamed,
+    NotReadyAutomationUnwiredInput,
+    NotReadyAutomationUnansweredCfg,
+    NotReadyAutomationAgentMissing,
+    NotReadyAutomationModelMissing,
 }
 
 impl ErrorCode {
@@ -444,6 +468,18 @@ impl ErrorCode {
             ErrorCode::InvalidMigrationNoSpace => "invalid_migration_no_space",
             ErrorCode::InvalidMigrationRolledBack => "invalid_migration_rolled_back",
             ErrorCode::InvalidMigrationRollbackFailed => "invalid_migration_rollback_failed",
+            ErrorCode::InvalidAutomationArchived => "invalid_automation_archived",
+            ErrorCode::InvalidAutomationWorkspaceClosed => "invalid_automation_workspace_closed",
+            ErrorCode::NotReadyAutomation => "not_ready_automation",
+            ErrorCode::NotReadyAutomationNoSteps => "not_ready_automation_no_steps",
+            ErrorCode::NotReadyAutomationNoEntry => "not_ready_automation_no_entry",
+            ErrorCode::NotReadyAutomationEntryTakesNoTask => "not_ready_automation_entry_takes_no_task",
+            ErrorCode::NotReadyAutomationOpenExit => "not_ready_automation_open_exit",
+            ErrorCode::NotReadyAutomationOpenExitUnnamed => "not_ready_automation_open_exit_unnamed",
+            ErrorCode::NotReadyAutomationUnwiredInput => "not_ready_automation_unwired_input",
+            ErrorCode::NotReadyAutomationUnansweredCfg => "not_ready_automation_unanswered_cfg",
+            ErrorCode::NotReadyAutomationAgentMissing => "not_ready_automation_agent_missing",
+            ErrorCode::NotReadyAutomationModelMissing => "not_ready_automation_model_missing",
         }
     }
 
@@ -512,6 +548,18 @@ impl ErrorCode {
         ErrorCode::InvalidMigrationNoSpace,
         ErrorCode::InvalidMigrationRolledBack,
         ErrorCode::InvalidMigrationRollbackFailed,
+        ErrorCode::InvalidAutomationArchived,
+        ErrorCode::InvalidAutomationWorkspaceClosed,
+        ErrorCode::NotReadyAutomation,
+        ErrorCode::NotReadyAutomationNoSteps,
+        ErrorCode::NotReadyAutomationNoEntry,
+        ErrorCode::NotReadyAutomationEntryTakesNoTask,
+        ErrorCode::NotReadyAutomationOpenExit,
+        ErrorCode::NotReadyAutomationOpenExitUnnamed,
+        ErrorCode::NotReadyAutomationUnwiredInput,
+        ErrorCode::NotReadyAutomationUnansweredCfg,
+        ErrorCode::NotReadyAutomationAgentMissing,
+        ErrorCode::NotReadyAutomationModelMissing,
     ];
 }
 
@@ -711,6 +759,18 @@ mod tests {
             "invalid_migration_no_space",
             "invalid_migration_rolled_back",
             "invalid_migration_rollback_failed",
+            "invalid_automation_archived",
+            "invalid_automation_workspace_closed",
+            "not_ready_automation",
+            "not_ready_automation_no_steps",
+            "not_ready_automation_no_entry",
+            "not_ready_automation_entry_takes_no_task",
+            "not_ready_automation_open_exit",
+            "not_ready_automation_open_exit_unnamed",
+            "not_ready_automation_unwired_input",
+            "not_ready_automation_unanswered_cfg",
+            "not_ready_automation_agent_missing",
+            "not_ready_automation_model_missing",
         ]
         .into_iter()
         .collect();

@@ -643,10 +643,6 @@ body.is-dragging { user-select: none; }
 .feed__target { font-size: var(--fs-xs); color: var(--c-accent-text); border: none; background: none; }
 button.feed__target:hover { color: var(--c-accent); }
 .feed__target--gone { color: var(--c-text-muted); }
-/* The same muting, for the other reason a ref cannot be pressed: it leads nowhere rather than having lost
-   what it led to (`AMB-D-944`). Written apart from `--gone` so the DOM does not call a live automation
-   deleted. */
-.feed__target--plain { color: var(--c-text-muted); }
 .feed__meta { font-size: var(--fs-xs); color: var(--c-text-muted); display: flex; gap: var(--s-2); margin-top: 2px; }
 
 /* ---------- search (where a word is written) ---------- */

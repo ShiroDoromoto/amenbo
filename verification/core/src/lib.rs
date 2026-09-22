@@ -4140,7 +4140,8 @@ const REGISTRY: &[OpSpec] = &[
     // names short enough to stand whole — what is read here is the shot, and a cut name is not on it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "pictured", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // A line leaving one step, and what is written along it: the way out's own name, and where it
-    // goes — on to a step (`to`), or to the end of the task or the run (`ends`).
+    // goes — on to a step (`to`), or to the end of the task or the run (`ends`). `present: false` is
+    // no line leaving by that way out, and names neither.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "ends"], binds: false },
     // The dashed outline around the steps one task is worked by, named by the step that takes it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
@@ -4157,6 +4158,23 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-step", required: &["after", "name"], refs: &["action"], strings: &["after", "exit", "name", "prompt"], binds: false },
     // The `+ output artefact` on a way out, and the dialog it opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
+    //
+    // **The action build screen's own three.** Inside an action a picture has no line
+    // until two boxes are joined, so `insert-step` has nothing to press on it: the first step, and
+    // every one after it that is not put in on a line, comes from the press above the picture —
+    // `＋ First step` on an empty action and `＋ Step` once one is there, the same dialog either way.
+    // `exits` and `inputs` are what the dialog is to declare on it, read the way `insert-step` reads
+    // them.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-step", required: &["name", "prompt"], refs: &[], strings: &["name", "prompt"], binds: false },
+    // What leaving by one way out leads to, said on that way out's row of the panel rather than drawn
+    // in the picture. `to` is a step to go on to, `ends` the end of the task or the run, and a step
+    // naming neither takes what was said away — "nothing said yet", which is a state of its own.
+    // `max_times` is the limit a way out going on to a step carries, and `~` empties it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "to", "ends"], binds: false },
+    // Deleting the step the panel is showing. It takes what the step declared and every line naming
+    // it, so the machine's own question stands between the press and the write, and the road answers
+    // it with the answer that goes ahead.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "remove-step", required: &[], refs: &[], strings: &[], binds: false },
     //
     // The panel beside the picture. `field` is the row it is read on or written in, named the way the
     // panel names it rather than by the column underneath — a road reads a screen.

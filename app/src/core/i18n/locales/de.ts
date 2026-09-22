@@ -598,6 +598,10 @@ export const de: Translation = {
     "face.opening": "Der Arbeitsbereich wird in einem eigenen Fenster geöffnet…",
     "face.drop": "Diesen Bereich entfernen",
     "face.dropConfirm": "Diesen Bereich entfernen? Das Terminal darin wird beendet, und der Weg zurück in das hier Gesagte geht mit dem Platz verloren.",
+    "face.auto": "Automatisch",
+    "face.runStep": "Schritt {n}",
+    "face.runNo": "Lauf {n}",
+    "face.dropRunConfirm": "Diesen Bereich entfernen? Der Lauf wird gestoppt, die Aufgabe, an der er war, geht zurück auf Offen, und eine Zeile auf dieser Aufgabe sagt das.",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 
@@ -918,6 +922,16 @@ export const de: Translation = {
     "auto.block.unwiredInput": "{step}: Die erforderliche Eingabe {at} wird von nichts erreicht.",
     "auto.block.unansweredCfg": "{step}: Die erforderliche Einstellung {at} ist unbeantwortet.",
     "auto.block.agentMissing": "{step}: Dieser Rechner kann {at} nicht starten.",
+    "auto.actions.empty": "Die Bibliothek enthält noch keine Aktionen.",
+    "auto.actions.reachDevice": "Dieses Gerät",
+    "auto.actions.reachProject": "Dieses Projekt",
+    "auto.actions.unused": "Keine Automation führt sie aus",
+    "auto.actions.usedBy.one": "{n} Automation führt sie aus", "auto.actions.usedBy.other": "{n} Automationen führen sie aus",
+    "auto.actions.name": "Name",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "Was hier gespeichert wird, trägt jeder Schritt, der auf diese Aktion zeigt.",
+    "auto.actions.save": "Speichern",
+    "auto.actions.cancel": "Abbrechen",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

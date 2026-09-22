@@ -594,6 +594,10 @@ export const nl: Translation = {
     "face.opening": "De werkruimte wordt in een eigen venster geopend…",
     "face.drop": "Dit deelvenster verwijderen",
     "face.dropConfirm": "Dit deelvenster verwijderen? De terminal erin wordt beëindigd, en de weg terug naar wat hier gezegd is verdwijnt met de plek.",
+    "face.auto": "Automatisch",
+    "face.runStep": "Stap {n}",
+    "face.runNo": "Uitvoering {n}",
+    "face.dropRunConfirm": "Dit deelvenster verwijderen? De uitvoering wordt gestopt, de taak waaraan die werkte gaat terug naar Te doen, en een regel op die taak zegt dat.",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
@@ -914,6 +918,16 @@ export const nl: Translation = {
     "auto.block.unwiredInput": "{step}: niets bereikt de verplichte invoer {at}.",
     "auto.block.unansweredCfg": "{step}: de verplichte instelling {at} is onbeantwoord.",
     "auto.block.agentMissing": "{step}: deze machine kan {at} niet starten.",
+    "auto.actions.empty": "De bibliotheek heeft nog geen acties.",
+    "auto.actions.reachDevice": "Dit apparaat",
+    "auto.actions.reachProject": "Dit project",
+    "auto.actions.unused": "Geen automatisering gebruikt hem",
+    "auto.actions.usedBy.one": "{n} automatisering gebruikt hem", "auto.actions.usedBy.other": "{n} automatiseringen gebruiken hem",
+    "auto.actions.name": "Naam",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "Wat hier wordt opgeslagen, draagt elke stap die naar deze actie wijst.",
+    "auto.actions.save": "Opslaan",
+    "auto.actions.cancel": "Annuleren",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

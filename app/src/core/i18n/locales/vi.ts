@@ -596,6 +596,10 @@ export const vi: Translation = {
     "face.opening": "Đang mở không gian làm việc trong cửa sổ riêng…",
     "face.drop": "Bỏ khung này",
     "face.dropConfirm": "Bỏ khung này? Terminal trong đó sẽ kết thúc, và đường trở lại những gì đã nói ở đây cũng mất theo chỗ này.",
+    "face.auto": "Tự động",
+    "face.runStep": "Bước {n}",
+    "face.runNo": "Lần chạy {n}",
+    "face.dropRunConfirm": "Bỏ khung này? Lần chạy sẽ dừng, việc mà nó đang làm quay lại Cần làm, và một dòng trên việc đó sẽ ghi lại điều này.",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, còn những gì đang chạy trong đó thì không.",
     "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
@@ -915,6 +919,16 @@ export const vi: Translation = {
     "auto.block.unwiredInput": "{step}: không có gì đến được đầu vào bắt buộc {at}.",
     "auto.block.unansweredCfg": "{step}: thiết lập bắt buộc {at} chưa có câu trả lời.",
     "auto.block.agentMissing": "{step}: máy này không chạy được {at}.",
+    "auto.actions.empty": "Thư viện chưa có hành động nào.",
+    "auto.actions.reachDevice": "Thiết bị này",
+    "auto.actions.reachProject": "Dự án này",
+    "auto.actions.unused": "Chưa có tự động hoá nào chạy nó",
+    "auto.actions.usedBy.other": "{n} tự động hoá đang dùng",
+    "auto.actions.name": "Tên",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "Nội dung lưu ở đây được mọi bước trỏ tới hành động này mang theo.",
+    "auto.actions.save": "Lưu",
+    "auto.actions.cancel": "Huỷ",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

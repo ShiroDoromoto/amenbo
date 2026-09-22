@@ -18,7 +18,11 @@ use amenbo_core::model::{
 use amenbo_core::model::{
     AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
 };
+use amenbo_core::model::{AttachmentTarget, AutomationStoppedReason};
 use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep, StepSource};
+use amenbo_core::ops::automation_report::{Next, Produced};
+use amenbo_core::ops::automation_run::Launcher;
+use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::time::Timestamp;
 use amenbo_core::Store;
 
@@ -246,9 +250,189 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         AutomationCmd::Wire { sub } => return wire(store, flags, sub),
         AutomationCmd::Note { sub } => return note(store, flags, sub),
         AutomationCmd::Run { sub } => return run(store, flags, sub),
+
+        AutomationCmd::Start { id } => {
+            let known = startable(store);
+            let by = Launcher {
+                startable: known.as_deref(),
+                lanes: store.config.automation_lanes,
+                // Nothing is claimed about the window: a terminal cannot see what is on screen, and a
+                // `false` written here would refuse a launch the reader can see perfectly well
+                // (`amenbo_core::ops::automation_run::Launcher`).
+                workspace_open: None,
+                by: Some(flags.facet()?),
+            };
+            let r = store.automation_launch(id, &by).map_err(CliError::from)?;
+            let line = match r.status {
+                amenbo_core::model::AutomationRunStatus::Queued => {
+                    format!("✓ Run {} is waiting for a lane", r.id)
+                }
+                _ => format!("✓ Run {} started", r.id),
+            };
+            write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+        }
+        AutomationCmd::Pause { run } => {
+            let paused = store
+                .automation_pause(run, store.config.automation_lanes)
+                .map_err(CliError::from)?;
+            let (value, line) = match &paused {
+                Paused::Asked(r) => (
+                    json!({ "run": r.id, "state": "asked" }),
+                    format!("✓ Run {} pauses at the end of the step under way", r.id),
+                ),
+                Paused::Now(ended) => (
+                    json!({ "run": ended.run.id, "state": "paused" }),
+                    format!("✓ Run {} is paused", ended.run.id),
+                ),
+            };
+            write_envelope(flags, "automation.pause", "automation_run", value, None, false, line);
+        }
+        AutomationCmd::Resume { run } => {
+            let resumed = store
+                .automation_resume(run, store.config.automation_lanes)
+                .map_err(CliError::from)?;
+            let (value, line) = match &resumed {
+                Resumed::Step { run: r, next } => (
+                    json!({ "run": r.id, "state": "running", "step": next.id }),
+                    format!("✓ Run {} picks up at {} ({})", r.id, next.name, next.id),
+                ),
+                Resumed::Queued(r) => (
+                    json!({ "run": r.id, "state": "queued" }),
+                    format!("✓ Run {} is waiting for a lane", r.id),
+                ),
+            };
+            write_envelope(flags, "automation.resume", "automation_run", value, None, false, line);
+        }
+        AutomationCmd::Stop { run } => {
+            let ended = store
+                .automation_stop(run, AutomationStoppedReason::ByHuman, store.config.automation_lanes)
+                .map_err(CliError::from)?;
+            write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} stopped", ended.run.id));
+        }
+
+        AutomationCmd::Take { task } => {
+            let tid = resolve_task(store, &task).map_err(CliError::from)?;
+            let t = store.automation_take(speaking_for()?, tid).map_err(CliError::from)?;
+            write_envelope(flags, "automation.take", "task", serde_json::to_value(&t).unwrap(), None, false, format!("✓ Took {} — {}", task_label(t.id), t.title));
+        }
+        AutomationCmd::Out { value, file } => {
+            let step = speaking_for()?;
+            let v = match file {
+                // A file is put down as an attachment on this step execution first: what the port
+                // carries is the row, so there is nothing to name until the bytes are in.
+                Some(path) => {
+                    let a = crate::cmd::attach::attach_file(
+                        store,
+                        flags,
+                        AttachmentTarget::AutomationRunStep,
+                        step,
+                        &path,
+                        None,
+                    )?;
+                    store.automation_out(step, value.trim(), Produced::File(a.id)).map_err(CliError::from)?
+                }
+                None => {
+                    let (name, text) = parse_produced(&value)?;
+                    store.automation_out(step, &name, Produced::Value(&text)).map_err(CliError::from)?
+                }
+            };
+            write_envelope(flags, "automation.out", "automation_run_value", serde_json::to_value(&v).unwrap(), None, false, format!("✓ Handed on: {}", v.name));
+        }
+        AutomationCmd::Done { report, exit, outs } => {
+            let step = speaking_for()?;
+            // Everything produced goes down before the way out is stamped: `done` refuses a missing
+            // required output, and a value written after that refusal would arrive at a step that has
+            // already been told it is not finished.
+            for one in &outs {
+                let (name, text) = parse_produced(one)?;
+                store.automation_out(step, &name, Produced::Value(&text)).map_err(CliError::from)?;
+            }
+            let report = body_arg(report)?;
+            let next = store
+                .automation_done(step, exit.as_deref(), &report, store.config.automation_lanes)
+                .map_err(CliError::from)?;
+            let value = json!({ "step": step, "next": next_word(&next) });
+            write_envelope(flags, "automation.done", "automation_run_step", value, None, false, next_line(&next));
+        }
     }
     Ok(0)
 }
+// ───────────────────────────── running one ─────────────────────────────
+
+/// **The step execution this command is speaking for**, read off the environment the window opened
+/// this terminal with ([`amenbo_core::session::STEP_VAR`]).
+///
+/// The agent carrying a step out is told what to do and nothing about where it sits, so nothing in
+/// its prompt names the step and nothing it types could. The window opened the terminal and knows,
+/// and the environment is the one road that reaches an `amenbo` several processes deep.
+///
+/// **Outside a step it refuses rather than guessing.** There is no "the current step" to fall back on:
+/// several runs go at once, and picking the newest would put one step's report on another's record.
+fn speaking_for() -> Result<i64, CliError> {
+    amenbo_core::env::automation_step().ok_or_else(|| CliError {
+        code: "invalid_value",
+        message: "this is not a step of a run — `take`, `out` and `done` are typed by the agent a step opened, in the terminal the run opened for it.".to_string(),
+        hint: Some("start a run with `automation start <id>`, and the step's own terminal carries what these commands need".to_string()),
+        exit: 2,
+    })
+}
+
+/// **The agent ids this machine was last seen able to start**, or `None` where it has never been
+/// asked (`AMB-D-792`).
+///
+/// It is the remembered answer and not a fresh probe: probing starts a login shell and reads a
+/// profile, which is arbitrary code that can wait on a network, and a launch is not the moment to pay
+/// that. `None` reaches the launch check as "not asked", which leaves the agent check unmade rather
+/// than failing every step on a machine nobody has probed.
+fn startable(store: &Store) -> Option<Vec<String>> {
+    let config = &store.config;
+    let known = config.installed_agents()?;
+    let candidates = amenbo_core::wake::candidates(&[], &config.custom_agents, |command| {
+        known.iter().any(|one| one == command)
+    });
+    Some(
+        amenbo_core::wake::startable(&candidates)
+            .into_iter()
+            .map(|one| one.id.clone())
+            .collect(),
+    )
+}
+
+/// `<name>=<value>`, as `out` and `done --out` take it.
+fn parse_produced(one: &str) -> Result<(String, String), CliError> {
+    match one.split_once('=') {
+        Some((name, value)) if !name.trim().is_empty() => {
+            Ok((name.trim().to_string(), value.to_string()))
+        }
+        _ => Err(CliError {
+            code: "invalid_value",
+            message: format!("'{one}' is not `<name>=<value>`"),
+            hint: Some("write what the step hands on as `note=the answer`, naming an output the step declared".to_string()),
+            exit: 2,
+        }),
+    }
+}
+
+/// What a run did next, in the one word a caller reads it by.
+fn next_word(next: &Next) -> &'static str {
+    match next {
+        Next::Step(_) => "step",
+        Next::Closed(_) => "closed",
+        Next::Halted(_) => "halted",
+        Next::Paused(_) => "paused",
+    }
+}
+
+/// The sentence each of those is said in.
+fn next_line(next: &Next) -> String {
+    match next {
+        Next::Step(def) => format!("✓ Step done — next is {} ({})", def.name, def.id),
+        Next::Closed(_) => "✓ Step done — the run is over".to_string(),
+        Next::Halted(_) => "✓ Step done — the run stopped and is waiting for a person".to_string(),
+        Next::Paused(_) => "✓ Step done — the run is paused".to_string(),
+    }
+}
+
 
 fn action(store: &mut Store, flags: &Flags, sub: AutomationActionCmd) -> Result<i32, CliError> {
     match sub {

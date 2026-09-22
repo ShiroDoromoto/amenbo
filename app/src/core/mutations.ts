@@ -41,8 +41,12 @@ function me() {
  * awaitable — so `await deleteProject(...)` resolving means the snapshot has already caught up, and a
  * caller that reads the list right after (`goToFirstProject` following a delete or archive) cannot
  * pick the now-gone project out of a stale one.
+ *
+ * Exported for the write doors that live beside their own reads rather than here — the automations
+ * seam is one (`core/automations`). What stays here either way is the ack: a write that invented its
+ * own invalidation would be the escape hatch `applyAck` exists so as not to have.
  */
-async function invokeAck(cmd: string, args: Record<string, unknown>): Promise<void> {
+export async function invokeAck(cmd: string, args: Record<string, unknown>): Promise<void> {
   return applyAck(await invoke<WriteAck>(cmd, args));
 }
 
@@ -85,10 +89,10 @@ function applyAck(ack: WriteAck): Promise<void> {
       case "decisionComments": return decisions.has(key[1] as number);
       case "attachments": return tasks.has(Number(key[2])) || decisions.has(Number(key[2]));
       case "commits": return tasks.has(key[1] as number);
-      // The "running" tab and the band that counts the lanes with it. Pausing, resuming and stopping
-      // a run all move both, and all three ack with this scope (`crate::automation`).
-      case "automationRuns":
-      case "automationLanesHeld": return scopes.has("automationRuns");
+      // The library the "actions" tab draws. Rewriting a prompt acks with this scope, and what goes
+      // stale is the whole list rather than one row: the prompt shown is the row's own, and the
+      // count beside it is read off the steps pointing at it.
+      case "automationActions": return scopes.has("automationActions");
       default: return false;
     }
   });

@@ -240,6 +240,25 @@ export type AttachmentDto = { id: number, kind: "blob" | "url", blobHash: string
 present: boolean, createdByKind: "human" | "ai" | null, };
 
 /**
+ * **One library action in the list** — what the "actions" tab draws a row from.
+ *
+ * `global` is the reach it is held at: an action in the device's own library is one every project on
+ * this machine points steps at, and one in a project's library is that project's alone. It travels as
+ * that fact rather than as the project id, because the screen drawing it is inside one project and
+ * would only ever read an id back as "mine" or "the device's".
+ *
+ * `used_by` is **how many automations run it**, not how many steps do. Two steps of one automation
+ * pointing at the same action is one automation whose runs change when the prompt is rewritten, and
+ * that is the number the warning beside the prompt is about.
+ */
+export type AutomationActionCardDto = { id: number, name: string, 
+/**
+ * The prompt every step pointing at this action carries. It comes with the row rather than being
+ * fetched when one is opened: a library is tens of rows, and the edit box is opened in place.
+ */
+prompt: string, global: boolean, usedBy: number, };
+
+/**
  * **One automation in the list** — what the "automations" tab draws a row from.
  */
 export type AutomationCardDto = { id: number, name: string, 
@@ -368,9 +387,19 @@ stepName?: string,
 stepsDone: number, 
 /**
  * The task it is working, where it is on one. A run walks a stretch per task
- * ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now.
+ * ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same
+ * shape the row over its pane says it in.
  */
-taskId?: number, taskTitle?: string, };
+task?: AutomationRunTaskDto, };
+
+/**
+ * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
+ *
+ * Both halves are the ledger's own — the reference a person types to reach the task, and the title
+ * on it — because what a run's pane says about a task is never the agent's word for it
+ * (`AMB-D-858`).
+ */
+export type AutomationRunTaskDto = { id: number, ref: string, title: string, };
 
 /**
  * **One step**, with the declarations it runs under already resolved.
@@ -436,9 +465,19 @@ export type AutomationStepRunDto = {
  */
 runStep: number, 
 /**
- * What the step is called, for the pane's own header (`AMB-T-5252`).
+ * Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
+ * same step several times, so it is the count and not the step that says how far in a reader is.
  */
-name: string, say: string, agent: string, model?: string, 
+seq: number, 
+/**
+ * What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
+ */
+name: string, 
+/**
+ * The task this stretch of the run is working, where it is on one. Absent until a step takes
+ * one — a run whose first step has not reported is on no task yet.
+ */
+task?: AutomationRunTaskDto, say: string, agent: string, model?: string, 
 /**
  * Where the terminal runs, resolved from the name the step holds. Absent where the step names
  * none, and then the pane opens where a pane of that project opens.

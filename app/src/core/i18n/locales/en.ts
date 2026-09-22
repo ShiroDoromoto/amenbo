@@ -661,6 +661,18 @@ const ui = {
   // removing the place is what closes the way back into it for good (`AMB-D-869`).
   "face.drop": "Remove this pane",
   "face.dropConfirm": "Remove this pane? The terminal in it ends, and the way back into what was said here goes with the place.",
+  // The pane an automation run is drawn in (`app/src/talk/nameplate.ts`). The mark beside the name
+  // says this pane is a run's, and the line under it says where the run has got to: which step is
+  // running, how many moves in that is, which run it is, and the task the run is working. Every one
+  // is a value Amenbo holds, never the agent's word about itself (`AMB-D-858`).
+  //
+  // **And the way out is the other act.** There is no conversation to lose here — a step opens one of
+  // its own and leaves nothing of it behind — so what the question is about is the run: it stops, the
+  // task it reserved goes back, and a line on that task says so (`AMB-T-5252`).
+  "face.auto": "Automated",
+  "face.runStep": "Step {n}",
+  "face.runNo": "Run {n}",
+  "face.dropRunConfirm": "Remove this pane? The run is stopped, the task it was working goes back to To do, and a line on that task says so.",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same
   // reason one pane is (`app/src/shell/openPanes.ts`, `crate::quit`). It is its own sentence rather
   // than the pane's: what is being left behind is every session in the process, and one about "this
@@ -1150,6 +1162,16 @@ const ui = {
   "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
+  "auto.actions.empty": "The library has no actions yet.",
+  "auto.actions.reachDevice": "This device",
+  "auto.actions.reachProject": "This project",
+  "auto.actions.unused": "No automation runs it",
+  "auto.actions.usedBy.one": "Run by {n} automation", "auto.actions.usedBy.other": "Run by {n} automations",
+  "auto.actions.name": "Name",
+  "auto.actions.prompt": "Prompt",
+  "auto.actions.reaches": "What is saved here is carried by every step pointing at this action.",
+  "auto.actions.save": "Save",
+  "auto.actions.cancel": "Cancel",
 
   // The "running" tab: what is under way, what each run is on, and the three presses that
   // move it (`app/src/screens/RunningTab.tsx`).

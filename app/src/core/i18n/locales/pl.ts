@@ -609,6 +609,10 @@ export const pl: Translation = {
     "face.opening": "Otwieranie przestrzeni roboczej w osobnym oknie…",
     "face.drop": "Usuń ten panel",
     "face.dropConfirm": "Usunąć ten panel? Terminal w nim zostanie zakończony, a droga powrotna do tego, co tu powiedziano, zniknie razem z miejscem.",
+    "face.auto": "Automatyczny",
+    "face.runStep": "Krok {n}",
+    "face.runNo": "Uruchomienie {n}",
+    "face.dropRunConfirm": "Usunąć ten panel? Uruchomienie zostanie zatrzymane, zadanie, nad którym pracowało, wróci na Do zrobienia, a wiersz na tym zadaniu to odnotuje.",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 
@@ -931,6 +935,16 @@ export const pl: Translation = {
     "auto.block.unwiredInput": "{step}: do wymaganego wejścia {at} nic nie dociera.",
     "auto.block.unansweredCfg": "{step}: wymagane ustawienie {at} pozostaje bez odpowiedzi.",
     "auto.block.agentMissing": "{step}: ta maszyna nie może uruchomić {at}.",
+    "auto.actions.empty": "Biblioteka nie ma jeszcze żadnych akcji.",
+    "auto.actions.reachDevice": "To urządzenie",
+    "auto.actions.reachProject": "Ten projekt",
+    "auto.actions.unused": "Żadna automatyzacja jej nie uruchamia",
+    "auto.actions.usedBy.one": "Uruchamia ją {n} automatyzacja", "auto.actions.usedBy.few": "Uruchamiają ją {n} automatyzacje", "auto.actions.usedBy.many": "Uruchamia ją {n} automatyzacji", "auto.actions.usedBy.other": "Uruchamia ją {n} automatyzacji",
+    "auto.actions.name": "Nazwa",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "To, co zapisane tutaj, niesie każdy krok wskazujący na tę akcję.",
+    "auto.actions.save": "Zapisz",
+    "auto.actions.cancel": "Anuluj",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -3245,6 +3245,31 @@ pub struct AutomationCardDto {
     pub(crate) archived: bool,
 }
 
+/// **One library action in the list** — what the "actions" tab draws a row from.
+///
+/// `global` is the reach it is held at: an action in the device's own library is one every project on
+/// this machine points steps at, and one in a project's library is that project's alone. It travels as
+/// that fact rather than as the project id, because the screen drawing it is inside one project and
+/// would only ever read an id back as "mine" or "the device's".
+///
+/// `used_by` is **how many automations run it**, not how many steps do. Two steps of one automation
+/// pointing at the same action is one automation whose runs change when the prompt is rewritten, and
+/// that is the number the warning beside the prompt is about.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationActionCardDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    /// The prompt every step pointing at this action carries. It comes with the row rather than being
+    /// fetched when one is opened: a library is tens of rows, and the edit box is opened in place.
+    pub(crate) prompt: String,
+    pub(crate) global: bool,
+    #[ts(type = "number")]
+    pub(crate) used_by: usize,
+}
+
 /// **One automation's whole definition** — every step, every way out of each, and what joins them.
 ///
 /// It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
@@ -3444,8 +3469,17 @@ pub struct AutomationStepRunDto {
     /// The execution row this terminal is running under — what a report or a value hangs off.
     #[ts(type = "number")]
     pub(crate) run_step: i64,
-    /// What the step is called, for the pane's own header (`AMB-T-5252`).
+    /// Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
+    /// same step several times, so it is the count and not the step that says how far in a reader is.
+    #[ts(type = "number")]
+    pub(crate) seq: i64,
+    /// What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
     pub(crate) name: String,
+    /// The task this stretch of the run is working, where it is on one. Absent until a step takes
+    /// one — a run whose first step has not reported is on no task yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task: Option<AutomationRunTaskDto>,
     pub(crate) say: String,
     pub(crate) agent: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3458,6 +3492,21 @@ pub struct AutomationStepRunDto {
     pub(crate) folder: Option<String>,
     /// Whether this step may stop and wait for a person (`automation_step.interactive`).
     pub(crate) interactive: bool,
+}
+
+/// **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
+///
+/// Both halves are the ledger's own — the reference a person types to reach the task, and the title
+/// on it — because what a run's pane says about a task is never the agent's word for it
+/// (`AMB-D-858`).
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunTaskDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) r#ref: String,
+    pub(crate) title: String,
 }
 
 /// **One thing standing in the way of a launch**, as core named it
@@ -3530,12 +3579,9 @@ pub struct AutomationRunCardDto {
     #[ts(type = "number")]
     pub(crate) steps_done: usize,
     /// The task it is working, where it is on one. A run walks a stretch per task
-    /// ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now.
-    #[ts(type = "number")]
+    /// ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same
+    /// shape the row over its pane says it in.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub(crate) task_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) task_title: Option<String>,
+    pub(crate) task: Option<AutomationRunTaskDto>,
 }

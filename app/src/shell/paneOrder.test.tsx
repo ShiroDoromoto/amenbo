@@ -217,7 +217,7 @@ describe("what a card says about its pane", () => {
     // The name and the lamp's face are the pane's own answers (`../talk/plate`), so a card and the
     // row above that pane can never come to disagree.
     draw(faceOf(2), new Map(), new Map([
-      reads("1", { name: "builder", dot: { hue: 199, face: "lit" } }),
+      reads("1", { name: "builder", dot: { hue: 199, face: "lit" }, run: null }),
     ]));
     expect(cardOf("1").querySelector(".paneorder__name")!.textContent).toBe("builder");
     expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("lit");

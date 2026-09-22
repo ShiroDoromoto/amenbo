@@ -11,11 +11,11 @@ describe("the row on the page", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
-    draw({ name: "the migration", dot: STILL });
+    draw({ name: "the migration", dot: STILL, run: null });
     expect(host.querySelector(".plate__name")?.textContent).toBe("the migration");
 
     const row = host.querySelector(".plate");
-    draw({ name: "the backup", dot: STILL });
+    draw({ name: "the backup", dot: STILL, run: null });
     expect(host.querySelectorAll(".plate")).toHaveLength(1);
     // Redrawn in place: the row is not rebuilt, so nothing under the pointer moves.
     expect(host.querySelector(".plate")).toBe(row);
@@ -34,7 +34,7 @@ describe("the row on the page", () => {
     const draw = mountNameplate(host);
     const name = "the migration that moves the store and then puts the pointer back";
 
-    draw({ name, dot: STILL });
+    draw({ name, dot: STILL, run: null });
     expect(host.querySelector(".plate-peek__name")?.textContent).toBe(name);
     expect(host.querySelector(".plate-peek")?.textContent).toBe(name);
   });
@@ -45,7 +45,7 @@ describe("the row on the page", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
-    draw({ name: null, dot: STILL });
+    draw({ name: null, dot: STILL, run: null });
     expect((host.querySelector(".plate-peek") as HTMLElement).hidden).toBe(true);
   });
 
@@ -65,9 +65,64 @@ describe("the row on the page", () => {
       "a pane with no session kept an empty panel",
     ).toBe(true);
 
-    draw({ name: null, dot: STILL });
+    draw({ name: null, dot: STILL, run: null });
     expect(host.querySelector(".plate")).toBe(row);
     expect((row as HTMLElement).hidden).toBe(false);
+  });
+});
+
+describe("the row above a run's pane", () => {
+  /** Where a run has got to, as the face hands it over (`./nameplate`). */
+  const RUN = {
+    run: 7,
+    seq: 3,
+    step: "取る",
+    task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く" },
+  };
+
+  it("says the four values, and marks the pane as a run's", () => {
+    // All four are Amenbo's own — three off the execution row and one off the ledger — which is the
+    // whole of why they can be said at all (`AMB-D-858`). What the step printed is not among them:
+    // that is in the terminal under the row.
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+
+    expect(host.querySelector(".plate__auto")?.textContent).toBeTruthy();
+    expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(false);
+    expect(host.querySelector(".plate-run__step")?.textContent).toBe("取る");
+    expect(host.querySelector(".plate-run__seq")?.textContent).toContain("3");
+    expect(host.querySelector(".plate-run__no")?.textContent).toContain("7");
+    expect(host.querySelector(".plate-run__task")?.textContent).toBe("AMB-T-5252");
+    // The row has room for the reference and the panel has room for the title, which is what says
+    // which task it is without going to look it up.
+    expect(host.querySelector(".plate-peek__task")?.textContent)
+      .toBe("AMB-T-5252 ペインのヘッダを描く");
+  });
+
+  it("says nothing of a run on a pane that is not one", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "the migration", dot: STILL, run: null });
+
+    expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(true);
+    // The panel is the name's, exactly as it was: an empty line in it would push it taller for a
+    // pane that has no run.
+    expect(host.querySelector(".plate-peek")?.textContent).toBe("the migration");
+  });
+
+  it("drops the run's line when the pane goes back to having no row", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+    draw(null);
+
+    expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-peek") as HTMLElement).hidden).toBe(true);
   });
 });
 

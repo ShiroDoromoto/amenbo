@@ -596,6 +596,10 @@ export const th: Translation = {
     "face.opening": "กำลังเปิดพื้นที่ทำงานในหน้าต่างของมันเอง…",
     "face.drop": "เอาบานหน้าต่างนี้ออก",
     "face.dropConfirm": "เอาบานหน้าต่างนี้ออกไหม เทอร์มินัลข้างในจะจบลง และทางกลับไปยังสิ่งที่คุยไว้ตรงนี้จะหายไปพร้อมกับที่ว่างนี้",
+    "face.auto": "อัตโนมัติ",
+    "face.runStep": "ขั้นที่ {n}",
+    "face.runNo": "การรัน {n}",
+    "face.dropRunConfirm": "เอาบานหน้าต่างนี้ออกไหม การรันจะหยุดลง งานที่มันทำอยู่จะกลับไปเป็นรอทำ และจะมีหนึ่งบรรทัดบนงานนั้นบอกไว้",
     "quit.confirm": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป แต่สิ่งที่กำลังทำงานอยู่จะไม่กลับมา",
     "quit.confirmNotAll": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป ยกเว้นบานหน้าต่างที่รัน {names} สิ่งที่กำลังทำงานอยู่ก็จะไม่กลับมาเช่นกัน",
 
@@ -915,6 +919,16 @@ export const th: Translation = {
     "auto.block.unwiredInput": "{step}: ไม่มีอะไรไปถึงอินพุตที่จำเป็น {at}",
     "auto.block.unansweredCfg": "{step}: การตั้งค่าที่จำเป็น {at} ยังไม่มีคำตอบ",
     "auto.block.agentMissing": "{step}: เครื่องนี้เริ่ม {at} ไม่ได้",
+    "auto.actions.empty": "คลังยังไม่มีแอ็กชัน",
+    "auto.actions.reachDevice": "อุปกรณ์นี้",
+    "auto.actions.reachProject": "โปรเจกต์นี้",
+    "auto.actions.unused": "ยังไม่มีออโตเมชันใดใช้",
+    "auto.actions.usedBy.other": "ออโตเมชัน {n} รายการใช้อยู่",
+    "auto.actions.name": "ชื่อ",
+    "auto.actions.prompt": "พรอมป์ต",
+    "auto.actions.reaches": "สิ่งที่บันทึกที่นี่ ทุกขั้นตอนที่ชี้มาที่แอ็กชันนี้จะนำไปใช้",
+    "auto.actions.save": "บันทึก",
+    "auto.actions.cancel": "ยกเลิก",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

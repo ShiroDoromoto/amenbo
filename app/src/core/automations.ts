@@ -1,10 +1,17 @@
-// The read side of the automations screen: a project's definitions, one definition whole, and
-// whether that one could be started.
+// The automations screen's own seam: a project's definitions, one definition whole, whether that one
+// could be started, the library its steps are pointed at — and the one write that is not the screen's
+// at all, a run being stopped from the pane it is drawn in.
 //
 // It sits beside `core/reads.ts` rather than in it because what it reads is a different shape of
 // thing: a task list is paged and an automation is not. An automation is tens of rows, and the build
 // screen's picture, its step panel and its launch check all walk the same definition — so it is
 // fetched whole, once, and every part of the screen reads that one answer.
+//
+// **The writes here sit beside their reads** rather than in `core/mutations`, because what they are
+// about is this screen and nothing else. What the screen's own write does not do for itself is the
+// invalidation — the ack goes through `mutations.invokeAck`, the same road every other write takes.
+// The second one is pressed from a pane rather than from this screen, and is no ack at all
+// (`stopRun`).
 //
 // **The launch check is read, not worked out here.** The rules live in core, where the launch itself
 // reads them (`amenbo_core::ops::automation_run::check`), so what a screen says is in the way and
@@ -13,7 +20,9 @@
 import { useQuery } from "./query";
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
+import { invokeAck } from "./mutations";
 import type {
+  AutomationActionCardDto,
   AutomationCardDto,
   AutomationDetailDto,
   AutomationLaunchCheckDto,
@@ -34,6 +43,46 @@ export function useAutomations(projectId: number | null): AutomationCardDto[] {
     () => (projectId === null ? Promise.resolve([]) : fetchAutomations(projectId)),
   );
   return data ?? [];
+}
+
+/**
+ * The library this project reaches — the device's own actions and the project's own, in one list.
+ *
+ * Both reaches come in one answer because both are one list on screen: what a reader is choosing
+ * between is every prompt a step here could be pointed at, and which library holds one is a column.
+ */
+export async function fetchAutomationActions(projectId: number): Promise<AutomationActionCardDto[]> {
+  if (!inTauri()) return [];
+  return invoke<AutomationActionCardDto[]>("automation_action_page", { projectId });
+}
+
+/** Subscribing read of the library this project reaches. */
+export function useAutomationActions(projectId: number | null): AutomationActionCardDto[] {
+  const { data } = useQuery<AutomationActionCardDto[]>(
+    ["automationActions", projectId ?? null],
+    () => (projectId === null ? Promise.resolve([]) : fetchAutomationActions(projectId)),
+  );
+  return data ?? [];
+}
+
+/**
+ * Rename a library action, or rewrite its prompt. Only what is passed is written.
+ *
+ * **The rewrite reaches every step pointing at this action**, which is what a library is for — and
+ * why the screen says how many automations that is before the box is opened. A run already under way
+ * is not reached: a step's prompt is resolved as the step opens, and what an open step carries is
+ * settled.
+ */
+export async function editAutomationAction(
+  id: number,
+  patch: { name?: string; prompt?: string },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_edit", {
+    id,
+    name: patch.name ?? null,
+    prompt: patch.prompt ?? null,
+  });
 }
 
 /** One automation's whole definition, or nothing where that id names none. */
@@ -123,4 +172,47 @@ export async function fetchLiveRuns(): Promise<AutomationRunCardDto[]> {
 export function useLiveRuns(): AutomationRunCardDto[] {
   const { data } = useQuery<AutomationRunCardDto[]>(["automationRuns"], fetchLiveRuns);
   return data ?? [];
+}
+
+/**
+ * **Stop a run now** — what closing the pane a run is drawn in means (`../shell/TerminalPane`).
+ *
+ * The cleanup is core's and is the same one every other stop goes through: the lane is handed back,
+ * the task the run reserved goes to `todo`, and a line on that task says the run is not coming back
+ * (`amenbo_core::ops::automation_stop`).
+ *
+ * **It is not a `WriteAck` write.** What it moves is a run, a task and a comment, and every screen
+ * that draws one of those is already following the change feed — which is how a lane taken by a run
+ * in another project reaches this window in the first place (`fetchLanesHeld`).
+ *
+ * Answers whether this press was the one that stopped it: a run that had already finished is `false`
+ * and not a refusal, the press having been about the pane.
+ */
+export async function stopRun(run: number): Promise<boolean> {
+  if (!inTauri()) return false;
+  return invoke<boolean>("automation_run_stop", { runId: run });
+}
+
+/**
+ * **Ask a run to pause** — pressed on a row of the "running" tab (`../screens/RunningTab`).
+ *
+ * A step under way cannot be cut in half, so the run goes on until that step reports and settles
+ * there, handing its lane back; a run with nothing under way pauses on the spot
+ * (`amenbo_core::ops::automation_stop::pause`). Not a `WriteAck` write, for `stopRun`'s reason.
+ */
+export async function pauseRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_pause", { runId: run });
+}
+
+/**
+ * **Pick a paused run up again**, from the way out its last step left through. It opens a terminal
+ * where a lane is free and joins the queue where none is.
+ *
+ * Refused for a run that is not paused, which is the answer a reader gets rather than nothing
+ * happening: the row they pressed was drawn from a picture that has since moved.
+ */
+export async function resumeRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_resume", { runId: run });
 }

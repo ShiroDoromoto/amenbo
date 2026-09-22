@@ -58,6 +58,20 @@ pub const DIR_VAR: &str = "AMENBO_SESSION_DIR";
 /// nobody can get back to by the time anybody reads it (`AMB-D-897`).
 pub const PANE_VAR: &str = "AMENBO_PANE";
 
+/// The variable naming the **step execution** a terminal was opened for, where it was opened for one
+/// ([`crate::model::AutomationRunStep`], `AMB-T-5249`). Set beside [`SESSION_VAR`] by the window, on
+/// the terminals it opens for a step of a run, and on no other.
+///
+/// **It is what makes `amenbo automation done` sayable at all.** The agent carrying a step out is
+/// told what to do and nothing about where it sits: which run it is in, which step of it, and what
+/// that step declared are none of its business, and a step asked to quote a number back would be a
+/// step whose prompt has to carry one. So the window, which opened the terminal and therefore knows,
+/// puts the answer in the environment — and the `amenbo` the agent runs several processes deep reads
+/// it from there.
+///
+/// Unset everywhere else, which is what tells those commands they were typed outside a step.
+pub const STEP_VAR: &str = "AMENBO_AUTOMATION_STEP";
+
 /// The variable the way back into that pane's conversation is carried in — the handle its provider
 /// is resumed from ([`crate::frames::SavedPane::resume`]).
 ///

@@ -22,8 +22,8 @@ const hoisted = vi.hoisted(() => ({
   refuse: null as unknown,
 }));
 
-vi.mock("../core/automations", () => ({ useLiveRuns: () => hoisted.runs }));
-vi.mock("../core/mutations", () => ({
+vi.mock("../core/automations", () => ({
+  useLiveRuns: () => hoisted.runs,
   pauseRun: (run: number) => move(`pause ${run}`),
   resumeRun: (run: number) => move(`resume ${run}`),
   stopRun: (run: number) => move(`stop ${run}`),
@@ -35,7 +35,6 @@ function move(what: string): Promise<void> {
 }
 
 import { t, tf } from "../core/i18n";
-import { taskRef } from "../core/idref";
 import { RunningTab } from "./RunningTab";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -97,11 +96,11 @@ describe("the running tab", () => {
   });
 
   it("says what each run is, how far in it is, and what it is on", async () => {
-    await render([run({ stepName: "Take one", stepsDone: 2, taskId: 51, taskTitle: "Draw the tab" })]);
+    await render([run({ stepName: "Take one", stepsDone: 2, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab" } })]);
     const row = container.querySelector(".autorun__go")?.textContent ?? "";
     expect(row).toContain("Morning round");
     expect(row).toContain(tf("auto.run.step", { n: 2, step: "Take one" }));
-    expect(row).toContain(taskRef(51));
+    expect(row).toContain("AMB-T-51");
     expect(row).toContain("Draw the tab");
     // The tab crosses projects, so each row says which one it is about.
     expect(row).toContain("amenbo");

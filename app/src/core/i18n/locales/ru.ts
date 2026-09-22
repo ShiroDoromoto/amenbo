@@ -609,6 +609,10 @@ export const ru: Translation = {
     "face.opening": "Открываем рабочую область в отдельном окне…",
     "face.drop": "Убрать эту панель",
     "face.dropConfirm": "Убрать эту панель? Терминал в ней завершится, и путь обратно к сказанному здесь исчезнет вместе с местом.",
+    "face.auto": "Автоматически",
+    "face.runStep": "Шаг {n}",
+    "face.runNo": "Запуск {n}",
+    "face.dropRunConfirm": "Убрать эту панель? Запуск будет остановлен, задача, над которой он работал, вернётся в «К выполнению», и строка на этой задаче об этом скажет.",
     "quit.confirm": "Завершить Amenbo? Все открытые терминалы завершатся. Разговоры вернутся при следующем запуске, а то, что в них выполнялось, — нет.",
     "quit.confirmNotAll": "Завершить Amenbo? Все открытые терминалы завершатся. Разговоры вернутся при следующем запуске, кроме панелей с {names}. То, что в них выполнялось, тоже не вернётся.",
 
@@ -931,6 +935,16 @@ export const ru: Translation = {
     "auto.block.unwiredInput": "{step}: до обязательного входа {at} ничего не доходит.",
     "auto.block.unansweredCfg": "{step}: обязательная настройка {at} осталась без ответа.",
     "auto.block.agentMissing": "{step}: эта машина не может запустить {at}.",
+    "auto.actions.empty": "В библиотеке пока нет действий.",
+    "auto.actions.reachDevice": "Это устройство",
+    "auto.actions.reachProject": "Этот проект",
+    "auto.actions.unused": "Ни одна автоматизация его не выполняет",
+    "auto.actions.usedBy.one": "Его выполняет {n} автоматизация", "auto.actions.usedBy.few": "Его выполняют {n} автоматизации", "auto.actions.usedBy.many": "Его выполняют {n} автоматизаций", "auto.actions.usedBy.other": "Его выполняют {n} автоматизации",
+    "auto.actions.name": "Название",
+    "auto.actions.prompt": "Промпт",
+    "auto.actions.reaches": "То, что сохранено здесь, несёт каждый шаг, указывающий на это действие.",
+    "auto.actions.save": "Сохранить",
+    "auto.actions.cancel": "Отмена",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

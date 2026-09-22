@@ -593,6 +593,10 @@ export const zhHant: Translation = {
     "face.opening": "正在單獨的視窗中開啟工作區…",
     "face.drop": "移除此窗格",
     "face.dropConfirm": "要移除此窗格嗎？裡面的終端機會結束，回到這裡說過的話的路，也隨這個位置一起沒了。",
+    "face.auto": "自動",
+    "face.runStep": "第 {n} 步",
+    "face.runNo": "執行 {n}",
+    "face.dropRunConfirm": "要移除此窗格嗎？執行會停下，它正在處理的任務回到待辦，並在那條任務上留下一行說明。",
     "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，正在跑的東西不會。",
     "quit.confirmNotAll": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，但跑著 {names} 的窗格不會。正在跑的東西也不會。",
 
@@ -916,6 +920,16 @@ export const zhHant: Translation = {
     "auto.block.unwiredInput": "{step}：沒有東西到達必填輸入 {at}。",
     "auto.block.unansweredCfg": "{step}：必填設定 {at} 還沒有填。",
     "auto.block.agentMissing": "{step}：這台機器啟動不了 {at}。",
+    "auto.actions.empty": "程式庫中還沒有動作。",
+    "auto.actions.reachDevice": "本裝置",
+    "auto.actions.reachProject": "本專案",
+    "auto.actions.unused": "沒有自動化在用",
+    "auto.actions.usedBy.other": "{n} 個自動化在用",
+    "auto.actions.name": "名稱",
+    "auto.actions.prompt": "提示詞",
+    "auto.actions.reaches": "在這裡儲存的內容，指向此動作的每個步驟都會讀到。",
+    "auto.actions.save": "儲存",
+    "auto.actions.cancel": "取消",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

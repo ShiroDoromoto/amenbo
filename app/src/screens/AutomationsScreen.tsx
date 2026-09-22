@@ -5,9 +5,8 @@
 // the library and takes effect in every automation using it. Three sidebar entries would make three
 // places out of one subject, and each of them would have to carry the way back to the other two.
 //
-// The tabs are "running" (`./RunningTab`), "automations" — this one — and "actions" (`AMB-T-5258`).
-// The one that is not built yet draws nothing rather than a line saying so: a placeholder is a
-// sentence in nineteen languages that exists to be deleted.
+// The tabs are "running" (`./RunningTab`), "automations" — this one — and "actions", the library
+// (`./AutomationActionsTab`).
 //
 // **"Running" crosses projects and the other two do not.** What is under way is a claim on this
 // machine's lanes, and the lanes are not divided up per project; a definition and a library action
@@ -18,6 +17,7 @@
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
 // picture needs (`./AutomationBuildScreen`).
 import { useState } from "react";
+import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { RunningTab } from "./RunningTab";
 import { useAutomations } from "../core/automations";
@@ -78,6 +78,8 @@ export function AutomationsScreen({
           </div>
 
           {tab === "running" && <RunningTab onGoToRun={onGoToRun} />}
+
+          {tab === "actions" && <AutomationActionsTab projectId={projectId} />}
 
           {tab === "automations" && automations.length === 0 && (
             <div className="auto__empty">{t("auto.empty")}</div>

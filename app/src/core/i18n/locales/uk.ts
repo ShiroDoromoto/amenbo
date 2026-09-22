@@ -609,6 +609,10 @@ export const uk: Translation = {
     "face.opening": "Відкриваємо робочу область в окремому вікні…",
     "face.drop": "Прибрати цю панель",
     "face.dropConfirm": "Прибрати цю панель? Термінал у ній завершиться, і шлях назад до сказаного тут зникне разом із місцем.",
+    "face.auto": "Автоматично",
+    "face.runStep": "Крок {n}",
+    "face.runNo": "Запуск {n}",
+    "face.dropRunConfirm": "Прибрати цю панель? Запуск буде зупинено, задача, над якою він працював, повернеться до «До виконання», і рядок на цій задачі про це скаже.",
     "quit.confirm": "Завершити Amenbo? Усі відкриті термінали завершаться. Розмови повернуться під час наступного запуску, а те, що в них виконувалося, — ні.",
     "quit.confirmNotAll": "Завершити Amenbo? Усі відкриті термінали завершаться. Розмови повернуться під час наступного запуску, окрім панелей із {names}. Те, що в них виконувалося, теж не повернеться.",
 
@@ -931,6 +935,16 @@ export const uk: Translation = {
     "auto.block.unwiredInput": "{step}: до обов’язкового входу {at} нічого не доходить.",
     "auto.block.unansweredCfg": "{step}: обов’язкове налаштування {at} лишилося без відповіді.",
     "auto.block.agentMissing": "{step}: ця машина не може запустити {at}.",
+    "auto.actions.empty": "У бібліотеці ще немає дій.",
+    "auto.actions.reachDevice": "Цей пристрій",
+    "auto.actions.reachProject": "Цей проєкт",
+    "auto.actions.unused": "Жодна автоматизація її не виконує",
+    "auto.actions.usedBy.one": "Її виконує {n} автоматизація", "auto.actions.usedBy.few": "Її виконують {n} автоматизації", "auto.actions.usedBy.many": "Її виконують {n} автоматизацій", "auto.actions.usedBy.other": "Її виконують {n} автоматизації",
+    "auto.actions.name": "Назва",
+    "auto.actions.prompt": "Промпт",
+    "auto.actions.reaches": "Те, що збережено тут, несе кожен крок, який вказує на цю дію.",
+    "auto.actions.save": "Зберегти",
+    "auto.actions.cancel": "Скасувати",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

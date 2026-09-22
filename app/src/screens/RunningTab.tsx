@@ -15,10 +15,8 @@
 // stands the run's place in the workspace and goes to it — including for a run still waiting for a
 // lane, whose place is stood empty and is the one its first step opens in (`../talk/layout`).
 import { useState } from "react";
-import { useLiveRuns } from "../core/automations";
-import { pauseRun, resumeRun, stopRun } from "../core/mutations";
+import { pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
-import { taskRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 
@@ -103,11 +101,8 @@ export function RunningTab({
                       {tf("auto.run.step", { n: run.stepsDone, step: run.stepName })}
                     </span>
                   )}
-                  {run.taskId !== undefined && (
-                    <span className="autorun__task">
-                      {taskRef(run.taskId)}
-                      {run.taskTitle !== undefined && ` ${run.taskTitle}`}
-                    </span>
+                  {run.task !== undefined && (
+                    <span className="autorun__task">{`${run.task.ref} ${run.task.title}`}</span>
                   )}
                 </span>
                 <span className="auto__mark">{run.projectName}</span>
@@ -144,7 +139,7 @@ export function RunningTab({
                     type="button"
                     className="btn"
                     disabled={pressing}
-                    onClick={() => void press(() => stopRun(run.run))}
+                    onClick={() => void press(async () => { await stopRun(run.run); })}
                   >
                     {t("auto.run.stop")}
                   </button>

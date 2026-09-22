@@ -605,6 +605,10 @@ export const it: Translation = {
     "face.opening": "Apertura dello spazio di lavoro in una finestra propria…",
     "face.drop": "Rimuovi questo riquadro",
     "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina, e la via di ritorno a ciò che vi è stato detto se ne va con il posto.",
+    "face.auto": "Automatizzato",
+    "face.runStep": "Passo {n}",
+    "face.runNo": "Esecuzione {n}",
+    "face.dropRunConfirm": "Rimuovere questo riquadro? L'esecuzione viene fermata, l'attività su cui stava lavorando torna a Da fare, e una riga su quell'attività lo dice.",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",
     "quit.confirmNotAll": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, tranne nei riquadri con {names}. Non torna nemmeno ciò che stavano eseguendo.",
 
@@ -926,6 +930,16 @@ export const it: Translation = {
     "auto.block.unwiredInput": "{step}: nulla raggiunge l’ingresso obbligatorio {at}.",
     "auto.block.unansweredCfg": "{step}: l’impostazione obbligatoria {at} non ha risposta.",
     "auto.block.agentMissing": "{step}: questa macchina non può avviare {at}.",
+    "auto.actions.empty": "La libreria non contiene ancora azioni.",
+    "auto.actions.reachDevice": "Questo dispositivo",
+    "auto.actions.reachProject": "Questo progetto",
+    "auto.actions.unused": "Nessuna automazione la esegue",
+    "auto.actions.usedBy.one": "{n} automazione la esegue", "auto.actions.usedBy.many": "{n} di automazioni la eseguono", "auto.actions.usedBy.other": "{n} automazioni la eseguono",
+    "auto.actions.name": "Nome",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "Ciò che viene salvato qui è portato da ogni passo che punta a questa azione.",
+    "auto.actions.save": "Salva",
+    "auto.actions.cancel": "Annulla",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

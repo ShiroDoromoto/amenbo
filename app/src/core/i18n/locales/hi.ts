@@ -594,6 +594,10 @@ export const hi: Translation = {
     "face.opening": "वर्कस्पेस को अलग विंडो में खोला जा रहा है…",
     "face.drop": "इस पैन को हटाएँ",
     "face.dropConfirm": "इस पैन को हटाएँ? इसमें चल रहा टर्मिनल समाप्त हो जाएगा, और यहाँ जो बात हुई थी उस तक लौटने का रास्ता भी जगह के साथ चला जाएगा।",
+    "face.auto": "स्वचालित",
+    "face.runStep": "चरण {n}",
+    "face.runNo": "रन {n}",
+    "face.dropRunConfirm": "इस पैन को हटाएँ? रन रुक जाएगा, जिस काम पर वह था वह वापस करना है पर चला जाएगा, और उस काम पर एक पंक्ति यह बता देगी।",
     "quit.confirm": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर उनमें जो चल रहा था वह नहीं।",
     "quit.confirmNotAll": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर {names} वाले पैन वापस नहीं आएँगे। उनमें जो चल रहा था वह भी वापस नहीं आएगा।",
 
@@ -914,6 +918,16 @@ export const hi: Translation = {
     "auto.block.unwiredInput": "{step}: ज़रूरी इनपुट {at} तक कुछ भी नहीं पहुँचता।",
     "auto.block.unansweredCfg": "{step}: ज़रूरी सेटिंग {at} का जवाब नहीं दिया गया है।",
     "auto.block.agentMissing": "{step}: यह मशीन {at} को शुरू नहीं कर सकती।",
+    "auto.actions.empty": "लाइब्रेरी में अभी कोई ऐक्शन नहीं है।",
+    "auto.actions.reachDevice": "यह डिवाइस",
+    "auto.actions.reachProject": "यह प्रोजेक्ट",
+    "auto.actions.unused": "कोई ऑटोमेशन इसे नहीं चलाता",
+    "auto.actions.usedBy.one": "{n} ऑटोमेशन इसे चलाता है", "auto.actions.usedBy.other": "{n} ऑटोमेशन इसे चलाते हैं",
+    "auto.actions.name": "नाम",
+    "auto.actions.prompt": "प्रॉम्प्ट",
+    "auto.actions.reaches": "यहाँ सहेजा गया वही हर उस स्टेप तक जाता है जो इस ऐक्शन की ओर इशारा करता है।",
+    "auto.actions.save": "सहेजें",
+    "auto.actions.cancel": "रद्द करें",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

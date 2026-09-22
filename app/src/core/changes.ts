@@ -86,15 +86,18 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   binding_project_dir: ["projects"],
   hook_optout: ["projects"],
   harness_consent: ["projects"],
-  // The ten tables an automation's definition is built in. Folded to nothing for `notify_target`'s
-  // reason: nothing on screen is drawn from a definition arriving on the feed — the automations tab
-  // and the build screen are read when they are opened — so no query goes stale when one is built,
-  // and falling to gap would buy a full re-read for a change nobody can see. The screens that come to
-  // need it name their scope here when they do.
+  // The ten tables an automation's definition is built in. Two of them are drawn — the library and
+  // the steps pointing into it, which the "actions" tab reads as one list — and name their scope
+  // below. The rest are folded to nothing for `notify_target`'s reason: no pane draws them yet, so no
+  // query goes stale when one is built, and falling to gap would buy a full re-read for a change
+  // nobody can see. The tabs that will draw them name their scope here when they arrive.
   automation: [],
-  automation_action: [],
+  // The library and the pointers into it: the "actions" tab draws every action with how many
+  // automations run it, so a step taking up an action or letting one go moves that list as surely as
+  // the action's own row does.
+  automation_action: ["automationActions"],
   automation_note: [],
-  automation_step: [],
+  automation_step: ["automationActions"],
   automation_step_note: [],
   automation_cfg: [],
   automation_exit: [],

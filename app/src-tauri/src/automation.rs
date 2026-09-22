@@ -33,21 +33,23 @@
 
 use amenbo_core::model::{
     Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
-    AutomationPortOwner, AutomationStep, AutomationStoppedReason,
+    AutomationPortOwner, AutomationRunStatus, AutomationStep, AutomationStoppedReason,
 };
 use amenbo_core::ops::automation::declarer;
 use amenbo_core::ops::automation_run::{self, Unmet};
-use amenbo_core::ops::automation_stop::{Paused, Resumed, TookALane};
+use amenbo_core::ops::automation_stop::{Ended, Paused, Resumed, TookALane};
 use amenbo_core::ops::automation_step::Opened;
 use amenbo_core::store_engine::{read, StoreEngine};
 
-use crate::commands::open_store_read;
+use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
-    AutomationCardDto, AutomationCfgDto, AutomationDetailDto, AutomationEdgeDto, AutomationExitDto,
-    AutomationLaunchBlockDto, AutomationLaunchCheckDto, AutomationPortDto, AutomationRunCardDto,
-    AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
+    AutomationActionCardDto, AutomationCardDto, AutomationCfgDto, AutomationDetailDto,
+    AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto, AutomationLaunchCheckDto,
+    AutomationPortDto, AutomationRunCardDto, AutomationRunTaskDto, AutomationStepDto,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
+use std::collections::BTreeSet;
 use tauri::Emitter;
 
 /// The automations of one project, in the order they were placed in.
@@ -71,6 +73,68 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
         });
     }
     Ok(cards)
+}
+
+/// **The library this project reaches** — the device's own actions first, then the project's own.
+///
+/// The two libraries answer as one list because they are one list on screen: what a reader is
+/// choosing between is every prompt a step here could be pointed at, and which of the two holds one
+/// is a column of that list rather than a second list to go and look in.
+#[tauri::command]
+pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_action_page");
+    let store = open_store_read()?;
+    let engine = store.read_model();
+    let conn = engine.conn();
+    let mut cards = Vec::new();
+    for (reach, global) in [(None, true), (Some(project_id), false)] {
+        for (id, _) in read::automation_action_siblings(conn, reach, None)? {
+            let Some(row) = read::automation_action(conn, id)? else { continue };
+            cards.push(AutomationActionCardDto {
+                id: row.id,
+                name: row.name,
+                prompt: row.prompt,
+                global,
+                used_by: automations_using(engine, id)?,
+            });
+        }
+    }
+    Ok(cards)
+}
+
+/// **Rename a library action, or rewrite its prompt.** Only what is `Some` is written.
+///
+/// The rewrite reaches every step pointing at this action, which is what the library is for — and
+/// what the screen says before the box is opened. It does not reach a run already under way: a run
+/// resolves each step's prompt as it opens the step, off the action as it stands at that moment
+/// ([`amenbo_core::ops::automation_run`]), so what a running step carries is settled and this cannot
+/// reach back into it.
+#[tauri::command]
+pub fn automation_action_edit(
+    id: i64,
+    name: Option<String>,
+    prompt: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_update(id, name.as_deref(), prompt.as_deref())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
+}
+
+/// **How many automations run this action**, counted by the automation each step is in.
+///
+/// Two steps of one automation pointing at the same action is one automation: what the number is
+/// read for is how far a rewrite of the prompt carries, and that is measured in automations whose
+/// runs change, not in places the pointer occurs.
+fn automations_using(engine: &StoreEngine, action_id: i64) -> Result<usize, CmdError> {
+    let conn = engine.conn();
+    let mut seen = BTreeSet::new();
+    for step_id in read::automation_step_ids_using_action(conn, action_id)? {
+        let Some(step) = read::automation_step(conn, step_id)? else { continue };
+        seen.insert(step.automation_id);
+    }
+    Ok(seen.len())
 }
 
 /// One automation's whole definition, or nothing where that id names none.
@@ -150,20 +214,19 @@ const STOPPED_SHOWN: usize = 20;
 pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_running_page");
     let store = open_store_read()?;
-    let engine = store.read_model();
     let mut out = Vec::new();
-    for run in read::automation_runs_live(engine.conn(), STOPPED_SHOWN)? {
-        out.push(run_card(engine, run)?);
+    for run in read::automation_runs_live(store.read_model().conn(), STOPPED_SHOWN)? {
+        out.push(run_card(&store, run)?);
     }
     Ok(out)
 }
 
 /// One run as the tab draws it: what it is, how far in, and what it is on.
 fn run_card(
-    engine: &StoreEngine,
+    store: &amenbo_core::Store,
     run: amenbo_core::model::AutomationRun,
 ) -> Result<AutomationRunCardDto, CmdError> {
-    let conn = engine.conn();
+    let conn = store.read_model().conn();
     let steps = read::automation_run_steps_of(conn, run.id)?;
     // The step it is on, or the last one it ran — read through the run's own copy of the definition,
     // which is what says what was asked at launch rather than what the automation says now.
@@ -172,14 +235,7 @@ fn run_card(
         None => None,
     };
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
-    let task = match read::automation_run_task_last(conn, run.id)? {
-        Some(stretch) => stretch.task_id,
-        None => None,
-    };
-    let task_title = match task {
-        Some(id) => read::task(conn, id)?.map(|one| one.title),
-        None => None,
-    };
+    let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
     Ok(AutomationRunCardDto {
         run: run.id,
         project: run.project_id,
@@ -193,10 +249,7 @@ fn run_card(
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         step_name,
         steps_done: steps.len(),
-        // A stretch whose task has since been deleted keeps the id and answers no title, which is
-        // what `task_id` being `Some` with nothing beside it means on the row.
-        task_id: task,
-        task_title,
+        task: worked_task(store, stretch)?,
     })
 }
 
@@ -248,58 +301,38 @@ pub fn automation_step_open(
 }
 
 /// **Pause a run** — it settles at the end of the step under way, and hands its lane back there
-/// ([`amenbo_core::ops::automation_stop::pause`]).
+/// ([`amenbo_core::ops::automation_stop::pause`]). Pressed on a row of the "running" tab.
 ///
 /// Pressed on a run with nothing under way it takes effect on the spot, and then a lane may come free
 /// here — which is why this door takes the window: whatever was waiting is promoted inside the same
 /// press, and a promoted run needs a terminal opening on it.
+///
+/// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not: what it moves is a
+/// run, and every screen drawing one is already following the change feed.
 #[tauri::command]
-pub fn automation_run_pause(app: tauri::AppHandle, run: i64) -> Result<WriteAck, CmdError> {
+pub fn automation_run_pause(app: tauri::AppHandle, run_id: i64) -> Result<(), CmdError> {
     let lanes = lanes()?;
     let mut store = crate::commands::open_store()?;
-    let woke = match store.automation_run_pause(run, lanes)? {
+    let woke = match store.automation_pause(run_id, lanes)? {
         Paused::Asked(_) => None,
         Paused::Now(ended) => ended.woke,
     };
-    follow(&app, &mut store, woke, lanes)?;
-    Ok(ack())
+    follow(&app, &mut store, woke, lanes)
 }
 
 /// **Pick a paused run up again** ([`amenbo_core::ops::automation_stop::resume`]). It opens a terminal
 /// on the step its last one led to where a lane is free, and joins the queue where none is.
 #[tauri::command]
-pub fn automation_run_resume(app: tauri::AppHandle, run: i64) -> Result<WriteAck, CmdError> {
+pub fn automation_run_resume(app: tauri::AppHandle, run_id: i64) -> Result<(), CmdError> {
     let lanes = lanes()?;
     let mut store = crate::commands::open_store()?;
-    match store.automation_run_resume(run, lanes)? {
+    match store.automation_resume(run_id, lanes)? {
         Resumed::Step { run, next } => {
             drive(&app, &mut store, run.id, next.id, lanes)?;
         }
         Resumed::Queued(_) => {}
     }
-    Ok(ack())
-}
-
-/// **Stop a run now** ([`amenbo_core::ops::automation_stop::stop`]) — the lane goes back, the task it
-/// was holding goes back to `todo`, and a line is left on that task saying what became of it.
-///
-/// The reason is `by_human` and is not asked for: this door is a button, and the three other reasons
-/// are ones the machine finds rather than ones a person presses.
-#[tauri::command]
-pub fn automation_run_stop(app: tauri::AppHandle, run: i64) -> Result<WriteAck, CmdError> {
-    let lanes = lanes()?;
-    let mut store = crate::commands::open_store()?;
-    let ended = store.automation_run_stop(run, AutomationStoppedReason::ByHuman, lanes)?;
-    follow(&app, &mut store, ended.woke, lanes)?;
-    Ok(ack())
-}
-
-/// What every one of the three writes above invalidates: the "running" tab, and the band that counts
-/// the lanes with it. The task a stop handed back is named too — it went to `todo` and picked up a
-/// comment, and the pane reading it is the one place that would otherwise go on drawing the old
-/// status.
-fn ack() -> WriteAck {
-    WriteAck::new(&["automationRuns", "tasks"])
+    Ok(())
 }
 
 /// How many runs may be under way at once. It is a setting and lives outside the store, so every door
@@ -372,7 +405,9 @@ fn open_one(
                 run.project_id,
                 Some(AutomationStepRunDto {
                     run_step: ready.run_step.id,
+                    seq: ready.run_step.seq,
                     name: def.name.clone(),
+                    task: worked_task(store, ready.run_step.run_task_id)?,
                     say: ready.text.clone(),
                     agent: def.agent.clone(),
                     model: def.model.clone(),
@@ -392,6 +427,72 @@ fn open_one(
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
     Ok((dto, woke))
+}
+
+/// **The task one stretch of a run is working**, read off the ledger for the pane's header.
+///
+/// `None` where the execution belongs to no stretch — a run whose steps take no task at all — and
+/// where the task itself has been deleted since the stretch opened, the column being nulled rather
+/// than the row going with it (`automation_run_task.task_id`).
+fn worked_task(
+    store: &amenbo_core::Store,
+    run_task_id: Option<i64>,
+) -> Result<Option<AutomationRunTaskDto>, CmdError> {
+    let Some(stretch_id) = run_task_id else { return Ok(None) };
+    let conn = store.read_model().conn();
+    let Some(task_id) = read::automation_run_task(conn, stretch_id)?.and_then(|s| s.task_id) else {
+        return Ok(None);
+    };
+    Ok(read::task_title(conn, task_id)?.map(|title| AutomationRunTaskDto {
+        id: task_id,
+        r#ref: amenbo_core::idref::task(task_id),
+        title,
+    }))
+}
+
+/// **Stop a run now** — what closing the pane a run is drawn in means
+/// (`app/src/shell/TerminalPane.tsx`), and what the "running" tab's third button presses.
+///
+/// The cleanup is core's and is the same one every other stop goes through
+/// ([`amenbo_core::ops::automation_stop::stop`]): the lane is handed back, the task the run was
+/// working goes to `todo`, and a line on that task says the run is not coming back. The terminal
+/// standing in the pane is the pane's own to end — it is a process this side started, and core has
+/// no window to end one from.
+///
+/// **A run that is over already is not an error here.** The pane is closed by a person, and between
+/// the last step reporting and the press there is a window in which the run has finished on its own;
+/// a refusal then would put a red sentence in front of somebody who did nothing wrong. What comes
+/// back says whether this press was the one that stopped it.
+#[tauri::command]
+pub fn automation_run_stop(app: tauri::AppHandle, run_id: i64) -> Result<bool, CmdError> {
+    let lanes = lanes()?;
+    let mut store = crate::commands::open_store()?;
+    let Some(ended) = stop_if_going(&mut store, run_id, lanes)? else { return Ok(false) };
+    follow(&app, &mut store, ended.woke, lanes)?;
+    Ok(true)
+}
+
+/// The half of the stop that has no window in it: stop the run where it is still going, and answer
+/// `None` where there was nothing to stop. Split out so the "already over" arm can be tested without
+/// an app to hand ([`automation_run_stop`] is the whole of it, the lane included).
+fn stop_if_going(
+    store: &mut amenbo_core::Store,
+    run_id: i64,
+    lanes: i64,
+) -> Result<Option<Ended>, CmdError> {
+    let going = match read::automation_run(store.read_model().conn(), run_id)? {
+        Some(run) => matches!(
+            run.status,
+            AutomationRunStatus::Running | AutomationRunStatus::Queued | AutomationRunStatus::Paused
+        ),
+        // A run nobody can find is one nothing can be stopped about, and the pane is going either
+        // way. Saying so is the whole of what is left to do.
+        None => false,
+    };
+    if !going {
+        return Ok(None);
+    }
+    Ok(Some(store.automation_stop(run_id, AutomationStoppedReason::ByHuman, lanes)?))
 }
 
 // ───────────────────────────── shaping ─────────────────────────────
@@ -514,5 +615,33 @@ fn cfg_dto(cfg: AutomationCfg) -> AutomationCfgDto {
         required: cfg.required,
         options: cfg.options,
         value: cfg.value,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::tests::env_guard;
+
+    /// **A press on a pane is never a refusal.** Closing a run's pane is a person being rid of the
+    /// pane, and between the last step reporting and the press there is a window in which the run
+    /// ended on its own — so a run that is over, or one whose rows are gone entirely, answers `false`
+    /// rather than putting a red sentence in front of somebody who did nothing wrong.
+    ///
+    /// Both facts come out of the same door: what is refused by core is the stop
+    /// ([`amenbo_core::ops::automation_stop::stop`], whose own cases cover the states), and what is
+    /// answered here is whether this press was the one that stopped it.
+    #[test]
+    fn stopping_a_run_that_is_not_there_is_answered_rather_than_refused() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-stop-gone");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        amenbo_core::Store::open().unwrap();
+
+        let lanes = lanes().expect("the lane count");
+        let mut store = crate::commands::open_store().expect("the store");
+        assert!(stop_if_going(&mut store, 404, lanes)
+            .expect("a run nobody can find is not an error")
+            .is_none());
     }
 }

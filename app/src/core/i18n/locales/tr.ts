@@ -594,6 +594,10 @@ export const tr: Translation = {
     "face.opening": "Çalışma alanı kendi penceresinde açılıyor…",
     "face.drop": "Bu bölmeyi kaldır",
     "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve burada konuşulanlara dönüş yolu da bu yerle birlikte gider.",
+    "face.auto": "Otomatik",
+    "face.runStep": "{n}. adım",
+    "face.runNo": "Çalıştırma {n}",
+    "face.dropRunConfirm": "Bu bölme kaldırılsın mı? Çalıştırma durdurulur, üzerinde çalıştığı görev Yapılacak durumuna döner ve o görevde bir satır bunu söyler.",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",
 
@@ -914,6 +918,16 @@ export const tr: Translation = {
     "auto.block.unwiredInput": "{step}: zorunlu girdi {at} öğesine hiçbir şey ulaşmıyor.",
     "auto.block.unansweredCfg": "{step}: zorunlu ayar {at} yanıtsız.",
     "auto.block.agentMissing": "{step}: bu makine {at} başlatamıyor.",
+    "auto.actions.empty": "Kitaplıkta henüz eylem yok.",
+    "auto.actions.reachDevice": "Bu cihaz",
+    "auto.actions.reachProject": "Bu proje",
+    "auto.actions.unused": "Hiçbir otomasyon çalıştırmıyor",
+    "auto.actions.usedBy.one": "{n} otomasyon çalıştırıyor", "auto.actions.usedBy.other": "{n} otomasyon çalıştırıyor",
+    "auto.actions.name": "Ad",
+    "auto.actions.prompt": "İstem",
+    "auto.actions.reaches": "Burada kaydedilen, bu eylemi gösteren her adımın taşıdığı şeydir.",
+    "auto.actions.save": "Kaydet",
+    "auto.actions.cancel": "Vazgeç",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -131,6 +131,10 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // its next step or ending — every one of which is a row of `automation_run`, of the stretch it
       // is spending on a task, or of the steps it has opened (`core/changes`).
       case "automationRuns": return touchesScope("automationRuns");
+      // The library the "actions" tab draws. It moves on two kinds of row — the action itself, and a
+      // step being pointed at one or away from one, which is what the count beside each action is —
+      // and both fold to this scope.
+      case "automationActions": return touchesScope("automationActions");
       default: return false;
     }
   });

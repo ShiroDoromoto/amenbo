@@ -593,6 +593,10 @@ export const zhHans: Translation = {
     "face.opening": "正在单独的窗口中打开工作区…",
     "face.drop": "移除此窗格",
     "face.dropConfirm": "要移除此窗格吗？里面的终端会结束，回到这里说过的话的路，也随这个位置一起没了。",
+    "face.auto": "自动",
+    "face.runStep": "第 {n} 步",
+    "face.runNo": "运行 {n}",
+    "face.dropRunConfirm": "要移除此窗格吗？运行会停下，它正在处理的任务回到待办，并在那条任务上留下一行说明。",
     "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，正在跑的东西不会。",
     "quit.confirmNotAll": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，但跑着 {names} 的窗格不会。正在跑的东西也不会。",
 
@@ -916,6 +920,16 @@ export const zhHans: Translation = {
     "auto.block.unwiredInput": "{step}：没有东西到达必填输入 {at}。",
     "auto.block.unansweredCfg": "{step}：必填设置 {at} 还没有填。",
     "auto.block.agentMissing": "{step}：这台机器启动不了 {at}。",
+    "auto.actions.empty": "库中还没有动作。",
+    "auto.actions.reachDevice": "本设备",
+    "auto.actions.reachProject": "本项目",
+    "auto.actions.unused": "没有自动化在用",
+    "auto.actions.usedBy.other": "{n} 个自动化在用",
+    "auto.actions.name": "名称",
+    "auto.actions.prompt": "提示词",
+    "auto.actions.reaches": "在这里保存的内容，指向该动作的每个步骤都会读到。",
+    "auto.actions.save": "保存",
+    "auto.actions.cancel": "取消",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

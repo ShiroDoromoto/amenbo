@@ -605,6 +605,10 @@ export const es: Translation = {
     "face.opening": "Abriendo el espacio de trabajo en una ventana propia…",
     "face.drop": "Quitar este panel",
     "face.dropConfirm": "¿Quitar este panel? La terminal que hay en él se cierra, y el camino de vuelta a lo que se dijo aquí se va con el sitio.",
+    "face.auto": "Automatizado",
+    "face.runStep": "Paso {n}",
+    "face.runNo": "Ejecución {n}",
+    "face.dropRunConfirm": "¿Quitar este panel? La ejecución se detiene, la tarea en la que estaba vuelve a Pendiente, y una línea en esa tarea lo dice.",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque; lo que estaban ejecutando, no.",
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 
@@ -926,6 +930,16 @@ export const es: Translation = {
     "auto.block.unwiredInput": "{step}: nada llega a la entrada obligatoria {at}.",
     "auto.block.unansweredCfg": "{step}: el ajuste obligatorio {at} está sin responder.",
     "auto.block.agentMissing": "{step}: esta máquina no puede iniciar {at}.",
+    "auto.actions.empty": "La biblioteca aún no tiene acciones.",
+    "auto.actions.reachDevice": "Este dispositivo",
+    "auto.actions.reachProject": "Este proyecto",
+    "auto.actions.unused": "Ninguna automatización la ejecuta",
+    "auto.actions.usedBy.one": "La ejecuta {n} automatización", "auto.actions.usedBy.many": "La ejecutan {n} de automatizaciones", "auto.actions.usedBy.other": "La ejecutan {n} automatizaciones",
+    "auto.actions.name": "Nombre",
+    "auto.actions.prompt": "Indicación",
+    "auto.actions.reaches": "Lo que se guarde aquí lo lleva cada paso que apunta a esta acción.",
+    "auto.actions.save": "Guardar",
+    "auto.actions.cancel": "Cancelar",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

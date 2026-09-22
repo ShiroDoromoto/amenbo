@@ -596,6 +596,10 @@ export const id: Translation = {
     "face.opening": "Membuka ruang kerja di jendelanya sendiri…",
     "face.drop": "Hapus panel ini",
     "face.dropConfirm": "Hapus panel ini? Terminal di dalamnya berakhir, dan jalan kembali ke percakapan di sini ikut hilang bersama tempatnya.",
+    "face.auto": "Otomatis",
+    "face.runStep": "Langkah {n}",
+    "face.runNo": "Eksekusi {n}",
+    "face.dropRunConfirm": "Hapus panel ini? Eksekusinya dihentikan, tugas yang sedang dikerjakannya kembali ke Akan dikerjakan, dan satu baris pada tugas itu mengatakannya.",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
@@ -915,6 +919,16 @@ export const id: Translation = {
     "auto.block.unwiredInput": "{step}: tidak ada yang sampai ke masukan wajib {at}.",
     "auto.block.unansweredCfg": "{step}: setelan wajib {at} belum dijawab.",
     "auto.block.agentMissing": "{step}: mesin ini tidak bisa menjalankan {at}.",
+    "auto.actions.empty": "Pustaka belum punya aksi.",
+    "auto.actions.reachDevice": "Perangkat ini",
+    "auto.actions.reachProject": "Proyek ini",
+    "auto.actions.unused": "Belum ada otomasi yang memakainya",
+    "auto.actions.usedBy.other": "Dipakai {n} otomasi",
+    "auto.actions.name": "Nama",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "Yang disimpan di sini dibawa oleh setiap langkah yang menunjuk ke aksi ini.",
+    "auto.actions.save": "Simpan",
+    "auto.actions.cancel": "Batal",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

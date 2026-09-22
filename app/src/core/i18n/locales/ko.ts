@@ -592,6 +592,10 @@ export const ko: Translation = {
     "face.opening": "워크스페이스를 별도의 창에서 여는 중…",
     "face.drop": "이 페인 지우기",
     "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 여기서 나눈 이야기로 돌아갈 길도 자리와 함께 사라집니다.",
+    "face.auto": "자동",
+    "face.runStep": "{n}번째 단계",
+    "face.runNo": "실행 {n}",
+    "face.dropRunConfirm": "이 페인을 지울까요? 실행은 멈추고, 맡고 있던 할 일은 할 일로 되돌아가며, 그 할 일에 한 줄이 남습니다.",
     "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, 그 안에서 돌던 것은 돌아오지 않습니다.",
     "quit.confirmNotAll": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, {names} 페인은 돌아오지 않습니다. 그 안에서 돌던 것도 돌아오지 않습니다.",
 
@@ -911,6 +915,16 @@ export const ko: Translation = {
     "auto.block.unwiredInput": "{step}: 필수 입력 {at}에 아무것도 닿지 않습니다.",
     "auto.block.unansweredCfg": "{step}: 필수 설정 {at}에 답이 없습니다.",
     "auto.block.agentMissing": "{step}: 이 컴퓨터에서 {at}을 시작할 수 없습니다.",
+    "auto.actions.empty": "라이브러리에 아직 액션이 없습니다.",
+    "auto.actions.reachDevice": "이 기기",
+    "auto.actions.reachProject": "이 프로젝트",
+    "auto.actions.unused": "쓰는 자동화 없음",
+    "auto.actions.usedBy.other": "자동화 {n}개가 사용",
+    "auto.actions.name": "이름",
+    "auto.actions.prompt": "프롬프트",
+    "auto.actions.reaches": "여기서 저장한 내용은 이 액션을 가리키는 모든 단계가 읽습니다.",
+    "auto.actions.save": "저장",
+    "auto.actions.cancel": "취소",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

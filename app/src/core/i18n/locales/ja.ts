@@ -600,6 +600,10 @@ export const ja: Translation = {
     "face.opening": "ワークスペースを別ウィンドウで開いています…",
     "face.drop": "このペインを消す",
     "face.dropConfirm": "このペインを消しますか？中の端末は終わり、ここで話していたことへ戻る道も場所と一緒に無くなります。",
+    "face.auto": "自動",
+    "face.runStep": "{n}件目",
+    "face.runNo": "実行 {n}",
+    "face.dropRunConfirm": "このペインを消しますか？実行は止まり、扱っていたタスクは未着手へ戻り、そのタスクに一行残ります。",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",
     "quit.confirmNotAll": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、{names} のペインは戻りません。走っていたものも戻りません。",
 
@@ -920,6 +924,16 @@ export const ja: Translation = {
     "auto.block.unwiredInput": "{step}：必須の入力パラメータ {at} に何も届かない",
     "auto.block.unansweredCfg": "{step}：必須の設定 {at} に答えが無い",
     "auto.block.agentMissing": "{step}：{at} は手元に無い",
+    "auto.actions.empty": "ライブラリにアクションはまだありません",
+    "auto.actions.reachDevice": "この端末",
+    "auto.actions.reachProject": "このプロジェクト",
+    "auto.actions.unused": "使っているオートメーションは無い",
+    "auto.actions.usedBy.other": "オートメーション {n} 本が使っている",
+    "auto.actions.name": "名前",
+    "auto.actions.prompt": "プロンプト",
+    "auto.actions.reaches": "ここで保存すると、このアクションを指しているステップすべてに効きます",
+    "auto.actions.save": "保存",
+    "auto.actions.cancel": "取消",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

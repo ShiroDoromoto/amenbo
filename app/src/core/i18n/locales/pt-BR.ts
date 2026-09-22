@@ -606,6 +606,10 @@ export const ptBR: Translation = {
     "face.opening": "Abrindo o espaço de trabalho em uma janela própria…",
     "face.drop": "Remover este painel",
     "face.dropConfirm": "Remover este painel? O terminal nele é encerrado, e o caminho de volta ao que foi dito aqui vai junto com o lugar.",
+    "face.auto": "Automatizado",
+    "face.runStep": "Passo {n}",
+    "face.runNo": "Execução {n}",
+    "face.dropRunConfirm": "Remover este painel? A execução é interrompida, a tarefa em que ela estava volta para A fazer, e uma linha nessa tarefa diz isso.",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",
     "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 
@@ -927,6 +931,16 @@ export const ptBR: Translation = {
     "auto.block.unwiredInput": "{step}: nada chega à entrada obrigatória {at}.",
     "auto.block.unansweredCfg": "{step}: a configuração obrigatória {at} está sem resposta.",
     "auto.block.agentMissing": "{step}: esta máquina não consegue iniciar {at}.",
+    "auto.actions.empty": "A biblioteca ainda não tem ações.",
+    "auto.actions.reachDevice": "Este dispositivo",
+    "auto.actions.reachProject": "Este projeto",
+    "auto.actions.unused": "Nenhuma automação a executa",
+    "auto.actions.usedBy.one": "{n} automação a executa", "auto.actions.usedBy.many": "{n} de automações a executam", "auto.actions.usedBy.other": "{n} automações a executam",
+    "auto.actions.name": "Nome",
+    "auto.actions.prompt": "Prompt",
+    "auto.actions.reaches": "O que for salvo aqui é levado por cada etapa que aponta para esta ação.",
+    "auto.actions.save": "Salvar",
+    "auto.actions.cancel": "Cancelar",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

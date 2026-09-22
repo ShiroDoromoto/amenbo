@@ -354,6 +354,10 @@ amenbo automation port add --exit 21 --name report --kind file  # what that way 
 amenbo automation edge add --from "11:something to fix" --to 12 --max-times 3 # what happens after it
 amenbo automation wire add --from "11:something to fix" --from-port report --to 12 --to-port report
 amenbo automation entry set 3 --step 11                # where a run starts
+amenbo automation list                                 # what this project has, and how built each is
+amenbo automation show 3                               # one whole definition, every step resolved
+amenbo automation action list                          # the library this project reaches
+amenbo automation action show 7                        # one prompt, and what it declares
 amenbo automation start 3                              # away it goes (queued when every lane is held)
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo

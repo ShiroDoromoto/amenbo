@@ -1834,6 +1834,19 @@ pub enum AutomationCmd {
         #[arg(long)]
         preamble: Option<String>,
     },
+    /// The automations of one project — what each is called, how many steps it is built out of, and
+    /// whether it is archived
+    List {
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// One automation in full: each step with the prompt, ways out, inputs and settings it runs
+    /// under, what happens after each way out, what is handed along, and the documents it shares
+    Show {
+        /// automation id
+        id: i64,
+    },
     /// Change an automation's name, notes, preamble, or whether it is archived (only the given fields change)
     Update {
         /// automation id
@@ -2016,6 +2029,20 @@ pub enum AutomationActionCmd {
         /// the prompt itself (`-` reads it from stdin)
         #[arg(long)]
         prompt: String,
+    },
+    /// The library this project reaches — the device's actions, then the project's own
+    List {
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long, conflicts_with = "global")]
+        project: Option<String>,
+        /// the device's library alone, which every project on this machine reaches
+        #[arg(long)]
+        global: bool,
+    },
+    /// One library action: its prompt, what it declares, and how many automations run it
+    Show {
+        /// action id
+        id: i64,
     },
     /// Rename a library action, or rewrite its prompt (only the given fields change)
     Update {

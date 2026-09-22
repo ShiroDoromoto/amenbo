@@ -3229,9 +3229,9 @@ pub struct ViewerRepairedDto {
 //
 // The ten definition tables answer as three shapes: a card for the list, a detail for the build screen,
 // and the launch check's verdict. A step's ways out, its inputs and its settings are read from the
-// library action it points at or from the step itself (`amenbo_core::ops::automation::declarer`), and
-// the resolving is done on this side — a screen that had to know which of the two declared a name would
-// be drawing the storage rather than the automation.
+// library action it points at or from the step itself, and core is what resolves that
+// (amenbo_core::ops::automation_view) — a screen that had to know which of the two declared a name
+// would be drawing the storage rather than the automation. What these shapes add is the naming.
 
 /// **One automation in the list** — what the "automations" tab draws a row from.
 #[derive(Serialize, TS)]

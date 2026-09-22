@@ -2,11 +2,11 @@
 //! doors behind the automations screen, its build screen, the "running" tab and the pane a run is
 //! drawn in.
 //!
-//! Core owns the ten definition tables and the writes that build them
-//! ([`amenbo_core::ops::automation`]); nothing is built here. What this side does is resolve and
-//! shape: a step reads its ways out, its inputs and its settings from the library action it points at
-//! or from itself, and a screen that had to know which of the two declared a name would be drawing
-//! the storage rather than the automation.
+//! Core owns the ten definition tables, the writes that build them
+//! ([`amenbo_core::ops::automation`]) and the read that resolves them
+//! ([`amenbo_core::ops::automation_view`]) — a step's ways out, its inputs and its settings come
+//! already read off the library action it points at or off itself. Nothing is built or resolved
+//! here. What this side does is name: the same rows under the names a screen draws them by.
 //!
 //! **The launch check is core's, and is asked here rather than repeated**
 //! ([`amenbo_core::ops::automation_run::check`]). It was written twice once, and the two lists
@@ -37,15 +37,15 @@
 //! terminal under it and the queue stops moving.
 
 use amenbo_core::model::{
-    ActorKind, Automation, AutomationCfg, AutomationExit, AutomationPort, AutomationPortDirection,
-    AutomationPortKind, AutomationPortOwner, AutomationRunStatus, AutomationStep,
-    AutomationStoppedReason,
+    ActorKind, AutomationCfg, AutomationPort, AutomationPortDirection, AutomationPortKind,
+    AutomationPortOwner, AutomationRunStatus, AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::{declarer, NewStep, StepSource};
+use amenbo_core::ops::automation::{NewStep, StepSource};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::{Ended, Paused, Resumed, TookALane};
 use amenbo_core::ops::automation_step::Opened;
-use amenbo_core::store_engine::{read, StoreEngine};
+use amenbo_core::ops::automation_view;
+use amenbo_core::store_engine::read;
 
 use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
@@ -55,7 +55,6 @@ use crate::dto::{
     AutomationStepDto, AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
-use std::collections::BTreeSet;
 use tauri::Emitter;
 
 /// The automations of one project, in the order they were placed in.
@@ -66,19 +65,16 @@ use tauri::Emitter;
 pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_page");
     let store = open_store_read()?;
-    let engine = store.read_model();
-    let conn = engine.conn();
-    let mut cards = Vec::new();
-    for (id, _) in read::automation_siblings(conn, project_id, None)? {
-        let Some(row) = read::automation(conn, id)? else { continue };
-        cards.push(AutomationCardDto {
-            id: row.id,
-            name: row.name,
-            steps: read::automation_step_ids(conn, id)?.len(),
-            archived: row.archived,
-        });
-    }
-    Ok(cards)
+    let cards = automation_view::cards(store.read_model().conn(), project_id)?;
+    Ok(cards
+        .into_iter()
+        .map(|card| AutomationCardDto {
+            id: card.automation.id,
+            name: card.automation.name,
+            steps: card.steps,
+            archived: card.automation.archived,
+        })
+        .collect())
 }
 
 /// **The library this project reaches** — the device's own actions first, then the project's own.
@@ -90,22 +86,19 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
 pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_action_page");
     let store = open_store_read()?;
-    let engine = store.read_model();
-    let conn = engine.conn();
-    let mut cards = Vec::new();
-    for (reach, global) in [(None, true), (Some(project_id), false)] {
-        for (id, _) in read::automation_action_siblings(conn, reach, None)? {
-            let Some(row) = read::automation_action(conn, id)? else { continue };
-            cards.push(AutomationActionCardDto {
-                id: row.id,
-                name: row.name,
-                prompt: row.prompt,
-                global,
-                used_by: automations_using(engine, id)?,
-            });
-        }
-    }
-    Ok(cards)
+    let cards = automation_view::action_cards(store.read_model().conn(), Some(project_id))?;
+    Ok(cards
+        .into_iter()
+        .map(|card| AutomationActionCardDto {
+            id: card.action.id,
+            name: card.action.name,
+            prompt: card.action.prompt,
+            // The shelf travels as the fact the screen draws rather than as the project id: a screen
+            // inside one project would only ever read an id back as "mine" or "the device's".
+            global: card.action.project_id.is_none(),
+            used_by: card.used_by,
+        })
+        .collect())
 }
 
 /// **Rename a library action, or rewrite its prompt.** Only what is `Some` is written.
@@ -348,29 +341,12 @@ pub fn automation_wire_clear(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **How many automations run this action**, counted by the automation each step is in.
-///
-/// Two steps of one automation pointing at the same action is one automation: what the number is
-/// read for is how far a rewrite of the prompt carries, and that is measured in automations whose
-/// runs change, not in places the pointer occurs.
-fn automations_using(engine: &StoreEngine, action_id: i64) -> Result<usize, CmdError> {
-    let conn = engine.conn();
-    let mut seen = BTreeSet::new();
-    for step_id in read::automation_step_ids_using_action(conn, action_id)? {
-        let Some(step) = read::automation_step(conn, step_id)? else { continue };
-        seen.insert(step.automation_id);
-    }
-    Ok(seen.len())
-}
-
 /// One automation's whole definition, or nothing where that id names none.
 #[tauri::command]
 pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_detail");
     let store = open_store_read()?;
-    let engine = store.read_model();
-    let Some(row) = read::automation(engine.conn(), id)? else { return Ok(None) };
-    Ok(Some(detail(engine, row)?))
+    Ok(automation_view::detail(store.read_model().conn(), id)?.map(detail_dto))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -789,112 +765,76 @@ fn stop_if_going(
 }
 
 // ───────────────────────────── shaping ─────────────────────────────
+//
+// Core resolves (amenbo_core::ops::automation_view); what is left here is naming. Nothing below
+// reads the store — a DTO is the same rows under the names a screen draws them by.
 
-/// One automation's ten tables, read and resolved into the one shape every part of the build screen
-/// works from.
-fn detail(engine: &StoreEngine, row: Automation) -> Result<AutomationDetailDto, CmdError> {
-    let conn = engine.conn();
-    let automation_id = row.id;
-    let mut steps = Vec::new();
-    for (step_id, _) in read::automation_step_siblings(conn, automation_id, None)? {
-        let Some(step) = read::automation_step(conn, step_id)? else { continue };
-        steps.push(step_dto(engine, step)?);
+/// One automation's whole definition, under the names the build screen draws it by.
+fn detail_dto(view: automation_view::AutomationView) -> AutomationDetailDto {
+    let a = view.automation;
+    AutomationDetailDto {
+        id: a.id,
+        project_id: a.project_id,
+        name: a.name,
+        notes: a.notes,
+        preamble: a.preamble,
+        entry_step_id: a.entry_step_id,
+        archived: a.archived,
+        steps: view.steps.into_iter().map(step_dto).collect(),
+        edges: view
+            .edges
+            .into_iter()
+            .map(|edge| AutomationEdgeDto {
+                id: edge.id,
+                from_step_id: edge.from_step_id,
+                exit_name: edge.exit_name,
+                to_step_id: edge.to_step_id,
+                ends: edge.ends.as_str(),
+                max_times: edge.max_times,
+            })
+            .collect(),
+        wires: view
+            .wires
+            .into_iter()
+            .map(|wire| AutomationWireDto {
+                id: wire.id,
+                from_step_id: wire.from_step_id,
+                from_exit_name: wire.from_exit_name,
+                from_port_name: wire.from_port_name,
+                to_step_id: wire.to_step_id,
+                to_port_name: wire.to_port_name,
+            })
+            .collect(),
     }
-    let mut edges = Vec::new();
-    for edge_id in read::automation_edge_ids(conn, automation_id)? {
-        let Some(edge) = read::automation_edge(conn, edge_id)? else { continue };
-        edges.push(AutomationEdgeDto {
-            id: edge.id,
-            from_step_id: edge.from_step_id,
-            exit_name: edge.exit_name,
-            to_step_id: edge.to_step_id,
-            ends: edge.ends.as_str(),
-            max_times: edge.max_times,
-        });
-    }
-    let mut wires = Vec::new();
-    for wire_id in read::automation_wire_ids(conn, automation_id)? {
-        let Some(wire) = read::automation_wire(conn, wire_id)? else { continue };
-        wires.push(AutomationWireDto {
-            id: wire.id,
-            from_step_id: wire.from_step_id,
-            from_exit_name: wire.from_exit_name,
-            from_port_name: wire.from_port_name,
-            to_step_id: wire.to_step_id,
-            to_port_name: wire.to_port_name,
-        });
-    }
-    Ok(AutomationDetailDto {
-        id: row.id,
-        project_id: row.project_id,
-        name: row.name,
-        notes: row.notes,
-        preamble: row.preamble,
-        entry_step_id: row.entry_step_id,
-        archived: row.archived,
-        steps,
-        edges,
-        wires,
-    })
 }
 
-/// One step, with the action it points at read in: the prompt it runs on, the ways out it can leave
-/// by, what it takes and what it is set to.
-fn step_dto(engine: &StoreEngine, step: AutomationStep) -> Result<AutomationStepDto, CmdError> {
-    let conn = engine.conn();
-    let action = match step.action_id {
-        Some(action_id) => read::automation_action(conn, action_id)?,
-        None => None,
-    };
-    let (owner_kind, owner_id) = declarer(&step);
-    let port_owner = match owner_kind {
-        amenbo_core::model::AutomationOwner::Step => AutomationPortOwner::Step,
-        amenbo_core::model::AutomationOwner::Action => AutomationPortOwner::Action,
-    };
-
-    let mut exits = Vec::new();
-    for exit in read::automation_exits_of(conn, owner_kind, owner_id)? {
-        exits.push(exit_dto(engine, exit)?);
-    }
-    let inputs = read::automation_ports_of(conn, port_owner, owner_id, AutomationPortDirection::In)?
-        .into_iter()
-        .map(port_dto)
-        .collect();
-
-    // An action declares and the step answers, and core is what puts the two rows back together —
-    // the same pair the launch check reads, rather than a second reading of it.
-    let settings = automation_run::settings_of(conn, &step)?.into_iter().map(cfg_dto).collect();
-
-    Ok(AutomationStepDto {
+/// One step, with the prompt it runs on already chosen between its own and its action's.
+fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
+    let step = view.step;
+    AutomationStepDto {
         id: step.id,
         name: step.name,
         action_id: step.action_id,
-        action_name: action.as_ref().map(|one| one.name.clone()),
-        prompt: step
-            .prompt
-            .clone()
-            .or_else(|| action.as_ref().map(|one| one.prompt.clone()))
-            .unwrap_or_default(),
+        action_name: view.action.map(|one| one.name),
+        prompt: view.prompt,
         agent: step.agent,
         model: step.model,
         interactive: step.interactive,
         work_dir_ref: step.work_dir_ref,
         report_to_task: step.report_to_task,
         show_history: step.show_history,
-        exits,
-        inputs,
-        settings,
-    })
+        exits: view.exits.into_iter().map(exit_dto).collect(),
+        inputs: view.inputs.into_iter().map(port_dto).collect(),
+        settings: view.settings.into_iter().map(cfg_dto).collect(),
+    }
 }
 
-fn exit_dto(engine: &StoreEngine, exit: AutomationExit) -> Result<AutomationExitDto, CmdError> {
-    let conn = engine.conn();
-    let outputs =
-        read::automation_ports_of(conn, AutomationPortOwner::Exit, exit.id, AutomationPortDirection::Out)?
-            .into_iter()
-            .map(port_dto)
-            .collect();
-    Ok(AutomationExitDto { id: exit.id, name: exit.name, outputs })
+fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
+    AutomationExitDto {
+        id: view.exit.id,
+        name: view.exit.name,
+        outputs: view.outputs.into_iter().map(port_dto).collect(),
+    }
 }
 
 fn port_dto(port: AutomationPort) -> AutomationPortDto {

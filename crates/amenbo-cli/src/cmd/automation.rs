@@ -23,6 +23,7 @@ use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep, StepSourc
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::Launcher;
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
+use amenbo_core::ops::automation_view::{ActionView, AutomationView, StepView};
 use amenbo_core::time::Timestamp;
 use amenbo_core::Store;
 
@@ -208,6 +209,41 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             let a = store.automation_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.add", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Created automation: {} ({})", a.name, a.id));
+        }
+        AutomationCmd::List { project } => {
+            let pid = project_or_bound(store, project)?;
+            let cards = store.automations(pid).map_err(CliError::from)?;
+            if flags.json {
+                print_json(&json!({
+                    "count": cards.len(),
+                    "project_id": pid,
+                    "automations": serde_json::to_value(&cards).unwrap(),
+                }));
+            } else {
+                human(flags, format!("{} automation(s) — project {pid}", cards.len()));
+                for card in &cards {
+                    let archived = if card.automation.archived { "  archived" } else { "" };
+                    human(
+                        flags,
+                        format!(
+                            "  {}  {}  {} step(s){archived}",
+                            card.automation.id, card.automation.name, card.steps
+                        ),
+                    );
+                }
+            }
+        }
+        AutomationCmd::Show { id } => {
+            let view = store.automation_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+                CliError::from(amenbo_core::Error::not_found(format!(
+                    "automation '{id}' not found"
+                )))
+            })?;
+            if flags.json {
+                print_json(&serde_json::to_value(&view).unwrap());
+            } else {
+                render_automation(flags, &view);
+            }
         }
         AutomationCmd::Update { id, name, notes, preamble, archived } => {
             let notes = body_arg_opt(notes)?;
@@ -481,6 +517,49 @@ fn action(store: &mut Store, flags: &Flags, sub: AutomationActionCmd) -> Result<
             let prompt = body_arg(prompt)?;
             let a = store.automation_action_add(pid, &name, &prompt).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-add", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Added action: {} ({})", a.name, a.id));
+        }
+        AutomationActionCmd::List { project, global } => {
+            // The device's shelf is reached from every project, so `--global` is a narrowing rather
+            // than another place to look: without it the two shelves answer as the one list a step
+            // here could be pointed at.
+            let pid = match global {
+                true => None,
+                false => Some(project_or_bound(store, project)?),
+            };
+            let cards = store.automation_actions(pid).map_err(CliError::from)?;
+            if flags.json {
+                print_json(&json!({
+                    "count": cards.len(),
+                    "project_id": pid,
+                    "actions": serde_json::to_value(&cards).unwrap(),
+                }));
+            } else {
+                let about = match pid {
+                    Some(pid) => format!("the device's library and project {pid}"),
+                    None => "the device's library".to_string(),
+                };
+                human(flags, format!("{} action(s) — {about}", cards.len()));
+                for card in &cards {
+                    let shelf = if card.action.project_id.is_none() { "  [device]" } else { "" };
+                    human(
+                        flags,
+                        format!(
+                            "  {}  {}{shelf}  used by {} automation(s)",
+                            card.action.id, card.action.name, card.used_by
+                        ),
+                    );
+                }
+            }
+        }
+        AutomationActionCmd::Show { id } => {
+            let view = store.automation_action_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+                CliError::from(amenbo_core::Error::not_found(format!("action '{id}' not found")))
+            })?;
+            if flags.json {
+                print_json(&serde_json::to_value(&view).unwrap());
+            } else {
+                render_action(flags, &view);
+            }
         }
         AutomationActionCmd::Update { id, name, prompt } => {
             let prompt = body_arg_opt(prompt)?;
@@ -767,6 +846,200 @@ fn note(store: &mut Store, flags: &Flags, sub: AutomationNoteCmd) -> Result<i32,
         }
     }
     Ok(0)
+}
+
+// ───────────────────────── what was built ─────────────────────────
+
+/// One automation's whole definition on the terminal: the automation's own lines, then each step with
+/// what it runs under and what follows each of its ways out, then the documents its steps share.
+///
+/// **Prompts and documents are written out in full.** A definition is read back to check what was
+/// built — that is the whole of what this command is for — and a snippet would send the reader to a
+/// screen to finish the sentence.
+fn render_automation(flags: &Flags, view: &AutomationView) {
+    let a = &view.automation;
+    human(flags, format!("Automation {}  {}", a.id, a.name));
+    let entry = match a.entry_step_id {
+        Some(step) => format!("starts at step {step}"),
+        None => "starts nowhere".to_string(),
+    };
+    let archived = if a.archived { "  archived" } else { "" };
+    human(flags, format!("project {}  {}  {} step(s){archived}", a.project_id, entry, view.steps.len()));
+    write_body(flags, "notes", &a.notes);
+    write_body(flags, "preamble", &a.preamble);
+    for step in &view.steps {
+        render_step(flags, view, step);
+    }
+    if !view.notes.is_empty() {
+        human(flags, format!("\ndocuments ({})", view.notes.len()));
+        for note in &view.notes {
+            let steps = match note.step_ids.is_empty() {
+                true => "handed to no step".to_string(),
+                false => format!(
+                    "handed to step {}",
+                    note.step_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
+                ),
+            };
+            human(flags, format!("  {} — {}  ({steps})", note.note.id, note.note.name));
+            for line in note.note.body.lines() {
+                human(flags, format!("      | {line}"));
+            }
+        }
+    }
+}
+
+/// One step: what it runs on, what it takes, what it is set to, and what happens after each way out.
+fn render_step(flags: &Flags, view: &AutomationView, step: &StepView) {
+    let row = &step.step;
+    let mut marks = vec![format!("agent {}", row.agent)];
+    if let Some(model) = &row.model {
+        marks.push(format!("model {model}"));
+    }
+    if row.interactive {
+        marks.push("interactive".to_string());
+    }
+    if row.report_to_task {
+        marks.push("reports to the task".to_string());
+    }
+    if let Some(name) = &row.work_dir_ref {
+        marks.push(format!("runs in \"{name}\""));
+    }
+    if !row.show_history {
+        marks.push("no history".to_string());
+    }
+    human(flags, format!("\nstep {} — {}  [{}]", row.id, row.name, marks.join(" · ")));
+    match &step.action {
+        Some(action) => human(flags, format!("    library action {} ({})", action.id, action.name)),
+        None => human(flags, "    its own prompt"),
+    }
+    for line in step.prompt.lines() {
+        human(flags, format!("      | {line}"));
+    }
+    for port in &step.inputs {
+        human(flags, format!("    takes  {}", one_port(port)));
+    }
+    for cfg in &step.settings {
+        human(flags, format!("    set  {}", one_cfg(cfg)));
+    }
+    for exit in &step.exits {
+        human(flags, format!("    way out {}", one_exit(exit.exit.name.as_deref())));
+        for port in &exit.outputs {
+            human(flags, format!("        hands on  {}", one_port(port)));
+        }
+        for edge in view.edges.iter().filter(|e| e.from_step_id == row.id && e.exit_name == exit.exit.name) {
+            human(flags, format!("        then  {}", one_edge(edge)));
+        }
+        for wire in view.wires.iter().filter(|w| w.from_step_id == row.id && w.from_exit_name == exit.exit.name) {
+            human(
+                flags,
+                format!(
+                    "        wire  {} → step {} . {}",
+                    wire.from_port_name, wire.to_step_id, wire.to_port_name
+                ),
+            );
+        }
+    }
+    // An edge hanging on a name this step no longer declares is what a way out being renamed or
+    // deleted leaves behind, and it is the reason a picture stops walking — so it is written out
+    // rather than left off the account.
+    let declared: Vec<Option<String>> = step.exits.iter().map(|e| e.exit.name.clone()).collect();
+    for edge in view
+        .edges
+        .iter()
+        .filter(|e| e.from_step_id == row.id && !declared.contains(&e.exit_name))
+    {
+        human(
+            flags,
+            format!(
+                "    way out {} — no longer declared\n        then  {}",
+                one_exit(edge.exit_name.as_deref()),
+                one_edge(edge)
+            ),
+        );
+    }
+}
+
+/// One library action: its prompt, and the ways out, inputs and settings it declares for every step
+/// pointing at it.
+fn render_action(flags: &Flags, view: &ActionView) {
+    let a = &view.action;
+    let shelf = match a.project_id {
+        Some(project_id) => format!("the library of project {project_id}"),
+        None => "the device's library".to_string(),
+    };
+    human(flags, format!("Action {}  {}", a.id, a.name));
+    human(flags, format!("{shelf}  used by {} automation(s)", view.used_by));
+    for line in a.prompt.lines() {
+        human(flags, format!("  | {line}"));
+    }
+    for port in &view.inputs {
+        human(flags, format!("takes  {}", one_port(port)));
+    }
+    for cfg in &view.settings {
+        human(flags, format!("declares  {}", one_cfg(cfg)));
+    }
+    for exit in &view.exits {
+        human(flags, format!("way out {}", one_exit(exit.exit.name.as_deref())));
+        for port in &exit.outputs {
+            human(flags, format!("    hands on  {}", one_port(port)));
+        }
+    }
+}
+
+/// How a way out is named where it labels a block rather than sits in a sentence — short, so the two
+/// every declarer is born with do not read as the longer phrase a report uses.
+fn one_exit(name: Option<&str>) -> String {
+    match name {
+        Some(amenbo_core::model::ERROR_EXIT) => "the error one".to_string(),
+        Some(name) => format!("\"{name}\""),
+        None => "the unnamed one".to_string(),
+    }
+}
+
+/// A Markdown field under its own name, or nothing at all where it is empty — a heading with no body
+/// under it says there is something to read.
+fn write_body(flags: &Flags, what: &str, body: &str) {
+    if body.trim().is_empty() {
+        return;
+    }
+    human(flags, format!("{what}:"));
+    for line in body.lines() {
+        human(flags, format!("  | {line}"));
+    }
+}
+
+/// One port on one line: the name it is handed under, what it carries, and whether it may be missing.
+fn one_port(port: &amenbo_core::model::AutomationPort) -> String {
+    let required = if port.required { "required" } else { "optional" };
+    format!("{}  {}  {required}", port.name, port.kind.as_str())
+}
+
+/// One setting on one line, with the answer written while building where there is one.
+fn one_cfg(cfg: &amenbo_core::model::AutomationCfg) -> String {
+    let required = if cfg.required { "required" } else { "optional" };
+    let answer = match &cfg.value {
+        Some(value) => format!(" = {value}"),
+        None => " — unanswered".to_string(),
+    };
+    let options = match &cfg.options {
+        Some(options) => format!("  of {options}"),
+        None => String::new(),
+    };
+    format!("{}  {}  {required}{options}{answer}", cfg.name, cfg.kind.as_str())
+}
+
+/// What happens after a way out is taken, as one phrase.
+fn one_edge(edge: &amenbo_core::model::AutomationEdge) -> String {
+    let where_to = match (edge.ends, edge.to_step_id) {
+        (amenbo_core::model::AutomationEnds::Go, Some(step)) => format!("step {step}"),
+        (amenbo_core::model::AutomationEnds::Go, None) => "nowhere".to_string(),
+        (amenbo_core::model::AutomationEnds::Done, _) => "the run is done".to_string(),
+        (amenbo_core::model::AutomationEnds::Halt, _) => "the run stops for a person".to_string(),
+    };
+    match edge.max_times {
+        Some(times) => format!("{where_to}  (at most {times} time(s) per task)"),
+        None => where_to,
+    }
 }
 
 // ───────────────────────── what ran ─────────────────────────

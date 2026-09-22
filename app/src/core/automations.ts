@@ -178,6 +178,48 @@ export async function setAutomationWire(
   });
 }
 
+/**
+ * **Put a step in on a line.** The way out that was pressed comes to point at the new step, and the
+ * new step goes on to whatever that way out used to reach — one act, one transaction
+ * (`amenbo_core::ops::automation::step_insert`).
+ *
+ * `exits` and `inputs` are what the dialog took. A step running a library action declares neither,
+ * so they are only ever sent for one carrying its own prompt.
+ */
+export async function insertAutomationStep(
+  edgeId: number,
+  step: {
+    name: string;
+    source: { action: number } | { prompt: string };
+    agent: string;
+    interactive: boolean;
+    exits: readonly string[];
+    inputs: readonly { name: string; kind: string; required: boolean }[];
+  },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_step_insert", {
+    edgeId,
+    name: step.name,
+    action: "action" in step.source ? step.source.action : null,
+    prompt: "prompt" in step.source ? step.source.prompt : null,
+    agent: step.agent,
+    model: null,
+    interactive: step.interactive,
+    exits: [...step.exits],
+    inputs: step.inputs.map((one) => [one.name, one.kind, one.required]),
+  });
+}
+
+/** **Declare what a way out hands on.** It belongs to the way out, not to the step. */
+export async function addAutomationOutput(
+  exitId: number,
+  port: { name: string; kind: string; required: boolean },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_output_add", { exitId, ...port });
+}
+
 /** **Take a wire away**, leaving the input it fed with nothing reaching it. */
 export async function clearAutomationWire(id: number): Promise<void> {
   if (!inTauri()) return;

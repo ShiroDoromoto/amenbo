@@ -31,7 +31,7 @@ use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind, AutomationEdge,
     AutomationEnds, AutomationExit, AutomationNote, AutomationOwner, AutomationPort,
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationStepNote, AutomationWire, ERROR_EXIT,
+    AutomationStepNote, AutomationWire, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
 use crate::ops::{emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -660,6 +660,68 @@ pub fn step_add(tx: &WriteTx<'_>, automation_id: i64, new: NewStep) -> Result<Au
     if step.action_id.is_none() {
         born_with_exits(tx, AutomationOwner::Step, id)?;
     }
+    Ok(step)
+}
+
+/// **Put a step in on a line**, which is the one road by which a step joins a picture already drawn.
+///
+/// The way out that was pressed comes to point at the new step, and the new step goes on to the
+/// target that way out names — so nothing that was decided is lost, and the new step is never left
+/// with nothing pointing at it. A step nothing points at is a step no run reaches, which is why there
+/// is no "add at the end".
+///
+/// **It is one transaction.** The step, the ways out and the inputs it is written with, and the two
+/// edges are one act as far as a reader is concerned: a press that leaves a step behind with the line
+/// running past it is a picture nobody asked for.
+///
+/// `exits` and `inputs` are what the dialog took. A step running a library action declares neither —
+/// those are the action's — and passing any is refused where that holds ([`exit_add`], [`port_add`]).
+///
+/// The limit on how often an edge may be taken follows the pressed edge where that one carries a
+/// limit. A way out that closes or stops the run carries none, so both edges take the standing limit
+/// ([`crate::model::DEFAULT_MAX_TIMES`]) — a step to go on to is what makes a limit mean anything.
+pub fn step_insert(
+    tx: &WriteTx<'_>,
+    edge_id: i64,
+    new: NewStep,
+    exits: &[String],
+    inputs: &[(String, AutomationPortKind, bool)],
+) -> Result<AutomationStep> {
+    let edge = live_edge(tx, edge_id)?;
+    let from = live_step(tx, edge.from_step_id)?;
+    let step = step_add(tx, from.automation_id, new)?;
+    for name in exits {
+        exit_add(tx, AutomationOwner::Step, step.id, Some(name))?;
+    }
+    for (name, kind, required) in inputs {
+        port_add(
+            tx,
+            AutomationPortOwner::Step,
+            step.id,
+            AutomationPortDirection::In,
+            name,
+            *kind,
+            *required,
+        )?;
+    }
+    let onward = match edge.ends {
+        AutomationEnds::Go => EdgeTarget::Go(
+            edge.to_step_id
+                .ok_or_else(|| Error::invalid("the way out goes on to no step"))?,
+        ),
+        AutomationEnds::Done => EdgeTarget::Done,
+        AutomationEnds::Halt => EdgeTarget::Halt,
+    };
+    let carried = match edge.ends {
+        AutomationEnds::Go => edge.max_times,
+        _ => Some(DEFAULT_MAX_TIMES),
+    };
+    edge_update(tx, edge_id, Some(EdgeTarget::Go(step.id)), Some(carried))?;
+    let onward_limit = match onward {
+        EdgeTarget::Go(_) => Some(DEFAULT_MAX_TIMES),
+        _ => None,
+    };
+    edge_add(tx, step.id, None, onward, onward_limit)?;
     Ok(step)
 }
 
@@ -1441,6 +1503,93 @@ mod tests {
                 exit_names(tx, AutomationOwner::Step, step.id),
                 vec![None, Some(ERROR_EXIT.to_string())],
                 "both are written at birth, the error one last so it sits at the bottom of the list",
+            );
+        });
+    }
+
+    /// What an edge says, as a pair a test can read at a glance.
+    fn edge_of(tx: &WriteTx<'_>, step_id: i64, exit: Option<&str>) -> (AutomationEnds, Option<i64>) {
+        let edge = read::automation_edge_for_exit(tx.conn(), step_id, exit)
+            .expect("read edge")
+            .expect("an edge on that way out");
+        (edge.ends, edge.to_step_id)
+    }
+
+    #[test]
+    fn a_step_put_in_on_a_line_takes_over_where_that_line_went() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let first = mk_step(tx, automation.id, "取る");
+            let last = mk_step(tx, automation.id, "見直す");
+            let edge = edge_add(tx, first.id, None, EdgeTarget::Go(last.id), Some(3)).expect("edge");
+
+            let put = step_insert(
+                tx,
+                edge.id,
+                NewStep::with_prompt("実装する", "やる", "claude"),
+                &["直すところがある".to_string()],
+                &[("要件".to_string(), AutomationPortKind::Value, true)],
+            )
+            .expect("insert");
+
+            assert_eq!(
+                edge_of(tx, first.id, None),
+                (AutomationEnds::Go, Some(put.id)),
+                "the way out that was pressed now points at the new step",
+            );
+            assert_eq!(
+                edge_of(tx, put.id, None),
+                (AutomationEnds::Go, Some(last.id)),
+                "and the new step goes on to where that way out used to reach",
+            );
+            assert_eq!(
+                read::automation_edge_for_exit(tx.conn(), first.id, None).unwrap().unwrap().max_times,
+                Some(3),
+                "the limit the pressed edge carried is the pressed edge's still",
+            );
+            assert_eq!(
+                exit_names(tx, AutomationOwner::Step, put.id),
+                vec![None, Some(ERROR_EXIT.to_string()), Some("直すところがある".to_string())],
+                "what the dialog wrote is declared on the step it made",
+            );
+            let inputs = read::automation_ports_of(
+                tx.conn(),
+                AutomationPortOwner::Step,
+                put.id,
+                AutomationPortDirection::In,
+            )
+            .expect("read inputs");
+            assert_eq!(inputs.len(), 1);
+            assert_eq!(inputs[0].name, "要件");
+        });
+    }
+
+    #[test]
+    fn a_step_put_in_on_a_line_that_closed_the_run_closes_it_from_there_instead() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let first = mk_step(tx, automation.id, "取る");
+            let edge = edge_add(tx, first.id, None, EdgeTarget::Done, None).expect("edge");
+
+            let put = step_insert(
+                tx,
+                edge.id,
+                NewStep::with_prompt("実装する", "やる", "claude"),
+                &[],
+                &[],
+            )
+            .expect("insert");
+
+            assert_eq!(edge_of(tx, first.id, None), (AutomationEnds::Go, Some(put.id)));
+            assert_eq!(
+                edge_of(tx, put.id, None),
+                (AutomationEnds::Done, None),
+                "closing the task is what the new step goes on to do",
+            );
+            assert_eq!(
+                read::automation_edge_for_exit(tx.conn(), first.id, None).unwrap().unwrap().max_times,
+                Some(DEFAULT_MAX_TIMES),
+                "a way out that closed the run carried no limit, and now it needs one",
             );
         });
     }

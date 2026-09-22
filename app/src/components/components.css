@@ -1450,8 +1450,37 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 /* One input, and what fills it. */
 .autostep__wire { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
-.autostep__exits { margin: 0; padding-inline-start: var(--s-4); font-size: var(--fs-md); }
+/* No markers: a way out carries a control beside its name, and a bullet in front of a row with a
+   button on it reads as a list of buttons. */
+.autostep__exits { margin: 0; padding: 0; list-style: none; font-size: var(--fs-md); }
 /* The error way out, always last and always drawn. Muted because nothing is being asked about it: a
    step that says nothing about it stops the run and calls a person, which is already the answer. */
 .autostep__exiterr { color: var(--c-text-muted); }
 .autostep__check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }
+/* A button that adds a row to the field it is in takes its own width. The field is a column, so
+   without this it would stretch the width of the panel and read as the field itself. */
+.autostep__field > .btn { align-self: flex-start; }
+/* One way out, and what it hands on, on one line. The outputs sit beside the name rather than under
+   it: what a way out is called and what it carries are read together, and a list under each name
+   would make three ways out look like nine things. */
+.autostep__exit { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autostep__exitname { font-size: var(--fs-md); }
+.autostep__out {
+  display: inline-flex; align-items: baseline; gap: var(--s-1);
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-sm);
+  padding: 0 var(--s-1); font-size: var(--fs-xs);
+}
+.autostep__outkind { color: var(--c-text-muted); }
+.autostep__outadd { padding: 0 var(--s-1); font-size: var(--fs-xs); }
+
+/* ----- the build screen's two dialogs (`screens/AutomationStepAdd.tsx`, `AutomationOutputAdd.tsx`) -----
+   Both wear the plain card, so what tells them from the rest of the application is the question at
+   the top and nothing else. Inside, they lay their fields out the way the step panel does — what a
+   dialog takes is what the panel shows, and a second arrangement for the same fields would make the
+   two read as two subjects. */
+.autodlg__title { margin: 0 0 var(--s-3); font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+/* A row a reader writes and may drop again: the name, what it carries, whether it is required, and
+   the way out of it. It wraps rather than shrinks — a name box squeezed to three characters is not
+   one. */
+.autodlg__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autodlg__row input { flex: 1 1 8rem; min-width: 0; }

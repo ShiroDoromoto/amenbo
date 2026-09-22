@@ -51,6 +51,8 @@ import {
   type TaskFilter,
 } from "./automationCfg";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
+import { AutomationOutputAdd } from "./AutomationOutputAdd";
+import { kindLabel } from "./automationPortKinds";
 import type {
   AgentModelListDto,
   AutomationCfgDto,
@@ -226,6 +228,9 @@ export function AutomationStepPanel({
   const agents = useAgents(projectId);
   const models = useModels(step?.agent ?? "");
   const [name, setName] = useDraft(step?.name ?? "");
+  // The way out an output artefact is being declared on, while that dialog is open
+  // (`AMB-T-5257`).
+  const [adding, setAdding] = useState<number | null>(null);
   const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
 
   if (automation === null || step === null) {
@@ -352,11 +357,33 @@ export function AutomationStepPanel({
           {step.exits
             .filter((one) => one.name !== ERROR_EXIT)
             .map((one) => (
-              <li key={one.id}>{exitLabel(one.name)}</li>
+              <li key={one.id} className="autostep__exit">
+                <span className="autostep__exitname">{exitLabel(one.name)}</span>
+                {/* What leaving by this way out hands on. It hangs off the way out and not off the
+                    step, because a step with three ways out hands on three different things. */}
+                {one.outputs.map((port) => (
+                  <span key={port.name} className="autostep__out">
+                    {port.name}
+                    <span className="autostep__outkind">{kindLabel(port.kind)}</span>
+                  </span>
+                ))}
+                {/* Only for a step that declares its own. A step running a library action reads the
+                    action's ways out, and an output declared on one of those is declared for every
+                    step running that action — which is the library's to change, not this step's. */}
+                {step.actionId === undefined && (
+                  <button
+                    type="button"
+                    className="btn autostep__outadd"
+                    onClick={() => setAdding(one.id)}
+                  >
+                    {t("auto.step.outputAdd")}
+                  </button>
+                )}
+              </li>
             ))}
           {/* The error way out, always drawn and always last: every step carries one, and a list that
               left it off where nobody had said anything about it would read as a step that cannot
-              fail. */}
+              fail. It hands nothing on — what a step that fell over has to say is its report. */}
           <li className="autostep__exiterr">{t("auto.pic.errorExit")}</li>
         </ul>
       </div>
@@ -444,6 +471,13 @@ export function AutomationStepPanel({
         />
         {t("auto.step.history")}
       </label>
+
+      {adding !== null && (
+        <AutomationOutputAdd
+          exit={step.exits.find((one) => one.id === adding)!}
+          onClose={() => setAdding(null)}
+        />
+      )}
     </div>
   );
 }

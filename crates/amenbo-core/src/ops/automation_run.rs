@@ -38,7 +38,7 @@ use crate::model::{
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
-    RunDefCfg, RunDefExit, RunDefPort, ERROR_EXIT,
+    RunDefCfg, RunDefExit, RunDefPort, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -229,9 +229,11 @@ fn not_found(what: &str, id: i64) -> Error {
 /// no entry has nothing reachable to say it about — every other check is asked of the placements a run
 /// would actually walk, and with no entry that is none of them.
 ///
-/// **What is asked of a placement is asked of the action standing on it**, except the agent and the
-/// model: those are each inner step's own answer (`AMB-D-950`), so they are asked of every step the
-/// action could open ([`steps_opened_by`]) rather than of the placement.
+/// **What is asked of a placement is asked of the action standing on it**, and then of every step the
+/// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
+/// inside that nothing reaches stop a run just as surely as the same gaps on the automation's picture
+/// ([`inside`]). The agent and the model are asked of the steps alone — they are each step's own answer
+/// (`AMB-D-950`).
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
@@ -294,6 +296,13 @@ pub fn check(
             unmet.push(Unmet::ActionEmpty { action: name.clone() });
             continue;
         }
+        for one in inside(conn, placement, &steps, &live, &by_id)? {
+            // An action placed twice has the same picture inside it twice, and the same gap in it is
+            // one thing to fix, not two.
+            if !unmet.contains(&one) {
+                unmet.push(one);
+            }
+        }
         for step in &steps {
             if let Some(startable) = startable {
                 if !startable.iter().any(|id| id == &step.agent) {
@@ -314,6 +323,108 @@ pub fn check(
                         model: model.to_string(),
                     });
                 }
+            }
+        }
+    }
+    Ok(unmet)
+}
+
+/// **What is missing inside the action standing on one placement** — the same two questions the
+/// placement is asked, put to every step a run could open inside it ([`steps_opened_by`]).
+///
+/// **A way out of a step is decided** where a line inside the action goes on from it: to another of its
+/// steps, to closing or halting the run, or back to one of the action's ways out — and that last only
+/// where the action really declares the way out it names. What follows the action's way out is the
+/// automation's to say, and asked of the placement above. The error way out is left alone here for the
+/// reason it is left alone there.
+///
+/// **A required input of a step is reached** by a wire inside the action from a step the run could
+/// open, whose way out hands on a port of that name, or by a wire from the action itself
+/// ([`ACTION_BOUNDARY`]) — which counts only where the action declares that input and something on the
+/// automation's picture reaches it on this placement ([`fed`]). It is the same walk a run makes when it
+/// hands a step its values ([`crate::ops::automation_step`]).
+fn inside(
+    conn: &Connection,
+    placement: &AutomationPlacement,
+    steps: &[AutomationStep],
+    live: &BTreeSet<i64>,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+) -> Result<Vec<Unmet>> {
+    let opened: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
+    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)?;
+    let mut unmet = Vec::new();
+    for step in steps {
+        for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
+            if exit.name.as_deref() == Some(ERROR_EXIT) {
+                continue;
+            }
+            let edge = read::automation_edge_for_exit(
+                conn,
+                AutomationPictureOwner::Action,
+                step.id,
+                exit.name.as_deref(),
+            )?;
+            let decided = match edge {
+                None => false,
+                Some(edge) => match edge.ends {
+                    AutomationEnds::Done | AutomationEnds::Halt => true,
+                    AutomationEnds::Go => edge.to_id.is_some_and(|to| opened.contains(&to)),
+                    AutomationEnds::Exit => read::automation_exit_by_name(
+                        conn,
+                        AutomationOwner::Action,
+                        placement.action_id,
+                        edge.exit_to.as_deref(),
+                    )?
+                    .is_some(),
+                },
+            };
+            if !decided {
+                unmet.push(Unmet::OpenExit { step: step.name.clone(), exit: exit.name.clone() });
+            }
+        }
+        for port in read::automation_ports_of(
+            conn,
+            AutomationPortOwner::Step,
+            step.id,
+            AutomationPortDirection::In,
+        )? {
+            if !port.required {
+                continue;
+            }
+            let mut reached = false;
+            for wire in wires.iter().filter(|w| w.to_id == step.id && w.to_port_name == port.name) {
+                reached = if wire.from_id == ACTION_BOUNDARY {
+                    let declared = read::automation_ports_of(
+                        conn,
+                        AutomationPortOwner::Action,
+                        placement.action_id,
+                        AutomationPortDirection::In,
+                    )?
+                    .iter()
+                    .any(|p| p.name == wire.from_port_name);
+                    declared && fed(conn, placement, &wire.from_port_name, live, by_id)?
+                } else if opened.contains(&wire.from_id) {
+                    let exit = read::automation_exit_by_name(
+                        conn,
+                        AutomationOwner::Step,
+                        wire.from_id,
+                        wire.from_exit_name.as_deref(),
+                    )?;
+                    match exit {
+                        Some(exit) => {
+                            outs_of(conn, &exit)?.iter().any(|p| p.name == wire.from_port_name)
+                        }
+                        None => false,
+                    }
+                } else {
+                    false
+                };
+                if reached {
+                    break;
+                }
+            }
+            if !reached {
+                unmet.push(Unmet::UnwiredInput { step: step.name.clone(), port: port.name });
             }
         }
     }
@@ -851,7 +962,7 @@ mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
-    use crate::ops::test_support::{mk_out, mk_placed, mk_project, only_step, with_tx};
+    use crate::ops::test_support::{mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
@@ -1019,7 +1130,8 @@ mod tests {
             // `launchable` writes no edge on the error way out, so a check that asked for one would
             // refuse the automation every other test here launches.
             let (automation, _, _) = launchable(tx);
-            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            let unmet =
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert_eq!(unmet, vec![], "the error way out is carried from birth, not written");
         });
     }
@@ -1569,6 +1681,143 @@ mod tests {
                 read::automation_run_ids_running(tx.conn()).expect("running").len(),
                 2,
                 "both are going at once",
+            );
+        });
+    }
+
+    /// The action a placement of `launchable` stands on, given a second step its one step goes on to.
+    fn a_second_step(tx: &WriteTx<'_>, action: &AutomationAction) -> crate::model::AutomationStep {
+        let first = only_step(tx, action);
+        let second = automation::step_add(tx, action.id, NewStep::new("見直す", "review", "claude"))
+            .expect("second step");
+        let on = AutomationPictureOwner::Action;
+        let leaves = read::automation_edge_for_exit(tx.conn(), on, first.id, None)
+            .expect("read")
+            .expect("the line out of the first step");
+        automation::edge_update(tx, leaves.id, Some(EdgeTarget::Go(second.id)), None).expect("on");
+        second
+    }
+
+    #[test]
+    fn a_way_out_inside_an_action_with_nothing_after_it_is_refused() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            a_second_step(tx, &action);
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::OpenExit { step: "見直す".into(), exit: None }],
+                "the second step's unnamed way out leads nowhere inside the action",
+            );
+        });
+    }
+
+    #[test]
+    fn a_way_out_inside_returning_to_one_the_action_no_longer_declares_is_refused() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            let second = a_second_step(tx, &action);
+            let back = automation::edge_add(
+                tx,
+                AutomationPictureOwner::Action,
+                second.id,
+                None,
+                EdgeTarget::Exit(None),
+                None,
+            )
+            .expect("edge");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
+                "returning to the action's unnamed way out, which the automation closes on",
+            );
+
+            // The action's own way out is renamed underneath the line returning to it, which is left
+            // naming what is no longer there.
+            let mine = automation::exit_add(tx, AutomationOwner::Action, action.id, Some("差し戻し"))
+                .expect("the action's way out");
+            automation::edge_update(tx, back.id, Some(EdgeTarget::Exit(Some("差し戻し".into()))), None)
+                .expect("return to it");
+            automation::exit_rename(tx, mine.id, Some("戻す")).expect("rename");
+            let unmet =
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            assert!(
+                unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: None }),
+                "{unmet:?}",
+            );
+        });
+    }
+
+    #[test]
+    fn a_required_input_inside_an_action_nothing_reaches_is_refused() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            let second = a_second_step(tx, &action);
+            let on = AutomationPictureOwner::Action;
+            automation::edge_add(tx, on, second.id, None, EdgeTarget::Exit(None), None).expect("edge");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Step,
+                second.id,
+                AutomationPortDirection::In,
+                "下書き",
+                AutomationPortKind::Value,
+                true,
+            )
+            .expect("in");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::UnwiredInput { step: "見直す".into(), port: "下書き".into() }],
+            );
+
+            // Wired from the first step's way out, which hands on nothing of that name yet.
+            let first = only_step(tx, &action);
+            automation::wire_add(tx, on, first.id, None, "下書き", second.id, "下書き")
+                .expect_err("a wire from an output nobody declared is refused while building");
+            let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, first.id, None)
+                .expect("read")
+                .expect("way out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "下書き",
+                AutomationPortKind::Value,
+                false,
+            )
+            .expect("out");
+            automation::wire_add(tx, on, first.id, None, "下書き", second.id, "下書き")
+                .expect("wire");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
+                "the first step inside hands it on",
+            );
+        });
+    }
+
+    #[test]
+    fn an_input_inside_handed_on_by_the_action_counts_only_where_the_action_is_fed() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            // Optional on the action, so only the step inside asks for it.
+            mk_in(tx, &action, "下書き", AutomationPortKind::Value, false);
+            let step = only_step(tx, &action);
+            let port = read::automation_ports_of(
+                tx.conn(),
+                AutomationPortOwner::Step,
+                step.id,
+                AutomationPortDirection::In,
+            )
+            .expect("read")
+            .into_iter()
+            .find(|p| p.name == "下書き")
+            .expect("the step's input");
+            automation::port_update(tx, port.id, None, None, Some(true)).expect("required inside");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
+                "the wire from the action carries nothing while nothing reaches the action",
             );
         });
     }

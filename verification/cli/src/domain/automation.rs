@@ -48,6 +48,48 @@ impl Driver<'_> {
                 let id = self.bound_id(&args, "automation", bind)?;
                 Ok(Outcome::action(format!("built automation {id} `{name}`")))
             }
+            // The three fields the definition itself holds. Only what a step names is written, the
+            // way the command reads it, so a road that renames one leaves its notes alone.
+            "update" => {
+                let automation = self.resolve(with)?;
+                let mut args: Vec<String> =
+                    vec!["automation".into(), "update".into(), automation.to_string()];
+                for key in ["name", "notes"] {
+                    if let Some(v) = with.get(key).and_then(|v| v.as_str()) {
+                        args.push(format!("--{key}"));
+                        args.push(v.to_string());
+                    }
+                }
+                if let Some(archived) = opt_bool(with, "archived") {
+                    args.push("--archived".into());
+                    args.push(archived.to_string());
+                }
+                if args.len() == 3 {
+                    return Err(
+                        "`update` writes a name, notes or whether it is archived — a step naming \
+                         none of the three would write nothing"
+                            .to_string(),
+                    );
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("wrote {} on automation {automation}", written(with))))
+            }
+            // **Destructive, and confirmed by the command unless it is told otherwise** — so the
+            // road says `--yes` rather than being left waiting at a prompt nothing will answer.
+            "remove" => {
+                let automation = self.resolve(with)?;
+                self.run_json(&[
+                    "automation",
+                    "rm",
+                    &automation.to_string(),
+                    "--yes",
+                    "--json",
+                ])?;
+                Ok(Outcome::action(format!(
+                    "deleted automation {automation} with everything built into it"
+                )))
+            }
             "step-add" => {
                 let automation = self.resolve(with)?;
                 let name = req_str(with, "name")?;
@@ -378,6 +420,33 @@ impl Driver<'_> {
                         match got {
                             Some(n) => n.to_string(),
                             None => "no".to_string(),
+                        }
+                    ));
+                }
+                if let Some(want) = with.get("name").and_then(|v| v.as_str()) {
+                    let got = row.and_then(|one| one["automation"]["name"].as_str());
+                    pass = pass && got == Some(want);
+                    said.push_str(&format!(
+                        ", called {}, expected `{want}`",
+                        match got {
+                            Some(name) => format!("`{name}`"),
+                            None => "nothing".to_string(),
+                        }
+                    ));
+                }
+                if let Some(want) = opt_bool(with, "archived") {
+                    let got = row.and_then(|one| one["automation"]["archived"].as_bool());
+                    pass = pass && got == Some(want);
+                    said.push_str(&format!(
+                        ", {} archived, expected {}",
+                        match got {
+                            Some(true) => "is",
+                            Some(false) => "is not",
+                            None => "says nothing about being",
+                        },
+                        match want {
+                            true => "archived",
+                            false => "not archived",
                         }
                     ));
                 }
@@ -792,6 +861,25 @@ fn judge_settings(with: &Args, rows: &[serde_json::Value]) -> Result<(bool, Stri
         said.push_str(&format!(", `{name}` answered {got} (expected {answer})"));
     }
     Ok((pass, said))
+}
+
+/// Which of the three fields an `update` step named, in the words the report says it back in. The
+/// driver has already refused a step that named none, so this never answers empty.
+fn written(with: &Args) -> String {
+    let mut said: Vec<String> = Vec::new();
+    if with.get("name").is_some() {
+        said.push("a new name".to_string());
+    }
+    if with.get("notes").is_some() {
+        said.push("new notes".to_string());
+    }
+    if let Some(archived) = opt_bool(with, "archived") {
+        said.push(match archived {
+            true => "that it is archived".to_string(),
+            false => "that it is not archived".to_string(),
+        });
+    }
+    said.join(" and ")
 }
 
 #[cfg(test)]

@@ -4007,6 +4007,15 @@ const REGISTRY: &[OpSpec] = &[
     // The automation itself. `notes` and `preamble` are the two free-text fields; left out, the
     // preamble is the standing operating rules, which is what a reader building one by hand gets.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes", "preamble"], binds: true },
+    // The three fields the definition itself holds, written after it is built: its name, its notes,
+    // and whether it is kept out of a reader's way. Archiving takes nothing away and stops nothing
+    // already running, which is why it is one of the three rather than a verb of its own — and why
+    // `archived` is a yes or a no rather than words, so it is not among the strings.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes"], binds: false },
+    // Deleting one, with every step, way out, edge and wire built into it. **Core refuses it while a
+    // run stands behind the definition**, naming how many, because a run is filed under what it was
+    // launched from — so a road that deletes one either never started it or reads that refusal.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "remove", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // A step of it: a prompt of its own, or the library action it is made of (`action:`), and who
     // carries it out. `agent` is the launch catalog's id (`claude-code`), not the command it runs —
     // the launch check judges the step against the ids, and a road writing the command would be told
@@ -4071,10 +4080,13 @@ const REGISTRY: &[OpSpec] = &[
     // per library action, and `automation list` / `automation action-list` print the same two rows.
     // A road asking either face whether a row is there is asking the one question.
     //
-    // A definition on the list, and how many steps the row says it is built out of. `steps` is asked
-    // for where the count is the point — a row says "what is this" and "is it built yet", and the
-    // second is that number.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "listed", required: &[], refs: &["target"], strings: &[], binds: false },
+    // A definition on the list, and what the row says about it. `steps` is asked for where the count
+    // is the point — a row says "what is this" and "is it built yet", and the second is that number.
+    // `name` is the first of those two, and it is asked for by a road that has just renamed one: the
+    // terminal has no binding to read a new name off, so the road says what it wrote. `archived` is
+    // the mark the row carries, which is the whole of what archiving is to look at — the row stays
+    // where it was and wears it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "listed", required: &[], refs: &["target"], strings: &["name"], binds: false },
     // A library action's row. `used_by` is counted in automations and not in steps — what the number
     // is read for is how far a rewrite of the prompt carries — and `reach` says which of the two
     // libraries the row is from.

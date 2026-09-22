@@ -526,6 +526,7 @@ impl Instructor {
                     }
                 }
                 self.note_end(*domain, op, with);
+                self.relabel(*domain, op, with);
             }
         }
     }
@@ -585,6 +586,30 @@ impl Instructor {
         match with.get("target").and_then(|v| v.as_str()) {
             Some(name) => self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>")),
             None => "<the target>".to_string(),
+        }
+    }
+
+    /// Move a binding's label onto the name a step just wrote on it.
+    ///
+    /// A road that renames something has changed what it is called on screen, and every later
+    /// instruction naming it by its binding has to move with it — or the operator is sent looking
+    /// for a row under the name it stopped carrying. It is the bookkeeping `bind` does, on the step
+    /// that writes rather than the step that makes.
+    ///
+    /// **Only the writes that rename their own target.** A step whose `name` belongs to something it
+    /// is adding (`step-add`, which names the step and targets the automation) is naming a new
+    /// thing, so the pair is read off the op rather than off the keys.
+    fn relabel(&mut self, domain: Domain, op: &str, with: &Args) {
+        if !matches!((domain, op), (Domain::Automation, "update")) {
+            return;
+        }
+        let (Some(target), Some(name)) =
+            (with.get("target").and_then(|v| v.as_str()), arg_str(with, "name"))
+        else {
+            return;
+        };
+        if self.labels.contains_key(target) {
+            self.labels.insert(target.to_string(), name.to_string());
         }
     }
 
@@ -676,6 +701,7 @@ impl Instructor {
                     }
                 }
                 self.note_end(*domain, op, with);
+                self.relabel(*domain, op, with);
                 Ok(text)
             }
             Step::Assert { domain, op, with, .. } => self.assert(*domain, op, with),
@@ -3830,6 +3856,46 @@ impl Instructor {
                 "Rewrite the prompt of the library action that is open so it reads \"{}\", and press the button that saves it.",
                 req(with, "prompt")?
             ),
+            // The three fields the definition itself holds, written in the place at the foot of the
+            // build screen. There is no Save there: a box of text writes as the caret leaves it, the
+            // way the step panel's do, and the tick writes on the press — which is the difference
+            // the last clause of the instruction turns on.
+            (Domain::Automation, "update") => {
+                let mut said: Vec<String> = Vec::new();
+                if let Some(name) = arg_str(with, "name") {
+                    said.push(format!("set the name to \"{name}\""));
+                }
+                if let Some(notes) = arg_str(with, "notes") {
+                    said.push(format!("set the notes to \"{notes}\""));
+                }
+                match with.get("archived").and_then(|v| v.as_bool()) {
+                    Some(true) => said.push("tick the box that archives it".to_string()),
+                    Some(false) => said.push("clear the box that archives it".to_string()),
+                    None => {}
+                }
+                if said.is_empty() {
+                    return Err(
+                        "`update` writes a name, notes or whether it is archived — a step naming \
+                         none of the three asks for nothing"
+                            .to_string(),
+                    );
+                }
+                format!(
+                    "In the build screen, in the place named for the automation itself, {}.{}",
+                    listed(&said),
+                    // Only the boxes of text wait for the caret to leave them. The archived mark is
+                    // a tick, and it writes on the press — an instruction telling an operator to
+                    // move off it would have them looking for an effect that already happened.
+                    match arg_str(with, "name").is_some() || arg_str(with, "notes").is_some() {
+                        true => " Move off the box afterwards, so what you wrote is taken.",
+                        false => "",
+                    }
+                )
+            }
+            // **The one press on this screen that cannot be taken back**, so the machine's own
+            // question stands between it and the write. The road names both halves: a step that
+            // stopped at the press would file a shot of a question nobody answered.
+            (Domain::Automation, "remove") => "In the build screen, press the button that deletes this automation, and answer the question the machine asks with the answer that goes ahead.".to_string(),
             // Pressing a box is what puts that step's contents in the panel beside the picture.
             (Domain::Automation, "pick-step") => format!(
                 "In the build screen's picture, press the box for the step \"{}\".",
@@ -5766,16 +5832,23 @@ impl Instructor {
             // this is, and whether it is built yet.
             (Domain::Automation, "listed") => match present(with) {
                 true => format!(
-                    "On the automations tab, confirm a row for \"{}\" is listed{}.",
-                    self.target_label(with),
+                    "On the automations tab, confirm a row for \"{}\" is listed{}{}.",
+                    // A road that has just renamed one says what it wrote, and that is what the row
+                    // now reads — so it wins over the name the binding was made under.
+                    arg_str(with, "name").map(str::to_string).unwrap_or_else(|| self.target_label(with)),
                     match with.get("steps") {
                         Some(_) => format!(", saying it is built out of {} steps", count(with, "steps")?),
                         None => String::new(),
+                    },
+                    match with.get("archived").and_then(|v| v.as_bool()) {
+                        Some(true) => ", marked as archived",
+                        Some(false) => ", carrying no archived mark",
+                        None => "",
                     }
                 ),
                 false => format!(
                     "On the automations tab, confirm no row for \"{}\" is listed.",
-                    self.target_label(with)
+                    arg_str(with, "name").map(str::to_string).unwrap_or_else(|| self.target_label(with))
                 ),
             },
             // A library action's row. The number beside it is counted in automations and not in

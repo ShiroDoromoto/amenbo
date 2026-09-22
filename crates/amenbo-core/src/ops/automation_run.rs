@@ -332,7 +332,7 @@ fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model
     let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
         return Ok(Vec::new());
     };
-    Ok(read::automation_step(conn, entry)?.into_iter().collect())
+    Ok(read::automation_action_step(conn, entry)?.into_iter().collect())
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to

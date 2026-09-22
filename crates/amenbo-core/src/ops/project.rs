@@ -348,7 +348,7 @@ mod tests {
             assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
             assert!(read::automation(tx.conn(), automation.id).unwrap().is_none());
             assert!(read::automation_placement(tx.conn(), placement.id).unwrap().is_none());
-            assert!(read::automation_step(tx.conn(), step).unwrap().is_none());
+            assert!(read::automation_action_step(tx.conn(), step).unwrap().is_none());
             assert!(read::automation_action(tx.conn(), action.id).unwrap().is_none());
             assert!(read::automation_run_ids_in_project(tx.conn(), p).unwrap().is_empty());
         });

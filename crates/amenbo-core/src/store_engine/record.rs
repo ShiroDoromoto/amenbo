@@ -572,9 +572,9 @@ pub fn automation_placement(p: &AutomationPlacement) -> Record {
     )
 }
 
-pub fn automation_step(s: &AutomationStep) -> Record {
+pub fn automation_action_step(s: &AutomationStep) -> Record {
     Record::new(
-        "automation_step",
+        "automation_action_step",
         s.id,
         with_audit(
             vec![

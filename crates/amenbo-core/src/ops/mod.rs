@@ -204,7 +204,7 @@ pub(crate) mod test_support {
         tx: &WriteTx<'_>,
         action: &crate::model::AutomationAction,
     ) -> crate::model::AutomationStep {
-        crate::store_engine::read::automation_step(
+        crate::store_engine::read::automation_action_step(
             tx.conn(),
             action.entry_step_id.expect("an entry step"),
         )

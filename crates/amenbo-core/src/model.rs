@@ -1371,7 +1371,7 @@ impl AutomationPictureOwner {
     pub fn box_table(&self) -> &'static str {
         match self {
             AutomationPictureOwner::Automation => "automation_placement",
-            AutomationPictureOwner::Action => "automation_step",
+            AutomationPictureOwner::Action => "automation_action_step",
         }
     }
 }

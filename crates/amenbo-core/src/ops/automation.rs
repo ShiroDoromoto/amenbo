@@ -90,7 +90,7 @@ fn live_placement(tx: &WriteTx<'_>, id: i64) -> Result<AutomationPlacement> {
 }
 
 fn live_step(tx: &WriteTx<'_>, id: i64) -> Result<AutomationStep> {
-    read::automation_step(tx.conn(), id)?.ok_or_else(|| not_found("step", id))
+    read::automation_action_step(tx.conn(), id)?.ok_or_else(|| not_found("step", id))
 }
 
 fn live_note(tx: &WriteTx<'_>, id: i64) -> Result<AutomationNote> {
@@ -413,7 +413,7 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     if action.entry_step_id.is_some() {
         action_set_entry(tx, id, None)?;
     }
-    for step in read::automation_step_ids(tx.conn(), id)? {
+    for step in read::automation_action_step_ids(tx.conn(), id)? {
         delete_step_row(tx, step)?;
     }
     delete_declarations(tx, AutomationOwner::Action, AutomationPortOwner::Action, id)?;
@@ -882,10 +882,10 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
     live_action(tx, action_id)?;
     let name = checked_name("step", &new.name)?;
     let agent = checked_name("agent", &new.agent)?;
-    let sibs = read::automation_step_siblings(tx.conn(), action_id, None)?;
+    let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
-    let id = read::next_id(tx.conn(), "automation_step")?;
+    let id = read::next_id(tx.conn(), "automation_action_step")?;
     let step = AutomationStep {
         id,
         action_id,
@@ -901,7 +901,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
         created_at: now,
         updated_at: now,
     };
-    emit_create(tx, record::automation_step(&step))?;
+    emit_create(tx, record::automation_action_step(&step))?;
     born_with_exits(tx, AutomationOwner::Step, id)?;
     Ok(step)
 }
@@ -1018,7 +1018,11 @@ pub fn step_update(
         after.show_history = show_history;
     }
     after.updated_at = Timestamp::now();
-    emit_update(tx, record::automation_step(&before), record::automation_step(&after))?;
+    emit_update(
+        tx,
+        record::automation_action_step(&before),
+        record::automation_action_step(&after),
+    )?;
     Ok(after)
 }
 
@@ -1026,11 +1030,15 @@ pub fn step_update(
 /// the entry along the edges, and no order here reaches it.
 pub fn step_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
-    let sibs = read::automation_step_siblings(tx.conn(), before.action_id, Some(id))?;
+    let sibs = read::automation_action_step_siblings(tx.conn(), before.action_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
     after.updated_at = Timestamp::now();
-    emit_update(tx, record::automation_step(&before), record::automation_step(&after))?;
+    emit_update(
+        tx,
+        record::automation_action_step(&before),
+        record::automation_action_step(&after),
+    )?;
     Ok(after)
 }
 
@@ -1055,7 +1063,7 @@ pub fn step_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 fn delete_step_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     delete_lines_naming_box(tx, AutomationPictureOwner::Action, id)?;
     delete_declarations(tx, AutomationOwner::Step, AutomationPortOwner::Step, id)?;
-    tx.delete_record("automation_step", id)?;
+    tx.delete_record("automation_action_step", id)?;
     Ok(())
 }
 
@@ -2424,7 +2432,7 @@ mod tests {
                 "its ways out went with it",
             );
             assert!(
-                read::automation_step_ids(tx.conn(), action.id).expect("read").is_empty(),
+                read::automation_action_step_ids(tx.conn(), action.id).expect("read").is_empty(),
                 "and so did the steps inside it",
             );
         });

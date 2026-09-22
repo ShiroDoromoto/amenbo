@@ -891,6 +891,11 @@ pub const STEPS: &[Step] = &[
         name: "fold the automation definition into three layers — automation, action, step",
         apply: Apply::Custom(fold_the_automation_into_three_layers),
     },
+    Step {
+        to: 54,
+        name: "rename automation_step to automation_action_step, after the owner it now hangs on",
+        apply: Apply::Custom(name_the_step_after_its_action),
+    },
 ];
 
 /// v52: `automation_run.stopped_reason` admits `no_way_on`.
@@ -3320,15 +3325,17 @@ impl Minting {
 /// rewritten where it stands, v9's procedure met an eighth time. It is one column's `REFERENCES` and its
 /// name, never the shape, so the rows are exactly as wide afterwards as before.
 ///
-/// **Skipped whole where there is nothing to fold**: a store born below v50 is handed today's registry
-/// by genesis and arrives here already in three layers. What says so is `automation_step.automation_id`
-/// — the column that only the two-layer shape has. The new tables are no test of it: genesis creates
-/// every table a store is *missing* from today's registry, so `automation_placement` is there on a
-/// store whose other tables are still v50's.
+/// **Skipped whole where there is nothing to fold**: a store born below v50 is handed today's
+/// registry by genesis and arrives here already in three layers. What says so is
+/// `automation_action.prompt` — the column only the v52 shape has, and the one every read below takes
+/// its prompts from. The new tables are no test of it: genesis creates every table a store is
+/// *missing* from today's registry, so `automation_placement` is there on a store whose other tables
+/// are still v50's. Neither is the presence of `automation_step`, since v50 lays that name down
+/// itself ([`name_the_step_after_its_action`] is what clears it away again).
 fn fold_the_automation_into_three_layers(ctx: &Ctx<'_>) -> Result<()> {
     let tx = ctx.tx;
     let two_layer: i64 = tx.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('automation_step') WHERE name = 'automation_id'",
+        "SELECT COUNT(*) FROM pragma_table_info('automation_action') WHERE name = 'prompt'",
         [],
         |r| r.get(0),
     )?;
@@ -3944,6 +3951,60 @@ fn point_the_entry_at_a_placement(ctx: &Ctx<'_>) -> Result<()> {
             expected: AUTOMATION_ENTRY_STEP,
         });
     }
+    Ok(())
+}
+
+/// v54: `automation_step` becomes `automation_action_step` — the table takes the name of the owner
+/// v53 moved it to (`AMB-D-949`).
+///
+/// Every table here whose rows hang off one other table is spelled `<owner>_<thing>`:
+/// `task_comment`, `task_commit`, `decision_comment`, `project_notify_target`. A step hung on an
+/// automation until v53 and hangs on an action from v53 on, so the name owed one word more.
+/// `automation_action` keeps the spelling it has: an action is a project's or the device's, and its
+/// `automation_` is the feature it belongs to rather than an owner.
+///
+/// **The genesis table is dropped before the rename, for the reason [`rename_the_outbox`] gives.**
+/// Genesis is `CREATE TABLE IF NOT EXISTS` over today's registry and runs before this chain on
+/// every open, so a store arriving here already carries an empty `automation_action_step` and
+/// `ALTER TABLE … RENAME TO` would fail on a name already taken. Dropping it leaves the rename a
+/// rename: the rows and the ids stay exactly what they were, and nothing references the empty one
+/// — what `automation_action.entry_step_id` and `automation_run_def.step_id` name is still the old
+/// name at this point, which is also what SQLite rewrites for us as the rename lands.
+///
+/// **Two shapes answer to the old name, and only one of them is carried.** A store that reached v53
+/// with steps in it holds the three-layer table, which is this one under its old name. A store born
+/// below v50 holds something else: [`lay_the_automation_tables_down`] writes the two-layer table out
+/// in frozen text, so from here on it lays down a name today's registry no longer has, on a store
+/// genesis has already handed the right one to. That table is a leftover — no op runs during a
+/// migration, so nothing has ever written a row into it — and what it owes is to go, not to be
+/// carried over the table genesis built. `automation_id` is what tells them apart: the column only
+/// the two-layer shape has.
+///
+/// **The feed is rewritten with it**, the way v33 rewrote `dependency`. `change_feed.dataset` is
+/// the key a carrier reads off the ledger and hands back to `sync records`, which answers only to
+/// the datasets the registry declares — so a row still saying `automation_step` would be refused
+/// rather than served. Frozen text, like every step's: the registry may rename the table again
+/// tomorrow, and what this step rewrote must keep meaning what it meant.
+fn name_the_step_after_its_action(ctx: &Ctx<'_>) -> Result<()> {
+    if table_is_here(ctx.tx, "automation_step")? {
+        let leftover: i64 = ctx.tx.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('automation_step') WHERE name = 'automation_id'",
+            [],
+            |r| r.get(0),
+        )?;
+        if leftover > 0 {
+            ctx.tx.execute_batch("DROP TABLE automation_step;")?;
+        } else {
+            ctx.tx.execute_batch(
+                "DROP TABLE IF EXISTS automation_action_step;
+                 ALTER TABLE automation_step RENAME TO automation_action_step;",
+            )?;
+        }
+    }
+    ctx.tx.execute_batch(
+        "UPDATE change_feed SET dataset = 'automation_action_step' \
+             WHERE dataset = 'automation_step';",
+    )?;
     Ok(())
 }
 
@@ -5936,23 +5997,26 @@ mod tests {
                 "v{born}: the step pointing at action 7 is a placement of it",
             );
             let inside = one("SELECT entry_step_id FROM automation_action WHERE id = 7");
-            assert_eq!(text(&format!("SELECT prompt FROM automation_step WHERE id = {inside}")), "look at it");
             assert_eq!(
-                text(&format!("SELECT agent FROM automation_step WHERE id = {inside}")),
+                text(&format!("SELECT prompt FROM automation_action_step WHERE id = {inside}")),
+                "look at it",
+            );
+            assert_eq!(
+                text(&format!("SELECT agent FROM automation_action_step WHERE id = {inside}")),
                 "codex-cli",
                 "v{born}: the agent is the step's now, and the spot that ran it is where it comes from",
             );
-            assert_eq!(one("SELECT COUNT(*) FROM automation_step WHERE id = 12"), 0,
+            assert_eq!(one("SELECT COUNT(*) FROM automation_action_step WHERE id = 12"), 0,
                 "v{born}: the row that only called an action is not a step any more");
 
             // The step that carried its own prompt keeps its row, inside an action written for it.
-            let mine = one("SELECT action_id FROM automation_step WHERE id = 11");
+            let mine = one("SELECT action_id FROM automation_action_step WHERE id = 11");
             assert_eq!(one(&format!("SELECT entry_step_id FROM automation_action WHERE id = {mine}")), 11);
             assert_eq!(
                 one(&format!("SELECT action_id FROM automation_placement WHERE id = {took}")),
                 mine,
             );
-            assert_eq!(text("SELECT prompt FROM automation_step WHERE id = 11"), "take one");
+            assert_eq!(text("SELECT prompt FROM automation_action_step WHERE id = 11"), "take one");
             assert_eq!(
                 one(&format!(
                     "SELECT COUNT(*) FROM automation_exit WHERE owner_kind = 'action' AND owner_id = {mine}"
@@ -5999,6 +6063,88 @@ mod tests {
             );
             std::fs::remove_dir_all(&dir).ok();
         }
+    }
+
+    /// **v54 names the step table after the action it hangs on** (`AMB-D-949`).
+    ///
+    /// Two shapes answer to the old name, and the step tells them apart. A store that reached v53
+    /// with steps in it is carried over whole — the rows keep their ids, what points at them still
+    /// points at them, and the ledger hands a carrier a key the registry answers to. A store born
+    /// below v50 holds only what v50's frozen text laid down, a two-layer table genesis never asked
+    /// for, and comes out without it and on the table genesis built.
+    #[test]
+    fn the_step_table_takes_the_name_of_the_action_it_hangs_on() {
+        let dir = scratch("step-after-its-action-v53");
+        let engine = store_at(&dir, 53);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name, notes, order_key, created_at, updated_at) \
+                   VALUES (1, 'amenbo', '', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation_action (id, project_id, name, order_key, created_at, updated_at) \
+                   VALUES (7, 1, '点検する', 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 INSERT INTO automation_step (id, action_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, show_history, order_key, created_at, updated_at) \
+                   VALUES (11, 7, '取る', 'take one', 'claude', NULL, 0, NULL, 0, 1, 'a0', '2026-01-02T03:04:05Z', '2026-01-02T03:04:05Z');
+                 UPDATE automation_action SET entry_step_id = 11 WHERE id = 7;
+                 INSERT INTO change_feed (id, dataset, row_id, op) \
+                   VALUES (91, 'automation_step', 11, 'insert');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        let text = |sql: &str| -> String { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        assert_eq!(
+            one("SELECT COUNT(*) FROM sqlite_master \
+                 WHERE type = 'table' AND name = 'automation_step'"),
+            0,
+            "nothing answers to the old name afterwards",
+        );
+        assert_eq!(text("SELECT prompt FROM automation_action_step WHERE id = 11"), "take one");
+        assert_eq!(
+            one("SELECT entry_step_id FROM automation_action WHERE id = 7"),
+            11,
+            "the step an action starts at is the row it was",
+        );
+        assert_eq!(
+            text("SELECT dataset FROM change_feed WHERE id = 91"),
+            "automation_action_step",
+            "and what the ledger hands a carrier is a key `sync records` answers to",
+        );
+        // The `REFERENCES` clauses were rewritten with the table, and a write is the proof of it:
+        // left naming a table that is gone, this insert would fail rather than land.
+        conn.execute(
+            "INSERT INTO automation_action_step \
+                 (id, action_id, name, prompt, agent, order_key, created_at, updated_at) \
+             VALUES (12, 7, '点検', 'look at it', 'claude', 'a1', '2026-01-02T03:04:05Z', \
+                 '2026-01-02T03:04:05Z')",
+            [],
+        )
+        .expect("a step still hangs on its action");
+        conn.execute("UPDATE automation_action SET entry_step_id = 12 WHERE id = 7", [])
+            .expect("and an action still names one of them");
+        std::fs::remove_dir_all(&dir).ok();
+
+        let dir = scratch("step-after-its-action-baseline");
+        let engine = store_at(&dir, OLDEST_FROZEN_VERSION);
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        let conn = engine.conn();
+        let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        assert_eq!(
+            one("SELECT COUNT(*) FROM sqlite_master \
+                 WHERE type = 'table' AND name = 'automation_step'"),
+            0,
+            "the table v50 lays down on a store that never had one goes",
+        );
+        assert_eq!(
+            one("SELECT COUNT(*) FROM pragma_table_info('automation_action_step') \
+                 WHERE name = 'automation_id'"),
+            0,
+            "and it is not carried over the table genesis built",
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

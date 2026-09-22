@@ -6339,9 +6339,17 @@ pub fn automation_placement(
     super::hydrate::row_by_id(conn, "automation_placement", id, super::hydrate::automation_placement_row)
 }
 
-/// The `automation_step` record with this id.
-pub fn automation_step(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationStep>> {
-    super::hydrate::row_by_id(conn, "automation_step", id, super::hydrate::automation_step_row)
+/// The `automation_action_step` record with this id.
+pub fn automation_action_step(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::AutomationStep>> {
+    super::hydrate::row_by_id(
+        conn,
+        "automation_action_step",
+        id,
+        super::hydrate::automation_action_step_row,
+    )
 }
 
 /// The `automation_cfg` record with this id.
@@ -6407,12 +6415,12 @@ pub fn automation_action_siblings(
 }
 
 /// Live step siblings within one library action.
-pub fn automation_step_siblings(
+pub fn automation_action_step_siblings(
     conn: &Connection,
     action_id: i64,
     exclude: Option<i64>,
 ) -> Result<Vec<(i64, String)>> {
-    const S: col::automation_step::Cols = col::automation_step::ALL;
+    const S: col::automation_action_step::Cols = col::automation_action_step::ALL;
     order_siblings(conn, S.id, S.order_key, Some(Pred::eq(S.action_id, action_id)), exclude)
 }
 
@@ -6690,17 +6698,17 @@ pub fn automation_wire_between(
 
 /// The steps of one library action, in display order — what the launch check walks and what the launch
 /// copies into the run.
-pub fn automation_steps_of(
+pub fn automation_action_steps_of(
     conn: &Connection,
     action_id: i64,
 ) -> Result<Vec<crate::model::AutomationStep>> {
-    const S: col::automation_step::Cols = col::automation_step::ALL;
+    const S: col::automation_action_step::Cols = col::automation_action_step::ALL;
     automation_rows(
         conn,
         S.table,
         &Pred::eq(S.action_id, action_id),
         &[Sort::by(S.order_key), Sort::by(S.id)],
-        super::hydrate::automation_step_row,
+        super::hydrate::automation_action_step_row,
     )
 }
 
@@ -6735,8 +6743,8 @@ pub fn automation_wires_to_port(
 }
 
 /// The steps of one library action, oldest key first — the subtree a delete walks.
-pub fn automation_step_ids(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
-    const S: col::automation_step::Cols = col::automation_step::ALL;
+pub fn automation_action_step_ids(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
+    const S: col::automation_action_step::Cols = col::automation_action_step::ALL;
     select_ids(conn, S.id, Some(&Pred::eq(S.action_id, action_id)))
 }
 

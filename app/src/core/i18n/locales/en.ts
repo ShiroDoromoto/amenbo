@@ -1162,6 +1162,16 @@ const ui = {
   "auto.pic.fromAction": "from {action}",
   "auto.pic.unfed": "nothing reaches {names}",
   "auto.pic.hands": "hands {from} on to {to}",
+  "auto.actions.empty": "The library has no actions yet.",
+  "auto.actions.reachDevice": "This device",
+  "auto.actions.reachProject": "This project",
+  "auto.actions.unused": "No automation runs it",
+  "auto.actions.usedBy.one": "Run by {n} automation", "auto.actions.usedBy.other": "Run by {n} automations",
+  "auto.actions.name": "Name",
+  "auto.actions.prompt": "Prompt",
+  "auto.actions.reaches": "What is saved here is carried by every step pointing at this action.",
+  "auto.actions.save": "Save",
+  "auto.actions.cancel": "Cancel",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

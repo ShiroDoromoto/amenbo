@@ -127,6 +127,10 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // re-read on a write of our own, and a lane is taken by whatever step reported, from wherever
       // it was running.
       case "automationLanesHeld": return touchesScope("automationLanes");
+      // The library the "actions" tab draws. It moves on two kinds of row — the action itself, and a
+      // step being pointed at one or away from one, which is what the count beside each action is —
+      // and both fold to this scope.
+      case "automationActions": return touchesScope("automationActions");
       default: return false;
     }
   });

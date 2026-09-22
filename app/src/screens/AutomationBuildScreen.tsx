@@ -38,6 +38,7 @@
 import { useState } from "react";
 import { AutomationAboutPanel } from "./AutomationAboutPanel";
 import { AutomationPicture } from "./AutomationPicture";
+import { automationGraph } from "./automationLayout";
 import { AutomationPlaceRow } from "./AutomationPlaceRow";
 import { AutomationStepAdd } from "./AutomationStepAdd";
 import { AutomationStepPanel } from "./AutomationStepPanel";
@@ -55,7 +56,7 @@ import type { AutomationDetailDto } from "../bindings/bindings";
  */
 function agentOn(automation: AutomationDetailDto | null, edgeId: number): string {
   const edge = automation?.edges.find((one) => one.id === edgeId);
-  return automation?.placements.find((one) => one.id === edge?.fromPlacementId)?.agent ?? "claude-code";
+  return automation?.placements.find((one) => one.id === edge?.fromId)?.agent ?? "claude-code";
 }
 
 export function AutomationBuildScreen({
@@ -137,10 +138,10 @@ export function AutomationBuildScreen({
         <div className="settings__body">
           <h3 className="auto__place">{t("auto.build.picture")}</h3>
           <AutomationPicture
-            automation={automation}
-            selectedPlacementId={step ?? undefined}
-            onPickPlacement={setStep}
-            onInsertStep={setInserting}
+            graph={automationGraph(automation)}
+            selectedBoxId={step ?? undefined}
+            onPickBox={setStep}
+            onInsert={setInserting}
           />
           <AutomationPlaceRow automationId={id} projectId={projectId} />
         </div>
@@ -169,7 +170,7 @@ export function AutomationBuildScreen({
 
       {inserting !== null && (
         <AutomationStepAdd
-          edgeId={inserting}
+          into={{ picture: "automation", edgeId: inserting }}
           projectId={projectId}
           agent={agentOn(automation, inserting)}
           onClose={() => setInserting(null)}

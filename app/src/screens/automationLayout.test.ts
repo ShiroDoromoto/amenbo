@@ -7,7 +7,7 @@
 // way out is drawn only where somebody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { layOut } from "./automationLayout";
+import { automationGraph, layOut, type PicGraph } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -61,7 +61,7 @@ function port(name: string, kind: AutomationPortDto["kind"], required = true): A
   return { name, kind, required };
 }
 
-function edge(over: Partial<AutomationEdgeDto> & { id: number; fromPlacementId: number }): AutomationEdgeDto {
+function edge(over: Partial<AutomationEdgeDto> & { id: number; fromId: number }): AutomationEdgeDto {
   return { ends: "go", ...over };
 }
 
@@ -69,8 +69,9 @@ function wire(over: AutomationWireDto): AutomationWireDto {
   return over;
 }
 
-function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
-  return {
+/** One automation, as the picture reads it — the definition the screen fetches, laid out. */
+function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
+  return automationGraph({
     id: 7,
     projectId: 1,
     name: "Morning round",
@@ -81,11 +82,11 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     ...over,
-  };
+  })!;
 }
 
-const at = (picture: ReturnType<typeof layOut>, placementId: number) =>
-  picture.nodes.find((one) => one.placementId === placementId)!;
+const at = (picture: ReturnType<typeof layOut>, boxId: number) =>
+  picture.nodes.find((one) => one.boxId === boxId)!;
 
 describe("the picture of an automation", () => {
   it("has nothing to draw for nothing, and for an automation with no steps", () => {
@@ -98,7 +99,7 @@ describe("the picture of an automation", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [taker(1, "take"), step({ id: 2, name: "work" }), step({ id: 3, name: "check" })],
-      edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }), edge({ id: 2, fromPlacementId: 2, toPlacementId: 3 })],
+      edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 })],
     });
     const picture = layOut(one);
     expect(at(picture, 1).y).toBeLessThan(at(picture, 2).y);
@@ -115,8 +116,8 @@ describe("the picture of an automation", () => {
         step({ id: 3, name: "right" }),
       ],
       edges: [
-        edge({ id: 1, fromPlacementId: 1, exitName: "yes", toPlacementId: 2 }),
-        edge({ id: 2, fromPlacementId: 1, exitName: "no", toPlacementId: 3 }),
+        edge({ id: 1, fromId: 1, exitName: "yes", toId: 2 }),
+        edge({ id: 2, fromId: 1, exitName: "no", toId: 3 }),
       ],
     });
     const picture = layOut(one);
@@ -131,10 +132,10 @@ describe("the picture of an automation", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [taker(1, "first"), step({ id: 2, name: "work" }), taker(3, "second")],
-      edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }), edge({ id: 2, fromPlacementId: 2, toPlacementId: 3 })],
+      edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 })],
     });
     const picture = layOut(one);
-    expect(picture.laps.map((lap) => lap.headPlacementId)).toEqual([1, 3]);
+    expect(picture.laps.map((lap) => lap.headBoxId)).toEqual([1, 3]);
     // The second taker heads its own stretch, so it is back at the top of one rather than three deep.
     expect(picture.laps[0]!.y + picture.laps[0]!.h).toBeLessThanOrEqual(picture.laps[1]!.y);
     expect(at(picture, 3).y).toBeGreaterThan(at(picture, 2).y);
@@ -147,7 +148,7 @@ describe("the picture of an automation", () => {
     });
     const picture = layOut(one);
     expect(picture.laps).toEqual([]);
-    expect(picture.nodes.map((node) => node.placementId).sort()).toEqual([1, 2]);
+    expect(picture.nodes.map((node) => node.boxId).sort()).toEqual([1, 2]);
   });
 
   it("ties what comes after a step down its left and what it hands on down its right", () => {
@@ -159,8 +160,8 @@ describe("the picture of an automation", () => {
         }),
         step({ id: 2, name: "work", inputs: [port("note", "value")] }),
       ],
-      edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 })],
-      wires: [wire({ id: 1, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" })],
+      edges: [edge({ id: 1, fromId: 1, toId: 2 })],
+      wires: [wire({ id: 1, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" })],
     });
     const picture = layOut(one);
     const middle = at(picture, 1).x + at(picture, 1).w / 2;
@@ -178,9 +179,9 @@ describe("the picture of an automation", () => {
         step({ id: 3, name: "check", exits: [{ id: 93, outputs: [] }, { id: 94, name: "again", outputs: [] }] }),
       ],
       edges: [
-        edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }),
-        edge({ id: 2, fromPlacementId: 2, toPlacementId: 3 }),
-        edge({ id: 3, fromPlacementId: 3, exitName: "again", toPlacementId: 2 }),
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, exitName: "again", toId: 2 }),
       ],
     });
     const picture = layOut(one);
@@ -194,7 +195,7 @@ describe("the picture of an automation", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [taker(1, "first"), step({ id: 2, name: "work" }), taker(3, "second")],
-      edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }), edge({ id: 2, fromPlacementId: 2, toPlacementId: 3 })],
+      edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 })],
     });
     const picture = layOut(one);
     // Four points is the shape of a line drawn between its own two boxes; an aside one has six.
@@ -212,12 +213,12 @@ describe("the picture of an automation", () => {
         taker(5, "third"),
       ],
       edges: [
-        edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }),
-        edge({ id: 2, fromPlacementId: 2, toPlacementId: 3 }),
-        edge({ id: 3, fromPlacementId: 3, toPlacementId: 4 }),
-        edge({ id: 4, fromPlacementId: 4, toPlacementId: 5 }),
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, toId: 4 }),
+        edge({ id: 4, fromId: 4, toId: 5 }),
         // Past the whole of the second stretch: forward, and no neighbour.
-        edge({ id: 5, fromPlacementId: 2, exitName: "*", toPlacementId: 5 }),
+        edge({ id: 5, fromId: 2, exitName: "*", toId: 5 }),
       ],
     });
     const picture = layOut(one);
@@ -237,11 +238,11 @@ describe("the picture of an automation", () => {
         step({ id: 4, name: "close" }),
       ],
       edges: [
-        edge({ id: 1, fromPlacementId: 1, exitName: "a", toPlacementId: 2 }),
-        edge({ id: 2, fromPlacementId: 2, toPlacementId: 3 }),
-        edge({ id: 3, fromPlacementId: 3, toPlacementId: 4 }),
-        edge({ id: 4, fromPlacementId: 4, toPlacementId: 2 }),
-        edge({ id: 5, fromPlacementId: 3, exitName: "*", toPlacementId: 2 }),
+        edge({ id: 1, fromId: 1, exitName: "a", toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, toId: 4 }),
+        edge({ id: 4, fromId: 4, toId: 2 }),
+        edge({ id: 5, fromId: 3, exitName: "*", toId: 2 }),
       ],
     });
     const picture = layOut(one);
@@ -256,7 +257,7 @@ describe("the picture of an automation", () => {
       detail({
         entryPlacementId: 1,
         placements: steps,
-        edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 })],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 })],
       }),
     );
     expect(plain.lines.some((line) => line.exitName === "*")).toBe(false);
@@ -266,8 +267,8 @@ describe("the picture of an automation", () => {
         entryPlacementId: 1,
         placements: steps,
         edges: [
-          edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }),
-          edge({ id: 2, fromPlacementId: 1, exitName: "*", ends: "halt" }),
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "*", ends: "halt" }),
         ],
       }),
     );
@@ -280,7 +281,7 @@ describe("the picture of an automation", () => {
       detail({
         entryPlacementId: 1,
         placements: [taker(1, "take")],
-        edges: [edge({ id: 1, fromPlacementId: 1, ends: "done" })],
+        edges: [edge({ id: 1, fromId: 1, ends: "done" })],
       }),
     );
     const line = picture.lines[0]!;
@@ -299,8 +300,8 @@ describe("the picture of an automation", () => {
           taker(1, "take", { exits: [{ id: 91, outputs: [port("note", "value")] }] }),
           step({ id: 2, name: "work", inputs: [port("note", "value")] }),
         ],
-        edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 }), edge({ id: 2, fromPlacementId: 2, ends: "done" })],
-        wires: [wire({ id: 1, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" })],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, ends: "done" })],
+        wires: [wire({ id: 1, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" })],
       }),
     );
     expect(picture.inserts.map((one) => one.edgeId).sort()).toEqual([1, 2]);
@@ -320,8 +321,8 @@ describe("the picture of an automation", () => {
       detail({
         entryPlacementId: 1,
         placements: steps,
-        edges: [edge({ id: 1, fromPlacementId: 1, toPlacementId: 2 })],
-        wires: [wire({ id: 1, fromPlacementId: 1, fromPortName: "note", toPlacementId: 2, toPortName: "note" })],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 })],
+        wires: [wire({ id: 1, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" })],
       }),
     );
     expect(at(picture, 2).unfed).toEqual(["draft"]);

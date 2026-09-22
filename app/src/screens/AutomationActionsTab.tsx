@@ -11,26 +11,24 @@
 // automations rather than steps: two steps of one automation is one automation whose runs change,
 // and what a reader weighs is how far the rewrite carries, not how often the pointer occurs.
 //
-// **This is the only place a prompt is written.** A step that points at an action holds no copy of
-// its own (`amenbo_core::ops::automation_run`), so there is nowhere else the same words could be
-// edited into two versions — and it is why making one here asks for a name and a reach and no
-// prompt: the box below is where the words go, opened on the row that was just made.
+// **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
+// prompts written. Making one here asks for a name and a reach and no prompt: an action is born
+// empty, and the screen the press lands on is where the words go.
 import { useEffect, useState } from "react";
-import {
-  addAutomationAction,
-  editAutomationAction,
-  useAutomationActions,
-} from "../core/automations";
+import { addAutomationAction, useAutomationActions } from "../core/automations";
 import { asTyped } from "../core/keys";
 import { errText, t, tn } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
-import type { AutomationActionCardDto } from "../bindings/bindings";
 
-export function AutomationActionsTab({ projectId }: { projectId: number | null }) {
+export function AutomationActionsTab({
+  projectId,
+  onOpen,
+}: {
+  projectId: number | null;
+  /** Open the build screen on this action — a press on a row, and on the row a press just made. */
+  onOpen: (id: number) => void;
+}) {
   const actions = useAutomationActions(projectId);
-  // Which row is open for editing, or nothing. One at a time: the box is opened in place of the row,
-  // and two open boxes would be two half-written prompts with one Save each to keep straight.
-  const [open, setOpen] = useState<number | null>(null);
   // The ids the library held when Make was pressed, while the row that was made is still on its way.
   // Nothing while none is.
   const [born, setBorn] = useState<ReadonlySet<number> | null>(null);
@@ -44,8 +42,8 @@ export function AutomationActionsTab({ projectId }: { projectId: number | null }
     const fresh = actions.find((one) => !born.has(one.id));
     if (fresh === undefined) return;
     setBorn(null);
-    setOpen(fresh.id);
-  }, [actions, born]);
+    onOpen(fresh.id);
+  }, [actions, born, onOpen]);
 
   async function make(name: string, project: number | null) {
     const before = new Set(actions.map((one) => one.id));
@@ -60,27 +58,21 @@ export function AutomationActionsTab({ projectId }: { projectId: number | null }
         <div className="auto__empty">{t("auto.actions.empty")}</div>
       ) : (
         <ul className="auto__list">
-          {actions.map((one) =>
-            one.id === open ? (
-              <li key={one.id}>
-                <ActionEdit action={one} onDone={() => setOpen(null)} />
-              </li>
-            ) : (
-              <li key={one.id}>
-                <button type="button" className="auto__row" onClick={() => setOpen(one.id)}>
-                  <span className="auto__name">{one.name}</span>
-                  <span className="auto__mark">
-                    {one.global ? t("auto.actions.reachDevice") : t("auto.actions.reachProject")}
-                  </span>
-                  <span className="auto__steps">
-                    {one.usedBy === 0
-                      ? t("auto.actions.unused")
-                      : tn("auto.actions.usedBy", one.usedBy)}
-                  </span>
-                </button>
-              </li>
-            ),
-          )}
+          {actions.map((one) => (
+            <li key={one.id}>
+              <button type="button" className="auto__row" onClick={() => onOpen(one.id)}>
+                <span className="auto__name">{one.name}</span>
+                <span className="auto__mark">
+                  {one.global ? t("auto.actions.reachDevice") : t("auto.actions.reachProject")}
+                </span>
+                <span className="auto__steps">
+                  {one.usedBy === 0
+                    ? t("auto.actions.unused")
+                    : tn("auto.actions.usedBy", one.usedBy)}
+                </span>
+              </button>
+            </li>
+          ))}
         </ul>
       )}
     </>
@@ -91,9 +83,9 @@ export function AutomationActionsTab({ projectId }: { projectId: number | null }
  * **Make an action from the list itself**, which until now could only be done from the CLI or by
  * raising a step that already carried the words (`AutomationStepPanel`).
  *
- * **It asks for a name and a reach, and no prompt.** The prompt is written in the box the row opens,
- * the only place it is written, and a second field here would be a second place — so what this makes
- * is the row, and the list opens the box on it.
+ * **It asks for a name and a reach, and no prompt.** The prompt belongs to a step inside the action,
+ * and a field here would be writing one before there is a step to write it on — so what this makes
+ * is the row, and the press lands in the build screen on it (`./AutomationActionBuildScreen`).
  *
  * **The reach is asked for rather than defaulted.** The device's library is reached by every project
  * on this machine and the project's by one, and moving an action between them is not something this
@@ -167,58 +159,6 @@ function ActionAdd({
         </button>
       </div>
       {error !== null && <ErrorNote>{error}</ErrorNote>}
-    </div>
-  );
-}
-
-/**
- * One action, open for editing. The name and the prompt are held here while they are being typed and
- * written on Save — the row underneath goes on reading the store, so a box left open while somebody
- * else rewrites the same action does not lose what is being typed into it.
- *
- * The fields take `asTyped` like every other box in the app. A prompt is prose, which is the one
- * place a spell checker would have something to offer — but it is prose carrying refs, paths and
- * command words, and an autocorrect that rewrites one of those changes what an agent is told to do.
- */
-function ActionEdit({
-  action,
-  onDone,
-}: {
-  action: AutomationActionCardDto;
-  onDone: () => void;
-}) {
-  const [name, setName] = useState(action.name);
-  const [prompt, setPrompt] = useState(action.prompt);
-
-  async function save() {
-    await editAutomationAction(action.id, { name, step: action.entryStepId ?? undefined, prompt });
-    onDone();
-  }
-
-  return (
-    <div className="settings__form">
-      <label className="field">
-        <span className="fieldlabel">{t("auto.actions.name")}</span>
-        <input {...asTyped} value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label className="field">
-        <span className="fieldlabel">{t("auto.actions.prompt")}</span>
-        <textarea
-          {...asTyped}
-          rows={6}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-      </label>
-      <div className="auto__reaches">{t("auto.actions.reaches")}</div>
-      <div className="settings__row">
-        <button type="button" className="btn btn--primary" onClick={save}>
-          {t("auto.actions.save")}
-        </button>
-        <button type="button" className="btn" onClick={onDone}>
-          {t("auto.actions.cancel")}
-        </button>
-      </div>
     </div>
   );
 }

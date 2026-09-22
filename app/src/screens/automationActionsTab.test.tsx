@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// The "actions" tab — the library, and the one box a prompt is written in (`AMB-T-5258`). Only the
-// read and the write door are stubbed; the rows, the reach column, the counted sentence and what
-// Save sends all run for real.
+// The "actions" tab — the library, the way one is made in it (`AMB-T-5329`), and the one box a
+// prompt is written in (`AMB-T-5258`). Only the read and the write doors are stubbed; the rows, the
+// reach column, the counted sentence and what each press sends all run for real.
 //
 // What these guard: **both reaches are one list**, each row saying which library holds it, so a
 // reader is never left to work out why an action they can see is not in the list they are looking
@@ -9,6 +9,11 @@
 // place of the row** and says what a rewrite reaches before Save is within reach; and **Save sends
 // the name and the prompt together through the one door**, which is the whole of what makes this the
 // only place a prompt is written.
+//
+// And on making one: **the way to make an action is there while the library is empty**, which is
+// where it is most needed; **it sends a name and a reach and no prompt**, because the prompt has one
+// place and this is not it; and **the box opens on the row that was just made**, which is how the
+// two halves are one act to the reader.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,11 +22,13 @@ import type { AutomationActionCardDto } from "../bindings/bindings";
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
   edit: vi.fn(async (_id: number, _patch: { name?: string; prompt?: string }) => {}),
+  add: vi.fn(async (_name: string, _project: number | null) => {}),
 }));
 
 vi.mock("../core/automations", () => ({
   useAutomationActions: () => hoisted.actions,
   editAutomationAction: hoisted.edit,
+  addAutomationAction: hoisted.add,
 }));
 
 import { t, tn } from "../core/i18n";
@@ -72,6 +79,8 @@ beforeEach(() => {
   root = createRoot(container);
   hoisted.actions = [];
   hoisted.edit.mockClear();
+  hoisted.add.mockReset();
+  hoisted.add.mockImplementation(async () => {});
 });
 
 afterEach(() => {
@@ -135,6 +144,7 @@ describe("writing a prompt", () => {
     await act(async () => { button(t("auto.actions.save")).click(); });
     expect(hoisted.edit).toHaveBeenCalledWith(3, {
       name: "Take the next one",
+      step: 11,
       prompt: "Take the next ready task.",
     });
     expect(container.querySelector(".auto__row")).not.toBeNull();
@@ -146,5 +156,64 @@ describe("writing a prompt", () => {
     await act(async () => { button(t("auto.actions.cancel")).click(); });
     expect(hoisted.edit).not.toHaveBeenCalled();
     expect(container.querySelector(".auto__row")).not.toBeNull();
+  });
+});
+
+describe("making one", () => {
+  /** Open the form the way a reader does: press the one control the tab draws over the list. */
+  async function openForm() {
+    await render();
+    await act(async () => { button(t("auto.actions.add")).click(); });
+  }
+
+  it("offers the way to make one while the library is empty", async () => {
+    await render();
+    expect(container.textContent).toContain(t("auto.actions.empty"));
+    expect(button(t("auto.actions.add"))).not.toBeNull();
+  });
+
+  it("asks for a name and a reach, and for no prompt", async () => {
+    await openForm();
+    expect(container.querySelector("input")).not.toBeNull();
+    expect(container.querySelector("select")).not.toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
+  });
+
+  it("makes it in this project's library by default", async () => {
+    await openForm();
+    type(container.querySelector("input")!, "Review");
+    await act(async () => { button(t("auto.actions.add")).click(); });
+    expect(hoisted.add).toHaveBeenCalledWith("Review", 1);
+  });
+
+  it("makes it in the device's library when that reach is picked", async () => {
+    await openForm();
+    type(container.querySelector("input")!, "Review");
+    const reach = container.querySelector("select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(reach, "device");
+      reach.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { button(t("auto.actions.add")).click(); });
+    expect(hoisted.add).toHaveBeenCalledWith("Review", null);
+  });
+
+  it("writes nothing while the name is blank", async () => {
+    await openForm();
+    expect(button(t("auto.actions.add")).disabled).toBe(true);
+  });
+
+  it("opens the box on the row that was just made", async () => {
+    hoisted.actions = [action({ id: 3, name: "Take one" })];
+    hoisted.add.mockImplementation(async (name: string) => {
+      hoisted.actions = [...hoisted.actions, action({ id: 9, name, prompt: "" })];
+    });
+    await render();
+    await act(async () => { button(t("auto.actions.add")).click(); });
+    type(container.querySelector("input")!, "Review");
+    await act(async () => { button(t("auto.actions.add")).click(); });
+    expect(container.querySelector("textarea")!.value).toBe("");
+    expect(container.querySelector("input")!.value).toBe("Review");
+    expect(rows()).toEqual([expect.stringContaining("Take one")]);
   });
 });

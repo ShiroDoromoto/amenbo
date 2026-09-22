@@ -1217,12 +1217,15 @@ mod tests {
             assert_eq!(first.placement_id, Some(placement.id));
 
             // A step under way is nobody's to open a second time.
-            let opening = match crate::ops::automation_step::open(tx, run.id, first.id)
+            let opening = match crate::ops::automation_step::open(tx, run.id, first.id, None)
                 .expect("open")
             {
                 crate::ops::automation_step::Opened::Ready(ready) => *ready,
                 crate::ops::automation_step::Opened::Stopped { missing, .. } => {
                     panic!("stopped for {missing:?}")
+                }
+                crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
+                    panic!("cannot start {agent}")
                 }
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
@@ -1309,10 +1312,13 @@ mod tests {
         let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
             panic!("the entry is what a fresh run waits for")
         };
-        let opening = match crate::ops::automation_step::open(tx, run.id, entry.id).expect("open") {
+        let opening = match crate::ops::automation_step::open(tx, run.id, entry.id, None).expect("open") {
             crate::ops::automation_step::Opened::Ready(ready) => *ready,
             crate::ops::automation_step::Opened::Stopped { missing, .. } => {
                 panic!("stopped for {missing:?}")
+            }
+            crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
+                panic!("cannot start {agent}")
             }
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));

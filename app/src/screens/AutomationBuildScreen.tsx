@@ -1,7 +1,12 @@
 // One automation, opened — the screen it is built and started from.
 //
-// **Three places, each named on the screen**: "launch", which refuses; "build", the picture of the
-// steps (`./AutomationPicture`); and "step", what the pressed step holds (`./AutomationStepPanel`).
+// **Four places, each named on the screen**: "launch", which refuses; "build", the picture of the
+// steps (`./AutomationPicture`); "step", what the pressed step holds (`./AutomationStepPanel`); and
+// last, the definition's own name, notes and archiving, with the press that deletes it
+// (`./AutomationAboutPanel`).
+//
+// **The delete takes the screen with it**, so the press hands back the same way out the "back"
+// button does: there is no definition left for this screen to be drawn from.
 //
 // **Which step is pressed is the screen's, not the picture's.** Two places read it — the picture
 // marks that box and the panel draws that step — so it is held where both can see it. The `+` on a
@@ -28,6 +33,7 @@
 // among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`). Whether it is
 // standing is handed down from the shell, which is the one place that knows which window holds it.
 import { useState } from "react";
+import { AutomationAboutPanel } from "./AutomationAboutPanel";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd } from "./AutomationStepAdd";
 import { AutomationStepPanel } from "./AutomationStepPanel";
@@ -141,6 +147,15 @@ export function AutomationBuildScreen({
           <AutomationStepPanel automation={automation} placementId={step} projectId={projectId} />
         </div>
       </div>
+
+      {automation !== null && (
+        <div className="settings__section">
+          <div className="settings__body">
+            <h3 className="auto__place">{t("auto.build.about")}</h3>
+            <AutomationAboutPanel automation={automation} onDeleted={onBack} />
+          </div>
+        </div>
+      )}
 
       {inserting !== null && (
         <AutomationStepAdd

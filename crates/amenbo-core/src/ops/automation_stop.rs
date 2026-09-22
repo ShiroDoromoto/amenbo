@@ -430,9 +430,10 @@ mod tests {
         run: &AutomationRun,
         placement: &crate::model::AutomationPlacement,
     ) -> Opening {
-        match open(tx, run.id, def_of(tx, run, placement).id).expect("open") {
+        match open(tx, run.id, def_of(tx, run, placement).id, None).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
+            Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
         }
     }
 

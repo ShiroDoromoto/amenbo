@@ -47,7 +47,7 @@ use amenbo_core::model::{
     AutomationPictureOwner, AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRunStatus, AutomationStoppedReason,
 };
-use amenbo_core::ops::automation::NewStep;
+use amenbo_core::ops::automation::{NewAutomation, NewStep};
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -84,6 +84,66 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
         .collect())
 }
 
+/// **Make an automation**, born with no steps and no entry
+/// ([`amenbo_core::ops::automation::add`]).
+///
+/// A name is all it takes. The notes are written on the build screen, once there is a picture to
+/// write them about — asking for them at the press would put a form in front of the one road into
+/// the screen where the work actually happens. The preamble is written nowhere: it is Amenbo's own
+/// fixed sentence at the head of every launch, and the column goes with it (`AMB-T-5325`).
+///
+/// The ack names the new automation, which is what the screen opens the build screen on: a creation
+/// that answered with the scope alone would leave the press having to go and find the row that was
+/// not there a moment ago.
+#[tauri::command]
+pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdError> {
+    let made = with_store_mut(|store| {
+        Ok(store.automation_add(project_id, NewAutomation { name, ..Default::default() })?)
+    })?;
+    Ok(WriteAck::new(&["automations"]).automation(made.id))
+}
+
+/// **Rename an automation, rewrite its notes, or put it out of the way.** Only what is `Some` is
+/// written.
+///
+/// Archiving takes nothing away and stops nothing already running
+/// ([`amenbo_core::ops::automation::update`]). It is what keeps a definition nobody launches any
+/// more out of a reader's way, so the row stays in the list carrying the mark rather than leaving
+/// it — which is why `automation_page` goes on answering with archived ones in it.
+///
+/// The preamble is not one of the three. It is the fixed sentence Amenbo puts at the head of every
+/// launch rather than anything this automation holds, and the column goes with it (`AMB-T-5325`).
+#[tauri::command]
+pub fn automation_edit(
+    id: i64,
+    name: Option<String>,
+    notes: Option<String>,
+    archived: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_update(id, name.as_deref(), notes.as_deref(), None, archived)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Delete an automation and everything built into it** — its steps with their declarations, the
+/// edges and wires between them, and the documents they share
+/// ([`amenbo_core::ops::automation::delete`]).
+///
+/// **Core refuses it while a run stands behind it**, naming how many. A run carries its own copy of
+/// the steps and would go on reading correctly, but it is filed under the automation it was
+/// launched from — so the refusal is what keeps the record able to say what was run. It reaches the
+/// screen as the sentence core wrote, which is why nothing is re-asked here before the write.
+#[tauri::command]
+pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **The library this project reaches** — the device's own actions first, then the project's own.
 ///
 /// The two libraries answer as one list because they are one list on screen: what a reader is
@@ -117,6 +177,29 @@ pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCar
         });
     }
     Ok(out)
+}
+
+/// **Make a library action** — a name, and which library it lands in.
+///
+/// **The prompt is not asked for here.** It is written in the box the list opens on the row
+/// ([`automation_action_edit`]), which is the one place a prompt is written: a second field writing
+/// the same text would be a second place to keep in step.
+///
+/// It is born holding one step, and that step is what the action opens — so the box the screen opens
+/// on the new row has a row to write the prompt on. Who is asked to carry it out is not settled here
+/// either, and until somebody picks an agent the run check says so
+/// ([`amenbo_core::ops::automation_run::Unmet::AgentMissing`]). An action of several steps is written
+/// from its own screen (`AMB-T-5315`).
+///
+/// `project` is which library it lands in — the project's own, or the device's where every project
+/// on this machine reaches it.
+#[tauri::command]
+pub fn automation_action_add(project: Option<i64>, name: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_from_prompt(project, NewStep::new(&name, "", ""), &[], &[])?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
 }
 
 /// **Rename a library action, and rewrite the prompt the step it opens runs on.** Only what is
@@ -853,7 +936,11 @@ fn open_one(
     run_id: i64,
     def_id: i64,
 ) -> Result<AutomationStepOpenDto, CmdError> {
-    let opened = store.automation_step_open(run_id, def_id)?;
+    // What this machine can start, as the device's settings last had it from a probe
+    // (`crate::wake`). Taken before the write because the store is borrowed for it, and `None` where
+    // nothing has ever probed — which is nobody asked, not "nothing is installed" (`AMB-D-792`).
+    let startable: Option<Vec<String>> = store.config.installed_agents().map(<[String]>::to_vec);
+    let opened = store.automation_step_open(run_id, def_id, startable.as_deref())?;
     let (project, step, missing) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
@@ -880,6 +967,13 @@ fn open_one(
         // What a step's pane is told about is its own step. No other run is in the event and none is
         // opened here: what the watch looks for is a run `running` with nothing open (`AMB-D-945`).
         Opened::Stopped { run, missing, .. } => (run.project_id, None, missing),
+        // Nothing is named in the event for this one. `missing` is about inputs, and what a reader is
+        // owed here is on the run's own row — the running tab says which ending it was, and the line
+        // core left on the task says how far it got (`amenbo_core::ops::automation_stop`).
+        Opened::NoAgent { run, agent } => {
+            log::info!("run {run_id} asked for {agent}, which this machine cannot start");
+            (run.project_id, None, Vec::new())
+        }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,

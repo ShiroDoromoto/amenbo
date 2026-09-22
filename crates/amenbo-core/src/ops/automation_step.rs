@@ -25,8 +25,8 @@ use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::model::{
     AutomationPortDirection, AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, RunDefExit,
-    RunDefPort, ERROR_EXIT,
+    AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
+    AutomationStoppedReason, RunDefExit, RunDefPort, ERROR_EXIT,
 };
 use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
@@ -54,7 +54,7 @@ pub struct Opening {
     pub folder: Option<String>,
 }
 
-/// The two ways opening a step can end.
+/// The three ways opening a step can end.
 #[derive(Clone, Debug)]
 pub enum Opened {
     /// Open a terminal on this.
@@ -62,6 +62,10 @@ pub enum Opened {
     /// A required input had nothing wired into it that has actually been produced, so no terminal was
     /// opened and the run was stopped. `missing` names the inputs, for the sentence a person reads,
     Stopped { run: AutomationRun, missing: Vec<String> },
+    /// **The agent this step asks for is not one this machine can start**, so no terminal was opened
+    /// and the run was stopped with [`AutomationStoppedReason::NoAgent`]. `agent` is the one that was
+    /// asked for, which is not on the run row and is what the sentence needs.
+    NoAgent { run: AutomationRun, agent: String },
 }
 
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
@@ -79,7 +83,16 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **A step that takes a fresh task opens a new stretch of the run**; every other step joins the one
 /// under way. That is what bounds the story a step is told: a run that goes round three tasks tells
 /// each step about its own task and not about the two before it.
-pub fn open(tx: &WriteTx<'_>, run_id: i64, run_def_id: i64) -> Result<Opened> {
+///
+/// **`startable` is what this machine can start**, handed in for the reason
+/// [`crate::ops::automation_run::Launcher`] hands it in: the store cannot see a person's `PATH`.
+/// `None` is nobody asked, and then no step is judged on its agent (`AMB-D-792`).
+pub fn open(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    run_def_id: i64,
+    startable: Option<&[String]>,
+) -> Result<Opened> {
     let conn = tx.conn();
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
     if run.status != AutomationRunStatus::Running {
@@ -94,6 +107,17 @@ pub fn open(tx: &WriteTx<'_>, run_id: i64, run_def_id: i64) -> Result<Opened> {
         return Err(Error::invalid(format!(
             "step '{run_def_id}' belongs to another run — a run opens its own steps"
         )));
+    }
+    // **The agent is asked for again here.** The launch check asked it of every step the run can
+    // reach (`crate::ops::automation_run::check`), but that was once, and a run is out for as long
+    // as its work takes — an agent uninstalled in the middle of one leaves every step after it with
+    // nothing to open. A run left `running` on that would hold its task for the rest of the session,
+    // so it is ended here with the reason that says which of the five this is.
+    if let Some(startable) = startable {
+        if !startable.iter().any(|id| id == &def.agent) {
+            let stopped = gave_up(tx, run)?;
+            return Ok(Opened::NoAgent { run: stopped.run, agent: def.agent });
+        }
     }
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
     let ins: Vec<RunDefPort> = serde_json::from_str(&def.ins).map_err(Error::from)?;
@@ -235,6 +259,20 @@ fn latest_for(
 /// happen.
 fn stop(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
     super::automation_stop::ended(tx, before, AutomationRunStatus::Stopped, None)
+}
+
+/// Stop a run because the agent its next step asks for is not one this machine can start, through the
+/// same cleanup — the task goes back and the line on it says why.
+///
+/// Here a reason *is* written, where [`stop`]'s is left empty: this is one of the five, and it is the
+/// one the running tab's row has always been able to say and nothing has ever written (`AMB-T-5308`).
+fn gave_up(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
+    super::automation_stop::ended(
+        tx,
+        before,
+        AutomationRunStatus::Stopped,
+        Some(AutomationStoppedReason::NoAgent),
+    )
 }
 
 /// Begin the next stretch of a run, and close the one before it.
@@ -664,6 +702,7 @@ mod tests {
         match opened {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
+            Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
         }
     }
 
@@ -705,7 +744,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
 
             assert_eq!(opening.run_step.seq, 1, "the first move of the run");
             assert_eq!(opening.run_step.status, AutomationRunStepStatus::Running);
@@ -752,7 +791,7 @@ mod tests {
             )
             .expect("point the step at it");
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             assert_eq!(opening.folder.as_deref(), Some("/work/here"));
         });
     }
@@ -764,7 +803,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             assert_eq!(opening.folder, None);
         });
     }
@@ -777,7 +816,7 @@ mod tests {
                 .expect("document");
             automation::note_link(tx, p.first.id, note.id).expect("link");
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
             assert!(text.starts_with("You are one step of a run."), "{text}");
             assert!(text.contains("## House style\n\nShort lines."), "{text}");
@@ -804,7 +843,7 @@ mod tests {
             let p = picture(tx, false, true);
             out_on(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
             assert!(text.contains("- a value — `amenbo automation step-out <name>=<value>`"), "{text}");
             assert!(
@@ -827,10 +866,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.\nAnd more below.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             assert_eq!(second.run_step.seq, 2);
             assert_eq!(
                 second.run_step.run_task_id, first.run_step.run_task_id,
@@ -856,10 +895,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, false);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             assert!(
                 read::automation_run_values_of(tx.conn(), second.run_step.id)
                     .expect("values")
@@ -875,12 +914,12 @@ mod tests {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first);
-            let once = ready(open(tx, run.id, def.id).expect("open"));
+            let once = ready(open(tx, run.id, def.id, None).expect("open"));
             reported(tx, &once.run_step, "found", "First time.", "the first note");
-            let twice = ready(open(tx, run.id, def.id).expect("open again"));
+            let twice = ready(open(tx, run.id, def.id, None).expect("open again"));
             reported(tx, &twice.run_step, "found", "Second time.", "the second note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed[0].value.as_deref(), Some("the second note"));
@@ -894,7 +933,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let before = read::automation_run_steps_of(tx.conn(), run.id).expect("read").len();
 
-            match open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open") {
+            match open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open") {
                 Opened::Ready(_) => panic!("nothing has produced the note"),
                 Opened::Stopped { run: stopped, missing, .. } => {
                     assert_eq!(missing, vec!["note".to_string()]);
@@ -903,6 +942,41 @@ mod tests {
                     assert_eq!(
                         stopped.stopped_reason, None,
                         "none of the five it offers is what happened",
+                    );
+                }
+                Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
+            }
+            assert_eq!(
+                read::automation_run_steps_of(tx.conn(), run.id).expect("read").len(),
+                before,
+                "no half-opened execution is left behind",
+            );
+        });
+    }
+
+    /// **The agent went away while the run was out**, which the launch check cannot have caught: it
+    /// asked once, at the press, and this run has been standing since. What this holds is that the
+    /// run is ended rather than left `running` on a step nothing can open — with the reason that says
+    /// which ending it was, so the row on the running tab reads apart from a stop by hand.
+    #[test]
+    fn a_step_whose_agent_this_machine_cannot_start_any_more_stops_the_run() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let before = read::automation_run_steps_of(tx.conn(), run.id).expect("read").len();
+
+            // Everything this machine can start, and "claude" — what both steps ask for — is not in it.
+            let here = ["codex".to_string()];
+            match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
+                Opened::Ready(_) => panic!("nothing here can start claude"),
+                Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
+                Opened::NoAgent { run: stopped, agent } => {
+                    assert_eq!(agent, "claude");
+                    assert_eq!(stopped.status, AutomationRunStatus::Stopped);
+                    assert!(stopped.ended_at.is_some());
+                    assert_eq!(
+                        stopped.stopped_reason,
+                        Some(AutomationStoppedReason::NoAgent),
                     );
                 }
             }
@@ -914,12 +988,26 @@ mod tests {
         });
     }
 
+    /// **Nobody asked, so no step is judged on its agent** (`AMB-D-792`). A machine that has never
+    /// probed has no list, and reading its silence as "nothing is installed" would stop every run on
+    /// it.
+    #[test]
+    fn a_machine_that_was_never_asked_judges_no_step_on_its_agent() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            assert_eq!(opening.run_def.agent, "claude");
+        });
+    }
+
     #[test]
     fn an_input_nobody_needs_is_simply_absent() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             assert!(!opening.text.contains("What you have been handed"), "{}", opening.text);
         });
     }
@@ -929,10 +1017,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.\nAnd more below.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             assert!(
                 second.text.contains("1. 調べる — left through \"found\": Found one thing."),
                 "{}",
@@ -960,10 +1048,10 @@ mod tests {
             )
             .expect("history off");
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             assert!(!second.text.contains("What has happened so far"), "{}", second.text);
             assert!(second.text.contains("- note: the note"), "the values still go: {}", second.text);
         });
@@ -976,7 +1064,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first).id;
             let stopped = stop(tx, run.clone()).expect("stop");
-            let refused = open(tx, stopped.run.id, def).expect_err("a stopped run opens nothing");
+            let refused = open(tx, stopped.run.id, def, None).expect_err("a stopped run opens nothing");
             assert!(refused.to_string().contains("stopped"), "{refused}");
         });
     }

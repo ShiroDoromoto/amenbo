@@ -922,6 +922,7 @@ export const tr: Translation = {
     "auto.block.unwiredInput": "{step}: zorunlu girdi {at} öğesine hiçbir şey ulaşmıyor.",
     "auto.block.unansweredCfg": "{step}: zorunlu ayar {at} yanıtsız.",
     "auto.block.agentMissing": "{step}: bu makine {at} başlatamıyor.",
+    "auto.block.modelMissing": "{step}: buradaki ajan {at} modelini sunmuyor.",
     "auto.pic.empty": "Bu otomasyonun henüz adımı yok.",
     "auto.pic.lap": "Bir görev",
     "auto.pic.insert": "Buraya bir adım ekle",

@@ -20,6 +20,11 @@
 //! `null` and not an empty list: an unanswered probe drawn as an answer would tell a reader with
 //! four agents installed that they have none (`AMB-D-792`).
 //!
+//! **Which models it can start on is read here rather than passed in**, because that answer is kept on
+//! this side ([`crate::agent_models`]) and the face never holds it. Read and never asked: a provider
+//! nobody has put the question to says nothing, which leaves that step's model unjudged — the same
+//! silence, drawn from the same rule.
+//!
 //! **A step that is ready to run is told to the window rather than answered back**, as an event.
 //! The press that starts a run is on the ledger and the pane it opens is in the workspace — the same
 //! window in one shape of the app and the other window in the other (`AMB-D-753`) — so an answer
@@ -284,6 +289,12 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
 /// not ask", and then no step is judged on its agent: a reason drawn off an answer nobody got would
 /// tell a reader to install what they already have.
 ///
+/// **The models are not passed in — they are read here**, off what each provider has already been asked
+/// ([`crate::agent_models::offered_here`]). It is the same silence that `agents` takes and for the same
+/// reason: an agent nobody has asked leaves its steps' models unjudged, rather than judged and failed.
+/// The face has no part in it because the answers are kept on this side, and putting the question would
+/// mean a login shell and a provider starting up behind every draw of a build screen.
+///
 /// **The workspace is not asked about here.** A closed one refuses the launch rather than the
 /// definition, and it stops being true the moment a window opens — so it belongs to the press
 /// ([`amenbo_core::ops::automation_run::launch`]) and not to the list a build screen draws.
@@ -294,7 +305,12 @@ pub fn automation_launch_check(
 ) -> Result<AutomationLaunchCheckDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch_check");
     let store = open_store_read()?;
-    let unmet = automation_run::check(store.read_model().conn(), id, agents.as_deref())?;
+    let unmet = automation_run::check(
+        store.read_model().conn(),
+        id,
+        agents.as_deref(),
+        &crate::agent_models::offered_here(),
+    )?;
     Ok(AutomationLaunchCheckDto {
         ready: unmet.is_empty(),
         blocks: unmet.iter().map(block_dto).collect(),
@@ -313,6 +329,10 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
         Unmet::UnwiredInput { step, port } => ("unwired_input", Some(step), Some(port)),
         Unmet::UnansweredCfg { step, cfg } => ("unanswered_cfg", Some(step), Some(cfg)),
         Unmet::AgentMissing { step, agent } => ("agent_missing", Some(step), Some(agent)),
+        // The model, not the agent, in the one slot a block carries: the row leads with the step, and a
+        // step names one agent, so what the reader cannot see from the picture is which model it asked
+        // for. Core's own sentence names both (`amenbo_core::ops::automation_run::Unmet::say`).
+        Unmet::ModelMissing { step, model, .. } => ("model_missing", Some(step), Some(model)),
     };
     AutomationLaunchBlockDto { reason, step_name: step.cloned(), at: at.cloned() }
 }
@@ -358,8 +378,13 @@ pub fn automation_launch(
     let _perf = amenbo_core::perf::Timer::start("automation_launch");
     let paths = amenbo_core::config::Paths::resolve()?;
     let lanes = amenbo_core::config::Config::load(&paths.config_file).automation_lanes;
+    // The models are read here, as the check reads them (`automation_launch_check`): the press is
+    // inside the process that keeps the answers, so a step naming a model its agent does not have is
+    // refused at the press rather than met inside the pane the run just opened.
+    let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
         startable: agents.as_deref(),
+        models: &offered,
         lanes,
         workspace_open: Some(workspace_open),
         by: Some(ActorKind::Human),

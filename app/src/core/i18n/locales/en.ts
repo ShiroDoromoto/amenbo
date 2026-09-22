@@ -1171,6 +1171,10 @@ const ui = {
   "auto.block.unwiredInput": "{step}: nothing reaches the required input {at}.",
   "auto.block.unansweredCfg": "{step}: the required setting {at} is unanswered.",
   "auto.block.agentMissing": "{step}: this machine cannot start {at}.",
+  // Said of the model rather than of the agent, which the step's own row already names. Only ever
+  // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
+  // silence (`app/src-tauri/src/agent_models.rs`).
+  "auto.block.modelMissing": "{step}: its agent here does not offer the model {at}.",
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
   // around a group of steps is.

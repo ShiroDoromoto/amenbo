@@ -923,6 +923,7 @@ export const th: Translation = {
     "auto.block.unwiredInput": "{step}: ไม่มีอะไรไปถึงอินพุตที่จำเป็น {at}",
     "auto.block.unansweredCfg": "{step}: การตั้งค่าที่จำเป็น {at} ยังไม่มีคำตอบ",
     "auto.block.agentMissing": "{step}: เครื่องนี้เริ่ม {at} ไม่ได้",
+    "auto.block.modelMissing": "{step}: เอเจนต์ที่นี่ไม่มีโมเดล {at}",
     "auto.pic.empty": "ออโตเมชันนี้ยังไม่มีขั้นตอน",
     "auto.pic.lap": "หนึ่งงาน",
     "auto.pic.insert": "แทรกขั้นตอนตรงนี้",

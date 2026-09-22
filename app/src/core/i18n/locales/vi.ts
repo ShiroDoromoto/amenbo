@@ -923,6 +923,7 @@ export const vi: Translation = {
     "auto.block.unwiredInput": "{step}: không có gì đến được đầu vào bắt buộc {at}.",
     "auto.block.unansweredCfg": "{step}: thiết lập bắt buộc {at} chưa có câu trả lời.",
     "auto.block.agentMissing": "{step}: máy này không chạy được {at}.",
+    "auto.block.modelMissing": "{step}: tác nhân ở đây không có mô hình {at}.",
     "auto.pic.empty": "Tự động hóa này chưa có bước nào.",
     "auto.pic.lap": "Một công việc",
     "auto.pic.insert": "Chèn một bước vào đây",

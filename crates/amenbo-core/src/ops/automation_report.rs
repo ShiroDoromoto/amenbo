@@ -603,6 +603,7 @@ mod tests {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
             startable: Some(&startable),
+            models: crate::ops::automation_run::nothing_asked(),
             lanes: 3,
             workspace_open: Some(true),
             by: Some(ActorKind::Ai),

@@ -922,6 +922,7 @@ export const nl: Translation = {
     "auto.block.unwiredInput": "{step}: niets bereikt de verplichte invoer {at}.",
     "auto.block.unansweredCfg": "{step}: de verplichte instelling {at} is onbeantwoord.",
     "auto.block.agentMissing": "{step}: deze machine kan {at} niet starten.",
+    "auto.block.modelMissing": "{step}: de agent hier biedt het model {at} niet aan.",
     "auto.pic.empty": "Deze automatisering heeft nog geen stappen.",
     "auto.pic.lap": "Eén taak",
     "auto.pic.insert": "Hier een stap invoegen",

@@ -922,6 +922,7 @@ export const hi: Translation = {
     "auto.block.unwiredInput": "{step}: ज़रूरी इनपुट {at} तक कुछ भी नहीं पहुँचता।",
     "auto.block.unansweredCfg": "{step}: ज़रूरी सेटिंग {at} का जवाब नहीं दिया गया है।",
     "auto.block.agentMissing": "{step}: यह मशीन {at} को शुरू नहीं कर सकती।",
+    "auto.block.modelMissing": "{step}: यहाँ इसका एजेंट {at} मॉडल नहीं देता।",
     "auto.pic.empty": "इस ऑटोमेशन में अभी कोई चरण नहीं है।",
     "auto.pic.lap": "एक कार्य",
     "auto.pic.insert": "यहाँ एक चरण जोड़ें",

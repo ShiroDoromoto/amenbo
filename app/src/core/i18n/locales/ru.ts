@@ -939,6 +939,7 @@ export const ru: Translation = {
     "auto.block.unwiredInput": "{step}: до обязательного входа {at} ничего не доходит.",
     "auto.block.unansweredCfg": "{step}: обязательная настройка {at} осталась без ответа.",
     "auto.block.agentMissing": "{step}: эта машина не может запустить {at}.",
+    "auto.block.modelMissing": "{step}: агент здесь не предлагает модель {at}.",
     "auto.pic.empty": "У этой автоматизации пока нет шагов.",
     "auto.pic.lap": "Одна задача",
     "auto.pic.insert": "Вставить сюда шаг",

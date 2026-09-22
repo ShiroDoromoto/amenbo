@@ -255,6 +255,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let known = startable(store);
             let by = Launcher {
                 startable: known.as_deref(),
+                // Nothing is claimed about the models either: asking a provider what it offers is a
+                // login shell and that provider starting up, and the answers the app keeps are in the
+                // app's own process (`amenbo_core::agent_models`). So a step naming a model this
+                // machine does not have is caught when the pane comes up, rather than here.
+                models: amenbo_core::ops::automation_run::nothing_asked(),
                 lanes: store.config.automation_lanes,
                 // Nothing is claimed about the window: a terminal cannot see what is on screen, and a
                 // `false` written here would refuse a launch the reader can see perfectly well

@@ -148,7 +148,7 @@ pub fn managed_block_body(language_label: &str, cmd: &str) -> String {
 /// **It names no command.** What a step types to hand its result back is the run's own vocabulary, and
 /// a preamble naming a command this build does not answer to teaches a road that is shut. An
 /// automation that wants those words written out says so in its own preamble, or in a document its
-/// steps share.
+/// placements share.
 pub const DEFAULT_PREAMBLE: &str = "\
 You are one step of an automation run, not the whole of it.
 

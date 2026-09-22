@@ -51,9 +51,9 @@ steps_gui:
     with:
       prompt: read what was written, then say what is wrong with it
 
-  # The rewrite, read back on a step of the first automation. A step running an action carries no
-  # prompt of its own, so what the panel draws here is the library's — and it is drawn to be read
-  # rather than written, the box that takes it being on the tab this road just left.
+  # The rewrite, read back on a spot of the first automation. A spot carries no prompt of its own, so
+  # what the panel draws here is the library's — written on the step inside the action, on the screen
+  # this road just left.
   - type: action
     domain: automation
     op: screen

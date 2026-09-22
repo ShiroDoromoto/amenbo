@@ -129,6 +129,10 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // step being pointed at one or away from one, which is what the count beside each action is —
       // and both fold to this scope.
       case "automationActions": return touchesScope("automationActions");
+      // One action's whole definition, as its build screen reads it. The same scope: every row that
+      // definition is built from — a step, a line between two of them, a declaration — folds there
+      // (`core/changes`), and what goes stale is the whole answer.
+      case "automationAction": return touchesScope("automationActions");
       default: return false;
     }
   });

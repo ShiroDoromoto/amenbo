@@ -680,6 +680,7 @@ pub fn automation_edge(e: &AutomationEdge) -> Record {
                 ("exit_name", ov(&e.exit_name)),
                 ("to_id", kv_opt(&e.to_id)),
                 ("ends", tv(e.ends.as_str())),
+                ("exit_to", ov(&e.exit_to)),
                 ("max_times", e.max_times.map(iv).unwrap_or(Value::Null)),
                 ("order_key", tv(&e.order_key)),
             ],

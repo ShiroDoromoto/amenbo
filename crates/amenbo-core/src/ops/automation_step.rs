@@ -372,8 +372,8 @@ fn write_in(
 /// holds for this one, then what it is being asked to do, and last how to hand the work back.
 ///
 /// **English, like every other sentence this crate writes.** The words that carry the work — the
-/// preamble, the shared documents, the prompt — are the person's own and arrive in whatever language
-/// they were written in; what is added around them is the frame.
+/// shared documents, the prompt — are the person's own and arrive in whatever language they were
+/// written in; what is added around them, the preamble included, is the frame.
 fn compose(
     tx: &WriteTx<'_>,
     def: &AutomationRunDef,
@@ -401,8 +401,8 @@ fn compose(
 }
 
 /// Add one block, with a blank line between it and whatever came before. An empty one is left out
-/// rather than left as a gap: an automation with no preamble should read as one that has nothing to say
-/// first, not as one that opens on white space.
+/// rather than left as a gap: a step handed no documents and no values should read as one with
+/// nothing to say about them, not as one with white space where they would have gone.
 fn push_block(out: &mut String, block: &str) {
     if block.trim().is_empty() {
         return;

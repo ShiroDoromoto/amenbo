@@ -274,18 +274,10 @@ fn next_after_the_pause(
 ) -> Result<Option<AutomationRunDef>> {
     let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else { return Ok(None) };
     let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
-    let Some(placement_id) = def.placement_id else { return Ok(None) };
-    let Some(edge) = read::automation_edge_for_exit(
-        conn,
-        crate::model::AutomationPictureOwner::Automation,
-        placement_id,
-        last.exit_name.as_deref(),
-    )?
-    else {
-        return Ok(None);
-    };
-    let Some(to) = edge.to_id else { return Ok(None) };
-    Ok(read::automation_run_defs_of(conn, run.id)?.into_iter().find(|d| d.placement_id == Some(to)))
+    Ok(match crate::ops::automation_run::onward(conn, &def, last.exit_name.as_deref())? {
+        crate::ops::automation_run::Onward::Go { def, .. } => Some(*def),
+        _ => None,
+    })
 }
 
 /// **Stop a run now** — the terminal is closed wherever it is, and the cleanup runs.
@@ -330,15 +322,12 @@ pub fn sweep(tx: &WriteTx<'_>) -> Result<Vec<AutomationRun>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{
-        Automation, AutomationOwner, AutomationPortDirection, AutomationPortKind,
-        AutomationPortOwner,
-    };
+    use crate::model::{Automation, AutomationPortKind};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{mk_exit, mk_out, mk_placed, mk_project, mk_task_in, with_tx};
 
 
     /// The picture these tests walk: a spot that takes a task and goes on to a second, and the second
@@ -362,13 +351,12 @@ mod tests {
         .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
         let (second_action, second) = mk_placed(tx, &automation, "直す", "fix", "claude");
-        takes_a_task(tx, first_action.id);
+        mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
         let on = crate::model::AutomationPictureOwner::Automation;
         automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None)
             .expect("onward");
         if back {
-            automation::exit_add(tx, AutomationOwner::Action, second_action.id, Some("again"))
-                .expect("way back");
+            mk_exit(tx, &second_action, "again");
             automation::edge_add(
                 tx,
                 on,
@@ -382,24 +370,6 @@ mod tests {
         automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
         let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, project, first, second }
-    }
-
-    /// Declare the `task_take` output that makes a spot usable as the one a run starts on.
-    fn takes_a_task(tx: &WriteTx<'_>, action_id: i64) {
-        let exit =
-            read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action_id, None)
-                .expect("read")
-                .expect("the unnamed way out");
-        automation::port_add(
-            tx,
-            AutomationPortOwner::Exit,
-            exit.id,
-            AutomationPortDirection::Out,
-            "タスク",
-            AutomationPortKind::TaskTake,
-            true,
-        )
-        .expect("output");
     }
 
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -672,6 +642,194 @@ mod tests {
             let refused = stop(tx, run.id, AutomationStoppedReason::ByHuman)
                 .expect_err("it is over already");
             assert!(refused.to_string().contains("over already"), "{refused}");
+        });
+    }
+
+    /// **An action of two steps, placed after a spot that takes a task.** The first step inside goes on
+    /// to the second, and the second returns to the action's unnamed way out, which closes the run on
+    /// the automation's picture. `back` gives the second step a way round to itself inside the action,
+    /// capped at one turn.
+    struct Inside {
+        automation: Automation,
+        project: i64,
+        first: crate::model::AutomationPlacement,
+        second: crate::model::AutomationPlacement,
+        write: crate::model::AutomationStep,
+        review: crate::model::AutomationStep,
+    }
+
+    fn two_steps_inside(tx: &WriteTx<'_>, back: bool) -> Inside {
+        use crate::model::AutomationPictureOwner::{Action, Automation as OnAutomation};
+        let project = mk_project(tx, "amenbo");
+        let automation = automation::add(
+            tx,
+            project,
+            NewAutomation { name: "書いて見直す".into(), ..Default::default() },
+        )
+        .expect("add automation");
+        let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
+        let (second_action, second) = mk_placed(tx, &automation, "書く", "write", "claude");
+        mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+        automation::edge_add(tx, OnAutomation, first.id, None, EdgeTarget::Go(second.id), None)
+            .expect("onward");
+        automation::edge_add(tx, OnAutomation, second.id, None, EdgeTarget::Done, None)
+            .expect("closes");
+
+        let write = crate::ops::test_support::only_step(tx, &second_action);
+        let review = automation::step_add(
+            tx,
+            second_action.id,
+            automation::NewStep::new("見直す", "review", "claude"),
+        )
+        .expect("second step");
+        // The first step no longer leaves the action: it goes on to the second inside it.
+        let leaves = read::automation_edge_for_exit(tx.conn(), Action, write.id, None)
+            .expect("read")
+            .expect("the line out of the first step");
+        automation::edge_update(tx, leaves.id, Some(EdgeTarget::Go(review.id)), None)
+            .expect("on to the second step");
+        automation::edge_add(tx, Action, review.id, None, EdgeTarget::Exit(None), None)
+            .expect("the second step leaves the action");
+        if back {
+            automation::exit_add(tx, crate::model::AutomationOwner::Step, review.id, Some("again"))
+                .expect("way back");
+            automation::edge_add(tx, Action, review.id, Some("again"), EdgeTarget::Go(review.id), Some(1))
+                .expect("back");
+        }
+        let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        Inside { automation, project, first, second, write, review }
+    }
+
+    /// The copy of one step of one placement.
+    fn copy_of(
+        tx: &WriteTx<'_>,
+        run: &AutomationRun,
+        placement: &crate::model::AutomationPlacement,
+        step: &crate::model::AutomationStep,
+    ) -> AutomationRunDef {
+        read::automation_run_defs_of(tx.conn(), run.id)
+            .expect("defs")
+            .into_iter()
+            .find(|d| d.placement_id == Some(placement.id) && d.step_id == Some(step.id))
+            .expect("the step's copy")
+    }
+
+    fn opened_step(tx: &WriteTx<'_>, run: &AutomationRun, def: &AutomationRunDef) -> Opening {
+        match open(tx, run.id, def.id, None).expect("open") {
+            Opened::Ready(opening) => *opening,
+            Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
+            Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
+        }
+    }
+
+    fn stepped_to(next: Next) -> AutomationRunDef {
+        match next {
+            Next::Step(def) => *def,
+            other => panic!("expected a step, got {other:?}"),
+        }
+    }
+
+    /// **A launch opens every step inside a placed action into one column** (`AMB-T-5313`), each row
+    /// saying which placement it came from — and the run walks the steps inside before it leaves the
+    /// action by the way out the last of them returns to.
+    #[test]
+    fn a_run_walks_the_steps_inside_an_action_and_leaves_it_where_the_last_returns() {
+        with_tx(|tx| {
+            let p = two_steps_inside(tx, false);
+            let run = a_run(tx, &p.automation);
+            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert_eq!(defs.len(), 3, "one row for the first placement, two for the second");
+            let second_rows: Vec<_> =
+                defs.iter().filter(|d| d.placement_id == Some(p.second.id)).collect();
+            assert_eq!(
+                second_rows.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+                vec!["書く", "見直す"],
+                "a row per step, named after the step",
+            );
+
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            let next = stepped_to(done(tx, first.run_step.id, None, "Looked.").expect("done"));
+            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.write).id, "the action's entry first");
+
+            let write = opened_step(tx, &run, &next);
+            let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
+            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "then on inside it");
+            match crate::ops::automation_run::next_def(tx.conn(), run.id).expect("next") {
+                crate::ops::automation_run::Waiting::Step(def) => assert_eq!(def.id, next.id),
+                other => panic!("the watcher reads the same step: {other:?}"),
+            }
+
+            let review = opened_step(tx, &run, &next);
+            let over = done(tx, review.run_step.id, None, "Reviewed.").expect("done");
+            assert!(matches!(over, Next::Closed(_)), "the action's way out closes the run: {over:?}");
+        });
+    }
+
+    /// **A value crosses the action's edge only along the wires drawn to it.** The step that produced
+    /// it wires it into the action's way out; the automation wires that on to the next placement; and
+    /// the action there wires its input on to the step inside.
+    #[test]
+    fn a_value_reaches_a_step_inside_an_action_along_the_wires_across_both_edges() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = automation::add(
+                tx,
+                project,
+                NewAutomation { name: "渡す".into(), ..Default::default() },
+            )
+            .expect("add automation");
+            let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
+            let (second_action, second) = mk_placed(tx, &automation, "直す", "fix", "claude");
+            mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+            mk_out(tx, &first_action, None, "note", AutomationPortKind::Value, false);
+            crate::ops::test_support::mk_in(tx, &second_action, "note", AutomationPortKind::Value, true);
+            let on = crate::model::AutomationPictureOwner::Automation;
+            automation::wire_add(tx, on, first.id, None, "note", second.id, "note").expect("wire");
+            automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None)
+                .expect("onward");
+            automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
+            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+
+            let run = a_run(tx, &automation);
+            let looked = opened(tx, &run, &first);
+            a_task_in_hand(tx, project, looked.run_step.id);
+            crate::ops::automation_report::out(
+                tx,
+                looked.run_step.id,
+                "note",
+                crate::ops::automation_report::Produced::Value("the third paragraph"),
+            )
+            .expect("out");
+            let next = stepped_to(done(tx, looked.run_step.id, None, "Looked.").expect("done"));
+            let fixing = opened_step(tx, &run, &next);
+            assert!(fixing.text.contains("the third paragraph"), "{}", fixing.text);
+        });
+    }
+
+    /// **A way back drawn inside an action is held to its limit there**, counted on the step it leaves
+    /// within the placement the run is walking.
+    #[test]
+    fn a_way_back_inside_an_action_taken_too_often_stops_the_run() {
+        with_tx(|tx| {
+            let p = two_steps_inside(tx, true);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            let next = stepped_to(done(tx, first.run_step.id, None, "Looked.").expect("done"));
+            let write = opened_step(tx, &run, &next);
+            let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
+
+            let review = opened_step(tx, &run, &next);
+            let next = stepped_to(done(tx, review.run_step.id, Some("again"), "Not yet.").expect("done"));
+            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "one turn is allowed");
+            let twice = opened_step(tx, &run, &next);
+            let stopped = done(tx, twice.run_step.id, Some("again"), "Still not.").expect("done");
+            assert!(matches!(stopped, Next::Halted(_)));
+            assert_eq!(
+                read::automation_run(tx.conn(), run.id).expect("read").expect("run").stopped_reason,
+                Some(AutomationStoppedReason::MaxTimes),
+            );
         });
     }
 }

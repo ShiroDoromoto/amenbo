@@ -270,6 +270,145 @@ fn a_run_that_does_not_exist_is_said_to_be_missing() {
     assert!(refused.contains("404"), "{refused}");
 }
 
+// ───────────────────────────── reading one back ─────────────────────────────
+
+/// The whole definition comes back off one command, with each step's declarations resolved to where
+/// they are actually declared. Building it and reading it back is one test: what `show` is for is
+/// saying what the `add`s just built, so anything asserted against a hand-written fixture would pass
+/// while the two sides disagreed.
+#[test]
+fn a_definition_is_read_back_whole_with_each_step_resolved() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let action = id_of(
+        &cli.json(&["automation", "action", "add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
+        "automation_action",
+    );
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
+    let review = id_of(
+        &cli.json(&["automation", "step", "add", &a, "--name", "review", "--action", &action, "--agent", "claude", "--json"]),
+        "automation_step",
+    );
+    let fix = id_of(
+        &cli.json(&["automation", "step", "add", &a, "--name", "fix", "--prompt", "fix it", "--agent", "claude", "--json"]),
+        "automation_step",
+    );
+    let found = id_of(
+        &cli.json(&["automation", "exit", "add", "--action", &action, "--name", "something to fix", "--json"]),
+        "automation_exit",
+    );
+    cli.json(&["automation", "port", "add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]);
+    cli.json(&["automation", "port", "add", "--step", &fix, "--name", "report", "--kind", "file", "--required", "--json"]);
+    cli.json(&["automation", "cfg", "add", "--action", &action, "--name", "depth", "--kind", "number", "--json"]);
+    cli.json(&["automation", "cfg", "set", &review, "--name", "depth", "--number", "3", "--json"]);
+    cli.json(&["automation", "entry", "set", &a, "--step", &review, "--json"]);
+    cli.json(&["automation", "edge", "add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
+    cli.json(&["automation", "wire", "add", "--from", &format!("{review}:something to fix"), "--from-port", "report", "--to", &fix, "--to-port", "report", "--json"]);
+    let note = id_of(&cli.json(&["automation", "note", "add", &a, "--name", "House style", "--body", "short lines", "--json"]), "automation_note");
+    cli.json(&["automation", "note", "link", &review, &note, "--json"]);
+
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(shown["automation"]["name"].as_str(), Some("Review and fix"));
+    assert_eq!(shown["steps"].as_array().map(|s| s.len()), Some(2));
+
+    // The step runs a library action, so the prompt it runs on and the ways out it can leave by are
+    // the action's — resolved here rather than left for the reader to go and look up.
+    let first = &shown["steps"][0];
+    assert_eq!(first["prompt"].as_str(), Some("review it"));
+    assert_eq!(first["action"]["name"].as_str(), Some("Review"));
+    // Every declarer is born carrying the unnamed way out and the error one, so the one built here
+    // is found by name rather than by where it sits.
+    let found = first["exits"]
+        .as_array()
+        .expect("the ways out")
+        .iter()
+        .find(|x| x["exit"]["name"].as_str() == Some("something to fix"))
+        .expect("the way out declared on the action");
+    assert_eq!(found["outputs"][0]["name"].as_str(), Some("report"));
+    // An action declares and the step answers, and the two rows come back as one.
+    assert_eq!(first["settings"][0]["name"].as_str(), Some("depth"));
+    assert_eq!(first["settings"][0]["value"].as_str(), Some("3"));
+
+    assert_eq!(shown["steps"][1]["prompt"].as_str(), Some("fix it"));
+    assert_eq!(shown["steps"][1]["inputs"][0]["name"].as_str(), Some("report"));
+    assert_eq!(shown["edges"][0]["to_step_id"], serde_json::json!(fix.parse::<i64>().unwrap()));
+    assert_eq!(shown["wires"][0]["to_port_name"].as_str(), Some("report"));
+    assert_eq!(shown["notes"][0]["note"]["name"].as_str(), Some("House style"));
+    assert_eq!(shown["notes"][0]["step_ids"][0], serde_json::json!(review.parse::<i64>().unwrap()));
+}
+
+/// The listing counts the steps and keeps an archived automation on it: archiving puts one out of the
+/// way rather than removing it, and a listing that hid them would leave an id nothing explains.
+#[test]
+fn the_listing_counts_the_steps_and_keeps_an_archived_one() {
+    let cli = Cli::new();
+    // The project is named rather than left to the folder: the harness runs in a home nothing has
+    // bound.
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    cli.json(&["automation", "step", "add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]);
+
+    let listed = cli.json(&["automation", "list", "--project", &p, "--json"]);
+    assert_eq!(listed["count"], serde_json::json!(1));
+    assert_eq!(listed["automations"][0]["steps"], serde_json::json!(1));
+    assert_eq!(listed["automations"][0]["automation"]["archived"], serde_json::json!(false));
+
+    cli.json(&["automation", "update", &a, "--archived", "true", "--json"]);
+    let after = cli.json(&["automation", "list", "--project", &p, "--json"]);
+    assert_eq!(after["count"], serde_json::json!(1));
+    assert_eq!(after["automations"][0]["automation"]["archived"], serde_json::json!(true));
+}
+
+/// The library answers as the one list a step here could be pointed at, and `--global` narrows it to
+/// the device's shelf rather than opening a second place to look.
+#[test]
+fn the_library_is_one_list_and_global_narrows_it() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let action = id_of(
+        &cli.json(&["automation", "action", "add", "--project", &p, "--name", "Review", "--prompt", "review it", "--json"]),
+        "automation_action",
+    );
+
+    let listed = cli.json(&["automation", "action", "list", "--project", &p, "--json"]);
+    assert_eq!(listed["count"], serde_json::json!(1));
+    assert_eq!(listed["actions"][0]["action"]["name"].as_str(), Some("Review"));
+    assert_eq!(listed["actions"][0]["used_by"], serde_json::json!(0));
+
+    let device = cli.json(&["automation", "action", "list", "--global", "--json"]);
+    assert_eq!(device["count"], serde_json::json!(0));
+
+    // Two steps of one automation running the same action is one automation whose runs change when
+    // the prompt is rewritten, which is what the count is about.
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    for name in ["one", "two"] {
+        cli.json(&["automation", "step", "add", &a, "--name", name, "--action", &action, "--agent", "claude", "--json"]);
+    }
+    let again = cli.json(&["automation", "action", "list", "--project", &p, "--json"]);
+    assert_eq!(again["actions"][0]["used_by"], serde_json::json!(1));
+
+    let shown = cli.json(&["automation", "action", "show", &action, "--json"]);
+    assert_eq!(shown["action"]["prompt"].as_str(), Some("review it"));
+    assert_eq!(shown["used_by"], serde_json::json!(1));
+    // Every declarer is born carrying the unnamed way out and the error one.
+    assert_eq!(shown["exits"].as_array().map(|x| x.len()), Some(2));
+}
+
+/// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.
+#[test]
+fn a_definition_that_does_not_exist_is_said_to_be_missing() {
+    let cli = Cli::new();
+    let both: [&[&str]; 2] = [
+        &["automation", "show", "404", "--json"],
+        &["automation", "action", "show", "404", "--json"],
+    ];
+    for args in both {
+        let (refused, code) = cli.run_err(args);
+        assert_ne!(code, 0, "{refused}");
+        assert!(refused.contains("404"), "{refused}");
+    }
+}
+
 // ───────────────────────────── running one ─────────────────────────────
 
 /// An automation that launches as it stands: one step that takes a task and closes the run, with every

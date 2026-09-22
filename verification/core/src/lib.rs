@@ -4066,9 +4066,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "found", required: &["target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
     //
     // ---- automation on screen -------------------------------------------------------------------
-    // **What reads a definition whole is the build screen**, so every assert about one is here rather
-    // than beside the verbs above: the binary has no read of an automation, and a road that wants to
-    // know what a definition came out as walks the screen for it.
+    // **What these asserts read is the picture**, so they are here rather than beside the verbs
+    // above: the boxes, the lines between them and the marks a build screen draws are the screen's
+    // own, and no terminal has them. A definition read back as text is the terminal's
+    // (`automation show`) and is not mapped here yet.
     //
     // Which of the automations screen's three tabs the reader is standing on. The screen is one place
     // and the tabs are what is on it, so a road says which rather than naming three screens.

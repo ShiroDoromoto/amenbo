@@ -804,6 +804,58 @@ impl Store {
         Ok(report)
     }
 
+    // ───────────────────────── automation: the definition ─────────────────────────
+    //
+    // The ten definition tables answer through crate::ops::automation_view, which is where the
+    // resolving lives — a step's ways out, its inputs and its settings are read from the library
+    // action it points at or from itself, and both the build screen and the terminal read that one
+    // resolution.
+
+    /// **The automations of one project**, in the order they were placed in, each with its step
+    /// count. Archived ones come too.
+    pub fn automations(&self, project_id: i64) -> Result<Vec<crate::ops::automation_view::AutomationCard>> {
+        self.reachable_project(project_id)?;
+        crate::ops::automation_view::cards(self.engine.conn(), project_id)
+    }
+
+    /// **One automation's whole definition** — every step with what it runs under, what joins them,
+    /// and the documents its steps share. `None` where that id names none.
+    pub fn automation_detail(&self, id: i64) -> Result<Option<crate::ops::automation_view::AutomationView>> {
+        self.reachable(&format!("automation #{id}"), |c| super::owner::automation(c, id))?;
+        crate::ops::automation_view::detail(self.engine.conn(), id)
+    }
+
+    /// **The library one project reaches** — the device's shelf, then that project's own.
+    ///
+    /// `project_id` `None` is the device's shelf alone, and it is within reach from anywhere: an
+    /// action with no project is one every project on this machine points steps at
+    /// ([`crate::ops::automation::step_add`] refuses only another project's).
+    pub fn automation_actions(
+        &self,
+        project_id: Option<i64>,
+    ) -> Result<Vec<crate::ops::automation_view::ActionCard>> {
+        if let Some(project_id) = project_id {
+            self.reachable_project(project_id)?;
+        }
+        crate::ops::automation_view::action_cards(self.engine.conn(), project_id)
+    }
+
+    /// **One library action in full**: the prompt, what it declares, and how many automations run it.
+    /// `None` where that id names none.
+    ///
+    /// The device's shelf is reachable from any project, for the reason [`Self::automation_actions`]
+    /// gives — so an action with no project of its own passes the guard.
+    pub fn automation_action_detail(
+        &self,
+        id: i64,
+    ) -> Result<Option<crate::ops::automation_view::ActionView>> {
+        let conn = self.engine.conn();
+        if let Some(project_id) = super::owner::automation_action(conn, id)? {
+            self.reachable_project(project_id)?;
+        }
+        crate::ops::automation_view::action_detail(conn, id)
+    }
+
     // ───────────────────────── automation: what ran ─────────────────────────
     //
     // A run is **reached, never searched for**: from the task it worked, or from the automation it came

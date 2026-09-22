@@ -1,9 +1,9 @@
-# An automation is built from the terminal and read on the screen. Nothing else reads one whole: the
-# binary has no command that prints a definition back, so the picture on the build screen is the only
-# place a person sees what they built — which steps there are, what leaving each one by which way out
-# does, and which of them is not finished yet. A build that drew the boxes and lost the lines, or drew
-# the lines and lost what is written along them, would leave somebody building blind while every
-# command they typed still answered.
+# An automation is built from the terminal and read on the screen. The terminal prints a definition
+# back as text (`automation show`), but the picture is the screen's alone — which steps there are,
+# what leaving each one by which way out does, and which of them is not finished yet, laid out so a
+# person sees it at once. A build that drew the boxes and lost the lines, or drew the lines and lost
+# what is written along them, would leave somebody building blind while every command they typed
+# still answered.
 id: read-the-picture-an-automation-is-built-into
 title: The build screen draws the steps, the lines between them and the marks that say a step is not finished
 description: >

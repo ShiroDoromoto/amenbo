@@ -12,9 +12,8 @@
 //! have to rebuild.
 //!
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
-//! waiting for. How many runs there can be is capped by the lanes
-//! ([`amenbo_core::config::Config::automation_lanes`], three by default), so a look is four small
-//! reads on tables with tens of rows in them, through a connection the thread keeps.
+//! waiting for. Every run is one somebody pressed start on, so a look is a handful of small reads on
+//! tables with tens of rows in them, through a connection the thread keeps.
 //!
 //! **And how often.** `WHILE_GOING` while anything is running, because a step is a person-scale
 //! thing and a second is under the noticing; `WHILE_IDLE` otherwise, so a machine with no
@@ -81,8 +80,7 @@ pub fn watch(app: tauri::AppHandle) {
 /// **Stop what a previous launch left standing**, once, before this one acts on any run.
 ///
 /// A run's steps are terminals of the app, so a `running` row on the way up is a record of what was
-/// true before rather than of anything going on now: left alone it holds a lane nobody is using and
-/// a task nobody is working.
+/// true before rather than of anything going on now: left alone it holds a task nobody is working.
 ///
 /// **Nobody is told.** What a person needs to find is the task, and stopping a run hands that back
 /// to `todo` with a comment saying how far it got — which is where they work, and it is there
@@ -92,17 +90,15 @@ pub fn watch(app: tauri::AppHandle) {
 /// **The CLI does not do this.** Opening the store from a terminal says nothing about whether the app
 /// is running, so a sweep there would stop the runs of an app that is up and watching them.
 fn sweep() {
-    let swept = crate::commands::open_store().and_then(|mut store| {
-        let lanes = store.config.automation_lanes;
-        store.automation_sweep(lanes).map_err(crate::error::CmdError::from)
-    });
+    let swept = crate::commands::open_store()
+        .and_then(|mut store| store.automation_sweep().map_err(crate::error::CmdError::from));
     match swept {
         Ok(runs) if !runs.is_empty() => {
             log::info!("{} run(s) did not survive the last launch and were stopped", runs.len());
         }
         Ok(_) => {}
         // Not fatal and not worth stopping the watch over: what was not swept is swept next launch,
-        // and until then it costs a lane.
+        // and until then it costs the task the run was holding.
         Err(e) => log::warn!("the runs left by the last launch were not swept: {}", e.message_en),
     }
 }
@@ -120,7 +116,7 @@ fn sleep(how_long: Duration) {
 /// A run answers one of three things ([`amenbo_core::ops::automation_run::Waiting`]) and each is acted
 /// on here. A step waiting to be opened is opened. A run with a step under way is left alone. A run
 /// with nowhere left to go is ended — it would otherwise be read again every second for the rest of
-/// the session, holding a lane and a task nobody is working.
+/// the session, holding a task nobody is working.
 ///
 /// A run whose step could not be opened is left where it is and looked at again next time. The one
 /// that stops a run — a required input with nothing in it — stops it inside the op that found it, so
@@ -164,12 +160,8 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
 /// ([`amenbo_core::model::AutomationStoppedReason::NoWayOn`]).
 fn give_up(run: i64) -> Result<(), crate::error::CmdError> {
     let mut store = crate::commands::open_store()?;
-    let lanes = store.config.automation_lanes;
-    let ended = store.automation_stop(
-        run,
-        amenbo_core::model::AutomationStoppedReason::NoWayOn,
-        lanes,
-    )?;
+    let ended =
+        store.automation_stop(run, amenbo_core::model::AutomationStoppedReason::NoWayOn)?;
     log::info!("run {} had nowhere left to go and was stopped", ended.run.id);
     Ok(())
 }

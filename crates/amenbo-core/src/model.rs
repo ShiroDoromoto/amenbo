@@ -1566,7 +1566,7 @@ pub struct AutomationStep {
     /// `None` leaves the agent's own default model.
     #[serde(default)]
     pub model: Option<String>,
-    /// May this step wait for a person? Only a step that says so holds a lane while nobody answers.
+    /// May this step wait for a person? A step that does not say so is not left standing on one.
     #[serde(default)]
     pub interactive: bool,
     /// The name of the setting or the input the working folder is taken from — a name, not a path.
@@ -1689,25 +1689,15 @@ pub struct AutomationWire {
 
 // ───────────────────────── automation: what ran ─────────────────────────
 
-/// How many runs may hold a lane at once when nobody has said otherwise
-/// ([`crate::config::Config::automation_lanes`]).
-///
-/// Three, because a lane is a terminal somebody watches: a person who launches a second automation
-/// while the first is going is doing an ordinary thing, and one who has four going at once is not
-/// reading any of them. It is a number to raise, not a ceiling to design around — what it guards is
-/// attention, and the reader is the only one who knows how much of it there is.
-pub const DEFAULT_LANES: i64 = 3;
-
 /// Where one launch of one automation stands.
 ///
-/// `Queued` and `Running` are the two a lane decides between: a launch takes a lane if one is free and
-/// waits for one if not. `Paused` hands the lane back and keeps the place, `Done` and `Stopped` are the
-/// two ends — reached by running out of picture, and by everything else.
+/// `Running` is where every launch begins: nothing limits how many may be under way at once, so a
+/// launch never waits (`AMB-D-947`). `Paused` keeps the place, `Done` and `Stopped` are the two ends —
+/// reached by running out of picture, and by everything else.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationRunStatus {
     #[default]
-    Queued,
     Running,
     Paused,
     Done,
@@ -1717,7 +1707,6 @@ pub enum AutomationRunStatus {
 impl AutomationRunStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            AutomationRunStatus::Queued => "queued",
             AutomationRunStatus::Running => "running",
             AutomationRunStatus::Paused => "paused",
             AutomationRunStatus::Done => "done",
@@ -1727,20 +1716,12 @@ impl AutomationRunStatus {
 
     pub fn parse(s: &str) -> Option<AutomationRunStatus> {
         match s {
-            "queued" => Some(AutomationRunStatus::Queued),
             "running" => Some(AutomationRunStatus::Running),
             "paused" => Some(AutomationRunStatus::Paused),
             "done" => Some(AutomationRunStatus::Done),
             "stopped" => Some(AutomationRunStatus::Stopped),
             _ => None,
         }
-    }
-
-    /// Whether a run in this state is holding one of the lanes. Only `Running` does: a queued run is
-    /// waiting for a lane and a paused one gave its lane back, which is what lets somebody pause a long
-    /// run and start another without raising the number.
-    pub fn holds_a_lane(&self) -> bool {
-        matches!(self, AutomationRunStatus::Running)
     }
 }
 
@@ -1803,8 +1784,8 @@ pub struct AutomationRun {
     /// Who pressed launch. `None` for a run whose launcher said nothing about itself.
     #[serde(default)]
     pub started_by_kind: Option<ActorKind>,
-    /// When it first took a lane — `None` while it is still queued, so "launched" and "started" are
-    /// two different moments and a queue's wait is readable.
+    /// When it began. Set at launch, since a launch starts on the spot (`AMB-D-947`); `None` only on a
+    /// run written by a build that could still leave one waiting.
     #[serde(default)]
     pub started_at: Option<Timestamp>,
     #[serde(default)]

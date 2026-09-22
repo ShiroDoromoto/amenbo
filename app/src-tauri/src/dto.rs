@@ -658,13 +658,10 @@ pub struct Snapshot {
     /// gave: a project already carries its own `view`, and this never repaints one.
     #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
     pub(crate) default_view: String,
-    /// How many automation runs may hold a lane at once (`config.automation_lanes`, default 3).
-    /// Exposed so the settings screen can show and change it, and so the workspace band can draw it
-    /// as the second half of `2/3`.
-    ///
-    /// It crosses projects, so the band's number and the panes of the project being looked at are not
-    /// one to one — which is why the band draws the number alone and says nothing about which project
-    /// is holding a lane.
+    /// The lane count the settings row and the workspace band still draw. There is no such setting
+    /// any more (`AMB-D-947`) — nothing caps how many runs may be under way — so what goes out is a
+    /// fixed figure ([`crate::commands`]) and it stops moving. It goes when those two places do
+    /// (`AMB-T-5302`).
     #[ts(type = "number")]
     pub(crate) automation_lanes: i64,
 }
@@ -3439,10 +3436,10 @@ pub struct AutomationLaunchCheckDto {
 
 /// **A run, just launched** — what the press is answered with.
 ///
-/// `queued` is the one thing the press cannot see for itself: every lane was held, so the run is in
-/// line rather than under way and no pane stands for it yet. A run that took a lane says nothing
-/// beyond its id — the pane arriving is what it looks like, and that comes as an event
-/// ([`AutomationStepOpenDto`]).
+/// `queued` is always `false`: a launch starts on the spot, nothing being in line ahead of it
+/// (`AMB-D-947`). It is still here because the screen still reads it, and goes when that does
+/// (`AMB-T-5302`). A run says nothing beyond its id — the pane arriving is what it looks like, and
+/// that comes as an event ([`AutomationStepOpenDto`]).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3559,10 +3556,10 @@ pub struct AutomationLaunchBlockDto {
 
 /// **One run in the "running" tab** — what is going on right now, on one line.
 ///
-/// It crosses projects, so it names the project each run is in: a lane is a terminal on this machine
-/// and the attention of whoever is watching it, and neither is divided up per project. The band over
-/// the panes draws the count and says nothing more, and this is where a reader comes to see what the
-/// count is made of ([`crate::automation::automation_lanes_held`]).
+/// It crosses projects, so it names the project each run is in: a run holds a terminal on this
+/// machine, and this machine is not divided up per project. The band over the panes draws the count
+/// and says nothing more, and this is where a reader comes to see what the count is made of
+/// ([`crate::automation::automation_lanes_held`]).
 ///
 /// **The name each row is read by is the automation's, not the run's.** A run has no name — what a
 /// person recognises is the automation they started and the task it is on.

@@ -1005,6 +1005,8 @@ export const ja: Translation = {
     "auto.actions.unused": "使っているオートメーションは無い",
     "auto.actions.usedBy.other": "オートメーション {n} 本が使っている",
     "auto.actions.name": "名前",
+    "auto.actions.note": "メモ",
+    "auto.actions.noteWhat": "この画面とアクション一覧に出るだけ。実行には入らない",
     "auto.actions.cancel": "取消",
     "auto.act.about": "このアクション",
     "auto.act.step": "ステップの中身",

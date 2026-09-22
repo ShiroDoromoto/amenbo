@@ -996,6 +996,8 @@ export const ko: Translation = {
     "auto.actions.unused": "쓰는 자동화 없음",
     "auto.actions.usedBy.other": "자동화 {n}개가 사용",
     "auto.actions.name": "이름",
+    "auto.actions.note": "메모",
+    "auto.actions.noteWhat": "여기와 액션 목록에만 나옵니다. 여기 있는 것은 실행에 들어가지 않습니다.",
     "auto.actions.cancel": "취소",
     "auto.act.about": "이 액션",
     "auto.act.step": "스텝의 내용",

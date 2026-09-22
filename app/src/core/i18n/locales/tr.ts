@@ -999,6 +999,8 @@ export const tr: Translation = {
     "auto.actions.unused": "Hiçbir otomasyon çalıştırmıyor",
     "auto.actions.usedBy.one": "{n} otomasyon çalıştırıyor", "auto.actions.usedBy.other": "{n} otomasyon çalıştırıyor",
     "auto.actions.name": "Ad",
+    "auto.actions.note": "Notlar",
+    "auto.actions.noteWhat": "Yalnızca burada ve eylem listesinde görünür. Buradaki hiçbir şey bir çalışmaya girmez.",
     "auto.actions.cancel": "Vazgeç",
     "auto.act.about": "Bu eylem",
     "auto.act.step": "Adımın içinde ne var",

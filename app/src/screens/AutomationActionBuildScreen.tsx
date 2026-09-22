@@ -6,8 +6,9 @@
 // `./AutomationActionStepPanel`, `./AutomationStepAdd`), handed this picture instead of that one.
 //
 // **There is no launch place.** What is started is an automation, and an action is what one places —
-// so what this screen has in that spot is the action's own name and reach, and what a rewrite here
-// reaches: every automation that places it.
+// so what this screen has in that spot is the action's own name, what it is for, its reach, and what
+// a rewrite here reaches: every automation that places it. What it is for is written the way the
+// automation's notes are (`./AutomationAboutPanel`), and like them it reaches no launch (`AMB-D-952`).
 //
 // **A step is added here, or put in on a line.** The `+` on a line is the road that leaves nothing
 // pointing at nothing — but a picture has no line until two boxes are joined, so the press above it
@@ -26,6 +27,7 @@ import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
 import { editAutomationAction, useAutomationAction } from "../core/automations";
 import { actionGraph } from "./automationLayout";
 import { errText, t, tf, tn } from "../core/i18n";
+import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { useDraft, type Run } from "./automationPanel";
@@ -59,6 +61,7 @@ export function AutomationActionBuildScreen({
   const [adding, setAdding] = useState<AddTarget | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [name, setName] = useDraft(action?.name ?? "");
+  const [note, setNote] = useDraft(action?.note ?? "");
 
   const run: Run = (write) => {
     setRefused(null);
@@ -98,6 +101,19 @@ export function AutomationActionBuildScreen({
                   name !== action.name && void run(editAutomationAction(action.id, { name }))
                 }
               />
+            </label>
+            <label className="autostep__field">
+              <span className="autostep__label">{t("auto.actions.note")}</span>
+              <textarea
+                {...asTyped}
+                rows={3}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onBlur={() =>
+                  note !== action.note && void run(editAutomationAction(action.id, { note }))
+                }
+              />
+              <span className="autostep__said">{t("auto.actions.noteWhat")}</span>
             </label>
             <div className="autostep__field">
               <span className="autostep__label">{t("auto.actions.reach")}</span>

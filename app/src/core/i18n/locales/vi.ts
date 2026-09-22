@@ -1000,6 +1000,8 @@ export const vi: Translation = {
     "auto.actions.unused": "Chưa có tự động hoá nào chạy nó",
     "auto.actions.usedBy.other": "{n} tự động hoá đang dùng",
     "auto.actions.name": "Tên",
+    "auto.actions.note": "Ghi chú",
+    "auto.actions.noteWhat": "Chỉ hiện ở đây và trong danh sách hành động. Không có gì ở đây đi vào một lần chạy.",
     "auto.actions.cancel": "Huỷ",
     "auto.act.about": "Hành động này",
     "auto.act.step": "Bên trong bước",

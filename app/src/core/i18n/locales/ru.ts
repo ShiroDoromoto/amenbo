@@ -1016,6 +1016,8 @@ export const ru: Translation = {
     "auto.actions.unused": "Ни одна автоматизация его не выполняет",
     "auto.actions.usedBy.one": "Его выполняет {n} автоматизация", "auto.actions.usedBy.few": "Его выполняют {n} автоматизации", "auto.actions.usedBy.many": "Его выполняют {n} автоматизаций", "auto.actions.usedBy.other": "Его выполняют {n} автоматизации",
     "auto.actions.name": "Название",
+    "auto.actions.note": "Заметки",
+    "auto.actions.noteWhat": "Видны только здесь и в списке действий. Ничто отсюда не попадает в выполнение.",
     "auto.actions.cancel": "Отмена",
     "auto.act.about": "Это действие",
     "auto.act.step": "Что содержит шаг",

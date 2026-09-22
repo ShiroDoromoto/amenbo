@@ -1001,6 +1001,8 @@ export const zhHans: Translation = {
     "auto.actions.unused": "没有自动化在用",
     "auto.actions.usedBy.other": "{n} 个自动化在用",
     "auto.actions.name": "名称",
+    "auto.actions.note": "备注",
+    "auto.actions.noteWhat": "只显示在这里和动作列表中。这里的内容不会进入执行。",
     "auto.actions.cancel": "取消",
     "auto.act.about": "这个动作",
     "auto.act.step": "步骤里有什么",

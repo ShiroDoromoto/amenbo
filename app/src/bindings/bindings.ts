@@ -257,6 +257,11 @@ present: boolean, createdByKind: "human" | "ai" | null, };
  */
 export type AutomationActionCardDto = { id: number, name: string, 
 /**
+ * What it is for, as its author wrote it. It is on the row because it is what a reader tells two
+ * actions of like names apart by, and it never reaches a launch (`AMB-D-952`).
+ */
+note: string, 
+/**
  * How many steps it holds. One is the shape every action folded out of a v52 step has.
  */
 steps: number, global: boolean, usedBy: number, };
@@ -273,6 +278,11 @@ steps: number, global: boolean, usedBy: number, };
  * which is what a placement of it is read by (`AMB-D-949`).
  */
 export type AutomationActionDetailDto = { id: number, name: string, 
+/**
+ * What it is for — drawn where it is built and on the library's row, never carried into a launch
+ * (`AMB-D-952`).
+ */
+note: string, 
 /**
  * Held by the device rather than by one project — the reach, as the library list draws it.
  */

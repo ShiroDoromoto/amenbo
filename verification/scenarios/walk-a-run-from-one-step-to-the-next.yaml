@@ -1,0 +1,161 @@
+# A run is a picture walked one step at a time, and the whole of it happens inside one pane. When a
+# step reports, what changes is the terminal standing in that pane: the next step opens in the same
+# place, on the same lane, carrying what the step before it handed on. Nothing new is stood up — a
+# second pane per step would leave a run of six steps with six panes and a reader with no way to say
+# which one is live.
+#
+# This is the only road that walks a run **forward**. The others start one and stop one; between the
+# two, the three things a step types (`take`, `out`, `done`) had nowhere to be typed until the pane
+# ops landed, and what a release could break here is the swap itself.
+id: walk-a-run-from-one-step-to-the-next
+title: A step reporting swaps the terminal in the run's own pane for the next step
+description: >
+  Start a run of a two-step automation, work the first step the way its agent would — take a task,
+  hand a value on, report the way out taken — and read what the press did: the pane is still the
+  run's, the line over it now names the second step, and the lane is the one the run already held.
+  The value is handed along a wire so that the second step has a reason to open at all.
+given:
+  # One agent this machine can start, so no step is refused for who carries it out. `reads` keeps the
+  # stand-in standing, which is what leaves a pane on screen to walk.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+
+  # The task the first step goes and takes. It is named here rather than found, because what the
+  # command takes is a ref and a road cannot know the number in advance.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task this run walks }, as: seed }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two steps in a row" }, as: auto }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: take, agent: claude-code, prompt: take the next task and say what it is about }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: auto, name: review, agent: claude-code, prompt: read what the step before handed on }, as: review }
+
+  # What leaving the first step by "got one" hands on: the task the run is now about, and a line of
+  # text for the second step to read.
+  - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { step: review, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: wire-add, with: { target: take, exit: got one, from_port: note, to: review, to_port: note } }
+
+  # Every way out says what happens after it, or the launch check stops the road before it starts.
+  - { type: action, domain: automation, op: edge-add, with: { target: take, exit: got one, to: review } }
+  - { type: action, domain: automation, op: edge-add, with: { target: take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: review } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, step: take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # One pane, on the first step, and one lane. Both numbers are read again at the end, where what
+  # they say is that the run went on in the place it was already in.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: take
+      present: true
+
+  - type: assert
+    domain: automation
+    op: lanes
+    with:
+      held: 1
+      of: 3
+
+  # What the step's agent types, in the pane the run opened for it. Which step is being answered
+  # comes off that terminal's own environment, so these are only typeable here.
+  - type: action
+    domain: automation
+    op: take-in-pane
+    with:
+      target: run
+      task: seed
+
+  # The task is the run's now, and the line over the pane says which one it is working.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: take
+      task: seed
+      present: true
+
+  - type: action
+    domain: automation
+    op: out-in-pane
+    with:
+      target: run
+      name: note
+      value: nothing was in the way
+
+  # The report, and the way out it was left by. The way out is what the run reads to decide where to
+  # go — a report with no way out named would leave by the unnamed one, which this step does not use.
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: read the task and found nothing in the way
+
+  # The swap. The pane is the same one, and what stands in it is the second step.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: review
+      task: seed
+      present: true
+
+  # And the lane is the one it already held. A second lane here would mean the run had been stood up
+  # again rather than walked on.
+  - type: assert
+    domain: automation
+    op: lanes
+    with:
+      held: 1
+      of: 3

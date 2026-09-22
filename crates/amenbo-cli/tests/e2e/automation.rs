@@ -583,16 +583,21 @@ fn inside_a_step_the_building_and_driving_verbs_are_refused() {
     }
 }
 
-/// The reading verbs are left with a step, so the agent carrying it out can see where it stands.
+/// The reading verbs are left with a step, so the agent carrying it out can see where it stands — and
+/// the action layer is among them, because the prompts moved there. `show` alone would hand back the
+/// placements and nothing of what stands at one.
 #[test]
 fn inside_a_step_the_reading_verbs_still_answer() {
     let cli = Cli::new();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "one", "--json"]), "automation");
+    let (action, _) = an_action(&cli, &p, "Review", "review it");
 
     for args in [
         vec!["automation", "list", "--project", &p, "--json"],
         vec!["automation", "show", &a, "--json"],
+        vec!["automation", "action-list", "--project", &p, "--json"],
+        vec!["automation", "action-show", &action, "--json"],
         vec!["automation", "run-list", "--automation", &a, "--json"],
     ] {
         let (out, code) = cli.run_env(&[("AMENBO_AUTOMATION_STEP", "1")], &args);

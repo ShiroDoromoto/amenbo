@@ -1845,7 +1845,7 @@ impl Store {
     /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
     /// it was holding, and the line left on that task.
     ///
-    /// `reason` is which of the four stops this is.
+    /// `reason` is which of the five stops this is.
     pub fn automation_stop(
         &mut self,
         run_id: i64,

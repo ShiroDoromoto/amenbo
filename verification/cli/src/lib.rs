@@ -697,6 +697,9 @@ impl<'a> Driver<'a> {
             Domain::Store => self.store_action(op, with, bind),
             Domain::Folder => self.folder_action(op, with, bind),
             Domain::Attachment => self.attachment_action(domain, op, with, bind),
+            // Built, started, and stopped at the terminal. What a step of a run types is refused
+            // outside the terminal the run opened for it, and this driver opens none (`domain::automation`).
+            Domain::Automation => self.automation_action(op, with, bind),
             Domain::Repo => self.repo_action(op, with),
             Domain::Mcp => self.mcp_action(op, with),
             // Nothing here writes a registration into the machine the gate is running on — see
@@ -737,6 +740,7 @@ impl<'a> Driver<'a> {
             Domain::Store => self.store_assert(op, with),
             Domain::Folder => self.folder_assert(op, with),
             Domain::Attachment => self.attachment_assert(op, with),
+            Domain::Automation => self.automation_assert(op, with),
             Domain::Repo => self.repo_assert(op, with),
             Domain::Mcp => self.mcp_assert(op, with),
             Domain::Tick => self.tick_assert(op, with),
@@ -791,6 +795,24 @@ impl<'a> Driver<'a> {
         self.session
             .folder(name)
             .map_err(|e| format!("could not make the folder `{name}`: {e}"))
+    }
+
+    /// Run a call that makes one row, read the id it answers with, and keep it under the step's
+    /// `as:` where the step named one.
+    ///
+    /// `object` is the key the answer carries the row under, which is the object's own name in every
+    /// envelope the binary writes. It is here rather than in each arm because a domain built out of
+    /// six kinds of row would otherwise spell the same six lines six times, and the line that is easy
+    /// to get wrong — binding what was made — would be written once per kind.
+    fn bound_id(&mut self, args: &[String], object: &str, bind: Option<&str>) -> Result<i64, String> {
+        let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+        let id = v[object]["id"]
+            .as_i64()
+            .ok_or_else(|| format!("`{}` did not report an id for the {object} it made", args.join(" ")))?;
+        if let Some(name) = bind {
+            self.bindings.insert(name.to_string(), id);
+        }
+        Ok(id)
     }
 
     /// Resolve a step's `target:` to the id an earlier action bound. The loader already proved

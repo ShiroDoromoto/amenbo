@@ -714,7 +714,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` /
-`mcp` / `tick` / `workspace` / `files` / `notify` / `viewer`) and an
+`mcp` / `tick` / `workspace` / `files` / `notify` / `viewer` / `automation`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -724,6 +724,13 @@ Three of those are not things filed in a store: `store` is this device's Amenbo 
 settings, the identity it answers `whoami` with, the build in place, and the store as a whole
 (`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
 `.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
+
+One domain carries less at this face than a reader might look for. **`automation` has no assert about
+a definition**, because the binary has no read of one: what reads an automation whole is the build
+screen, through a door of the host's. The build verbs are there to stand a definition up — a road about
+a run needs one — and what is asserted is the run, the listing a run is reached by, and the search.
+**What a step of a run types is not there at all** (`take` / `out` / `done`): those are refused outside
+the terminal a run opened for a step, and a run started at the terminal opens none.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

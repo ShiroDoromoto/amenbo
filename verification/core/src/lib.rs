@@ -357,6 +357,19 @@ pub enum Domain {
     /// whether a third party answered today. What is walked is everything up to the sending: the
     /// shelf, the selection, and the check that reads the settings without a message leaving.
     Notify,
+    /// An automation: the picture agents are walked along, the library of prompts its steps are made
+    /// of, the documents they share — and a run of it.
+    ///
+    /// **One domain and not two**, though a definition and a run are different rows. What a road
+    /// walks is one subject: a definition is built so that it can be started, and a run is read to
+    /// see what the definition did. Splitting them would put the halves of every road in two
+    /// vocabularies and leave each of them unable to say what it was about.
+    ///
+    /// **What a step of a run types is not here** (`automation take` / `out` / `done`). Those are
+    /// typed inside the terminal a run opened, which this driver has none of — and a run started at
+    /// the terminal opens no step, there being no window to draw one in. A road for them waits on the
+    /// door that opens a step without a screen.
+    Automation,
     /// The phone that reads this store, and the server it reads from in the reader's own Cloudflare
     /// account. A domain of its own because none of it is a record: the server is a
     /// Worker somebody owns, the read code is one code the server holds, and the switch is this
@@ -3985,6 +3998,61 @@ const REGISTRY: &[OpSpec] = &[
     // into `--json`, before anything is issued; on the screen the three fields setup leaves behind
     // are drawn nowhere at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Viewer, op: "key-stays-on-screen", required: &[], refs: &[], strings: &[], binds: false },
+
+    // ---- automation: the picture agents are walked along, and a run of it ----------------------
+    // **Building one is a road's premise more often than its subject.** Every road about a run needs a
+    // definition to start, and what a definition is built out of is six rows that only mean anything
+    // together — so the verbs are here whole, and a road uses as many of them as its own goal needs.
+    //
+    // The automation itself. `notes` and `preamble` are the two free-text fields; left out, the
+    // preamble is the standing operating rules, which is what a reader building one by hand gets.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes", "preamble"], binds: true },
+    // A step of it: a prompt of its own, or the library action it is made of (`action:`), and who
+    // carries it out. `agent` is the launch catalog's id (`claude-code`), not the command it runs —
+    // the launch check judges the step against the ids, and a road writing the command would be told
+    // the agent is not installed on a machine that has it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["name", "agent"], refs: &["target", "action"], strings: &["name", "agent", "prompt", "model", "work_dir_ref"], binds: true },
+    // A way out, beyond the two it is born with — the unnamed one and the error one. **What declares
+    // it is the step or the library action the step runs**, and a step made of an action declares
+    // nothing of its own: named on the step, the binary refuses it and says where to write it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "exit-add", required: &["name"], refs: &["step", "action"], strings: &["name"], binds: true },
+    // What a way out hands on, or what is handed to a step. Which of the two it is falls out of what
+    // it hangs off, the way the command reads it: `target` is the way out, and `step` / `action` the
+    // side that is handed — the same pair `exit-add` is declared on, for the same reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "port-add", required: &["name", "kind"], refs: &["target", "step", "action"], strings: &["name", "kind"], binds: true },
+    // What happens after a way out is taken: on to another step, the run closed, or the run stopped
+    // for a person. The way out is named as the step and the name it carries, because that pair is
+    // what the edge hangs on — the unnamed one is the step with no `exit`, and `*` is the error one.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "edge-add", required: &[], refs: &["target", "to"], strings: &["exit"], binds: true },
+    // What is handed from one step to the next, port to port.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "wire-add", required: &["from_port", "to_port"], refs: &["target", "to"], strings: &["exit", "from_port", "to_port"], binds: true },
+    // Where a run starts. It is the one field of the automation that names a step, and a definition
+    // without it is refused at the launch check rather than here.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry", required: &[], refs: &["target", "step"], strings: &[], binds: false },
+    // A document the steps of one automation share, and the link that hands it to one of them.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-add", required: &["name", "body"], refs: &["target"], strings: &["name", "body"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-link", required: &[], refs: &["target", "step"], strings: &[], binds: false },
+    // The library: a prompt worth using twice, and the rewrite that reaches every step pointed at it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-add", required: &["name", "prompt"], refs: &["project"], strings: &["name", "prompt"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-update", required: &["prompt"], refs: &["target"], strings: &["prompt"], binds: true },
+    //
+    // Running one. `start` binds the run every other verb here names.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "stop", required: &[], refs: &["target"], strings: &[], binds: false },
+    //
+    // Asserts. What a run is doing, read the way a person reads it back — from the run itself.
+    // `stopped_reason` is asked only of a run that is stopped, and a road that names it is saying
+    // which of the four stops this was.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run", required: &["status"], refs: &["target"], strings: &["status", "stopped_reason"], binds: false },
+    // The runs one automation has behind it, or the ones that worked one task — the two doors a run
+    // is reached by, and the whole of what a listing of runs is (there is no listing of every run).
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
+    // A word written in a document the steps share, found from the terminal. The record a hit names is
+    // the automation and the face is `body`: a document carries no reference of its own, one automation
+    // holding several of them, so what a reader opens next is the automation.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "found", required: &["target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

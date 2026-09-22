@@ -4032,6 +4032,14 @@ impl Instructor {
                 "On the running tab, on the row for this run, {}.",
                 run_press(req(with, "press")?)?
             ),
+            // The entry taken off while a run of the definition is out. Amenbo draws no control over
+            // this field, so the road says it at a shell the workspace opened — and the number is
+            // read off the terminal a line earlier rather than spelled here, a road having no way to
+            // know what a store will mint.
+            (Domain::Automation, "entry-off") => format!(
+                "Click into the shell pane and clear what is on it — hold control and press L, which clears the screen without sending a line. Then type `amenbo automation list --actor human` and press return, and read the number beside \"{}\". Then type `amenbo automation entry set <id> --clear --actor human` with that number in place of `<id>`, press return, and confirm the line comes back saying the automation now starts nowhere. Touch nothing else on the screen until the next step: when this lands is the whole of what is being read.",
+                self.target_label(with)
+            ),
             // The two ways in that are not the build screen. Neither hands anything over at the
             // press: which task and which folder are the definition's.
             (Domain::Automation, "start-from-task") => format!(
@@ -5926,8 +5934,12 @@ impl Instructor {
             // so the row names the project as well as where the run has got to.
             (Domain::Automation, "run-row") => match present(with) {
                 true => format!(
-                    "On the running tab, confirm a row for this run is drawn, saying it is {}{}.",
+                    "On the running tab, confirm a row for this run is drawn, saying it is {}{}{}.",
                     run_state(req(with, "state")?)?,
+                    match arg_str(with, "reason") {
+                        Some(reason) => format!(", with the line under it saying {}", run_ending(reason)?),
+                        None => String::new(),
+                    },
                     match with.get("project") {
                         Some(_) => format!(", and naming the project \"{}\"", self.labels
                             .get(with.get("project").and_then(|v| v.as_str()).unwrap_or(""))
@@ -6192,6 +6204,24 @@ fn run_press(press: &str) -> Result<&'static str, String> {
 }
 
 /// Where a run has got to, said as the row says it.
+/// How a stopped run ended, in the words the row carries under its state. A road names the code core
+/// writes, so what it is reading is the ending and not a sentence the interface owns — the same line
+/// the launch place's reasons are read on.
+fn run_ending(reason: &str) -> Result<&'static str, String> {
+    Ok(match reason {
+        "crashed" => "the app was restarted under it",
+        "max_times" => "it went round too many times",
+        "no_agent" => "its agent could not be started",
+        "by_human" => "it was stopped by hand",
+        "no_way_on" => "there was nothing left to open",
+        other => {
+            return Err(format!(
+                "`reason` does not know `{other}` — it is one of the endings a stopped run is given"
+            ))
+        }
+    })
+}
+
 fn run_state(state: &str) -> Result<&'static str, String> {
     Ok(match state {
         "running" => "under way",
@@ -7861,6 +7891,14 @@ steps_gui:
     domain: automation
     op: run-row
     with: { target: run, state: running }
+  - type: assert
+    domain: automation
+    op: run-row
+    with: { target: run, state: stopped, reason: no_way_on }
+  - type: action
+    domain: automation
+    op: entry-off
+    with: { target: auto }
   - type: action
     domain: automation
     op: press-run

@@ -269,3 +269,107 @@ fn a_run_that_does_not_exist_is_said_to_be_missing() {
     assert_ne!(code, 0, "{refused}");
     assert!(refused.contains("404"), "{refused}");
 }
+
+// ───────────────────────────── running one ─────────────────────────────
+
+/// An automation that launches as it stands: one step that takes a task and closes the run, with every
+/// way out of it decided. Answers the automation's id.
+fn a_launchable(cli: &Cli) -> String {
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
+    let step = id_of(
+        &cli.json(&["automation", "step", "add", &a, "--name", "take one", "--prompt", "take one", "--agent", "claude", "--json"]),
+        "automation_step",
+    );
+    // The way out the task comes out on, which is what makes this step usable as an entry.
+    let took = id_of(
+        &cli.json(&["automation", "exit", "add", "--step", &step, "--name", "took one", "--json"]),
+        "automation_exit",
+    );
+    cli.json(&["automation", "port", "add", "--exit", &took, "--name", "task", "--kind", "task_take", "--required", "--json"]);
+    cli.json(&["automation", "entry", "set", &a, "--step", &step, "--json"]);
+    // Every way out of a reachable step is answered for, which is the whole of what the launch check
+    // asks about the picture.
+    cli.json(&["automation", "edge", "add", "--from", &format!("{step}:took one"), "--done", "--json"]);
+    cli.json(&["automation", "edge", "add", "--from", &format!("{step}:"), "--done", "--json"]);
+    a
+}
+
+/// A launch takes a lane where one is free, and the run is the record every later command names.
+///
+/// **Nothing is claimed about the workspace.** A terminal cannot see what is on screen, so the launch
+/// says nothing about it rather than refusing a launch the reader can see perfectly well — and the run
+/// waits for whatever opens its first step.
+#[test]
+fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
+    let cli = Cli::new();
+    let a = a_launchable(&cli);
+
+    let started = cli.json(&["automation", "start", &a, "--json"]);
+    assert_eq!(started["automation_run"]["status"].as_str(), Some("running"));
+    let run = id_of(&started, "automation_run");
+
+    // A running run pauses at the end of the step under way, so what comes back is the asking rather
+    // than the pause: the run keeps its lane until that step reports.
+    let paused = cli.json(&["automation", "pause", &run, "--json"]);
+    assert_eq!(paused["automation_run"]["state"].as_str(), Some("asked"));
+
+    let stopped = cli.json(&["automation", "stop", &run, "--json"]);
+    assert_eq!(stopped["automation_run"]["status"].as_str(), Some("stopped"));
+    assert_eq!(stopped["automation_run"]["stopped_reason"].as_str(), Some("by_human"));
+}
+
+/// The launch check refuses an unfinished automation and names what is missing. Nothing on the
+/// building side ever did: a picture is half-built for as long as somebody is drawing it, and this is
+/// the moment a person is about to be let down by one.
+#[test]
+fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--json"]), "automation");
+    let step = id_of(
+        &cli.json(&["automation", "step", "add", &a, "--name", "one", "--prompt", "do it", "--agent", "claude", "--json"]),
+        "automation_step",
+    );
+    cli.json(&["automation", "entry", "set", &a, "--step", &step, "--json"]);
+
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "an unfinished automation does not launch: {err}");
+    assert!(err.contains("not_ready"), "{err}");
+    assert!(err.contains("nothing is set to happen after"), "it names what is missing: {err}");
+}
+
+/// The three verbs a step's own agent types refuse outside a step, and say why.
+///
+/// **There is no "the current step" to fall back on.** Several runs go at once, so a command that
+/// guessed would put one step's report on another's record — and the guess would look like it worked.
+#[test]
+fn the_verbs_a_step_types_refuse_outside_a_step() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
+
+    for args in [
+        vec!["automation", "take", &t, "--json"],
+        vec!["automation", "out", "note=done", "--json"],
+        vec!["automation", "done", "--report", "did it", "--json"],
+    ] {
+        let (err, code) = cli.run_err(&args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(err.contains("this is not a step of a run"), "{args:?}: {err}");
+    }
+}
+
+/// A step execution named by the environment is read from there and nowhere else — and one that names
+/// no row is refused rather than falling back to whatever is newest.
+#[test]
+fn a_step_execution_that_does_not_exist_is_refused_rather_than_guessed_at() {
+    let cli = Cli::new();
+    let (err, code) = cli.run_env_err(
+        &[("AMENBO_AUTOMATION_STEP", "9999")],
+        &["automation", "done", "--report", "did it", "--json"],
+    );
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("9999"), "it names the row it was pointed at: {err}");
+}

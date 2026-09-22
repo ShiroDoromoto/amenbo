@@ -618,6 +618,7 @@ pub(super) fn automation_edge_row(r: &Row) -> rusqlite::Result<AutomationEdge> {
         exit_name: get(r, C.exit_name)?,
         to_id: get(r, C.to_id)?,
         ends: enum_req(r, C.ends, AutomationEnds::parse)?,
+        exit_to: get(r, C.exit_to)?,
         max_times: get(r, C.max_times)?,
         order_key: get(r, C.order_key)?,
         created_at,

@@ -172,8 +172,8 @@ pub fn terms(query: &str) -> Vec<String> {
 pub enum HitFace {
     /// A task's `title` or a decision's `title`.
     Title,
-    /// A task's `notes`, a decision's `body`, or the body of a document an automation's steps share
-    /// (`AMB-D-944`) — the record's long text, whatever its column is called on that side.
+    /// A task's `notes` or a decision's `body` — the record's long text, whatever its column is called on
+    /// that side.
     Body,
     /// The text of a comment on either.
     Comment,

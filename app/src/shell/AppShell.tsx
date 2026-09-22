@@ -5,7 +5,6 @@ import { TopBar } from "./TopBar";
 import { WorkspaceFace } from "./WorkspaceFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
 import { runFrameId } from "../talk/layout";
-import { fetchAutomation } from "../core/automations";
 import { isBlankSpaceClose } from "./outsideClose";
 import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
@@ -267,16 +266,6 @@ export function AppShell() {
   // (`./WorkspaceFace`).
   const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; run?: number; nth: number } | null>(null);
   /**
-   * **Which automation's build screen the board is to open**, asked from outside it
-   * (`goToAutomation`). It is the ledger's twin of `openIn`: the press is made on a screen that is not
-   * the board, and the board is the one that can act on it.
-   *
-   * `nth` is what makes a second press a second answer, the way it does there — a reader who pressed
-   * the same ref twice asked twice, and the screen may have been walked away from in between.
-   */
-  const [openAutomation, setOpenAutomation] =
-    useState<{ project: number; automation: number; nth: number } | null>(null);
-  /**
    * "Start in the workspace" — the one move the first loop offers (`../components/FirstLoop`).
    *
    * With the workspace split out into a window of its own, this window has no face to hand the folder
@@ -354,7 +343,6 @@ export function AppShell() {
     (project: number, run: number) => goToPlace(project, runFrameId(run), run),
     [goToPlace],
   );
-
 
 
   // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
@@ -459,27 +447,6 @@ export function AppShell() {
   };
   // Switching nav (project / view) does not carry the right-pane selection over: push a Location with no selection.
   const navTo = useCallback((n: Nav) => { go({ nav: n, sel: NO_SELECTION }); }, [go]);
-
-  /**
-   * **Go to an automation's build screen**, pressed on a search hit whose ref is an automation's
-   * (`../screens/SearchScreen`, `AMB-D-944`).
-   *
-   * **The project is asked for here and not carried.** A hit holds a ref and no more, while the build
-   * screen is drawn for one project's screen — so the definition is read on the way, which is the one
-   * thing that knows which project it is in. A definition that has gone since the word was indexed
-   * takes the reader nowhere, which is the same answer the row gives for a record that stopped being
-   * readable.
-   */
-  const goToAutomation = useCallback(async (automation: number) => {
-    const found = await fetchAutomation(automation);
-    if (!found) return;
-    navTo({ type: "project", id: String(found.projectId) });
-    setOpenAutomation((asked) => ({
-      project: found.projectId,
-      automation,
-      nth: (asked?.nth ?? 0) + 1,
-    }));
-  }, [navTo]);
   // The escape hatch for when a project leaves the list through archive or delete (the settings screen's onGone).
   // Go to the first project still in the refetched snapshot, or to onboarding if there is none.
   const goToFirstProject = useCallback(() => {
@@ -733,7 +700,6 @@ export function AppShell() {
               onStartTerminal={startTerminalIn}
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
-              openAutomation={openAutomation}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -758,11 +724,7 @@ export function AppShell() {
             />
           )}
           {nav.type === "view" && nav.id === "search" && (
-            <SearchScreen
-              onOpenTask={selectTask}
-              onOpenDecision={selectDecision}
-              onOpenAutomation={(id) => { void goToAutomation(id); }}
-            />
+            <SearchScreen onOpenTask={selectTask} onOpenDecision={selectDecision} />
           )}
           {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen pick={nav.pick ?? null} />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}

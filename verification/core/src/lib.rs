@@ -4053,6 +4053,100 @@ const REGISTRY: &[OpSpec] = &[
     // the automation and the face is `body`: a document carries no reference of its own, one automation
     // holding several of them, so what a reader opens next is the automation.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "found", required: &["target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
+    //
+    // ---- automation on screen -------------------------------------------------------------------
+    // **What reads a definition whole is the build screen**, so every assert about one is here rather
+    // than beside the verbs above: the binary has no read of an automation, and a road that wants to
+    // know what a definition came out as walks the screen for it.
+    //
+    // Which of the automations screen's three tabs the reader is standing on. The screen is one place
+    // and the tabs are what is on it, so a road says which rather than naming three screens.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "screen", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
+    // A definition on the list, and how many steps the row says it is built out of. `steps` is asked
+    // for where the count is the point — a row says "what is this" and "is it built yet", and the
+    // second is that number.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "listed", required: &[], refs: &["target"], strings: &[], binds: false },
+    // Opening one: the row is the press, and what it opens is the build screen rather than a pane
+    // beside the list.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open", required: &[], refs: &["target"], strings: &[], binds: false },
+    // A library action on the "actions" tab. `used_by` is counted in automations and not in steps —
+    // what the number is read for is how far a rewrite of the prompt carries — and `reach` says which
+    // of the two libraries the row is from.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach"], binds: false },
+    // Opening a library action, and rewriting the prompt it holds. The rewrite reaches every step
+    // pointing at it, which is what the road that walks this is about.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-open", required: &[], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-rewrite", required: &["prompt"], refs: &[], strings: &["prompt"], binds: false },
+    //
+    // The picture. One step's box, and what is marked on it: `from_action` is the edge down its left
+    // where the prompt came from the library, and `unfed` the outline it wears while a required input
+    // has nothing reaching it. Both are drawn as colour, so a road naming one is asking an eye.
+    //
+    // **A box is a fixed size and the name in it is cut at two lines**, so a road gives its steps
+    // names short enough to stand whole — what is read here is the shot, and a cut name is not on it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "pictured", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // A line leaving one step, and what is written along it: the way out's own name, and where it
+    // goes — on to a step (`to`), or to the end of the task or the run (`ends`).
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "ends"], binds: false },
+    // The dashed outline around the steps one task is worked by, named by the step that takes it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
+    // Pressing a step's box, which is what puts its contents in the panel beside the picture.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-step", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The `+` on a line, and the dialog it opens. The step is put in **in front of** the line named:
+    // `after` is the step the line leaves and `exit` the way out it leaves by, which is the pair a
+    // line hangs on. A step made of a library action names `action` and writes no prompt.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-step", required: &["after", "name"], refs: &["action"], strings: &["after", "exit", "name", "prompt"], binds: false },
+    // The `+ output artefact` on a way out, and the dialog it opens.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
+    //
+    // The panel beside the picture. `field` is the row it is read on or written in, named the way the
+    // panel names it rather than by the column underneath — a road reads a screen.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "step-shows", required: &["field"], refs: &[], strings: &["field", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-set", required: &["field", "value"], refs: &[], strings: &["field", "value"], binds: false },
+    // One value pressed on one row of a task filter. The rows are axes and the values are what is on
+    // them, which is the whole of how that setting is answered — there is no filter expression to
+    // write, and no road here may write one.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-filter", required: &["setting", "row", "value"], refs: &[], strings: &["setting", "row", "value"], binds: false },
+    // What fills one of a step's inputs, picked from what fits rather than drawn.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-wire", required: &["input", "from"], refs: &[], strings: &["input", "from"], binds: false },
+    //
+    // The launch place, which is where a half-built definition is named as such. `ready` is the whole
+    // answer and `reason` one line of what stands in the way, spelled as core names it
+    // (`unwired_input`, `unanswered_cfg`, …) so a road says which refusal it is walking rather than
+    // quoting a sentence the interface owns.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "step", "at"], binds: false },
+    // What the press answered where no lane was free. The run is made either way — what is different
+    // is that no terminal stands for it yet.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "queued", required: &[], refs: &["target"], strings: &[], binds: false },
+    //
+    // The pane a run is drawn in, and the four things its header carries: which step, how many tasks
+    // in, the run's own number and the task it is on. `label` reads a pane's name and nothing else,
+    // which is why this one is here.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step"], binds: false },
+    // Closing that pane, which is a way of stopping the run and says so before it does.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
+    //
+    // The band over the workspace's panes: how many lanes the runs are holding, out of how many there
+    // are. Pressing it lands on the setting that holds the second number.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lanes", required: &["held", "of"], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-lanes", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lanes-setting", required: &["of"], refs: &[], strings: &[], binds: false },
+    //
+    // A row of the "running" tab. It draws every run this device is carrying, across projects, so the
+    // row names the project as well as the state.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-row", required: &["state"], refs: &["target", "project"], strings: &["state"], binds: false },
+    // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again, or
+    // stop it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press"], binds: false },
+    //
+    // The two ways in that are not the build screen: a task's own pane, and an empty frame of the
+    // workspace. Neither hands anything over at the press — which task and which folder are the
+    // definition's — so both make the same run the build screen would.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-task", required: &[], refs: &["target", "task"], strings: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-frame", required: &[], refs: &["target"], strings: &[], binds: true },
+    // The reference on a search hit, pressed. What it opens is the build screen of the automation the
+    // document belongs to, in that automation's own project.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-found", required: &[], refs: &["target"], strings: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {
@@ -4234,6 +4328,25 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // arranges is the machine and never the app: programs in a directory of the run's own, handed to
     // the launch and to nothing else.
     (Domain::Workspace, "can-start"),
+    // A definition already built. **Every screen road about an automation stands on one**: what
+    // reads a definition whole is the build screen, so a road that opens it has to find something
+    // there — and the ten verbs that build one are the terminal's, there being no way in on screen
+    // for the first step of the first automation. Building one on the road instead would make every
+    // road about the picture, the step panel and the launch place a road about building, which is
+    // `build-an-automation-from-the-terminal`'s to be.
+    //
+    // The screen's own moves over a definition are **not** here — putting a step in on a line,
+    // answering a setting, picking what fills an input. Those are what a screen road watches.
+    (Domain::Automation, "create"),
+    (Domain::Automation, "step-add"),
+    (Domain::Automation, "exit-add"),
+    (Domain::Automation, "port-add"),
+    (Domain::Automation, "edge-add"),
+    (Domain::Automation, "wire-add"),
+    (Domain::Automation, "entry"),
+    (Domain::Automation, "note-add"),
+    (Domain::Automation, "note-link"),
+    (Domain::Automation, "action-add"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).

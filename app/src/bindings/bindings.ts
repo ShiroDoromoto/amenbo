@@ -359,6 +359,15 @@ export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_t
 export type AutomationRunStartedDto = { run: number, queued: boolean, };
 
 /**
+ * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).
+ *
+ * Both halves are the ledger's own — the reference a person types to reach the task, and the title
+ * on it — because what a run's pane says about a task is never the agent's word for it
+ * (`AMB-D-858`).
+ */
+export type AutomationRunTaskDto = { id: number, ref: string, title: string, };
+
+/**
  * **One step**, with the declarations it runs under already resolved.
  */
 export type AutomationStepDto = { id: number, name: string, 
@@ -422,9 +431,19 @@ export type AutomationStepRunDto = {
  */
 runStep: number, 
 /**
- * What the step is called, for the pane's own header (`AMB-T-5252`).
+ * Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
+ * same step several times, so it is the count and not the step that says how far in a reader is.
  */
-name: string, say: string, agent: string, model?: string, 
+seq: number, 
+/**
+ * What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
+ */
+name: string, 
+/**
+ * The task this stretch of the run is working, where it is on one. Absent until a step takes
+ * one — a run whose first step has not reported is on no task yet.
+ */
+task?: AutomationRunTaskDto, say: string, agent: string, model?: string, 
 /**
  * Where the terminal runs, resolved from the name the step holds. Absent where the step names
  * none, and then the pane opens where a pane of that project opens.
@@ -2377,12 +2396,14 @@ export type SearchFaceDto = "title" | "body" | "comment" | "label" | "attachment
  */
 export type SearchHitDto = { face: SearchFaceDto, 
 /**
- * Which side the record is on — `task` or `decision`. The face alone does not say: a title is either.
+ * Which side the record is on — `task`, `decision` or `automation`. The face alone does not say: a
+ * body is any of the three.
  */
 kind: string, 
 /**
- * The record's ref (`AMB-T-<n>` / `AMB-D-<n>`) — what the row opens, and where the number in it
- * comes from.
+ * The record's ref (`AMB-T-<n>` / `AMB-D-<n>` / `AMB-AUT-<n>`) — what the row opens where it leads
+ * anywhere, and where the number in it comes from. An automation's leads nowhere yet: its shared
+ * documents are read in the build screen, which the search screen cannot reach (`AMB-D-944`).
  */
 ref: string, title: string, 
 /**
@@ -2407,8 +2428,9 @@ at: string, snippet: string,
 matches: Array<SearchMatchDto>, 
 /**
  * Where the record this row points at stands — what the row shows past the ref and the title, so the
- * reader can tell a task still to be done from one that is over without opening it. Absent only when
- * the record stopped being readable between the page and the read that fills this in.
+ * reader can tell a task still to be done from one that is over without opening it. Absent when the
+ * record stopped being readable between the page and the read that fills this in — and always on an
+ * automation, which has no status to stand in (`AMB-D-944`).
  */
 standing?: SearchStandingDto, };
 

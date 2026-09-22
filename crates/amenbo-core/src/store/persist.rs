@@ -1731,11 +1731,10 @@ impl Store {
         )
     }
 
-    /// **Launch an automation** — check it, write the run down and copy its steps into it (one
-    /// operation = one transaction).
+    /// **Launch an automation** — check it, copy its steps into a run, and take a lane if one is free
+    /// (one operation = one transaction).
     ///
-    /// The reach is the automation's: the run is filed under the project the automation sits in, and
-    /// that project is what a launch writes into.
+    /// The reach is the automation's, the run being made under it.
     ///
     /// `by` carries what the store cannot answer — which agents this machine can start, how many
     /// lanes there are, whether the workspace is open, and who pressed
@@ -1749,6 +1748,75 @@ impl Store {
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
             |tx| crate::ops::automation_run::launch(tx, automation_id, by),
         )
+    }
+
+    /// **Take the task this stretch of the run is about** — reserve it and declare it in one act.
+    pub fn automation_take(&mut self, run_step_id: i64, task_id: i64) -> Result<crate::model::Task> {
+        self.write_one(&[WriteTarget::Task(task_id)], |tx| {
+            crate::ops::automation_report::take(tx, run_step_id, task_id)
+        })
+    }
+
+    /// **Put down one thing a step produced**, under the name its port was declared with.
+    pub fn automation_out(
+        &mut self,
+        run_step_id: i64,
+        name: &str,
+        produced: crate::ops::automation_report::Produced<'_>,
+    ) -> Result<crate::model::AutomationRunValue> {
+        self.write_one(
+            &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
+            |tx| crate::ops::automation_report::out(tx, run_step_id, name, produced),
+        )
+    }
+
+    /// **A step has finished**: stamp the way out it left through, keep its report, and answer with
+    /// what the run does next.
+    pub fn automation_done(
+        &mut self,
+        run_step_id: i64,
+        exit_name: Option<&str>,
+        report: &str,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_report::Next> {
+        self.write_one(
+            &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
+            |tx| crate::ops::automation_report::done(tx, run_step_id, exit_name, report, lanes),
+        )
+    }
+
+    /// **Ask a run to pause.** A step under way finishes first; one that is not pauses now.
+    pub fn automation_pause(
+        &mut self,
+        run_id: i64,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Paused> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::pause(tx, run_id, lanes)
+        })
+    }
+
+    /// **Pick a paused run up again**, from the way out the step before it left through.
+    pub fn automation_resume(
+        &mut self,
+        run_id: i64,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Resumed> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::resume(tx, run_id, lanes)
+        })
+    }
+
+    /// **Stop a run**, hand its task back and give up its lane.
+    pub fn automation_stop(
+        &mut self,
+        run_id: i64,
+        reason: crate::model::AutomationStoppedReason,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Ended> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::stop(tx, run_id, reason, lanes)
+        })
     }
 
     /// **Open one step of a run** — write the execution down and build the text its terminal is
@@ -1769,6 +1837,25 @@ impl Store {
     ) -> Result<crate::ops::automation_step::Opened> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
             crate::ops::automation_step::open(tx, run_id, run_def_id, lanes)
+        })
+    }
+
+    /// **Stop a run now** (one operation = one transaction).
+    ///
+    /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
+    /// it was holding, and the line left on that task.
+    ///
+    /// `reason` is which of the four stops this is, and `lanes` is how many runs may be under way at
+    /// once ([`crate::config::Config::automation_lanes`]) — a lane handed back promotes whatever has
+    /// waited longest, and that run is in the answer.
+    pub fn automation_run_stop(
+        &mut self,
+        run_id: i64,
+        reason: crate::model::AutomationStoppedReason,
+        lanes: i64,
+    ) -> Result<crate::ops::automation_stop::Ended> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::stop(tx, run_id, reason, lanes)
         })
     }
 

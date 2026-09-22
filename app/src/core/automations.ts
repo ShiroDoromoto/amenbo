@@ -1,14 +1,17 @@
 // The automations screen's own seam: a project's definitions, one definition whole, whether that one
-// could be started, and the library its steps are pointed at.
+// could be started, the library its steps are pointed at — and the one write that is not the screen's
+// at all, a run being stopped from the pane it is drawn in.
 //
 // It sits beside `core/reads.ts` rather than in it because what it reads is a different shape of
 // thing: a task list is paged and an automation is not. An automation is tens of rows, and the build
 // screen's picture, its step panel and its launch check all walk the same definition — so it is
 // fetched whole, once, and every part of the screen reads that one answer.
 //
-// **The one write here sits beside its reads** rather than in `core/mutations`, because what it is
-// about is this screen and nothing else. What it does not do for itself is the invalidation — the
-// ack goes through `mutations.invokeAck`, the same road every other write takes.
+// **The writes here sit beside their reads** rather than in `core/mutations`, because what they are
+// about is this screen and nothing else. What the screen's own write does not do for itself is the
+// invalidation — the ack goes through `mutations.invokeAck`, the same road every other write takes.
+// The second one is pressed from a pane rather than from this screen, and is no ack at all
+// (`stopRun`).
 //
 // **The launch check is read, not worked out here.** The rules live in core, where the launch itself
 // reads them (`amenbo_core::ops::automation_run::check`), so what a screen says is in the way and
@@ -190,4 +193,23 @@ export async function fetchLanesHeld(): Promise<number> {
 export function useLanesHeld(): number {
   const { data } = useQuery<number>(["automationLanesHeld"], fetchLanesHeld);
   return data ?? 0;
+}
+
+/**
+ * **Stop a run now** — what closing the pane a run is drawn in means (`../shell/TerminalPane`).
+ *
+ * The cleanup is core's and is the same one every other stop goes through: the lane is handed back,
+ * the task the run reserved goes to `todo`, and a line on that task says the run is not coming back
+ * (`amenbo_core::ops::automation_stop`).
+ *
+ * **It is not a `WriteAck` write.** What it moves is a run, a task and a comment, and every screen
+ * that draws one of those is already following the change feed — which is how a lane taken by a run
+ * in another project reaches this window in the first place (`fetchLanesHeld`).
+ *
+ * Answers whether this press was the one that stopped it: a run that had already finished is `false`
+ * and not a refusal, the press having been about the pane.
+ */
+export async function stopRun(run: number): Promise<boolean> {
+  if (!inTauri()) return false;
+  return invoke<boolean>("automation_run_stop", { runId: run });
 }

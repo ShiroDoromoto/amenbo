@@ -479,6 +479,22 @@ fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
     [own, in_comment, on_value, on_axis, attached, attached_to_comment]
 }
 
+/// The automation's columns as the automation-side word query names them: `FROM automation aut`, and the
+/// documents its steps share as `FROM automation_note an`.
+const AUT: col::automation::Cols = col::automation::of("aut");
+const AN: col::automation_note::Cols = col::automation_note::of("an");
+
+/// The one way a term reaches an automation (`AMB-D-944`): a document its steps share carries it. One set
+/// rather than six, because this side has one face — an automation's own name, notes and preamble are not
+/// in [`search::FACES`] — and still a set, because an automation holds any number of documents and the
+/// record-level AND is what lets two words land in two different ones and come back as one answer.
+fn automation_word_sets(term: search::Term<'_>) -> [IdSet; 1] {
+    let in_document = IdSet::of(AN.table, AN.automation_id)
+        .join(SD.table, on_face(search::DATASET_AUTOMATION_NOTE, AN.id))
+        .filter(term.pred(SD));
+    [in_document]
+}
+
 /// What is attached, as the arms above alias it.
 const A: col::attachment::Cols = col::attachment::of("a");
 
@@ -1915,9 +1931,10 @@ pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Ve
 /// and in two of its comments is three rows.
 pub struct SearchHitRow {
     pub face: HitFace,
-    /// Which side the owner is: [`search::DATASET_TASK`] or [`search::DATASET_DECISION`]. Every hit
-    /// belongs to one of the two, including the faces that are not held on the record itself — a label is
-    /// the task's by the placement, an attachment by what it hangs off.
+    /// Which side the owner is: [`search::DATASET_TASK`], [`search::DATASET_DECISION`] or
+    /// [`search::OWNER_AUTOMATION`]. Every hit belongs to one of the three, including the faces that are
+    /// not held on the record itself — a label is the task's by the placement, an attachment by what it
+    /// hangs off, a shared document the automation's by the steps that are handed it.
     pub owner_kind: String,
     pub owner_id: i64,
     pub owner_title: String,
@@ -1941,7 +1958,7 @@ pub struct SearchPage {
 type HitSlots =
     (Slot<i64>, Slot<String>, Slot<i64>, Slot<String>, Slot<Option<i64>>, Slot<String>, Slot<String>);
 
-/// Project one arm's row — the seam that keeps fourteen arms saying the same thing in the same order.
+/// Project one arm's row — the seam that keeps fifteen arms saying the same thing in the same order.
 ///
 /// The face travels as its rank ([`HitFace::tier`]) rather than as a name, because the rank is what the
 /// compound query orders by and the mapping back is total. `text` arrives as an **expression** rather
@@ -2035,6 +2052,7 @@ fn kept_by_axes(
         None => true,
         Some(crate::query::SearchKind::Task) => owner_kind == search::DATASET_TASK,
         Some(crate::query::SearchKind::Decision) => owner_kind == search::DATASET_DECISION,
+        Some(crate::query::SearchKind::Automation) => owner_kind == search::OWNER_AUTOMATION,
     };
     by_kind && want.is_none_or(|w| w == face)
 }
@@ -2105,8 +2123,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     // Which sides still have an arm standing. A side the caller narrowed away is one whose every arm is
     // gated off, so its sets are made for nobody — and a `MATERIALIZED` set is built when the statement
     // runs, not when a row needs it.
-    let wants_task = q.kind != Some(crate::query::SearchKind::Decision);
-    let wants_decision = q.kind != Some(crate::query::SearchKind::Task);
+    let sides = Sides::of(q.kind);
 
     // **One word asks nothing of the record.** The record-level AND is there so that several words may
     // land on a record by different faces and still be one answer; with a single word, an arm whose face
@@ -2116,11 +2133,11 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     // Which is also the shape a person searches in — the first thing typed is one ordinary word.
     let record_level = terms.len() > 1;
 
-    let head = search_head(terms, record_level, wants_task, wants_decision);
+    let head = search_head(terms, record_level, sides);
     let asked: Vec<search::Term<'_>> = (0..terms.len()).map(search::Term::Named).collect();
-    let (task_side, decision_side) =
-        search_sides(q, project_id, record_level, wants_task, wants_decision);
-    let arms = HitArms { q, asked: asked.as_slice(), task_side, decision_side };
+    let (task_side, decision_side, automation_side) =
+        search_sides(q, project_id, record_level, sides);
+    let arms = HitArms { q, asked: asked.as_slice(), task_side, decision_side, automation_side };
     let (slots, mut sql) = hit_union(&arms);
 
     let total = count_hits(conn, &sql, head.as_ref())?;
@@ -2145,23 +2162,19 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 /// With several words the record-level set is still needed, and then it goes to the head for the same
 /// reason the lookups do: "this record carries the word somewhere" is a union over six ways in — its own
 /// copy, its comments, its labels, the axis behind them, what is attached to it and to those comments —
-/// on either side, and written into the arms it is built by each of the fourteen, twice over. Named here,
-/// it is built once.
+/// on either record side, and written into the arms it is built by each of the fifteen, twice over. The
+/// automations' set is one way in rather than six, and goes to the head for the same reason. Named here,
+/// each is built once.
 /// Only for a side that still has an arm standing, which is the gate [`search_sides`] asks it under too.
-fn search_head(
-    terms: &[String],
-    record_level: bool,
-    wants_task: bool,
-    wants_decision: bool,
-) -> Option<Sql> {
+fn search_head(terms: &[String], record_level: bool, sides: Sides) -> Option<Sql> {
     let mut head = search::terms_head(terms);
     if let Some(head) = &mut head {
         if record_level {
             for i in 0..terms.len() {
-                if wants_task {
+                if sides.task {
                     push_words_cte(head, search::DATASET_TASK, i, task_word_sets(search::Term::Named(i)));
                 }
-                if wants_decision {
+                if sides.decision {
                     push_words_cte(
                         head,
                         search::DATASET_DECISION,
@@ -2169,10 +2182,40 @@ fn search_head(
                         decision_word_sets(search::Term::Named(i)),
                     );
                 }
+                if sides.automation {
+                    push_words_cte(
+                        head,
+                        search::OWNER_AUTOMATION,
+                        i,
+                        automation_word_sets(search::Term::Named(i)),
+                    );
+                }
             }
         }
     }
     head
+}
+
+/// Which sides still have an arm standing, once `kind` has narrowed. Carried as one value rather than as
+/// a flag per side, because every place that asks has to ask for all of them: a side whose set is not
+/// built at the head is a side no arm may name ([`search_sides`]).
+#[derive(Clone, Copy)]
+struct Sides {
+    task: bool,
+    decision: bool,
+    automation: bool,
+}
+
+impl Sides {
+    /// The sides a `--kind` leaves standing — every one of them where it named none.
+    fn of(kind: Option<crate::query::SearchKind>) -> Self {
+        use crate::query::SearchKind as K;
+        Self {
+            task: kind.is_none_or(|k| k == K::Task),
+            decision: kind.is_none_or(|k| k == K::Decision),
+            automation: kind.is_none_or(|k| k == K::Automation),
+        }
+    }
 }
 
 /// Everything asked of each side, folded once and cloned into every arm that owns that side: the
@@ -2183,9 +2226,8 @@ fn search_sides(
     q: &SearchQuery,
     project_id: Option<i64>,
     record_level: bool,
-    wants_task: bool,
-    wants_decision: bool,
-) -> (Option<Pred>, Option<Pred>) {
+    sides: Sides,
+) -> (Option<Pred>, Option<Pred>, Option<Pred>) {
     // Named only where it was built. A side the caller narrowed away has no set at the head, so nothing
     // may name one: the arms of that side are all gated off and never answer, but the reference stands in
     // the statement all the same, and a `WITH` name that was never pushed is a table SQLite cannot find —
@@ -2211,7 +2253,7 @@ fn search_sides(
     };
     let task_side = Pred::all(
         [
-            side_words(wants_task, T.id.to_sql(), search::DATASET_TASK).flatten(),
+            side_words(sides.task, T.id.to_sql(), search::DATASET_TASK).flatten(),
             project_id.map(|pid| Pred::eq(T.project_id, pid)),
             task_filter.and_then(Pred::all),
         ]
@@ -2225,7 +2267,7 @@ fn search_sides(
     };
     let decision_side = Pred::all(
         [
-            side_words(wants_decision, DEC.id.to_sql(), search::DATASET_DECISION).flatten(),
+            side_words(sides.decision, DEC.id.to_sql(), search::DATASET_DECISION).flatten(),
             project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
             decision_filter.and_then(Pred::all),
         ]
@@ -2233,7 +2275,20 @@ fn search_sides(
         .flatten(),
     );
 
-    (task_side, decision_side)
+    // The automation side carries no structural narrowing: `--filter` is written in the vocabulary of a
+    // listing (`AMB-D-563`), and an automation has none to take one from — which the entry point refuses
+    // rather than reads as no narrowing (`crate::query::search`). What is left is the scope and the
+    // record-level AND, both read exactly as the two sides above read them.
+    let automation_side = Pred::all(
+        [
+            side_words(sides.automation, AUT.id.to_sql(), search::OWNER_AUTOMATION).flatten(),
+            project_id.map(|pid| Pred::eq(AUT.project_id, pid)),
+        ]
+        .into_iter()
+        .flatten(),
+    );
+
+    (task_side, decision_side, automation_side)
 }
 
 /// What every arm of the hit query is handed: the words as a face is asked about them, and the predicate
@@ -2244,6 +2299,7 @@ struct HitArms<'a> {
     asked: &'a [search::Term<'a>],
     task_side: Option<Pred>,
     decision_side: Option<Pred>,
+    automation_side: Option<Pred>,
 }
 
 impl HitArms<'_> {
@@ -2253,6 +2309,7 @@ impl HitArms<'_> {
     fn r#where(&self, face_carries: Pred, face: HitFace, owner_kind: &str) -> Option<Pred> {
         let side = match owner_kind {
             search::DATASET_DECISION => &self.decision_side,
+            search::OWNER_AUTOMATION => &self.automation_side,
             _ => &self.task_side,
         };
         let gate = (!kept_by_axes(self.q.kind, self.q.face, owner_kind, face)).then(Pred::never);
@@ -2260,7 +2317,7 @@ impl HitArms<'_> {
     }
 }
 
-/// The fourteen arms, in the order their faces are projected. The first names the row shape the rest are
+/// The fifteen arms, in the order their faces are projected. The first names the row shape the rest are
 /// held to ([`HitSlots`]), and the groups are the families of face: a record's own copy, a comment on it,
 /// a label it was placed on, and what is attached — to the record, or to one of its comments.
 fn hit_union(a: &HitArms) -> (HitSlots, Sql) {
@@ -2271,7 +2328,8 @@ fn hit_union(a: &HitArms) -> (HitSlots, Sql) {
     comment_attachment_arms(a, union).into_parts()
 }
 
-/// A record's own copy: a task's title and notes, a decision's title and body.
+/// A record's own copy: a task's title and notes, a decision's title and body, and the body of a document
+/// an automation's steps share — the automation's own long text, there being no other face on that side.
 fn own_face_arms(a: &HitArms) -> Union<HitSlots> {
     const TASK: &str = search::DATASET_TASK;
     const DECISION: &str = search::DATASET_DECISION;
@@ -2331,6 +2389,35 @@ fn own_face_arms(a: &HitArms) -> Union<HitSlots> {
         tail.push_where(
             a.r#where(face_hit(DECISION, DEC.id, &["body"], a.asked), HitFace::Body, DECISION)
                 .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // The body of a document an automation's steps share (`AMB-D-944`). The record is the automation,
+        // because that is what a reader opens to read the document — the same reading that makes a comment
+        // the task's. It is dated by the document rather than by the automation: the hit's own instant is
+        // when the text it sits in was last written, and an automation renamed since is not a newer hit.
+        //
+        // One automation may hold several documents, so two of them carrying a word are two rows with the
+        // same ref and the same face — as a value and the axis behind it already are on the label face.
+        let slots = hit_slots(
+            sel,
+            HitFace::Body,
+            search::OWNER_AUTOMATION,
+            AUT.id,
+            AUT.name,
+            None,
+            AN.updated_at,
+            AN.body.to_sql(),
+        );
+        let mut tail = Sql::from_table(AN.table);
+        tail.join(AUT.table, same(AUT.id, AN.automation_id)).push_where(
+            a.r#where(
+                face_hit(search::DATASET_AUTOMATION_NOTE, AN.id, &["body"], a.asked),
+                HitFace::Body,
+                search::OWNER_AUTOMATION,
+            )
+            .as_ref(),
         );
         (slots, tail)
     })

@@ -16,7 +16,8 @@ import {
   whyItStopped,
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
-import type { Plate as Row } from "../talk/nameplate";
+import type { Plate as Row, Say } from "../talk/nameplate";
+import { stopRun } from "../core/automations";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
@@ -97,7 +98,7 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, onGrab, onStretch,
+  inserted = [], composeOpen, held = false, goes = null, run = null, onGrab, onStretch,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -116,6 +117,14 @@ export function TerminalPane({
   names: FrameNames;
   /** Which terminal to draw here, and where to start one. */
   start: PaneStart;
+  /**
+   * Where the automation run this pane is drawing has got to, or null on an ordinary pane
+   * (`../talk/nameplate`).
+   *
+   * It is what the row says under the name, and it is also what the way out means here: **closing a
+   * run's pane is stopping the run** (`drop`).
+   */
+  run?: Say | null;
   /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
    *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
@@ -280,9 +289,21 @@ export function TerminalPane({
    *  `face.dropConfirm` says what the loss is: the place, and with it the handle the talk in it is
    *  resumed from — so this press is what closes the way back into that conversation for good
    *  (`AMB-D-869`). It is the heavier of the app's two questions now, the way out of the app being
-   *  the lighter one. */
+   *  the lighter one.
+   *
+   *  **On a run's pane it is the other question, because it is the other act** (`AMB-T-5252`). There
+   *  is no way back into a step's conversation to lose — every step opens one of its own — and what
+   *  goes instead is the run: the one under way is stopped, the task it reserved goes back to `todo`,
+   *  and a line on that task says so. A run left going with its pane gone would be one nobody could
+   *  see, reach or stop. */
   const drop = async () => {
-    if (!await confirmDialog(t("face.dropConfirm"))) return;
+    if (!await confirmDialog(t(run === null ? "face.dropConfirm" : "face.dropRunConfirm"))) return;
+    // **Stopping comes before the terminal ends.** What the run is holding is handed back by core —
+    // the lane, the task, and the line left on that task (`amenbo_core::ops::automation_stop`) — and
+    // a step whose terminal had already gone would have reported nothing either way. A refusal is
+    // swallowed for the same reason the pane goes whatever happens: the press was to be rid of the
+    // pane, and a run that had finished a moment earlier is not something the person did wrong.
+    if (run !== null) await stopRun(run.run).catch(() => {});
     if (live !== null) await endTerminal(live).catch(() => {});
     onDrop(frame);
   };
@@ -464,7 +485,7 @@ export function TerminalPane({
     setEnded(false);
     // The line above the pane: what this pane is called, and the lamp that says whether anything is
     // coming out of it (`../talk/plate.ts`).
-    const plate = mountPlate(label, frame, hue);
+    const plate = mountPlate(label, frame, hue, run);
     plateRef.current = plate;
     // The row is readable from outside for as long as this pane is drawn, and no longer: a pane on
     // another page is not being measured at all, so a reading kept past this point would be the last
@@ -551,8 +572,9 @@ export function TerminalPane({
       // Nothing here has to hold that open. The row above the pane goes with the pane and says so on
       // its way out (`../talk/plate`).
     };
-    // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
-    // — a change of either would be a different pane, and the face gives that one a different key.
+    // Only `running` is a reason to do any of this again. `start`, `frame` and `run` are what this
+    // pane *is* — a change of any of them would be a different pane, and the face gives that one a
+    // different key (`./WorkspaceFace`).
   }, [running]);
 
   // The keyboard, at the moment a terminal opens here and at every fold after it. What a person does

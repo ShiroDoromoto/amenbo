@@ -604,7 +604,7 @@ mod tests {
         let by = Launcher {
             startable: Some(&startable),
             lanes: 3,
-            workspace_open: true,
+            workspace_open: Some(true),
             by: Some(ActorKind::Ai),
         };
         launch(tx, automation.id, &by).expect("launch")

@@ -629,7 +629,7 @@ export function WorkspaceFace({
    * **A run stopped for a missing input is nothing for this face to do.** There is no terminal to put
    * in the pane, and what is standing in it is the last step's own output — the whole of what a
    * reader has to go on. Ending that belongs to whatever stopped the run (`AMB-T-5247`), taking the
-   * pane away belongs to the pane's own control (`AMB-T-5252`), and saying so belongs to the screen
+   * pane away belongs to the pane's own control (`./TerminalPane`), and saying so belongs to the screen
    * the run is read on. It rides this road at all because one answer carries both outcomes, and the
    * press that started the run is owed the other one (`crate::automation`).
    */
@@ -1624,6 +1624,7 @@ export function WorkspaceFace({
                       // already inside the text core composed (`crate::pty::pty_open`).
                       say: step?.say ?? null,
                       fresh: step !== undefined,
+                      runStep: step?.runStep ?? null,
                       // Nothing on this face takes up a terminal it was not given: which session
                       // belongs where is answered once, as the face comes up, and a pane left to
                       // guess would take the one running terminal off whichever pane had it.
@@ -1636,6 +1637,15 @@ export function WorkspaceFace({
                       // (`../talk/layout`). It is the row's own agent and not a fresh choice: the
                       // reader answered this a run ago.
                       resume: frame.resumes ? frame.agent : null,
+                    }}
+                    // What the row says under the name, on a run's pane (`../talk/nameplate`). It is
+                    // the run the place is standing for and the step it is on — both Amenbo's own
+                    // values, neither of them the agent's word about itself (`AMB-D-858`).
+                    run={frame.run === null || step === undefined ? null : {
+                      run: frame.run,
+                      seq: step.seq,
+                      step: step.name,
+                      task: step.task ?? null,
                     }}
                     // A place that came back holding a way into what was running in it is opened
                     // without being pressed — that press is what `AMB-D-869` is about.
@@ -1665,6 +1675,15 @@ export function WorkspaceFace({
                       setLayout((was) => closedFrame(was, id));
                       startNow.current.delete(id);
                       startWith.current.delete(id);
+                      // A run's pane takes its step with it. The run was stopped on the way out
+                      // (`./TerminalPane`), and a step left here would put the row back the moment a
+                      // pane of that id stood again.
+                      setSteps((had) => {
+                        if (!had.has(id)) return had;
+                        const left = new Map(had);
+                        left.delete(id);
+                        return left;
+                      });
                     }}
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}

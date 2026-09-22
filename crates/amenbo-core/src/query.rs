@@ -2198,13 +2198,17 @@ impl SearchSort {
 
 /// Which record a hit is on — one of the two axes a search narrows by (`AMB-D-562`). It says **whose**
 /// words they are and nothing about where on the record they sit; that is the face's to say ([`HitFace`]).
-/// Left unnamed it keeps both sides.
+/// Left unnamed it keeps every side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchKind {
     /// The words on a task: its own faces, its comments, its labels, what is attached to it.
     Task,
     /// The words on a decision, the same way.
     Decision,
+    /// The words in the documents an automation's steps share (`AMB-D-944`). The one face on this side:
+    /// an automation's own name, notes and preamble are not indexed, and what a run *did* is reached from
+    /// the task it worked on rather than searched for.
+    Automation,
 }
 
 impl SearchKind {
@@ -2213,8 +2217,9 @@ impl SearchKind {
         match value.trim() {
             "task" => Ok(Self::Task),
             "decision" => Ok(Self::Decision),
+            "automation" => Ok(Self::Automation),
             other => Err(Error::invalid(format!(
-                "unknown kind '{other}' (task/decision — which record the words are on; which face of it is the other axis)"
+                "unknown kind '{other}' (task/decision/automation — which record the words are on; which face of it is the other axis)"
             ))),
         }
     }
@@ -2224,6 +2229,7 @@ impl SearchKind {
         match self {
             Self::Task => "task",
             Self::Decision => "decision",
+            Self::Automation => "automation",
         }
     }
 }
@@ -2264,9 +2270,10 @@ impl HitFace {
 pub struct SearchHit {
     /// Which face of the record the words are on.
     pub face: HitFace,
-    /// Which side the record is: `task` or `decision`. The face alone does not say — a title is either.
+    /// Which side the record is: `task`, `decision` or `automation`. The face alone does not say — a body
+    /// is any of the three.
     pub kind: String,
-    /// The record's conversational ref (`AMB-T-<n>` / `AMB-D-<n>`) and its title: what the reader opens to
+    /// The record's ref (`AMB-T-<n>` / `AMB-D-<n>` / `AMB-AUT-<n>`) and its title: what the reader opens to
     /// read the whole of it.
     pub r#ref: String,
     pub title: String,
@@ -2434,6 +2441,11 @@ pub fn search(
             f.project_id = reach.narrow(f.project_id)?;
             Some(SearchNarrowing::Decision(f))
         }
+        (Some(_), Some(SearchKind::Automation)) => {
+            return Err(Error::invalid(
+                "--kind automation takes no --filter: a narrowing is written in the vocabulary of a listing (`AMB-D-563`), and an automation has none — narrow it by --project, or search the words alone",
+            ))
+        }
         (Some(_), None) => {
             return Err(Error::invalid(
                 "a --filter is one side's vocabulary or the other's, so say which with --kind task or --kind decision (the same key can mean different things: `status:rejected` is work decided against on a task, and a decision turned down on a decision)",
@@ -2473,15 +2485,18 @@ pub fn search(
 
     let mut hits = shown_pins;
     hits.extend(page.hits.into_iter().map(|h| {
-        let is_task = h.owner_kind == crate::store_engine::search::DATASET_TASK;
-        let excerpt = crate::store_engine::search::snippet(&h.text, &terms);
+        use crate::store_engine::search as idx;
+        let is_task = h.owner_kind == idx::DATASET_TASK;
+        let excerpt = idx::snippet(&h.text, &terms);
         SearchHit {
             face: h.face,
-            r#ref: if is_task {
-                crate::idref::task(h.owner_id)
-            } else {
-                crate::idref::decision(h.owner_id)
+            r#ref: match h.owner_kind.as_str() {
+                idx::DATASET_TASK => crate::idref::task(h.owner_id),
+                idx::OWNER_AUTOMATION => crate::idref::automation(h.owner_id),
+                _ => crate::idref::decision(h.owner_id),
             },
+            // Only the two sides that have a timeline carry one: an automation's documents are read in
+            // the automation, and carry no ref of their own (`AMB-D-944`).
             comment: h.comment_id.map(|id| {
                 if is_task {
                     crate::idref::task_comment(id)
@@ -2612,6 +2627,9 @@ fn pinned(
             match kind {
                 Some(SearchKind::Task) => vec![(TypedKind::Task, number)],
                 Some(SearchKind::Decision) => vec![(TypedKind::Decision, number)],
+                // An automation is not a conversational number space — its ref is display-only
+                // (`crate::idref::RefKind::Automation`) — so a bare number names nothing on that side.
+                Some(SearchKind::Automation) => Vec::new(),
                 None => vec![(TypedKind::Task, number), (TypedKind::Decision, number)],
             }
         } else {

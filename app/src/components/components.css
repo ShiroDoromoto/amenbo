@@ -643,6 +643,10 @@ body.is-dragging { user-select: none; }
 .feed__target { font-size: var(--fs-xs); color: var(--c-accent-text); border: none; background: none; }
 button.feed__target:hover { color: var(--c-accent); }
 .feed__target--gone { color: var(--c-text-muted); }
+/* The same muting, for the other reason a ref cannot be pressed: it leads nowhere rather than having lost
+   what it led to (`AMB-D-944`). Written apart from `--gone` so the DOM does not call a live automation
+   deleted. */
+.feed__target--plain { color: var(--c-text-muted); }
 .feed__meta { font-size: var(--fs-xs); color: var(--c-text-muted); display: flex; gap: var(--s-2); margin-top: 2px; }
 
 /* ---------- search (where a word is written) ---------- */
@@ -1318,3 +1322,72 @@ button.feed__target:hover { color: var(--c-accent); }
 /* What a rewrite in the library reaches, said where the rewrite is happening: under the prompt box
    and over Save, so it is read on the way to the press rather than after it. */
 .auto__reaches { font-size: var(--fs-md); color: var(--c-text-muted); }
+
+/* ----- the picture of the steps (`screens/AutomationPicture.tsx`) -----
+   Every position on it is worked out from the definition (`screens/automationLayout.ts`) and
+   written as an inline `left`/`top`, so nothing here places anything: this file says what a box, a
+   line and an outline look like, and the sheet under them is the size the walk came to.
+   It scrolls both ways and does nothing else — there is no zoom and no folding a stretch away, so
+   the only state it carries is where the reader scrolled to. */
+.autopic { max-height: 420px; overflow: auto; }
+.autopic__sheet { position: relative; }
+.autopic__lines { position: absolute; inset: 0; pointer-events: none; }
+/* The span of one task, said with an outline and with nothing else. A fill would be a colour on the
+   screen that has to mean something, and what it would mean is only "these go together", which the
+   outline already says. */
+.autopic__lap { fill: none; stroke: var(--c-rule); stroke-width: 1; stroke-dasharray: 6 4; }
+.autopic__lapword {
+  position: absolute; transform: translateY(-50%);
+  padding: 0 var(--s-1); background: var(--c-surface-pic) var(--c-surface);
+  font-size: var(--fs-xs); line-height: 1; color: var(--c-text-muted); white-space: nowrap;
+}
+/* What comes after a step runs down the left, what is handed on runs down the right, and the two are
+   told apart by weight rather than by colour — a wire is the thinner, quieter of the two because it
+   is read after the order of the steps, never before it. */
+.autopic__line { fill: none; stroke: var(--c-rule); stroke-width: 1.5; }
+.autopic__line--wire { stroke: var(--c-text-faint); stroke-width: 1; }
+/* It goes back to a row above the one it left. */
+.autopic__line--back { stroke-dasharray: 5 4; }
+.autopic__word { font-size: var(--fs-xs); fill: var(--c-text-muted); }
+/* One step. A button because that is what it is: pressing it is what puts the step's contents in the
+   panel beside the picture. */
+.autopic__node {
+  position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  box-sizing: border-box; padding: var(--s-2);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
+  font: inherit; font-size: var(--fs-md); text-align: start; overflow: hidden; cursor: pointer;
+}
+.autopic__node:disabled { cursor: default; }
+.autopic__node:enabled:hover { background: var(--c-hover); }
+/* The prompt came from the library rather than from the step. */
+.autopic__node--action { border-inline-start: 3px solid var(--c-auto-action); }
+/* A required input nothing reaches. The border is the step saying it, and the line under the name
+   says which input — a mark on its own would send the reader to the step panel to find out. */
+.autopic__node--unfed { border-color: var(--c-stop); }
+.autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
+.autopic__nodename {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+.autopic__from {
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.autopic__unfed {
+  display: flex; align-items: center; gap: var(--s-1);
+  font-size: var(--fs-xs); color: var(--c-stop); min-width: 0;
+}
+.autopic__unfed .icon { flex: none; }
+.autopic__unfed > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Put a step in on this line. It sits on the line's first leg, under the step it leaves. */
+.autopic__plus {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0;
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text-muted);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: 50%;
+  cursor: pointer;
+}
+.autopic__plus:disabled { cursor: default; opacity: 0.5; }
+.autopic__plus:enabled:hover { color: var(--c-text); border-color: var(--c-edge); }

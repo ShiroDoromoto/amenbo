@@ -182,6 +182,54 @@ impl Driver<'_> {
                 ])?;
                 Ok(Outcome::action(format!("automation {automation} starts at step {step}")))
             }
+            "cfg-add" => {
+                let (flag, owner, what) = self.declarer(with)?;
+                let name = req_str(with, "name")?;
+                let kind = req_str(with, "kind")?;
+                let mut args: Vec<String> = vec![
+                    "automation".into(),
+                    "cfg".into(),
+                    "add".into(),
+                    flag.into(),
+                    owner.to_string(),
+                    "--name".into(),
+                    name.into(),
+                    "--kind".into(),
+                    kind.into(),
+                ];
+                if opt_bool(with, "required").unwrap_or(false) {
+                    args.push("--required".into());
+                }
+                if let Some(options) = with.get("options").and_then(|v| v.as_str()) {
+                    args.push("--options".into());
+                    args.push(options.to_string());
+                }
+                args.push("--json".into());
+                let id = self.bound_id(&args, "automation_cfg", bind)?;
+                Ok(Outcome::action(format!("declared setting {id} `{name}` ({kind}) on {what} {owner}")))
+            }
+            "cfg-set" => {
+                let step = self.resolve(with)?;
+                let name = req_str(with, "name")?;
+                let mut args: Vec<String> = vec![
+                    "automation".into(),
+                    "cfg".into(),
+                    "set".into(),
+                    step.to_string(),
+                    "--name".into(),
+                    name.into(),
+                ];
+                let said = match opt_bool(with, "clear").unwrap_or(false) {
+                    true => {
+                        args.push("--clear".into());
+                        "left unanswered".to_string()
+                    }
+                    false => answer(with, &mut args)?,
+                };
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("setting `{name}` on step {step} {said}")))
+            }
             "note-add" => {
                 let automation = self.resolve(with)?;
                 let name = req_str(with, "name")?;
@@ -339,5 +387,116 @@ impl Driver<'_> {
         let step = self.resolve(with)?;
         let exit = with.get("exit").and_then(|v| v.as_str()).unwrap_or("");
         Ok(format!("{step}:{exit}"))
+    }
+}
+
+/// A setting's answer, put into the flags the command takes it behind, and said in a line.
+///
+/// **A task filter is never one string.** What names it is the parts (`assignee`, `status`, `ready`,
+/// and the rest), each carrying what is any-of on that part — the same reading `--filter`'s
+/// expression gives, and the same shape the screen's rows take. So a road writes the parts and this
+/// spells them out one flag at a time, which is also what lets the command refuse a value nothing
+/// accepts while the person who wrote it is still here.
+///
+/// The other four kinds take one answer apiece, and a road naming more than one of them is naming
+/// two answers for one setting — which the command refuses, and which this lets it.
+fn answer(with: &Args, args: &mut Vec<String>) -> Result<String, String> {
+    let mut said: Vec<String> = Vec::new();
+    for key in ["folder", "choice", "text", "number"] {
+        let Some(value) = with.get(key) else { continue };
+        let value = match key {
+            "number" => value
+                .as_i64()
+                .map(|n| n.to_string())
+                .ok_or_else(|| "`number` takes a number".to_string())?,
+            _ => value
+                .as_str()
+                .ok_or_else(|| format!("`{key}` takes a string"))?
+                .to_string(),
+        };
+        args.push(format!("--{key}"));
+        args.push(value.clone());
+        said.push(format!("{key} `{value}`"));
+    }
+    for key in ["status", "priority", "assignee", "dim", "ready", "done", "due"] {
+        let Some(value) = with.get(key) else { continue };
+        // One value or several, written either way round: a part answered with one thing is the
+        // ordinary case and a road should not have to wrap it in a list to say so.
+        let values: Vec<String> = match value {
+            serde_yaml::Value::Sequence(seq) => seq
+                .iter()
+                .map(|v| {
+                    v.as_str().map(str::to_string).ok_or_else(|| {
+                        format!("`{key}` takes the words a filter is written in")
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+            other => vec![other
+                .as_str()
+                .ok_or_else(|| format!("`{key}` takes the words a filter is written in"))?
+                .to_string()],
+        };
+        for one in &values {
+            args.push(format!("--{key}"));
+            args.push(one.clone());
+        }
+        said.push(format!("{key} `{}`", values.join(",")));
+    }
+    if said.is_empty() {
+        return Err(
+            "a setting is answered in the shape its kind takes, or left unanswered with `clear`"
+                .to_string(),
+        );
+    }
+    Ok(format!("answered {}", said.join(", ")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with(yaml: &str) -> Args {
+        serde_yaml::from_str(yaml).expect("the road's own words")
+    }
+
+    /// A task filter is the one answer that is not a single value, and the shape it goes in as is
+    /// the parts that name it — each carrying what is any-of on that part. What this guards is that
+    /// a part written as one thing and a part written as a list both reach the command, since a road
+    /// answering one value should not have to wrap it in a list to say so.
+    #[test]
+    fn a_task_filter_is_answered_a_part_at_a_time() {
+        let mut args: Vec<String> = Vec::new();
+        let said = answer(&with("{ assignee: me-ai, status: [todo, in_progress] }"), &mut args)
+            .expect("an answer");
+        assert_eq!(
+            args,
+            [
+                "--status", "todo", "--status", "in_progress", "--assignee", "me-ai",
+            ]
+            .map(String::from)
+            .to_vec(),
+            "each part is written out one flag at a time, the command's own way round",
+        );
+        assert!(said.contains("todo,in_progress"), "{said}");
+    }
+
+    /// The four kinds that take one answer apiece, each behind its own flag.
+    #[test]
+    fn the_other_kinds_take_one_answer_apiece() {
+        let mut args: Vec<String> = Vec::new();
+        answer(&with("{ number: 3 }"), &mut args).expect("an answer");
+        assert_eq!(args, ["--number", "3"].map(String::from).to_vec());
+
+        let mut args: Vec<String> = Vec::new();
+        answer(&with("{ text: SCENARIO }"), &mut args).expect("an answer");
+        assert_eq!(args, ["--text", "SCENARIO"].map(String::from).to_vec());
+    }
+
+    /// An answer nobody wrote is not an empty answer: a setting left unanswered is said with
+    /// `clear`, and a step that named neither is a step with nothing to send.
+    #[test]
+    fn a_setting_with_no_answer_at_all_is_refused_here() {
+        let mut args: Vec<String> = Vec::new();
+        assert!(answer(&with("{}"), &mut args).is_err());
     }
 }

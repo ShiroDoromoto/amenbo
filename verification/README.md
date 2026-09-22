@@ -731,9 +731,10 @@ screen, through a door of the host's. So the terminal's half of the domain is th
 definition up and the run that walks it — what it asserts is the run, the listing a run is reached by,
 and the search — while the picture, the step panel and the launch place are asserted on the screen
 (`pictured`, `line-pictured`, `lap-pictured`, `step-shows`, `launch`, and the rest of the screen half).
-**The ten build verbs stand a world up** rather than being walked: every screen road about an
-automation opens on a definition that is already there, there being no way in on screen for the first
-step of the first one.
+**The verbs that build a definition stand a world up** rather than being walked: every screen road
+about an automation opens on a definition that is already there, there being no way in on screen for
+the first step of the first one. Answering a setting is not among them — that is a move a reader
+makes, on the rows the screen takes one on or behind the flags the command does.
 **What a step of a run types is not there at all** (`take` / `out` / `done`): those are refused outside
 the terminal a run opened for a step, and a run started at the terminal opens none.
 

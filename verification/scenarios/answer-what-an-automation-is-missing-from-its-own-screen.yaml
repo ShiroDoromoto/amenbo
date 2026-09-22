@@ -6,13 +6,13 @@
 id: answer-what-an-automation-is-missing-from-its-own-screen
 title: What the launch place says is in the way is put right on the screen, and the line for it goes
 description: >
-  Stand a definition up with a required input nothing reaches, and close it from the screen by
-  picking what fills it out of the list of what fits. It is read three times: the line is on the
-  launch place and the mark is on the step, the input is filled, and both are gone. A build that
-  drew the list once and never read it again would pass the first two and fail the third, which is
-  the failure this road is written against.
+  Stand a definition up with two holes in it — a required setting nobody answered and a required
+  input nothing reaches — and close both from the screen: the setting on the rows its kind is
+  answered by, the input from the list of what fits. Each is read twice, there and gone. A build that
+  drew the list once and never read it again would pass the first half of each and fail the second,
+  which is the failure this road is written against.
 given:
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one hole to close" }, as: auto }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two holes to close" }, as: auto }
 
   # The step that takes the task. Its named way out hands on a value, which is what the step after it
   # is left waiting for.
@@ -20,6 +20,10 @@ given:
   - { type: action, domain: automation, op: exit-add, with: { step: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+
+  # The hole a person answers: a required setting, declared and left unanswered. A task filter is the
+  # kind worth walking, being the one the screen refuses to let anybody write as an expression.
+  - { type: action, domain: automation, op: cfg-add, with: { step: take, name: which, kind: taskfilter, required: true } }
 
   # The hole a wire closes: a required input on the step after it, with nothing joined to it.
   - { type: action, domain: automation, op: step-add, with: { target: auto, name: work, agent: claude-code, prompt: do the work }, as: work }
@@ -42,7 +46,17 @@ steps_gui:
     with:
       target: auto
 
-  # The hole, named on the launch place before anything is done about it.
+  # Both holes, named on the launch place before anything is done about them.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      step: take
+      at: which
+      present: true
+
   - type: assert
     domain: automation
     op: launch
@@ -60,6 +74,32 @@ steps_gui:
     with:
       name: work
       unfed: true
+
+  # The setting, answered on the rows its kind is taken on. Which row and which value are the
+  # reader's words; what a filter expression would look like never appears on this screen.
+  - type: action
+    domain: automation
+    op: pick-step
+    with:
+      name: take
+
+  - type: action
+    domain: automation
+    op: answer-filter
+    with:
+      setting: which
+      row: assignee
+      value: My AI
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      step: take
+      at: which
+      present: false
 
   # The input, filled from the list of what fits. What is offered is what carries the same kind, so
   # the way out that hands a value on is the only thing this list can hold.

@@ -4032,6 +4032,17 @@ const REGISTRY: &[OpSpec] = &[
     // A document the steps of one automation share, and the link that hands it to one of them.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-add", required: &["name", "body"], refs: &["target"], strings: &["name", "body"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "note-link", required: &[], refs: &["target", "step"], strings: &[], binds: false },
+    // A setting: what a step or a library action declares, and what one step answers for it. The two
+    // are apart because the declaring and the answering are: an action declares once and every step
+    // running it answers on a row of its own, so a road standing up "a required setting nobody has
+    // answered" needs the first without the second.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cfg-add", required: &["name", "kind"], refs: &["step", "action"], strings: &["name", "kind", "options"], binds: true },
+    // The answer, in the shape the setting's kind takes. **A task filter is never one string here**:
+    // it is the parts that name it (`assignee`, `status`, `ready`, …), each a list of what is any-of
+    // on that part, which is the same reading `--filter`'s expression gives and the same shape the
+    // screen's rows take. `clear` leaves it unanswered, which is a state of its own and not an empty
+    // answer.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cfg-set", required: &["name"], refs: &["target"], strings: &["name", "folder", "choice", "text"], binds: false },
     // The library: a prompt worth using twice, and the rewrite that reaches every step pointed at it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-add", required: &["name", "prompt"], refs: &["project"], strings: &["name", "prompt"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-update", required: &["prompt"], refs: &["target"], strings: &["prompt"], binds: true },
@@ -4095,6 +4106,11 @@ const REGISTRY: &[OpSpec] = &[
     // The `+` on a line, and the dialog it opens. The step is put in **in front of** the line named:
     // `after` is the step the line leaves and `exit` the way out it leaves by, which is the pair a
     // line hangs on. A step made of a library action names `action` and writes no prompt.
+    //
+    // `exits` is the named ways out the dialog is to declare on the new step, and `inputs` what it
+    // is to take in — each of those a `name` and a `kind`, and `required` where it is one. Both are
+    // lists, and both are only ever written for a step carrying its own prompt: one made of a
+    // library action declares neither, those being the action's.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-step", required: &["after", "name"], refs: &["action"], strings: &["after", "exit", "name", "prompt"], binds: false },
     // The `+ output artefact` on a way out, and the dialog it opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
@@ -4344,6 +4360,7 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Automation, "edge-add"),
     (Domain::Automation, "wire-add"),
     (Domain::Automation, "entry"),
+    (Domain::Automation, "cfg-add"),
     (Domain::Automation, "note-add"),
     (Domain::Automation, "note-link"),
     (Domain::Automation, "action-add"),

@@ -5,7 +5,7 @@
 # leave a picture nobody asked for, and one that made the step and dropped what the line used to
 # reach would quietly throw away a decision somebody had made.
 id: put-a-step-into-a-picture-from-the-screen
-title: A step put in on a line takes over where that line went
+title: A step put in on a line takes over where that line went, and says what leaving it hands on
 description: >
   Stand a one-step definition up from the terminal, put a second step in on the line that closes the
   task, and read both halves of what that press did: the pressed way out now points at the new step,
@@ -54,6 +54,8 @@ steps_gui:
       exit: got one
       name: work
       prompt: do the work
+      exits:
+        - drafted
 
   - type: assert
     domain: automation
@@ -94,3 +96,15 @@ steps_gui:
     with:
       field: prompt
       value: do the work
+
+  # And the way out the dialog declared is on it, with a control for saying what leaving by it hands
+  # on. The name the box starts on is that way out's own — it has handed nothing on yet, and a name
+  # for what a way out produces is nine times out of ten the way out's own name.
+  - type: action
+    domain: automation
+    op: add-output
+    with:
+      exit: drafted
+      name: drafted
+      kind: file
+      required: true

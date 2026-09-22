@@ -3835,7 +3835,7 @@ impl Instructor {
             // The `+` on a line. The step goes in **in front of** that line, so the road names the
             // step the line leaves and the way out it leaves by — the pair a line hangs on.
             (Domain::Automation, "insert-step") => format!(
-                "In the build screen's picture, press the `+` on the line leaving the step \"{}\" by {}. In the dialog, write the name \"{}\"{}, then press the button that puts it in.",
+                "In the build screen's picture, press the `+` on the line leaving the step \"{}\" by {}. In the dialog, write the name \"{}\"{}{}{}, then press the button that puts it in.",
                 req(with, "after")?,
                 way_out(with),
                 req(with, "name")?,
@@ -3852,13 +3852,33 @@ impl Instructor {
                         "a step put in writes a prompt here or names a library action, never both and never neither"
                             .to_string(),
                     ),
+                },
+                match declared_exits(with)?.as_slice() {
+                    [] => String::new(),
+                    [one] => format!(", add a way out called {one}"),
+                    ways => format!(", add a way out for each of {}", listed(ways)),
+                },
+                match declared_inputs(with)?.as_slice() {
+                    [] => String::new(),
+                    [one] => format!(", add an input {one}"),
+                    ports => format!(", add an input for each of {}", listed(ports)),
                 }
             ),
             // What a way out hands on, declared from the way out it belongs to.
             (Domain::Automation, "add-output") => format!(
-                "In the step panel, on the line for {}, press the control that adds an output artefact. Write the name \"{}\", pick {} as what it carries{}, then press the button that adds it.",
+                "In the step panel, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
                 way_out(with),
-                req(with, "name")?,
+                // **The name the box starts on is the one thing this dialog does for a reader.** A
+                // way out that hands one thing on is named for what it hands on nine times out of
+                // ten, so the box starts on the way out's own name — and a road naming that same
+                // name is walking exactly that, which it can only do by being told to read the box
+                // rather than to fill it.
+                match (arg_str(with, "exit"), arg_str(with, "name")) {
+                    (Some(exit), Some(name)) if exit == name => format!(
+                        "Confirm the name box already reads \"{name}\" — the way out's own name, it having handed nothing on yet"
+                    ),
+                    (_, name) => format!("Write the name \"{}\"", name.unwrap_or("")),
+                },
                 port_kind(req(with, "kind")?)?,
                 match flagged(with, "required") {
                     true => "",
@@ -5811,6 +5831,64 @@ fn decision_filter_pair(axis: &str, value: &str) -> String {
     }
 }
 
+/// The named ways out the dialog is to declare on the step it is making.
+fn declared_exits(with: &Args) -> Result<Vec<String>, String> {
+    let Some(value) = with.get("exits") else { return Ok(Vec::new()) };
+    let Some(seq) = value.as_sequence() else {
+        return Err("`exits` is a list of the names to declare".to_string());
+    };
+    seq.iter()
+        .map(|v| {
+            v.as_str()
+                .map(|name| format!("\"{name}\""))
+                .ok_or_else(|| "`exits` is a list of the names to declare".to_string())
+        })
+        .collect()
+}
+
+/// The inputs the dialog is to declare on that step: what each is called, what it carries, and
+/// whether the step is refused without it.
+fn declared_inputs(with: &Args) -> Result<Vec<String>, String> {
+    let Some(value) = with.get("inputs") else { return Ok(Vec::new()) };
+    let Some(seq) = value.as_sequence() else {
+        return Err("`inputs` is a list, each naming a port and what it carries".to_string());
+    };
+    let mut out = Vec::new();
+    for one in seq {
+        let Some(port) = one.as_mapping() else {
+            return Err("`inputs` is a list, each naming a port and what it carries".to_string());
+        };
+        let at = |key: &str| {
+            port.get(serde_yaml::Value::String(key.to_string())).and_then(|v| v.as_str()).map(str::to_string)
+        };
+        let name = at("name").ok_or_else(|| "an input names what it is called".to_string())?;
+        let kind = at("kind").ok_or_else(|| "an input names what it carries".to_string())?;
+        let required = port
+            .get(serde_yaml::Value::String("required".to_string()))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        out.push(format!(
+            "\"{name}\" carrying {}, marked {}",
+            port_kind(&kind)?,
+            match required {
+                true => "required",
+                false => "optional",
+            }
+        ));
+    }
+    Ok(out)
+}
+
+/// A handful of things said as a person would say them, so an instruction reads as a sentence
+/// rather than as a list somebody has to parse.
+fn listed(items: &[String]) -> String {
+    match items {
+        [one] => one.clone(),
+        [most @ .., last] => format!("{} and {last}", most.join(", ")),
+        [] => String::new(),
+    }
+}
+
 /// A mark a road named on a step's box, either way round, or nothing where it named none. Both
 /// marks are worth saying the absence of: a mark that never comes off is a build reading a
 /// definition it had already read, and a road that could only ask for one to be there could not
@@ -7613,6 +7691,66 @@ steps_gui:
         assert!(lines[13].contains("output artefact") && lines[13].contains("a value"), "{}", lines[13]);
         assert!(lines[14].contains("nothing reaches one of a step's required inputs"), "{}", lines[14]);
         assert!(lines[19].contains("1 of 3"), "{}", lines[19]);
+    }
+
+    /// What the dialog that puts a step in is told to declare on it. One of a thing and several read
+    /// differently, and a road that wrote one way out should not be handed a sentence written for a
+    /// list.
+    #[test]
+    fn a_step_put_in_is_told_what_to_declare_on_it() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: insert-step
+    with:
+      after: take
+      name: work
+      prompt: do it
+      exits: [drafted]
+      inputs:
+        - { name: note, kind: value, required: true }
+        - { name: draft, kind: file }
+"#);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).expect("it renders");
+        assert!(line.contains("add a way out called \"drafted\""), "{line}");
+        assert!(
+            line.contains("\"note\" carrying a value, marked required"),
+            "{line}",
+        );
+        assert!(line.contains("\"draft\" carrying a file, marked optional"), "{line}");
+    }
+
+    /// The name the output dialog's box starts on is the one thing it does for a reader, so a road
+    /// naming the way out's own name is told to read the box rather than to fill it.
+    #[test]
+    fn the_output_dialog_is_read_where_the_name_is_the_way_outs_own() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: add-output
+    with: { exit: drafted, name: drafted, kind: file, required: true }
+  - type: action
+    domain: automation
+    op: add-output
+    with: { exit: drafted, name: the draft, kind: file, required: true }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        assert!(
+            ins.render(&steps[0]).expect("it renders").contains("already reads \"drafted\""),
+            "the box starts on the way out's own name, so the road reads it",
+        );
+        assert!(
+            ins.render(&steps[1]).expect("it renders").contains("Write the name \"the draft\""),
+            "a name of the reader's own is written",
+        );
     }
 
     /// The marks on a step's box are colour, and a reading answers which words are on a shot — so a

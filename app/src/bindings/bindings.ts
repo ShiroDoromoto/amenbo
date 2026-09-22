@@ -2547,14 +2547,12 @@ export type SearchFaceDto = "title" | "body" | "comment" | "label" | "attachment
  */
 export type SearchHitDto = { face: SearchFaceDto, 
 /**
- * Which side the record is on — `task`, `decision` or `automation`. The face alone does not say: a
- * body is any of the three.
+ * Which side the record is on — `task` or `decision`. The face alone does not say: a title is either.
  */
 kind: string, 
 /**
- * The record's ref (`AMB-T-<n>` / `AMB-D-<n>` / `AMB-AUT-<n>`) — what the row opens where it leads
- * anywhere, and where the number in it comes from. An automation's leads nowhere yet: its shared
- * documents are read in the build screen, which the search screen cannot reach (`AMB-D-944`).
+ * The record's ref (`AMB-T-<n>` / `AMB-D-<n>`) — what the row opens, and where the number in it
+ * comes from.
  */
 ref: string, title: string, 
 /**
@@ -2579,9 +2577,8 @@ at: string, snippet: string,
 matches: Array<SearchMatchDto>, 
 /**
  * Where the record this row points at stands — what the row shows past the ref and the title, so the
- * reader can tell a task still to be done from one that is over without opening it. Absent when the
- * record stopped being readable between the page and the read that fills this in — and always on an
- * automation, which has no status to stand in (`AMB-D-944`).
+ * reader can tell a task still to be done from one that is over without opening it. Absent only when
+ * the record stopped being readable between the page and the read that fills this in.
  */
 standing?: SearchStandingDto, };
 

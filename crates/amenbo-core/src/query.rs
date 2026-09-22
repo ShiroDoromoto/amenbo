@@ -2264,10 +2264,9 @@ impl HitFace {
 pub struct SearchHit {
     /// Which face of the record the words are on.
     pub face: HitFace,
-    /// Which side the record is: `task`, `decision` or `automation`. The face alone does not say — a body
-    /// is any of the three.
+    /// Which side the record is: `task` or `decision`. The face alone does not say — a body is either.
     pub kind: String,
-    /// The record's ref (`AMB-T-<n>` / `AMB-D-<n>` / `AMB-AUT-<n>`) and its title: what the reader opens to
+    /// The record's ref (`AMB-T-<n>` / `AMB-D-<n>`) and its title: what the reader opens to
     /// read the whole of it.
     pub r#ref: String,
     pub title: String,

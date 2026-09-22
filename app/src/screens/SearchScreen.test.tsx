@@ -70,7 +70,6 @@ const render = () =>
       createElement(SearchScreen, {
         onOpenTask: (id: number) => openedTasks.push(id),
         onOpenDecision: (id: number) => openedDecisions.push(id),
-        onOpenAutomation: () => {},
       }),
     );
   });

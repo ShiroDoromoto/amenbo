@@ -1,0 +1,63 @@
+# A library action is made on the screen, from the library's own list. The press asks for a name and
+# which library it lands in, and no prompt: the prompt belongs to a step inside the action, and there
+# is no step until the screen the press lands on puts one in. So the road that makes one goes on into
+# that screen — an action nobody could fill from where it was made would be an empty row somebody
+# has to go to the terminal to finish.
+#
+# ── Why the first step is put in ────────────────────────────────────────────────────────────────
+# An action is born empty, and what the build screen it lands on offers is the press that puts the
+# first step in. Reading that step's box in the picture is what says the press landed on the action
+# just made: a build screen opened on some other action would draw a picture too.
+id: make-an-action-from-the-library
+title: A library action is made from the actions tab by a name and a reach, and filled on the screen it lands on
+description: >
+  Stand on the actions tab, make an action by its name in this project's library, and put its first
+  step in on the build screen the press opens. Then go back to the list and read the row it made,
+  marked as this project's.
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-make
+    with:
+      name: SCENARIO SEED — made in the library
+      reach: project
+    as: act
+
+  # Where the press landed: an action with nothing inside it, and the press above its picture that puts
+  # the first step in.
+  - type: action
+    domain: automation
+    op: add-step
+    with:
+      name: draft
+      prompt: write the draft
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      present: true
+
+  # And the list it was made from. The mark on the row is the reach the press was given — the half a
+  # reader chose, and cannot move afterwards from this screen.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: act
+      reach: project
+      present: true

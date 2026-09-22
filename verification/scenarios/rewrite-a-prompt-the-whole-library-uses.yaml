@@ -39,7 +39,6 @@ steps_gui:
     with:
       target: library
       used_by: 2
-      steps: 1
       reach: project
 
   - type: action

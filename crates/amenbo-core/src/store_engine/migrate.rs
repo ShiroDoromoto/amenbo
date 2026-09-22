@@ -947,7 +947,7 @@ pub const STEPS: &[Step] = &[
 ///
 /// The order is the `RESTRICT` clause's: a link names the document, so the link table goes before the
 /// document table does — dropping a table something still points rows at is refused. The third name of
-/// that family, `automation_step_note`, went at v56 ([`the_note_table_v50_lays_down_is_dropped`]).
+/// that family, `automation_step_note`, went at v56 (the_note_table_v50_lays_down_is_dropped).
 ///
 /// **`DROP` alone, with no `DELETE` in front of it.** A `DROP` takes the rows with it and is prepared
 /// against no parent, which is what keeps this two statements rather than four.

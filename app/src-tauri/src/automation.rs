@@ -251,8 +251,9 @@ pub fn automation_action_add(project: Option<i64>, name: String) -> Result<Write
 /// row, never carried into a launch (`AMB-D-952`).
 ///
 /// **Renaming parts nothing.** A placement points at the action by key, so every picture standing on
-/// it reads the new name at once — while renaming one of its ways out or its ports parts every edge
-/// and wire that named the old one ([`amenbo_core::ops::automation::action_update`]).
+/// it reads the new name at once. So does renaming one of its ways out, which edges and wires key by
+/// its id (`AMB-D-961`); renaming a port parts every wire that named the old one
+/// ([`amenbo_core::ops::automation::action_update`]).
 #[tauri::command]
 pub fn automation_action_edit(id: i64, name: Option<String>, note: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -1620,6 +1621,7 @@ fn detail_dto(
     view: automation_view::AutomationView,
     held_by: Vec<AutomationRunCardDto>,
 ) -> AutomationDetailDto {
+    let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let a = view.automation;
     AutomationDetailDto {
         id: a.id,
@@ -1628,9 +1630,9 @@ fn detail_dto(
         notes: a.notes,
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
+        edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
+        wires: view.wires.into_iter().map(|w| wire_dto(w, &names)).collect(),
         placements: view.placements.into_iter().map(placement_dto).collect(),
-        edges: view.edges.into_iter().map(edge_dto).collect(),
-        wires: view.wires.into_iter().map(wire_dto).collect(),
         held_by,
     }
 }
@@ -1640,6 +1642,7 @@ fn action_detail_dto(
     view: automation_view::ActionView,
     held_by: Vec<AutomationRunCardDto>,
 ) -> AutomationActionDetailDto {
+    let names = exit_names(view.steps.iter().flat_map(|s| s.exits.iter()).chain(view.exits.iter()));
     let action = view.action;
     AutomationActionDetailDto {
         id: action.id,
@@ -1649,8 +1652,8 @@ fn action_detail_dto(
         used_by: view.used_by,
         entry_step_id: action.entry_step_id,
         steps: view.steps.into_iter().map(step_dto).collect(),
-        edges: view.edges.into_iter().map(edge_dto).collect(),
-        wires: view.wires.into_iter().map(wire_dto).collect(),
+        edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
+        wires: view.wires.into_iter().map(|w| wire_dto(w, &names)).collect(),
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),
@@ -1676,25 +1679,39 @@ fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
     }
 }
 
+/// **The name of every way out a picture's lines can be keyed to**, by the row's id. A line keys its way
+/// out (`AMB-D-961`), and a screen draws it by the name the way out carries now — which is what keeps
+/// a renamed way out's lines on it on screen as in the store.
+fn exit_names<'a>(
+    exits: impl Iterator<Item = &'a automation_view::ExitView>,
+) -> std::collections::HashMap<i64, Option<String>> {
+    exits.map(|e| (e.exit.id, e.exit.name.clone())).collect()
+}
+
+/// The name a line's way out carries, `None` being the unnamed one.
+fn exit_name(names: &std::collections::HashMap<i64, Option<String>>, id: Option<i64>) -> Option<String> {
+    id.and_then(|id| names.get(&id).cloned().flatten())
+}
+
 /// One line of either picture. Which boxes its two ends name is the picture it came in.
-fn edge_dto(edge: AutomationEdge) -> AutomationEdgeDto {
+fn edge_dto(edge: AutomationEdge, names: &std::collections::HashMap<i64, Option<String>>) -> AutomationEdgeDto {
     AutomationEdgeDto {
         id: edge.id,
         from_id: edge.from_id,
-        exit_name: edge.exit_name,
+        exit_name: exit_name(names, Some(edge.exit_id)),
         to_id: edge.to_id,
         ends: edge.ends.as_str(),
-        exit_to: edge.exit_to,
+        exit_to: exit_name(names, edge.exit_to_id),
         max_times: edge.max_times,
     }
 }
 
 /// One wire of either picture, read the way [`edge_dto`] reads a line.
-fn wire_dto(wire: AutomationWire) -> AutomationWireDto {
+fn wire_dto(wire: AutomationWire, names: &std::collections::HashMap<i64, Option<String>>) -> AutomationWireDto {
     AutomationWireDto {
         id: wire.id,
         from_id: wire.from_id,
-        from_exit_name: wire.from_exit_name,
+        from_exit_name: exit_name(names, wire.from_exit_id),
         from_port_name: wire.from_port_name,
         to_id: wire.to_id,
         to_port_name: wire.to_port_name,

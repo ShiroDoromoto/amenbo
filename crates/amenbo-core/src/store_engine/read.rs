@@ -6504,15 +6504,31 @@ pub fn automation_edge_for_exit(
     conn: &Connection,
     owner_kind: crate::model::AutomationPictureOwner,
     from_id: i64,
-    exit_name: Option<&str>,
+    exit_id: i64,
 ) -> Result<Option<crate::model::AutomationEdge>> {
     const E: col::automation_edge::Cols = col::automation_edge::ALL;
     let pred = Pred::eq(E.owner_kind, owner_kind.as_str())
         .and(Pred::eq(E.from_id, from_id))
-        .and(named_or_unnamed(E.exit_name, exit_name));
+        .and(Pred::eq(E.exit_id, exit_id));
     Ok(automation_rows(conn, E.table, &pred, &[Sort::by(E.id)], super::hydrate::automation_edge_row)?
         .into_iter()
         .next())
+}
+
+/// The lines hanging on one way out — the edges that leave by it or return to it, and the wires that
+/// carry what it hands on. What goes when the way out does: a line keyed to a row that is gone decides
+/// nothing and carries nothing.
+pub fn automation_line_ids_on_exit(conn: &Connection, exit_id: i64) -> Result<(Vec<i64>, Vec<i64>)> {
+    const E: col::automation_edge::Cols = col::automation_edge::ALL;
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let mut edges = select_ids(conn, E.id, Some(&Pred::eq(E.exit_id, exit_id)))?;
+    for id in select_ids(conn, E.id, Some(&Pred::eq(E.exit_to_id, exit_id)))? {
+        if !edges.contains(&id) {
+            edges.push(id);
+        }
+    }
+    let wires = select_ids(conn, W.id, Some(&Pred::eq(W.from_exit_id, exit_id)))?;
+    Ok((edges, wires))
 }
 
 /// The edges leaving one box, in display order — what a picture is walked along.
@@ -6566,15 +6582,19 @@ pub fn automation_wire_between(
     conn: &Connection,
     owner_kind: crate::model::AutomationPictureOwner,
     from_id: i64,
-    from_exit_name: Option<&str>,
+    from_exit_id: Option<i64>,
     from_port_name: &str,
     to_id: i64,
     to_port_name: &str,
 ) -> Result<Option<crate::model::AutomationWire>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let exit = match from_exit_id {
+        Some(id) => Pred::eq(W.from_exit_id, id),
+        None => Pred::is_null(W.from_exit_id),
+    };
     let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
         .and(Pred::eq(W.from_id, from_id))
-        .and(named_or_unnamed(W.from_exit_name, from_exit_name))
+        .and(exit)
         .and(Pred::eq(W.from_port_name, from_port_name))
         .and(Pred::eq(W.to_id, to_id))
         .and(Pred::eq(W.to_port_name, to_port_name));

@@ -4338,24 +4338,29 @@ impl Instructor {
             // line says is spelled out because it is what the agent finishes again from: the ways out
             // the step does declare, as they are typed, the error one among them — and the step still
             // running, which the pane is read for afterwards.
+            // The way out is typed as an id here, since what is refused is an id the step does not
+            // carry — a road names one no row can have.
             (Domain::Automation, "done-in-pane") if with.contains_key("refused") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\"{}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — `--exit \"*\"` for the error one among them.",
+                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
                 req(with, "report")?,
-                match arg_str(with, "exit") {
-                    Some(exit) => format!(" --exit \"{exit}\""),
-                    None => String::new(),
-                }
+                req(with, "exit")?
             ),
             // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
-            // one — which is the shape of the command and not a default this writes in.
-            (Domain::Automation, "done-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\"{}` and run it, and confirm the line comes back saying the step is done.",
-                req(with, "report")?,
+            // one — which is the shape of the command and not a default this writes in. A way out is
+            // typed by its id, which the store issues, so the road names the way out
+            // and the step's own text in the pane is where its id is read — the gap `take-in-pane`
+            // leaves for a task's ref, for the same reason.
+            (Domain::Automation, "done-in-pane") => {
+                let report = req(with, "report")?;
                 match arg_str(with, "exit") {
-                    Some(exit) => format!(" --exit \"{exit}\""),
-                    None => String::new(),
+                    Some(exit) => format!(
+                        "In the pane this run is drawn in, type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
+                    ),
+                    None => format!(
+                        "In the pane this run is drawn in, type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
+                    ),
                 }
-            ),
+            }
             // The other side of those three: a verb that builds or drives, reached for from inside a
             // step. What the line says is spelled out rather than left at "it was refused", because
             // this road is about which refusal — a mistyped number is turned away too, and on a shot
@@ -4374,14 +4379,21 @@ impl Instructor {
             // window hands it to the step's terminal and nowhere else — so it is read off the run's
             // own account, and the run's number off its row, the one place it is drawn outside the
             // pane this road leaves shut.
-            (Domain::Automation, "done-outside-pane") => format!(
-                "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\"{}` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
-                req(with, "report")?,
-                match arg_str(with, "exit") {
-                    Some(exit) => format!(" --exit \"{exit}\""),
-                    None => String::new(),
+            //
+            // It leaves by the unnamed way out alone: any other is typed by its id, and the step's
+            // own text — the one place the ids are listed — is in the pane this road leaves shut.
+            (Domain::Automation, "done-outside-pane") => {
+                if arg_str(with, "exit").is_some() {
+                    return Err(
+                        "`done-outside-pane` leaves by the unnamed way out alone — another is typed by its id, and the step's text that lists the ids is in the pane this op leaves shut"
+                            .to_string(),
+                    );
                 }
-            ),
+                format!(
+                    "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\"` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
+                    req(with, "report")?
+                )
+            }
             // The program ending itself, in the run's own pane. The stand-in carries out the line it
             // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
             (Domain::Automation, "quit-in-pane") => {

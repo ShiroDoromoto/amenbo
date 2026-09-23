@@ -150,20 +150,20 @@ steps_gui:
       name: note
       value: nothing was in the way
 
-  # A way out the step does not declare. An empty name is the slip an agent makes for the unnamed
-  # way out, and it is not that one — the unnamed one is said by leaving `--exit` off. Refused, it
-  # writes nothing: the line names the ways out that are declared, and the step stays where it was.
+  # A way out the step does not declare. A way out is typed by its id, and `0` is one no way out
+  # carries. Refused, it writes nothing: the line names the ways out that are declared, each with its
+  # id, and the step stays where it was.
   - type: action
     domain: automation
     op: done-in-pane
     with:
       target: run
-      exit: ""
+      exit: "0"
       report: read the task and found nothing in the way
       refused: invalid_value
 
-  # Still the first step. A build that let the empty name through would have ended it — by the
-  # unnamed way out, which this step sends nowhere, or by the error one.
+  # Still the first step. A build that let an id nobody declared through would have ended it — by
+  # the error way out, or by whichever way out it guessed.
   - type: assert
     domain: automation
     op: run-pane

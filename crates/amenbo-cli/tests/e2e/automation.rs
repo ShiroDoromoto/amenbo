@@ -111,18 +111,20 @@ fn an_automation_carries_no_preamble_of_its_own() {
 
 /// `--from` is one token, `<box>:<way out>`, because a way out is named against whichever of the box
 /// and the action standing on it declares it — a name without its box names nothing. The colon with
-/// nothing after it is the unnamed way out, and `*` the error one.
+/// nothing after it is the unnamed way out, and `*` the error one. What the edge keeps is the way
+/// out's row (`AMB-D-961`), so two names give two keys.
 #[test]
 fn an_edge_names_its_way_out_on_the_box_it_leaves_from() {
     let cli = Cli::new();
     let (_, _, _, placement) = an_automation(&cli);
 
     let unnamed = cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--halt", "--json"]);
-    assert_eq!(unnamed["automation_edge"]["exit_name"], Value::Null);
+    let unnamed_exit = unnamed["automation_edge"]["exit_id"].as_i64().expect("keyed");
     assert_eq!(unnamed["automation_edge"]["ends"].as_str(), Some("halt"));
 
     let errored = cli.json(&["automation", "edge-add", "--from", &format!("{placement}:*"), "--done", "--json"]);
-    assert_eq!(errored["automation_edge"]["exit_name"].as_str(), Some("*"));
+    let errored_exit = errored["automation_edge"]["exit_id"].as_i64().expect("keyed");
+    assert_ne!(unnamed_exit, errored_exit, "the unnamed way out and the error one are two rows");
 
     // No colon at all reads as the unnamed way out too — and that one already says what happens.
     let (again, code) = cli.run_err(&["automation", "edge-add", "--from", &placement, "--done", "--json"]);
@@ -191,15 +193,16 @@ fn inside_an_action_a_step_returns_to_the_action_and_wires_reach_the_action_itse
 
     let named = ai(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:approved"), "--exit-to", "approved"]);
     assert_eq!(named["automation_edge"]["ends"].as_str(), Some("exit"));
-    assert_eq!(named["automation_edge"]["exit_to"].as_str(), Some("approved"));
+    assert_eq!(named["automation_edge"]["exit_to_id"].as_i64(), action_exit.parse().ok());
     assert_eq!(named["automation_edge"]["max_times"], Value::Null, "leaving the action counts nothing");
 
     let bare = ai(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to"]);
     assert_eq!(bare["automation_edge"]["ends"].as_str(), Some("exit"));
-    assert_eq!(bare["automation_edge"]["exit_to"], Value::Null, "bare is the action's unnamed way out");
+    let unnamed = bare["automation_edge"]["exit_to_id"].as_i64().expect("keyed");
+    assert_ne!(Some(unnamed), action_exit.parse().ok(), "bare is the action's unnamed way out");
     let edge = id_of(&bare, "automation_edge");
     let moved = ai(&["automation", "edge-update", &edge, "--exit-to", "approved"]);
-    assert_eq!(moved["automation_edge"]["exit_to"].as_str(), Some("approved"));
+    assert_eq!(moved["automation_edge"]["exit_to_id"].as_i64(), action_exit.parse().ok());
 
     let into = ai(&[
         "automation", "wire-add", "--in-action", "--from", "0", "--from-port", "task", "--to", &step,

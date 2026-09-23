@@ -18,7 +18,7 @@ import {
   panesOf, reordered, resized, restored, runFrameId, slotsOf, stoodForRun, writing,
   type Layout, type Size,
 } from "../talk/layout";
-import { onStep, type StepRun } from "../talk/automationStep";
+import { onStep, standingSteps, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import {
@@ -45,7 +45,7 @@ import { invoke } from "../core/ipc";
 import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
-import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
+import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
@@ -488,7 +488,11 @@ export function WorkspaceFace({
             // restore had landed on (`../talk/layout`).
             next = goProject(next, saved.project);
           }
+          // A step's terminal is left to the run's own pane, which is stood below from what the
+          // host holds: handed to a free place here it would be an ordinary pane in whichever
+          // project the face is on, running a step nobody could tell was one.
           for (const session of running) {
+            if (session.run != null) continue;
             const free = next.frames.find(
               (frame) => frame.session === null && frame.folder === session.folder,
             );
@@ -608,10 +612,10 @@ export function WorkspaceFace({
    * (`stoodForRun`). A run opens its pane by itself, and may be a run in a project the reader is not
    * looking at; what says a pane has arrived is the ring, which is up for a moment and gone.
    *
-   * **The terminal before it is ended, and the frame is emptied of it in the same move.** A step ends
-   * when its agent reports, and the process may still be standing there; left running it would go on
-   * writing into a pane that is now about another step, and left on the frame it would be adopted by
-   * the very opening that is meant to replace it.
+   * **The step's terminal is already running** — the host started it, and ended the one of the step
+   * before it, whether or not this pane is drawn (`crate::pty::open_step`). What is done here is the
+   * frame's half: the old session comes off it and the new one goes on, so the pane takes the step's
+   * terminal up whenever it is drawn, on this page or when the reader turns to it.
    *
    * **A run stopped for a missing input is nothing for this face to do.** There is no terminal to put
    * in the pane, and what is standing in it is the last step's own output — the whole of what a
@@ -624,17 +628,31 @@ export function WorkspaceFace({
     if (one.step === undefined) return;
     const id = runFrameId(one.run);
     const before = standing.current.frames.find((frame) => frame.id === id)?.session ?? null;
-    if (before !== null) void endTerminal(before).catch(() => {});
     const step = one.step;
     setSteps((had) => new Map(had).set(id, step));
     setLayout((was) => {
       const cleared = before === null ? was : closedIn(was, before);
-      return stoodForRun(cleared, one.project, one.run).layout;
+      const stood = stoodForRun(cleared, one.project, one.run).layout;
+      return openedIn(stood, id, step.session, step.folder ?? null, step.agent);
     });
     landOn(id);
   }, [landOn]);
 
   useEffect(() => onStep(stepArrived), [stepArrived]);
+
+  // **And the steps told before this face was up**, once the arrangement has been put back. The
+  // workspace is built the first time it is asked for, and a run started before then — from the
+  // command line, say — has its step's terminal running with nobody told (`crate::automation`'s
+  // `StepsStanding`). Read after the restore rather than beside it, because the restore puts the
+  // saved arrangement in place of what is here and would take a run's pane stood before it away.
+  useEffect(() => {
+    if (!settled) return;
+    void standingSteps().then((all) => {
+      if (gone.current) return;
+      for (const one of all) stepArrived(one);
+    });
+    // Once, as the face settles: every step after that arrives by the event.
+  }, [settled]);
 
   /**
    * Hand a file the panel is showing to the pane the reader is working in — the reverse of
@@ -1597,10 +1615,9 @@ export function WorkspaceFace({
                     start={{
                       frame: frame.id,
                       session: frame.session,
-                      // A step's terminal is opened on a session of its own and says the step's own
-                      // text, not the sentence that points an agent at `agent --json` — that one is
-                      // already inside the text core composed (`crate::pty::pty_open`).
-                      say: step?.say ?? null,
+                      // A step's terminal was started by the host and is on the frame's session
+                      // already (`stepArrived`); what is started here is only what a person opens
+                      // in the run's place after it, on a session of its own.
                       fresh: step !== undefined,
                       runStep: step?.runStep ?? null,
                       // Nothing on this face takes up a terminal it was not given: which session

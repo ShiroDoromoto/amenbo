@@ -9,6 +9,7 @@
 // shape of the app and the other window in the other (`AMB-D-753`). An answer handed back to whoever
 // pressed would reach a screen with no pane to stand it in, so the host tells the window instead
 // (`crate::automation`).
+import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 import type { AutomationStepOpenDto, AutomationStepRunDto } from "../bindings/bindings";
 
@@ -42,4 +43,18 @@ export function onStep(heard: (one: StepOpened) => void): () => void {
     gone = true;
     stop?.();
   };
+}
+
+/**
+ * **The steps whose terminal is running now**, one per run — for a face coming up after they were
+ * told (`crate::automation::automation_steps_standing`).
+ *
+ * The event reaches only a face that is up, and the workspace is put up the first time it is asked
+ * for. A run started before then has its step's terminal running with no pane standing for it, and
+ * this is how the face learns of it. Nothing outside Tauri, and nothing where the host cannot be
+ * asked: a face with no runs is what either of those looks like.
+ */
+export async function standingSteps(): Promise<StepOpened[]> {
+  if (!inTauri()) return [];
+  return await invoke<StepOpened[]>("automation_steps_standing").catch(() => [] as StepOpened[]);
 }

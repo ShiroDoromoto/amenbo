@@ -23,7 +23,7 @@ const hoisted = vi.hoisted(() => ({
     frame?: string | null;
     cwd?: string | null;
     agent?: string | null;
-    say?: string | null;
+    session?: string | null;
     fresh?: boolean;
     runStep?: number | null;
   }[],
@@ -89,7 +89,6 @@ vi.mock("./terminal", () => ({
         adopt?: boolean;
         session?: string | null;
         resume?: string | null;
-        say?: string | null;
         fresh?: boolean;
         runStep?: number | null;
       },
@@ -343,18 +342,22 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
 });
 
 describe("a frame opened for a step of an automation run", () => {
-  /** A frame handed what a step's pane is handed: where it runs, who carries it out, and the text
-   *  core composed for that step (`../shell/WorkspaceFace`). */
-  async function stepFrame(): Promise<HTMLElement> {
+  /** A frame handed what a step's pane is handed: the terminal the host started for the step, where
+   *  it runs, and who carries it out (`../shell/WorkspaceFace`). `running` says whether that terminal
+   *  is still up by the time the frame is drawn. */
+  async function stepFrame(running: boolean): Promise<HTMLElement> {
     hoisted.answers = [wake({ settled: "claude-code" })];
+    hoisted.running = running
+      ? [{ session: "step-3", folder: "/work/here", agent: "claude-code" }]
+      : [];
     const root = document.createElement("div");
     document.body.replaceChildren(root);
     await mountAgentFrame(root, "en", events, {
       frame: "run-7",
+      session: "step-3",
       cwd: "/work/here",
       agent: "claude-code",
       adopt: false,
-      say: "You are one step of an automation run…",
       fresh: true,
       runStep: 3,
     });
@@ -362,33 +365,42 @@ describe("a frame opened for a step of an automation run", () => {
     return root;
   }
 
-  it("starts the terminal on the step's own text, in a session of its own", async () => {
-    // The road a step comes by is the one that is handed an agent to start, and it reached the
-    // terminal with a choice and nothing else — so the step came up on the sentence that points an
-    // agent at `agent --json`, which is what the host writes where there is no text (`AMB-T-5281`).
-    await stepFrame();
+  it("takes up the terminal the host started for the step", async () => {
+    // The host starts a step's terminal whether or not its pane is drawn (`crate::pty::open_step`),
+    // so the frame's part is to draw that one and to start nothing of its own (`AMB-T-5394`).
+    await stepFrame(true);
 
-    const started = hoisted.panes[hoisted.panes.length - 1]!;
-    expect(started.say).toBe("You are one step of an automation run…");
-    expect(started.fresh, "a step opens a session of its own").toBe(true);
-    expect(started.runStep, "the execution the terminal speaks for").toBe(3);
-    expect(started.agent).toBe("claude-code");
+    expect(hoisted.panes).toHaveLength(1);
+    expect(hoisted.panes[0]!.session).toBe("step-3");
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_probe");
   });
 
-  it("does not start a second terminal on it", async () => {
+  it("starts nothing where the step's terminal ended before the frame was drawn", async () => {
+    // The step was carried out once, while nobody was looking. Starting a terminal here would be the
+    // frame asking for an agent the step never asked for.
+    const root = await stepFrame(false);
+
+    expect(hoisted.panes).toEqual([]);
+    // And the row's press is a person asking for a terminal like any other.
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(hoisted.panes).toHaveLength(1);
+    expect(hoisted.panes[0]!.fresh).toBe(true);
+  });
+
+  it("opens what a person asks for after it on a session of its own", async () => {
     // A row pressed after the step's own terminal ended is a person asking for a terminal, not the
-    // step being carried out again.
-    const root = await stepFrame();
+    // step being carried out again — and the place is still the run's.
+    const root = await stepFrame(true);
+    hoisted.running = [];
     hoisted.end?.();
     buttons(root).find((b) => b.textContent === "Open")?.click();
     await new Promise((r) => setTimeout(r, 0));
 
     const again = hoisted.panes[hoisted.panes.length - 1]!;
     expect(hoisted.panes.length, "a second terminal was started").toBeGreaterThan(1);
-    expect(again.say ?? null, "the step's text was sent twice").toBe(null);
-    // Where the place stands for is not spent: it is what the frame is, for as long as it is up.
+    expect(again.session ?? null, "the step's terminal was taken up again").toBe(null);
     expect(again.fresh).toBe(true);
-    expect(again.runStep).toBe(3);
   });
 });
 

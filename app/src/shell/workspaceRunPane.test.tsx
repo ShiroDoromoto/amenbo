@@ -11,9 +11,9 @@
 // is not looking at, so neither the pane being worked in nor the page moves. What says a pane has
 // arrived is the ring, which is up for a moment and gone.
 //
-// **The terminal before it is given up.** A step ends when its agent reports and the process may
-// still be standing there; left running it would go on writing into a pane that is now about another
-// step, and left on the frame it would be adopted by the very opening meant to replace it.
+// **The pane takes up the terminal the host started.** A step's terminal is started, and the one
+// before it ended, on the host whether or not the pane is drawn (`crate::pty::open_step`), so what the
+// face does with a step is put its session on the run's place for the pane to draw.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,6 +31,8 @@ const hoisted = vi.hoisted(() => ({
   stopped: [] as number[],
   /** What the question above a removal is answered with. */
   says: true,
+  /** The steps the host says are running as the face comes up (`standingSteps`). */
+  standing: [] as StepOpened[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -51,6 +53,7 @@ vi.mock("../talk/automationStep", () => ({
     hoisted.heard = fn;
     return () => { hoisted.heard = null; };
   },
+  standingSteps: () => Promise.resolve(hoisted.standing),
 }));
 
 vi.mock("../talk/terminal", async (importOriginal) => ({
@@ -122,7 +125,7 @@ function step(over: Partial<StepRun> = {}): StepRun {
     seq: 1,
     name: "取る",
     task: { id: 5252, ref: "AMB-T-5252", title: "ペインのヘッダを描く" },
-    say: "take one, and report",
+    session: "step-1",
     agent: "claude",
     folder: "/work/a",
     interactive: false,
@@ -153,6 +156,7 @@ beforeEach(() => {
   hoisted.heard = null;
   hoisted.stopped = [];
   hoisted.says = true;
+  hoisted.standing = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -164,19 +168,30 @@ afterEach(() => {
 });
 
 describe("the pane a run is drawn in", () => {
-  it("stands on the first step and opens its terminal on the step's own text", async () => {
+  it("stands on the first step and takes up the terminal the host started for it", async () => {
     await mount();
     expect(panes()).toHaveLength(0);
 
     await arrive();
     expect(panes()).toHaveLength(1);
     const start = hoisted.opened[hoisted.opened.length - 1]!;
-    expect(start.say).toBe("take one, and report");
-    // A session of its own, with nothing of it written on the frame: the place is reused at every
-    // step and the conversation must not be (`AMB-D-869`).
+    expect(start.session).toBe("step-1");
+    expect(start.runStep).toBe(1);
+    // What a person opens in the place after the step is a session of its own, with nothing of it
+    // written on the frame: the place is the run's (`AMB-D-869`).
     expect(start.fresh).toBe(true);
     expect(start.agent).toBe("claude");
     expect(start.cwd).toBe("/work/a");
+  });
+
+  it("stands for a step told before the face was up", async () => {
+    // A run started from the command line before the workspace was ever asked for has its step's
+    // terminal running with nobody told (`crate::automation`'s `StepsStanding`).
+    hoisted.standing = [{ run: 7, project: 1, step: step(), missing: [] }];
+    await mount();
+
+    expect(panes()).toHaveLength(1);
+    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-1");
   });
 
   it("does not take the pane being worked in", async () => {
@@ -185,18 +200,17 @@ describe("the pane a run is drawn in", () => {
     expect(worked()).toBe(null);
   });
 
-  it("keeps one pane at the next step, ending the terminal that was in it", async () => {
+  it("keeps one pane at the next step, and draws the next step's terminal in it", async () => {
     await mount();
     await arrive();
-    const first = hoisted.opened[hoisted.opened.length - 1]!;
 
-    await arrive({ step: step({ runStep: 2, name: "直す", say: "fix it, and report" }) });
+    await arrive({ step: step({ runStep: 2, name: "直す", session: "step-2" }) });
     expect(panes()).toHaveLength(1);
-    expect(hoisted.ended).toEqual([first.session ?? "s1"]);
-    expect(hoisted.opened[hoisted.opened.length - 1]!.say).toBe("fix it, and report");
-    // The second opening is not handed the first one's session: it is a terminal of its own, and one
-    // told to take up the session before it would draw the step that is over.
-    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe(null);
+    // The host ended the terminal before it, so the face ends nothing itself.
+    expect(hoisted.ended).toEqual([]);
+    // The second pane is handed the second step's session, not the first one's: told to take up the
+    // session before it, it would draw the step that is over.
+    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-2");
   });
 
   it("touches nothing where the run was stopped instead", async () => {
@@ -239,7 +253,7 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(panes()).toHaveLength(0);
     // The terminal ends too, and after the stop: a step whose terminal had gone first would have
     // reported nothing either way.
-    expect(hoisted.ended).toEqual(["s1"]);
+    expect(hoisted.ended).toEqual(["step-1"]);
   });
 
   it("stops nothing where the question was answered no", async () => {

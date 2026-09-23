@@ -181,26 +181,19 @@ export type PaneStart = {
    */
   resume?: string | null;
   /**
-   * What the agent is handed as its opening prompt, instead of the sentence that points it at
-   * `agent --json` (`AMB-T-5251`). It is a step of an automation and nothing else: the step's own
-   * text already carries the way in among everything else it says
-   * (`amenbo_core::ops::automation_step`).
-   */
-  say?: string | null;
-  /**
    * Whether this opening starts a session of its own and leaves nothing of it on the frame
    * (`crate::pty::pty_open`).
    *
-   * **A step is one prompt carried out once.** The run keeps one place on the page and swaps the
-   * terminal in it at every step, so the place is reused and the conversation must not be: opened
-   * the ordinary way, the second step would come up inside the first one's session, and the next
-   * run of the app would come up inside a step that is over (`AMB-D-869`).
+   * **It is a run's pane that asks for it.** The place is the run's, and a terminal a person starts
+   * in it after a step has ended must not leave a conversation standing as the place's own: the next
+   * run of the app would come up inside it (`AMB-D-869`).
    */
   fresh?: boolean;
   /**
-   * The step execution this terminal is carrying out (`crate::session::STEP_VAR`), for a pane a run
-   * opened. The agent reads it out of the environment, which is how `amenbo automation step-done` knows
-   * which step it is speaking for without the step's prompt having to carry a number.
+   * The step execution this pane stands for, where a run opened it. **The pane never starts the
+   * step's terminal**: the host started it (`crate::pty::open_step`), and the pane takes it up by
+   * `session` whenever it is drawn. A step whose terminal has already ended is not started again —
+   * the step was carried out once, whether or not anybody was watching.
    */
   runStep?: number | null;
 };
@@ -621,7 +614,10 @@ async function draw(
   host: HTMLElement,
   start: PaneStart,
 ): Promise<Drawn> {
-  const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
+  // A step's terminal is its run's pane's and nobody else's (`crate::pty::open_step`), so it is never
+  // the single session a pane takes up for being the only one.
+  const open = (await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]))
+    .filter((one) => one.run == null || one.session === start.session);
   // The slot's own terminal where it has one. Otherwise, and only where this pane is the one that may:
   // a single open session is the only count that names one without guessing.
   const want = start.session
@@ -651,9 +647,7 @@ async function draw(
     agent: start.agent ?? null,
     cols: term.cols,
     rows: term.rows,
-    say: start.say ?? null,
     fresh: start.fresh ?? false,
-    runStep: start.runStep ?? null,
   });
   // A terminal started here has said nothing yet, so there is nothing it could have missed.
   return { running: opened, named: null, made: [] };

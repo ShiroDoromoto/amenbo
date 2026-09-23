@@ -602,11 +602,11 @@ step?: AutomationStepRunDto,
 missing: Array<string>, };
 
 /**
- * **What one step's terminal is started with.**
+ * **One step of a run, as its pane draws it.**
  *
- * `say` is the whole text core composed — the preamble, the documents the step is handed, the story
- * so far, the values it was given, its own prompt and how to report — and it goes in as the agent's
- * opening prompt rather than being typed after the fact (`crate::pty::pty_open`'s `say`).
+ * The terminal is already running when this is told: the host started it on the whole text core
+ * composed, as the agent's opening prompt (`crate::pty::open_step`). What the pane is handed is
+ * that terminal's session and what the row above it says.
  */
 export type AutomationStepRunDto = { 
 /**
@@ -635,10 +635,15 @@ actionName?: string,
  * The task this stretch of the run is working, where it is on one. Absent until a step takes
  * one — a run whose first step has not reported is on no task yet.
  */
-task?: AutomationRunTaskDto, say: string, agent: string, model?: string, 
+task?: AutomationRunTaskDto, 
 /**
- * Where the terminal runs, resolved from the name the step holds. Absent where the step names
- * none, and then the pane opens where a pane of that project opens.
+ * **The terminal the host started for this step** (`crate::pty::open_step`). The run's pane takes
+ * it up whenever it is drawn, and never starts one of its own for the step.
+ */
+session: string, agent: string, model?: string, 
+/**
+ * Where the terminal runs, resolved from the name the step holds — or, where it names none, the
+ * folder the project is bound to. Absent where there is neither.
  */
 folder?: string, 
 /**
@@ -2533,7 +2538,13 @@ folder: string | null,
  * is the control that moves a running pane to another model — a question about the provider in
  * the pane, so a pane that cannot name the provider draws no control (`AMB-D-865`).
  */
-agent: string | null, };
+agent: string | null, 
+/**
+ * **The automation run this terminal carries a step of**, or absent for every other terminal
+ * (`crate::pty::open_step`). A step's terminal belongs to the run's own pane and to nothing
+ * else, so a face putting its panes back never hands it to an ordinary one.
+ */
+run?: number, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

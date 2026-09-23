@@ -1188,23 +1188,27 @@ pub fn automation_launch(
     Ok(AutomationRunStartedDto { run: run.id })
 }
 
-/// **How many stopped runs the "running" tab is shown.** A stop is kept on the list so that a failure
-/// nobody was watching is still seen — not so that every failure since the store was made is listed.
-/// What a run did months ago is read from the task it worked ([`amenbo_core::store::Store::automation_runs_for_task`]).
-const STOPPED_SHOWN: usize = 20;
+/// **How many canceled runs the "running" tab is shown** under the live ones.
+const CANCELED_SHOWN: usize = 20;
 
 /// **What is under way right now**, across every project — the rows of the "running" tab.
 ///
 /// It crosses projects because a terminal does — what a run holds is a terminal on this machine, and
-/// this machine is not divided up per project. Runs that are `done` are not here: what a finished
-/// run did is reached from the task it worked or the automation it came from, never searched for
-/// (`amenbo_core::store::Store`'s run reads).
+/// this machine is not divided up per project. The live runs come first ([`read::automation_runs_live`]):
+/// what is going, and every failure nobody has acknowledged. The most recent canceled runs follow, taken
+/// from the history ([`read::automation_runs_history`]), because the tab has no history of its own to
+/// draw them in and a run somebody just stopped should not vanish from under the press. A completed run
+/// is not on this card (`AMB-D-955`).
 #[tauri::command]
 pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_running_page");
     let store = open_store_read()?;
+    let conn = store.read_model().conn();
+    let canceled = read::automation_runs_history(conn, CANCELED_SHOWN)?
+        .into_iter()
+        .filter(|run| run.status == AutomationRunStatus::Canceled);
     let mut out = Vec::new();
-    for run in read::automation_runs_live(store.read_model().conn(), STOPPED_SHOWN)? {
+    for run in read::automation_runs_live(conn)?.into_iter().chain(canceled) {
         out.push(run_card(&store, run)?);
     }
     Ok(out)

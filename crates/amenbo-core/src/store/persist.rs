@@ -1919,6 +1919,14 @@ impl Store {
         })
     }
 
+    /// **Say a failed run has been seen** (one operation = one transaction), so it leaves the top of the
+    /// runs tab for the history under it. The reach is the run's, like stopping it.
+    pub fn automation_acknowledge(&mut self, run_id: i64) -> Result<crate::model::AutomationRun> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::acknowledge(tx, run_id)
+        })
+    }
+
     /// **Open one step of a run** — write the execution down and build the text its terminal is
     /// started on (one operation = one transaction).
     ///

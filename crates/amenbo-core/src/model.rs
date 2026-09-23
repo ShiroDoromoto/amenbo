@@ -1901,6 +1901,10 @@ pub struct AutomationRun {
     pub started_at: Option<Timestamp>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// When a person said they had seen this failure. Only a `Failed` run is ever acknowledged, and it
+    /// stays at the top of the runs tab until it is (`AMB-D-955`).
+    #[serde(default)]
+    pub acknowledged_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

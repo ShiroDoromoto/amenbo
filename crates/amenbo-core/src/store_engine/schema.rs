@@ -1203,6 +1203,9 @@ datasets! {
     // show a crash (that step execution is left `failed`) and say nothing about a loop that ran out
     // of turns, an agent that was not there, or an input nothing filled. Set only while
     // `status = 'failed'` (`AMB-D-955`).
+    //
+    // `acknowledged_at` is when a person said they had seen a failure. Until then the failure stays at
+    // the top of the runs tab, because the task it handed back is one nobody is carrying.
     automation_run {
         automation_id: fk("automation", "RESTRICT"),
         project_id: fk("project", "RESTRICT"),
@@ -1212,6 +1215,7 @@ datasets! {
         started_by_kind: actor_kind,
         started_at: ts_opt,
         ended_at: ts_opt,
+        acknowledged_at: ts_opt,
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

@@ -939,6 +939,11 @@ pub const STEPS: &[Step] = &[
         name: "say how a run ended — completed, failed or canceled — instead of done or stopped",
         apply: Apply::Custom(say_how_a_run_ended),
     },
+    Step {
+        to: 61,
+        name: "let a person say they have seen a failed run",
+        apply: Apply::Custom(let_a_failure_be_acknowledged),
+    },
 ];
 
 /// v59: the shared documents go, and `automation_action.note` arrives (`AMB-D-952`).
@@ -979,6 +984,28 @@ fn take_the_shared_documents_away(ctx: &Ctx<'_>) -> Result<()> {
     )?;
     if carries_note == 0 {
         tx.execute_batch("ALTER TABLE automation_action ADD COLUMN note TEXT NOT NULL DEFAULT '';")?;
+    }
+    Ok(())
+}
+
+/// v61: `automation_run.acknowledged_at` — when a person said they had seen a failed run
+/// (`AMB-D-955`).
+///
+/// **A plain `ALTER TABLE … ADD COLUMN`.** The column is nullable, so every row already there reads as
+/// not acknowledged — which is true of every failure in a store that had no way to say it. The `CHECK`
+/// is the one every timestamp column carries, frozen here as text. A store born from a registry that
+/// already has the column, stamped back to an earlier version, is left as it is.
+fn let_a_failure_be_acknowledged(ctx: &Ctx<'_>) -> Result<()> {
+    let has_column: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation_run') WHERE name = 'acknowledged_at'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_column == 0 {
+        ctx.tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN acknowledged_at TEXT \
+             CHECK(acknowledged_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        )?;
     }
     Ok(())
 }
@@ -7158,6 +7185,44 @@ mod tests {
                 )
                 .is_err(),
             "and the retired value is refused on the way in, not merely absent"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v61 in full: the column arrives empty on every run, a failure can then be marked as seen, and
+    /// the mark is held to the shape every timestamp column has.
+    #[test]
+    fn a_failed_run_can_be_marked_as_seen_and_none_arrives_marked() {
+        let dir = scratch("run-acknowledged");
+        let engine = store_at(&dir, 60);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, stopped_reason) VALUES
+                     (1, 1, 1, 'failed', 'crashed');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let seen: Option<String> = engine
+            .conn()
+            .query_row("SELECT acknowledged_at FROM automation_run WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(seen, None, "no failure arrives already seen");
+        engine
+            .conn()
+            .execute("UPDATE automation_run SET acknowledged_at = '2026-09-23T00:00:00Z' WHERE id = 1", [])
+            .expect("a time goes in");
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE automation_run SET acknowledged_at = 'yesterday' WHERE id = 1", [])
+                .is_err(),
+            "and anything else is refused"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

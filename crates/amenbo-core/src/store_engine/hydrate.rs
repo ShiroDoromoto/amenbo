@@ -631,6 +631,7 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        acknowledged_at: ts_opt(r, C.acknowledged_at)?,
         created_at,
         updated_at,
     })

@@ -4349,6 +4349,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "out-in-pane", required: &["name", "value"], refs: &["target"], strings: &["name", "value"], binds: false },
     // The step finished: which way out it took — left out, the unnamed one — and the report it owes
     // whichever it took.
+    // A way out the step does not declare — an empty one included — is turned away with
+    // `invalid_value`, nothing written and the step still running, so a road writes `refused:` on it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
     // **Any other `automation` verb, typed in that same terminal.** Building a definition and driving
     // a run belong outside a step, and the binary turns them away there (`automation_outside_only`)
@@ -4360,15 +4362,26 @@ const REGISTRY: &[OpSpec] = &[
     // **The same report, typed where the run's pane is not.** A step's terminal is started by the app
     // whether or not its pane is drawn (`app/src-tauri/src/pty.rs`, `open_step`), and the three ops
     // above cannot tell that from the old way: opening the pane to type in it starts the terminal on
-    // the spot either way. So this one reports a step of a run nobody has opened, from a plain shell in whatever pane is up, by
-    // putting the step the window would have named into the environment by hand
-    // (`amenbo_core::session::STEP_VAR`). What says the terminal ran is the pane opened afterwards
-    // standing on the step after it.
+    // the spot either way. So this one reports a step of a run nobody has opened, from a plain shell
+    // in whatever pane is up, by putting the step the window would have named into the environment
+    // by hand (`amenbo_core::session::STEP_VAR`). What says the terminal ran is the pane opened
+    // afterwards standing on the step after it.
     //
     // `target` is which run, read off its row on the running tab — the row carries the run's number,
     // and the pane that also carries it is the one this road does not open. `report` and `exit` are
     // `done-in-pane`'s.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-outside-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
+    // **The program in that terminal ending by itself**, before the step has reported. It is the
+    // agent going without a word, which is the one ending a run meets from inside its own step: the
+    // host hears the terminal end and fails the run there (`crashed`). The other ways a terminal ends
+    // are Amenbo's — the next step taking the place, a closed pane — and move nothing, so a road that
+    // reached for one of those would be reading a run that was never going to fail.
+    //
+    // `end-pane` is not this op because it names no run: it is the workspace's, said of whichever
+    // pane has a terminal in it. `target` is which run's pane, read the way `close-run-pane` reads it.
+    // What ends the program is `exit` typed at the stand-in a road stood up to carry lines out
+    // (`can-start`'s `then: runs`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "quit-in-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // A row of the "running" tab. It draws what is going and every failure nobody has acknowledged,
     // across projects, so the row names the project as well as the state.

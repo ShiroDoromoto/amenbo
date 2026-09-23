@@ -4334,6 +4334,18 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "value")?
             ),
+            // A way out the step does not declare is turned away before anything is written. What the
+            // line says is spelled out because it is what the agent finishes again from: the ways out
+            // the step does declare, as they are typed, the error one among them — and the step still
+            // running, which the pane is read for afterwards.
+            (Domain::Automation, "done-in-pane") if with.contains_key("refused") => format!(
+                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\"{}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — `--exit \"*\"` for the error one among them.",
+                req(with, "report")?,
+                match arg_str(with, "exit") {
+                    Some(exit) => format!(" --exit \"{exit}\""),
+                    None => String::new(),
+                }
+            ),
             // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
             // one — which is the shape of the command and not a default this writes in.
             (Domain::Automation, "done-in-pane") => format!(
@@ -4370,6 +4382,12 @@ impl Instructor {
                     None => String::new(),
                 }
             ),
+            // The program ending itself, in the run's own pane. The stand-in carries out the line it
+            // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
+            (Domain::Automation, "quit-in-pane") => {
+                "In the pane this run is drawn in, type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
+                    .to_string()
+            }
             (Domain::Automation, "press-run") => format!(
                 "On the running tab, on the row for this run, {}.",
                 run_press(req(with, "press")?)?

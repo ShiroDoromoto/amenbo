@@ -25,8 +25,7 @@ fn an_action(cli: &Cli, project: &str, name: &str, prompt: &str) -> (String, Str
     );
     let step = id_of(
         &cli.json(&[
-            "automation", "step-add", &action, "--name", name, "--prompt", prompt, "--agent",
-            "claude", "--json",
+            "automation", "step-add", &action, "--name", name, "--prompt", prompt, "--json",
         ]),
         "automation_step",
     );
@@ -142,7 +141,7 @@ fn a_line_is_drawn_on_an_automation_or_inside_an_action() {
     let p = cli.a_project();
     let (action, first) = an_action(&cli, &p, "Review", "review it");
     let second = id_of(
-        &cli.json(&["automation", "step-add", &action, "--name", "again", "--prompt", "look again", "--agent", "claude", "--json"]),
+        &cli.json(&["automation", "step-add", &action, "--name", "again", "--prompt", "look again", "--json"]),
         "automation_step",
     );
 
@@ -179,7 +178,7 @@ fn inside_an_action_a_step_returns_to_the_action_and_wires_reach_the_action_itse
     };
     let action = id_of(&ai(&["automation", "action-add", "--project", &p, "--name", "Review"]), "automation_action");
     let step = id_of(
-        &ai(&["automation", "step-add", &action, "--name", "check", "--prompt", "check it", "--agent", "claude"]),
+        &ai(&["automation", "step-add", &action, "--name", "check", "--prompt", "check it"]),
         "automation_step",
     );
     let step_exit = id_of(&ai(&["automation", "exit-add", "--step", &step, "--name", "approved"]), "automation_exit");
@@ -549,8 +548,9 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
 // ───────────────────────────── running one ─────────────────────────────
 
 /// An automation that launches as it stands: one action of one step that takes a task and closes the
-/// run, with every way out of it decided. Answers the automation's id.
-fn a_launchable(cli: &Cli) -> String {
+/// run, with every way out of it decided and an agent chosen for the step where it is placed. Answers
+/// the automation's id, the placement's and the step's.
+fn a_launchable(cli: &Cli) -> (String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
     let (action, step) = an_action(cli, &p, "take one", "take one");
@@ -561,6 +561,7 @@ fn a_launchable(cli: &Cli) -> String {
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
         "automation_placement",
     );
+    cli.json(&["automation", "agent-set", &placement, "--step", &step, "--agent", "claude", "--json"]);
     // The way out the task comes out on, which is what makes this spot usable as an entry.
     let took = id_of(
         &cli.json(&["automation", "exit-add", "--action", &action, "--name", "took one", "--json"]),
@@ -572,7 +573,7 @@ fn a_launchable(cli: &Cli) -> String {
     // asks about the picture.
     cli.json(&["automation", "edge-add", "--from", &format!("{placement}:took one"), "--done", "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--done", "--json"]);
-    a
+    (a, placement, step)
 }
 
 /// A launch makes a run, and the run is the record every later command names.
@@ -583,7 +584,7 @@ fn a_launchable(cli: &Cli) -> String {
 #[test]
 fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     let cli = Cli::new();
-    let a = a_launchable(&cli);
+    let (a, _, _) = a_launchable(&cli);
 
     let started = cli.json(&["automation", "start", &a, "--json"]);
     assert_eq!(started["automation_run"]["status"].as_str(), Some("running"));
@@ -618,6 +619,33 @@ fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
     assert_ne!(code, 0, "an unfinished automation does not launch: {err}");
     assert!(err.contains("not_ready"), "{err}");
     assert!(err.contains("nothing is set to happen after"), "it names what is missing: {err}");
+}
+
+/// Who carries a step out is chosen where its action is placed (`AMB-D-960`): with nobody chosen the
+/// launch is refused and says so, `show` lists the choice at each spot, and `--clear` takes it back.
+#[test]
+fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
+    let cli = Cli::new();
+    let (a, placement, step) = a_launchable(&cli);
+
+    let chosen = cli.json(&[
+        "automation", "agent-set", &placement, "--step", &step, "--agent", "codex", "--model", "gpt-5",
+        "--json",
+    ]);
+    assert_eq!(chosen["automation_placement_step"]["agent"].as_str(), Some("codex"));
+    assert_eq!(chosen["automation_placement_step"]["model"].as_str(), Some("gpt-5"));
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("carried out by codex (gpt-5)"), "{shown}");
+
+    cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("nobody chosen to carry it out"), "{shown}");
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("nobody is chosen to carry out"), "{err}");
+
+    let (err, code) = cli.run_err(&["automation", "agent-set", &placement, "--step", &step, "--json"]);
+    assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
 }
 
 /// The three verbs a step's own agent types refuse outside a step, and say why.

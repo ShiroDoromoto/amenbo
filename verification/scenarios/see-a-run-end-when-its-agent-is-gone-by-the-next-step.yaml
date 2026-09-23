@@ -40,7 +40,7 @@ given:
   # The first action: one step that takes the task and leaves by "got one". The run starts on it, so
   # it takes a task, and the way out carries the task on to the action's own way out.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: codex-cli, prompt: take the next task and say what it is about }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task and say what it is about }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
@@ -52,13 +52,15 @@ given:
   # The second action: one step, carried out by the same agent. It takes nothing in, so the only thing
   # that can stop it opening is the agent.
   - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
-  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, agent: codex-cli, prompt: read what the step before did }, as: read }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, prompt: read what the step before did }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an agent gone part way" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: codex-cli } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_review, step: read, agent: codex-cli } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_review } }

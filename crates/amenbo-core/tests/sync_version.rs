@@ -260,12 +260,15 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let action = store
         .automation_action_from_prompt(
             Some(mine),
-            NewStep::new("取る", "take one", "claude"),
+            NewStep::new("取る", "take one"),
             &[],
             &[],
         )
         .unwrap();
     let placement = store.automation_placement_add(automation.id, action.id).unwrap();
+    store
+        .automation_placement_step_set(placement.id, action.entry_step_id.unwrap(), "claude", None)
+        .unwrap();
     let took = store
         .automation_exit_add(AutomationOwner::Action, action.id, Some("取った"))
         .unwrap();

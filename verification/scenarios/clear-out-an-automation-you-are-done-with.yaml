@@ -17,7 +17,7 @@ given:
   # leave the rename with nothing a reader could see it had done.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the moring sweep" }, as: sweep }
   - { type: action, domain: automation, op: action-add, with: { name: sweep }, as: sweep_action }
-  - { type: action, domain: automation, op: step-add, with: { target: sweep_action, name: read, agent: claude-code, prompt: read what came in overnight } }
+  - { type: action, domain: automation, op: step-add, with: { target: sweep_action, name: read, prompt: read what came in overnight }, as: step_read }
   - { type: action, domain: automation, op: place-add, with: { target: sweep, action: sweep_action } }
 
 steps_cli:

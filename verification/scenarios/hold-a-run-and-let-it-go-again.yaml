@@ -22,7 +22,7 @@ given:
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
@@ -33,12 +33,14 @@ given:
   # The action the run goes on to. It is what makes the hold settle: a step that reports with nothing
   # after it closes the run, and a closed run is not a held one.
   - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
-  - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, agent: claude-code, prompt: carry on with the task }, as: wait }
+  - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, prompt: carry on with the task }, as: wait }
   - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_after, step: wait, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_after } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_after } }

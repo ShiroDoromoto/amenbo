@@ -148,16 +148,12 @@ impl Driver<'_> {
                     action.to_string(),
                     "--name".into(),
                     name.into(),
-                    "--agent".into(),
-                    req_str(with, "agent")?.into(),
                     "--prompt".into(),
                     req_str(with, "prompt")?.into(),
                 ];
-                for (key, flag) in [("model", "--model"), ("work_dir_ref", "--work-dir")] {
-                    if let Some(v) = with.get(key).and_then(|v| v.as_str()) {
-                        args.push(flag.into());
-                        args.push(v.to_string());
-                    }
+                if let Some(v) = with.get("work_dir_ref").and_then(|v| v.as_str()) {
+                    args.push("--work-dir".into());
+                    args.push(v.to_string());
                 }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_step", bind)?;
@@ -192,6 +188,28 @@ impl Driver<'_> {
                 Ok(Outcome::action(format!(
                     "placed library action {action} on automation {automation} (placement {id})"
                 )))
+            }
+            // Who carries one step out at one placement.
+            "agent-set" => {
+                let placement = self.resolve(with)?;
+                let step = self.resolve_key(with, "step")?;
+                let agent = req_str(with, "agent")?;
+                let mut args: Vec<String> = vec![
+                    "automation".into(),
+                    "agent-set".into(),
+                    placement.to_string(),
+                    "--step".into(),
+                    step.to_string(),
+                    "--agent".into(),
+                    agent.into(),
+                ];
+                if let Some(model) = with.get("model").and_then(|v| v.as_str()) {
+                    args.push("--model".into());
+                    args.push(model.to_string());
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("step {step} is carried out by {agent} at placement {placement}")))
             }
             "entry" => {
                 let automation = self.resolve(with)?;

@@ -6498,6 +6498,40 @@ pub fn automation_cfg_by_name(
         .next())
 }
 
+/// Who carries one step out at one placement, or `None` where nobody has been chosen there yet.
+pub fn automation_placement_step_for(
+    conn: &Connection,
+    placement_id: i64,
+    step_id: i64,
+) -> Result<Option<crate::model::AutomationPlacementStep>> {
+    const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
+    let pred = Pred::eq(C.placement_id, placement_id).and(Pred::eq(C.step_id, step_id));
+    Ok(automation_rows(
+        conn,
+        C.table,
+        &pred,
+        &[Sort::by(C.id)],
+        super::hydrate::automation_placement_step_row,
+    )?
+    .into_iter()
+    .next())
+}
+
+/// Every choice of who carries a step out that was made at one placement, in the order they were made.
+pub fn automation_placement_steps_of(
+    conn: &Connection,
+    placement_id: i64,
+) -> Result<Vec<crate::model::AutomationPlacementStep>> {
+    const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
+    automation_rows(
+        conn,
+        C.table,
+        &Pred::eq(C.placement_id, placement_id),
+        &[Sort::by(C.id)],
+        super::hydrate::automation_placement_step_row,
+    )
+}
+
 /// What is set to happen after one box leaves through one way out. At most one row: a way out decides
 /// one thing.
 pub fn automation_edge_for_exit(
@@ -6719,6 +6753,18 @@ pub fn automation_cfg_ids(
     const C: col::automation_cfg::Cols = col::automation_cfg::ALL;
     let pred = Pred::eq(C.owner_kind, owner_kind.as_str()).and(Pred::eq(C.owner_id, owner_id));
     select_ids(conn, C.id, Some(&pred))
+}
+
+/// The choices of who carries a step out made at one placement — what goes when the placement does.
+pub fn automation_placement_step_ids(conn: &Connection, placement_id: i64) -> Result<Vec<i64>> {
+    const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.placement_id, placement_id)))
+}
+
+/// The choices naming one step, at every placement of its action — what goes when the step does.
+pub fn automation_placement_step_ids_naming_step(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
+    const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.step_id, step_id)))
 }
 
 /// The placements of one library action — what a delete of the action is refused by, since the

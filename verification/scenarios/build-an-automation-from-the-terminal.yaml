@@ -29,7 +29,7 @@ steps_cli:
   - type: action
     domain: automation
     op: step-add
-    with: { target: take, name: look, agent: claude-code, prompt: look for the next task }
+    with: { target: take, name: look, prompt: look for the next task }
     as: look
   - type: action
     domain: automation
@@ -43,7 +43,7 @@ steps_cli:
   - type: action
     domain: automation
     op: step-add
-    with: { target: take, name: claim, agent: claude-code, prompt: take the task you found }
+    with: { target: take, name: claim, prompt: take the task you found }
     as: claim
   - type: action
     domain: automation
@@ -117,7 +117,7 @@ steps_cli:
   - type: action
     domain: automation
     op: step-add
-    with: { target: review, name: read, agent: claude-code, prompt: read what was written }
+    with: { target: review, name: read, prompt: read what was written }
     as: read
   - type: action
     domain: automation
@@ -148,9 +148,21 @@ steps_cli:
     as: at_take
   - type: action
     domain: automation
+    op: agent-set
+    with: { target: at_take, step: look, agent: claude-code }
+  - type: action
+    domain: automation
+    op: agent-set
+    with: { target: at_take, step: claim, agent: claude-code }
+  - type: action
+    domain: automation
     op: place-add
     with: { target: auto, action: review }
     as: at_review
+  - type: action
+    domain: automation
+    op: agent-set
+    with: { target: at_review, step: read, agent: claude-code }
   - type: action
     domain: automation
     op: entry

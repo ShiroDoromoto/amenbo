@@ -272,6 +272,7 @@ fn typed_in(sub: &AutomationCmd) -> Where {
         | AutomationCmd::CfgAdd { .. }
         | AutomationCmd::CfgUpdate { .. }
         | AutomationCmd::CfgSet { .. }
+        | AutomationCmd::AgentSet { .. }
         | AutomationCmd::CfgRm { .. }
         | AutomationCmd::EdgeAdd { .. }
         | AutomationCmd::EdgeUpdate { .. }
@@ -482,13 +483,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::StepAdd { action, name, prompt, agent, model, interactive, work_dir, report_to_task, no_history } => {
+        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history } => {
             let prompt = body_arg(prompt)?;
             let new = NewStep {
                 name,
                 prompt,
-                agent,
-                model,
                 interactive,
                 work_dir_ref: work_dir,
                 report_to_task,
@@ -499,18 +498,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let s = store.automation_step_add(action, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added step: {} ({})", s.name, s.id));
         }
-        AutomationCmd::StepUpdate { id, name, prompt, agent, model, clear_model, interactive, work_dir, clear_work_dir, report_to_task, history } => {
+        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history } => {
             let prompt = body_arg_opt(prompt)?;
-            let model = match clear_model {
-                true => Some(None),
-                false => model.as_deref().map(Some),
-            };
             let work_dir = match clear_work_dir {
                 true => Some(None),
                 false => work_dir.as_deref().map(Some),
             };
             let s = store
-                .automation_step_update(id, name.as_deref(), prompt.as_deref(), agent.as_deref(), model, interactive, work_dir, report_to_task, history)
+                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Updated step: {} ({})", s.name, s.id));
         }
@@ -607,6 +602,33 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 None => format!("✓ Left setting unanswered: {}", c.name),
             };
             write_envelope(flags, "automation.cfg-set", "automation_cfg", serde_json::to_value(&c).unwrap(), Some(vec!["value".to_string()]), false, line);
+        }
+        AutomationCmd::AgentSet { placement, step, agent, model, clear } => {
+            // clap holds `--agent` to be there unless `--clear` is, and the two apart.
+            match agent.filter(|_| !clear) {
+                Some(agent) => {
+                    let c = store
+                        .automation_placement_step_set(placement, step, &agent, model.as_deref())
+                        .map_err(CliError::from)?;
+                    let line = match &c.model {
+                        Some(model) => format!("✓ Chose {} ({model}) for step {step} at placement {placement}", c.agent),
+                        None => format!("✓ Chose {} for step {step} at placement {placement}", c.agent),
+                    };
+                    write_envelope(flags, "automation.agent-set", "automation_placement_step", serde_json::to_value(&c).unwrap(), None, false, line);
+                }
+                None => {
+                    store.automation_placement_step_clear(placement, step).map_err(CliError::from)?;
+                    write_envelope(
+                        flags,
+                        "automation.agent-set",
+                        "automation_placement_step",
+                        json!({ "placement_id": placement, "step_id": step, "cleared": true }),
+                        None,
+                        false,
+                        format!("✓ Left nobody chosen for step {step} at placement {placement}"),
+                    );
+                }
+            }
         }
         AutomationCmd::CfgRm { id } => {
             if !confirm(flags, "delete setting")? {
@@ -973,6 +995,16 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
     for cfg in &placement.settings {
         human(flags, format!("    set  {}", one_cfg(cfg)));
     }
+    for one in &placement.steps {
+        let who = match &one.chosen {
+            Some(c) => match &c.model {
+                Some(model) => format!("carried out by {} ({model})", c.agent),
+                None => format!("carried out by {}", c.agent),
+            },
+            None => "nobody chosen to carry it out".to_string(),
+        };
+        human(flags, format!("    step {} {}  {who}", one.step.id, one.step.name));
+    }
     for exit in &placement.exits {
         human(flags, format!("    way out {}", one_exit(exit.exit.name.as_deref())));
         for port in &exit.outputs {
@@ -1060,10 +1092,7 @@ fn render_action(flags: &Flags, view: &ActionView) {
 /// out.
 fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
     let row = &step.step;
-    let mut marks = vec![format!("agent {}", row.agent)];
-    if let Some(model) = &row.model {
-        marks.push(format!("model {model}"));
-    }
+    let mut marks = Vec::new();
     if row.interactive {
         marks.push("interactive".to_string());
     }
@@ -1076,7 +1105,12 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
     if !row.show_history {
         marks.push("no history".to_string());
     }
-    human(flags, format!("\nstep {} — {}  [{}]", row.id, row.name, marks.join(" · ")));
+    // A step that says none of these is written bare — who carries it out is the placement's to say.
+    let marks = match marks.is_empty() {
+        true => String::new(),
+        false => format!("  [{}]", marks.join(" · ")),
+    };
+    human(flags, format!("\nstep {} — {}{marks}", row.id, row.name));
     for line in row.prompt.lines() {
         human(flags, format!("      | {line}"));
     }

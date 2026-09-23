@@ -16,7 +16,7 @@ given:
   # after it is left waiting for. The step inside declares the same, and the lines inside the action
   # carry the one out by the other.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
@@ -34,14 +34,16 @@ given:
 
   # The hole a wire closes: a required input on the action after it, with nothing joined to it.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
-  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, agent: claude-code, prompt: do the work }, as: do }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work }, as: do }
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
   - { type: action, domain: automation, op: port-add, with: { action: work, name: note, kind: value, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two holes to close" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }

@@ -248,6 +248,13 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_action_step" => {
             "action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)"
         }
+        // Who carries a step out is chosen where the action is placed, so it travels with the
+        // placement — even where the step it names is inside a device-wide action, for the reason the
+        // placement itself does.
+        "automation_placement_step" => concat!(
+            "placement_id IN (SELECT id FROM automation_placement",
+            " WHERE automation_id IN (SELECT id FROM automation WHERE project_id = ?1))",
+        ),
         "automation_run_def" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_task" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_step" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
@@ -1048,9 +1055,9 @@ mod tests {
         );
         let step = put(
             "INSERT INTO automation_action_step \
-                 (action_id, name, prompt, agent, model, interactive, work_dir_ref, \
+                 (action_id, name, prompt, interactive, work_dir_ref, \
                   report_to_task, show_history, order_key, created_at, updated_at) \
-             VALUES (?1, 'worktree を切る', 'あなたは…', 'claude-code', 'opus', 0, 'リポジトリの場所', \
+             VALUES (?1, 'worktree を切る', 'あなたは…', 0, 'リポジトリの場所', \
                      0, 1, 'a0', ?2, ?2)",
             rusqlite::params![action, at],
         );
@@ -1067,6 +1074,12 @@ mod tests {
         put(
             "UPDATE automation SET entry_placement_id = ?2 WHERE id = ?1",
             rusqlite::params![automation, placement],
+        );
+        put(
+            "INSERT INTO automation_placement_step \
+                 (placement_id, step_id, agent, model, created_at, updated_at) \
+             VALUES (?1, ?2, 'claude-code', 'opus', ?3, ?3)",
+            rusqlite::params![placement, step, at],
         );
         put(
             "INSERT INTO automation_cfg \

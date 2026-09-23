@@ -24,7 +24,7 @@ given:
   - type: action
     domain: automation
     op: step-add
-    with: { target: act, name: draft, agent: claude-code, prompt: write the draft }
+    with: { target: act, name: draft, prompt: write the draft }
     as: draft
   - type: action
     domain: automation

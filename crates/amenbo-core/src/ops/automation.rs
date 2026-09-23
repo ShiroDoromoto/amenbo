@@ -41,7 +41,7 @@ use crate::error::{Error, Result};
 use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind,
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
     AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
@@ -984,7 +984,86 @@ pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     delete_lines_naming_box(tx, AutomationPictureOwner::Automation, id)?;
     delete_cfgs(tx, AutomationCfgOwner::Placement, id)?;
+    for chosen in read::automation_placement_step_ids(tx.conn(), id)? {
+        tx.delete_record("automation_placement_step", chosen)?;
+    }
     tx.delete_record("automation_placement", id)?;
+    Ok(())
+}
+
+/// **Choose who carries one step out at one placement** — the agent, and the model where one is
+/// named (`AMB-D-960`). `model` `None` leaves the agent's own default.
+///
+/// The step has to be one of the action standing on the placement: a choice for any other step would
+/// be written and never read. The row is written the first time somebody chooses and rewritten after
+/// that, the way [`cfg_set`] answers a setting.
+pub fn placement_step_set(
+    tx: &WriteTx<'_>,
+    placement_id: i64,
+    step_id: i64,
+    agent: &str,
+    model: Option<&str>,
+) -> Result<AutomationPlacementStep> {
+    let placement = live_placement(tx, placement_id)?;
+    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
+    checked_step_of_placement(tx, &placement, step_id)?;
+    let agent = checked_name("agent", agent)?;
+    let model = match model {
+        Some(model) => Some(checked_name("model", model)?),
+        None => None,
+    };
+    let now = Timestamp::now();
+    if let Some(before) = read::automation_placement_step_for(tx.conn(), placement_id, step_id)? {
+        let mut after = before.clone();
+        after.agent = agent;
+        after.model = model;
+        after.updated_at = now;
+        emit_update(
+            tx,
+            record::automation_placement_step(&before),
+            record::automation_placement_step(&after),
+        )?;
+        return Ok(after);
+    }
+    let chosen = AutomationPlacementStep {
+        id: read::next_id(tx.conn(), "automation_placement_step")?,
+        placement_id,
+        step_id,
+        agent,
+        model,
+        created_at: now,
+        updated_at: now,
+    };
+    emit_create(tx, record::automation_placement_step(&chosen))?;
+    Ok(chosen)
+}
+
+/// **Take back the choice of who carries one step out at one placement**, leaving nobody chosen there.
+/// A launch that would open the step is then refused until somebody chooses again. Nothing chosen is
+/// nothing to take back, and that is not an error.
+pub fn placement_step_clear(tx: &WriteTx<'_>, placement_id: i64, step_id: i64) -> Result<()> {
+    let placement = live_placement(tx, placement_id)?;
+    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
+    checked_step_of_placement(tx, &placement, step_id)?;
+    if let Some(chosen) = read::automation_placement_step_for(tx.conn(), placement_id, step_id)? {
+        tx.delete_record("automation_placement_step", chosen.id)?;
+    }
+    Ok(())
+}
+
+/// The step a choice is made for has to be inside the action standing on the placement.
+fn checked_step_of_placement(
+    tx: &WriteTx<'_>,
+    placement: &AutomationPlacement,
+    step_id: i64,
+) -> Result<()> {
+    let step = live_step(tx, step_id)?;
+    if step.action_id != placement.action_id {
+        return Err(Error::invalid(format!(
+            "step '{step_id}' is not inside the action placed at placement '{}'",
+            placement.id
+        )));
+    }
     Ok(())
 }
 
@@ -996,8 +1075,6 @@ fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 pub struct NewStep {
     pub name: String,
     pub prompt: String,
-    pub agent: String,
-    pub model: Option<String>,
     pub interactive: bool,
     /// The name of the setting or the input the working folder is taken from — a name, not a path.
     pub work_dir_ref: Option<String>,
@@ -1007,12 +1084,10 @@ pub struct NewStep {
 
 impl NewStep {
     /// A step with the three flags where they start.
-    pub fn new(name: &str, prompt: &str, agent: &str) -> NewStep {
+    pub fn new(name: &str, prompt: &str) -> NewStep {
         NewStep {
             name: name.to_string(),
             prompt: prompt.to_string(),
-            agent: agent.to_string(),
-            model: None,
             interactive: false,
             work_dir_ref: None,
             report_to_task: false,
@@ -1041,7 +1116,6 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
     live_action(tx, action_id)?;
     not_under_a_run(tx, Def::Action(action_id))?;
     let name = checked_name("step", &new.name)?;
-    let agent = checked_name("agent", &new.agent)?;
     let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
@@ -1051,8 +1125,6 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
         action_id,
         name,
         prompt: new.prompt,
-        agent,
-        model: new.model,
         interactive: new.interactive,
         work_dir_ref: new.work_dir_ref,
         report_to_task: new.report_to_task,
@@ -1145,8 +1217,6 @@ pub fn step_update(
     id: i64,
     name: Option<&str>,
     prompt: Option<&str>,
-    agent: Option<&str>,
-    model: Option<Option<&str>>,
     interactive: Option<bool>,
     work_dir_ref: Option<Option<&str>>,
     report_to_task: Option<bool>,
@@ -1160,12 +1230,6 @@ pub fn step_update(
     }
     if let Some(prompt) = prompt {
         after.prompt = prompt.to_string();
-    }
-    if let Some(agent) = agent {
-        after.agent = checked_name("agent", agent)?;
-    }
-    if let Some(model) = model {
-        after.model = model.map(str::to_string);
     }
     if let Some(interactive) = interactive {
         after.interactive = interactive;
@@ -1227,6 +1291,10 @@ pub fn step_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 fn delete_step_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     delete_lines_naming_box(tx, AutomationPictureOwner::Action, id)?;
     delete_declarations(tx, AutomationOwner::Step, AutomationPortOwner::Step, id)?;
+    // Every placement of the action chose someone for it, and none of those choices names anything now.
+    for chosen in read::automation_placement_step_ids_naming_step(tx.conn(), id)? {
+        tx.delete_record("automation_placement_step", chosen)?;
+    }
     tx.delete_record("automation_action_step", id)?;
     Ok(())
 }
@@ -2024,7 +2092,7 @@ mod tests {
         let action = action_from_prompt(
             tx,
             Some(automation.project_id),
-            NewStep::new(name, "do it", "claude"),
+            NewStep::new(name, "do it"),
             &[],
             &[],
         )
@@ -2072,7 +2140,7 @@ mod tests {
             let action = action_from_prompt(
                 tx,
                 Some(project),
-                NewStep::new("点検する", "見る", "claude"),
+                NewStep::new("点検する", "見る"),
                 &["直すところがある".to_string()],
                 &[("差分".to_string(), AutomationPortKind::File, true)],
             )
@@ -2260,7 +2328,7 @@ mod tests {
             let action = action_from_prompt(
                 tx,
                 Some(project),
-                NewStep::new("点検する", "見る", "claude"),
+                NewStep::new("点検する", "見る"),
                 &[],
                 &[("差分".to_string(), AutomationPortKind::File, true)],
             )
@@ -2433,7 +2501,7 @@ mod tests {
             let put = step_insert(
                 tx,
                 edge.id,
-                NewStep::new("実装する", "やる", "claude"),
+                NewStep::new("実装する", "やる"),
                 &["直すところがある".to_string()],
                 &[("要件".to_string(), AutomationPortKind::Value, true)],
             )
@@ -2493,7 +2561,7 @@ mod tests {
             )
             .expect("edge");
             assert!(
-                step_insert(tx, edge.id, NewStep::new("実装する", "やる", "claude"), &[], &[]).is_err(),
+                step_insert(tx, edge.id, NewStep::new("実装する", "やる"), &[], &[]).is_err(),
                 "what stands on an automation is a placement, never a step",
             );
         });
@@ -2861,7 +2929,7 @@ mod tests {
             let action = action_from_prompt(
                 tx,
                 Some(automation.project_id),
-                NewStep::new("点検する", "look", "claude"),
+                NewStep::new("点検する", "look"),
                 &["直すところがある".to_string()],
                 &[("差分".to_string(), AutomationPortKind::File, true)],
             )
@@ -3112,6 +3180,66 @@ mod tests {
             assert_eq!(ids, vec![first.id, second.id, mine.id]);
         });
     }
+
+    /// **Who carries a step out is chosen where the action is placed** (`AMB-D-960`): one row per
+    /// placement and step, rewritten when chosen again, and each placement of the same action answers
+    /// for itself.
+    #[test]
+    fn a_step_s_agent_is_chosen_per_placement_and_rewritten_in_place() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "調べる");
+            let there = placement_add(tx, automation.id, action.id).expect("placed twice");
+            let step = only_step(tx, &action);
+
+            let first = placement_step_set(tx, here.id, step.id, "claude", Some("opus")).expect("choose");
+            let again = placement_step_set(tx, here.id, step.id, "codex", None).expect("choose again");
+            assert_eq!(again.id, first.id, "choosing again rewrites the row rather than adding one");
+            assert_eq!((again.agent.as_str(), again.model.as_deref()), ("codex", None));
+            placement_step_set(tx, there.id, step.id, "claude", None).expect("the other spot");
+
+            let chosen = |p: i64| read::automation_placement_step_for(tx.conn(), p, step.id).unwrap();
+            assert_eq!(chosen(here.id).map(|c| c.agent), Some("codex".to_string()));
+            assert_eq!(chosen(there.id).map(|c| c.agent), Some("claude".to_string()));
+
+            placement_step_clear(tx, there.id, step.id).expect("take it back");
+            assert!(chosen(there.id).is_none());
+            placement_step_clear(tx, there.id, step.id).expect("nothing chosen is nothing to take back");
+        });
+    }
+
+    /// A choice for a step of some other action would be written and never read, so it is refused.
+    #[test]
+    fn a_choice_for_a_step_outside_the_placed_action_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, here) = mk_placed(tx, &automation, "調べる");
+            let (elsewhere, _) = mk_placed(tx, &automation, "直す");
+            let step = only_step(tx, &elsewhere);
+            assert!(placement_step_set(tx, here.id, step.id, "claude", None).is_err());
+            assert!(placement_step_set(tx, here.id, step.id, " ", None).is_err());
+        });
+    }
+
+    /// The choices go with whatever they name: the placement taken off, or the step deleted.
+    #[test]
+    fn a_choice_goes_with_its_placement_and_with_its_step() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "調べる");
+            let there = placement_add(tx, automation.id, action.id).expect("placed twice");
+            let step = only_step(tx, &action);
+            placement_step_set(tx, here.id, step.id, "claude", None).expect("choose here");
+            placement_step_set(tx, there.id, step.id, "claude", None).expect("choose there");
+
+            placement_delete(tx, there.id).expect("take one spot off");
+            assert!(read::automation_placement_step_ids(tx.conn(), there.id).unwrap().is_empty());
+            assert_eq!(read::automation_placement_step_ids(tx.conn(), here.id).unwrap().len(), 1);
+
+            step_delete(tx, step.id).expect("delete the step");
+            assert!(read::automation_placement_step_ids(tx.conn(), here.id).unwrap().is_empty());
+        });
+    }
 }
 
 /// **A definition a run is going on is held** (`AMB-D-961`): every op that rewrites one is refused
@@ -3214,6 +3342,8 @@ mod held_by_a_run {
         held("rewrite an answer", run, cfg_update(tx, answer.id, None, None, Some(true), None));
         held("reorder an answer", run, cfg_move(tx, answer.id, Position::Top));
         held("take an answer off", run, cfg_delete(tx, answer.id));
+        held("choose an agent", run, placement_step_set(tx, p.first.id, step.id, "codex", None));
+        held("take the agent back", run, placement_step_clear(tx, p.first.id, step.id));
         held(
             "draw a line",
             run,
@@ -3233,16 +3363,16 @@ mod held_by_a_run {
         held("the action's entry", run, action_set_entry(tx, action, None));
         held("move the action's reach", run, action_set_scope(tx, action, None));
         held("delete the action", run, action_delete(tx, action));
-        held("add a step", run, step_add(tx, action, NewStep::new("もう一つ", "again", "claude")));
+        held("add a step", run, step_add(tx, action, NewStep::new("もう一つ", "again")));
         held(
             "add a step on a line",
             run,
-            step_insert(tx, inner_edge, NewStep::new("もう一つ", "again", "claude"), &[], &[]),
+            step_insert(tx, inner_edge, NewStep::new("もう一つ", "again"), &[], &[]),
         );
         held(
             "rewrite a step",
             run,
-            step_update(tx, step.id, None, Some("again"), None, None, None, None, None, None),
+            step_update(tx, step.id, None, Some("again"), None, None, None, None),
         );
         held("reorder a step", run, step_move(tx, step.id, Position::Bottom));
         held("delete a step", run, step_delete(tx, step.id));
@@ -3343,6 +3473,8 @@ mod held_by_a_run {
             let theirs = add(tx, elsewhere, NewAutomation { name: "よそ".into(), ..Default::default() })
                 .expect("add");
             let placed = placement_add(tx, theirs.id, p.second_action.id).expect("placed there too");
+            let step = only_step(tx, &p.second_action);
+            placement_step_set(tx, placed.id, step.id, "claude", None).expect("chosen there too");
             edge_add(tx, AutomationPictureOwner::Automation, placed.id, None, EdgeTarget::Done, None)
                 .expect("edge");
             set_entry(tx, theirs.id, Some(placed.id)).expect("entry");

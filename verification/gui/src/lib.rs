@@ -5533,6 +5533,19 @@ impl Instructor {
             // rather than the shape for its own sake, so the reading is said as a share of the page
             // between the columns — which is what an operator can hold a pane against without
             // measuring anything.
+            // The list on the pane's row, opened and not picked from. The names are the interface's
+            // own and in the language the run is in, so they are said by what they stand for.
+            (Domain::Workspace, "size-list") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane you are working in (the last one you opened or typed at)"
+                        .to_string(),
+                };
+                format!(
+                    "On the row above {pane}, bring the pointer onto the small mark beside its menu and leave it there. Confirm the list that opens holds six sizes in one row, from the whole page down — the whole page, half standing side by side, half lying across, a quarter, a sixth and an eighth — each drawn on the page's grid with its name under it, and that the one framed is {}. Then move the pointer away without pressing anything.",
+                    size(with)?.phrase()
+                )
+            }
             (Domain::Workspace, "pane-size") => format!(
                 "On the workspace, look at the pane you are working in — the one with the mark round it. Confirm it takes {}.",
                 size(with)?.phrase()

@@ -3,28 +3,30 @@
 # ── Why a list as well as the corner ─────────────────────────────────────────────────────────────
 # The corner measures from the pane's left edge to the pointer. A pane in the right-hand column has
 # its corner against the window's edge, so it can never be pulled out to the whole page — the list is
-# what reaches every size wherever the pane stands.
+# what reaches every size wherever the pane stands. So the road ends on exactly that pane: a quarter
+# in the right-hand column, picked to the whole page, which sends it to a page of its own.
 #
-# ── Why the mark is the size it is now ───────────────────────────────────────────────────────────
+# ── Why the mark is the size it is now, and the list is read before it is used ───────────────────
 # The mark on the row is the page drawn small with what the pane takes filled in, so the row says the
 # size before anything is opened. The list holds the six drawn the same way, each with its name under
 # it, because two halves that differ only by which way they lie are hard to tell apart by the drawing.
+# It is read once with nothing picked, so the names and the framed one are a claim of their own.
 #
-# ── Why it goes down and back up ─────────────────────────────────────────────────────────────────
-# A road read at one size alone says nothing about the pick having done anything: a pane that already
-# took the whole page and was read at the whole page again is green on a build that ignored the
-# press. So it is made smaller first, and then picked back to the whole page, which is the size the
-# list exists to reach.
+# ── Why the first pane goes down to a quarter first ──────────────────────────────────────────────
+# A road read at one size alone says nothing about the pick having done anything, and a pane on its
+# own takes the whole page — so the first pick is from the whole page down, and it is also what leaves
+# room beside it for the second pane to land in the right-hand column.
 #
 # The world is empty, as on every road on this face: choosing the folder raises the project it
-# belongs to, and the pane runs the reader's own shell.
+# belongs to, and the panes run the reader's own shell.
 id: pick-a-pane-size-from-its-row
-title: A pane's size is picked from the list on its own row, down to a quarter and back to the whole page, and the terminal in it comes through
+title: A pane in the right-hand column is picked to the whole page from the list on its row, and goes to a page of its own
 description: >
   Open the workspace, choose the folder it runs in, and get a pane down to a plain shell with a line
-  on it. It takes the whole page. From the mark on its row pick a quarter: the pane comes out at a
-  quarter and three quarters of the page are free. Pick the whole page again: it takes the page, with
-  the line still on it.
+  on it. From the mark on its row pick a quarter: it comes out at a quarter with room beside it. Open
+  a second pane there — a quarter in the right-hand column — and type a line at it. Read its list: the
+  six sizes named, the quarter framed. Pick the whole page: that pane goes to the next page at the
+  whole page, and the first is still on the page it was on.
 
 steps_gui:
   - type: action
@@ -47,7 +49,7 @@ steps_gui:
     domain: workspace
     op: type-line
     with:
-      text: SCENARIO the pane that was sized from its row
+      text: SCENARIO the pane on the left
 
   - type: assert
     domain: workspace
@@ -74,6 +76,36 @@ steps_gui:
       count: 1
       empty: 1
 
+  # The second pane lands in the room beside the first, at the size the last pane takes: a quarter,
+  # in the right-hand column. It becomes the pane being worked in.
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  # A line on it, which is how the steps after name it. Whatever it opened with, the line only has to
+  # stand on the screen.
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane on the right
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: size-list
+    with:
+      size: quarter
+
+  # The size the corner of this pane cannot reach. It cannot share the page at the whole page, so it
+  # starts the next one, and the screen follows the pane that was sized.
   - type: action
     domain: workspace
     op: pick-pane-size
@@ -86,9 +118,28 @@ steps_gui:
     with:
       size: whole
 
-  # The same pane: the page was laid out again under it twice, and a fresh terminal would be empty.
   - type: assert
     domain: workspace
     op: pane
     with:
-      shows: SCENARIO the pane that was sized from its row
+      shows: SCENARIO the pane on the right
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane on the left
+      present: false
+
+  # And the first is where it was, on the first page.
+  - type: action
+    domain: workspace
+    op: go-page
+    with:
+      page: 1
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane on the left

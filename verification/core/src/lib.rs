@@ -4055,6 +4055,15 @@ const REGISTRY: &[OpSpec] = &[
     // never carried into a launch. The screen writes both on the action's own build screen, each as
     // the caret leaves its box.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-update", required: &["target"], refs: &["target"], strings: &["name", "note"], binds: false },
+    // Moving an action to the other library: `reach: device` into the one every project reaches,
+    // `reach: project` into `project`'s, or the project the run stands in where the road names none.
+    // Into the device's it always goes; into a project it goes only while no automation of any other
+    // project places it, and otherwise it is refused (`invalid`) with each of those automations
+    // named — which `scope-refusal-names` reads. **Nothing is copied**, so a road that moves one and
+    // reads the library finds the same row wearing the other reach. On a screen the press is on the
+    // row of the "actions" tab of the entrance that owns the action now: a project's own from that
+    // project, a global one from the sidebar's automations.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-scope", required: &["target", "reach"], refs: &["target", "project"], strings: &["reach"], binds: false },
     // A step inside an action (`target`): its own prompt, and who carries it out. `agent` is the
     // launch catalog's id (`claude-code`), not the command it runs — the launch check judges the
     // step against the ids, and a road writing the command would be told the agent is not installed
@@ -4138,6 +4147,13 @@ const REGISTRY: &[OpSpec] = &[
     // libraries the row is from. `note` is the line the row draws under the name: the first line of
     // what the action is for that is not blank, and `""` where it has none.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach", "note"], binds: false },
+    // What a refused move into a project says: `reach` and `project` are the move's, as on
+    // `action-scope`, and `names` is an automation of another project that
+    // places the action, and the refusal has to name it — the reader is told which placement stands in
+    // the way rather than only that one does. The terminal asks the move again and reads the error it
+    // is turned away with (nothing is written either time); a screen reads the sentence the refused
+    // press left under the row.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "scope-refusal-names", required: &["target", "reach", "names"], refs: &["target", "project", "names"], strings: &["reach"], binds: false },
     //
     // **And a whole definition, read back as text — the terminal's alone.** It is read in two layers,
     // the way it is built: `automation show` prints the placements on an automation with what each
@@ -4540,6 +4556,9 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // a screen road watches.
     (Domain::Automation, "create"),
     (Domain::Automation, "action-add"),
+    // The one way a premise has to put an action in the device's library: it is born in a project's,
+    // and a world whose automations in two projects place one action needs it global first.
+    (Domain::Automation, "action-scope"),
     (Domain::Automation, "step-add"),
     (Domain::Automation, "action-entry"),
     (Domain::Automation, "place-add"),

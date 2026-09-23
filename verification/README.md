@@ -736,7 +736,9 @@ rest of the screen half): an automation's build screen draws its placements and 
 steps, the ops are named for the box and the panel so one set reads either, and boxes, the lines
 between them and the marks along them are drawn nowhere else — neither face is a gap in the other.
 The two listings — a row per definition, a row per library action — are read on both (`listed`,
-`action-listed`).
+`action-listed`). So is moving an action to the other library (`action-scope`) and what a refused
+move into a project names (`scope-refusal-names`): the terminal reads the error it is turned away
+with, a screen the sentence left under the row.
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation but the one that makes one from the list opens on a definition that is already
 there, so a premise builds all three layers — the action, the steps inside it, and the placement on

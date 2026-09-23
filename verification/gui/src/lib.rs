@@ -1182,6 +1182,14 @@ impl Instructor {
             (Domain::Automation, "action-listed") if with.contains_key("note") && present(with) => {
                 Some(Expectation { text: arg_str(with, "note")?.to_string(), present: true })
             }
+            // The automation the refusal names is a name the road gave it, so a reading finds it.
+            (Domain::Automation, "scope-refusal-names") => {
+                let name = arg_str(with, "names")?;
+                Some(Expectation {
+                    text: self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>")),
+                    present: true,
+                })
+            }
             (Domain::Automation, "listed") | (Domain::Automation, "action-listed") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
@@ -3902,6 +3910,28 @@ impl Instructor {
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
+            // Moving an action to the other library, from the "actions" tab of the entrance that owns
+            // it now — the one place it is changed from: a project's own is sent to the global
+            // library from that project's automations screen in one press; a global one is sent into
+            // a project from the sidebar's automations, which asks which project under the row first.
+            (Domain::Automation, "action-scope") => match req(with, "reach")? {
+                "device" => format!(
+                    "Open the automations screen of the project on the ledger, stand on the actions tab, and on the row for \"{}\" press the button that moves it to the global library.",
+                    self.target_label(with)
+                ),
+                "project" => format!(
+                    "In the sidebar, press the smart view for automations and stand on the actions tab. On the row for \"{}\" press the button that moves it to a project, pick {} in the list that opens under the row, and press the button that moves it.",
+                    self.target_label(with),
+                    match with.get("project").and_then(|v| v.as_str()) {
+                        Some(name) => format!(
+                            "\"{}\"",
+                            self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>"))
+                        ),
+                        None => "the project on the ledger".to_string(),
+                    }
+                ),
+                other => return Err(format!("`reach` does not know `{other}` — it is device / project")),
+            },
             // What the action is called and what it is for, written in the panel the edit button on
             // the action's own row opens beside the picture. There is no Save there: each box writes
             // as the caret leaves it, the way the automation's own do.
@@ -6078,6 +6108,16 @@ impl Instructor {
                     None => "",
                 }
             ),
+            // The sentence a refused move left under the row: it names each automation of another
+            // project that places the action, so the one the road placed it on is a name to find.
+            (Domain::Automation, "scope-refusal-names") => format!(
+                "Under the row for \"{}\", confirm the refusal names the automation \"{}\" as one that places it.",
+                self.target_label(with),
+                {
+                    let name = req(with, "names")?;
+                    self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>"))
+                }
+            ),
             // One box, and the mark it may wear. The mark is drawn as colour — an outline round the
             // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
@@ -8243,6 +8283,18 @@ steps_gui:
     op: start-from-frame
     with: { target: auto }
     as: from_frame
+  - type: action
+    domain: automation
+    op: action-scope
+    with: { target: act, reach: device }
+  - type: action
+    domain: automation
+    op: action-scope
+    with: { target: act, reach: project, refused: invalid }
+  - type: assert
+    domain: automation
+    op: scope-refusal-names
+    with: { target: act, reach: project, names: auto }
 "#);
         let mut ins = Instructor::new();
         // What the premise made is what the road then points at, so its labels are learnt without a

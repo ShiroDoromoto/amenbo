@@ -1,0 +1,100 @@
+# An action is made in one library and turns out to belong in the other: what it does was general,
+# or was one project's all along. So its reach can be moved afterwards, and nothing is copied — two
+# actions of the same words would part the moment one of them was rewritten. Into the global library
+# it always goes. Into a project it goes only while no automation of any other project places it,
+# and then it is refused with that automation named, so the reader can decide again there and then.
+id: move-an-action-between-the-global-library-and-a-project
+title: An action moves to the global library, and is refused a move into a project while another project places it
+description: >
+  Move a project's own action to the global library and read the same row wearing the global mark.
+  Then try to move a global action into this project while an automation of another project places
+  it: the move is turned away, the refusal names that automation, and the action is still global.
+given:
+  # This project's own action — where every action is born — which the road sends to the global library.
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — tidy up }, as: tidy }
+
+  # A global action another project's automation places. It is born in this project's library and
+  # made global here, because a project reaches only its own actions and the global ones.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — another }, as: another }
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — shared review }, as: shared }
+  - { type: action, domain: automation, op: action-scope, with: { target: shared, reach: device } }
+  - { type: action, domain: automation, op: create, with: { name: SCENARIO SEED — the other's round, project: another }, as: elsewhere }
+  - { type: action, domain: automation, op: place-add, with: { target: elsewhere, action: shared } }
+
+steps_cli:
+  - type: action
+    domain: automation
+    op: action-scope
+    with:
+      target: tidy
+      reach: device
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: tidy
+      reach: device
+
+  # Another project's automation places it, so it cannot become this project's alone.
+  - type: action
+    domain: automation
+    op: action-scope
+    with:
+      target: shared
+      reach: project
+      refused: invalid
+
+  - type: assert
+    domain: automation
+    op: scope-refusal-names
+    with:
+      target: shared
+      reach: project
+      names: elsewhere
+
+  # Refused means written nowhere: it is still the global row.
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: shared
+      reach: device
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: action-scope
+    with:
+      target: tidy
+      reach: device
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: tidy
+      reach: device
+
+  - type: action
+    domain: automation
+    op: action-scope
+    with:
+      target: shared
+      reach: project
+      refused: invalid
+
+  - type: assert
+    domain: automation
+    op: scope-refusal-names
+    with:
+      target: shared
+      reach: project
+      names: elsewhere
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: shared
+      reach: device

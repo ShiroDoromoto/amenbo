@@ -4357,6 +4357,18 @@ const REGISTRY: &[OpSpec] = &[
     // in them is a gap the operator fills from the line over the pane, the way `<ref>` is elsewhere:
     // the store issues the number.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "verb-in-pane", required: &["verb"], refs: &["target"], strings: &["verb"], binds: false },
+    // **The same report, typed where the run's pane is not.** A step's terminal is started by the app
+    // whether or not its pane is drawn (`app/src-tauri/src/pty.rs`, `open_step`), and the three ops
+    // above cannot tell that from the old way: opening the pane to type in it starts the terminal on
+    // the spot either way. So this one reports a step of a run nobody has opened, from a plain shell in whatever pane is up, by
+    // putting the step the window would have named into the environment by hand
+    // (`amenbo_core::session::STEP_VAR`). What says the terminal ran is the pane opened afterwards
+    // standing on the step after it.
+    //
+    // `target` is which run, read off its row on the running tab — the row carries the run's number,
+    // and the pane that also carries it is the one this road does not open. `report` and `exit` are
+    // `done-in-pane`'s.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-outside-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
     //
     // A row of the "running" tab. It draws what is going and every failure nobody has acknowledged,
     // across projects, so the row names the project as well as the state.

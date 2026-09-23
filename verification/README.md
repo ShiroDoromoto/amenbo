@@ -755,6 +755,11 @@ three are refused anywhere else — and a run started at the terminal opens no p
 terminal, where building a definition and driving a run are turned away (`automation_outside_only`).
 A road writes `refused:` on it, and the words after `automation` are the road's to spell — a `<run>`
 among them is a gap the operator fills off the line over the pane.
+`done-outside-pane` is the report made **without** that pane: a step's terminal is started whether or
+not its pane is drawn, and opening the pane to type in it would start one on the spot either way. So
+it is typed at a plain shell in whatever pane is up, with the step the window would have named put
+into the environment by hand — the run's number off its row on the running tab, the step's off
+`run-show`.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

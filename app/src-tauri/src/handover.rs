@@ -119,7 +119,7 @@ const PASTE_OPEN: &[u8] = b"\x1b[200~";
 const PASTE_CLOSE: &[u8] = b"\x1b[201~";
 
 /// What submits the pasted text, once — and only once — the pane has shown it or answered for it.
-const SUBMIT: &[u8] = b"\r";
+pub const SUBMIT: &[u8] = b"\r";
 
 /// How much of the instruction is looked for on the screen.
 ///
@@ -317,7 +317,8 @@ fn pasteable(instruction: &str) -> String {
     instruction.chars().filter(|c| !c.is_control()).collect()
 }
 
-/// The bytes that put the instruction in **and send it** — for the one moment a newline is owed.
+/// The bytes that put the instruction in, for the one moment a newline is owed after it — which goes
+/// out on its own, [`SUBMIT_AFTER`] later ([`SUBMIT`]).
 ///
 /// Everything the loop above withholds a newline for is the same question: is this an input box, or
 /// is it a program's own first question with the sentence sitting unread beneath it. A person
@@ -327,11 +328,22 @@ fn pasteable(instruction: &str) -> String {
 ///
 /// The text is made safe the same way, because it is the same text arriving by another door
 /// ([`pasteable`]).
-pub fn paste_and_send(instruction: &str) -> Vec<u8> {
-    let mut out = paste(&pasteable(instruction));
-    out.extend_from_slice(SUBMIT);
-    out
+pub fn paste_owed(instruction: &str) -> Vec<u8> {
+    paste(&pasteable(instruction))
 }
+
+/// **How long the newline waits behind the paste it sends.**
+///
+/// Written in the same breath as the paste, it is read as part of it: Gemini CLI takes a return that
+/// comes within 30ms of the key before it as a new line in the box rather than a send
+/// (`bufferFastReturn`, `FAST_RETURN_TIMEOUT`), and the sentence stayed in the box unsent. 100ms got
+/// it through (`AMB-T-5387`). On Windows it is the floor every send there keeps, which is longer
+/// (`AMB-D-887`, `app/src/talk/terminal.ts`'s `READ_AS_A_RETURN_ON_WINDOWS_AFTER_MS`).
+pub const SUBMIT_AFTER: std::time::Duration = if cfg!(windows) {
+    std::time::Duration::from_millis(150)
+} else {
+    std::time::Duration::from_millis(100)
+};
 
 /// The bytes one attempt writes: the instruction, bracketed, with nothing that submits it.
 fn paste(instruction: &str) -> Vec<u8> {
@@ -976,14 +988,15 @@ mod tests {
     }
 
     #[test]
-    fn the_bytes_a_persons_enter_earns_carry_the_sentence_and_the_newline() {
-        // The one place the newline goes out with the paste: the person just pressed Enter here, so
-        // there is no question of its answering something else (`AMB-D-805`).
-        let bytes = paste_and_send("say this\nand this");
+    fn the_paste_a_persons_enter_earns_carries_the_sentence_and_leaves_the_newline_for_later() {
+        // The person just pressed Enter here, so the newline is owed (`AMB-D-805`) — but not in the
+        // same write: a return that close behind the paste is read as part of it (`SUBMIT_AFTER`).
+        let bytes = paste_owed("say this\nand this");
         assert!(bytes.starts_with(PASTE_OPEN));
-        assert!(bytes.ends_with(SUBMIT));
-        let inside = &bytes[PASTE_OPEN.len()..bytes.len() - PASTE_CLOSE.len() - SUBMIT.len()];
+        assert!(bytes.ends_with(PASTE_CLOSE));
+        let inside = &bytes[PASTE_OPEN.len()..bytes.len() - PASTE_CLOSE.len()];
         assert_eq!(inside, b"say thisand this", "and the line's own newline is still dropped");
+        assert!(SUBMIT_AFTER.as_millis() >= 100, "Gemini CLI reads a return within 30ms as a new line");
     }
 
     #[test]

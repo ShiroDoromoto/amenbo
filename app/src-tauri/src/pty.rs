@@ -1978,7 +1978,12 @@ pub fn pty_write(
 /// **The press is what makes this safe.** Everything the hand-over withholds a newline for is one
 /// question — is that an input box, or a program's own first question — and a person sending
 /// something of their own into a box they can see settles it (`AMB-D-805`). So this is the one place
-/// the sentence goes in with the newline that submits it ([`crate::handover::paste_and_send`]).
+/// the sentence goes in with the newline that submits it ([`crate::handover::paste_owed`]).
+///
+/// **The newline follows the paste, not inside it.** Written together, a provider that reads a quick
+/// return as part of what was pasted kept the sentence in its box unsent (Gemini CLI,
+/// [`crate::handover::SUBMIT_AFTER`]). The wait is on a thread of its own: this command answers on
+/// the main thread, and a pause there is the whole window standing still.
 ///
 /// **It is asked on every eligible press and answers once.** Which press that is belongs to the pane
 /// drawing the terminal, which is where a key is; whether anything is owed belongs here, where the
@@ -2000,19 +2005,37 @@ pub fn pty_write(
 /// turned out to need nothing is not a failure either. Only a terminal that is not there at all is
 /// refused, the same way a write to one is.
 #[tauri::command]
-pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
+pub fn pty_brief(
+    app: tauri::AppHandle,
+    terminals: tauri::State<'_, Terminals>,
+    session: String,
+) -> Result<(), CmdError> {
     let mut open = terminals.0.lock().expect("terminals lock");
     let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
     if terminal.pane.briefed() {
         return Ok(());
     }
     let Some(instruction) = terminal.pane.take_unsent() else { return Ok(()) };
-    let bytes = crate::handover::paste_and_send(&instruction);
+    let bytes = crate::handover::paste_owed(&instruction);
     terminal
         .writer
         .write_all(&bytes)
         .and_then(|()| terminal.writer.flush())
-        .map_err(failed)
+        .map_err(failed)?;
+    drop(open);
+    std::thread::spawn(move || {
+        std::thread::sleep(crate::handover::SUBMIT_AFTER);
+        // A terminal that ended in the meantime has nothing left to send into.
+        let terminals = app.state::<Terminals>();
+        let mut open = terminals.0.lock().expect("terminals lock");
+        if let Some(terminal) = open.get_mut(&session) {
+            let _ = terminal
+                .writer
+                .write_all(crate::handover::SUBMIT)
+                .and_then(|()| terminal.writer.flush());
+        }
+    });
+    Ok(())
 }
 
 /// The line to type into a pane running `agent` to have it call itself `name`, or `None` where there

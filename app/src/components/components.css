@@ -1628,6 +1628,11 @@ button.feed__target:hover { color: var(--c-accent); }
    The action build screen's frame (`.actbuild`), with the launch band where that one has its
    declaration. "Edit" stands at the far end of the head. */
 .actbuild__edit { margin-inline-start: auto; }
+/* An automation's ID, the number the terminal names it by — set in the code face, ahead of the name. */
+.autoid {
+  margin-inline-end: var(--s-2); font-family: var(--font-mono); font-size: var(--fs-xs);
+  font-weight: var(--fw-normal); color: var(--c-text-muted); font-variant-numeric: tabular-nums;
+}
 .autolaunch {
   display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) var(--s-3) var(--s-3);
   border-block-end: var(--border-w) var(--border-style) var(--c-rule);

@@ -21,6 +21,10 @@
 // (`./AutomationActionBuildScreen`). It is the same move one layer down (`AMB-D-949`), so the list
 // it replaces is the "actions" tab's rather than the "automations" tab's.
 //
+// **A row leads with the automation's ID**, the number the terminal names it by
+// (`amenbo automation start <ID>`): a name can be changed, so the ID is what ties a row on this
+// screen to a line typed there.
+//
 // **A row says whether its automation could be started now**, beside how many actions are placed on
 // it: "what is this" and "is it built yet" are the two things the list is read for. It is the build
 // screen's own launch check, so the list and the launch place cannot disagree (`AMB-T-5272`).
@@ -164,6 +168,7 @@ function AutomationRow({
       onClick={onOpen}
     >
       <span className="autolist__name">
+        <span className="autoid">{tf("auto.id", { id: automation.id })}</span>
         {automation.name}
         {automation.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
       </span>

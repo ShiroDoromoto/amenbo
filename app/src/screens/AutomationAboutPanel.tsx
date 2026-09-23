@@ -11,6 +11,9 @@
 // (`./AutomationStepPanel`): there is no Save on this screen, so a definition never carries a change
 // that looks made and is not. A refusal is drawn once, at the top, in the words core wrote.
 //
+// **The ID stands first, and is read, not written.** It is what the terminal names the definition by
+// and it never changes, so the panel says so and shows the line it goes into.
+//
 // **Archiving is a field and not an action.** It takes nothing away and stops nothing already
 // running (`amenbo_core::ops::automation::update`) — the row stays in the list carrying the mark —
 // so it saves the way the name does.
@@ -23,7 +26,7 @@ import { useEffect, useState } from "react";
 import { deleteAutomation, editAutomation } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { asTyped } from "../core/keys";
-import { errText, t } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AutomationDetailDto } from "../bindings/bindings";
 
@@ -72,6 +75,14 @@ export function AutomationAboutPanel({
   return (
     <div className="autostep">
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
+
+      <div className="autostep__field">
+        <span className="autostep__label">{t("auto.about.id")}</span>
+        <span className="autoid">{automation.id}</span>
+        <span className="autostep__said">
+          {tf("auto.about.idWhat", { command: `amenbo automation start ${automation.id}` })}
+        </span>
+      </div>
 
       <label className="autostep__field">
         <span className="autostep__label">{t("auto.about.name")}</span>

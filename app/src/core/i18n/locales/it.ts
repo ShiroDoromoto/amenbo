@@ -1053,6 +1053,8 @@ export const it: Translation = {
     "auto.run.noAgent": "non è stato possibile avviare il suo agente",
     "auto.run.byHuman": "fermata a mano",
     "auto.run.noWayOn": "non restava nulla da aprire",
+    "auto.run.noInput": "un input obbligatorio è rimasto vuoto",
+    "auto.run.halted": "un'uscita ha chiamato una persona",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
 

@@ -1042,6 +1042,8 @@ export const id: Translation = {
     "auto.run.noAgent": "agennya tidak bisa dijalankan",
     "auto.run.byHuman": "dihentikan secara manual",
     "auto.run.noWayOn": "tidak ada lagi yang bisa dibuka",
+    "auto.run.noInput": "input wajib tidak terisi",
+    "auto.run.halted": "jalan keluar memanggil seseorang",
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
 

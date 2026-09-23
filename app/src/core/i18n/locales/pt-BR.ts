@@ -1054,6 +1054,8 @@ export const ptBR: Translation = {
     "auto.run.noAgent": "não foi possível iniciar seu agente",
     "auto.run.byHuman": "parada à mão",
     "auto.run.noWayOn": "não restava nada para abrir",
+    "auto.run.noInput": "uma entrada obrigatória ficou vazia",
+    "auto.run.halted": "uma saída chamou uma pessoa",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} em {action}",
 

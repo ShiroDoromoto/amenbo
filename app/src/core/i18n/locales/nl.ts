@@ -1041,6 +1041,8 @@ export const nl: Translation = {
     "auto.run.noAgent": "de agent kon niet worden gestart",
     "auto.run.byHuman": "met de hand gestopt",
     "auto.run.noWayOn": "er viel niets meer te openen",
+    "auto.run.noInput": "een verplichte invoer bleef leeg",
+    "auto.run.halted": "een uitgang riep een mens erbij",
     "auto.run.step": "Stap {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
 

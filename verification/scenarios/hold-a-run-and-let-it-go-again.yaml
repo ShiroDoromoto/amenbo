@@ -83,12 +83,13 @@ steps_cli:
     with:
       target: run
 
+  # A person who said stop ends the run canceled, and a cancel carries no reason.
   - type: assert
     domain: automation
     op: run
     with:
       target: run
-      status: stopped
+      status: canceled
 
   # And it is reachable afterwards from the automation it came from, which is one of the two doors a
   # run is ever found by — a run that ended is still a run that happened.

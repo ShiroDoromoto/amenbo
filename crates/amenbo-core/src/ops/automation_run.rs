@@ -1506,7 +1506,7 @@ mod tests {
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
-                AutomationRunStatus::Done,
+                AutomationRunStatus::Completed,
             );
         });
     }

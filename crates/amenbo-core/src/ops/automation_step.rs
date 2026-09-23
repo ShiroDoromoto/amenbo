@@ -321,29 +321,25 @@ fn sources_of(
     Ok(out)
 }
 
-/// Stop a run because a required input had nothing to fill it, through the one cleanup every ending
+/// Fail a run because a required input had nothing to fill it, through the one cleanup every ending
 /// goes through ([`super::automation_stop::ended`]) — so the task is not left reserved by a run that
 /// is over.
-///
-/// `stopped_reason` is left empty on purpose: the five it offers are a crash, a loop that ran out of
-/// turns, an agent that was not there, a person who said stop and a picture with nothing left to open,
-/// and this is none of them. Writing the nearest one would make the record say something that did not
-/// happen.
 fn stop(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
-    super::automation_stop::ended(tx, before, AutomationRunStatus::Stopped, None)
+    super::automation_stop::ended(
+        tx,
+        before,
+        super::automation_stop::Ending::Failed(AutomationStoppedReason::NoInput),
+    )
 }
 
 /// Stop a run because the agent its next step asks for is not one this machine can start, through the
 /// same cleanup — the task goes back and the line on it says why.
 ///
-/// Here a reason *is* written, where [`stop`]'s is left empty: this is one of the five, and it is the
-/// one the running tab's row has always been able to say and nothing has ever written (`AMB-T-5308`).
 fn gave_up(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
     super::automation_stop::ended(
         tx,
         before,
-        AutomationRunStatus::Stopped,
-        Some(AutomationStoppedReason::NoAgent),
+        super::automation_stop::Ending::Failed(AutomationStoppedReason::NoAgent),
     )
 }
 
@@ -951,11 +947,12 @@ mod tests {
                 Opened::Ready(_) => panic!("nothing has produced the note"),
                 Opened::Stopped { run: stopped, missing, .. } => {
                     assert_eq!(missing, vec!["note".to_string()]);
-                    assert_eq!(stopped.status, AutomationRunStatus::Stopped);
+                    assert_eq!(stopped.status, AutomationRunStatus::Failed);
                     assert!(stopped.ended_at.is_some());
                     assert_eq!(
-                        stopped.stopped_reason, None,
-                        "none of the five it offers is what happened",
+                        stopped.stopped_reason,
+                        Some(AutomationStoppedReason::NoInput),
+                        "the record says what happened",
                     );
                 }
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
@@ -986,7 +983,7 @@ mod tests {
                 Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
                 Opened::NoAgent { run: stopped, agent } => {
                     assert_eq!(agent, "claude");
-                    assert_eq!(stopped.status, AutomationRunStatus::Stopped);
+                    assert_eq!(stopped.status, AutomationRunStatus::Failed);
                     assert!(stopped.ended_at.is_some());
                     assert_eq!(
                         stopped.stopped_reason,
@@ -1078,8 +1075,8 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first).id;
             let stopped = stop(tx, run.clone()).expect("stop");
-            let refused = open(tx, stopped.run.id, def, None).expect_err("a stopped run opens nothing");
-            assert!(refused.to_string().contains("stopped"), "{refused}");
+            let refused = open(tx, stopped.run.id, def, None).expect_err("a failed run opens nothing");
+            assert!(refused.to_string().contains("failed"), "{refused}");
         });
     }
 }

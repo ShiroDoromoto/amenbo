@@ -1042,6 +1042,8 @@ export const vi: Translation = {
     "auto.run.noAgent": "không khởi động được tác nhân của nó",
     "auto.run.byHuman": "đã dừng bằng tay",
     "auto.run.noWayOn": "không còn gì để mở",
+    "auto.run.noInput": "một đầu vào bắt buộc bị bỏ trống",
+    "auto.run.halted": "một lối ra đã gọi người",
     "auto.run.step": "Bước {n} · {step}",
     "auto.run.inAction": "{step} trong {action}",
 

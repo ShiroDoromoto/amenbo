@@ -1058,6 +1058,8 @@ export const ru: Translation = {
     "auto.run.noAgent": "не удалось запустить агента",
     "auto.run.byHuman": "остановлен вручную",
     "auto.run.noWayOn": "открывать было больше нечего",
+    "auto.run.noInput": "обязательный вход остался пустым",
+    "auto.run.halted": "выход позвал человека",
     "auto.run.step": "Шаг {n} · {step}",
     "auto.run.inAction": "{step} в {action}",
 

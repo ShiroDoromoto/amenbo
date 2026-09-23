@@ -1041,6 +1041,8 @@ export const hi: Translation = {
     "auto.run.noAgent": "इसका एजेंट शुरू नहीं हो सका",
     "auto.run.byHuman": "हाथ से बंद किया गया",
     "auto.run.noWayOn": "खोलने के लिए कुछ नहीं बचा था",
+    "auto.run.noInput": "एक ज़रूरी इनपुट खाली रह गया",
+    "auto.run.halted": "एक निकास ने किसी व्यक्ति को बुलाया",
     "auto.run.step": "चरण {n} · {step}",
     "auto.run.inAction": "{action} का {step}",
 

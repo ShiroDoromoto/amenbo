@@ -1058,6 +1058,8 @@ export const uk: Translation = {
     "auto.run.noAgent": "не вдалося запустити агента",
     "auto.run.byHuman": "зупинено вручну",
     "auto.run.noWayOn": "відкривати вже не було чого",
+    "auto.run.noInput": "обов'язковий вхід лишився порожнім",
+    "auto.run.halted": "вихід покликав людину",
     "auto.run.step": "Крок {n} · {step}",
     "auto.run.inAction": "{step} у {action}",
 

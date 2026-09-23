@@ -476,6 +476,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       commands::snapshot,
       automation::automation_page,
+      automation::automation_page_everywhere,
       automation::automation_add,
       automation::automation_edit,
       automation::automation_entry_set,

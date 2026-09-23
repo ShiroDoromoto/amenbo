@@ -10,6 +10,7 @@ import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
 import { BoardScreen } from "../screens/BoardScreen";
 import { ActivityFeed } from "../screens/ActivityFeed";
+import { AutomationsScreen } from "../screens/AutomationsScreen";
 import { UpdateBanner, UpdateCheckFeedback } from "../components/UpdateBanner";
 import { HealthBanner } from "../components/HealthBanner";
 import { ManagedBlockBanner } from "../components/ManagedBlockBanner";
@@ -43,6 +44,10 @@ import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
 /**
+ * `automation` is the definition a project arrives with open on its build screen — a press on the
+ * sidebar's list of every project's automations, which goes to the project that owns the row
+ * (`AMB-D-954`). It is kept on the place for `pick`'s reason.
+ *
  * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the gear in the board toolbar.
  *
  * `pick` is the project a screen should arrive already holding — the one the creation screen just
@@ -50,7 +55,7 @@ import { Icon } from "../components/Icon";
  * are rather than a message passed alongside, so ＜/＞ land back on the same screen holding the same
  * project; a way in that names no project simply leaves it off.
  */
-export type Nav = { type: "view" | "project" | "projectSettings"; id: string; pick?: number };
+export type Nav = { type: "view" | "project" | "projectSettings"; id: string; pick?: number; automation?: number };
 
 /**
  * Where a new task gets created. A task only gets placed in a project; classification (assigning it to a
@@ -700,6 +705,7 @@ export function AppShell() {
               onStartTerminal={startTerminalIn}
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
+              openAutomation={nav.automation}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -725,6 +731,14 @@ export function AppShell() {
           )}
           {nav.type === "view" && nav.id === "search" && (
             <SearchScreen onOpenTask={selectTask} onOpenDecision={selectDecision} />
+          )}
+          {nav.type === "view" && nav.id === "automations" && (
+            <AutomationsScreen
+              projectId={null}
+              workspaceOpen={workspaceOpen}
+              onGoToRun={goToRun}
+              onGoToAutomation={(project, automation) => navTo({ type: "project", id: String(project), automation })}
+            />
           )}
           {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen pick={nav.pick ?? null} />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}

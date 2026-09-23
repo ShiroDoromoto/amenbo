@@ -19,10 +19,12 @@ import type {
   AutomationDetailDto,
   AutomationLaunchBlockDto,
   AutomationLaunchCheckDto,
+  EveryAutomationCardDto,
 } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   automations: [] as AutomationCardDto[],
+  everywhere: [] as EveryAutomationCardDto[],
   detail: null as AutomationDetailDto | null,
   check: null as AutomationLaunchCheckDto | null,
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
@@ -30,6 +32,7 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("../core/automations", () => ({
   useAutomations: () => hoisted.automations,
+  useEveryAutomation: () => hoisted.everywhere,
   useAutomation: () => hoisted.detail,
   useLaunchCheck: () => hoisted.check,
   useAutomationActions: () => [],
@@ -97,6 +100,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.automations = [];
+  hoisted.everywhere = [];
   hoisted.detail = null;
   hoisted.check = null;
   hoisted.launch.mockClear();
@@ -178,6 +182,95 @@ describe("the automations screen", () => {
     expect(container.textContent).toContain(t("auto.build.launch"));
     expect(container.textContent).toContain(t("auto.build.picture"));
     expect(container.querySelector(".actpanel")).toBeNull();
+  });
+});
+
+// The sidebar's entrance (`AMB-D-954`): every project's definitions, each with its project; started
+// from the row; a press on the row goes to that project rather than opening anything here; and
+// nothing is made here, since making one would first ask which project it is for.
+describe("the automations screen opened from the sidebar", () => {
+  const goTo = vi.fn();
+  function everywhere(over: Partial<EveryAutomationCardDto> = {}): EveryAutomationCardDto {
+    return { projectId: 3, projectName: "site", card: card(), ...over };
+  }
+  async function renderEverywhere() {
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: null, workspaceOpen: true, onGoToAutomation: goTo }));
+    });
+  }
+  beforeEach(() => goTo.mockClear());
+
+  it("lists every project's automations, each naming its project, and offers no new one", async () => {
+    hoisted.everywhere = [
+      everywhere({ projectId: 1, projectName: "amenbo", card: card({ id: 7, name: "Morning round" }) }),
+      everywhere({ projectId: 3, projectName: "site", card: card({ id: 9, name: "Publish" }) }),
+    ];
+    await renderEverywhere();
+    const rows = [...container.querySelectorAll(".autolist__row")].map((one) => one.textContent ?? "");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Morning round");
+    expect(rows[0]).toContain("amenbo");
+    expect(rows[1]).toContain("site");
+    expect(buttons().some((b) => b.textContent === t("auto.new"))).toBe(false);
+  });
+
+  it("says no project has one yet, rather than that this project has none", async () => {
+    await renderEverywhere();
+    expect(container.textContent).toContain(t("auto.emptyEverywhere"));
+    expect(container.textContent).not.toContain(t("auto.empty"));
+  });
+
+  it("goes to the row's own project to open it, rather than opening it here", async () => {
+    hoisted.everywhere = [everywhere()];
+    await renderEverywhere();
+    await act(async () => { button("Morning round").click(); });
+    expect(goTo).toHaveBeenCalledWith(3, 7);
+    expect(container.querySelector(".autolist")).not.toBeNull();
+  });
+
+  it("starts the row's automation in the row's project", async () => {
+    hoisted.everywhere = [everywhere()];
+    hoisted.check = { ready: true, blocks: [] };
+    await renderEverywhere();
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true);
+    expect(goTo).not.toHaveBeenCalled();
+  });
+
+  it("holds the start shut while the check has not said it could start", async () => {
+    hoisted.everywhere = [everywhere()];
+    hoisted.check = { ready: false, blocks: [] };
+    await renderEverywhere();
+    expect(button(t("auto.start")).disabled).toBe(true);
+  });
+
+  it("says over the run tabs that they are this device's whole", async () => {
+    await renderEverywhere();
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    await act(async () => { tabs[2].click(); });
+    expect(container.querySelector(".autotabs__scope")?.textContent).toBe(t("auto.scope.device"));
+    await act(async () => { tabs[3].click(); });
+    expect(container.querySelector(".autotabs__scope")?.textContent).toBe(t("auto.scope.device"));
+  });
+
+  it("says nothing of the scope from a project, whose tabs are narrowed elsewhere", async () => {
+    await render();
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    await act(async () => { tabs[2].click(); });
+    expect(container.querySelector(".autotabs__scope")).toBeNull();
+  });
+});
+
+describe("arriving from the sidebar's list", () => {
+  it("opens on the build screen of the automation that was pressed", async () => {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: 1, opening: 7, workspaceOpen: true }));
+    });
+    expect(container.querySelector(".autolist")).toBeNull();
+    expect(container.textContent).toContain(t("auto.build.picture"));
   });
 });
 

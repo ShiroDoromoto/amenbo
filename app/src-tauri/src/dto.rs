@@ -3245,6 +3245,21 @@ pub struct AutomationCardDto {
     pub(crate) archived: bool,
 }
 
+/// **One automation in the list that spans every project** — the row the sidebar's "automations"
+/// tab draws, with whose it is.
+///
+/// The project comes by id as well as by name: the name is what the row says, and the id is where a
+/// press on it goes — that project's build screen, and the folders its launch is asked about.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EveryAutomationCardDto {
+    #[ts(type = "number")]
+    pub(crate) project_id: i64,
+    pub(crate) project_name: String,
+    pub(crate) card: AutomationCardDto,
+}
+
 /// **One library action in the list** — what the "actions" tab draws a row from.
 ///
 /// `global` is the reach it is held at: an action in the device's own library is one every project on

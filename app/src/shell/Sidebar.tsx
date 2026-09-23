@@ -16,7 +16,9 @@ import { inkOn, initialOf, MARK_COMPACT_PX, MARK_PX } from "./projectMark";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
-const VIEW_ICON: Record<string, IconName> = { inbox: "inbox", activity: "activity", due: "calendar" };
+const VIEW_ICON: Record<string, IconName> = {
+  inbox: "inbox", activity: "activity", due: "calendar", automations: "rocket",
+};
 
 /** A project row's own id, off the markup — nothing else in the sidebar carries one. */
 function rowId(row: HTMLElement): number | null {

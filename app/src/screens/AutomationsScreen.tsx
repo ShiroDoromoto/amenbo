@@ -1,4 +1,6 @@
-// The automations of one project — one screen with four tabs in it.
+// The automations — one screen with four tabs in it, standing at two entrances (`AMB-D-954`): a
+// project's toolbar, where it is that project's, and the sidebar's smart views, where it is every
+// project's.
 //
 // **One screen, not four entrances.** What a reader does here moves between them: a definition they
 // have just built is the one they want to watch run, and the action a step carries is edited in the
@@ -12,6 +14,14 @@
 // this machine, and this machine is not divided up per project; a definition and a library action
 // belong to the project they were built in. So those two tabs take no `projectId` and name the
 // project on each row instead.
+//
+// **From the sidebar, what can be changed is only what has no project to be changed in.** An
+// automation is its project's, so the list there names the project on each row, starts one from the
+// row, and a press on the row goes to that project's own build screen rather than opening one here —
+// and nothing is made there, since making one would first ask which project it is for. The actions
+// are the device's library alone, made and changed there (`./AutomationActionsTab`). The two run
+// tabs say over their rows that they are this device's whole, because the sidebar names no project
+// to have narrowed them to.
 //
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
@@ -41,11 +51,12 @@ import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { HistoryTab } from "./HistoryTab";
 import { RunningTab } from "./RunningTab";
-import { addAutomation, useAutomations, useLaunchCheck } from "../core/automations";
+import { useAutomationStart } from "../components/StartAutomation";
+import { addAutomation, useAutomations, useEveryAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { t, tf } from "../core/i18n";
-import type { AutomationCardDto } from "../bindings/bindings";
+import type { AutomationCardDto, EveryAutomationCardDto } from "../bindings/bindings";
 
 /** Which of the four tabs the screen is on. */
 type Tab = "automations" | "actions" | "running" | "history";
@@ -61,19 +72,27 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
 
 export function AutomationsScreen({
   projectId,
+  opening,
   workspaceOpen,
   onGoToRun,
+  onGoToAutomation,
 }: {
+  /** The project whose screen this is, or `null` for the sidebar's, which is every project's. */
   projectId: number | null;
+  /** The definition to arrive already open on — a press on the sidebar's list that came here. */
+  opening?: number;
   /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
   workspaceOpen: boolean;
   /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
   onGoToRun?: (project: number, run: number) => void;
+  /** Go to one automation's build screen in its project — a press on a row of the sidebar's list. */
+  onGoToAutomation?: (project: number, automation: number) => void;
 }) {
+  const everywhere = projectId === null;
   const [tab, setTab] = useState<Tab>("automations");
   // Which definition is open, or nothing while the list is. The build screen replaces the list
   // rather than standing beside it, so this is where the screen is and not a selection within it.
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<number | null>(opening ?? null);
   // Which library action is open, for the same reason and in the same spot: the build screen stands
   // in place of the list rather than beside it.
   const [openAction, setOpenAction] = useState<number | null>(null);
@@ -121,6 +140,13 @@ export function AutomationsScreen({
             ))}
           </div>
 
+          {everywhere && (tab === "running" || tab === "history") && (
+            <div className="autotabs__head">
+              <span className="actlib__sec">{tab === "running" ? t("auto.tab.running") : t("auto.tab.history")}</span>
+              <span className="autotabs__scope">{t("auto.scope.device")}</span>
+            </div>
+          )}
+
           {tab === "running" && <RunningTab onGoToRun={onGoToRun} />}
 
           {tab === "history" && <HistoryTab />}
@@ -129,13 +155,17 @@ export function AutomationsScreen({
             <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />
           )}
 
-          {tab === "automations" && <AutomationNew projectId={projectId} onMade={setOpen} />}
+          {tab === "automations" && everywhere && (
+            <EveryAutomationList workspaceOpen={workspaceOpen} onGoTo={onGoToAutomation} />
+          )}
 
-          {tab === "automations" && automations.length === 0 && (
+          {tab === "automations" && !everywhere && <AutomationNew projectId={projectId} onMade={setOpen} />}
+
+          {tab === "automations" && !everywhere && automations.length === 0 && (
             <div className="auto__empty">{t("auto.empty")}</div>
           )}
 
-          {tab === "automations" && automations.length > 0 && (
+          {tab === "automations" && !everywhere && automations.length > 0 && (
             <ul className="autolist">
               {automations.map((one) => (
                 <li key={one.id}>
@@ -152,6 +182,91 @@ export function AutomationsScreen({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The sidebar's list: every project's definitions, each with its project. */
+function EveryAutomationList({
+  workspaceOpen,
+  onGoTo,
+}: {
+  workspaceOpen: boolean;
+  onGoTo?: (project: number, automation: number) => void;
+}) {
+  const automations = useEveryAutomation();
+  if (automations.length === 0) return <div className="auto__empty">{t("auto.emptyEverywhere")}</div>;
+  return (
+    <ul className="autolist">
+      {automations.map((one) => (
+        <li key={one.card.id}>
+          <EveryAutomationRow
+            row={one}
+            workspaceOpen={workspaceOpen}
+            onGoTo={onGoTo && (() => onGoTo(one.projectId, one.card.id))}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One definition on the sidebar's list — the row goes to its project's build screen, and the start
+ * press stands beside it.
+ *
+ * The press is not inside the row because a press inside a press is not one: the row would swallow
+ * "start" and go to the project instead (the "running" tab's rows stand the same way). Where the
+ * launch is refused, core's sentence goes under the row it was pressed on, as the build screen puts it
+ * under its own press (`../components/StartAutomation`).
+ */
+function EveryAutomationRow({
+  row,
+  workspaceOpen,
+  onGoTo,
+}: {
+  row: EveryAutomationCardDto;
+  workspaceOpen: boolean;
+  onGoTo?: () => void;
+}) {
+  const { card, projectId } = row;
+  const folders = useBoundFolders(projectId).live.map((one) => one.path);
+  const check = useLaunchCheck(card.id, projectId, folders);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
+  return (
+    <>
+      <div className="autolist__line">
+        <button
+          type="button"
+          className={card.archived ? "autolist__row autolist__row--everywhere autolist__row--archived" : "autolist__row autolist__row--everywhere"}
+          disabled={!onGoTo}
+          onClick={onGoTo}
+        >
+          <span className="autolist__name">
+            <span className="autoid">{tf("auto.id", { id: card.id })}</span>
+            {card.name}
+            {card.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
+          </span>
+          <span className="autolist__project">{row.projectName}</span>
+          <span className="autolist__meta">{tf("auto.stepCount", { count: card.placements })}</span>
+          <span
+            className={
+              check === null ? "autolist__ready" : `autolist__ready autolist__ready--${check.ready ? "ok" : "no"}`
+            }
+          >
+            {check === null ? "" : check.ready ? t("auto.ready") : t("auto.notReady")}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={check?.ready !== true || starting}
+          onClick={() => void start(card.id, folders)}
+        >
+          {t("auto.start")}
+        </button>
+      </div>
+      {refused !== null && <div className="autolist__refused">{refused}</div>}
+    </>
   );
 }
 
@@ -205,8 +320,8 @@ function AutomationRow({
  * refuses it too, and a message about it would be a sentence in place of a button that simply does
  * not fire.
  *
- * With no project there is nowhere to make one, so there is no press — the screen is standing on a
- * project that has not been chosen.
+ * With no project there is nowhere to make one, so there is no press — the screen is the sidebar's,
+ * which makes nothing (`AMB-D-954`).
  */
 function AutomationNew({
   projectId,

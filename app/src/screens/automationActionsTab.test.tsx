@@ -235,3 +235,31 @@ describe("making one", () => {
     expect(opened).toEqual([9]);
   });
 });
+
+// Opened from the sidebar there is no project (`AMB-D-954`): the list is the device's library alone,
+// so there is no reach to narrow to, and what is made is global without asking.
+describe("the library opened from the sidebar", () => {
+  async function renderDevice() {
+    await act(async () => {
+      root.render(
+        createElement(AutomationActionsTab, { projectId: null, onOpen: (id: number) => opened.push(id) }),
+      );
+    });
+  }
+
+  it("offers no reach to narrow to", async () => {
+    hoisted.actions = [action({ global: true })];
+    await renderDevice();
+    expect(container.querySelector(".actchip")).toBeNull();
+  });
+
+  it("makes it in the device's library, the one reach there is", async () => {
+    await renderDevice();
+    await act(async () => { button(t("auto.actions.add")).click(); });
+    const options = [...container.querySelectorAll(".actlib__make option")].map((one) => one.getAttribute("value"));
+    expect(options).toEqual(["global"]);
+    type(nameBox(), "Review");
+    await act(async () => { button(t("auto.actions.add")).click(); });
+    expect(hoisted.add).toHaveBeenCalledWith("Review", null);
+  });
+});

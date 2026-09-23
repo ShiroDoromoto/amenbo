@@ -14,13 +14,18 @@
 # place names it. Taking that line away is the screen saying a press on the pulldown was an answer,
 # and not a selection it merely drew: a build that offered the right lines and wrote none of them
 # down would pass the press and fail here.
+#
+# ── Where each half is done ─────────────────────────────────────────────────────────────────────
+# The setting is the action's, so it is declared, written out and insisted on in the action's own
+# input panel; the answer is the placement's, so it is given in the panel a placement opens on the
+# automation. The road goes from the one to the other, which is the way a reader goes.
 id: answer-a-setting-from-the-list-written-under-it
 title: What is written out under a choice setting is what its pulldown offers, and choosing from it answers the setting
 description: >
-  Declare a setting on a placement's panel as the kind that is answered off a list, write two
+  Declare a setting on an action's own screen as the kind that is answered off a list, write two
   choices out under it a line apiece, and say the step is refused without an answer — which puts the
-  setting on the launch place. Then answer it by choosing the second of the two on the pulldown, and
-  the launch place lets the definition go.
+  setting on the launch place of the automation placing it. Then answer it on that placement's panel
+  by choosing the second of the two on the pulldown, and the launch place lets the definition go.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up — so nothing on the launch place is ever about who carries the step out.
@@ -64,11 +69,24 @@ steps_gui:
     with:
       ready: true
 
+  # On the action placed there: the setting, the list under it a line to a choice, and insisting on it.
   - type: action
     domain: automation
-    op: pick-box
+    op: screen
     with:
-      name: take
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: input
 
   - type: action
     domain: automation
@@ -88,8 +106,6 @@ steps_gui:
         - take the next one
         - stop here
 
-  # And the box that says the step is refused without an answer, which is what puts the setting where
-  # this road can read it. Declared and left optional it stands in nobody's way.
   - type: action
     domain: automation
     op: redeclare
@@ -97,6 +113,19 @@ steps_gui:
       what: setting
       name: which way
       required: true
+
+  # Back on the definition, unanswered and in the way.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
 
   - type: assert
     domain: automation
@@ -108,8 +137,13 @@ steps_gui:
       at: which way
       present: true
 
-  # The second of the two written out above. A pulldown that does not offer it is a box that was
-  # read as something other than a line to a choice.
+  # Answered on the placement, off the pulldown the list became — the second line of it.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: take
+
   - type: action
     domain: automation
     op: answer-choice
@@ -117,8 +151,6 @@ steps_gui:
       setting: which way
       value: stop here
 
-  # Nothing in the way again. The name stays on the panel — the setting is still declared — so what
-  # is read here is the whole answer rather than that name going.
   - type: assert
     domain: automation
     op: launch

@@ -1628,6 +1628,19 @@ button.feed__target:hover { color: var(--c-accent); }
    The action build screen's frame (`.actbuild`), with the launch band where that one has its
    declaration. "Edit" stands at the far end of the head. */
 .actbuild__edit { margin-inline-start: auto; }
+/* Which action stands on the pressed spot, read at the head of its panel: the name and its reach, what
+   it is for, and the press that goes to where it is built. */
+.autoplace__action {
+  display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken);
+}
+.autoplace__actionhead { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.autoplace__actionname { font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+.autoplace__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
+.autoplace__empty { font-size: var(--fs-xs); color: var(--c-heed); font-weight: var(--fw-bold); }
+.autoplace__meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autoplace__meta .btn { margin-inline-start: auto; }
 /* An automation's ID, the number the terminal names it by — set in the code face, ahead of the name. */
 .autoid {
   margin-inline-end: var(--s-2); font-family: var(--font-mono); font-size: var(--fs-xs);

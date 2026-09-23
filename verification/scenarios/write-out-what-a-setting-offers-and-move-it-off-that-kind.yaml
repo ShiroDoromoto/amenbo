@@ -1,7 +1,7 @@
 # A setting says what kind of answer it takes, and one of those kinds brings its own list: a `choice`
 # is answered off a pulldown, and what that pulldown holds is written out by whoever declared it, a
 # line to a choice. The box that takes those lines is drawn under the row and under no other kind's,
-# so declaring the kind and writing what it offers are one move on the panel — and a reader who can
+# so declaring the kind and writing what it offers are one move on the action's input panel — and a reader who can
 # declare the setting but not say what it offers has a pulldown with nothing in it.
 #
 # ── Why the move off `choice` is where this road ends ───────────────────────────────────────────
@@ -17,13 +17,19 @@
 # `answer-a-setting-from-the-list-written-under-it` walks that, by answering the setting off the list
 # rather than moving it away from one. This road is about the move, so it writes the list and leaves
 # it unanswered — which is what keeps the launch place free to say something about the move itself.
+#
+# ── Where each half is done ─────────────────────────────────────────────────────────────────────
+# The setting is the action's, so it is declared, written out and insisted on in the action's own
+# input panel; the answer is the placement's, so it is given in the panel a placement opens on the
+# automation. The road goes from the one to the other, which is the way a reader goes.
 id: write-out-what-a-setting-offers-and-move-it-off-that-kind
 title: What a choice setting offers is written out under it, and moving the setting off that kind takes the list with it
 description: >
-  Declare a setting on a placement's panel as the kind that is answered off a list, write the list
+  Declare a setting on an action's own screen as the kind that is answered off a list, write the list
   out under it a line to a choice, and say the step is refused without an answer — which puts the
   setting on the launch place. Then move it to the kind a task filter is answered on, which it can
-  only reach by taking its list with it, and answer it there. The launch place lets it go.
+  only reach by taking its list with it, and answer it on the placement's panel. The launch place
+  lets it go.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up — so nothing on the launch place is ever about who carries the step out.
@@ -67,14 +73,25 @@ steps_gui:
     with:
       ready: true
 
+  # On the action placed there: the setting, the list under it, and insisting on it.
   - type: action
     domain: automation
-    op: pick-box
+    op: screen
     with:
-      name: take
+      tab: actions
 
-  # Declared as the kind that is answered off a list. The box that takes the list is drawn for this
-  # kind alone, so the next step is walkable only if the kind on the row took.
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: input
+
   - type: action
     domain: automation
     op: declare
@@ -93,8 +110,6 @@ steps_gui:
         - take the next one
         - stop here
 
-  # And the box that says the step is refused without an answer, which is what puts the setting where
-  # this road can read it. Declared and left optional it stands in nobody's way.
   - type: action
     domain: automation
     op: redeclare
@@ -102,6 +117,18 @@ steps_gui:
       what: setting
       name: which way
       required: true
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
 
   - type: assert
     domain: automation
@@ -113,8 +140,25 @@ steps_gui:
       at: which way
       present: true
 
-  # Moved to the kind a task filter is answered on. The list cannot come along, so the row has to
-  # give it up in the same call — and core refuses the move outright if it does not.
+  # The move off `choice`, on the action again — which can only land by taking the list with it.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: input
+
   - type: action
     domain: automation
     op: redeclare
@@ -123,9 +167,25 @@ steps_gui:
       name: which way
       kind: taskfilter
 
-  # The far side of that move, read as a reader meets it: the rows a filter is answered on are drawn
-  # under the same name, and one press on one of them is an answer. A row still on the old kind would
-  # offer a pulldown here and nothing to press.
+  # And the rows a task filter is answered on, under the same name on the placement's panel.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: take
+
   - type: action
     domain: automation
     op: answer-filter
@@ -134,9 +194,6 @@ steps_gui:
       row: assignee
       value: My AI
 
-  # And the launch place lets it go. What is read here is the whole answer rather than the line
-  # going: the setting is still declared under that name, so the name is still on the panel, and a
-  # road reading for it gone would be reading the screen wrong.
   - type: assert
     domain: automation
     op: launch

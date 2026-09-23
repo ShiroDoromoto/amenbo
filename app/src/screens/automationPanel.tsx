@@ -1,10 +1,12 @@
-// The controls both build panels are made of — the panel for a spot on an automation
-// (`./AutomationStepPanel`) and the one for a step inside an action (`./AutomationActionStepPanel`).
+// The controls the build panels are made of — the panel for a spot on an automation
+// (`./AutomationStepPanel`), the one for a step inside an action (`./AutomationActionStepPanel`) and
+// the one for what the action declares (`./AutomationActionDeclaresPanel`).
 //
 // **Two layers, one set of controls** (`AMB-D-949`). What a reader does to a declaration is the same
-// act whichever layer declares it: type a name, pick what it carries, say whether it has to be
-// answered, take it away. So the rows live here, and each panel says which layer its presses write
-// on (`../core/automations`).
+// act whichever layer declares it — a step or the action: type a name, pick what it carries, say
+// whether it has to be answered, take it away. So the rows live here, and each panel says which
+// layer its presses write on (`../core/automations`). A spot on an automation declares nothing
+// (`AMB-D-954`); what it shares with the others is what happens after a way out.
 //
 // **Every field writes on the spot.** There is no Save: what a reader changed is what the definition
 // now says, and a panel with a button would leave a box half-edited every time somebody pressed

@@ -4027,7 +4027,7 @@ impl Instructor {
             }
             // What a way out hands on, declared from the way out it belongs to.
             (Domain::Automation, "add-output") => format!(
-                "In the panel showing what the pressed box holds, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
+                "In the panel open beside the picture, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
                 way_out(with),
                 // **The name the box starts on is the one thing this dialog does for a reader.** A
                 // way out that hands one thing on is named for what it hands on nine times out of
@@ -4145,14 +4145,19 @@ impl Instructor {
                 req(with, "setting")?,
                 req(with, "value")?
             ),
-            // **Declaring on the panel.** The three families are one shape on the screen — a row to
+            // **Declaring on the panel.** What is declared is an action's or a step's, so the panel
+            // is one on the action build screen: the action's input or output, opened with
+            // `open-part`, or a pressed step. A spot on an automation declares nothing (it reads what
+            // its action declares), so a road declares after going to the action's own screen.
+            //
+            // The three families are one shape on the screen — a row to
             // write a name in, a kind to choose where the family has one, and a press — so the line
             // names the list it is under and what one of them is called, and the rest is the same
             // sentence three times over.
             (Domain::Automation, "declare") => {
                 let (list, one) = declared_family(req(with, "what")?)?;
                 format!(
-                    "In the panel showing what the pressed box holds, under {list}, write \"{}\" in the row that declares a new {one}{}, and press the button that adds it.",
+                    "In the panel open beside the picture, under {list}, write \"{}\" in the row that declares a new {one}{}, and press the button that adds it.",
                     req(with, "name")?,
                     match arg_str(with, "kind") {
                         Some(kind) => format!(", set what it carries to {}", declared_kind(req(with, "what")?, kind)?),
@@ -4197,7 +4202,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "In the panel showing what the pressed box holds, under {list}, on the {one} \"{}\", {}.",
+                    "In the panel open beside the picture, under {list}, on the {one} \"{}\", {}.",
                     req(with, "name")?,
                     listed(&moves)
                 )
@@ -4205,7 +4210,7 @@ impl Instructor {
             (Domain::Automation, "undeclare") => {
                 let (list, one) = declared_family(req(with, "what")?)?;
                 format!(
-                    "In the panel showing what the pressed box holds, under {list}, on the {one} \"{}\", press the button that takes it away.",
+                    "In the panel open beside the picture, under {list}, on the {one} \"{}\", press the button that takes it away.",
                     req(with, "name")?
                 )
             }

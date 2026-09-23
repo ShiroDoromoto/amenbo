@@ -1013,7 +1013,7 @@ export const ja: Translation = {
     "auto.actions.noteWhat": "この画面とアクション一覧に出るだけ。実行には入らない",
     "auto.actions.cancel": "取消",
     "auto.act.aboutPlace": "アクション",
-    "auto.act.edit": "直す",
+    "auto.act.edit": "編集",
     "auto.act.stepsPlace": "ステップ",
     "auto.act.stepsHint": "上の「入力」から入り、ステップを通って、下の「出力」のどれかで終わる",
     "auto.act.usedWhere": "{n} 本。ここで直すと、全部に効く",

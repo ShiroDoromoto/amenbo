@@ -1007,7 +1007,7 @@ export const hi: Translation = {
     "auto.actions.noteWhat": "सिर्फ़ यहाँ और ऐक्शन की सूची में दिखते हैं। यहाँ से कुछ भी किसी रन तक नहीं पहुँचता।",
     "auto.actions.cancel": "रद्द करें",
     "auto.act.aboutPlace": "ऐक्शन",
-    "auto.act.edit": "बदलें",
+    "auto.act.edit": "संपादित करें",
     "auto.act.stepsPlace": "चरण",
     "auto.act.stepsHint": "ऊपर के इनपुट से शुरू होकर, चरणों से गुज़रता है और नीचे के किसी आउटपुट पर खत्म होता है",
     "auto.act.usedWhere": "{n}। यहाँ का बदलाव सब पर लागू होता है।",

@@ -24,9 +24,9 @@
 //!
 //! **A run stops reading the definition the moment it starts.** Every step inside every placed action
 //! is copied into `automation_run_def` at launch — one column of them, each saying which placement it
-//! was opened from — so editing the automation afterwards cannot change what a run
-//! already under way is doing, and a run stays readable months later when the automation it came from
-//! has moved on.
+//! was opened from, with the wires joined to each input resolved into it — so editing the automation
+//! afterwards cannot change what a run already under way is doing, and a run stays readable months
+//! later when the automation it came from has moved on.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,7 +38,7 @@ use crate::model::{
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
-    RunDefCfg, RunDefExit, RunDefPort, ACTION_BOUNDARY, ERROR_EXIT,
+    RunDefCfg, RunDefExit, RunDefIn, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -680,11 +680,12 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
 ///
 /// The ways out and the inputs are **the step's own**: they are what the agent is told it may leave by
 /// and what it is handed, and the action's declarations are reached through the lines drawn across its
-/// edge ([`onward`], [`crate::ops::automation_step`]). The settings are the placement's — the action's
-/// declarations with this spot's answers written in — because a step reads them by name and the answer
-/// is given once, where the action is placed. The prompt, the agent, the model and the three flags are
-/// resolved here rather than kept as a pointer, so the step is not read halfway through the run as
-/// whatever it had since been edited into.
+/// edge ([`onward`], [`wired_into`]). Each input carries the outputs wired into it, resolved here, so a
+/// run hands a value along the wires it launched with (`AMB-D-961`). The settings are the placement's —
+/// the action's declarations with this spot's answers written in — because a step reads them by name and
+/// the answer is given once, where the action is placed. The prompt, the agent, the model and the three
+/// flags are resolved here rather than kept as a pointer, so the step is not read halfway through the
+/// run as whatever it had since been edited into.
 ///
 /// No cycle can be met here: an action places no action (`AMB-D-949`), so opening a placement goes one
 /// level down and stops. A loop drawn inside an action is a way back between its steps, walked at run
@@ -705,15 +706,14 @@ fn snapshot(
             .collect();
         exits.push(RunDefExit { id: exit.id, name: exit.name.clone(), outs });
     }
-    let ins: Vec<RunDefPort> = read::automation_ports_of(
-        conn,
-        AutomationPortOwner::Step,
-        step.id,
-        AutomationPortDirection::In,
-    )?
-    .into_iter()
-    .map(|p| RunDefPort { name: p.name, kind: p.kind, required: p.required })
-    .collect();
+    let mut ins: Vec<RunDefIn> = Vec::new();
+    let declared =
+        read::automation_ports_of(conn, AutomationPortOwner::Step, step.id, AutomationPortDirection::In)?;
+    for p in declared {
+        let from = wired_into(conn, placement, step.id, &p.name)?;
+        let port = RunDefPort { name: p.name, kind: p.kind, required: p.required };
+        ins.push(RunDefIn { port, from });
+    }
     let cfg: Vec<RunDefCfg> = settings_of(conn, placement)?
         .into_iter()
         .map(|c| RunDefCfg {
@@ -743,6 +743,65 @@ fn snapshot(
         created_at: now,
         updated_at: now,
     })
+}
+
+/// **Every step output the wires join to one input of one step**, followed across the action's edge —
+/// resolved once, at launch, into the copy's [`RunDefIn::from`].
+///
+/// A wire inside the action from another of its steps is a source as it stands. A wire from the
+/// action itself ([`ACTION_BOUNDARY`]) hands on one of the action's inputs, so it is followed out to the
+/// automation's picture: to the wires feeding that input on this placement, and from each of them back
+/// into the action placed at the far end, to the wires that fill the output it names. Those are drawn
+/// into the boundary from a step's way out, and they count only where that way out returns to the very
+/// way out of the action the automation's wire leaves by ([`returns_to`]) — the wire into the boundary
+/// does not name one, and the line from the step's way out is what says which.
+fn wired_into(
+    conn: &Connection,
+    placement: &AutomationPlacement,
+    step_id: i64,
+    port_name: &str,
+) -> Result<Vec<RunDefSource>> {
+    let mut out = Vec::new();
+    for wire in read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)? {
+        if wire.to_id != step_id || wire.to_port_name != port_name {
+            continue;
+        }
+        if wire.from_id != ACTION_BOUNDARY {
+            out.push(RunDefSource {
+                placement_id: placement.id,
+                step_id: wire.from_id,
+                exit_id: wire.from_exit_id,
+                port: wire.from_port_name,
+            });
+            continue;
+        }
+        for outer in read::automation_wires_to_port(
+            conn,
+            AutomationPictureOwner::Automation,
+            placement.id,
+            &wire.from_port_name,
+        )? {
+            let Some(far) = read::automation_placement(conn, outer.from_id)? else { continue };
+            for inner in
+                read::automation_wires_of(conn, AutomationPictureOwner::Action, far.action_id)?
+            {
+                if inner.to_id != ACTION_BOUNDARY || inner.to_port_name != outer.from_port_name {
+                    continue;
+                }
+                let Some(inner_exit) = inner.from_exit_id else { continue };
+                let leaves_by = returns_to(conn, inner.from_id, inner_exit)?;
+                if leaves_by.is_some() && leaves_by == outer.from_exit_id {
+                    out.push(RunDefSource {
+                        placement_id: far.id,
+                        step_id: inner.from_id,
+                        exit_id: inner.from_exit_id,
+                        port: inner.from_port_name,
+                    });
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// The copy a run took of the step a placement opens first, or `None` where it took none.

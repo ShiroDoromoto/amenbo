@@ -1,0 +1,136 @@
+# Inside an action, the steps run from what the action takes in to one of the outputs it declares.
+# Both ends are the action's own, and the screen has a press for each: a step's way out can end the
+# action by one of its outputs, a step's input can be fed from what the action itself took in, and
+# an output of the action is filled from a step that ends by it. A build that lost any of the three
+# would leave an action whose steps nothing reaches and nothing leaves, which is finished only at the
+# terminal.
+#
+# ── Why the line is read on the picture ─────────────────────────────────────────────────────────
+# The pulldown alone could say a thing the picture never drew. The line into the output frame is
+# what a reader actually looks for when they ask where the action ends.
+#
+# ── Why the input is read on the box ────────────────────────────────────────────────────────────
+# A required input with nothing reaching it is marked on the box. Fed from the action itself, the
+# mark goes — which is the one thing that says the wire landed where the step reads it.
+id: end-an-action-by-one-of-its-outputs
+title: A step inside an action ends it by one of its outputs, reads what the action took in, and fills that output
+description: >
+  Open a library action of one step, say on the step's way out that leaving by it ends the action
+  with its output "finished", and read the line that draws into the output frame. Feed the step's
+  required input from what the action itself takes in and read the box stop asking for it. Then open
+  the action's output and fill "finished"'s artefact from what the step hands on.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — write it up }, as: act }
+  - type: action
+    domain: automation
+    op: step-add
+    with: { target: act, name: draft, agent: claude-code, prompt: write the draft }
+    as: draft
+  - type: action
+    domain: automation
+    op: exit-add
+    with: { step: draft, name: drafted }
+    as: draft_drafted
+  - type: action
+    domain: automation
+    op: port-add
+    with: { target: draft_drafted, name: text, kind: file, required: true }
+  - type: action
+    domain: automation
+    op: port-add
+    with: { step: draft, name: title, kind: value, required: true }
+  - type: action
+    domain: automation
+    op: action-entry
+    with: { target: act, step: draft }
+
+  # What the action says to the automations placing it: what it takes in, and a way out of its own
+  # with what leaving by it hands on.
+  - type: action
+    domain: automation
+    op: port-add
+    with: { action: act, name: title, kind: value, required: true }
+  - type: action
+    domain: automation
+    op: exit-add
+    with: { action: act, name: finished }
+    as: act_finished
+  - type: action
+    domain: automation
+    op: port-add
+    with: { target: act_finished, name: text, kind: file, required: true }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: act
+
+  # Said on the way out's row, read on the picture.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: draft
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      ends: exit
+      exit_to: finished
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      ends: exit
+      exit_to: finished
+
+  # The step asks for a title nothing reaches until the action's own is picked for it.
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      unfed: true
+
+  - type: action
+    domain: automation
+    op: pick-wire
+    with:
+      input: title
+      from: title
+      from_action: true
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      unfed: false
+
+  # What leaving by "finished" hands on, filled from the step that ends the action by it.
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: output
+
+  - type: action
+    domain: automation
+    op: fill-output
+    with:
+      exit: finished
+      output: text
+      from: draft

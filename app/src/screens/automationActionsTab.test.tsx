@@ -73,7 +73,7 @@ function button(label: string): HTMLButtonElement {
 const nameBox = () => container.querySelector<HTMLInputElement>(".actlib__make input")!;
 
 /** Pick a reach in the make form, which starts with none picked. */
-async function pickReach(value: "project" | "device") {
+async function pickReach(value: "project" | "global") {
   const reach = container.querySelector<HTMLSelectElement>(".actlib__make select")!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(reach, value);
@@ -115,7 +115,7 @@ describe("the library", () => {
       action({ id: 2, name: "Take one", global: false }),
     ];
     await render();
-    expect(rows()[0]).toContain(t("auto.actions.reachDevice"));
+    expect(rows()[0]).toContain(t("auto.actions.reachGlobal"));
     expect(rows()[1]).toContain(t("auto.actions.reachProject"));
   });
 
@@ -212,7 +212,7 @@ describe("making one", () => {
   it("makes it in the device's library when that reach is picked", async () => {
     await openForm();
     type(nameBox(), "Review");
-    await pickReach("device");
+    await pickReach("global");
     await act(async () => { button(t("auto.actions.add")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", null);
   });

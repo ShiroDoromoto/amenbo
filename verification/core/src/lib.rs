@@ -4201,7 +4201,7 @@ const REGISTRY: &[OpSpec] = &[
     // A line leaving one box, and what is written along it: the way out's own name, and where it
     // goes — on to a box (`to`), or to the end of the task or the run (`ends`). `present: false` is
     // no line leaving by that way out, and names neither.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "ends"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "ends", "exit_to"], binds: false },
     // The dashed outline around the boxes one task is worked by, named by the box that takes it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
     // Pressing a box, which is what puts what it holds in the panel beside the picture.
@@ -4232,7 +4232,13 @@ const REGISTRY: &[OpSpec] = &[
     // in the picture. `to` is a box to go on to, `ends` the end of the task or the run, and a step
     // naming neither takes what was said away — "nothing said yet", which is a state of its own.
     // `max_times` is the limit a way out going on to a box carries, and `~` empties it.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "to", "ends"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "to", "ends", "exit_to"], binds: false },
+    // The action's own three places on its build screen, opened in the panel: the row for the action
+    // itself, the input frame over the picture, the output frame under it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-part", required: &["part"], refs: &[], strings: &["part"], binds: false },
+    // What fills one output a way out of the action hands on — a step's output, picked in the output
+    // panel from the steps that leave by that way out.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "fill-output", required: &["output", "from"], refs: &[], strings: &["exit", "output", "from"], binds: false },
     //
     // **The automation build screen's own three.** An automation's picture has no line until two
     // placements are joined either, so the first placement comes from the press in the empty picture,

@@ -653,6 +653,7 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
         started_by_kind: by.by,
         started_at: Some(now),
         ended_at: None,
+        acknowledged_at: None,
         created_at: now,
         updated_at: now,
     };

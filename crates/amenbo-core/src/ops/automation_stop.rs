@@ -329,6 +329,30 @@ pub fn stop(tx: &WriteTx<'_>, run_id: i64, ending: Ending) -> Result<Ended> {
     ended(tx, before, ending)
 }
 
+/// **Say a failed run has been seen** (`AMB-D-955`). It leaves the top of the runs tab for the
+/// history under it; nothing else about the run changes.
+///
+/// Only a failure is acknowledged: a completed or canceled run needs nobody, and one still going is
+/// not over. Acknowledging one that already is answers it as it stands rather than moving the time.
+pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64) -> Result<AutomationRun> {
+    let before = live_run(tx, run_id)?;
+    if before.status != AutomationRunStatus::Failed {
+        return Err(Error::invalid(format!(
+            "run '{run_id}' is {}, and only a failed run is acknowledged",
+            before.status.as_str()
+        )));
+    }
+    if before.acknowledged_at.is_some() {
+        return Ok(before);
+    }
+    let now = Timestamp::now();
+    let mut after = before.clone();
+    after.acknowledged_at = Some(now);
+    after.updated_at = now;
+    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
+    Ok(after)
+}
+
 /// **The runs this machine was in the middle of when it last shut down.**
 ///
 /// Run at startup, before anything else touches a run. Every `running` row is one from a process that
@@ -466,22 +490,24 @@ mod tests {
             let paused = a_run(tx, &p.automation);
             let stopped = a_run(tx, &p.automation);
             settle(tx, paused.clone()).expect("pause");
-            stop(tx, stopped.id, Ending::Canceled).expect("stop");
-            let live: Vec<i64> = read::automation_runs_live(tx.conn(), 20)
+            ended(tx, stopped.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+            let live: Vec<i64> = read::automation_runs_live(tx.conn())
                 .expect("live")
                 .into_iter()
                 .map(|one| one.id)
                 .collect();
             assert!(live.contains(&running.id) && live.contains(&paused.id) && live.contains(&stopped.id));
-            // Under way first and newest first within that, then the stops — which is the order the
+            // Under way first and newest first within that, then the failures — which is the order the
             // tab draws, without a screen sorting what it was handed.
-            let over = live.iter().position(|id| *id == stopped.id).expect("the stop is on it");
-            assert_eq!(over, live.len() - 1, "a stop sits behind everything still going");
+            let over = live.iter().position(|id| *id == stopped.id).expect("the failure is on it");
+            assert_eq!(over, live.len() - 1, "a failure sits behind everything still going");
 
-            // What is over is not on it. A finished run is read from the task it worked.
-            ended(tx, running, Ending::Completed).expect("completed");
-            let after = read::automation_runs_live(tx.conn(), 20).expect("live");
-            assert!(after.iter().all(|one| one.status != AutomationRunStatus::Completed));
+            // What is over and needs nobody is not on it: it is the history's.
+            ended(tx, running.clone(), Ending::Completed).expect("completed");
+            let after = read::automation_runs_live(tx.conn()).expect("live");
+            assert!(after.iter().all(|one| one.id != running.id));
+            let history = read::automation_runs_history(tx.conn(), 20).expect("history");
+            assert_eq!(history.iter().map(|one| one.id).collect::<Vec<_>>(), vec![running.id]);
         });
     }
 
@@ -660,6 +686,39 @@ mod tests {
                 read::automation_run(tx.conn(), run.id).expect("read").expect("run").stopped_reason,
                 Some(AutomationStoppedReason::MaxTimes),
             );
+        });
+    }
+
+    /// A failure leaves the top of the tab once somebody says they saw it, and lands in the history.
+    /// Nothing but a failure can be marked, and marking it twice keeps the first time.
+    #[test]
+    fn a_failure_someone_has_seen_moves_to_the_history() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let failed = a_run(tx, &p.automation);
+            ended(tx, failed.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+            let canceled = a_run(tx, &p.automation);
+            stop(tx, canceled.id, Ending::Canceled).expect("cancel");
+
+            let live = read::automation_runs_live(tx.conn()).expect("live");
+            assert!(live.iter().any(|one| one.id == failed.id), "a failure waits to be seen");
+            assert!(live.iter().all(|one| one.id != canceled.id), "a cancel needs nobody");
+
+            let seen = acknowledge(tx, failed.id).expect("acknowledge");
+            assert!(seen.acknowledged_at.is_some());
+            let live = read::automation_runs_live(tx.conn()).expect("live");
+            assert!(live.iter().all(|one| one.id != failed.id));
+            let history: Vec<i64> = read::automation_runs_history(tx.conn(), 20)
+                .expect("history")
+                .into_iter()
+                .map(|one| one.id)
+                .collect();
+            assert_eq!(history, vec![canceled.id, failed.id], "newest first");
+
+            let again = acknowledge(tx, failed.id).expect("again");
+            assert_eq!(again.acknowledged_at, seen.acknowledged_at, "the first time is kept");
+            let refused = acknowledge(tx, canceled.id).expect_err("only a failure");
+            assert!(refused.to_string().contains("only a failed run"), "{refused}");
         });
     }
 

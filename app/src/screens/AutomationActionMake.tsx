@@ -83,7 +83,7 @@ export function AutomationActionMake({
             <span className="autostep__label">{t("auto.actions.reach")}</span>
             <select value={shelf} onChange={(e) => setShelf(e.target.value as ActionShelf)}>
               <option value="project">{t("auto.actions.reachProject")}</option>
-              <option value="device">{t("auto.lib.device")}</option>
+              <option value="device">{t("auto.actions.reachGlobal")}</option>
             </select>
           </label>
         )}

@@ -4349,6 +4349,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "out-in-pane", required: &["name", "value"], refs: &["target"], strings: &["name", "value"], binds: false },
     // The step finished: which way out it took — left out, the unnamed one — and the report it owes
     // whichever it took.
+    // A way out the step does not declare — an empty one included — is turned away with
+    // `invalid_value`, nothing written and the step still running, so a road writes `refused:` on it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
     // **Any other `automation` verb, typed in that same terminal.** Building a definition and driving
     // a run belong outside a step, and the binary turns them away there (`automation_outside_only`)

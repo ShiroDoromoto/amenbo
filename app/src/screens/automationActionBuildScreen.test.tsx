@@ -115,9 +115,9 @@ function noteBox(): HTMLTextAreaElement {
   return field!.querySelector("textarea")!;
 }
 
-/** Open the declaration in the panel, the way a reader does: its one button over the picture. */
+/** Open the action itself in the panel, the way a reader does: the edit button on its row. */
 async function openDeclaration() {
-  const edit = buttons().find((one) => one.textContent === t("auto.act.declEdit"))!;
+  const edit = buttons().find((one) => one.textContent === t("auto.act.edit"))!;
   await act(async () => edit.click());
 }
 
@@ -174,7 +174,7 @@ describe("the action build screen", () => {
     expect(container.querySelector(".actpanel")).toBeNull();
   });
 
-  it("reads the declaration in the band without opening anything", async () => {
+  it("reads the action in its row, and opens its input and output from the frames of the picture", async () => {
     hoisted.action = action({
       note: "Takes the next task off the queue\nand says which",
       exits: [
@@ -184,7 +184,15 @@ describe("the action build screen", () => {
     });
     await render();
     expect(container.querySelector(".actdecl__note")?.textContent).toBe("Takes the next task off the queue");
-    expect(container.querySelector(".actdecl")?.textContent).toContain(t("auto.pic.errorExit"));
+    expect(container.querySelector(".actpanel")).toBeNull();
+
+    const frames = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__frame")];
+    expect(frames()).toHaveLength(2);
+    await act(async () => frames().find((one) => one.classList.contains("autopic__frame--in"))!.click());
+    expect(container.querySelector(".actpanel .actbuild__sec")?.textContent).toBe(t("auto.pic.actionIn"));
+    await act(async () => frames().find((one) => !one.classList.contains("autopic__frame--in"))!.click());
+    expect(container.querySelector(".actpanel .actbuild__sec")?.textContent).toBe(t("auto.pic.actionOut"));
+    expect(container.querySelector(".actpanel")?.textContent).toContain(t("auto.pic.errorExit"));
   });
 
   it("offers the first step while the picture is empty, and not once there is one", async () => {

@@ -367,7 +367,7 @@ describe("the picture inside an action", () => {
       if (mark.kind === "in") expect(mark.y + mark.h).toBeLessThan(at(picture, 1).y);
       else expect(mark.y).toBeGreaterThan(lowest);
     }
-    expect(picture.outsAt).toBeDefined();
+    expect(picture.outFrame).toBeDefined();
   });
 
   it("draws a line from the top mark into the step opened first", () => {
@@ -418,7 +418,7 @@ describe("the picture inside an action", () => {
   it("draws no marks on an automation's picture", () => {
     const picture = layOut(detail({ placements: [step({ id: 1, name: "one" })] }));
     expect(picture.marks).toEqual([]);
-    expect(picture.outsAt).toBeUndefined();
+    expect(picture.outFrame).toBeUndefined();
   });
 });
 

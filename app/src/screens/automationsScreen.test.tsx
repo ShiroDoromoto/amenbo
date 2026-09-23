@@ -143,6 +143,13 @@ describe("the automations screen", () => {
     expect(rows[1]).toContain(t("auto.archived"));
   });
 
+  it("leads each row with the automation's ID, the number the terminal names it by", async () => {
+    hoisted.automations = [card({ id: 12 })];
+    await render();
+    const id = container.querySelector(".autolist__row .autoid")?.textContent;
+    expect(id).toBe(tf("auto.id", { id: 12 }));
+  });
+
   it("says nothing of a row's readiness until the check answers", async () => {
     hoisted.automations = [card()];
     await render();
@@ -189,6 +196,13 @@ describe("the panel beside the picture", () => {
     expect(container.textContent).toContain(t("auto.about.remove"));
     await act(async () => { button(t("auto.build.edit")).click(); });
     expect(panelPlace()).toBe(t("auto.build.edit"));
+  });
+
+  it("puts the ID on the head, and in Edit with the line the terminal takes it in", async () => {
+    await open();
+    expect(container.querySelector(".actbuild__head .autoid")?.textContent).toBe(tf("auto.id", { id: 7 }));
+    await act(async () => { button(t("auto.build.edit")).click(); });
+    expect(container.querySelector(".actpanel")?.textContent).toContain("amenbo automation start 7");
   });
 
   it("closes from its own ×", async () => {

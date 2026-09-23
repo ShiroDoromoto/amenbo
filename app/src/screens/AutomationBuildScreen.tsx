@@ -16,6 +16,9 @@
 // a picture that runs long would push whatever is under it off the bottom of the window, and the
 // panel stands where the reader is looking however far they scrolled. Only the picture scrolls.
 //
+// **The head leads with the automation's ID**, as the list's rows do: it is what the terminal names
+// the definition by, and it does not change when the name does.
+//
 // **A dialog opens for one thing only: making an action on the spot** (`./AutomationStepAdd`). Picking
 // one off the shelf is done beside the picture, where the line it goes on can still be seen.
 //
@@ -131,6 +134,9 @@ export function AutomationBuildScreen({
         <button type="button" className="btn" onClick={onBack}>
           <Icon name="chevronLeft" /> {t("auto.build.back")}
         </button>
+        {automation !== null && (
+          <span className="autoid">{tf("auto.id", { id: automation.id })}</span>
+        )}
         <span className="actbuild__name">{automation?.name ?? ""}</span>
         <button
           type="button"

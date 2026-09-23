@@ -93,7 +93,7 @@ describe("the library in the panel", () => {
   it("lists this project's and the device's under their own heads", async () => {
     await render();
     const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
-    expect(heads).toEqual([t("auto.actions.reachProject"), t("auto.lib.device")]);
+    expect(heads).toEqual([t("auto.actions.reachProject"), t("auto.lib.global")]);
     const groups = [...container.querySelectorAll(".autolib__group")];
     expect(groups[0]!.textContent).toContain("Review");
     expect(groups[1]!.textContent).toContain("Publish");

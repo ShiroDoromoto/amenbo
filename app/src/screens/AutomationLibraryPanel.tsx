@@ -175,7 +175,7 @@ export function AutomationLibraryPanel({
         </div>
       )}
       <div className="autolib__group">
-        <div className="autolib__head">{t("auto.lib.device")}</div>
+        <div className="autolib__head">{t("auto.lib.global")}</div>
         {rows(true)}
       </div>
       <div className="autolib__make">

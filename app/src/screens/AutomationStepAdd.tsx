@@ -30,6 +30,10 @@
 // **What it declares is what a dialog can take without becoming a screen**: the named ways out, and
 // the inputs with what each carries. Everything else is on the panel, which is where a reader lands
 // the moment this closes.
+//
+// **Only its two buttons close it** (`AMB-T-5363`). A press on the backdrop or Escape would throw away
+// a prompt half written, and nothing here keeps it — so neither is a way out, and the reader leaves
+// by putting the box in or by giving it up.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -126,7 +130,7 @@ export function AutomationStepAdd({
   };
 
   return createPortal(
-    <div className="modal__overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal__overlay">
       <div
         className="modal__card modal__card--wide"
         role="dialog"

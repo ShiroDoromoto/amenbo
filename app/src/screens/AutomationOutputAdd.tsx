@@ -9,6 +9,9 @@
 // **Required or optional is a pulldown with no sentence under it.** What the two do is refuse the
 // step or let it run, which the words already say; a line explaining it would be read once and then
 // never again.
+//
+// **Only its two buttons close it** (`AMB-T-5363`), as with the dialog that puts a box in
+// (`./AutomationStepAdd`): a press on the backdrop or Escape is not a way out.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { addAutomationOutput } from "../core/automations";
@@ -38,10 +41,7 @@ export function AutomationOutputAdd({
   };
 
   return createPortal(
-    <div
-      className="modal__overlay"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <div className="modal__overlay">
       <div className="modal__card" role="dialog" aria-modal="true" aria-labelledby="auto-out-title">
         <h2 className="autodlg__title" id="auto-out-title">{t("auto.out.title")}</h2>
 

@@ -1,0 +1,112 @@
+# The automations screen has two ways in. From a project it is that project's, where one is made
+# and changed. From the sidebar it is every project's on one list: each row names its project, a run
+# is started from the row, and a press on the row goes to the project the automation is in rather
+# than opening it here — an automation is changed in its own project, and this list changes nothing.
+# The two run tabs opened this way say over their rows that they hold everything on this device,
+# because no project narrowed them.
+id: read-every-projects-automations-from-the-sidebar
+title: The sidebar's automations list every project's, start one from its row, and go to a row's own project to change it
+description: >
+  Open the automations from the sidebar and read a row from another project naming that project.
+  Start this project's automation from its row and read the pane the run stands up. Read the running
+  and history tabs saying they hold everything on this device. Then press the other project's row
+  and land on its build screen inside that project.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+  # The action the run opens, holding the one step it runs. The way out that takes the task is
+  # declared on both layers: the step's is what the step reports, and the action's is what the
+  # automation's picture goes on from — the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — started from the list" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+  # Another project's automation, which the list draws beside this project's.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — another }, as: another }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the other's round", project: another }, as: elsewhere }
+
+steps_gui:
+  # A workspace to put the run in: a run's steps open terminals, and terminals live here.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: task
+    op: open-view
+    with:
+      view: automations
+
+  - type: assert
+    domain: automation
+    op: every-listed
+    with:
+      target: elsewhere
+      project: another
+
+  # Started from the row: nothing is handed over, so it is the run the build screen would make.
+  - type: action
+    domain: automation
+    op: start-from-list
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: claim
+      action: take
+      present: true
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: assert
+    domain: automation
+    op: scope-said
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: scope-said
+    with:
+      tab: history
+
+  # The row goes to the project that owns it, where the automation is changed.
+  - type: action
+    domain: automation
+    op: every-open
+    with:
+      target: elsewhere
+      project: another

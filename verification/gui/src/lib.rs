@@ -592,6 +592,14 @@ impl Instructor {
         }
     }
 
+    /// The same reading, of the binding under any other key — the second thing a step names.
+    fn key_label(&self, with: &Args, key: &str) -> String {
+        match with.get(key).and_then(|v| v.as_str()) {
+            Some(name) => self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>")),
+            None => format!("<the {key}>"),
+        }
+    }
+
     /// Move a binding's label onto the name a step just wrote on it.
     ///
     /// A road that renames something has changed what it is called on screen, and every later
@@ -1189,6 +1197,11 @@ impl Instructor {
                     text: self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>")),
                     present: true,
                 })
+            }
+            // The row names the automation, which is the road's word; the project beside it is the
+            // road's word too, but a reading finds either on a shot of any row, so the name is enough.
+            (Domain::Automation, "every-listed") => {
+                Some(Expectation { text: self.target_label(with), present: true })
             }
             (Domain::Automation, "listed") | (Domain::Automation, "action-listed") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
@@ -4349,6 +4362,18 @@ impl Instructor {
                 "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\".",
                 self.target_label(with)
             ),
+            // The press beside a row of the list the sidebar opens — beside it, not inside it, so it
+            // starts the run rather than going to the project.
+            (Domain::Automation, "start-from-list") => format!(
+                "On the automations tab the sidebar opened, press the button beside the row for \"{}\" that starts it.",
+                self.target_label(with)
+            ),
+            // The row itself goes to the automation's own project and opens it there.
+            (Domain::Automation, "every-open") => format!(
+                "On the automations tab the sidebar opened, press the row for \"{}\". Confirm the ledger moves to the project \"{}\" and opens the build screen for it on that project's automations.",
+                self.target_label(with),
+                self.key_label(with, "project")
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -6118,6 +6143,22 @@ impl Instructor {
                     self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>"))
                 }
             ),
+            // A row of the list the sidebar opens, naming the project it is in.
+            (Domain::Automation, "every-listed") => format!(
+                "On the automations tab the sidebar opened, confirm a row for \"{}\" is listed, naming the project \"{}\".",
+                self.target_label(with),
+                self.key_label(with, "project")
+            ),
+            // The words over the rows are the interface's own, in the language the run is in, so
+            // what the step names is what they say rather than how.
+            (Domain::Automation, "scope-said") => format!(
+                "Stand on the {} tab of the automations the sidebar opened, and confirm beside its heading it says it holds everything on this device.",
+                match req(with, "tab")? {
+                    "running" => "running",
+                    "history" => "history",
+                    other => return Err(format!("`tab` does not know `{other}` — it is running / history")),
+                }
+            ),
             // One box, and the mark it may wear. The mark is drawn as colour — an outline round the
             // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
@@ -6739,6 +6780,7 @@ fn view_row(id: &str) -> Result<&'static str, String> {
         "inbox" => "the smart view that gathers what is waiting on the reader",
         "due" => "the smart view that stands for the days work is due on",
         "activity" => "the smart view that runs everything that has happened",
+        "automations" => "the smart view that gathers every project's automations",
         other => {
             return Err(format!("`view: {other}` is not a smart view the sidebar draws"))
         }
@@ -8157,6 +8199,7 @@ given:
   - { type: action, domain: automation, op: create, with: { name: Morning round }, as: auto }
   - { type: action, domain: automation, op: action-add, with: { name: Review }, as: act }
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
+  - { type: action, domain: project, op: create, with: { name: Another }, as: another }
 steps_gui:
   - type: action
     domain: automation
@@ -8283,6 +8326,23 @@ steps_gui:
     op: start-from-frame
     with: { target: auto }
     as: from_frame
+  - type: assert
+    domain: automation
+    op: every-listed
+    with: { target: auto, project: another }
+  - type: action
+    domain: automation
+    op: start-from-list
+    with: { target: auto }
+    as: from_list
+  - type: assert
+    domain: automation
+    op: scope-said
+    with: { tab: running }
+  - type: action
+    domain: automation
+    op: every-open
+    with: { target: auto, project: another }
   - type: action
     domain: automation
     op: action-scope

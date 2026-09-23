@@ -4363,6 +4363,22 @@ const REGISTRY: &[OpSpec] = &[
     // definition's — so both make the same run the build screen would.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-task", required: &[], refs: &["target", "task"], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-frame", required: &[], refs: &["target"], strings: &[], binds: true },
+    //
+    // **The automations the sidebar opens**, every project's on one list (`open-view` with
+    // `view: automations`). A screen road alone: the terminal has no list that crosses projects.
+    //
+    // A row, and the project it names. The project is the claim — a list drawn from many projects is
+    // read by project first, and a row that dropped it would pass a reading of the name alone.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "every-listed", required: &["target", "project"], refs: &["target", "project"], strings: &[], binds: false },
+    // Starting one from its row there. It makes the same run the build screen would: nothing is handed
+    // over at the press.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-list", required: &["target"], refs: &["target"], strings: &[], binds: true },
+    // Pressing the row, which goes to the project the automation is in and opens its build screen
+    // there — an automation is changed in its own project, and this list changes nothing.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "every-open", required: &["target", "project"], refs: &["target", "project"], strings: &[], binds: false },
+    // What the two run tabs say over their rows when the sidebar opened them: that they hold every
+    // run on this device, since no project narrowed them. `tab` is `running` or `history`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "scope-said", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

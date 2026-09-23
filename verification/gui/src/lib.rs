@@ -600,7 +600,7 @@ impl Instructor {
     /// is adding (`step-add`, which names the step and targets the action) is naming a new
     /// thing, so the pair is read off the op rather than off the keys.
     fn relabel(&mut self, domain: Domain, op: &str, with: &Args) {
-        if !matches!((domain, op), (Domain::Automation, "update")) {
+        if !matches!((domain, op), (Domain::Automation, "update" | "action-update")) {
             return;
         }
         let (Some(target), Some(name)) =
@@ -1170,6 +1170,15 @@ impl Instructor {
             // A definition's own name and a library action's, off the row each is listed on. Both
             // are names the road gave, so a reading finds them on that list and nowhere in the
             // interface around it — which is what lets the absent half be read as well.
+            //
+            // A library action's row asked for its note is read on the note instead: those are the
+            // road's own words as well, written only on that row, and a reading that found the name
+            // alone would pass a row that had lost the line under it. A row asked for no line at all
+            // is a missing thing no reading can place, so it is an eye's.
+            (Domain::Automation, "action-listed") if arg_str(with, "note") == Some("") => None,
+            (Domain::Automation, "action-listed") if with.contains_key("note") && present(with) => {
+                Some(Expectation { text: arg_str(with, "note")?.to_string(), present: true })
+            }
             (Domain::Automation, "listed") | (Domain::Automation, "action-listed") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
@@ -3878,6 +3887,29 @@ impl Instructor {
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
+            // What the action is called and what it is for, written in the place at the head of its
+            // own build screen. There is no Save there: each box writes as the caret leaves it, the
+            // way the automation's own do.
+            (Domain::Automation, "action-update") => {
+                let mut said: Vec<String> = Vec::new();
+                if let Some(name) = arg_str(with, "name") {
+                    said.push(format!("set the name to \"{name}\""));
+                }
+                if let Some(note) = arg_str(with, "note") {
+                    said.push(format!("set the notes to \"{note}\""));
+                }
+                if said.is_empty() {
+                    return Err(
+                        "`action-update` writes a name or a note — a step naming neither would write nothing"
+                            .to_string(),
+                    );
+                }
+                format!(
+                    "On the action build screen for \"{}\", in the place named for the action itself, {}. Move off the box afterwards, so what you wrote is taken.",
+                    self.target_label(with),
+                    listed(&said)
+                )
+            }
             // The rewrite that reaches every automation placing this action, which is what the library
             // is for. The prompt is one step's, so it is written on the panel the picture opens, and
             // it is written as the caret leaves the box — there is no Save on that screen.
@@ -5935,7 +5967,7 @@ impl Instructor {
             // placements, which is the whole reason a road reads it: it says how far a rewrite
             // carries.
             (Domain::Automation, "action-listed") => format!(
-                "On the actions tab, confirm a row for \"{}\" is listed{}{}{}.",
+                "On the actions tab, confirm a row for \"{}\" is listed{}{}{}{}.",
                 self.target_label(with),
                 match with.get("used_by") {
                     Some(_) => format!(", saying {} automations use it", count(with, "used_by")?),
@@ -5949,6 +5981,13 @@ impl Instructor {
                         "the actions tab draws no count of steps — read it at the terminal (`steps_cli`)"
                             .to_string(),
                     ),
+                    None => String::new(),
+                },
+                // The line under the name is the note's first one, and no line at all where there is
+                // no note — which is what a road writing `""` is asking for.
+                match arg_str(with, "note") {
+                    Some("") => ", with no line under its name".to_string(),
+                    Some(note) => format!(", reading \"{note}\" under its name"),
                     None => String::new(),
                 },
                 match arg_str(with, "reach") {
@@ -8257,6 +8296,57 @@ steps_gui:
         assert!(lines[0].contains("Create a task titled \"SEED\""));
         assert!(lines[1].contains("\"SEED\"") && lines[1].contains("me-ai"));
         assert!(lines[2].contains("\"SEED\"") && lines[2].contains("present in"));
+    }
+
+    /// What a library action is for is written on its own build screen and read on the library's
+    /// row. The row is read on the note where the road names one — the name alone would pass a row
+    /// that lost the line under it — and a rename moves the label later steps look for.
+    #[test]
+    fn an_actions_note_is_written_on_its_screen_and_read_on_its_row() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: action-make
+    with: { name: Triage }
+    as: act
+  - type: action
+    domain: automation
+    op: action-update
+    with: { target: act, name: Sorting, note: sorts what came in }
+  - type: assert
+    domain: automation
+    op: action-listed
+    with: { target: act, note: sorts what came in }
+  - type: assert
+    domain: automation
+    op: action-listed
+    with: { target: act, note: "" }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[1].contains("action build screen for \"Triage\"")
+                && lines[1].contains("set the name to \"Sorting\"")
+                && lines[1].contains("set the notes to \"sorts what came in\"")
+                && lines[1].contains("Move off the box"),
+            "got: {}", lines[1]
+        );
+        assert!(
+            lines[2].contains("\"Sorting\"") && lines[2].contains("reading \"sorts what came in\" under its name"),
+            "the rename moved the label, and the note is said: {}", lines[2]
+        );
+        assert!(lines[3].contains("no line under its name"), "got: {}", lines[3]);
+        assert_eq!(ins.expectation(&steps[2]).map(|e| e.text).as_deref(), Some("sorts what came in"));
+        assert!(ins.expectation(&steps[3]).is_none(), "a line that is not there is an eye's");
+
+        let bare = load("id: x\ntitle: y\nsteps_gui:\n  - type: action\n    domain: automation\n    op: action-make\n    with: { name: T }\n    as: act\n  - type: action\n    domain: automation\n    op: action-update\n    with: { target: act }\n");
+        let mut ins = Instructor::new();
+        let said = bare.steps(Driver::Gui).iter().map(|st| ins.render(st)).collect::<Result<Vec<_>, _>>();
+        assert!(said.is_err_and(|e| e.contains("writes a name or a note")), "a write naming nothing is refused");
     }
 
     /// A number the store issues is nothing a road could write, and nothing these lines could print:

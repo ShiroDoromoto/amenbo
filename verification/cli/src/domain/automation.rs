@@ -572,6 +572,13 @@ impl Driver<'_> {
                     pass = pass && got == want;
                     said.push_str(&format!(", on the {got} library (expected {want})"));
                 }
+                // The row carries the note's first line that is not blank, and no more — so that is
+                // what is compared, and the listing's whole note is cut the way the screen cuts it.
+                if let Some(want) = with.get("note").and_then(|v| v.as_str()) {
+                    let got = first_line(row["action"]["note"].as_str().unwrap_or(""));
+                    pass = pass && got == want;
+                    said.push_str(&format!(", reading \"{got}\" under its name (expected \"{want}\")"));
+                }
                 said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
                 Ok(Outcome::assert(pass, said))
             }
@@ -1025,6 +1032,12 @@ fn written(with: &Args) -> String {
     said.join(" and ")
 }
 
+/// The line a library action's row draws under its name: the first line of its note that is not
+/// blank, trimmed — `AutomationActionsTab`'s `firstLine`, read the same way off the listing.
+fn first_line(note: &str) -> &str {
+    note.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or("")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1052,6 +1065,15 @@ mod tests {
             "each part is written out one flag at a time, the command's own way round",
         );
         assert!(said.contains("todo,in_progress"), "{said}");
+    }
+
+    /// What a library action's row is read for is the line the screen draws under the name, so the
+    /// listing's note is cut the way the screen cuts it: leading blank lines skipped, the rest dropped.
+    #[test]
+    fn a_rows_note_is_its_first_line_that_is_not_blank() {
+        assert_eq!(first_line("\n  sorts the inbox  \nby hand, once a day"), "sorts the inbox");
+        assert_eq!(first_line(" \n\n"), "");
+        assert_eq!(first_line(""), "");
     }
 
     /// The four kinds that take one answer apiece, each behind its own flag.

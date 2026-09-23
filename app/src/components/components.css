@@ -1414,6 +1414,8 @@ button.feed__target:hover { color: var(--c-accent); }
   padding: var(--s-2) var(--s-3); text-align: start;
   background: none; border: 0; color: var(--c-text); font: inherit; font-size: var(--fs-md); cursor: pointer;
 }
+/* One project's list has no project column to give the width to. */
+.autorun__go--oneproject { grid-template-columns: 7rem minmax(0, 1.2fr) minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem; }
 .autorun__go:hover { background: var(--c-hover); }
 .autorun__go:disabled { cursor: default; }
 .autorun__go:disabled:hover { background: none; }

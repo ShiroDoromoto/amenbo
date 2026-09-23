@@ -10,10 +10,9 @@
 // The tabs run from making to running, left to right: "automations" — this one — "actions", the
 // library (`./AutomationActionsTab`), "running" (`./RunningTab`) and "history" (`./HistoryTab`).
 //
-// **"Running" and "history" cross projects and the other two do not.** A run holds a terminal on
-// this machine, and this machine is not divided up per project; a definition and a library action
-// belong to the project they were built in. So those two tabs take no `projectId` and name the
-// project on each row instead.
+// **Every tab is the entrance's** (`AMB-D-954`): opened from a project, the runs on "running" and
+// "history" are that project's; opened from the sidebar, they are every project's, each row naming
+// its project.
 //
 // **From the sidebar, what can be changed is only what has no project to be changed in.** An
 // automation is its project's, so the list there names the project on each row, starts one from the
@@ -147,9 +146,9 @@ export function AutomationsScreen({
             </div>
           )}
 
-          {tab === "running" && <RunningTab onGoToRun={onGoToRun} />}
+          {tab === "running" && <RunningTab projectId={projectId} onGoToRun={onGoToRun} />}
 
-          {tab === "history" && <HistoryTab />}
+          {tab === "history" && <HistoryTab projectId={projectId} />}
 
           {tab === "actions" && (
             <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />

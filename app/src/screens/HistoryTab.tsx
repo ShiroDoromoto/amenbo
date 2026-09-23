@@ -1,5 +1,7 @@
 // The "history" tab — the runs that are over and need nobody: completed, canceled, and failures a
-// person has acknowledged, newest first, across every project (`AMB-D-955`).
+// person has acknowledged, newest first (`AMB-D-955`). Opened from a project it is that project's
+// alone, read so from the store a page at a time, and the rows leave the project off; opened from the
+// sidebar it is every project's (`AMB-D-954`).
 //
 // **One page at a time, with page numbers.** The history only grows and lives in the store, so the
 // screen holds one page of it and reads that page alone (`../core/automations`). A "show more" that
@@ -41,10 +43,15 @@ export function pageNumbers(current: number, pages: number): (number | null)[] {
   return out;
 }
 
-export function HistoryTab() {
+export function HistoryTab({
+  projectId,
+}: {
+  /** The project whose runs these are, or `null` for every project's — the sidebar's. */
+  projectId: number | null;
+}) {
   const [filter, setFilter] = useState<RunHistoryFilter>("all");
   const [page, setPage] = useState(0);
-  const history = useRunHistory(filter, page);
+  const history = useRunHistory(filter, projectId, page);
 
   const total = history?.total ?? 0;
   const size = history?.pageSize ?? 20;
@@ -77,7 +84,7 @@ export function HistoryTab() {
       {history !== null && runs.length === 0 && <div className="auto__empty">{t("auto.history.empty")}</div>}
       {runs.length > 0 && (
         <ul className="autoruns">
-          {runs.map((run) => <RunLine key={run.run} run={run} />)}
+          {runs.map((run) => <RunLine key={run.run} run={run} withProject={projectId === null} />)}
         </ul>
       )}
 

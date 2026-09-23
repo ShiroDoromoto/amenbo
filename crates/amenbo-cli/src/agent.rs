@@ -19,6 +19,11 @@ pub fn build_index() -> Value {
     amenbo_core::agent::build_index()
 }
 
+/// The entry point inside a step of an automation run: what the step is, and the commands it reaches.
+pub fn build_step() -> Value {
+    amenbo_core::agent::build_step()
+}
+
 /// One command's full spec (`agent --command <name>`). None for an unknown name.
 pub fn command_spec(name: &str) -> Option<Value> {
     amenbo_core::agent::command_spec(name)

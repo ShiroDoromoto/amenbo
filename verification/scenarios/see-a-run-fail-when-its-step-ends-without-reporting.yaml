@@ -22,11 +22,12 @@ given:
   # One action holding one step, which leaves by the unnamed way out and takes nothing in: the only
   # thing that can end this run early is its program going.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
-  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, agent: claude-code, prompt: do the work and report }, as: do }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work and report }, as: do }
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step goes silent" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_work } }
 

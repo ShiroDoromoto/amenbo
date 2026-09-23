@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
-    AutomationExit, AutomationPlacement, AutomationPort,
+    AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep,
@@ -555,6 +555,23 @@ pub fn automation_placement(p: &AutomationPlacement) -> Record {
     )
 }
 
+pub fn automation_placement_step(p: &AutomationPlacementStep) -> Record {
+    Record::new(
+        "automation_placement_step",
+        p.id,
+        with_audit(
+            vec![
+                ("placement_id", kv(p.placement_id)),
+                ("step_id", kv(p.step_id)),
+                ("agent", tv(&p.agent)),
+                ("model", ov(&p.model)),
+            ],
+            &p.created_at,
+            &p.updated_at,
+        ),
+    )
+}
+
 pub fn automation_action_step(s: &AutomationStep) -> Record {
     Record::new(
         "automation_action_step",
@@ -564,8 +581,6 @@ pub fn automation_action_step(s: &AutomationStep) -> Record {
                 ("action_id", kv(s.action_id)),
                 ("name", tv(&s.name)),
                 ("prompt", tv(&s.prompt)),
-                ("agent", tv(&s.agent)),
-                ("model", ov(&s.model)),
                 ("interactive", bv(s.interactive)),
                 ("work_dir_ref", ov(&s.work_dir_ref)),
                 ("report_to_task", bv(s.report_to_task)),

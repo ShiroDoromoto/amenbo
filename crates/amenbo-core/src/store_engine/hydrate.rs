@@ -30,6 +30,7 @@ use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
     AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge, AutomationEnds,
     AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+    AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
@@ -510,6 +511,20 @@ pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPl
     })
 }
 
+pub(super) fn automation_placement_step_row(r: &Row) -> rusqlite::Result<AutomationPlacementStep> {
+    const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationPlacementStep {
+        id: get(r, C.id)?,
+        placement_id: get(r, C.placement_id)?,
+        step_id: get(r, C.step_id)?,
+        agent: get(r, C.agent)?,
+        model: get(r, C.model)?,
+        created_at,
+        updated_at,
+    })
+}
+
 pub(super) fn automation_action_step_row(r: &Row) -> rusqlite::Result<AutomationStep> {
     const C: col::automation_action_step::Cols = col::automation_action_step::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -518,8 +533,6 @@ pub(super) fn automation_action_step_row(r: &Row) -> rusqlite::Result<Automation
         action_id: get(r, C.action_id)?,
         name: get(r, C.name)?,
         prompt: get(r, C.prompt)?,
-        agent: get(r, C.agent)?,
-        model: get(r, C.model)?,
         interactive: get(r, C.interactive)?,
         work_dir_ref: get(r, C.work_dir_ref)?,
         report_to_task: get(r, C.report_to_task)?,

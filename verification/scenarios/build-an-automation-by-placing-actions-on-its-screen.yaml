@@ -20,11 +20,11 @@ given:
   # Two library actions, each with a step inside it so a placement's panel has a first step to show.
   # The first declares a way out of its own, which is the row the lines are said on.
   - { type: action, domain: automation, op: action-add, with: { name: draft }, as: draft }
-  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, agent: claude-code, prompt: write the draft }, as: write }
+  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
   - { type: action, domain: automation, op: exit-add, with: { action: draft, name: drafted } }
   - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
-  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, agent: claude-code, prompt: read the draft back }, as: read }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, prompt: read the draft back }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
   # An automation is born empty, which is the state the road opens on: nothing placed, and no line.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — placed on screen" }, as: auto }

@@ -1,8 +1,9 @@
 // What the pressed step holds, on the action build screen (`AMB-T-5315`).
 //
 // **It is the step's own panel, not a placement's.** A box inside an action is a step, and a step is
-// one terminal: the prompt it runs on, who is asked to carry it out, the model and the three flags
-// are all its own (`AMB-D-950`). What the action declares to the automations placing it is the other
+// one terminal: the prompt it runs on and the three flags are its own. Who carries it out is not —
+// that is chosen where the action is placed, step by step (`./AutomationStepPanel`, `AMB-D-960`),
+// since the same action may be run by different models on two pictures. What the action declares to the automations placing it is the other
 // panel's (`./AutomationActionDeclaresPanel`), and nothing here writes on that layer.
 //
 // **What comes after a way out is written here too.** Inside an action the line and the box it
@@ -30,7 +31,7 @@ import {
   setAutomationWire,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
 import {
@@ -39,9 +40,7 @@ import {
   DeclEdit,
   exitLabel,
   NextRow,
-  useAgents,
   useDraft,
-  useModels,
   type Run,
 } from "./automationPanel";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
@@ -198,19 +197,15 @@ function InputRow({
 export function AutomationActionStepPanel({
   action,
   stepId,
-  projectId,
   onRemoved,
 }: {
   action: AutomationActionDetailDto | null;
   /** The step the picture is showing as pressed, or nothing while none is. */
   stepId: number | null;
-  projectId: number | null;
   /** The panel has nothing left to draw once its step is gone. */
   onRemoved: () => void;
 }) {
   const step = action?.steps.find((one) => one.id === stepId) ?? null;
-  const agents = useAgents(projectId);
-  const models = useModels(step?.agent ?? "");
   const [name, setName] = useDraft(step?.name ?? "");
   const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
   // The way out an output artefact is being declared on, while that dialog is open.
@@ -329,46 +324,6 @@ export function AutomationActionStepPanel({
           onAdd={(declared) => run(declareAutomationExit("step", step.id, declared))}
         />
       </div>
-
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.agent")}</span>
-        <select
-          value={step.agent}
-          onChange={(e) => void run(editAutomationStep(step.id, { agent: e.target.value }))}
-        >
-          {agents.every((one) => one.id !== step.agent) && (
-            <option value={step.agent}>{step.agent}</option>
-          )}
-          {agents.map((one) => (
-            <option key={one.id} value={one.id} disabled={!one.installed}>
-              {one.installed ? one.label : tf("auto.step.notHere", { agent: one.label })}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.model")}</span>
-        <select
-          value={step.model ?? ""}
-          onChange={(e) =>
-            void run(
-              editAutomationStep(step.id, { model: e.target.value === "" ? null : e.target.value }),
-            )
-          }
-        >
-          <option value="">{t("auto.step.modelDefault")}</option>
-          {step.model !== undefined &&
-            (models?.models ?? []).every((one) => one.id !== step.model) && (
-              <option value={step.model}>{step.model}</option>
-            )}
-          {(models?.models ?? []).map((one) => (
-            <option key={one.id} value={one.id}>
-              {one.label}
-            </option>
-          ))}
-        </select>
-      </label>
 
       <label className="autostep__field">
         <span className="autostep__label">{t("auto.step.folder")}</span>

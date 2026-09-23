@@ -34,16 +34,7 @@ type Draft = { name: string; kind: string; required: boolean };
 /** Where the new step goes: onto a line inside the action, or onto an action with no line yet. */
 export type AddTarget = { picture: "action"; edgeId: number } | { picture: "action"; actionId: number };
 
-export function AutomationStepAdd({
-  into,
-  agent,
-  onClose,
-}: {
-  into: AddTarget;
-  /** What the step this line leaves is carried out by, which is the likeliest answer for the new one. */
-  agent: string;
-  onClose: () => void;
-}) {
+export function AutomationStepAdd({ into, onClose }: { into: AddTarget; onClose: () => void }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [interactive, setInteractive] = useState(false);
@@ -59,7 +50,7 @@ export function AutomationStepAdd({
         .filter((one) => one.name.trim() !== "")
         .map((one) => ({ ...one, name: one.name.trim() })),
     };
-    const step = { name: name.trim(), prompt: prompt.trim(), agent, interactive, ...declared };
+    const step = { name: name.trim(), prompt: prompt.trim(), interactive, ...declared };
     void ("edgeId" in into
       ? insertAutomationActionStep(into.edgeId, step)
       : addAutomationStep(into.actionId, step));

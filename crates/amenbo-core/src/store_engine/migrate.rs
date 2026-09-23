@@ -954,6 +954,11 @@ pub const STEPS: &[Step] = &[
         name: "copy the wires into a run's copy of each step it can still open",
         apply: Apply::Custom(copy_the_wires_into_the_run),
     },
+    Step {
+        to: 64,
+        name: "choose a step's agent and model where its action is placed, not on the step",
+        apply: Apply::Custom(choose_the_agent_where_the_action_is_placed),
+    },
 ];
 
 /// v63: a run's copy of a step holds the wires joined to each of its inputs (`AMB-D-961`).
@@ -1327,6 +1332,65 @@ fn let_a_failure_be_acknowledged(ctx: &Ctx<'_>) -> Result<()> {
     }
     Ok(())
 }
+
+/// v64: a step's agent and model move off the step, onto the placement of its action
+/// (`automation_placement_step`, `AMB-D-960`).
+///
+/// **What each step said is written onto every placement of its action**, one row per pair. An action
+/// placed twice is asked for by the same agent at both spots until somebody chooses otherwise, which is
+/// what it did before this step — so no run launched after the move is carried out by anyone else. A
+/// step with the empty sentinel for an agent said nothing, and is left with nobody chosen.
+///
+/// **The table is laid down here in frozen text** as well as by genesis, for the reason v53's are: the
+/// registry may reshape it tomorrow, and what this step built must keep meaning what it meant. A pair
+/// already there is left alone, so a store stamped back and run forward again lands on what it had.
+///
+/// **The two columns go after the copy**, and only where they are still there: a store born from a
+/// registry that no longer has them, stamped back to an earlier version, has nothing to copy or drop.
+fn choose_the_agent_where_the_action_is_placed(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(PLACEMENT_STEP_TABLE)?;
+    let carries: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('automation_action_step') WHERE name = 'agent'",
+        [],
+        |r| r.get(0),
+    )?;
+    if carries == 0 {
+        return Ok(());
+    }
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+    tx.execute(
+        "INSERT INTO automation_placement_step (placement_id, step_id, agent, model, created_at, \
+             updated_at) \
+         SELECT p.id, s.id, s.agent, s.model, ?1, ?1 \
+         FROM automation_placement p \
+         JOIN automation_action_step s ON s.action_id = p.action_id \
+         WHERE s.agent <> '' \
+           AND NOT EXISTS (SELECT 1 FROM automation_placement_step c \
+                           WHERE c.placement_id = p.id AND c.step_id = s.id) \
+         ORDER BY p.id, s.id",
+        rusqlite::params![now],
+    )?;
+    tx.execute_batch(
+        "ALTER TABLE automation_action_step DROP COLUMN agent;
+         ALTER TABLE automation_action_step DROP COLUMN model;",
+    )?;
+    Ok(())
+}
+
+/// The table v64 lays down — frozen text, like every step's.
+const PLACEMENT_STEP_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS automation_placement_step (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    placement_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    agent TEXT NOT NULL DEFAULT '',
+    model TEXT,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (placement_id, step_id)
+);
+";
 
 /// v60: `automation_run.status` ends on `completed`, `failed` or `canceled` in place of `done` and
 /// `stopped` (`AMB-D-955`).
@@ -3818,8 +3882,9 @@ impl Minting {
 /// **Every v52 library action gains one step**, carrying the prompt the action itself used to carry.
 ///
 /// **The one thing this cannot carry across** is two spots running one library action under two
-/// different agents. `agent` and `model` are a step's now (`AMB-D-950`), and an action has one step
-/// here, so the first spot's answer becomes the action's and the second's is not written. An action
+/// different agents. `agent` and `model` are a step's at this version (`AMB-D-950`; v64 moves them
+/// onto the placement), and an action has one step here, so the first spot's answer becomes the
+/// action's and the second's is not written. An action
 /// nothing pointed at gets no agent at all, which the launch check names rather than guesses at.
 ///
 /// **Settings are split in two.** A v52 step declared and answered on one row; an action declared and
@@ -6785,9 +6850,12 @@ mod tests {
                 "look at it",
             );
             assert_eq!(
-                text(&format!("SELECT agent FROM automation_action_step WHERE id = {inside}")),
+                text(&format!(
+                    "SELECT agent FROM automation_placement_step \
+                     WHERE placement_id = {looked} AND step_id = {inside}"
+                )),
                 "codex-cli",
-                "v{born}: the agent is the step's now, and the spot that ran it is where it comes from",
+                "v{born}: the agent is chosen for the step at the spot that ran it (AMB-D-960)",
             );
             assert_eq!(one("SELECT COUNT(*) FROM automation_action_step WHERE id = 12"), 0,
                 "v{born}: the row that only called an action is not a step any more");
@@ -6901,8 +6969,8 @@ mod tests {
         // left naming a table that is gone, this insert would fail rather than land.
         conn.execute(
             "INSERT INTO automation_action_step \
-                 (id, action_id, name, prompt, agent, order_key, created_at, updated_at) \
-             VALUES (12, 7, '点検', 'look at it', 'claude', 'a1', '2026-01-02T03:04:05Z', \
+                 (id, action_id, name, prompt, order_key, created_at, updated_at) \
+             VALUES (12, 7, '点検', 'look at it', 'a1', '2026-01-02T03:04:05Z', \
                  '2026-01-02T03:04:05Z')",
             [],
         )
@@ -7623,6 +7691,65 @@ mod tests {
                 .unwrap();
             assert_eq!(held, 0, "{table}.{column} is gone");
         }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v64 in full: what each step said is written onto every placement of its action, a step that said
+    /// nothing is left with nobody chosen, an action placed nowhere carries its answer nowhere, and the
+    /// two columns are gone from the step (`AMB-D-960`).
+    #[test]
+    fn a_step_s_agent_is_chosen_at_every_placement_of_its_action() {
+        let dir = scratch("placement-step");
+        let engine = store_at(&dir, 63);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (1, 1, '書く'), (2, 1, '誰も置かない');
+                 INSERT INTO automation_action_step (id, action_id, name, agent, model) VALUES
+                     (1, 1, '書く', 'claude', 'opus'),
+                     (2, 1, '見直す', 'codex', NULL),
+                     (3, 1, 'まだ', '', NULL),
+                     (4, 2, '置かれない', 'claude', NULL);
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1), (2, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let chosen: Vec<(i64, i64, String, Option<String>)> = {
+            let conn = engine.conn();
+            let mut stmt = conn
+                .prepare(
+                    "SELECT placement_id, step_id, agent, model FROM automation_placement_step \
+                     ORDER BY placement_id, step_id",
+                )
+                .unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(
+            chosen,
+            vec![
+                (1, 1, "claude".to_string(), Some("opus".to_string())),
+                (1, 2, "codex".to_string(), None),
+                (2, 1, "claude".to_string(), Some("opus".to_string())),
+                (2, 2, "codex".to_string(), None),
+            ],
+            "both placements carry what each step said, and the step that said nothing has nobody"
+        );
+        let left: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('automation_action_step') \
+                 WHERE name IN ('agent', 'model')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0, "the step names no agent and no model any more");
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1,7 +1,7 @@
 //! **Reading a definition back**, with the declarations each box runs under already resolved — the one
 //! shape both a build screen and a terminal read it in.
 //!
-//! The eleven definition tables are written by [`super::automation`]; nothing here writes. What this
+//! The ten definition tables are written by [`super::automation`]; nothing here writes. What this
 //! module does is the resolving: a placement reads its ways out, its inputs and its settings off the
 //! library action standing on it, a step reads its own, and a caller that had to know which of the two
 //! declared a name would be reading the storage rather than the picture.
@@ -19,7 +19,8 @@ use serde::Serialize;
 
 use crate::model::{
     Automation, AutomationAction, AutomationCfg, AutomationCfgOwner, AutomationEdge, AutomationExit,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPort,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
+    AutomationPort,
     AutomationPortDirection, AutomationPortOwner, AutomationStep, AutomationWire,
 };
 use crate::store_engine::read;
@@ -75,8 +76,8 @@ pub struct PlacementView {
     pub placement: AutomationPlacement,
     /// The library action placed here, or `None` where that row is gone from under it.
     pub action: Option<AutomationAction>,
-    /// The step a run opens first at this spot — the action's entry, read in so a caller drawing the
-    /// prompt and the agent does not have to go back for it. `None` where the action holds none.
+    /// The step a run opens first at this spot — the action's entry, read in so a caller drawing its
+    /// prompt does not have to go back for it. `None` where the action holds none.
     pub entry_step: Option<AutomationStep>,
     /// The ways out the run can leave this spot by — the action's.
     pub exits: Vec<ExitView>,
@@ -84,6 +85,17 @@ pub struct PlacementView {
     pub inputs: Vec<AutomationPort>,
     /// Declared by the action, answered here.
     pub settings: Vec<AutomationCfg>,
+    /// Every step of the action, in display order, with who is chosen to carry it out at this spot
+    /// (`AMB-D-960`).
+    pub steps: Vec<PlacementStepView>,
+}
+
+/// **One step of the action standing on a placement**, and who carries it out there — `None` where
+/// nobody is chosen yet, which the launch check refuses for a step a run could open.
+#[derive(Clone, Debug, Serialize)]
+pub struct PlacementStepView {
+    pub step: AutomationStep,
+    pub chosen: Option<AutomationPlacementStep>,
 }
 
 /// **A way out**, and what leaving through it hands on.
@@ -273,7 +285,12 @@ fn placement_view(conn: &Connection, placement: AutomationPlacement) -> Result<P
     // An action declares and the placement answers, and core is what puts the two rows back together —
     // the same pair the launch check reads, rather than a second reading of it.
     let settings = super::automation_run::settings_of(conn, &placement)?;
-    Ok(PlacementView { placement, action, entry_step, exits, inputs, settings })
+    let mut steps = Vec::new();
+    for step in read::automation_action_steps_of(conn, placement.action_id)? {
+        let chosen = read::automation_placement_step_for(conn, placement.id, step.id)?;
+        steps.push(PlacementStepView { step, chosen });
+    }
+    Ok(PlacementView { placement, action, entry_step, exits, inputs, settings, steps })
 }
 
 /// One step of an action, with its own declarations read in.

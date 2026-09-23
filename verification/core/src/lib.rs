@@ -4076,11 +4076,9 @@ const REGISTRY: &[OpSpec] = &[
     // row of the "actions" tab of the entrance that owns the action now: a project's own from that
     // project, a global one from the sidebar's automations.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-scope", required: &["target", "reach"], refs: &["target", "project"], strings: &["reach"], binds: false },
-    // A step inside an action (`target`): its own prompt, and who carries it out. `agent` is the
-    // launch catalog's id (`claude-code`), not the command it runs — the launch check judges the
-    // step against the ids, and a road writing the command would be told the agent is not installed
-    // on a machine that has it.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name", "agent", "prompt"], refs: &["target"], strings: &["name", "agent", "prompt", "model", "work_dir_ref"], binds: true },
+    // A step inside an action (`target`): its own prompt. Who carries it out is not the step's — it is
+    // chosen where the action is placed (`agent-set`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name", "prompt"], refs: &["target"], strings: &["name", "prompt", "work_dir_ref"], binds: true },
     // The step a placement of this action opens first. An action with none is one the launch check
     // names, the way it names an automation with no entry.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-entry", required: &["target", "step"], refs: &["target", "step"], strings: &[], binds: false },
@@ -4088,6 +4086,13 @@ const REGISTRY: &[OpSpec] = &[
     // picture is a placement of an action, never a prompt of its own, and it binds the placement —
     // the id a setting is answered on and an edge leaves from.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target", "action"], refs: &["target", "action"], strings: &[], binds: true },
+    // Who carries one step (`step`) out at one placement (`target`), and the model where one is named.
+    // A step a run could open with nobody chosen is refused at launch, so a premise
+    // that stands up a definition to be run chooses for every step of every placement. `agent` is the
+    // launch catalog's id (`claude-code`), not the command it runs — the launch check judges the
+    // choice against the ids, and a road writing the command would be told the agent is not installed
+    // on a machine that has it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "agent-set", required: &["target", "step", "agent"], refs: &["target", "step"], strings: &["agent", "model"], binds: false },
     // Where a run starts: the placement it opens first. A definition without one is refused at the
     // launch check rather than here.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry", required: &["target", "placement"], refs: &["target", "placement"], strings: &[], binds: false },
@@ -4632,6 +4637,7 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Automation, "step-add"),
     (Domain::Automation, "action-entry"),
     (Domain::Automation, "place-add"),
+    (Domain::Automation, "agent-set"),
     (Domain::Automation, "entry"),
     (Domain::Automation, "exit-add"),
     (Domain::Automation, "port-add"),

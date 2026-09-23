@@ -1922,7 +1922,8 @@ pub enum AutomationCmd {
         /// action id
         id: i64,
     },
-    /// Add a step to a library action. One step is one terminal, and it carries its own prompt
+    /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
+    /// carries it out is chosen where the action is placed (`agent-set`)
     StepAdd {
         /// action id
         action: i64,
@@ -1932,12 +1933,6 @@ pub enum AutomationCmd {
         /// the prompt this step runs on (`-` reads it from stdin)
         #[arg(long)]
         prompt: String,
-        /// who is asked to carry it out (e.g. claude)
-        #[arg(long)]
-        agent: String,
-        /// which model; left out, the agent's own default stands
-        #[arg(long)]
-        model: Option<String>,
         /// let this step wait for a person
         #[arg(long)]
         interactive: bool,
@@ -1960,15 +1955,6 @@ pub enum AutomationCmd {
         /// the prompt this step runs on (`-` reads it from stdin)
         #[arg(long)]
         prompt: Option<String>,
-        /// who is asked to carry it out
-        #[arg(long)]
-        agent: Option<String>,
-        /// which model
-        #[arg(long, conflicts_with = "clear_model")]
-        model: Option<String>,
-        /// leave the agent's own default model
-        #[arg(long)]
-        clear_model: bool,
         /// whether this step may wait for a person (`--interactive true|false`)
         #[arg(long)]
         interactive: Option<bool>,
@@ -2143,6 +2129,24 @@ pub enum AutomationCmd {
         /// `taskfilter`: when it is due — today | overdue | week | none | YYYY-MM-DD
         #[arg(long, value_name = "VALUE")]
         due: Vec<String>,
+    },
+    /// Choose who carries one step out at one placement — the agent, and the model where one is named.
+    /// A step nobody is chosen for is refused at launch
+    AgentSet {
+        /// placement id
+        placement: i64,
+        /// the step, inside the action standing on the placement
+        #[arg(long, value_name = "ID")]
+        step: i64,
+        /// who is asked to carry it out (e.g. claude)
+        #[arg(long, required_unless_present = "clear", conflicts_with = "clear")]
+        agent: Option<String>,
+        /// which model; left out, the agent's own default stands
+        #[arg(long, conflicts_with = "clear")]
+        model: Option<String>,
+        /// leave nobody chosen for it
+        #[arg(long)]
+        clear: bool,
     },
     /// Delete a setting — confirms unless -y
     CfgRm {

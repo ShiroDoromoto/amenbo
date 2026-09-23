@@ -1786,6 +1786,26 @@ impl Store {
         })
     }
 
+    /// Choose who carries one step out at one placement (one operation = one transaction).
+    pub fn automation_placement_step_set(
+        &mut self,
+        placement_id: i64,
+        step_id: i64,
+        agent: &str,
+        model: Option<&str>,
+    ) -> Result<crate::model::AutomationPlacementStep> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, placement_id)], |tx| {
+            crate::ops::automation::placement_step_set(tx, placement_id, step_id, agent, model)
+        })
+    }
+
+    /// Leave nobody chosen for one step at one placement (one operation = one transaction).
+    pub fn automation_placement_step_clear(&mut self, placement_id: i64, step_id: i64) -> Result<()> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, placement_id)], |tx| {
+            crate::ops::automation::placement_step_clear(tx, placement_id, step_id)
+        })
+    }
+
     /// Delete an automation and everything built into it (one operation = one transaction). The
     /// subtree rides one transaction: apply it half-way and a step's ways out outlive the step.
     pub fn automation_delete(&mut self, id: i64) -> Result<()> {
@@ -1964,8 +1984,6 @@ impl Store {
         id: i64,
         name: Option<&str>,
         prompt: Option<&str>,
-        agent: Option<&str>,
-        model: Option<Option<&str>>,
         interactive: Option<bool>,
         work_dir_ref: Option<Option<&str>>,
         report_to_task: Option<bool>,
@@ -1977,8 +1995,6 @@ impl Store {
                 id,
                 name,
                 prompt,
-                agent,
-                model,
                 interactive,
                 work_dir_ref,
                 report_to_task,

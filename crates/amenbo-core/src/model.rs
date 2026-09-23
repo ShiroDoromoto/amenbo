@@ -1630,10 +1630,11 @@ pub struct Automation {
     pub updated_at: Timestamp,
 }
 
-/// **One action, placed on one automation.** It carries no prompt, no agent and no way out of its own
-/// — those are the action's. What is this row's is which action stands here, and, through the
-/// [`AutomationCfg`] answers and the lines drawn onto it, everything that belongs to this spot rather
-/// than to the library. The same action placed twice gives two rows.
+/// **One action, placed on one automation.** It carries no prompt and no way out of its own — those
+/// are the action's. What is this row's is which action stands here, and, through the
+/// [`AutomationCfg`] answers, the [`AutomationPlacementStep`] choices and the lines drawn onto it,
+/// everything that belongs to this spot rather than to the library. The same action placed twice gives
+/// two rows.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationPlacement {
     pub id: i64,
@@ -1645,17 +1646,14 @@ pub struct AutomationPlacement {
 }
 
 /// **One step of one action**, and one terminal when it is opened. Its `prompt` is its own — an action
-/// holds the prompts rather than being one.
+/// holds the prompts rather than being one. Who carries it out is not: that is chosen where the action
+/// is placed ([`AutomationPlacementStep`], `AMB-D-960`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationStep {
     pub id: i64,
     pub action_id: i64,
     pub name: String,
     pub prompt: String,
-    pub agent: String,
-    /// `None` leaves the agent's own default model.
-    #[serde(default)]
-    pub model: Option<String>,
     /// May this step wait for a person? A step that does not say so is not left standing on one.
     #[serde(default)]
     pub interactive: bool,
@@ -1670,6 +1668,22 @@ pub struct AutomationStep {
     #[serde(default)]
     pub show_history: bool,
     pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **Who carries one step out at one placement** — chosen where the action is placed, step by step
+/// (`AMB-D-960`). A step with no row here has nobody chosen, and the launch check refuses a run that
+/// would open it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationPlacementStep {
+    pub id: i64,
+    pub placement_id: i64,
+    pub step_id: i64,
+    pub agent: String,
+    /// `None` leaves the agent's own default model.
+    #[serde(default)]
+    pub model: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

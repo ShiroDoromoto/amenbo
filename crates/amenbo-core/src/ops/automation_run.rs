@@ -44,10 +44,10 @@ use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// **One thing the launch check found missing.** Eight of them, and every one is something a person can
+/// **One thing the launch check found missing.** Ten of them, and every one is something a person can
 /// go and fix in the build screen — which is why each names where it is rather than only what it is.
 ///
-/// They are a type rather than eight sentences because both doors need them: the refusal writes them out
+/// They are a type rather than ten sentences because both doors need them: the refusal writes them out
 /// as English, and the build screen draws them as a list beside the step each belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unmet {
@@ -70,6 +70,9 @@ pub enum Unmet {
     UnwiredInput { step: String, port: String },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String },
+    /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
+    /// opened on it would have no agent to start.
+    AgentUnchosen { step: String },
     /// A step asking for an agent this machine cannot start. A pane opened on it would come up on
     /// `command not found`.
     AgentMissing { step: String, agent: String },
@@ -103,6 +106,9 @@ impl Unmet {
             Unmet::UnansweredCfg { step, cfg } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
+            Unmet::AgentUnchosen { step } => {
+                format!("nobody is chosen to carry out '{step}' where its action is placed")
+            }
             Unmet::AgentMissing { step, agent } => {
                 format!("'{step}' asks for '{agent}', which this machine cannot start")
             }
@@ -128,6 +134,7 @@ impl Unmet {
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
+            Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
         }
@@ -151,6 +158,7 @@ impl Unmet {
             },
             Unmet::UnwiredInput { step, port } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg } => msg.with("step", step).with("cfg", cfg),
+            Unmet::AgentUnchosen { step } => msg.with("step", step),
             Unmet::AgentMissing { step, agent } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
         }
@@ -224,7 +232,7 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. Two of the nine
+/// The list is walked in display order, so a person reading it walks their own picture. Two of the ten
 /// answer alone: an automation with nothing placed on it has nothing else to say about it, and one with
 /// no entry has nothing reachable to say it about — every other check is asked of the placements a run
 /// would actually walk, and with no entry that is none of them.
@@ -232,8 +240,8 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
 /// inside that nothing reaches stop a run just as surely as the same gaps on the automation's picture
-/// ([`inside`]). The agent and the model are asked of the steps alone — they are each step's own answer
-/// (`AMB-D-950`).
+/// ([`inside`]). The agent and the model are asked of each step as it is placed here — they are chosen
+/// where the action is placed, step by step (`AMB-D-960`).
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
@@ -296,34 +304,35 @@ pub fn check(
             unmet.push(Unmet::ActionEmpty { action: name.clone() });
             continue;
         }
-        for one in inside(conn, placement, &steps, &live, &by_id)? {
-            // An action placed twice has the same picture inside it twice, and the same gap in it is
-            // one thing to fix, not two.
-            if !unmet.contains(&one) {
-                unmet.push(one);
-            }
-        }
+        push_new(&mut unmet, inside(conn, placement, &steps, &live, &by_id)?);
         for step in &steps {
+            let mut found = Vec::new();
+            let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
+                found.push(Unmet::AgentUnchosen { step: step.name.clone() });
+                push_new(&mut unmet, found);
+                continue;
+            };
             if let Some(startable) = startable {
-                if !startable.iter().any(|id| id == &step.agent) {
-                    unmet.push(Unmet::AgentMissing {
+                if !startable.iter().any(|id| id == &chosen.agent) {
+                    found.push(Unmet::AgentMissing {
                         step: step.name.clone(),
-                        agent: step.agent.clone(),
+                        agent: chosen.agent.clone(),
                     });
                 }
             }
-            // Asked of the step's own model, and only where the agent offered a list (`ModelsHere`).
-            // A step naming no model is on whatever the provider's own settings have, which is not a
+            // Asked of the chosen model, and only where the agent offered a list (`ModelsHere`). A
+            // choice naming no model is on whatever the provider's own settings have, which is not a
             // name this could judge.
-            if let (Some(model), Some(offered)) = (step.model.as_deref(), models.get(&step.agent)) {
+            if let (Some(model), Some(offered)) = (chosen.model.as_deref(), models.get(&chosen.agent)) {
                 if !offered.iter().any(|id| id == model) {
-                    unmet.push(Unmet::ModelMissing {
+                    found.push(Unmet::ModelMissing {
                         step: step.name.clone(),
-                        agent: step.agent.clone(),
+                        agent: chosen.agent.clone(),
                         model: model.to_string(),
                     });
                 }
             }
+            push_new(&mut unmet, found);
         }
     }
     Ok(unmet)
@@ -432,6 +441,16 @@ fn inside(
     Ok(unmet)
 }
 
+/// Add what one placement is missing, leaving out what is already said. An action placed twice has the
+/// same picture inside it twice, and the same gap in it is one thing to fix, not two.
+fn push_new(unmet: &mut Vec<Unmet>, found: Vec<Unmet>) {
+    for one in found {
+        if !unmet.contains(&one) {
+            unmet.push(one);
+        }
+    }
+}
+
 /// What a placement is called in a refusal: the name of the action standing on it.
 fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
     Ok(read::automation_action(conn, action_id)?
@@ -444,7 +463,7 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 /// [`Unmet::ActionEmpty`] is raised on.
 ///
 /// Which of them one run walks is decided by the ways out taken while it goes; this is every one it
-/// could walk, in display order, and that is what the agent and the model are asked of (`AMB-D-950`)
+/// could walk, in display order, and that is what the agent and the model are asked of (`AMB-D-960`)
 /// and what a launch copies into the run ([`snapshot`]).
 /// A step nothing inside leads to is left out for the reason [`reachable`] leaves a placement out: no
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
@@ -648,8 +667,9 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
     emit_create(tx, record::automation_run(&run))?;
     for placement in read::automation_placements_of(tx.conn(), automation_id)? {
         for step in steps_opened_by(tx.conn(), placement.action_id)? {
-            let def = snapshot(tx, run.id, &placement, &step, now)?;
-            emit_create(tx, record::automation_run_def(&def))?;
+            if let Some(def) = snapshot(tx, run.id, &placement, &step, now)? {
+                emit_create(tx, record::automation_run_def(&def))?;
+            }
         }
     }
     Ok(run)
@@ -683,9 +703,14 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
 /// edge ([`onward`], [`wired_into`]). Each input carries the outputs wired into it, resolved here, so a
 /// run hands a value along the wires it launched with (`AMB-D-961`). The settings are the placement's —
 /// the action's declarations with this spot's answers written in — because a step reads them by name and
-/// the answer is given once, where the action is placed. The prompt, the agent, the model and the three
-/// flags are resolved here rather than kept as a pointer, so the step is not read halfway through the
-/// run as whatever it had since been edited into.
+/// the answer is given once, where the action is placed. The agent and the model are the placement's too
+/// — chosen there, step by step (`AMB-D-960`). The prompt, the agent, the model and the three flags are
+/// resolved here rather than kept as a pointer, so the step is not read halfway through the run as
+/// whatever it had since been edited into.
+///
+/// **A step nobody is chosen for is not copied**, and `None` says so. The launch check refuses a run
+/// that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here stands on a
+/// placement no run reaches — copied, it would need an agent it does not have.
 ///
 /// No cycle can be met here: an action places no action (`AMB-D-949`), so opening a placement goes one
 /// level down and stops. A loop drawn inside an action is a way back between its steps, walked at run
@@ -696,8 +721,11 @@ fn snapshot(
     placement: &AutomationPlacement,
     step: &AutomationStep,
     now: Timestamp,
-) -> Result<AutomationRunDef> {
+) -> Result<Option<AutomationRunDef>> {
     let conn = tx.conn();
+    let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
+        return Ok(None);
+    };
     let mut exits = Vec::new();
     for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
         let outs = outs_of(conn, &exit)?
@@ -724,15 +752,15 @@ fn snapshot(
             value: c.value,
         })
         .collect();
-    Ok(AutomationRunDef {
+    Ok(Some(AutomationRunDef {
         id: read::next_id(conn, "automation_run_def")?,
         run_id,
         placement_id: Some(placement.id),
         step_id: Some(step.id),
         name: step.name.clone(),
         prompt: Some(step.prompt.clone()),
-        agent: step.agent.clone(),
-        model: step.model.clone(),
+        agent: chosen.agent,
+        model: chosen.model,
         interactive: step.interactive,
         work_dir_ref: step.work_dir_ref.clone(),
         report_to_task: step.report_to_task,
@@ -742,7 +770,7 @@ fn snapshot(
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
-    })
+    }))
 }
 
 /// **Every step output the wires join to one input of one step**, followed across the action's edge —
@@ -1041,22 +1069,20 @@ mod tests {
         mk_out(tx, action, exit_name, "タスク", AutomationPortKind::TaskTake, true);
     }
 
-    /// Name a model on the one step an action holds.
-    fn names_model(tx: &WriteTx<'_>, action: &AutomationAction, model: &str) {
+    /// Name a model for the one step an action holds, where it is placed — the agent stays the one
+    /// chosen there.
+    fn names_model(
+        tx: &WriteTx<'_>,
+        placement: &AutomationPlacement,
+        action: &AutomationAction,
+        model: &str,
+    ) {
         let step = only_step(tx, action);
-        automation::step_update(
-            tx,
-            step.id,
-            None,
-            None,
-            None,
-            Some(Some(model)),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("name a model");
+        let chosen = read::automation_placement_step_for(tx.conn(), placement.id, step.id)
+            .expect("read the choice")
+            .expect("an agent chosen");
+        automation::placement_step_set(tx, placement.id, step.id, &chosen.agent, Some(model))
+            .expect("name a model");
     }
 
     /// The machine every test launches on: one that can start `claude`, with a window
@@ -1292,7 +1318,14 @@ mod tests {
 
     /// **A second step inside an action**, put in on the line its first step leaves the action by — so
     /// the one it starts at goes on to this one, and this one is what leaves the action from here.
-    fn goes_on_to(tx: &WriteTx<'_>, action: &AutomationAction, name: &str, agent: &str) {
+    /// `agent` is chosen for it at `placement`.
+    fn goes_on_to(
+        tx: &WriteTx<'_>,
+        action: &AutomationAction,
+        placement: &AutomationPlacement,
+        name: &str,
+        agent: &str,
+    ) {
         let entry = only_step(tx, action);
         let leaves_by =
             read::automation_edge_for_exit(
@@ -1303,15 +1336,59 @@ mod tests {
             )
                 .expect("read the line out of the action")
                 .expect("the step an action is written with leaves it by its unnamed way out");
-        automation::step_insert(tx, leaves_by.id, NewStep::new(name, "続ける", agent), &[], &[])
+        let step = automation::step_insert(tx, leaves_by.id, NewStep::new(name, "続ける"), &[], &[])
             .expect("the second step");
+        automation::placement_step_set(tx, placement.id, step.id, agent, None)
+            .expect("choose who carries it out");
+    }
+
+    /// **A step nobody is chosen for where it is placed is refused** (`AMB-D-960`), even on a machine
+    /// nobody has asked what it can start — there is no agent to ask about at all.
+    #[test]
+    fn a_step_nobody_is_chosen_for_where_it_is_placed_is_refused() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+            assert_eq!(
+                check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
+                vec![Unmet::AgentUnchosen { step: "取る".into() }],
+            );
+            let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
+            let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationAgentUnchosen)],
+            );
+        });
+    }
+
+    /// **The run carries out a step by whoever is chosen where it is placed** — the agent and the model
+    /// are copied from the placement at launch, and choosing again afterwards leaves the run's copy as
+    /// it was.
+    #[test]
+    fn a_run_copies_the_agent_and_the_model_chosen_where_the_step_is_placed() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_set(tx, placement.id, step.id, "claude", Some("opus"))
+                .expect("choose");
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
+                .expect("stop");
+            automation::placement_step_set(tx, placement.id, step.id, "codex", None)
+                .expect("choose again once the run is over");
+            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert_eq!(defs[0].agent, "claude");
+            assert_eq!(defs[0].model.as_deref(), Some("opus"));
+        });
     }
 
     #[test]
     fn a_step_further_inside_an_action_is_asked_for_its_agent_too() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
-            goes_on_to(tx, &action, "書く", "codex");
+            let (automation, action, placement) = launchable(tx);
+            goes_on_to(tx, &action, &placement, "書く", "codex");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::AgentMissing { step: "書く".into(), agent: "codex".into() }],
@@ -1324,7 +1401,7 @@ mod tests {
     fn a_step_inside_an_action_that_nothing_leads_to_is_left_out() {
         with_tx(|tx| {
             let (automation, action, _) = launchable(tx);
-            automation::step_add(tx, action.id, NewStep::new("書く", "続ける", "codex"))
+            automation::step_add(tx, action.id, NewStep::new("書く", "続ける"))
                 .expect("a step with no line into it");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
@@ -1345,8 +1422,8 @@ mod tests {
     #[test]
     fn a_model_the_agent_does_not_offer_here_is_refused() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
-            names_model(tx, &action, "opus-9");
+            let (automation, action, placement) = launchable(tx);
+            names_model(tx, &placement, &action, "opus-9");
             assert_eq!(
                 check(
                     tx.conn(),
@@ -1378,8 +1455,8 @@ mod tests {
     #[test]
     fn a_model_is_judged_only_against_an_agent_that_answered() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
-            names_model(tx, &action, "opus-9");
+            let (automation, action, placement) = launchable(tx);
+            names_model(tx, &placement, &action, "opus-9");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
@@ -1494,18 +1571,7 @@ mod tests {
                 .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)
                 .expect("edit the definition once the run is over");
-            automation::step_update(
-                tx,
-                step.id,
-                None,
-                Some("take another"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
+            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None)
             .expect("rewrite the prompt once the run is over");
             let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(defs[0].name, "取る", "the copy is what the run reads from here on");
@@ -1744,10 +1810,16 @@ mod tests {
     }
 
     /// The action a placement of `launchable` stands on, given a second step its one step goes on to.
-    fn a_second_step(tx: &WriteTx<'_>, action: &AutomationAction) -> crate::model::AutomationStep {
+    fn a_second_step(
+        tx: &WriteTx<'_>,
+        action: &AutomationAction,
+        placement: &AutomationPlacement,
+    ) -> crate::model::AutomationStep {
         let first = only_step(tx, action);
-        let second = automation::step_add(tx, action.id, NewStep::new("見直す", "review", "claude"))
+        let second = automation::step_add(tx, action.id, NewStep::new("見直す", "review"))
             .expect("second step");
+        automation::placement_step_set(tx, placement.id, second.id, "claude", None)
+            .expect("choose who carries it out");
         let on = AutomationPictureOwner::Action;
         let unnamed = exit_id(tx, AutomationOwner::Step, first.id, None);
         let leaves = read::automation_edge_for_exit(tx.conn(), on, first.id, unnamed)
@@ -1760,8 +1832,8 @@ mod tests {
     #[test]
     fn a_way_out_inside_an_action_with_nothing_after_it_is_refused() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
-            a_second_step(tx, &action);
+            let (automation, action, placement) = launchable(tx);
+            a_second_step(tx, &action, &placement);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::OpenExit { step: "見直す".into(), exit: None }],
@@ -1777,7 +1849,7 @@ mod tests {
     fn a_way_out_inside_follows_the_action_s_way_out_through_a_rename_and_goes_with_it() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
-            let second = a_second_step(tx, &action);
+            let second = a_second_step(tx, &action, &placement);
             let mine = automation::exit_add(tx, AutomationOwner::Action, action.id, Some("差し戻し"))
                 .expect("the action's way out");
             automation::edge_add(
@@ -1823,8 +1895,8 @@ mod tests {
     #[test]
     fn a_required_input_inside_an_action_nothing_reaches_is_refused() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
-            let second = a_second_step(tx, &action);
+            let (automation, action, placement) = launchable(tx);
+            let second = a_second_step(tx, &action, &placement);
             let on = AutomationPictureOwner::Action;
             automation::edge_add(tx, on, second.id, None, EdgeTarget::Exit(None), None).expect("edge");
             automation::port_add(

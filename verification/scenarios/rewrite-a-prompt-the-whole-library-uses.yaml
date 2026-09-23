@@ -14,7 +14,7 @@ description: >
   where the answer is two, and a reader would judge a rewrite by a number about the wrong thing.
 given:
   - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — review }, as: library }
-  - { type: action, domain: automation, op: step-add, with: { target: library, name: read, agent: claude-code, prompt: read what was written }, as: read }
+  - { type: action, domain: automation, op: step-add, with: { target: library, name: read, prompt: read what was written }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: library, step: read } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews twice" }, as: first }

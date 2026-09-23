@@ -341,16 +341,17 @@ amenbo decision list --filter "dim:Area=Design" --json           # the same axes
 amenbo decision list --filter "status:decided superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
 # Automations: a picture drawn once and walked by agents, in three layers. An automation
-# places library actions; an action holds steps; one step is one prompt, an agent to carry it
-# out and the ways out it may leave through. An edge says what happens after each way out is
+# places library actions; an action holds steps; one step is one prompt and the ways out it may
+# leave through. Who carries a step out is chosen where its action is placed. An edge says what happens after each way out is
 # taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
 # waits for that step to report, so the loop belongs to the store.
 amenbo automation add --name "Review and fix"          # the picture itself; what every step is told first is Amenbo's own
 amenbo automation action-add --name "Review"           # a unit worth using twice, in the library
-amenbo automation step-add 7 --name "Review" --prompt - --agent claude # one step of it = one terminal
+amenbo automation step-add 7 --name "Review" --prompt -  # one step of it = one terminal
 amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
 amenbo automation place-add 3 --action 7               # put that action on the picture
+amenbo automation agent-set 31 --step 11 --agent claude # who carries that step out at this spot (--model too)
 amenbo automation exit-add --action 7 --name "something to fix" # a way out a placement may leave by
 amenbo automation port-add --exit 21 --name report --kind file  # what that way out hands on
 amenbo automation edge-add --from "31:something to fix" --to 32 --max-times 3 # what happens after it

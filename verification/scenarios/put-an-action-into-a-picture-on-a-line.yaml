@@ -21,7 +21,7 @@ description: >
   that way out having handed on nothing yet.
 given:
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
@@ -33,6 +33,7 @@ given:
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one action, then two" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   # The line the `+` is pressed on. It closes the task, which is the half of this road worth walking:
   # a way out that ends something carries no limit, and turning it into one that goes on to a box
   # needs one — so this is the arm where the press has the most to put right.

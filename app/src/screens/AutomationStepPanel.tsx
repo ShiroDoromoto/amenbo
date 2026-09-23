@@ -3,15 +3,16 @@
 //
 // **It holds what is this placement's own, and reads the rest** (`AMB-D-954`, `AMB-T-5374`). A box on
 // the picture is a placement of a library action. What that action declares — its ways out, what
-// each hands on, its inputs, its settings — and what its steps carry — the prompt, the agent, the
-// model — are the action's, and are written on the action's own screen, where a rewrite reaches every
-// placement of it. So here they are read, and the panel says where they are written, with the press
+// each hands on, its inputs, its settings — and what its steps carry — the prompt and the flags — are
+// the action's, and are written on the action's own screen, where a rewrite reaches every placement
+// of it. So here they are read, and the panel says where they are written, with the press
 // that goes there. Written in two places, a reader would not know which one they were changing, nor
 // that a rewrite on one picture reached another.
 //
 // **What is written here is this spot's alone**: the answer a setting takes, the wire into an input,
-// what happens after each way out, and whether a run opens here. One action placed on two pictures
-// answers, is wired and goes on differently on each.
+// what happens after each way out, whether a run opens here, and who carries out each step of the
+// action (`AMB-D-960`). One action placed on two pictures answers, is wired, goes on and is run by
+// different agents on each.
 //
 // **It stands where it stands, whatever the picture does.** A definition of forty boxes draws a
 // picture two thousand pixels tall, and a panel that followed the box a reader pressed would put the
@@ -35,6 +36,7 @@
 import { useState } from "react";
 import {
   answerAutomationCfg,
+  chooseAutomationAgent,
   clearAutomationWire,
   removeAutomationPlacement,
   setAutomationEntry,
@@ -42,11 +44,11 @@ import {
   useAutomationAction,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, isStatus, statusLabel, t, tn } from "../core/i18n";
+import { errText, isStatus, statusLabel, t, tf, tn } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { ReachChip } from "./AutomationActionsTab";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
-import { CFG_KINDS, exitLabel, NextRow, useDraft, type Run } from "./automationPanel";
+import { CFG_KINDS, exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import {
   FILTER_ROWS,
   pressed,
@@ -64,7 +66,9 @@ import type {
   AutomationCfgDto,
   AutomationDetailDto,
   AutomationPlacementDto,
+  AutomationPlacementStepDto,
   AutomationPortDto,
+  WakeCandidateDto,
 } from "../bindings/bindings";
 
 /** What one value of a task filter row is called. */
@@ -187,6 +191,67 @@ function CfgRow({ placementId, cfg, run }: { placementId: number; cfg: Automatio
   );
 }
 
+/**
+ * One step of the placed action, and who carries it out at this spot: the agent, then the model that
+ * agent offers. Choosing another agent leaves the model to that agent's own default, since a model is
+ * one agent's name for it. The empty agent is nobody chosen, which the launch check names.
+ */
+function AgentRow({
+  placementId,
+  step,
+  agents,
+  run,
+}: {
+  placementId: number;
+  step: AutomationPlacementStepDto;
+  agents: WakeCandidateDto[];
+  run: Run;
+}) {
+  const models = useModels(step.agent ?? "");
+  const choose = (agent: string | null, model: string | null) =>
+    void run(chooseAutomationAgent(placementId, step.stepId, agent, model));
+  return (
+    <div className="autostep__who">
+      <span className="autostep__rowname">{step.name}</span>
+      <select
+        aria-label={tf("auto.place.agentOf", { step: step.name })}
+        value={step.agent ?? ""}
+        onChange={(e) => choose(e.target.value === "" ? null : e.target.value, null)}
+      >
+        <option value="">{t("auto.place.agentNone")}</option>
+        {step.agent !== undefined && agents.every((one) => one.id !== step.agent) && (
+          <option value={step.agent}>{step.agent}</option>
+        )}
+        {agents.map((one) => (
+          <option key={one.id} value={one.id} disabled={!one.installed}>
+            {one.installed ? one.label : tf("auto.step.notHere", { agent: one.label })}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={tf("auto.place.modelOf", { step: step.name })}
+        value={step.model ?? ""}
+        disabled={step.agent === undefined}
+        onChange={(e) => {
+          if (step.agent === undefined) return;
+          choose(step.agent, e.target.value === "" ? null : e.target.value);
+        }}
+      >
+        <option value="">{t("auto.step.modelDefault")}</option>
+        {step.model !== undefined &&
+          (models?.models ?? []).every((one) => one.id !== step.model) && (
+            <option value={step.model}>{step.model}</option>
+          )}
+        {(models?.models ?? []).map((one) => (
+          <option key={one.id} value={one.id}>
+            {one.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** One input: what the action declares, read, and what is wired into it at this spot. */
 function InputRow({
   automation,
@@ -259,6 +324,7 @@ export function AutomationStepPanel({
 }) {
   const placement = automation?.placements.find((one) => one.id === placementId) ?? null;
   const action = useAutomationAction(placement?.actionId ?? null);
+  const agents = useAgents(automation?.projectId ?? null);
   const [refused, setRefused] = useState<string | null>(null);
 
   const run: Run = (write) => {
@@ -334,6 +400,18 @@ export function AutomationStepPanel({
             {takesTask ? t("auto.step.takesTask") : t("auto.step.carriesTask")}
           </span>
         </div>
+
+        {placement.steps.length > 0 && (
+          <div className="autostep__field">
+            <span className="autostep__label">{t("auto.place.agents")}</span>
+            <span className="autostep__said">{t("auto.place.agentsWhat")}</span>
+            <div className="autostep__rows">
+              {placement.steps.map((step) => (
+                <AgentRow key={step.stepId} placementId={placement.id} step={step} agents={agents} run={run} />
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="autostep__field">
           <span className="autostep__label">{t("auto.step.cfg")}</span>

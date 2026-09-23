@@ -985,7 +985,7 @@ datasets! {
 
     // ───────────────────────── automation: what is built ─────────────────────────
     //
-    // Eleven tables for the definition and five for the run, and the line between them is that a run
+    // Ten tables for the definition and five for the run, and the line between them is that a run
     // never reads a definition again once it has started: `automation_run_def` is the copy taken at
     // the moment of launch, so editing an automation cannot change what a run already under way is
     // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
@@ -1012,9 +1012,9 @@ datasets! {
     // opens first. Nullable because an action under construction has no entry yet, and `RESTRICT`
     // because deleting the step it starts at is a thing the op has to be told to do.
     //
-    // It names no agent and no model: who is asked to carry a prompt out is each step's own answer,
-    // so the same action can be run by different agents in two automations (the columns are on
-    // `automation_action_step`).
+    // It names no agent and no model: who is asked to carry a prompt out is chosen where it is placed,
+    // step by step, so the same action can be run by different agents in two automations (the columns
+    // are on `automation_placement_step`).
     //
     // `note` is what the action is for, written for whoever builds with it. It is drawn on the build
     // screen and never prepended to a launch — `automation.notes`' twin one layer down.
@@ -1043,10 +1043,10 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // **One action, placed on one automation.** It carries no prompt, no agent and no way out of its
-    // own — those are the action's. What is this row's is which action stands here and, through
-    // `automation_cfg` and the wires and edges drawn onto it, the answers and the joins that belong
-    // to this spot rather than to the library. The same action placed twice gives two rows, which is
+    // **One action, placed on one automation.** It carries no prompt and no way out of its own —
+    // those are the action's. What is this row's is which action stands here and, through
+    // `automation_cfg`, `automation_placement_step` and the wires and edges drawn onto it, the
+    // answers, the agents and the joins that belong to this spot rather than to the library. The same action placed twice gives two rows, which is
     // what lets one prompt be run twice in one automation under two different answers.
     automation_placement {
         automation_id: fk("automation", "RESTRICT"),
@@ -1057,10 +1057,10 @@ datasets! {
     // **One step of one action**, and one terminal when it is opened. Its `prompt` is its own: an
     // action holds the prompts rather than being one.
     //
-    // `agent` is required and `model` is not: a step has to say who is asked, while the model is the
-    // agent's own default unless someone names one. They sit here and not on the placement because an
-    // action holds several steps, and one answer given where it is placed could not decide them all
-    // (`AMB-D-950`).
+    // It names no agent and no model. What a step is asked to do is the action's to say, and who is
+    // asked to do it is the automation's: those change for different reasons, and the same action
+    // placed on two projects' automations may be run by two different models there
+    // (`automation_placement_step`, `AMB-D-960`).
     //
     // The three flags' product defaults are **not** the `0` in their declarations — that is the
     // not-yet-written sentinel every required column carries, and the create writes the real answer
@@ -1074,14 +1074,26 @@ datasets! {
         action_id: fk("automation_action", "RESTRICT"),
         name: col(REQ),
         prompt: col(REQ),
-        agent: col(REQ),
-        model: col(OPT),
         interactive: bool_col,
         work_dir_ref: col(OPT),
         report_to_task: bool_col,
         show_history: bool_col,
         order_key: col(ORDER_KEY),
     }
+
+    // **Who carries one step out at one placement** — the agent, and the model where one is named
+    // (`AMB-D-960`). Chosen where the action is placed, one row per step of it, because an action
+    // holds several steps and one answer for the placement could not decide them all.
+    //
+    // A row is written when somebody chooses, the way a placement's answer to a setting is: a step
+    // with no row here has nobody chosen, and the launch check refuses a run that would open it.
+    // `model` NULL leaves the agent's own default. One row per pair, which is the constraint.
+    automation_placement_step {
+        placement_id: fk("automation_placement", "RESTRICT"),
+        step_id: fk("automation_action_step", "RESTRICT"),
+        agent: col(REQ),
+        model: col(OPT),
+    } => "UNIQUE (placement_id, step_id)"
 
     // **A setting, declared by an action and answered where it is placed.** The action's row is the
     // declaration alone, so its `value` is NULL; each placement of that action carries a row of its

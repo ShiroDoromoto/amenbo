@@ -396,6 +396,7 @@ pub enum ErrorCode {
     NotReadyAutomationOpenExitUnnamed,
     NotReadyAutomationUnwiredInput,
     NotReadyAutomationUnansweredCfg,
+    NotReadyAutomationAgentUnchosen,
     NotReadyAutomationAgentMissing,
     NotReadyAutomationModelMissing,
 }
@@ -480,6 +481,7 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationOpenExitUnnamed => "not_ready_automation_open_exit_unnamed",
             ErrorCode::NotReadyAutomationUnwiredInput => "not_ready_automation_unwired_input",
             ErrorCode::NotReadyAutomationUnansweredCfg => "not_ready_automation_unanswered_cfg",
+            ErrorCode::NotReadyAutomationAgentUnchosen => "not_ready_automation_agent_unchosen",
             ErrorCode::NotReadyAutomationAgentMissing => "not_ready_automation_agent_missing",
             ErrorCode::NotReadyAutomationModelMissing => "not_ready_automation_model_missing",
         }
@@ -561,6 +563,7 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationOpenExitUnnamed,
         ErrorCode::NotReadyAutomationUnwiredInput,
         ErrorCode::NotReadyAutomationUnansweredCfg,
+        ErrorCode::NotReadyAutomationAgentUnchosen,
         ErrorCode::NotReadyAutomationAgentMissing,
         ErrorCode::NotReadyAutomationModelMissing,
     ];
@@ -773,6 +776,7 @@ mod tests {
             "not_ready_automation_open_exit_unnamed",
             "not_ready_automation_unwired_input",
             "not_ready_automation_unanswered_cfg",
+            "not_ready_automation_agent_unchosen",
             "not_ready_automation_agent_missing",
             "not_ready_automation_model_missing",
         ]

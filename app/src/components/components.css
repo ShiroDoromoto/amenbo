@@ -1491,6 +1491,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__rows { display: flex; flex-direction: column; gap: var(--s-1); }
 .autostep__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .autostep__rowname { flex: none; min-width: 6rem; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* Who carries one step out at a spot: the step's name on a line of its own, and the agent and the
+   model side by side under it — the panel is too narrow for all three on one line. */
+.autostep__who { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-1); }
+.autostep__who > .autostep__rowname { grid-column: 1 / -1; }
+.autostep__who > select { min-width: 0; }
 .autostep__chip {
   background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);

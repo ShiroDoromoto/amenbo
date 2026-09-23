@@ -60,7 +60,8 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationPlacementDto, AutomationPortDto, AutomationRunCardDto,
+    AutomationLaunchCheckDto, AutomationPlacementDto, AutomationPlacementStepDto, AutomationPortDto,
+    AutomationRunCardDto,
     AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto, WriteAck,
 };
@@ -229,8 +230,8 @@ pub fn automation_action_page(
 /// **It is born empty**, which is what an action born from a name is: no steps, no entry, and the two
 /// ways out every declarer carries ([`amenbo_core::ops::automation::action_add`]). The first step is
 /// written in the build screen the press lands in ([`automation_step_add`], `AMB-T-5315`), which is
-/// where a prompt and the agent asked to carry it out are given together — asking for either here
-/// would be asking before there is a step to write it on.
+/// where its prompt is given — asking for one here would be asking before there is a step to write it
+/// on.
 ///
 /// `project` is which library it lands in — the project's own, or the device's where every project
 /// on this machine reaches it.
@@ -244,8 +245,9 @@ pub fn automation_action_add(project: Option<i64>, name: String) -> Result<Write
 }
 
 /// **Rename a library action, or rewrite what it is for.** Only what is `Some` is written. The name
-/// and the note are all that is the action's own to write: the prompt, the agent and the flags belong
-/// to its steps ([`automation_step_edit`]), and what it declares has its own doors.
+/// and the note are all that is the action's own to write: the prompt and the flags belong to its
+/// steps ([`automation_step_edit`]), who carries each step out to where the action is placed
+/// ([`automation_placement_step_set`]), and what it declares has its own doors.
 ///
 /// The note is the automation's notes one layer down: drawn where it is built and on the library's
 /// row, never carried into a launch (`AMB-D-952`).
@@ -284,35 +286,26 @@ pub fn automation_action_set_scope(id: i64, project_id: Option<i64>) -> Result<W
 
 /// **Change the step one library action opens.** Only what is `Some` is written.
 ///
-/// The fields are the step's, not the placement's: a prompt, who is asked to carry it out, the model
-/// and the three flags all belong to the terminal that is stood up, and an action holds the steps
-/// (`AMB-D-950`). Writing one reaches every placement of that action, which is what the library is
-/// for.
+/// The fields are the step's, not the placement's: a prompt and the three flags belong to the terminal
+/// that is stood up, and an action holds the steps. Writing one reaches every placement of that action,
+/// which is what the library is for. Who carries the step out is not among them — that is chosen where
+/// the action is placed ([`automation_placement_step_set`], `AMB-D-960`).
 ///
-/// `model` and `work_dir` are each a field with a third answer: written, cleared, or left alone. The
-/// pair of arguments says which — `clear_model` beats a `model` beside it, and the same for the
-/// folder — rather than a single `Option<Option<..>>`, which does not cross the IPC boundary as a
-/// shape a screen can write.
+/// `work_dir` is a field with a third answer: written, cleared, or left alone. The pair of arguments
+/// says which — `clear_work_dir` beats a `work_dir` beside it — rather than a single
+/// `Option<Option<..>>`, which does not cross the IPC boundary as a shape a screen can write.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn automation_step_edit(
     id: i64,
     name: Option<String>,
     prompt: Option<String>,
-    agent: Option<String>,
-    model: Option<String>,
-    clear_model: Option<bool>,
     interactive: Option<bool>,
     work_dir: Option<String>,
     clear_work_dir: Option<bool>,
     report_to_task: Option<bool>,
     history: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
-    let model = match (clear_model, model.as_deref()) {
-        (Some(true), _) => Some(None),
-        (_, Some(model)) => Some(Some(model)),
-        _ => None,
-    };
     let work_dir = match (clear_work_dir, work_dir.as_deref()) {
         (Some(true), _) => Some(None),
         (_, Some(name)) => Some(Some(name)),
@@ -323,8 +316,6 @@ pub fn automation_step_edit(
             id,
             name.as_deref(),
             prompt.as_deref(),
-            agent.as_deref(),
-            model,
             interactive,
             work_dir,
             report_to_task,
@@ -351,7 +342,6 @@ pub fn automation_step_add(
     action_id: i64,
     name: String,
     prompt: String,
-    agent: String,
     interactive: bool,
     exits: Vec<String>,
     inputs: Vec<(String, String, bool)>,
@@ -363,8 +353,6 @@ pub fn automation_step_add(
     let new = NewStep {
         name,
         prompt,
-        agent,
-        model: None,
         interactive,
         work_dir_ref: None,
         report_to_task: false,
@@ -480,7 +468,6 @@ pub fn automation_action_step_insert(
     edge_id: i64,
     name: String,
     prompt: String,
-    agent: String,
     interactive: bool,
     exits: Vec<String>,
     inputs: Vec<(String, String, bool)>,
@@ -492,8 +479,6 @@ pub fn automation_action_step_insert(
     let new = NewStep {
         name,
         prompt,
-        agent,
-        model: None,
         interactive,
         work_dir_ref: None,
         report_to_task: false,
@@ -877,6 +862,32 @@ pub fn automation_cfg_answer(
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.automation_cfg_set(placement_id, &name, value.as_deref())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Choose who carries one step out at one placement** — the agent, and the model where one is
+/// named — or, with no `agent`, leave nobody chosen (`AMB-D-960`). `model` absent is the agent's own
+/// default.
+///
+/// It is the placement's to say because the same action placed on two pictures may be run by two
+/// different models, and an action holds several steps, so the choice is made step by step
+/// ([`amenbo_core::ops::automation::placement_step_set`]).
+#[tauri::command]
+pub fn automation_placement_step_set(
+    placement_id: i64,
+    step_id: i64,
+    agent: Option<String>,
+    model: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        match agent.as_deref() {
+            Some(agent) => {
+                store.automation_placement_step_set(placement_id, step_id, agent, model.as_deref())?;
+            }
+            None => store.automation_placement_step_clear(placement_id, step_id)?,
+        }
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -1668,8 +1679,6 @@ fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
         id: step.id,
         name: step.name,
         prompt: step.prompt,
-        agent: step.agent,
-        model: step.model,
         interactive: step.interactive,
         work_dir_ref: step.work_dir_ref,
         report_to_task: step.report_to_task,
@@ -1734,8 +1743,6 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         action_id: placement.action_id,
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
-        agent: opens.as_ref().map(|s| s.agent.clone()).unwrap_or_default(),
-        model: opens.as_ref().and_then(|s| s.model.clone()),
         interactive: opens.as_ref().is_some_and(|s| s.interactive),
         work_dir_ref: opens.as_ref().and_then(|s| s.work_dir_ref.clone()),
         report_to_task: opens.as_ref().is_some_and(|s| s.report_to_task),
@@ -1743,6 +1750,16 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),
+        steps: view
+            .steps
+            .into_iter()
+            .map(|one| AutomationPlacementStepDto {
+                step_id: one.step.id,
+                name: one.step.name,
+                agent: one.chosen.as_ref().map(|c| c.agent.clone()),
+                model: one.chosen.and_then(|c| c.model),
+            })
+            .collect(),
     }
 }
 

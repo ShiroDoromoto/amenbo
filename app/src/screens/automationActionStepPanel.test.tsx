@@ -4,8 +4,9 @@
 // sends run for real.
 //
 // What these guard: **nothing pressed says so** rather than drawing an empty form; **every field
-// writes on the step** (`AMB-D-950`) — the prompt, the agent and the flags are the terminal's, and
-// what it declares is the step's rather than the action's; **the way out says where the run goes
+// writes on the step** — the prompt and the flags are the terminal's, who carries it out is left to
+// where the action is placed (`AMB-D-960`), and what it declares is the step's rather than the
+// action's; **the way out says where the run goes
 // next**, on the action's own picture, and choosing "nothing said" takes that line away;
 // **the error way out is drawn with that pulldown and nothing else**, being carried from birth and
 // neither renamed nor removed; **the entry is named from the step it names**; and **deleting asks
@@ -70,7 +71,6 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     id: 11,
     name: "Take the next task",
     prompt: "take one",
-    agent: "claude-code",
     interactive: false,
     reportToTask: false,
     showHistory: true,
@@ -154,13 +154,13 @@ afterEach(() => {
 
 describe("the panel of one step", () => {
   it("says so while nothing is pressed", async () => {
-    await render({ action: action(), stepId: null, projectId: 1, onRemoved: () => undefined });
+    await render({ action: action(), stepId: null, onRemoved: () => undefined });
     expect(container.textContent).toContain(t("auto.act.stepNone"));
     expect(selects()).toHaveLength(0);
   });
 
   it("writes the prompt onto the step when the caret leaves the box", async () => {
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
     const box = container.querySelector("textarea")!;
     await typeInto(box, "take the next ready one");
     expect(hoisted.editStep).not.toHaveBeenCalled();
@@ -169,7 +169,7 @@ describe("the panel of one step", () => {
   });
 
   it("declares an input on the step, not on the action", async () => {
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
     const line = declareLine(t("auto.step.inputName"));
     await typeInto(line.querySelector("input")!, "draft");
     await act(async () => line.querySelector<HTMLButtonElement>("button")!.click());
@@ -186,7 +186,7 @@ describe("what happens after a way out", () => {
   });
 
   it("offers the other steps, and sends the line on this picture", async () => {
-    await render({ action: two, stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: two, stepId: 11, onRemoved: () => undefined });
     const next = nextPicks()[0]!;
     expect([...next.options].map((one) => one.textContent)).toContain(
       t("auto.step.nextGo").replace("{name}", "Review"),
@@ -203,7 +203,7 @@ describe("what happens after a way out", () => {
     const declared = action({
       exits: [{ id: 20, outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
     });
-    await render({ action: declared, stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: declared, stepId: 11, onRemoved: () => undefined });
     const next = nextPicks()[0]!;
     expect([...next.options].map((one) => one.textContent)).toContain(
       t("auto.step.nextExit").replace("{name}", "gave up"),
@@ -227,7 +227,7 @@ describe("what happens after a way out", () => {
       exits: [{ id: 20, outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
       edges: [{ id: 5, fromId: 11, ends: "exit", exitTo: "gave up" }],
     });
-    await render({ action: leaving, stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: leaving, stepId: 11, onRemoved: () => undefined });
     expect(nextPicks()[0]!.value).toBe("exit:gave up");
   });
 
@@ -236,14 +236,14 @@ describe("what happens after a way out", () => {
       steps: two.steps,
       edges: [{ id: 5, fromId: 11, toId: 12, ends: "go" }],
     });
-    await render({ action: wired, stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: wired, stepId: 11, onRemoved: () => undefined });
     expect(nextPicks()[0]!.value).toBe("go:12");
     await pick(nextPicks()[0]!, "");
     expect(hoisted.removeEdge).toHaveBeenCalledWith(5);
   });
 
   it("gives the error way out that pulldown and nothing else", async () => {
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
     const row = container.querySelector(".autostep__exiterr")!;
     expect(row.textContent).toContain(t("auto.pic.errorExit"));
     expect(row.querySelector("input")).toBeNull();
@@ -254,7 +254,7 @@ describe("what happens after a way out", () => {
 
 describe("the step a placement opens first", () => {
   it("says so on the step that is it", async () => {
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
     expect(container.textContent).toContain(t("auto.act.entryIs"));
     expect(buttons().some((one) => one.textContent === t("auto.act.entrySet"))).toBe(false);
   });
@@ -263,7 +263,6 @@ describe("the step a placement opens first", () => {
     await render({
       action: action({ entryStepId: 12, steps: [step(), step({ id: 12, name: "Review" })] }),
       stepId: 11,
-      projectId: 1,
       onRemoved: () => undefined,
     });
     await act(async () => button(t("auto.act.entrySet")).click());
@@ -274,7 +273,7 @@ describe("the step a placement opens first", () => {
 describe("taking a step out", () => {
   it("asks first, and hands the screen back its selection", async () => {
     const onRemoved = vi.fn();
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved });
+    await render({ action: action(), stepId: 11, onRemoved });
     await act(async () => button(t("auto.act.stepRemove")).click());
     expect(hoisted.confirm).toHaveBeenCalledWith(t("auto.act.stepRemoveConfirm"));
     expect(hoisted.removeStep).toHaveBeenCalledWith(11);
@@ -284,14 +283,14 @@ describe("taking a step out", () => {
   it("writes nothing where the reader says no", async () => {
     hoisted.confirm.mockResolvedValue(false);
     const onRemoved = vi.fn();
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved });
+    await render({ action: action(), stepId: 11, onRemoved });
     await act(async () => button(t("auto.act.stepRemove")).click());
     expect(hoisted.removeStep).not.toHaveBeenCalled();
     expect(onRemoved).not.toHaveBeenCalled();
   });
 
   it("names the box the reader is looking at, not the one the line came from", async () => {
-    await render({ action: action(), stepId: 11, projectId: 1, onRemoved: () => undefined });
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
     expect(boxes()[0]!.value).toBe("Take the next task");
   });
 });

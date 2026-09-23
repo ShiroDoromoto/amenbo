@@ -28,18 +28,20 @@ given:
   # Two actions of one step each, placed one after the other. Nothing is handed on between them: what
   # the road reads is that the second step opened at all.
   - { type: action, domain: automation, op: action-add, with: { name: first, project: harbour }, as: first }
-  - { type: action, domain: automation, op: step-add, with: { target: first, name: begin, agent: claude-code, prompt: begin the round }, as: begin }
+  - { type: action, domain: automation, op: step-add, with: { target: first, name: begin, prompt: begin the round }, as: begin }
   - { type: action, domain: automation, op: action-entry, with: { target: first, step: begin } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: begin, exit_to: "" } }
 
   - { type: action, domain: automation, op: action-add, with: { name: second, project: harbour }, as: second }
-  - { type: action, domain: automation, op: step-add, with: { target: second, name: follow, agent: claude-code, prompt: follow the round through }, as: follow }
+  - { type: action, domain: automation, op: step-add, with: { target: second, name: follow, prompt: follow the round through }, as: follow }
   - { type: action, domain: automation, op: action-entry, with: { target: second, step: follow } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: follow, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the harbour round", project: harbour }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: first }, as: at_first }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_first, step: begin, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: second }, as: at_second }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_second, step: follow, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_first, to: at_second } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_second } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_first } }

@@ -710,8 +710,6 @@ mod tests {
                 None,
                 None,
                 None,
-                None,
-                None,
                 Some(Some("作業フォルダ")),
                 None,
                 None,
@@ -994,18 +992,7 @@ mod tests {
     fn a_step_told_to_go_without_the_story_is_not_given_it() {
         with_tx(|tx| {
             let p = picture(tx, true, true);
-            automation::step_update(
-                tx,
-                p.second.id,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(false),
-            )
+            automation::step_update(tx, p.second.id, None, None, None, None, None, Some(false))
             .expect("history off");
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));

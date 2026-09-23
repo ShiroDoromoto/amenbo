@@ -911,9 +911,11 @@ mod tests {
         let review = automation::step_add(
             tx,
             second_action.id,
-            automation::NewStep::new("見直す", "review", "claude"),
+            automation::NewStep::new("見直す", "review"),
         )
         .expect("second step");
+        automation::placement_step_set(tx, second.id, review.id, "claude", None)
+            .expect("choose who carries it out");
         // The first step no longer leaves the action: it goes on to the second inside it.
         let unnamed = exit_id(tx, crate::model::AutomationOwner::Step, write.id, None);
         let leaves = read::automation_edge_for_exit(tx.conn(), Action, write.id, unnamed)

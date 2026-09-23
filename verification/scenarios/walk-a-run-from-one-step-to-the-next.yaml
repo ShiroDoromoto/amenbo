@@ -31,7 +31,7 @@ given:
   # the action's is what the next placement is fed from — and the lines inside the action carry the
   # one out by the other.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task and say what it is about }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task and say what it is about }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
@@ -46,7 +46,7 @@ given:
   # The second action: one step that reads what the first handed on. The input is the action's, so a
   # placement of it can be fed, and the step's, so the step is handed it.
   - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
-  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, agent: claude-code, prompt: read what the step before handed on }, as: read }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, prompt: read what the step before handed on }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
   - { type: action, domain: automation, op: port-add, with: { action: review, name: note, kind: value, required: true } }
   - { type: action, domain: automation, op: port-add, with: { step: read, name: note, kind: value, required: true } }
@@ -55,7 +55,9 @@ given:
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two actions in a row" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_review, step: read, agent: claude-code } }
   - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_review, to_port: note } }
 
   # Every way out says what happens after it, or the launch check stops the road before it starts.

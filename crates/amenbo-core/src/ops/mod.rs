@@ -178,7 +178,8 @@ pub(crate) mod test_support {
     }
 
     /// **One action of one step, placed on one automation** — the smallest thing a run can walk
-    /// (`AMB-D-949`), and what a test that needs one spot on a picture asks for.
+    /// (`AMB-D-949`), and what a test that needs one spot on a picture asks for. `agent` is chosen for
+    /// the step at that placement (`AMB-D-960`).
     pub(crate) fn mk_placed(
         tx: &WriteTx<'_>,
         automation: &crate::model::Automation,
@@ -189,13 +190,16 @@ pub(crate) mod test_support {
         let action = crate::ops::automation::action_from_prompt(
             tx,
             Some(automation.project_id),
-            crate::ops::automation::NewStep::new(name, prompt, agent),
+            crate::ops::automation::NewStep::new(name, prompt),
             &[],
             &[],
         )
         .expect("write the action");
         let placement = crate::ops::automation::placement_add(tx, automation.id, action.id)
             .expect("place it");
+        let step = action.entry_step_id.expect("an entry step");
+        crate::ops::automation::placement_step_set(tx, placement.id, step, agent, None)
+            .expect("choose who carries it out");
         (action, placement)
     }
 

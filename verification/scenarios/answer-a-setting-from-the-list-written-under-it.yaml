@@ -34,7 +34,7 @@ given:
   # The action the panel is read on, holding the one step it runs. The way out that takes the task
   # is declared on both layers, and the line inside the action carries the step's out by the action's.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
@@ -44,6 +44,7 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a setting to answer off its list" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   # Both ways out say what happens after them, so the definition opens with nothing in its way and
   # the one line the launch place carries below is the one this road put there.
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }

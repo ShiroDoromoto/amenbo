@@ -37,6 +37,7 @@ import type {
   AutomationRunCardDto,
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
+  EveryAutomationCardDto,
   WakeDto,
 } from "../bindings/bindings";
 
@@ -54,6 +55,19 @@ export function useAutomations(projectId: number | null): AutomationCardDto[] {
   const { data } = useQuery<AutomationCardDto[]>(
     ["automations", projectId ?? null],
     () => (projectId === null ? Promise.resolve([]) : fetchAutomations(projectId)),
+  );
+  return data ?? [];
+}
+
+/**
+ * **The automations of every project**, each with the project it is in — the sidebar's list.
+ *
+ * Its key starts with `automations` like the one project's, so a write that says it moved the
+ * automations re-reads both lists.
+ */
+export function useEveryAutomation(): EveryAutomationCardDto[] {
+  const { data } = useQuery<EveryAutomationCardDto[]>(["automations", "everywhere"], () =>
+    inTauri() ? invoke<EveryAutomationCardDto[]>("automation_page_everywhere") : Promise.resolve([]),
   );
   return data ?? [];
 }
@@ -115,17 +129,19 @@ export async function deleteAutomation(id: number): Promise<void> {
  *
  * Both reaches come in one answer because both are one list on screen: what a reader is choosing
  * between is every action this automation could place, and which library holds one is a column.
+ *
+ * `null` is the device's library alone — the sidebar's list, which has no project to reach from.
  */
-export async function fetchAutomationActions(projectId: number): Promise<AutomationActionCardDto[]> {
+export async function fetchAutomationActions(projectId: number | null): Promise<AutomationActionCardDto[]> {
   if (!inTauri()) return [];
   return invoke<AutomationActionCardDto[]>("automation_action_page", { projectId });
 }
 
-/** Subscribing read of the library this project reaches. */
+/** Subscribing read of the library this project reaches — the device's alone for `null`. */
 export function useAutomationActions(projectId: number | null): AutomationActionCardDto[] {
   const { data } = useQuery<AutomationActionCardDto[]>(
     ["automationActions", projectId ?? null],
-    () => (projectId === null ? Promise.resolve([]) : fetchAutomationActions(projectId)),
+    () => fetchAutomationActions(projectId),
   );
   return data ?? [];
 }

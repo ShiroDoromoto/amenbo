@@ -949,6 +949,15 @@ toKind?: string,
 tasks?: number, decisions?: number, };
 
 /**
+ * **One automation in the list that spans every project** — the row the sidebar's "automations"
+ * tab draws, with whose it is.
+ *
+ * The project comes by id as well as by name: the name is what the row says, and the id is where a
+ * press on it goes — that project's build screen, and the folders its launch is asked about.
+ */
+export type EveryAutomationCardDto = { projectId: number, projectName: string, card: AutomationCardDto, };
+
+/**
  * What [`run_export`](crate::commands::run_export) returns: the directory it wrote to, how big it is, and how many attachments
  * were carried out.
  */

@@ -97,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal, workspaceOpen, onGoToRun,
+  onStartTerminal, workspaceOpen, onGoToRun, openAutomation,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -117,11 +117,16 @@ export function BoardScreen({
   /** Go to the pane a run is drawn in — a press on a row of the automations screen's "running" tab,
    *  carried out by the shell (`../shell/AppShell`). */
   onGoToRun?: (project: number, run: number) => void;
+  /** The automation to arrive on, open on its build screen — a press on the sidebar's list of every
+   *  project's automations (`./AutomationsScreen`). */
+  openAutomation?: number;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
   // The tasks surface (list/board/…) or the decisions one. Decisions shows only what sits under this project.
-  const [tab, setTab] = useState<"tasks" | "decisions" | "automations">("tasks");
+  const [tab, setTab] = useState<"tasks" | "decisions" | "automations">(
+    openAutomation === undefined ? "tasks" : "automations",
+  );
   const [sel, setSel] = useState<FilterSelection>({});
   // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
   // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
@@ -287,9 +292,10 @@ export function BoardScreen({
       >
         <Icon name="gavel" /> {t("nav.decisions")}
       </button>
-      {/* The project's automations, beside its decisions rather than in the sidebar: an automation
-          belongs to a project the way a decision does, and a place in the sidebar would be asking
-          which project it was about all over again (`app/src/screens/AutomationsScreen.tsx`). */}
+      {/* The project's automations, beside its decisions: an automation belongs to a project the way
+          a decision does, so this is where one is made and changed. The sidebar's entrance lists
+          every project's, and a press there comes here (`AMB-D-954`,
+          `app/src/screens/AutomationsScreen.tsx`). */}
       <button
         className={`boardtab ${tab === "automations" ? "boardtab--active" : ""}`}
         onClick={() => { setTab("automations"); onSelectDecision(null); }}
@@ -336,6 +342,7 @@ export function BoardScreen({
       {tab === "automations" && (
         <AutomationsScreen
           projectId={projectId}
+          opening={openAutomation}
           workspaceOpen={workspaceOpen}
           onGoToRun={onGoToRun}
         />

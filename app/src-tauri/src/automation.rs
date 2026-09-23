@@ -62,7 +62,7 @@ use crate::dto::{
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacementDto, AutomationPortDto, AutomationRunCardDto,
     AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
-    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto, WriteAck,
 };
 use crate::error::CmdError;
 use tauri::Emitter;
@@ -83,6 +83,31 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
             name: card.automation.name,
             placements: card.placements,
             archived: card.automation.archived,
+        })
+        .collect())
+}
+
+/// **The automations of every project**, project by project in the sidebar's order — the list the
+/// sidebar's "automations" tab draws ([`automation_view::every_card`]).
+///
+/// It is the one read the screen has that crosses projects on the definition side, so each row
+/// carries its project. The window holds every project, so nothing narrows the walk.
+#[tauri::command]
+pub fn automation_page_everywhere() -> Result<Vec<EveryAutomationCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_page_everywhere");
+    let store = open_store_read()?;
+    let cards = automation_view::every_card(store.read_model().conn(), None)?;
+    Ok(cards
+        .into_iter()
+        .map(|one| EveryAutomationCardDto {
+            project_id: one.card.automation.project_id,
+            project_name: one.project_name,
+            card: AutomationCardDto {
+                id: one.card.automation.id,
+                name: one.card.automation.name,
+                placements: one.card.placements,
+                archived: one.card.automation.archived,
+            },
         })
         .collect())
 }
@@ -170,12 +195,17 @@ pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
 /// The two libraries answer as one list because they are one list on screen: what a reader is
 /// choosing between is every action this automation could place, and which of the two holds one is a
 /// column of that list rather than a second list to go and look in.
+///
+/// `project_id` `None` is the device's library alone — what the sidebar's "actions" tab lists, since a
+/// project's own actions are made and changed from that project (`AMB-D-954`).
 #[tauri::command]
-pub fn automation_action_page(project_id: i64) -> Result<Vec<AutomationActionCardDto>, CmdError> {
+pub fn automation_action_page(
+    project_id: Option<i64>,
+) -> Result<Vec<AutomationActionCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_action_page");
     let store = open_store_read()?;
     let conn = store.read_model().conn();
-    let cards = automation_view::action_cards(conn, Some(project_id))?;
+    let cards = automation_view::action_cards(conn, project_id)?;
     let mut out = Vec::with_capacity(cards.len());
     for card in cards {
         out.push(AutomationActionCardDto {

@@ -17,6 +17,10 @@
 // **It is searched and narrowed in place** — by what the name and the note say, and by reach — since
 // a library grows past what a reader scans by eye, and the two reaches stay one list either way.
 //
+// **Opened from the sidebar, it is the device's library alone** (`AMB-D-954`), with no project to
+// reach from: a global action is made and changed there and nowhere else, and a project's own are
+// its project's. So the reach narrowing has nothing to narrow, and what is made is global.
+//
 // **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
 // prompts written. Making one here asks for a name and a reach and no prompt: an action is born
 // empty, and the screen the press lands on is where the words go.
@@ -59,6 +63,7 @@ export function AutomationActionsTab({
   projectId,
   onOpen,
 }: {
+  /** Whose library this is, besides the device's — `null` for the sidebar's, the device's alone. */
   projectId: number | null;
   /** Open the build screen on this action — a press on a row, and on the row a press just made. */
   onOpen: (id: number) => void;
@@ -122,7 +127,7 @@ export function AutomationActionsTab({
           value={words}
           onChange={(e) => setWords(e.target.value)}
         />
-        {reaches.map((one) => (
+        {projectId !== null && reaches.map((one) => (
           <button
             key={one.id}
             type="button"
@@ -200,7 +205,8 @@ function ActionAdd({
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
-  const [reach, setReach] = useState<"" | "global" | "project">("");
+  // With no project there is one reach to make in, so it is the one already picked.
+  const [reach, setReach] = useState<"" | "global" | "project">(projectId === null ? "global" : "");
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -228,8 +234,8 @@ function ActionAdd({
           value={reach}
           onChange={(e) => setReach(e.target.value as "" | "global" | "project")}
         >
-          <option value="">{t("auto.actions.pickReach")}</option>
-          <option value="project">{t("auto.actions.reachProject")}</option>
+          {projectId !== null && <option value="">{t("auto.actions.pickReach")}</option>}
+          {projectId !== null && <option value="project">{t("auto.actions.reachProject")}</option>}
           <option value="global">{t("auto.actions.reachGlobal")}</option>
         </select>
       </label>
@@ -237,7 +243,7 @@ function ActionAdd({
         type="button"
         className="btn btn--primary"
         disabled={
-          making || name.trim() === "" || reach === "" || (reach === "project" && projectId === null)
+          making || name.trim() === "" || reach === ""
         }
         onClick={() => void make()}
       >

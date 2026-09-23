@@ -340,6 +340,7 @@ const ui = {
   // smart views (sidebar shows inbox/activity/due; archive is the header for the board-opened list)
   "smartview.inbox": "Inbox @me", "smartview.activity": "Activity",
   "smartview.due": "Due",
+  "smartview.automations": "Automations",
   "smartview.dueStop": "Overdue or due today", "smartview.dueHeed": "Due tomorrow",
   "mailbox.notifyTitle": "Amenbo inbox", "mailbox.notifyBody.one": "{n} item needs your attention", "mailbox.notifyBody.other": "{n} items need your attention",
   "mailbox.notifyFailed": "Couldn't show an OS notification (allow Amenbo notifications in system settings)",
@@ -1134,6 +1135,8 @@ const ui = {
   "auto.tab.actions": "Actions",
   "auto.tab.history": "History",
   "auto.empty": "No automations in this project yet.",
+  "auto.emptyEverywhere": "No project has an automation yet.",
+  "auto.scope.device": "All on this device",
   "auto.new": "New automation",
   "auto.new.name": "Name",
   "auto.new.make": "Create",

@@ -1742,6 +1742,20 @@ button.feed__target:hover { color: var(--c-accent); }
 .autolist__ready { font-size: var(--fs-xs); font-weight: var(--fw-bold); white-space: nowrap; text-align: end; }
 .autolist__ready--ok { color: var(--c-done); }
 .autolist__ready--no { color: var(--c-heed); }
+/* The sidebar's list (`../screens/AutomationsScreen`): the row goes to its project, and the start
+   press stands beside it rather than inside it — the same shape a run's row has (`.autorun`). */
+.autolist__line { display: flex; align-items: center; gap: var(--s-2); padding-inline-end: var(--s-2); }
+.autolist__line .autolist__row { flex: 1 1 auto; min-width: 0; }
+.autolist__line > .btn { flex: none; white-space: nowrap; }
+.autolist__row--everywhere { grid-template-columns: minmax(0, 1fr) minmax(0, 10rem) auto 8rem; }
+.autolist__project {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.autolist__refused { padding: 0 var(--s-3) var(--s-2); font-size: var(--fs-xs); color: var(--c-stop); }
+/* Over the two run tabs from the sidebar: what they are, and that they are this device's whole. */
+.autotabs__head { display: flex; align-items: baseline; gap: var(--s-2); }
+.autotabs__scope { font-size: var(--fs-xs); color: var(--c-text-faint); }
 
 /* The library in the panel (`../screens/AutomationLibraryPanel`): two groups by reach, and the row
    pressed opens in place with what the action declares and the press that places it. */

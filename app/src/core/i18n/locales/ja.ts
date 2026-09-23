@@ -319,6 +319,7 @@ export const ja: Translation = {
     // smart views (sidebar shows inbox/activity/due; archive is the header for the board-opened list)
     "smartview.inbox": "受信箱 @自分", "smartview.activity": "アクティビティ",
     "smartview.due": "期日",
+    "smartview.automations": "オートメーション",
     "smartview.dueStop": "期限切れ・今日が期日", "smartview.dueHeed": "明日が期日",
     "mailbox.notifyTitle": "Amenbo 受信箱", "mailbox.notifyBody.other": "確認が必要な項目が {n} 件届きました",
     "mailbox.notifyFailed": "OS 通知を出せませんでした（システム設定で Amenbo の通知を許可してください）",
@@ -904,6 +905,8 @@ export const ja: Translation = {
     "auto.tab.actions": "アクション",
     "auto.tab.history": "履歴",
     "auto.empty": "このプロジェクトにオートメーションはまだありません",
+    "auto.emptyEverywhere": "どのプロジェクトにもオートメーションはまだありません",
+    "auto.scope.device": "この端末のぜんぶ",
     "auto.new": "オートメーションを作る",
     "auto.new.name": "名前",
     "auto.new.make": "作る",

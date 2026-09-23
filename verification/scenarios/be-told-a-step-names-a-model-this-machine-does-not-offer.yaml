@@ -13,17 +13,16 @@
 #
 # ── What puts the question ──────────────────────────────────────────────────────────────────────
 # Three places ask, and all three are a reader looking at what an agent can be started on: the row
-# under an empty frame, the row under a running pane, and the panel a placement opens — which asks
-# for the agent carrying out the step the placed action opens first
-# (`app/src/screens/AutomationStepPanel.tsx`). This road walks the third, because it is the one that
-# happens where the answer is read: a reader on the build screen presses a box to look at it, and the
-# launch place beside it has something to say it did not have a moment ago.
+# under an empty frame, the row under a running pane, and the panel a step opens on its action's
+# build screen — which asks for the agent carrying that step out
+# (`app/src/screens/AutomationActionStepPanel.tsx`). This road walks the third, because it is the one
+# a reader building an automation meets: they go to the action to see who carries its step out, and
+# the launch place of the automation they came from has something to say it did not have before.
 #
 # ── Why the screen is left and come back to ─────────────────────────────────────────────────────
-# The launch place is read when the build screen opens. The ask the panel makes lands after that, so
-# the list does not move under the reader — it is the next reading that carries the reason. A road
-# that asserted it without going back would be asserting that the app re-reads a check it has no
-# reason to re-read, and that is not what is being defended here.
+# The launch place is read when the build screen opens. The ask the step panel makes lands on another
+# screen, so it is the next reading of the automation that carries the reason — the answer is kept
+# for the life of the app, whichever screen asked.
 #
 # ── Why the model is named from the terminal ────────────────────────────────────────────────────
 # The panel's model control offers what the agent answered with, plus whatever the step already
@@ -36,9 +35,9 @@ title: A step's model is judged only once its agent has been asked, and then the
 description: >
   Stand a definition up that is short of nothing except that one of its steps names a model the agent
   on this machine does not answer with. Open the build screen: the launch place says it is ready,
-  because nobody has asked that agent anything yet. Press the box of the action holding that step,
-  which is one of the three places that puts the question, and open the build screen again: the same
-  definition now lists one reason, naming the step and the model it asks for.
+  because nobody has asked that agent anything yet. Go to the action holding that step and press
+  the step, which is one of the three places that puts the question, and open the build screen again:
+  the same definition now lists one reason, naming the step and the model it asks for.
 given:
   # Two agents, each answering with two models it can be started on. The names are the harness's
   # own — a road never writes a real model name — and the step below names a third of that family,
@@ -85,13 +84,25 @@ steps_gui:
     with:
       ready: true
 
-  # The press that puts the question. What the panel draws is beside the point; what it does on the
-  # way is ask the agent this step is carried out by what it can be started on.
+  # The press that puts the question: the step on its action's own screen. What the panel draws is
+  # beside the point; what it does on the way is ask the agent what it can be started on.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
   - type: action
     domain: automation
     op: pick-box
     with:
-      name: take
+      name: claim
 
   # The name is on the panel although the agent never offered it — the control carries what the step
   # already says as well as what came back, or a reader would be shown their own definition with a
@@ -103,7 +114,7 @@ steps_gui:
       field: model
       value: scenario-model-09
 
-  # Away and back, which is what makes the launch place read the check again.
+  # Back to the definition, which reads the check again.
   - type: action
     domain: automation
     op: screen

@@ -18,11 +18,15 @@
 # It is the reading that says the edges and the wire were left standing rather than thrown away: a
 # build that dropped them on the rename would pass everything above and leave a definition that
 # cannot be put back.
+#
+# ── Where the rename is made ────────────────────────────────────────────────────────────────────
+# A way out is the action's, so it is renamed on the action's own output panel, and what the rename
+# parted is read back on the automation placing it — the road goes there and back.
 id: rename-a-way-out-and-find-what-hung-on-it-let-go
 title: Renaming a way out parts the line and the wire that named it, and writing the name back brings them home
 description: >
-  Open a definition that is ready to start, and rename one placed action's named way out on the
-  panel. The line that left by the old name is still drawn under that name, the renamed way out is
+  Open a definition that is ready to start, and rename one placed action's named way out on that
+  action's own screen. The line that left by the old name is still drawn under that name, the renamed way out is
   named on the launch place as having nothing after it, and the placement the wire fed wears the
   mark for a required input nothing reaches. Then write the old name back, and every one of those
   goes.
@@ -79,8 +83,6 @@ steps_gui:
     with:
       target: auto
 
-  # Where it opens: nothing in the way, a line leaving by the name that is about to change, and the
-  # placement the wire feeds wearing no mark.
   - type: assert
     domain: automation
     op: launch
@@ -102,11 +104,24 @@ steps_gui:
       name: work
       unfed: false
 
+  # The rename is the action's, so it is made on the action's output.
   - type: action
     domain: automation
-    op: pick-box
+    op: screen
     with:
-      name: take
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: output
 
   - type: action
     domain: automation
@@ -116,8 +131,19 @@ steps_gui:
       name: got one
       to: found one
 
-  # The renamed way out, with nothing set to happen after it. The line is still there — it is just no
-  # longer this way out's.
+  # What it parted, read on the definition placing it.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
   - type: assert
     domain: automation
     op: launch
@@ -128,9 +154,6 @@ steps_gui:
       at: found one
       present: true
 
-  # And one layer down: the line inside the action that carried the step's way out by the action's
-  # named the old name as well, so the step is left with nothing after its "got one" — the parting
-  # reaches every line that named the way out, whichever picture it is drawn on.
   - type: assert
     domain: automation
     op: launch
@@ -141,8 +164,6 @@ steps_gui:
       at: got one
       present: true
 
-  # And the other half of the parting, one placement along: the wire left by a way out under the old name, so
-  # nothing reaches the input it was filling.
   - type: assert
     domain: automation
     op: launch
@@ -160,9 +181,6 @@ steps_gui:
       name: work
       unfed: true
 
-  # The line, read where it was read before and under the name it was read under. This is the one
-  # assert a build that quietly rewrote the graph cannot pass: there, the line would have followed the
-  # rename and be written "found one".
   - type: assert
     domain: automation
     op: line-pictured
@@ -171,7 +189,25 @@ steps_gui:
       exit: got one
       to: work
 
-  # The name written back, on the same row.
+  # The old name written back on the action, and everything it parted home again.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: output
+
   - type: action
     domain: automation
     op: redeclare
@@ -180,8 +216,18 @@ steps_gui:
       name: found one
       to: got one
 
-  # Nothing in the way again, and the name the way out was carrying for the length of the parting is
-  # nowhere on the screen.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
   - type: assert
     domain: automation
     op: launch
@@ -192,7 +238,6 @@ steps_gui:
       at: found one
       present: false
 
-  # The wire found its way out again, which is the same fact read on the other half of the screen.
   - type: assert
     domain: automation
     op: pictured

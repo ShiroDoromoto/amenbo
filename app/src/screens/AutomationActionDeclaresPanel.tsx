@@ -9,9 +9,13 @@
 // left by; an input is what a placement takes in; a setting is answered where the action is placed,
 // and never here — the row an action carries is the declaration alone (`AMB-D-949`).
 //
-// **A choice list is written one per line**, the way the placement panel writes it
-// (`./AutomationStepPanel`): a choice is a label a person reads on a pulldown, and any separator
-// this could take is a character that belongs inside one.
+// **A choice list is written one per line**: a choice is a label a person reads on a pulldown, and
+// any separator this could take is a character that belongs inside one.
+//
+// **This is the one place a declaration is written** (`AMB-D-954`). The panel a placement opens on
+// an automation's picture reads what is declared here and answers it (`./AutomationStepPanel`), and
+// writes none of it: a rewrite here reaches every placement of the action, and a second place to
+// make it would hide that.
 //
 // **What a declaration is answered with is not drawn here at all.** There is nothing to answer until
 // the action stands somewhere, and a control that took an answer would be writing on a placement

@@ -16,8 +16,8 @@ description: >
   Stand a definition of one placed action up from the terminal, make a second action on the line
   that closes the task, and read both halves of what that press did: the pressed way out now points
   at the new placement, and the new placement now closes the task. The launch place then says an
-  action placed on it has nothing in it. Last, declare what the first action's other way out hands
-  on, and read the one thing that dialog does for a reader — the name starts on the way out's own,
+  action placed on it has nothing in it. Last, on the first action's own screen, declare what its
+  other way out hands on, and read the one thing that dialog does for a reader — the name starts on the way out's own,
   that way out having handed on nothing yet.
 given:
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
@@ -105,14 +105,26 @@ steps_gui:
       box: work
       present: true
 
-  # And a way out that hands nothing on yet, with a control for saying what leaving by it hands on.
-  # The name the box starts on is that way out's own — a name for what a way out produces is nine
-  # times out of ten the way out's own name.
+  # And a way out that hands nothing on yet, with a control for saying what leaving by it hands on —
+  # on the first action's own output, where its ways out are declared. The name the box starts on is
+  # that way out's own: a name for what a way out produces is nine times out of ten its own name.
   - type: action
     domain: automation
-    op: pick-box
+    op: screen
     with:
-      name: take
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: output
 
   - type: action
     domain: automation

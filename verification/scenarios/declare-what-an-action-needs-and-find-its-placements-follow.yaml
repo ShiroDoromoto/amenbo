@@ -1,21 +1,21 @@
 # An action's ways out, its settings and what it takes in are what the rest of an automation is built
 # against: a line hangs on a way out, a wire ends at an input, and a launch is refused for a setting
-# nobody answered. All three are declarations, and a reader who can read them on the panel and not
-# put one there is a reader sent back to the terminal to finish what the screen just showed them.
+# nobody answered. All three are declarations, and a reader who can read them and not put one there
+# is a reader sent back to the terminal to finish what the screen just showed them.
 #
-# ── Why they are declared from a placement ──────────────────────────────────────────────────────
-# The panel a placement opens draws what the action standing there declares, with the controls that
-# change it — so a reader building an automation declares what an action needs without
-# leaving the picture they are building. What is written is the action's, and reaches every other
-# placement of it; only the answer to a setting and the wire into an input are the placement's own.
+# ── Why they are declared on the action's own screen ────────────────────────────────────────────
+# What is declared is the action's, and reaches every placement of it — so it is written in one place,
+# the action's build screen, and the panel a placement opens on an automation reads it without a
+# control to change it. A reader building an automation goes to the action, declares there, and comes
+# back to the picture. Only the answer to a setting and the wire into an input are a placement's own.
 #
 # ── Why the launch place is the reading ─────────────────────────────────────────────────────────
 # A declaration is not visible as itself: a way out with nothing after it, a required setting with
-# no answer and a required input with nothing reaching it are all rows the panel simply draws. What
-# says the definition moved is the list beside it — each declaration puts a reason there, and taking
-# it away takes the reason with it. So every one is read twice, there and gone. A build that drew
-# that list once and answered from it afterwards would pass the first half of each and fail the
-# second.
+# no answer and a required input with nothing reaching it are all rows a panel simply draws. What
+# says the definition moved is the launch place of an automation placing the action — each
+# declaration puts a reason there, and taking it away takes the reason with it. So every one is read
+# twice, there and gone. A build that drew that list once and answered from it afterwards would pass
+# the first half of each and fail the second.
 #
 # ── Why required is a second press ──────────────────────────────────────────────────────────────
 # The row that declares a new one takes a name and a kind. Whether a step is refused without it is
@@ -24,18 +24,16 @@
 #
 # ── Why each one goes whole ─────────────────────────────────────────────────────────────────────
 # What a reason on the launch place names is the declaration's own name, and the reading that says
-# the reason has gone is that name being off the screen. A row left standing with the insisting
-# cleared off it is that name still drawn — so a road that took a setting off the list by its box
-# would go red on a screen doing exactly what it was asked. The box is pressed on the way in, where
-# what is being read is the reason arriving.
-id: declare-what-an-action-needs-from-a-placement
-title: What an action declares is put in and taken away from a placement's panel, and the launch place follows each one
+# the reason has gone is that name being off the screen. So each one is taken away by the press at
+# the end of its row, not by clearing the insisting off it.
+id: declare-what-an-action-needs-and-find-its-placements-follow
+title: What an action declares is put in and taken away on its own screen, and the launch place of an automation placing it follows
 description: >
-  Open a definition that is short of nothing and declare three things on the panel of one placed
-  action — a second way out, a required setting, and a required input. Each puts its own reason on
-  the launch place. Then take all three back, one by one, by the press at the end of each row. Each
-  reason goes as its declaration does, and the definition ends where it started, ready to be
-  started.
+  Open a definition that is short of nothing, go to the one action placed on it and declare three
+  things there — a second way out, a required setting, and a required input. Back on the
+  definition, each has put its own reason on the launch place. Then go back to the action and take
+  all three away by the press at the end of each row. Each reason goes as its declaration does, and
+  the definition ends where it started, ready to be started.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up — so nothing on the launch place is ever about who carries the step out.
@@ -79,14 +77,25 @@ steps_gui:
     with:
       ready: true
 
+  # To the action placed on it, where what it declares is written. A way out first, from its output.
   - type: action
     domain: automation
-    op: pick-box
+    op: screen
     with:
-      name: take
+      tab: actions
 
-  # A second way out, with nothing set to happen after it. It is the one declaration that is enough
-  # on its own: a way out is in the way from the moment it exists.
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: output
+
   - type: action
     domain: automation
     op: declare
@@ -94,18 +103,13 @@ steps_gui:
       what: exit
       name: needs a fix
 
-  - type: assert
+  # A setting and an input, from its input — each declared, then insisted on as a second press.
+  - type: action
     domain: automation
-    op: launch
+    op: open-part
     with:
-      ready: false
-      reason: open_exit
-      box: take
-      at: needs a fix
-      present: true
+      part: input
 
-  # A setting, and then the box that says the step is refused without it. Declared and left optional
-  # it stands in nobody's way, which is what the second press is for.
   - type: action
     domain: automation
     op: declare
@@ -122,17 +126,6 @@ steps_gui:
       name: which
       required: true
 
-  - type: assert
-    domain: automation
-    op: launch
-    with:
-      ready: false
-      reason: unanswered_cfg
-      box: take
-      at: which
-      present: true
-
-  # An input, the same way. Nothing is wired to it, there being one placement and nothing before it.
   - type: action
     domain: automation
     op: declare
@@ -149,6 +142,40 @@ steps_gui:
       name: note
       required: true
 
+  # Back on the definition, each declaration has put its own reason on the launch place. Nothing is
+  # wired to the input, there being one placement and nothing before it.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: open_exit
+      box: take
+      at: needs a fix
+      present: true
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      box: take
+      at: which
+      present: true
+
   - type: assert
     domain: automation
     op: launch
@@ -159,8 +186,25 @@ steps_gui:
       at: note
       present: true
 
-  # And back, one at a time. Two are still in the way after each of the first two, so the list is
-  # read as a list losing one line rather than as a list emptying.
+  # And back to the action, taking all three away by the press at the end of each row.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: output
+
   - type: action
     domain: automation
     op: undeclare
@@ -168,15 +212,11 @@ steps_gui:
       what: exit
       name: needs a fix
 
-  - type: assert
+  - type: action
     domain: automation
-    op: launch
+    op: open-part
     with:
-      ready: false
-      reason: open_exit
-      box: take
-      at: needs a fix
-      present: false
+      part: input
 
   - type: action
     domain: automation
@@ -185,16 +225,6 @@ steps_gui:
       what: setting
       name: which
 
-  - type: assert
-    domain: automation
-    op: launch
-    with:
-      ready: false
-      reason: unanswered_cfg
-      box: take
-      at: which
-      present: false
-
   - type: action
     domain: automation
     op: undeclare
@@ -202,14 +232,22 @@ steps_gui:
       what: input
       name: note
 
-  # The last one off the list and the definition ready again, which is where it opened — read as one
-  # step, because "ready" is the launch place saying there is no list left to name anything on.
+  # Every reason gone with its declaration, and the definition ready again, where it opened —
+  # read as one step, because "ready" is the launch place saying there is no list left.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
   - type: assert
     domain: automation
     op: launch
     with:
       ready: true
-      reason: unwired_input
-      box: take
-      at: note
-      present: false

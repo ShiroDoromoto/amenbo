@@ -229,8 +229,8 @@ export function AutomationBuildScreen({
             <AutomationStepPanel
               automation={automation}
               placementId={pressed.id}
-              projectId={projectId}
               onRemoved={close}
+              onOpenAction={onOpenAction}
             />
           </Panel>
         )}

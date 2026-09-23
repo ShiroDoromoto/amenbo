@@ -349,6 +349,7 @@ amenbo automation add --name "Review and fix"          # the picture itself; wha
 amenbo automation action-add --name "Review"           # a unit worth using twice, in the library
 amenbo automation step-add 7 --name "Review" --prompt - --agent claude # one step of it = one terminal
 amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first
+amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
 amenbo automation place-add 3 --action 7               # put that action on the picture
 amenbo automation exit-add --action 7 --name "something to fix" # a way out a placement may leave by
 amenbo automation port-add --exit 21 --name report --kind file  # what that way out hands on

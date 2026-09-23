@@ -507,6 +507,30 @@ fn an_action_says_what_it_is_for_and_a_rewrite_reaches_it() {
     );
 }
 
+/// **An action moves between the two libraries** (`AMB-D-954`): out to the device's is never refused,
+/// and into a project is refused while an automation of another project places it — the refusal names
+/// that automation, and the action stays where it was.
+#[test]
+fn an_action_moves_between_libraries_and_is_refused_where_another_project_places_it() {
+    let cli = Cli::new();
+    let (p, _, action, _) = an_automation(&cli);
+
+    let out = cli.json(&["automation", "action-scope-set", &action, "--global", "--json"]);
+    assert_eq!(out["automation_action"]["project_id"], Value::Null);
+    let device = cli.json(&["automation", "action-list", "--global", "--json"]);
+    assert_eq!(device["count"], serde_json::json!(1), "it is on the device's shelf now");
+
+    let other = cli.a_project();
+    let (refused, code) = cli.run_err(&["automation", "action-scope-set", &action, "--project", &other, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("'A'"), "it names the automation that places it: {refused}");
+    let still = cli.json(&["automation", "action-show", &action, "--json"]);
+    assert_eq!(still["action"]["project_id"], Value::Null, "and nothing moved");
+
+    let back = cli.json(&["automation", "action-scope-set", &action, "--project", &p, "--json"]);
+    assert_eq!(back["automation_action"]["project_id"].to_string(), p, "every placement is in this project");
+}
+
 /// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.
 #[test]
 fn a_definition_that_does_not_exist_is_said_to_be_missing() {

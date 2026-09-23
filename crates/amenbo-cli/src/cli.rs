@@ -1905,6 +1905,18 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear: bool,
     },
+    /// Move a library action to the device's library or a project's — refused into a project while
+    /// another project's automation places it
+    ActionScopeSet {
+        /// action id
+        id: i64,
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long, conflicts_with = "global")]
+        project: Option<String>,
+        /// move it to the device's library, which every project on this machine reaches (a human's to write)
+        #[arg(long)]
+        global: bool,
+    },
     /// Delete a library action with the steps inside it — refused while it is placed; confirms unless -y
     ActionRm {
         /// action id

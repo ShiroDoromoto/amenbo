@@ -257,6 +257,7 @@ fn typed_in(sub: &AutomationCmd) -> Where {
         | AutomationCmd::ActionAdd { .. }
         | AutomationCmd::ActionUpdate { .. }
         | AutomationCmd::ActionEntrySet { .. }
+        | AutomationCmd::ActionScopeSet { .. }
         | AutomationCmd::ActionRm { .. }
         | AutomationCmd::StepAdd { .. }
         | AutomationCmd::StepUpdate { .. }
@@ -458,6 +459,20 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 None => format!("✓ Action {} opens nothing", a.id),
             };
             write_envelope(flags, "automation.action-entry-set", "automation_action", serde_json::to_value(&a).unwrap(), Some(vec!["entry_step_id".to_string()]), false, line);
+        }
+        AutomationCmd::ActionScopeSet { id, project, global } => {
+            // The same two shelves `action-add` puts an action on, read the same way. Core declares
+            // both ends, so an AI bound to a project is turned away whichever way the action moves.
+            let pid = match global {
+                true => None,
+                false => Some(project_or_bound(store, project)?),
+            };
+            let a = store.automation_action_set_scope(id, pid).map_err(CliError::from)?;
+            let line = match a.project_id {
+                Some(p) => format!("✓ Action {} is in the library of project {p}", a.id),
+                None => format!("✓ Action {} is in the device's library", a.id),
+            };
+            write_envelope(flags, "automation.action-scope-set", "automation_action", serde_json::to_value(&a).unwrap(), Some(vec!["project_id".to_string()]), false, line);
         }
         AutomationCmd::ActionRm { id } => {
             if !confirm(flags, "delete library action")? {

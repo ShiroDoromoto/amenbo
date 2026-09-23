@@ -430,6 +430,76 @@ pub fn action_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automatio
     Ok(after)
 }
 
+/// **Move a library action to another library** — the device's own (`None`) or one project's — and put
+/// it at the bottom there. Nothing under it moves with it, because nothing under it names a library:
+/// its steps, declarations and pictures all hang off the action, and the reach of each is walked through
+/// it.
+///
+/// **Refused while a placement would be left out of reach** of the library it lands in: an automation
+/// reaches its own project's library and the device's ([`checked_action`]), so into project P the
+/// action may carry only placements on P's automations. Out to the device's library is never refused.
+/// The refusal names every automation that stands in the way and the project it is in — the same shape
+/// as [`action_delete`]'s — and nothing is copied to get round it: two copies of one action would be
+/// two things to keep in step (`AMB-D-954`).
+pub fn action_set_scope(
+    tx: &WriteTx<'_>,
+    id: i64,
+    project_id: Option<i64>,
+) -> Result<AutomationAction> {
+    let before = live_action(tx, id)?;
+    if before.project_id == project_id {
+        return Ok(before);
+    }
+    if let Some(project_id) = project_id {
+        if read::project(tx.conn(), project_id)?.is_none() {
+            return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
+        }
+        let elsewhere = automations_placing_outside(tx, id, project_id)?;
+        if !elsewhere.is_empty() {
+            return Err(Error::invalid(format!(
+                "action '{id}' is placed on automations of other projects — {} — take it off them \
+                 before moving it into project {}",
+                elsewhere.join(", "),
+                crate::idref::project(project_id),
+            )));
+        }
+    }
+    let sibs = read::automation_action_siblings(tx.conn(), project_id, Some(id))?;
+    let mut after = before.clone();
+    after.project_id = project_id;
+    after.order_key = place(&sibs, &Position::Bottom)?;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
+    Ok(after)
+}
+
+/// The automations outside `project_id` that place this action, each named once with its project —
+/// `automation '<name>' (<id>) in project <ref> '<name>'`, in the order the placements were made.
+fn automations_placing_outside(
+    tx: &WriteTx<'_>,
+    action_id: i64,
+    project_id: i64,
+) -> Result<Vec<String>> {
+    let mut seen = Vec::new();
+    let mut named = Vec::new();
+    for placement in read::automation_placement_ids_using_action(tx.conn(), action_id)? {
+        let placement = live_placement(tx, placement)?;
+        let automation = live_automation(tx, placement.automation_id)?;
+        if automation.project_id == project_id || seen.contains(&automation.id) {
+            continue;
+        }
+        seen.push(automation.id);
+        let project = read::project_name(tx.conn(), automation.project_id)?.unwrap_or_default();
+        named.push(format!(
+            "automation '{}' ({}) in project {} '{project}'",
+            automation.name,
+            automation.id,
+            crate::idref::project(automation.project_id),
+        ));
+    }
+    Ok(named)
+}
+
 /// Delete a library action with everything inside it — the picture its steps are drawn into, the steps
 /// with their own declarations, and the ways out, ports and settings the action declared.
 ///
@@ -2796,6 +2866,79 @@ mod tests {
             );
             exit_add(tx, AutomationOwner::Action, two.id, Some("直すところがある"))
                 .expect("another action is another list");
+        });
+    }
+
+    #[test]
+    fn an_action_moves_out_to_the_devices_library_with_its_placements() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "取る");
+            let moved = action_set_scope(tx, action.id, None).expect("out is never refused");
+            assert_eq!(moved.project_id, None);
+            assert_eq!(
+                live_placement(tx, placement.id).expect("read").action_id,
+                action.id,
+                "the placement still stands on it",
+            );
+            assert_eq!(only_step(tx, &moved).action_id, action.id, "and the step went with it");
+        });
+    }
+
+    #[test]
+    fn an_action_moves_into_the_project_its_placements_are_in() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "取る");
+            action_set_scope(tx, action.id, None).expect("out");
+            let back = action_set_scope(tx, action.id, Some(automation.project_id))
+                .expect("every placement is in this project");
+            assert_eq!(back.project_id, Some(automation.project_id));
+
+            let unplaced = action_add(tx, None, "点検する", "").expect("add");
+            let other = mk_project(tx, "別");
+            let moved = action_set_scope(tx, unplaced.id, Some(other))
+                .expect("an action placed nowhere goes anywhere");
+            assert_eq!(moved.project_id, Some(other));
+        });
+    }
+
+    #[test]
+    fn an_action_placed_in_another_project_is_not_moved_into_this_one() {
+        with_tx(|tx| {
+            let here = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &here, "取る");
+            action_set_scope(tx, action.id, None).expect("out");
+            let other = mk_project(tx, "別");
+            let refused = action_set_scope(tx, action.id, Some(other)).expect_err("placed elsewhere");
+            let said = refused.to_string();
+            assert!(said.contains(&here.name), "it names the automation: {said}");
+            assert!(
+                said.contains(&crate::idref::project(here.project_id)),
+                "and the project it is in: {said}",
+            );
+            assert_eq!(
+                live_action(tx, action.id).expect("read").project_id,
+                None,
+                "and nothing moved",
+            );
+        });
+    }
+
+    #[test]
+    fn a_moved_action_goes_to_the_bottom_of_its_new_library() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let first = action_add(tx, None, "取る", "").expect("add");
+            let second = action_add(tx, None, "点検する", "").expect("add");
+            let mine = action_add(tx, Some(project), "直す", "").expect("add");
+            action_set_scope(tx, mine.id, None).expect("out");
+            let ids: Vec<i64> = read::automation_action_siblings(tx.conn(), None, None)
+                .expect("read")
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect();
+            assert_eq!(ids, vec![first.id, second.id, mine.id]);
         });
     }
 }

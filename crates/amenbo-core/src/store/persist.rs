@@ -1640,6 +1640,20 @@ impl Store {
         })
     }
 
+    /// Move a library action to the device's library (`None`) or a project's (one operation = one
+    /// transaction). Both ends are declared, so an AI bound to a project can neither take an action out
+    /// of it nor bring one in from the device's library, and both projects' versions move.
+    pub fn automation_action_set_scope(
+        &mut self,
+        id: i64,
+        project_id: Option<i64>,
+    ) -> Result<crate::model::AutomationAction> {
+        self.write_one(
+            &[WriteTarget::AutomationPart(AutomationPart::Action, id), WriteTarget::NewIn(project_id)],
+            |tx| crate::ops::automation::action_set_scope(tx, id, project_id),
+        )
+    }
+
     /// Delete a library action with the steps inside it and everything it declared (one operation =
     /// one transaction). Refused while it is placed on a picture.
     pub fn automation_action_delete(&mut self, id: i64) -> Result<()> {

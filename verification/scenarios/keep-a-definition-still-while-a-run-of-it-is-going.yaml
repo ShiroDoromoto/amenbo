@@ -1,0 +1,102 @@
+# A run works from the copy of its definition it took at the start, and while it is running or paused
+# the definition it came from is held: nothing about the automation, or about an action placed on it,
+# can be rewritten until the run ends. The refusal and the release are one road because they are read
+# against each other — a build that refused every edit, or none, would pass either half on its own.
+id: keep-a-definition-still-while-a-run-of-it-is-going
+title: A definition a run is going on refuses to be edited, and takes edits again once the run is stopped
+description: >
+  Start a run, then try to rename the automation, archive it, and rename the action placed on it —
+  each is refused as a conflict while the run is going. Stop the run, and the same renames go
+  through. The terminal is the road here; what the screen shows while a run holds the definition is a
+  road of its own.
+given:
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # One action of one step that takes a task, placed once, and every way out of it decided — the
+  # least an automation needs to be started.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold still" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_cli:
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
+
+  # The automation's own fields, archiving included: an archived automation is still the one the run
+  # is filed under and working from.
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: auto
+      name: SCENARIO SEED — renamed under a run
+      refused: conflict
+
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: auto
+      archived: true
+      refused: conflict
+
+  # An action placed on it is held too — the run copied its steps at the start, and the library
+  # definition is what a person reads as the one being run.
+  - type: action
+    domain: automation
+    op: action-update
+    with:
+      target: take
+      name: take, renamed under a run
+      refused: conflict
+
+  - type: action
+    domain: automation
+    op: stop
+    with:
+      target: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: canceled
+
+  # Once the run is over nothing holds the definition, and the same edits go through.
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: auto
+      name: SCENARIO SEED — renamed once the run ended
+
+  - type: action
+    domain: automation
+    op: action-update
+    with:
+      target: take
+      name: take, renamed once the run ended

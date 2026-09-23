@@ -903,13 +903,9 @@ pub enum Waiting {
     /// will never move again on its own, so it is ended rather than looked at every second.
     ///
     /// **Nobody can walk a run into this on purpose**, which is why it is held by the tests below and
-    /// by no scenario (`AMB-T-5307`). Every deliberate edit under a run is answered at the door it
-    /// passes through: a report reads the picture live and stops the run there
-    /// ([`crate::ops::automation_report::done`]), and so does picking a paused run up again
-    /// ([`crate::ops::automation_stop::resume`]). What is left over is the second between a run
-    /// becoming one with nothing open — launched, reported, resumed — and the watch's next look at
-    /// it. An edit landing inside that second is the whole of what this answers, and a second is not
-    /// something a hand can aim at.
+    /// by no scenario (`AMB-T-5307`). No op edits a definition a run is going on (`AMB-D-961`); what
+    /// is left is a store written by a build that let one be edited under a run, whose picture may
+    /// already have moved.
     NoWayOn,
 }
 
@@ -925,10 +921,10 @@ pub enum Waiting {
 /// ([`crate::ops::automation_report::done`] resolved the same edge to decide whether the run goes on
 /// at all). A second copy kept for the watcher's benefit would be a second thing to keep true.
 ///
-/// **Deriving is also what puts a run in the way of `NoWayOn`.** A definition goes on being edited
-/// while runs of it are out: a way out loses its edge, an entry is taken off, a step is deleted. The
-/// report that walked the same edge a moment earlier found one; the read after it does not, and the
-/// run standing between two steps has nowhere to stand towards.
+/// **Deriving is also what puts a run in the way of `NoWayOn`.** A store written before a definition
+/// was held under its runs (`AMB-D-961`) can carry a run whose way out has since lost its edge, whose
+/// entry was taken off, or whose step was deleted — and the run standing between two steps then has
+/// nowhere to stand towards.
 pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     let Some(run) = read::automation_run(conn, run_id)? else {
         return Err(not_found("run", run_id));
@@ -1443,8 +1439,12 @@ mod tests {
             assert_eq!(exits.len(), 2, "the unnamed way out and the error one");
             assert_eq!(exits[0].outs[0].kind, AutomationPortKind::TaskTake);
 
+            // The definition is held while the run is going (`AMB-D-961`), so it is ended first — the copy
+            // is what the run's record reads from then on, whatever the definition becomes.
+            crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
+                .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)
-                .expect("edit the definition under the run");
+                .expect("edit the definition once the run is over");
             automation::step_update(
                 tx,
                 step.id,
@@ -1457,7 +1457,7 @@ mod tests {
                 None,
                 None,
             )
-            .expect("rewrite the prompt under the run");
+            .expect("rewrite the prompt once the run is over");
             let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(defs[0].name, "取る", "the copy is what the run reads from here on");
             assert_eq!(defs[0].prompt.as_deref(), Some("take one"));
@@ -1515,9 +1515,10 @@ mod tests {
     /// **A run with nowhere to go says so**, rather than reading as a run somebody is about to move.
     ///
     /// The two are one answer to look at — nothing is open either way — and telling them apart is the
-    /// whole of why there are three. A definition goes on being edited while runs of it are out, so a
-    /// run that has lost the spot it would start at is a shape that happens rather than one that
-    /// cannot; left as "nothing to do" it holds its task for the rest of the session.
+    /// whole of why there are three. No op edits a definition a run is going on (`AMB-D-961`), but a
+    /// store written before that held runs whose picture moved under them, so a run that has lost the
+    /// spot it would start at is a shape a store can hold; left as "nothing to do" it holds its task
+    /// for the rest of the session. The tests draw that shape [`automation::past_the_guard`].
     #[test]
     fn a_run_that_has_lost_the_spot_it_would_start_at_says_it_cannot_go_on() {
         with_tx(|tx| {
@@ -1527,7 +1528,8 @@ mod tests {
 
             // Taken off the definition while the run is out. The run's own copies are still there —
             // what it has lost is the one saying where to start.
-            crate::ops::automation::set_entry(tx, automation.id, None).expect("entry off");
+            automation::past_the_guard(|| automation::set_entry(tx, automation.id, None))
+                .expect("entry off");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
             assert_eq!(
@@ -1606,7 +1608,8 @@ mod tests {
             let (automation, first, _) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
-            automation::placement_delete(tx, first.id).expect("take the placement off");
+            automation::past_the_guard(|| automation::placement_delete(tx, first.id))
+                .expect("take the placement off");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
             assert_eq!(
@@ -1625,7 +1628,8 @@ mod tests {
             let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
-            automation::edge_delete(tx, onward.id).expect("delete the edge");
+            automation::past_the_guard(|| automation::edge_delete(tx, onward.id))
+                .expect("delete the edge");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
         });
@@ -1640,8 +1644,10 @@ mod tests {
             let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
-            automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
-                .expect("point it at an ending");
+            automation::past_the_guard(|| {
+                automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
+            })
+            .expect("point it at an ending");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
         });
@@ -1656,9 +1662,11 @@ mod tests {
             let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
 
-            let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
-            automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
-                .expect("point it at the new placement");
+            automation::past_the_guard(|| {
+                let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
+                automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
+            })
+            .expect("point it at the new placement");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
         });

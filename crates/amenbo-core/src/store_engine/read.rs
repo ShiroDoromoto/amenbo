@@ -6775,28 +6775,39 @@ pub fn automation_run_ids_running(conn: &Connection) -> Result<Vec<i64>> {
 
 
 /// **The runs a reader has to be able to see right now**, newest first — everything that is still
-/// going, and the ones cut short most recently.
+/// going, and every failure nobody has said they saw (`AMB-D-955`).
 ///
 /// It crosses projects because a terminal does: what a run holds is a terminal on this machine, and
-/// this machine is not divided up per project. The under-way runs come first and are all of them,
-/// however many that is. The failed and canceled ones follow and are capped at `stopped`, because they
-/// are kept so that a failure nobody was watching is still seen, not so that every failure since the
-/// store was made is listed. **A run that is `completed` is not here at all**: what it did is read from
-/// the task it worked or the automation it came from ([`automation_run_ids`]).
-pub fn automation_runs_live(
-    conn: &Connection,
-    stopped: usize,
-) -> Result<Vec<crate::model::AutomationRun>> {
+/// this machine is not divided up per project. The under-way runs come first, then the failures, and
+/// neither is capped: a failure stays here until a person acknowledges it, because the task it handed
+/// back is one nobody is carrying. What is over and needs nobody — completed, canceled, a failure
+/// already seen — is [`automation_runs_history`].
+pub fn automation_runs_live(conn: &Connection) -> Result<Vec<crate::model::AutomationRun>> {
     use crate::model::AutomationRunStatus as S;
     const R: col::automation_run::Cols = col::automation_run::ALL;
     let under_way = Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]);
     let mut out = automation_run_rows(conn, &under_way, None)?;
-    out.extend(automation_run_rows(
-        conn,
-        &Pred::is_in(R.status, [S::Failed.as_str(), S::Canceled.as_str()]),
-        Some(stopped as i64),
-    )?);
+    let unseen = Pred::eq(R.status, S::Failed.as_str()).and(Pred::is_null(R.acknowledged_at));
+    out.extend(automation_run_rows(conn, &unseen, None)?);
     Ok(out)
+}
+
+/// **The runs that are over and need nobody**, newest first and at most `limit` of them — completed,
+/// canceled, and failed ones a person has acknowledged (`AMB-D-955`).
+///
+/// This is the history under the live runs on the runs tab, across projects for the same reason. It is
+/// capped because it only grows; what a reader comes to it for is "that one just now", and anything
+/// older is read from the task it worked or the automation it came from ([`automation_run_ids`]).
+pub fn automation_runs_history(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<crate::model::AutomationRun>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let over = Pred::is_in(R.status, [S::Completed.as_str(), S::Canceled.as_str()]).or(
+        Pred::eq(R.status, S::Failed.as_str()).and(Pred::is_not_null(R.acknowledged_at)),
+    );
+    automation_run_rows(conn, &over, Some(limit as i64))
 }
 
 /// The `automation_run` rows matching `pred`, newest first and at most `limit` of them.

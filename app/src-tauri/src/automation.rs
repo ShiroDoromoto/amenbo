@@ -1204,9 +1204,9 @@ pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> 
     let _perf = amenbo_core::perf::Timer::start("automation_running_page");
     let store = open_store_read()?;
     let conn = store.read_model().conn();
-    let canceled = read::automation_runs_history(conn, CANCELED_SHOWN)?
-        .into_iter()
-        .filter(|run| run.status == AutomationRunStatus::Canceled);
+    let canceled =
+        read::automation_runs_history(conn, None, Some(read::RunOutcome::Canceled), 0, CANCELED_SHOWN)?
+            .runs;
     let mut out = Vec::new();
     for run in read::automation_runs_live(conn)?.into_iter().chain(canceled) {
         out.push(run_card(&store, run)?);

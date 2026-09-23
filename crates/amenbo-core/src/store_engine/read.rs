@@ -6786,41 +6786,86 @@ pub fn automation_runs_live(conn: &Connection) -> Result<Vec<crate::model::Autom
     use crate::model::AutomationRunStatus as S;
     const R: col::automation_run::Cols = col::automation_run::ALL;
     let under_way = Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]);
-    let mut out = automation_run_rows(conn, &under_way, None)?;
+    let mut out = automation_run_rows(conn, &under_way, None, 0)?;
     let unseen = Pred::eq(R.status, S::Failed.as_str()).and(Pred::is_null(R.acknowledged_at));
-    out.extend(automation_run_rows(conn, &unseen, None)?);
+    out.extend(automation_run_rows(conn, &unseen, None, 0)?);
     Ok(out)
 }
 
-/// **The runs that are over and need nobody**, newest first and at most `limit` of them — completed,
-/// canceled, and failed ones a person has acknowledged (`AMB-D-955`).
-///
-/// This is the history under the live runs on the runs tab, across projects for the same reason. It is
-/// capped because it only grows; what a reader comes to it for is "that one just now", and anything
-/// older is read from the task it worked or the automation it came from ([`automation_run_ids`]).
-pub fn automation_runs_history(
-    conn: &Connection,
-    limit: usize,
-) -> Result<Vec<crate::model::AutomationRun>> {
-    use crate::model::AutomationRunStatus as S;
-    const R: col::automation_run::Cols = col::automation_run::ALL;
-    let over = Pred::is_in(R.status, [S::Completed.as_str(), S::Canceled.as_str()]).or(
-        Pred::eq(R.status, S::Failed.as_str()).and(Pred::is_not_null(R.acknowledged_at)),
-    );
-    automation_run_rows(conn, &over, Some(limit as i64))
+/// **Which ending a history is narrowed to** — the three a run that is over and needs nobody can have.
+/// `Failed` is a failure a person has acknowledged; one nobody has is still live
+/// ([`automation_runs_live`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunOutcome {
+    Completed,
+    Failed,
+    Canceled,
 }
 
-/// The `automation_run` rows matching `pred`, newest first and at most `limit` of them.
+/// One page of the history, and how many runs the whole of it holds — what a pager says as
+/// "21–40 of 115".
+#[derive(Clone, Debug)]
+pub struct RunHistoryPage {
+    pub runs: Vec<crate::model::AutomationRun>,
+    pub total: usize,
+}
+
+/// **One page of the runs that are over and need nobody**, newest first — completed, canceled, and
+/// failed ones a person has acknowledged (`AMB-D-955`).
+///
+/// It is read a page at a time because it only grows: a screen holds one page of it, never the whole.
+/// `project` narrows it to the runs launched from one project, `None` is every project on this machine;
+/// `only` narrows it to one ending. `total` counts every run the narrowing matches, not the page.
+pub fn automation_runs_history(
+    conn: &Connection,
+    project: Option<i64>,
+    only: Option<RunOutcome>,
+    offset: usize,
+    limit: usize,
+) -> Result<RunHistoryPage> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let completed = || Pred::eq(R.status, S::Completed.as_str());
+    let canceled = || Pred::eq(R.status, S::Canceled.as_str());
+    let seen_failure =
+        || Pred::eq(R.status, S::Failed.as_str()).and(Pred::is_not_null(R.acknowledged_at));
+    let mut pred = match only {
+        None => completed().or(canceled()).or(seen_failure()),
+        Some(RunOutcome::Completed) => completed(),
+        Some(RunOutcome::Failed) => seen_failure(),
+        Some(RunOutcome::Canceled) => canceled(),
+    };
+    if let Some(project) = project {
+        pred = pred.and(Pred::eq(R.project_id, project));
+    }
+
+    let mut counted = Select::new();
+    let matched = counted.count_all();
+    let mut count = Sql::from(&counted, R.table);
+    count.push_where(Some(&pred));
+    let total: usize = conn
+        .query_row(count.text(), rusqlite::params_from_iter(count.params()), |r| matched.get(r))
+        .map_err(StoreEngineError::from)? as usize;
+
+    let runs = automation_run_rows(conn, &pred, Some(limit as i64), offset as i64)?;
+    Ok(RunHistoryPage { runs, total })
+}
+
+/// The `automation_run` rows matching `pred`, newest first, skipping `offset` and at most `limit` of
+/// them.
 fn automation_run_rows(
     conn: &Connection,
     pred: &Pred,
     limit: Option<i64>,
+    offset: i64,
 ) -> Result<Vec<crate::model::AutomationRun>> {
     const R: col::automation_run::Cols = col::automation_run::ALL;
     let mut sql = Sql::new(format!("SELECT * FROM {}", R.table.name()));
     sql.push_where(Some(pred)).order_by([Sort::by(R.id).desc()]);
-    if let Some(n) = limit {
-        sql.limit(n);
+    // `LIMIT -1` = no limit, which is what an `OFFSET` needs in front of it.
+    sql.limit(limit.unwrap_or(-1));
+    if offset > 0 {
+        sql.offset(offset);
     }
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt

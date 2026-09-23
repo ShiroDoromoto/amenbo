@@ -506,8 +506,8 @@ mod tests {
             ended(tx, running.clone(), Ending::Completed).expect("completed");
             let after = read::automation_runs_live(tx.conn()).expect("live");
             assert!(after.iter().all(|one| one.id != running.id));
-            let history = read::automation_runs_history(tx.conn(), 20).expect("history");
-            assert_eq!(history.iter().map(|one| one.id).collect::<Vec<_>>(), vec![running.id]);
+            let history = read::automation_runs_history(tx.conn(), None, None, 0, 20).expect("history");
+            assert_eq!(history.runs.iter().map(|one| one.id).collect::<Vec<_>>(), vec![running.id]);
         });
     }
 
@@ -708,8 +708,9 @@ mod tests {
             assert!(seen.acknowledged_at.is_some());
             let live = read::automation_runs_live(tx.conn()).expect("live");
             assert!(live.iter().all(|one| one.id != failed.id));
-            let history: Vec<i64> = read::automation_runs_history(tx.conn(), 20)
+            let history: Vec<i64> = read::automation_runs_history(tx.conn(), None, None, 0, 20)
                 .expect("history")
+                .runs
                 .into_iter()
                 .map(|one| one.id)
                 .collect();
@@ -719,6 +720,52 @@ mod tests {
             assert_eq!(again.acknowledged_at, seen.acknowledged_at, "the first time is kept");
             let refused = acknowledge(tx, canceled.id).expect_err("only a failure");
             assert!(refused.to_string().contains("only a failed run"), "{refused}");
+        });
+    }
+
+    /// The history is read a page at a time, narrowed to one ending or one project, and says how many
+    /// runs the whole narrowing holds — the pager's "21–40 of 115".
+    #[test]
+    fn the_history_is_read_a_page_at_a_time_and_narrowed_by_ending_and_project() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let mut completed = Vec::new();
+            for _ in 0..3 {
+                let run = a_run(tx, &p.automation);
+                ended(tx, run.clone(), Ending::Completed).expect("complete");
+                completed.push(run.id);
+            }
+            let canceled = a_run(tx, &p.automation);
+            stop(tx, canceled.id, Ending::Canceled).expect("cancel");
+            let unseen = a_run(tx, &p.automation);
+            ended(tx, unseen.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+            let seen = a_run(tx, &p.automation);
+            ended(tx, seen.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+            acknowledge(tx, seen.id).expect("acknowledge");
+
+            let ids = |page: &read::RunHistoryPage| page.runs.iter().map(|one| one.id).collect::<Vec<_>>();
+
+            let first = read::automation_runs_history(tx.conn(), None, None, 0, 2).expect("page");
+            assert_eq!(first.total, 5, "an unseen failure is not history yet");
+            assert_eq!(ids(&first), vec![seen.id, canceled.id], "newest first");
+            let second = read::automation_runs_history(tx.conn(), None, None, 2, 2).expect("page");
+            assert_eq!(ids(&second), vec![completed[2], completed[1]]);
+            let last = read::automation_runs_history(tx.conn(), None, None, 4, 2).expect("page");
+            assert_eq!(ids(&last), vec![completed[0]]);
+
+            let only = |outcome| {
+                read::automation_runs_history(tx.conn(), None, Some(outcome), 0, 20).expect("page")
+            };
+            assert_eq!(only(read::RunOutcome::Completed).total, 3);
+            assert_eq!(ids(&only(read::RunOutcome::Failed)), vec![seen.id]);
+            assert_eq!(ids(&only(read::RunOutcome::Canceled)), vec![canceled.id]);
+
+            let here = read::automation_runs_history(tx.conn(), Some(p.project), None, 0, 20)
+                .expect("page");
+            assert_eq!(here.total, 5);
+            let elsewhere = read::automation_runs_history(tx.conn(), Some(p.project + 1), None, 0, 20)
+                .expect("page");
+            assert_eq!((elsewhere.total, elsewhere.runs.len()), (0, 0));
         });
     }
 

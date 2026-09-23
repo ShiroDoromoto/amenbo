@@ -9,9 +9,9 @@
 // spot has been taken off the picture**;
 // **a pause that has been asked for reads as neither of the two states it sits between**, since a run
 // told "running" would be pressed again and one told "paused" is not stopped yet; **the buttons match
-// the state** — a paused run is picked up rather than paused again, and a stopped one carries none at
-// all; and **the row goes to the pane while the buttons move the run**, which is the one thing a
-// press inside a press would silently get wrong.
+// the state** — a paused run is picked up rather than paused again, and a failure carries only the
+// press that acknowledges it; and **the row goes to the pane while the buttons move the run**, which
+// is the one thing a press inside a press would silently get wrong.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,6 +30,7 @@ vi.mock("../core/automations", () => ({
   pauseRun: (run: number) => move(`pause ${run}`),
   resumeRun: (run: number) => move(`resume ${run}`),
   stopRun: (run: number) => move(`stop ${run}`),
+  acknowledgeRun: (run: number) => move(`acknowledge ${run}`),
 }));
 
 function move(what: string): Promise<void> {
@@ -127,7 +128,7 @@ describe("the running tab", () => {
     expect(button(t("auto.run.pause")).disabled).toBe(true);
   });
 
-  it("offers the move the state has, and none to a run that is over", async () => {
+  it("offers the move the state has, and to a failure only the press that acknowledges it", async () => {
     await render([run({ status: "paused" })]);
     expect(labels()).toContain(t("auto.run.resume"));
     expect(labels()).not.toContain(t("auto.run.pause"));
@@ -135,18 +136,16 @@ describe("the running tab", () => {
     await render([run({ status: "running" })]);
     expect(labels()).toContain(t("auto.run.pause"));
 
-    await render([run({ status: "canceled" })]);
-    expect(labels()).not.toContain(t("auto.run.stop"));
-    expect(labels()).not.toContain(t("auto.run.pause"));
-    expect(container.textContent).toContain(t("auto.run.stopped"));
-    expect(container.textContent).toContain(t("auto.run.byHuman"));
-
     await render([run({ status: "failed", stoppedReason: "crashed" })]);
     expect(labels()).not.toContain(t("auto.run.stop"));
+    expect(labels()).not.toContain(t("auto.run.pause"));
+    expect(container.textContent).toContain(t("auto.run.failed"));
     expect(container.textContent).toContain(t("auto.run.crashed"));
+    await act(async () => { button(t("auto.run.acknowledge")).click(); });
+    expect(hoisted.moved).toEqual(["acknowledge 4"]);
   });
 
-  it("puts every reason a run can stop for into words", async () => {
+  it("puts every reason a run can fail for into words", async () => {
     // Every arm core writes (`amenbo_core::model::AutomationStoppedReason`), so a reason added there
     // without words on this side is caught here rather than on somebody's screen.
     for (const [reason, key] of [

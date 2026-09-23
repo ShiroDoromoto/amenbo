@@ -2,8 +2,8 @@
 // The automations screen and the build screen's launch place (`AMB-T-5254`). Only the reads are
 // stubbed; the tabs, the list, the wording of each reason and what the button does all run for real.
 //
-// What these guard: **the screen is three tabs and opens on the definitions**, so the two that are
-// not built yet cannot quietly become the one a reader lands on; **a row says whether its automation
+// What these guard: **the screen is four tabs, from making to running, and opens on the
+// definitions**, so another tab cannot quietly become the one a reader lands on; **a row says whether its automation
 // could be started**, from the same check the launch place reads; **a row opens the build screen** in
 // place of the list rather than beside it; **the panel beside the picture is opened by what was
 // pressed** — the library by the press on an empty picture, the definition's own fields by "Edit" —
@@ -40,6 +40,7 @@ vi.mock("../core/automations", () => ({
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
   useLiveRuns: () => [],
+  useRunHistory: () => ({ runs: [], total: 0, pageSize: 20 }),
   // The step panel's own write door. Nothing here presses a step, so the panel draws its "press one"
   // line and these are never called (`./automationStepPanel.test.tsx` is where they are).
   editAutomationStep: () => Promise.resolve(),
@@ -108,23 +109,32 @@ afterEach(() => {
 });
 
 describe("the automations screen", () => {
-  it("draws the three tabs and opens on the definitions", async () => {
+  it("draws the four tabs from making to running, and opens on the definitions", async () => {
     await render();
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
     expect(tabs.map((one) => one.textContent)).toEqual([
-      t("auto.tab.running"),
       t("auto.tab.automations"),
       t("auto.tab.actions"),
+      t("auto.tab.running"),
+      t("auto.tab.history"),
     ]);
-    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
   });
 
   it("moves to the running tab, which is about no one project", async () => {
     await render();
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
-    await act(async () => { tabs[0].click(); });
+    await act(async () => { tabs[2].click(); });
     expect(container.querySelector(".auto__list")).toBeNull();
     expect(container.textContent).toContain(t("auto.running.empty"));
+  });
+
+  it("moves to the history tab, which is read a page at a time", async () => {
+    await render();
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    await act(async () => { tabs[3].click(); });
+    expect(container.textContent).toContain(t("auto.history.empty"));
+    expect(container.querySelector(".autohist__filter")).not.toBeNull();
   });
 
   it("says a project with no automations has none", async () => {

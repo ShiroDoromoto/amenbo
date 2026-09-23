@@ -8,8 +8,8 @@ title: A run is held, picked up again and stopped, and says which of the three i
 description: >
   Start a run, then hold it, let it go and stop it, reading what it says it is doing after each. The
   terminal reads the run itself; the screen reads the row the running tab draws for it, which is
-  where a person meets the same three controls. Stopping is asserted last on both roads because it
-  is the one that cannot be taken back.
+  where a person meets the same three controls. Stopping is pressed last on both roads because it
+  is the one that cannot be taken back; the terminal reads the run as canceled afterwards.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
@@ -231,10 +231,3 @@ steps_gui:
     with:
       target: run
       press: stop
-
-  - type: assert
-    domain: automation
-    op: run-row
-    with:
-      target: run
-      state: stopped

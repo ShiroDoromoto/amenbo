@@ -483,10 +483,18 @@ project: number, projectName: string, automation: number,
  */
 automationName: string, 
 /**
- * Where the run stands. A `completed` run is never on this card: the tab lists what is going and
- * what was cut short (`AMB-D-955`).
+ * Where the run stands (`AMB-D-955`). The "running" tab draws the first three — what is going,
+ * and a failure nobody has acknowledged — and the "history" tab the last three.
  */
-status: "running" | "paused" | "failed" | "canceled", 
+status: "running" | "paused" | "completed" | "failed" | "canceled", 
+/**
+ * When it began, as RFC 3339. Absent only on a run written by a build that could leave one waiting.
+ */
+startedAt?: string, 
+/**
+ * When it ended, as RFC 3339. Absent while it is going.
+ */
+endedAt?: string, 
 /**
  * Whether a pause has been asked for and the step under way has not reported yet. The run is
  * still `running` — this is the gap between the button and the pause
@@ -514,6 +522,24 @@ stepsDone: number,
  * shape the row over its pane says it in.
  */
 task?: AutomationRunTaskDto, };
+
+/**
+ * **One page of the "history" tab** — the runs that are over and need nobody (`AMB-D-955`).
+ */
+export type AutomationRunHistoryDto = { 
+/**
+ * The runs on this page, newest first.
+ */
+runs: Array<AutomationRunCardDto>, 
+/**
+ * How many runs the whole history holds under the narrowing asked for — the "of 115" in
+ * "21–40 of 115".
+ */
+total: number, 
+/**
+ * How many runs a page holds. The screen counts pages with it rather than keeping its own.
+ */
+pageSize: number, };
 
 /**
  * **A run, just launched** — what the press is answered with.

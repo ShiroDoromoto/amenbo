@@ -3649,6 +3649,22 @@ pub struct AutomationLaunchBlockDto {
     pub(crate) fields: std::collections::BTreeMap<String, String>,
 }
 
+/// **One page of the "history" tab** — the runs that are over and need nobody (`AMB-D-955`).
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+pub struct AutomationRunHistoryDto {
+    /// The runs on this page, newest first.
+    pub(crate) runs: Vec<AutomationRunCardDto>,
+    /// How many runs the whole history holds under the narrowing asked for — the "of 115" in
+    /// "21–40 of 115".
+    #[ts(type = "number")]
+    pub(crate) total: usize,
+    /// How many runs a page holds. The screen counts pages with it rather than keeping its own.
+    #[ts(type = "number")]
+    pub(crate) page_size: usize,
+}
+
 // ───────────────────────── automation: what is under way ─────────────────────────
 
 /// **One run in the "running" tab** — what is going on right now, on one line.
@@ -3675,10 +3691,18 @@ pub struct AutomationRunCardDto {
     /// What the automation was called at launch. Read from the run's own copy of the entry step's
     /// automation where the definition has since been deleted, and empty where neither is left.
     pub(crate) automation_name: String,
-    /// Where the run stands. A `completed` run is never on this card: the tab lists what is going and
-    /// what was cut short (`AMB-D-955`).
-    #[ts(type = "\"running\" | \"paused\" | \"failed\" | \"canceled\"")]
+    /// Where the run stands (`AMB-D-955`). The "running" tab draws the first three — what is going,
+    /// and a failure nobody has acknowledged — and the "history" tab the last three.
+    #[ts(type = "\"running\" | \"paused\" | \"completed\" | \"failed\" | \"canceled\"")]
     pub(crate) status: &'static str,
+    /// When it began, as RFC 3339. Absent only on a run written by a build that could leave one waiting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) started_at: Option<String>,
+    /// When it ended, as RFC 3339. Absent while it is going.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) ended_at: Option<String>,
     /// Whether a pause has been asked for and the step under way has not reported yet. The run is
     /// still `running` — this is the gap between the button and the pause
     /// ([`amenbo_core::ops::automation_stop::pause`]).

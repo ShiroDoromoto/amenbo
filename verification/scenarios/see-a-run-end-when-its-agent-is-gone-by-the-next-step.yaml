@@ -191,5 +191,5 @@ steps_gui:
     op: run-row
     with:
       target: run
-      state: stopped
+      state: failed
       reason: no_agent

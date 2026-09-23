@@ -1,27 +1,25 @@
-// The "running" tab — what is under way right now, on one line each (`AMB-T-5259`).
+// The "running" tab — what is under way right now, and every failure nobody has seen yet, on one line
+// each (`AMB-D-955`).
 //
-// **It crosses projects, and says which project each run is in.** A lane is a terminal on this
-// machine and the attention of whoever is watching it, and neither is divided up per project. The
-// band over the panes draws the count and nothing more; this is where a reader comes to see what the
-// count is made of (`../core/automations`, `../shell/WorkspaceFace`).
+// **It crosses projects, and says which project each run is in.** A run holds a terminal on this
+// machine, and this machine is not divided up per project.
 //
-// **A run that is `done` is not here.** What a finished run did is reached from the task it worked or
-// the automation it came from, never listed — a tab that grew every run ever launched would stop
-// answering the one question it is opened for. A run that **stopped** does stay, in the stop colour:
-// a failure nobody was watching is the thing most worth seeing here, and it is gone from the screen
-// the moment it is the reader's turn to be told about it.
+// **What is over and needs nobody is not here.** A completed run, a canceled one and a failure
+// somebody has acknowledged are the "history" tab's (`./HistoryTab`). A failure stays here, in the
+// stop colour, until a person presses "acknowledge": the task it handed back is one nobody is
+// carrying, and a failure that slid into the history unseen would take that task out of sight with it.
 //
 // **The row goes to the pane, the buttons move the run.** Pressing the row is "show me this", so it
-// stands the run's place in the workspace and goes to it — including for a run still waiting for a
-// lane, whose place is stood empty and is the one its first step opens in (`../talk/layout`).
+// stands the run's place in the workspace and goes to it.
 //
 // **How far in it is says the action as well as the step** (`AMB-D-949`), for the reason the row over
 // a run's pane does (`../talk/nameplate`): a launch opens one spot of the picture into a column of
 // steps, so a step's name alone no longer says which spot of the automation this is. Where the spot
 // has been taken off the picture since, the line says the step alone.
-import { useState } from "react";
-import { pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
+import { useState, type ReactNode } from "react";
+import { acknowledgeRun, pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
+import { exactLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 
@@ -37,21 +35,14 @@ function statusText(run: AutomationRunCardDto): string {
   switch (run.status) {
     case "running": return t("auto.run.running");
     case "paused": return t("auto.run.paused");
-    // Failed and canceled keep the one word the tab has had for a run cut short; what tells them apart
-    // on the row is the reason beside it. The words of their own are the tab's redraw (`AMB-D-955`).
-    case "failed":
-    case "canceled": return t("auto.run.stopped");
-    default: return run.status;
+    case "completed": return t("auto.run.completed");
+    case "failed": return t("auto.run.failed");
+    case "canceled": return t("auto.run.canceled");
   }
 }
 
-/**
- * Why it ended, where there is something to say. A cancel carries no reason in core — the person who
- * pressed stop is the reason — so it is said here. A failure with no reason on it says nothing rather
- * than guessing.
- */
+/** Why it failed, where core named one. A failure with no reason on it says nothing rather than guessing. */
 function reasonText(run: AutomationRunCardDto): string | null {
-  if (run.status === "canceled") return t("auto.run.byHuman");
   switch (run.stoppedReason) {
     case "crashed": return t("auto.run.crashed");
     case "max_times": return t("auto.run.maxTimes");
@@ -61,6 +52,57 @@ function reasonText(run: AutomationRunCardDto): string | null {
     case "halted": return t("auto.run.halted");
     default: return null;
   }
+}
+
+/**
+ * **One run on one line** — shared by the "running" tab and the "history" tab, so a run reads the same
+ * on either side of ending.
+ *
+ * The line is state, the automation and its run number, the project, how far in it is, the task it is
+ * on, and how long since — the time it ended once it has, the time it began while it has not. Under
+ * it, for a failure, why. `acts` are the buttons that move the run; the history passes none.
+ */
+export function RunLine({
+  run,
+  onGo,
+  acts,
+}: {
+  run: AutomationRunCardDto;
+  /** Go to the pane the run is drawn in. Absent where there is no pane to go to, and then the line is read rather than pressed. */
+  onGo?: () => void;
+  acts?: ReactNode;
+}) {
+  const reason = run.status === "failed" ? reasonText(run) : null;
+  const at = run.endedAt ?? run.startedAt;
+  return (
+    <li className={`autorun autorun--${run.status}`}>
+      <button type="button" className="autorun__go" disabled={!onGo} onClick={onGo}>
+        <span className="autorun__state">{statusText(run)}</span>
+        <span className="autorun__of">
+          <span className="autorun__name">{run.automationName}</span>
+          <span className="autoid">{tf("face.runNo", { n: run.run })}</span>
+        </span>
+        <span className="autorun__project">{run.projectName}</span>
+        <span className="autorun__step">
+          {run.stepName !== undefined &&
+            tf("auto.run.step", {
+              n: run.stepsDone,
+              // Which step, in full — the action and the step as one value, so the language orders
+              // the two and the count is counted of the pair.
+              step: run.actionName === undefined
+                ? run.stepName
+                : tf("auto.run.inAction", { action: run.actionName, step: run.stepName }),
+            })}
+        </span>
+        <span className="autorun__task">{run.task !== undefined && `${run.task.ref} ${run.task.title}`}</span>
+        <span className="autorun__when" title={at === undefined ? undefined : exactLabel(at)}>
+          {at === undefined ? "" : whenLabel(at)}
+        </span>
+        {reason !== null && <span className="autorun__why">{reason}</span>}
+      </button>
+      <span className="autorun__acts">{acts}</span>
+    </li>
+  );
 }
 
 export function RunningTab({
@@ -73,11 +115,11 @@ export function RunningTab({
   const runs = useLiveRuns();
   const [error, setError] = useState<string | null>(null);
 
-  // One press at a time, whichever row it was on: the three writes all move the same queue, and a
-  // second press landing while the first is still opening a terminal would be answered off a picture
-  // that has already changed.
+  // One press at a time, whichever row it was on: the writes all move the same list, and a second
+  // press landing while the first is still opening a terminal would be answered off a picture that
+  // has already changed.
   const [pressing, setPressing] = useState(false);
-  const press = async (move: () => Promise<void>) => {
+  const press = async (move: () => Promise<unknown>) => {
     setError(null);
     setPressing(true);
     try {
@@ -89,6 +131,39 @@ export function RunningTab({
     }
   };
 
+  // The buttons a row carries are the moves its state has: a run going can be held or stopped, a held
+  // one picked up again or stopped, and a failure acknowledged.
+  const actsOf = (run: AutomationRunCardDto) => {
+    if (run.status === "failed") {
+      return (
+        <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => acknowledgeRun(run.run))}>
+          {t("auto.run.acknowledge")}
+        </button>
+      );
+    }
+    return (
+      <>
+        {run.status === "paused" ? (
+          <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => resumeRun(run.run))}>
+            {t("auto.run.resume")}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn"
+            disabled={pressing || run.pauseRequested}
+            onClick={() => void press(() => pauseRun(run.run))}
+          >
+            {t("auto.run.pause")}
+          </button>
+        )}
+        <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => stopRun(run.run))}>
+          {t("auto.run.stop")}
+        </button>
+      </>
+    );
+  };
+
   return (
     <>
       {/* Above the rows, and above the empty line too: a press that was refused is the answer to
@@ -96,83 +171,16 @@ export function RunningTab({
       {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       {runs.length === 0 && <div className="auto__empty">{t("auto.running.empty")}</div>}
       {runs.length > 0 && (
-      <ul className="auto__list">
-        {runs.map((run) => {
-          const reason = reasonText(run);
-          const over = run.status === "failed" || run.status === "canceled";
-          return (
-            <li key={run.run} className="autorun">
-              <button
-                type="button"
-                className="auto__row autorun__go"
-                disabled={!onGoToRun}
-                onClick={() => onGoToRun?.(run.project, run.run)}
-              >
-                <span className="autorun__what">
-                  <span className="autorun__of">{run.automationName}</span>
-                  {run.stepName !== undefined && (
-                    <span className="autorun__step">
-                      {tf("auto.run.step", {
-                        n: run.stepsDone,
-                        // Which step, in full — the action and the step as one value, so the
-                        // language orders the two and the count is counted of the pair.
-                        step: run.actionName === undefined
-                          ? run.stepName
-                          : tf("auto.run.inAction", {
-                              action: run.actionName,
-                              step: run.stepName,
-                            }),
-                      })}
-                    </span>
-                  )}
-                  {run.task !== undefined && (
-                    <span className="autorun__task">{`${run.task.ref} ${run.task.title}`}</span>
-                  )}
-                </span>
-                <span className="auto__mark">{run.projectName}</span>
-                <span className={`autorun__state autorun__state--${run.status}`}>
-                  {statusText(run)}
-                  {reason !== null && <span className="autorun__why">{reason}</span>}
-                </span>
-              </button>
-
-              {/* A stopped run has nothing left to move, so it carries no buttons at all rather than
-                  three that refuse. */}
-              {!over && (
-                <span className="autorun__acts">
-                  {run.status === "paused" ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={pressing}
-                      onClick={() => void press(() => resumeRun(run.run))}
-                    >
-                      {t("auto.run.resume")}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={pressing || run.pauseRequested}
-                      onClick={() => void press(() => pauseRun(run.run))}
-                    >
-                      {t("auto.run.pause")}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={pressing}
-                    onClick={() => void press(async () => { await stopRun(run.run); })}
-                  >
-                    {t("auto.run.stop")}
-                  </button>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+        <ul className="autoruns">
+          {runs.map((run) => (
+            <RunLine
+              key={run.run}
+              run={run}
+              onGo={onGoToRun && (() => onGoToRun(run.project, run.run))}
+              acts={actsOf(run)}
+            />
+          ))}
+        </ul>
       )}
     </>
   );

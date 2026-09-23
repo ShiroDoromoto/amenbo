@@ -61,8 +61,8 @@ use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacementDto, AutomationPortDto, AutomationRunCardDto,
-    AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto, AutomationStepOpenDto,
-    AutomationStepRunDto, AutomationWireDto, WriteAck,
+    AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, WriteAck,
 };
 use crate::error::CmdError;
 use tauri::Emitter;
@@ -1131,30 +1131,76 @@ pub fn automation_launch(
     Ok(AutomationRunStartedDto { run: run.id })
 }
 
-/// **How many canceled runs the "running" tab is shown** under the live ones.
-const CANCELED_SHOWN: usize = 20;
-
 /// **What is under way right now**, across every project — the rows of the "running" tab.
 ///
 /// It crosses projects because a terminal does — what a run holds is a terminal on this machine, and
-/// this machine is not divided up per project. The live runs come first ([`read::automation_runs_live`]):
-/// what is going, and every failure nobody has acknowledged. The most recent canceled runs follow, taken
-/// from the history ([`read::automation_runs_history`]), because the tab has no history of its own to
-/// draw them in and a run somebody just stopped should not vanish from under the press. A completed run
-/// is not on this card (`AMB-D-955`).
+/// this machine is not divided up per project. What is going comes first, then every failure nobody
+/// has acknowledged ([`read::automation_runs_live`]). What is over and needs nobody is the "history"
+/// tab's ([`automation_history_page`], `AMB-D-955`).
 #[tauri::command]
 pub fn automation_running_page() -> Result<Vec<AutomationRunCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_running_page");
     let store = open_store_read()?;
-    let conn = store.read_model().conn();
-    let canceled =
-        read::automation_runs_history(conn, None, Some(read::RunOutcome::Canceled), 0, CANCELED_SHOWN)?
-            .runs;
     let mut out = Vec::new();
-    for run in read::automation_runs_live(conn)?.into_iter().chain(canceled) {
+    for run in read::automation_runs_live(store.read_model().conn())? {
         out.push(run_card(&store, run)?);
     }
     Ok(out)
+}
+
+/// **How many runs a page of the "history" tab holds.**
+const HISTORY_PAGE: usize = 20;
+
+/// **One page of the "history" tab** — completed, canceled, and acknowledged failures, newest first,
+/// across every project (`AMB-D-955`).
+///
+/// A page at a time because the history only grows: the screen holds one page of it and no more.
+/// `only` narrows it to one ending (`"completed"`, `"failed"`, `"canceled"`) and absent is all three;
+/// `page` counts from 0.
+#[tauri::command]
+pub fn automation_history_page(
+    only: Option<String>,
+    page: usize,
+) -> Result<AutomationRunHistoryDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_history_page");
+    let only = match only.as_deref() {
+        None => None,
+        Some("completed") => Some(read::RunOutcome::Completed),
+        Some("failed") => Some(read::RunOutcome::Failed),
+        Some("canceled") => Some(read::RunOutcome::Canceled),
+        // Uncoded: the screen offers the three and nothing else, so another word is a caller's
+        // mistake rather than something a reader is shown.
+        Some(other) => {
+            return Err(CmdError::from(amenbo_core::error::Error::invalid(format!(
+                "'{other}' is not an ending the history is narrowed to"
+            ))))
+        }
+    };
+    let store = open_store_read()?;
+    let found = read::automation_runs_history(
+        store.read_model().conn(),
+        None,
+        only,
+        page * HISTORY_PAGE,
+        HISTORY_PAGE,
+    )?;
+    let mut runs = Vec::with_capacity(found.runs.len());
+    for run in found.runs {
+        runs.push(run_card(&store, run)?);
+    }
+    Ok(AutomationRunHistoryDto { runs, total: found.total, page_size: HISTORY_PAGE })
+}
+
+/// **Say a failed run has been seen** ([`amenbo_core::ops::automation_stop::acknowledge`]) — pressed on
+/// its row of the "running" tab, which it then leaves for the "history" tab (`AMB-D-955`).
+///
+/// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not: what it moves is a
+/// run, and every screen drawing one is already following the change feed.
+#[tauri::command]
+pub fn automation_run_acknowledge(run_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_acknowledge(run_id)?;
+    Ok(())
 }
 
 /// **The action a spot on the picture stands on**, named — the half a step's own name stopped saying
@@ -1201,6 +1247,8 @@ fn run_card(
             .map(|one| one.name)
             .unwrap_or_default(),
         status: run.status.as_str(),
+        started_at: run.started_at.map(|at| at.to_rfc3339_z()),
+        ended_at: run.ended_at.map(|at| at.to_rfc3339_z()),
         pause_requested: run.pause_requested,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         step_name,

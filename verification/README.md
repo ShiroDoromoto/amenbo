@@ -757,6 +757,11 @@ line then names the declared ones and the step stays running, which the pane is 
 terminal, where building a definition and driving a run are turned away (`automation_outside_only`).
 A road writes `refused:` on it, and the words after `automation` are the road's to spell — a `<run>`
 among them is a gap the operator fills off the line over the pane.
+`done-outside-pane` is the report made **without** that pane: a step's terminal is started whether or
+not its pane is drawn, and opening the pane to type in it would start one on the spot either way. So
+it is typed at a plain shell in whatever pane is up, with the step the window would have named put
+into the environment by hand — the run's number off its row on the running tab, the step's off
+`run-show`.
 `quit-in-pane` is the step's program ending by itself before it reports — `exit` typed at a stand-in
 that carries lines out (`can-start`'s `then: runs`) — which fails the run there as `crashed`. Closing
 the pane is Amenbo ending the terminal, a stop, and not this.

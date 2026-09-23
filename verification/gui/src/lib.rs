@@ -4370,6 +4370,18 @@ impl Instructor {
                     "In the pane this run is drawn in, type `amenbo automation {verb}` and run it{standing_in}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
             }
+            // The report made without the run's pane. The step's number is not on any screen — the
+            // window hands it to the step's terminal and nowhere else — so it is read off the run's
+            // own account, and the run's number off its row, the one place it is drawn outside the
+            // pane this road leaves shut.
+            (Domain::Automation, "done-outside-pane") => format!(
+                "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\"{}` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
+                req(with, "report")?,
+                match arg_str(with, "exit") {
+                    Some(exit) => format!(" --exit \"{exit}\""),
+                    None => String::new(),
+                }
+            ),
             // The program ending itself, in the run's own pane. The stand-in carries out the line it
             // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
             (Domain::Automation, "quit-in-pane") => {

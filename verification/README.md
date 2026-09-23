@@ -755,6 +755,9 @@ three are refused anywhere else — and a run started at the terminal opens no p
 terminal, where building a definition and driving a run are turned away (`automation_outside_only`).
 A road writes `refused:` on it, and the words after `automation` are the road's to spell — a `<run>`
 among them is a gap the operator fills off the line over the pane.
+`quit-in-pane` is the step's program ending by itself before it reports — `exit` typed at a stand-in
+that carries lines out (`can-start`'s `then: runs`) — which fails the run there as `crashed`. Closing
+the pane is Amenbo ending the terminal, a stop, and not this.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

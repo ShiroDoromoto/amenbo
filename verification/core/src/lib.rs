@@ -4357,6 +4357,17 @@ const REGISTRY: &[OpSpec] = &[
     // in them is a gap the operator fills from the line over the pane, the way `<ref>` is elsewhere:
     // the store issues the number.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "verb-in-pane", required: &["verb"], refs: &["target"], strings: &["verb"], binds: false },
+    // **The program in that terminal ending by itself**, before the step has reported. It is the
+    // agent going without a word, which is the one ending a run meets from inside its own step: the
+    // host hears the terminal end and fails the run there (`crashed`). The other ways a terminal ends
+    // are Amenbo's — the next step taking the place, a closed pane — and move nothing, so a road that
+    // reached for one of those would be reading a run that was never going to fail.
+    //
+    // `end-pane` is not this op because it names no run: it is the workspace's, said of whichever
+    // pane has a terminal in it. `target` is which run's pane, read the way `close-run-pane` reads it.
+    // What ends the program is `exit` typed at the stand-in a road stood up to carry lines out
+    // (`can-start`'s `then: runs`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "quit-in-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // A row of the "running" tab. It draws what is going and every failure nobody has acknowledged,
     // across projects, so the row names the project as well as the state.

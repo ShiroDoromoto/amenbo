@@ -1,8 +1,11 @@
 // The "running" tab — what is under way right now, and every failure nobody has seen yet, on one line
 // each (`AMB-D-955`).
 //
-// **It crosses projects, and says which project each run is in.** A run holds a terminal on this
-// machine, and this machine is not divided up per project.
+// **Opened from the sidebar it crosses projects, and says which project each run is in.** A run holds
+// a terminal on this machine, and this machine is not divided up per project. **Opened from a project
+// it is that project's runs alone** (`AMB-D-954`), and then the project column says nothing, so it is
+// not drawn: a reader inside one project who is shown another's runs cannot read at a glance what is
+// going in their own.
 //
 // **What is over and needs nobody is not here.** A completed run, a canceled one and a failure
 // somebody has acknowledged are the "history" tab's (`./HistoryTab`). A failure stays here, in the
@@ -60,14 +63,18 @@ function reasonText(run: AutomationRunCardDto): string | null {
  *
  * The line is state, the automation and its run number, the project, how far in it is, the task it is
  * on, and how long since — the time it ended once it has, the time it began while it has not. Under
- * it, for a failure, why. `acts` are the buttons that move the run; the history passes none.
+ * it, for a failure, why. `acts` are the buttons that move the run; the history passes none. The
+ * project is left off a list that is one project's already.
  */
 export function RunLine({
   run,
   onGo,
   acts,
+  withProject = true,
 }: {
   run: AutomationRunCardDto;
+  /** Whether the line names the project — not on a list narrowed to one. */
+  withProject?: boolean;
   /** Go to the pane the run is drawn in. Absent where there is no pane to go to, and then the line is read rather than pressed. */
   onGo?: () => void;
   acts?: ReactNode;
@@ -76,13 +83,18 @@ export function RunLine({
   const at = run.endedAt ?? run.startedAt;
   return (
     <li className={`autorun autorun--${run.status}`}>
-      <button type="button" className="autorun__go" disabled={!onGo} onClick={onGo}>
+      <button
+        type="button"
+        className={withProject ? "autorun__go" : "autorun__go autorun__go--oneproject"}
+        disabled={!onGo}
+        onClick={onGo}
+      >
         <span className="autorun__state">{statusText(run)}</span>
         <span className="autorun__of">
           <span className="autorun__name">{run.automationName}</span>
           <span className="autoid">{tf("face.runNo", { n: run.run })}</span>
         </span>
-        <span className="autorun__project">{run.projectName}</span>
+        {withProject && <span className="autorun__project">{run.projectName}</span>}
         <span className="autorun__step">
           {run.stepName !== undefined &&
             tf("auto.run.step", {
@@ -106,13 +118,19 @@ export function RunLine({
 }
 
 export function RunningTab({
+  projectId,
   onGoToRun,
 }: {
+  /** The project whose runs these are, or `null` for every project's — the sidebar's. */
+  projectId: number | null;
   /** Go to the pane this run is drawn in. Absent in the window that has no workspace face to send
    *  anybody to, and then the rows are read rather than pressed. */
   onGoToRun?: (project: number, run: number) => void;
 }) {
-  const runs = useLiveRuns();
+  // Narrowed here rather than asked for: every row already says its project, and the live list is
+  // what is going on this machine now, which is short.
+  const everyRun = useLiveRuns();
+  const runs = projectId === null ? everyRun : everyRun.filter((one) => one.project === projectId);
   const [error, setError] = useState<string | null>(null);
 
   // One press at a time, whichever row it was on: the writes all move the same list, and a second
@@ -178,6 +196,7 @@ export function RunningTab({
               run={run}
               onGo={onGoToRun && (() => onGoToRun(run.project, run.run))}
               acts={actsOf(run)}
+              withProject={projectId === null}
             />
           ))}
         </ul>

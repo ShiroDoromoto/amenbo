@@ -1186,10 +1186,12 @@ const HISTORY_PAGE: usize = 20;
 ///
 /// A page at a time because the history only grows: the screen holds one page of it and no more.
 /// `only` narrows it to one ending (`"completed"`, `"failed"`, `"canceled"`) and absent is all three;
-/// `page` counts from 0.
+/// `project_id` narrows it to one project's runs — the tab opened from that project — and absent is
+/// every project's, the sidebar's (`AMB-D-954`); `page` counts from 0.
 #[tauri::command]
 pub fn automation_history_page(
     only: Option<String>,
+    project_id: Option<i64>,
     page: usize,
 ) -> Result<AutomationRunHistoryDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_history_page");
@@ -1209,7 +1211,7 @@ pub fn automation_history_page(
     let store = open_store_read()?;
     let found = read::automation_runs_history(
         store.read_model().conn(),
-        None,
+        project_id,
         only,
         page * HISTORY_PAGE,
         HISTORY_PAGE,

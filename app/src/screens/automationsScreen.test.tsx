@@ -125,7 +125,7 @@ describe("the automations screen", () => {
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
   });
 
-  it("moves to the running tab, which is about no one project", async () => {
+  it("moves to the running tab", async () => {
     await render();
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
     await act(async () => { tabs[2].click(); });

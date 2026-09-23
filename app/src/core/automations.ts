@@ -766,18 +766,20 @@ export type RunHistoryFilter = "all" | "completed" | "failed" | "canceled";
 
 /**
  * **One page of the "history" tab** — completed, canceled, and acknowledged failures, newest first,
- * across every project (`AMB-D-955`). `page` counts from 0.
+ * of one project or, for `null`, of every project (`AMB-D-955`, `AMB-D-954`). `page` counts from 0.
  *
  * A page at a time because the history only grows: the screen holds one page and no more, and the
  * answer says how many runs the whole narrowing holds so the pager can count its pages.
  */
 export async function fetchRunHistory(
   filter: RunHistoryFilter,
+  projectId: number | null,
   page: number,
 ): Promise<AutomationRunHistoryDto> {
   if (!inTauri()) return { runs: [], total: 0, pageSize: 20 };
   return invoke<AutomationRunHistoryDto>("automation_history_page", {
     only: filter === "all" ? null : filter,
+    projectId,
     page,
   });
 }
@@ -786,10 +788,14 @@ export async function fetchRunHistory(
  * Subscribing read of one page of the history. It sits under the same key as the running tab's, so
  * a run ending — which moves a row from one tab to the other — refreshes both.
  */
-export function useRunHistory(filter: RunHistoryFilter, page: number): AutomationRunHistoryDto | null {
+export function useRunHistory(
+  filter: RunHistoryFilter,
+  projectId: number | null,
+  page: number,
+): AutomationRunHistoryDto | null {
   const { data } = useQuery<AutomationRunHistoryDto>(
-    ["automationRuns", "history", filter, page],
-    () => fetchRunHistory(filter, page),
+    ["automationRuns", "history", filter, projectId, page],
+    () => fetchRunHistory(filter, projectId, page),
   );
   return data ?? null;
 }

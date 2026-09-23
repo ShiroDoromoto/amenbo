@@ -3,7 +3,7 @@
 // wording of every state and which buttons a run carries all run for real.
 //
 // What these guard: **a row says what the run is, how far in it is and what it is on** — the four
-// things a reader opens this tab to see, and the project it is in, because the tab crosses projects;
+// things a reader opens this tab to see, and the project it is in where the tab crosses projects;
 // **how far in it is names the action the step was opened from**, two spots standing on the same
 // action running steps of the same names (`AMB-D-949`), **and falls back to the step alone where that
 // spot has been taken off the picture**;
@@ -61,10 +61,11 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
   };
 }
 
-async function render(runs: AutomationRunCardDto[]) {
+async function render(runs: AutomationRunCardDto[], projectId: number | null = null) {
   hoisted.runs = runs;
   await act(async () => {
     root.render(createElement(RunningTab, {
+      projectId,
       onGoToRun: (project: number, one: number) => { went.push({ project, run: one }); },
     }));
   });
@@ -178,5 +179,33 @@ describe("the running tab", () => {
     await render([run({ run: 9 })]);
     await act(async () => { button(t("auto.run.pause")).click(); });
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("it is over already");
+  });
+});
+
+// The two entrances (`AMB-D-954`): from a project, that project's runs alone and no project column;
+// from the sidebar, every project's, each naming its project.
+describe("the running tab's reach", () => {
+  const two = () => [
+    run({ run: 4, project: 1, projectName: "amenbo", automationName: "Morning round" }),
+    run({ run: 5, project: 2, projectName: "site", automationName: "Publish" }),
+  ];
+
+  it("lists one project's runs alone from that project, and leaves the project off the rows", async () => {
+    await render(two(), 2);
+    const rows = [...container.querySelectorAll(".autorun")].map((one) => one.textContent ?? "");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("Publish");
+    expect(container.querySelector(".autorun__project")).toBeNull();
+  });
+
+  it("lists every project's runs from the sidebar, each naming its project", async () => {
+    await render(two(), null);
+    const projects = [...container.querySelectorAll(".autorun__project")].map((one) => one.textContent);
+    expect(projects).toEqual(["amenbo", "site"]);
+  });
+
+  it("says nothing is running in a project whose runs are all elsewhere", async () => {
+    await render(two(), 3);
+    expect(container.textContent).toContain(t("auto.running.empty"));
   });
 });

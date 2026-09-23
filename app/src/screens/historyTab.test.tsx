@@ -12,14 +12,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationRunCardDto, AutomationRunHistoryDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
-  /** Every page the tab asked for, in order, as `<filter> <page>`. */
+  /** Every page the tab asked for, in order, as `<filter> <page>`, and whose runs, in the same order. */
   asked: [] as string[],
   total: 45,
+  projects: [] as (number | null)[],
 }));
 
 vi.mock("../core/automations", () => ({
-  useRunHistory: (filter: string, page: number): AutomationRunHistoryDto => {
+  useRunHistory: (filter: string, project: number | null, page: number): AutomationRunHistoryDto => {
     hoisted.asked.push(`${filter} ${page}`);
+    hoisted.projects.push(project);
     const from = page * 20;
     const count = Math.max(0, Math.min(20, hoisted.total - from));
     return {
@@ -53,8 +55,8 @@ import { HistoryTab, pageNumbers } from "./HistoryTab";
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
-  await act(async () => { root.render(createElement(HistoryTab)); });
+async function render(projectId: number | null = null) {
+  await act(async () => { root.render(createElement(HistoryTab, { projectId })); });
 }
 
 function button(label: string): HTMLButtonElement {
@@ -71,6 +73,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.asked = [];
+  hoisted.projects = [];
   hoisted.total = 45;
 });
 
@@ -113,5 +116,21 @@ describe("the history tab", () => {
     expect(pageNumbers(0, 3)).toEqual([0, 1, 2]);
     expect(pageNumbers(5, 12)).toEqual([0, null, 3, 4, 5, 6, 7, null, 11]);
     expect(pageNumbers(11, 12)).toEqual([0, null, 9, 10, 11]);
+  });
+});
+
+// The two entrances (`AMB-D-954`): from a project the store is asked for that project's runs, and the
+// rows leave the project off; from the sidebar it is asked for every project's, each row naming one.
+describe("the history's reach", () => {
+  it("asks for one project's runs from that project, and leaves the project off the rows", async () => {
+    await render(1);
+    expect(new Set(hoisted.projects)).toEqual(new Set([1]));
+    expect(container.querySelector(".autorun__project")).toBeNull();
+  });
+
+  it("asks for every project's runs from the sidebar, each row naming its project", async () => {
+    await render(null);
+    expect(new Set(hoisted.projects)).toEqual(new Set([null]));
+    expect(container.querySelector(".autorun__project")?.textContent).toBe("amenbo");
   });
 });

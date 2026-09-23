@@ -254,7 +254,7 @@ mod tests {
             &[
                 ("run_step_id", int(steps[1])),
                 ("direction", text("in")),
-                ("name", text("報告")),
+                ("port_id", int(1)),
                 ("kind", text("value")),
                 ("from_run_step_id", int(steps[0])),
             ],

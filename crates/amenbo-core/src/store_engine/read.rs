@@ -6617,9 +6617,9 @@ pub fn automation_wire_between(
     owner_kind: crate::model::AutomationPictureOwner,
     from_id: i64,
     from_exit_id: Option<i64>,
-    from_port_name: &str,
+    from_port_id: i64,
     to_id: i64,
-    to_port_name: &str,
+    to_port_id: i64,
 ) -> Result<Option<crate::model::AutomationWire>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
     let exit = match from_exit_id {
@@ -6629,9 +6629,9 @@ pub fn automation_wire_between(
     let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
         .and(Pred::eq(W.from_id, from_id))
         .and(exit)
-        .and(Pred::eq(W.from_port_name, from_port_name))
+        .and(Pred::eq(W.from_port_id, from_port_id))
         .and(Pred::eq(W.to_id, to_id))
-        .and(Pred::eq(W.to_port_name, to_port_name));
+        .and(Pred::eq(W.to_port_id, to_port_id));
     Ok(automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)?
         .into_iter()
         .next())
@@ -6674,13 +6674,21 @@ pub fn automation_wires_to_port(
     conn: &Connection,
     owner_kind: crate::model::AutomationPictureOwner,
     to_id: i64,
-    to_port_name: &str,
+    to_port_id: i64,
 ) -> Result<Vec<crate::model::AutomationWire>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
     let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
         .and(Pred::eq(W.to_id, to_id))
-        .and(Pred::eq(W.to_port_name, to_port_name));
+        .and(Pred::eq(W.to_port_id, to_port_id));
     automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)
+}
+
+/// Every wire keyed to one port at either end — what goes when the port does, since a wire from or
+/// into a port that is gone carries nothing.
+pub fn automation_wire_ids_naming_port(conn: &Connection, port_id: i64) -> Result<Vec<i64>> {
+    const W: col::automation_wire::Cols = col::automation_wire::ALL;
+    let pred = Pred::eq(W.from_port_id, port_id).or(Pred::eq(W.to_port_id, port_id));
+    select_ids(conn, W.id, Some(&pred))
 }
 
 /// The steps of one library action, oldest key first — the subtree a delete walks.

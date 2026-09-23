@@ -1099,11 +1099,17 @@ mod tests {
              VALUES ('action', ?1, '進行中にした', 'a0', ?2, ?2)",
             rusqlite::params![action, at],
         );
-        put(
+        let out_port = put(
             "INSERT INTO automation_port \
                  (owner_kind, owner_id, direction, name, kind, required, order_key, created_at, updated_at) \
              VALUES ('exit', ?1, 'out', '進行中のタスク', 'task_take', 1, 'a0', ?2, ?2)",
             rusqlite::params![exit, at],
+        );
+        let in_port = put(
+            "INSERT INTO automation_port \
+                 (owner_kind, owner_id, direction, name, kind, required, order_key, created_at, updated_at) \
+             VALUES ('action', ?1, 'in', '扱うタスク', 'task_take', 1, 'a1', ?2, ?2)",
+            rusqlite::params![action, at],
         );
         put(
             "INSERT INTO automation_edge \
@@ -1113,10 +1119,10 @@ mod tests {
         );
         put(
             "INSERT INTO automation_wire \
-                 (owner_kind, owner_id, from_id, from_exit_id, from_port_name, to_id, to_port_name, \
+                 (owner_kind, owner_id, from_id, from_exit_id, from_port_id, to_id, to_port_id, \
                   created_at, updated_at) \
-             VALUES ('automation', ?1, ?2, ?4, '進行中のタスク', ?2, '扱うタスク', ?3, ?3)",
-            rusqlite::params![automation, placement, at, exit],
+             VALUES ('automation', ?1, ?2, ?4, ?5, ?2, ?6, ?3, ?3)",
+            rusqlite::params![automation, placement, at, exit, out_port, in_port],
         );
 
         let run = put(
@@ -1155,15 +1161,15 @@ mod tests {
         );
         put(
             "INSERT INTO automation_run_value \
-                 (run_step_id, direction, exit_id, name, kind, task_id, created_at, updated_at) \
-             VALUES (?1, 'out', ?4, '進行中のタスク', 'task_take', ?2, ?3, ?3)",
-            rusqlite::params![run_step, task, at, exit],
+                 (run_step_id, direction, exit_id, port_id, kind, task_id, created_at, updated_at) \
+             VALUES (?1, 'out', ?4, ?5, 'task_take', ?2, ?3, ?3)",
+            rusqlite::params![run_step, task, at, exit, out_port],
         );
         put(
             "INSERT INTO automation_run_value \
-                 (run_step_id, direction, exit_id, name, kind, attachment_id, created_at, updated_at) \
-             VALUES (?1, 'out', ?4, '指摘', 'file', ?2, ?3, ?3)",
-            rusqlite::params![run_step, file, at, exit],
+                 (run_step_id, direction, exit_id, port_id, kind, attachment_id, created_at, updated_at) \
+             VALUES (?1, 'out', ?4, ?5, 'file', ?2, ?3, ?3)",
+            rusqlite::params![run_step, file, at, exit, out_port],
         );
 
         // The comment the step's report was carried onto, so the column v50 added to `task_comment`

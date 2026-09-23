@@ -75,7 +75,10 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
         "automation_exit",
     );
     // What that way out hands on, and what the later action takes in.
-    cli.json(&["automation", "port-add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]);
+    let hands_on = id_of(
+        &cli.json(&["automation", "port-add", "--exit", &found, "--name", "report", "--kind", "file", "--json"]),
+        "automation_port",
+    );
     cli.json(&["automation", "port-add", "--action", &fix_action, "--name", "report", "--kind", "file", "--required", "--json"]);
 
     cli.json(&["automation", "entry-set", &a, "--placement", &review, "--json"]);
@@ -91,7 +94,8 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
         "--from", &format!("{review}:something to fix"), "--from-port", "report",
         "--to", &fix, "--to-port", "report", "--json",
     ]);
-    assert_eq!(wire["automation_wire"]["from_port_name"].as_str(), Some("report"));
+    // The wire is written by the names a person types and keys the port rows they name (`AMB-D-961`).
+    assert_eq!(wire["automation_wire"]["from_port_id"], serde_json::json!(hands_on.parse::<i64>().unwrap()));
 }
 
 /// What every step is told before its own prompt is Amenbo's own and the same on every automation
@@ -421,7 +425,7 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
 
     assert_eq!(shown["placements"][1]["inputs"][0]["name"].as_str(), Some("report"));
     assert_eq!(shown["edges"][0]["to_id"], serde_json::json!(fix.parse::<i64>().unwrap()));
-    assert_eq!(shown["wires"][0]["to_port_name"].as_str(), Some("report"));
+    assert_eq!(shown["wires"][0]["to_port_id"], shown["placements"][1]["inputs"][0]["id"]);
 
     // And the prompts are inside the action, which is the picture `action show` reads.
     let inside = cli.json(&["automation", "action-show", &review_action, "--json"]);
@@ -664,7 +668,7 @@ fn the_verbs_a_step_types_refuse_outside_a_step() {
 
     for args in [
         vec!["automation", "step-take", &t, "--json"],
-        vec!["automation", "step-out", "note=done", "--json"],
+        vec!["automation", "step-out", "12=done", "--json"],
         vec!["automation", "step-done", "--report", "did it", "--json"],
     ] {
         let (err, code) = cli.run_err(&args);

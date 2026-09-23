@@ -1185,11 +1185,11 @@ datasets! {
     }
 
     // **What is handed from one box to the next**, on either of the two pictures `automation_edge` is
-    // drawn on. The way out it leaves by is keyed (`from_exit_id`, `AMB-D-961`), and the ports at
-    // either end are named: one action placed twice on an automation gives two placements whose ports
-    // carry the same names, so only `from_id` + `from_exit_id` + `from_port_name` says which of them
-    // is meant. `from_exit_id` is NULL where the wire starts at the action itself, whose inputs hang
-    // on no way out.
+    // drawn on. The way out it leaves by and the ports at either end are keyed (`from_exit_id`,
+    // `from_port_id`, `to_port_id`, `AMB-D-961`), so renaming a way out or a port leaves the wire on
+    // it. One action placed twice on an automation gives two placements declaring the same port rows,
+    // so the box ids are what say which of them is meant. `from_exit_id` is NULL where the wire starts
+    // at the action itself, whose inputs hang on no way out.
     //
     // On an action's picture either end may be `0` — the action itself, which no step's id can be
     // (`crate::model::ACTION_BOUNDARY`). That is how what the action declares reaches what is inside
@@ -1200,9 +1200,9 @@ datasets! {
         owner_id: col(KEY_REF),
         from_id: col(KEY_REF),
         from_exit_id: col(KEY_REF_OPT),
-        from_port_name: col(REQ),
+        from_port_id: col(KEY_REF),
         to_id: col(KEY_REF),
-        to_port_name: col(REQ),
+        to_port_id: col(KEY_REF),
     }
 
     // ───────────────────────── automation: what ran ─────────────────────────
@@ -1299,9 +1299,10 @@ datasets! {
         ended_at: ts_opt,
     }
 
-    // **One value that went in or came out of a step execution**, under the port's *name* — the port
-    // row itself may be re-declared or gone by the time this is read, so the name is what is kept.
-    // `exit_id` is the way out it left by, as the run's copy of the step keys it
+    // **One value that went in or came out of a step execution**, under the port it went through —
+    // `port_id` keys the port as the run's copy of the step does (`automation_run_def`), and its name
+    // is read from there: the live row may since have been renamed or deleted, and the record says what
+    // was declared then. `exit_id` is the way out it left by, keyed the same way
     // (`automation_run_def.exits`).
     // Which of the three payload columns means anything is `kind`'s to say, the way `attachment`'s
     // mode decides between its two.
@@ -1313,7 +1314,7 @@ datasets! {
         run_step_id: fk("automation_run_step", "RESTRICT"),
         direction: enum_col("in", "out"),
         exit_id: col(KEY_REF_OPT),
-        name: col(REQ),
+        port_id: col(KEY_REF),
         kind: enum_col("value", "file", "task_take", "task_make"),
         value: col(OPT),
         attachment_id: fk_opt("attachment", "SET NULL"),

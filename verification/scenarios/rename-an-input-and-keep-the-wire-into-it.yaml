@@ -1,0 +1,139 @@
+# A port is keyed, not named: a wire leaves from an output's row and lands on an input's row. So
+# renaming an input is a relabelling and nothing more — the wire into it stays where it was, and the
+# definition is exactly as ready to start as it was.
+#
+# ── Why the launch place and the fed placement are read ─────────────────────────────────────────
+# A wire lives on the automation's picture and is drawn nowhere of its own, so what shows it stayed is
+# what it does: the launch place says the definition is ready, and the placement the wire feeds wears
+# no mark for a required input nothing reaches. A build that parted the wire on the rename would fail
+# both.
+#
+# ── Where the rename is made ────────────────────────────────────────────────────────────────────
+# An input is the action's, so it is renamed on the action's own input panel, and what hangs on it is
+# read back on the automation placing it — the road goes there and back, as the way out's does.
+id: rename-an-input-and-keep-the-wire-into-it
+title: Renaming an input keeps the wire into it, and the definition stays ready to start
+description: >
+  Open a definition that is ready to start, and rename the required input one placed action takes on
+  that action's own screen. Back on the definition, the launch place still says it is ready, and the
+  placement the wire feeds wears no mark for an input nothing reaches.
+given:
+  # Claude Code is one of the two agents this machine can start — two being the fewest the premise
+  # stands up — so nothing on the launch place is ever about who carries a step out.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
+
+  # The action that takes the task. Its named way out is the one being renamed: it carries the task
+  # the run works on, and the value the placement after it is wired to. The step inside it declares
+  # the same way out, and the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: wire-add, with: { in_action: true, target: claim, exit: got one, from_port: note, to_port: note } }
+
+  # The action the wire feeds.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work }, as: do }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
+  - { type: action, domain: automation, op: port-add, with: { action: work, name: note, kind: value, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an input to rename" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
+  - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
+  # Both of `take`'s ways out go on to `work`. The unnamed one is what keeps `work` on the run's road
+  # while the named one is being renamed — a placement a run cannot reach is judged for nothing, so the
+  # mark this road reads on `work` would go with it.
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: false
+
+  # The rename is the action's, so it is made on the action's input.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: work
+
+  - type: action
+    domain: automation
+    op: open-part
+    with:
+      part: input
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: input
+      name: note
+      to: memo
+
+  # What hangs on it, read on the definition placing it.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: work
+      unfed: false

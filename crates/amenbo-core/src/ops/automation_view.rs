@@ -129,6 +129,32 @@ pub struct StepView {
     pub inputs: Vec<AutomationPort>,
 }
 
+impl AutomationView {
+    /// **The name a port carries now**, by its id — what a wire keys at either end (`AMB-D-961`) and what
+    /// a reader is shown. Read from the declarations the placements resolve, so a renamed port's wires
+    /// read by the new name. `None` for an id no placement here declares.
+    pub fn port_name(&self, port_id: i64) -> Option<&str> {
+        self.placements
+            .iter()
+            .flat_map(|p| p.exits.iter().flat_map(|e| e.outputs.iter()).chain(p.inputs.iter()))
+            .find(|port| port.id == port_id)
+            .map(|port| port.name.as_str())
+    }
+}
+
+impl ActionView {
+    /// **The name a port carries now**, by its id — one of a step's or one the action declares at its
+    /// edge, which are the ports the wires inside the action key. `None` for an id nothing here declares.
+    pub fn port_name(&self, port_id: i64) -> Option<&str> {
+        let steps = self
+            .steps
+            .iter()
+            .flat_map(|s| s.exits.iter().flat_map(|e| e.outputs.iter()).chain(s.inputs.iter()));
+        let edge = self.exits.iter().flat_map(|e| e.outputs.iter()).chain(self.inputs.iter());
+        steps.chain(edge).find(|port| port.id == port_id).map(|port| port.name.as_str())
+    }
+}
+
 /// The automations of one project, in the order they were placed in.
 ///
 /// Archived ones come too: what an archived automation is, is one kept out of the way rather than

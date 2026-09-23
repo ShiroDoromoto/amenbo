@@ -35,6 +35,7 @@ import type {
   AutomationLaunchCheckDto,
   AutomationPortDto,
   AutomationRunCardDto,
+  AutomationRunHistoryDto,
   AutomationRunStartedDto,
   WakeDto,
 } from "../bindings/bindings";
@@ -730,8 +731,8 @@ export function useLaunchCheck(
  * **What is under way right now**, across every project — the rows of the "running" tab.
  *
  * It crosses projects because a terminal does, and this is the one place a reader sees everything
- * that is under way at once. Runs that are `done` are not in it: what a finished run did is reached
- * from the task it worked, never listed here.
+ * that is under way at once. A failure nobody has acknowledged stays in it too; what is over and
+ * needs nobody is the "history" tab's (`fetchRunHistory`, `AMB-D-955`).
  */
 export async function fetchLiveRuns(): Promise<AutomationRunCardDto[]> {
   if (!inTauri()) return [];
@@ -742,6 +743,49 @@ export async function fetchLiveRuns(): Promise<AutomationRunCardDto[]> {
 export function useLiveRuns(): AutomationRunCardDto[] {
   const { data } = useQuery<AutomationRunCardDto[]>(["automationRuns"], fetchLiveRuns);
   return data ?? [];
+}
+
+/** The one ending the "history" tab can be narrowed to, or all three. */
+export type RunHistoryFilter = "all" | "completed" | "failed" | "canceled";
+
+/**
+ * **One page of the "history" tab** — completed, canceled, and acknowledged failures, newest first,
+ * across every project (`AMB-D-955`). `page` counts from 0.
+ *
+ * A page at a time because the history only grows: the screen holds one page and no more, and the
+ * answer says how many runs the whole narrowing holds so the pager can count its pages.
+ */
+export async function fetchRunHistory(
+  filter: RunHistoryFilter,
+  page: number,
+): Promise<AutomationRunHistoryDto> {
+  if (!inTauri()) return { runs: [], total: 0, pageSize: 20 };
+  return invoke<AutomationRunHistoryDto>("automation_history_page", {
+    only: filter === "all" ? null : filter,
+    page,
+  });
+}
+
+/**
+ * Subscribing read of one page of the history. It sits under the same key as the running tab's, so
+ * a run ending — which moves a row from one tab to the other — refreshes both.
+ */
+export function useRunHistory(filter: RunHistoryFilter, page: number): AutomationRunHistoryDto | null {
+  const { data } = useQuery<AutomationRunHistoryDto>(
+    ["automationRuns", "history", filter, page],
+    () => fetchRunHistory(filter, page),
+  );
+  return data ?? null;
+}
+
+/**
+ * **Say a failed run has been seen** — pressed on its row of the "running" tab, which it then leaves
+ * for the "history" tab (`amenbo_core::ops::automation_stop::acknowledge`). Not a `WriteAck` write,
+ * for `stopRun`'s reason.
+ */
+export async function acknowledgeRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_acknowledge", { runId: run });
 }
 
 /**

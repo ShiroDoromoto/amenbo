@@ -515,6 +515,8 @@ pub fn run() {
       automation::automation_launch,
       automation::automation_step_open,
       automation::automation_running_page,
+      automation::automation_history_page,
+      automation::automation_run_acknowledge,
       automation::automation_run_pause,
       automation::automation_run_resume,
       automation::automation_run_stop,

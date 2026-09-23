@@ -1394,28 +1394,76 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__plus:disabled { cursor: default; opacity: 0.5; }
 .autopic__plus:enabled:hover { color: var(--c-text); border-color: var(--c-edge); }
 
-/* ---------- the "running" tab (`app/src/screens/RunningTab.tsx`) ---------- */
-/* One run is a row and a half: the whole line is the press that goes to its pane, and the buttons
-   that move the run stand beside it. They are not inside it because a press inside a press is not
-   one — the row would swallow "stop" and go to the pane instead. */
-.autorun { display: flex; align-items: center; gap: var(--s-2); }
-.autorun__go { flex: 1 1 auto; min-width: 0; align-items: center; }
+/* ---------- the "running" and "history" tabs (`app/src/screens/RunningTab.tsx`, `HistoryTab.tsx`) ---------- */
+/* One bordered stack of runs, the shape the list of definitions has (`.autolist`). */
+.autoruns {
+  list-style: none; margin: 0; padding: 0;
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;
+}
+.autoruns > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
+/* One run is a row and its buttons: the whole line is the press that goes to its pane, and the
+   buttons that move the run stand beside it. They are not inside it because a press inside a press
+   is not one — the row would swallow "stop" and go to the pane instead. */
+.autorun { display: flex; align-items: center; gap: var(--s-2); padding-inline-end: var(--s-2); }
+/* The line is read across, one column to each thing it says: the state, what it is, the project, how
+   far in, the task, how long since. Why a failure failed runs under the whole of it. */
+.autorun__go {
+  flex: 1 1 auto; min-width: 0;
+  display: grid; align-items: center; gap: 2px var(--s-3);
+  grid-template-columns: 7rem minmax(0, 1.2fr) 6rem minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem;
+  padding: var(--s-2) var(--s-3); text-align: start;
+  background: none; border: 0; color: var(--c-text); font: inherit; font-size: var(--fs-md); cursor: pointer;
+}
+.autorun__go:hover { background: var(--c-hover); }
 .autorun__go:disabled { cursor: default; }
 .autorun__go:disabled:hover { background: none; }
-/* What the run is: the automation it came from, how far in it is, and the task it is on — read down
-   rather than across, because the three are one answer and only the first is a name. */
-.autorun__what { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.autorun__of { overflow-wrap: anywhere; }
-.autorun__step { font-size: var(--fs-xs); color: var(--c-text-muted); overflow-wrap: anywhere; }
-.autorun__task { font-size: var(--fs-xs); color: var(--c-text-faint); overflow-wrap: anywhere; }
-/* The state, and under it why it stopped. The colour is the state's own: a run that has stopped is
-   the one thing here nothing will move again without a hand put to it (`--c-stop`), and one under
-   way wears the colour that says so while it does (`--c-heed`). */
-.autorun__state { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: var(--fs-xs); color: var(--c-plain); }
-.autorun__state--running { color: var(--c-heed); font-weight: var(--fw-bold); }
-.autorun__state--stopped { color: var(--c-stop); font-weight: var(--fw-bold); }
-.autorun__why { color: var(--c-text-muted); font-weight: var(--fw-normal); }
+.autorun__state { font-weight: var(--fw-bold); font-size: var(--fs-xs); color: var(--c-plain); }
+.autorun__of { min-width: 0; display: flex; flex-direction: column; }
+.autorun__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-bold); }
+.autorun__project,
+.autorun__step,
+.autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autorun__when { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: end; font-variant-numeric: tabular-nums; }
+.autorun__why { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-stop); }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }
+.autorun__acts:empty { display: none; }
+/* The colour is the state's own. One under way wears the colour that says so (`--c-heed`); a failure
+   is the one thing here nothing will move again without a hand put to it, so its whole row takes the
+   stop colour until somebody acknowledges it (`--c-stop`). */
+.autorun--running .autorun__state { color: var(--c-heed); }
+.autorun--completed .autorun__state { color: var(--c-done); }
+.autorun--failed .autorun__state { color: var(--c-stop); }
+.autorun--canceled .autorun__state { color: var(--c-text-muted); }
+.autorun--failed { background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
+/* A narrow window keeps what says which run this is, and lets the rest go. */
+@media (max-width: 900px) {
+  .autorun__go { grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1.2fr); }
+  .autorun__project, .autorun__task, .autorun__when { display: none; }
+}
+
+/* The history's narrowing: one segmented control of the four choices, and the pager under the rows. */
+.autohist__filter {
+  display: inline-flex; align-self: flex-start;
+  background: var(--c-sunken-pic) var(--c-sunken);
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
+  padding: 2px;
+}
+.autohist__only {
+  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
+  padding: 2px var(--s-3); color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); cursor: pointer;
+}
+.autohist__only:hover { color: var(--c-text); }
+.autohist__only--on { background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
+.autohist__pager { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autohist__page {
+  min-width: 2em; padding: 2px var(--s-1);
+  background: none; border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
+  color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); cursor: pointer;
+}
+.autohist__page:hover { color: var(--c-text); }
+.autohist__page--on { border-color: var(--c-edge); color: var(--c-text); font-weight: var(--fw-bold); }
+.autohist__gap { color: var(--c-text-faint); }
+.autohist__count { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
 
 /* ----- what the pressed step holds (`screens/AutomationStepPanel.tsx`) -----
    A column of fields, each a label over its control. There is no Save, so there is no button row and

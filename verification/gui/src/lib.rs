@@ -6341,7 +6341,8 @@ fn automation_tab(tab: &str) -> Result<&'static str, String> {
         "running" => "the tab holding the runs that are under way",
         "automations" => "the tab holding this project's automations",
         "actions" => "the tab holding the library of actions",
-        other => return Err(format!("`tab` does not know `{other}` — it is running / automations / actions")),
+        "history" => "the tab holding the runs that are over",
+        other => return Err(format!("`tab` does not know `{other}` — it is automations / actions / running / history")),
     })
 }
 
@@ -6496,7 +6497,7 @@ fn run_press(press: &str) -> Result<&'static str, String> {
 }
 
 /// Where a run has got to, said as the row says it.
-/// How a stopped run ended, in the words the row carries under its state. A road names the code core
+/// Why a failed run ended, in the words the row carries under its state. A road names the code core
 /// writes, so what it is reading is the ending and not a sentence the interface owns — the same line
 /// the launch place's reasons are read on.
 fn run_ending(reason: &str) -> Result<&'static str, String> {
@@ -6504,11 +6505,12 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
         "crashed" => "the app was restarted under it",
         "max_times" => "it went round too many times",
         "no_agent" => "its agent could not be started",
-        "by_human" => "it was stopped by hand",
+        "no_input" => "a required input had nothing to fill it",
         "no_way_on" => "there was nothing left to open",
+        "halted" => "a way out called for a person",
         other => {
             return Err(format!(
-                "`reason` does not know `{other}` — it is one of the endings a stopped run is given"
+                "`reason` does not know `{other}` — it is one of the reasons a failed run is given"
             ))
         }
     })
@@ -6521,11 +6523,12 @@ fn run_state(state: &str) -> Result<&'static str, String> {
         // hold once that step reports rather than either of the two it sits between.
         "pausing" => "going to hold at the end of the step it is on",
         "paused" => "held",
-        "stopped" => "stopped",
-        "done" => "finished",
+        "completed" => "completed",
+        "failed" => "failed, waiting for somebody to acknowledge it",
+        "canceled" => "canceled",
         other => {
             return Err(format!(
-                "`state` does not know `{other}` — it is running / pausing / paused / stopped / done"
+                "`state` does not know `{other}` — it is running / pausing / paused / completed / failed / canceled"
             ))
         }
     })
@@ -8204,7 +8207,7 @@ steps_gui:
   - type: assert
     domain: automation
     op: run-row
-    with: { target: run, state: stopped, reason: no_way_on }
+    with: { target: run, state: failed, reason: no_way_on }
   - type: action
     domain: automation
     op: press-run

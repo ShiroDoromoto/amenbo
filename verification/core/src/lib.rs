@@ -4172,7 +4172,7 @@ const REGISTRY: &[OpSpec] = &[
     // a box in are the same three on both, so the ops below are named for the box and the panel and
     // read on whichever screen the road opened — `open` for the one, `action-open` for the other.
     //
-    // Which of the automations screen's three tabs the reader is standing on. The screen is one place
+    // Which of the automations screen's four tabs the reader is standing on. The screen is one place
     // and the tabs are what is on it, so a road says which rather than naming three screens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "screen", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
     // Opening one: the row is the press, and what it opens is the build screen rather than a pane
@@ -4330,12 +4330,12 @@ const REGISTRY: &[OpSpec] = &[
     // the store issues the number.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "verb-in-pane", required: &["verb"], refs: &["target"], strings: &["verb"], binds: false },
     //
-    // A row of the "running" tab. It draws every run this device is carrying, across projects, so the
-    // row names the project as well as the state.
+    // A row of the "running" tab. It draws what is going and every failure nobody has acknowledged,
+    // across projects, so the row names the project as well as the state.
     //
-    // `reason` is the line a stopped row carries under its state, spelled as core names it
-    // (`no_way_on`, `by_human`, …) so a road says which ending it is reading rather than quoting a
-    // sentence the interface owns. It belongs to `stopped` alone — every other state is its own whole
+    // `reason` is the line a failed row carries under its state, spelled as core names it
+    // (`no_way_on`, `halted`, …) so a road says which ending it is reading rather than quoting a
+    // sentence the interface owns. It belongs to `failed` alone — every other state is its own whole
     // answer — and a row read without it is a road asking about the state and nothing more.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-row", required: &["state"], refs: &["target", "project"], strings: &["state", "reason"], binds: false },
     // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again, or

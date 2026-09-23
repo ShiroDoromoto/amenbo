@@ -1,17 +1,17 @@
-// The automations of one project — one screen with three tabs in it.
+// The automations of one project — one screen with four tabs in it.
 //
-// **One screen, not three entrances.** What a reader does here moves between the three: a definition
-// they have just built is the one they want to watch run, and the action a step carries is edited in
-// the library and takes effect in every automation using it. Three sidebar entries would make three
-// places out of one subject, and each of them would have to carry the way back to the other two.
+// **One screen, not four entrances.** What a reader does here moves between them: a definition they
+// have just built is the one they want to watch run, and the action a step carries is edited in the
+// library and takes effect in every automation using it. Four sidebar entries would make four places
+// out of one subject, and each of them would have to carry the way back to the others.
 //
-// The tabs are "running" (`./RunningTab`), "automations" — this one — and "actions", the library
-// (`./AutomationActionsTab`).
+// The tabs run from making to running, left to right: "automations" — this one — "actions", the
+// library (`./AutomationActionsTab`), "running" (`./RunningTab`) and "history" (`./HistoryTab`).
 //
-// **"Running" crosses projects and the other two do not.** What is under way is a claim on this
-// machine's lanes, and the lanes are not divided up per project; a definition and a library action
-// belong to the project they were built in. So the tab takes no `projectId` and names the project on
-// each row instead (`./RunningTab`).
+// **"Running" and "history" cross projects and the other two do not.** A run holds a terminal on
+// this machine, and this machine is not divided up per project; a definition and a library action
+// belong to the project they were built in. So those two tabs take no `projectId` and name the
+// project on each row instead.
 //
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
@@ -39,6 +39,7 @@ import { useState } from "react";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
+import { HistoryTab } from "./HistoryTab";
 import { RunningTab } from "./RunningTab";
 import { addAutomation, useAutomations, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
@@ -46,15 +47,16 @@ import { asTyped, isEnterSubmit } from "../core/keys";
 import { t, tf } from "../core/i18n";
 import type { AutomationCardDto } from "../bindings/bindings";
 
-/** Which of the three tabs the screen is on. */
-type Tab = "running" | "automations" | "actions";
+/** Which of the four tabs the screen is on. */
+type Tab = "automations" | "actions" | "running" | "history";
 
 // Spelled out rather than built from the id, so the key gate can see every label a reader can be
 // shown (`core/i18n/sourceKeys.test.ts`).
 const TABS: readonly { id: Tab; label: () => string }[] = [
-  { id: "running", label: () => t("auto.tab.running") },
   { id: "automations", label: () => t("auto.tab.automations") },
   { id: "actions", label: () => t("auto.tab.actions") },
+  { id: "running", label: () => t("auto.tab.running") },
+  { id: "history", label: () => t("auto.tab.history") },
 ];
 
 export function AutomationsScreen({
@@ -120,6 +122,8 @@ export function AutomationsScreen({
           </div>
 
           {tab === "running" && <RunningTab onGoToRun={onGoToRun} />}
+
+          {tab === "history" && <HistoryTab />}
 
           {tab === "actions" && (
             <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />

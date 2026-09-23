@@ -1714,6 +1714,18 @@ button.feed__target:hover { color: var(--c-accent); }
   margin-inline-end: var(--s-2); font-family: var(--font-mono); font-size: var(--fs-xs);
   font-weight: var(--fw-normal); color: var(--c-text-muted); font-variant-numeric: tabular-nums;
 }
+/* The runs holding the definition open on either build screen (`../screens/AutomationHeldBy`): why
+   its fields are shut, over the lines that go to where each run is stopped. */
+.autoheld {
+  display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) var(--s-3) var(--s-3);
+  border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+/* The placement panel's writes, shut as one while a run holds the automation; the press to the action
+   stays outside it. A fieldset for that one attribute, with none of its own frame. */
+.autostep__writes {
+  display: flex; flex-direction: column; gap: var(--s-3); margin: 0; padding: 0; border: 0; min-width: 0;
+}
+.autoheld__what { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autolaunch {
   display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) var(--s-3) var(--s-3);
   border-block-end: var(--border-w) var(--border-style) var(--c-rule);

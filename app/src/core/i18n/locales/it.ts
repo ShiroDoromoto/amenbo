@@ -1039,6 +1039,8 @@ export const it: Translation = {
     "auto.act.read": "Vedi",
     "auto.act.openInSidebar": "Apri nella barra laterale",
     "auto.act.globalReadOnly": "Un’azione globale si modifica da Automazioni nella barra laterale. Qui si legge soltanto.",
+    "auto.held.place": "Esecuzioni che lo usano",
+    "auto.held.what": "Finché un’esecuzione che lo usa è in corso o in pausa, non si può modificare. Ferma l’esecuzione, o attendi che finisca, per modificarlo di nuovo.",
     "auto.act.stepsPlace": "Passi",
     "auto.act.stepsHint": "Entra dall’Input in alto, attraversa i passi e finisce in uno degli Output in basso",
     "auto.act.usedWhere": "{n}. Una modifica qui vale per tutte.",

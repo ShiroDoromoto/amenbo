@@ -1040,6 +1040,8 @@ export const ptBR: Translation = {
     "auto.act.read": "Ver",
     "auto.act.openInSidebar": "Abrir na barra lateral",
     "auto.act.globalReadOnly": "Uma ação global é alterada em Automações na barra lateral. Aqui ela só é lida.",
+    "auto.held.place": "Execuções que o usam",
+    "auto.held.what": "Enquanto uma execução que o usa estiver em andamento ou pausada, ele não pode ser editado. Pare a execução, ou espere ela terminar, para editá-lo de novo.",
     "auto.act.stepsPlace": "Passos",
     "auto.act.stepsHint": "Entra pela Entrada acima, passa pelos passos e termina em uma das Saídas abaixo",
     "auto.act.usedWhere": "{n}. Uma mudança aqui vale para todas.",

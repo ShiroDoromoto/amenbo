@@ -184,12 +184,39 @@ fn shelves(project_id: Option<i64>) -> Vec<Option<i64>> {
 /// **How many automations place this action** — the placements standing on it, counted by the
 /// automation they sit on.
 pub fn used_by(conn: &Connection, action_id: i64) -> Result<usize> {
+    Ok(automations_placing(conn, action_id)?.len())
+}
+
+/// **The automations an action is placed on**, each once, in id order — what a rewrite of the action
+/// reaches, and so whose runs hold it.
+pub fn automations_placing(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
     let mut seen = std::collections::BTreeSet::new();
     for placement_id in read::automation_placement_ids_using_action(conn, action_id)? {
         let Some(placement) = read::automation_placement(conn, placement_id)? else { continue };
         seen.insert(placement.automation_id);
     }
-    Ok(seen.len())
+    Ok(seen.into_iter().collect())
+}
+
+/// **The runs holding an automation's definition** — its own that are `running` or `paused`, in id
+/// order (`AMB-D-961`). While there is one, every rewrite of the automation is refused
+/// ([`super::automation`]), and a build screen reads the same answer to hold its fields shut and name
+/// the runs a reader would have to end.
+pub fn run_ids_holding_automation(conn: &Connection, id: i64) -> Result<Vec<i64>> {
+    let mut runs = read::automation_run_ids_under_way(conn, id)?;
+    runs.sort_unstable();
+    Ok(runs)
+}
+
+/// **The runs holding an action's definition** — those going on any automation that places it, in any
+/// project, in id order.
+pub fn run_ids_holding_action(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
+    let mut runs = Vec::new();
+    for automation_id in automations_placing(conn, action_id)? {
+        runs.extend(run_ids_holding_automation(conn, automation_id)?);
+    }
+    runs.sort_unstable();
+    Ok(runs)
 }
 
 /// One automation read and resolved — or `None` where that id names none.

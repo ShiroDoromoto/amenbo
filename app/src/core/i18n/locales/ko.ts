@@ -1024,6 +1024,8 @@ export const ko: Translation = {
     "auto.act.read": "보기",
     "auto.act.openInSidebar": "사이드바에서 열기",
     "auto.act.globalReadOnly": "글로벌 액션은 사이드바의 오토메이션에서 고칩니다. 여기서는 읽기만 합니다.",
+    "auto.held.place": "이것을 쓰는 실행",
+    "auto.held.what": "이것을 쓰는 실행이 실행 중이거나 일시 정지된 동안에는 편집할 수 없습니다. 실행을 멈추거나 끝날 때까지 기다리면 다시 편집할 수 있습니다.",
     "auto.act.stepsPlace": "스텝",
     "auto.act.stepsHint": "위의 '입력'에서 들어와 스텝을 거쳐 아래 '출력' 중 하나로 끝난다",
     "auto.act.usedWhere": "{n}개. 여기서 고치면 모두에 적용된다",

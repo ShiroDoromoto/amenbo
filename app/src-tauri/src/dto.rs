@@ -3321,6 +3321,10 @@ pub struct AutomationDetailDto {
     pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,
+    /// **The runs holding this definition** — its own that are running or paused (`AMB-D-961`). While
+    /// there is one, core refuses every rewrite, so the build screen holds its fields shut and names
+    /// these, each with the way to its pane. Empty while nothing is going.
+    pub(crate) held_by: Vec<AutomationRunCardDto>,
 }
 
 /// **One spot on the picture**: the library action standing there, with everything it is read under
@@ -3400,6 +3404,9 @@ pub struct AutomationActionDetailDto {
     /// The declarations alone — an action's rows carry no answer, which is the placement's
     /// (`automation_cfg_answer`).
     pub(crate) settings: Vec<AutomationCfgDto>,
+    /// **The runs holding this action** — those going on any automation that places it, whichever
+    /// project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
+    pub(crate) held_by: Vec<AutomationRunCardDto>,
 }
 
 /// **One step inside an action**: the terminal it stands up, and what it declares inside the picture.

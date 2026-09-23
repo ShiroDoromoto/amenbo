@@ -11,7 +11,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationActionDetailDto, AutomationStepDto } from "../bindings/bindings";
+import type { AutomationActionDetailDto, AutomationRunCardDto, AutomationStepDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   action: null as AutomationActionDetailDto | null,
@@ -86,6 +86,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     exits: [{ id: 20, outputs: [] }],
     inputs: [],
     settings: [],
+    heldBy: [],
     ...over,
   };
 }
@@ -296,5 +297,69 @@ describe("a global action opened from a project", () => {
     await renderAt(1, false);
     expect(has(t("auto.act.edit"))).toBe(true);
     expect(has(t("auto.act.openInSidebar"))).toBe(false);
+  });
+});
+
+/** A run going on an automation that places the action. */
+function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
+  return {
+    run: 31,
+    project: 2,
+    projectName: "Other",
+    automation: 9,
+    automationName: "Night round",
+    status: "running",
+    pauseRequested: false,
+    stepsDone: 1,
+    ...over,
+  };
+}
+
+describe("an action a run is going on (AMB-D-961)", () => {
+  const goToRun = vi.fn();
+  async function renderHeld(runs: AutomationRunCardDto[] = [heldRun()]) {
+    hoisted.action = action({ heldBy: runs });
+    await act(async () => {
+      root.render(
+        createElement(AutomationActionBuildScreen, {
+          id: 4,
+          projectId: 1,
+          onBack: () => undefined,
+          onGoToRun: goToRun,
+        }),
+      );
+    });
+  }
+  beforeEach(() => goToRun.mockClear());
+
+  it("names the runs using it, and goes to a run's pane on its line", async () => {
+    await renderHeld();
+    expect(container.textContent).toContain(t("auto.held.what"));
+    expect(container.textContent).toContain("Night round");
+    await act(async () => { container.querySelector<HTMLButtonElement>(".autoheld .autorun__go")!.click(); });
+    expect(goToRun).toHaveBeenCalledWith(2, 31);
+  });
+
+  it("opens what it is for and its steps to be read, with the fields shut", async () => {
+    await renderHeld();
+    expect(has(t("auto.act.edit"))).toBe(false);
+    await act(async () => {
+      buttons().find((one) => one.textContent === t("auto.act.read"))!.click();
+    });
+    expect(noteBox().closest("fieldset")?.disabled).toBe(true);
+    await act(async () => { nodes()[0].click(); });
+    expect(container.querySelector<HTMLFieldSetElement>(".actpanel__body")?.disabled).toBe(true);
+  });
+
+  it("offers no way to add a step, and does not say it is changed from the sidebar", async () => {
+    await renderHeld();
+    expect(has(t("auto.act.stepAdd"))).toBe(false);
+    expect(container.textContent).not.toContain(t("auto.act.globalReadOnly"));
+  });
+
+  it("says nothing of runs, and holds nothing shut, while none is going", async () => {
+    await renderHeld([]);
+    expect(container.querySelector(".autoheld")).toBeNull();
+    expect(has(t("auto.act.edit"))).toBe(true);
   });
 });

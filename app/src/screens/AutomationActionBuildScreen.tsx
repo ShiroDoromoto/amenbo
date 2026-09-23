@@ -30,12 +30,18 @@
 // press that goes to it there. One place to change a thing is what keeps a reader from wondering which
 // of two is the real one.
 //
+// **An action a run is going on is read, not written, for as long as the run goes** (`AMB-D-961`). Core
+// refuses every rewrite of it while a run of an automation placing it is running or paused, so the
+// screen holds itself shut the way it does for a global action, and names those runs over the picture
+// with the way to each one's pane (`./AutomationHeldBy`).
+//
 // **Which step is pressed is the screen's, not the picture's**, for the automation screen's reason:
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
 import { useState, type ReactNode } from "react";
 import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
+import { AutomationHeldBy } from "./AutomationHeldBy";
 import { ReachChip } from "./AutomationActionsTab";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
@@ -72,13 +78,16 @@ function AboutRow({
   editing,
   onEdit,
   readOnly,
+  elsewhere,
   onGoToOwner,
 }: {
   action: AutomationActionDetailDto;
   editing: boolean;
   onEdit: () => void;
-  /** Whether it is read here and changed elsewhere — a global action opened from a project. */
+  /** Whether it is read rather than written here — changed elsewhere, or held by a run. */
   readOnly: boolean;
+  /** Whether it is changed elsewhere — a global action opened from a project. */
+  elsewhere: boolean;
   /** Go to where it is changed — the sidebar's entrance, for a global action. */
   onGoToOwner?: () => void;
 }) {
@@ -105,13 +114,13 @@ function AboutRow({
         >
           {readOnly ? t("auto.act.read") : t("auto.act.edit")}
         </button>
-        {readOnly && onGoToOwner && (
+        {elsewhere && onGoToOwner && (
           <button type="button" className="btn" onClick={onGoToOwner}>
             {t("auto.act.openInSidebar")}
           </button>
         )}
       </div>
-      {readOnly && <p className="actdecl__elsewhere">{t("auto.act.globalReadOnly")}</p>}
+      {elsewhere && <p className="actdecl__elsewhere">{t("auto.act.globalReadOnly")}</p>}
     </div>
   );
 }
@@ -162,6 +171,7 @@ export function AutomationActionBuildScreen({
   projectId,
   onBack,
   onGoToGlobal,
+  onGoToRun,
 }: {
   id: number;
   /** Whose project this is — what the machine is asked about when a step picks an agent. `null` is
@@ -170,9 +180,12 @@ export function AutomationActionBuildScreen({
   onBack: () => void;
   /** Go to a global action on the sidebar's entrance, where it is changed. */
   onGoToGlobal?: (id: number) => void;
+  /** Go to the pane a run holding this action is drawn in. */
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const action = useAutomationAction(id);
-  const readOnly = projectId !== null && action?.global === true;
+  const elsewhere = projectId !== null && action?.global === true;
+  const readOnly = elsewhere || (action?.heldBy.length ?? 0) > 0;
   // What the panel is showing: a pressed step, the action itself, its input or its output — or
   // nothing, until one is pressed. An action opens on the picture, and a place picked for the reader
   // would be one they did not choose.
@@ -227,9 +240,12 @@ export function AutomationActionBuildScreen({
           editing={part === "about"}
           onEdit={() => pickPart("about")}
           readOnly={readOnly}
+          elsewhere={elsewhere}
           onGoToOwner={onGoToGlobal && (() => onGoToGlobal(action.id))}
         />
       )}
+
+      {action !== null && <AutomationHeldBy runs={action.heldBy} onGoToRun={onGoToRun} />}
 
       <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
         <div className="actbuild__canvashead">

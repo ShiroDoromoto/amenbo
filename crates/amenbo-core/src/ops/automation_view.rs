@@ -35,6 +35,17 @@ pub struct AutomationCard {
     pub placements: usize,
 }
 
+/// **One automation in the list that spans every project**: its card, and the name of the project it
+/// belongs to.
+///
+/// The name comes with the row because a list drawn from many projects is read by project first — an
+/// automation's name alone says nothing until it says whose it is.
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectAutomationCard {
+    pub project_name: String,
+    pub card: AutomationCard,
+}
+
 /// **One library action in a list**, with how many steps it holds and how many automations place it.
 ///
 /// `used_by` counts automations, not placements: one action placed twice on one automation is one
@@ -118,6 +129,25 @@ pub fn cards(conn: &Connection, project_id: i64) -> Result<Vec<AutomationCard>> 
             automation,
             placements: read::automation_placement_ids(conn, id)?.len(),
         });
+    }
+    Ok(out)
+}
+
+/// **The automations of every project**, project by project in the sidebar's order, and within one
+/// project in the order they were placed in.
+///
+/// Archived projects come too, the same as the running tab lists their runs: archiving a project
+/// hides it from the sidebar, not the automations it still has from the list that spans them. `reach`
+/// narrows the walk to one project, the way a bound session sees only that one.
+pub fn every_card(conn: &Connection, reach: Option<i64>) -> Result<Vec<ProjectAutomationCard>> {
+    let mut out = Vec::new();
+    for project in read::project_list(conn, true)? {
+        if reach.is_some_and(|pid| pid != project.id) {
+            continue;
+        }
+        for card in cards(conn, project.id)? {
+            out.push(ProjectAutomationCard { project_name: project.name.clone(), card });
+        }
     }
     Ok(out)
 }
@@ -244,4 +274,64 @@ fn ports_of(
     direction: AutomationPortDirection,
 ) -> Result<Vec<AutomationPort>> {
     Ok(read::automation_ports_of(conn, owner, owner_id, direction)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ops::automation::{add, NewAutomation};
+    use crate::ops::test_support::{mk_project, with_tx};
+
+    fn names(cards: &[ProjectAutomationCard]) -> Vec<(String, String)> {
+        cards
+            .iter()
+            .map(|one| (one.project_name.clone(), one.card.automation.name.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn every_card_lists_each_projects_automations_with_its_name() {
+        with_tx(|tx| {
+            let amenbo = mk_project(tx, "amenbo");
+            let site = mk_project(tx, "site");
+            add(tx, amenbo, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            add(tx, site, NewAutomation { name: "記事を出す".into(), ..Default::default() }).unwrap();
+            add(tx, amenbo, NewAutomation { name: "起票する".into(), ..Default::default() }).unwrap();
+
+            let all = every_card(tx.conn(), None).unwrap();
+            assert_eq!(
+                names(&all),
+                vec![
+                    ("amenbo".into(), "1件やりきる".into()),
+                    ("amenbo".into(), "起票する".into()),
+                    ("site".into(), "記事を出す".into()),
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn every_card_keeps_an_archived_projects_automations() {
+        with_tx(|tx| {
+            let old = mk_project(tx, "old");
+            add(tx, old, NewAutomation { name: "片付ける".into(), ..Default::default() }).unwrap();
+            crate::ops::project::set_archived(tx, old, true).unwrap();
+
+            let all = every_card(tx.conn(), None).unwrap();
+            assert_eq!(names(&all), vec![("old".into(), "片付ける".into())]);
+        });
+    }
+
+    #[test]
+    fn every_card_through_a_bound_reach_is_that_project_alone() {
+        with_tx(|tx| {
+            let amenbo = mk_project(tx, "amenbo");
+            let site = mk_project(tx, "site");
+            add(tx, amenbo, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            add(tx, site, NewAutomation { name: "記事を出す".into(), ..Default::default() }).unwrap();
+
+            let bound = every_card(tx.conn(), Some(site)).unwrap();
+            assert_eq!(names(&bound), vec![("site".into(), "記事を出す".into())]);
+        });
+    }
 }

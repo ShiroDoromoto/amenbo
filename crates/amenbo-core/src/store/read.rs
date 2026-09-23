@@ -818,6 +818,17 @@ impl Store {
         crate::ops::automation_view::cards(self.engine.conn(), project_id)
     }
 
+    /// **The automations of every project**, each with the name of the project it belongs to — what a
+    /// list that spans the projects draws. Archived projects and archived automations come too.
+    ///
+    /// Under a narrowed reach it is the bound project's alone: not even the names of the other
+    /// projects enter the context, the same as [`Self::project_list`].
+    pub fn automations_of_every_project(
+        &self,
+    ) -> Result<Vec<crate::ops::automation_view::ProjectAutomationCard>> {
+        crate::ops::automation_view::every_card(self.engine.conn(), self.reach.project())
+    }
+
     /// **One automation's whole definition** — every step with what it runs under, and what joins
     /// them. `None` where that id names none.
     pub fn automation_detail(&self, id: i64) -> Result<Option<crate::ops::automation_view::AutomationView>> {

@@ -303,7 +303,12 @@ exits: Array<AutomationExitDto>, inputs: Array<AutomationPortDto>,
  * The declarations alone — an action's rows carry no answer, which is the placement's
  * (`automation_cfg_answer`).
  */
-settings: Array<AutomationCfgDto>, };
+settings: Array<AutomationCfgDto>, 
+/**
+ * **The runs holding this action** — those going on any automation that places it, whichever
+ * project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
+ */
+heldBy: Array<AutomationRunCardDto>, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.
@@ -340,7 +345,13 @@ export type AutomationDetailDto = { id: number, projectId: number, name: string,
 /**
  * The placement a run opens first. Absent while the automation is still being built.
  */
-entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, };
+entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
+/**
+ * **The runs holding this definition** — its own that are running or paused (`AMB-D-961`). While
+ * there is one, core refuses every rewrite, so the build screen holds its fields shut and names
+ * these, each with the way to its pane. Empty while nothing is going.
+ */
+heldBy: Array<AutomationRunCardDto>, };
 
 /**
  * **What happens after a way out is taken.**

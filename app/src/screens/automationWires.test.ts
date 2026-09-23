@@ -47,6 +47,7 @@ function detail(steps: AutomationPlacementDto[], wires: AutomationDetailDto["wir
     placements: steps,
     edges: [],
     wires,
+    heldBy: [],
   })!;
 }
 

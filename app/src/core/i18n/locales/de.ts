@@ -1031,6 +1031,8 @@ export const de: Translation = {
     "auto.act.read": "Ansehen",
     "auto.act.openInSidebar": "In der Seitenleiste öffnen",
     "auto.act.globalReadOnly": "Eine globale Aktion wird unter „Automationen“ in der Seitenleiste geändert. Hier wird sie nur gelesen.",
+    "auto.held.place": "Läufe, die es verwenden",
+    "auto.held.what": "Solange ein Lauf, der dies verwendet, läuft oder pausiert ist, lässt es sich nicht bearbeiten. Stoppe den Lauf oder warte, bis er endet, um es wieder zu bearbeiten.",
     "auto.act.stepsPlace": "Schritte",
     "auto.act.stepsHint": "Beginnt oben bei der Eingabe, läuft durch die Schritte und endet bei einer der Ausgaben unten",
     "auto.act.usedWhere": "{n}. Eine Änderung hier wirkt auf alle.",

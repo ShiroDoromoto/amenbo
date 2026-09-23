@@ -45,7 +45,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
     AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
-use crate::ops::{emit_create, emit_update, place, Position};
+use crate::ops::{automation_view, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -144,27 +144,14 @@ fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     if PAST_THE_GUARD.with(std::cell::Cell::get) {
         return Ok(());
     }
-    let automations = match def {
-        Def::Automation(id) => vec![id],
-        Def::Action(id) => {
-            let mut ids = Vec::new();
-            for placement in read::automation_placement_ids_using_action(tx.conn(), id)? {
-                let automation_id = live_placement(tx, placement)?.automation_id;
-                if !ids.contains(&automation_id) {
-                    ids.push(automation_id);
-                }
-            }
-            ids
-        }
+    // The same answer a build screen reads to hold its fields shut, so the two cannot disagree.
+    let runs = match def {
+        Def::Automation(id) => automation_view::run_ids_holding_automation(tx.conn(), id)?,
+        Def::Action(id) => automation_view::run_ids_holding_action(tx.conn(), id)?,
     };
-    let mut runs = Vec::new();
-    for automation_id in automations {
-        runs.extend(read::automation_run_ids_under_way(tx.conn(), automation_id)?);
-    }
     if runs.is_empty() {
         return Ok(());
     }
-    runs.sort_unstable();
     let what = match def {
         Def::Automation(id) => format!("automation '{}'", live_automation(tx, id)?.name),
         Def::Action(id) => format!("action '{}'", live_action(tx, id)?.name),

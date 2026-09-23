@@ -112,6 +112,7 @@ export function AutomationsScreen({
         projectId={projectId}
         onBack={() => setOpenAction(null)}
         onGoToGlobal={onGoToGlobalAction}
+        onGoToRun={onGoToRun}
       />
     );
   }
@@ -124,6 +125,7 @@ export function AutomationsScreen({
         workspaceOpen={workspaceOpen}
         onBack={() => setOpen(null)}
         onOpenAction={setOpenAction}
+        onGoToRun={onGoToRun}
       />
     );
   }

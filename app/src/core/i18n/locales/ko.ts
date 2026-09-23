@@ -1088,7 +1088,7 @@ export const ko: Translation = {
     "auto.run.acknowledge": "확인함",
     "auto.run.paused": "일시 중지됨",
     "auto.run.pausing": "이 단계가 끝나면 멈춥니다",
-    "auto.run.crashed": "앱이 다시 시작됨",
+    "auto.run.crashed": "단계가 보고하지 않고 끝남",
     "auto.run.maxTimes": "반복 횟수를 넘김",
     "auto.run.noAgent": "에이전트를 시작하지 못함",
     "auto.run.noWayOn": "열 단계가 남아 있지 않았다",

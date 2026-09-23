@@ -1091,7 +1091,7 @@ export const hi: Translation = {
     "auto.run.acknowledge": "देख लिया",
     "auto.run.paused": "रुका हुआ",
     "auto.run.pausing": "इस चरण के बाद रुकेगा",
-    "auto.run.crashed": "ऐप फिर से शुरू हुआ",
+    "auto.run.crashed": "चरण बिना रिपोर्ट किए समाप्त हो गया",
     "auto.run.maxTimes": "बहुत बार दोहराया गया",
     "auto.run.noAgent": "इसका एजेंट शुरू नहीं हो सका",
     "auto.run.noWayOn": "खोलने के लिए कुछ नहीं बचा था",

@@ -1091,7 +1091,7 @@ export const tr: Translation = {
     "auto.run.acknowledge": "Görüldü",
     "auto.run.paused": "Duraklatıldı",
     "auto.run.pausing": "Bu adımın sonunda duraklayacak",
-    "auto.run.crashed": "uygulama yeniden başlatıldı",
+    "auto.run.crashed": "adım rapor vermeden sona erdi",
     "auto.run.maxTimes": "çok fazla tur attı",
     "auto.run.noAgent": "aracısı başlatılamadı",
     "auto.run.noWayOn": "açılacak bir şey kalmamıştı",

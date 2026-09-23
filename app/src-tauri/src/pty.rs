@@ -1426,6 +1426,12 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         if let Some(frame) = gave_up {
             app.state::<crate::frames::TalkFace>().gave_up(&frame);
         }
+        // A step's program that ended by itself, where the step has not reported, fails its run now
+        // rather than leaving it at "running" until the next startup (`AMB-D-961`). One Amenbo ended
+        // — the next step taking the place, or a person closing the pane — is not this.
+        if let Some(run_step) = run_step.filter(|_| itself) {
+            crate::automation::step_program_ended(run_step);
+        }
         let ending = PtyClosedDto { session: id.clone(), code, no_way_back };
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, ending);
     });

@@ -1511,6 +1511,20 @@ fn project_folder(store: &amenbo_core::Store, project: i64) -> Option<String> {
         .map(|dir| dir.to_string())
 }
 
+/// **The program carrying out a step ended by itself** (`crate::pty`). Where the step never
+/// reported, its run fails as a crash ([`amenbo_core::ops::automation_stop::step_ended`]); where it
+/// did, or the run is over, nothing moves. The screens drawing the run follow the change feed.
+pub fn step_program_ended(run_step: i64) {
+    let ended = crate::commands::open_store().and_then(|mut store| {
+        store.automation_step_ended(run_step).map_err(CmdError::from)
+    });
+    match ended {
+        Ok(Some(ended)) => log::info!("run {} failed: step {run_step} ended without reporting", ended.run.id),
+        Ok(None) => {}
+        Err(e) => log::warn!("could not settle step {run_step} whose program ended: {e:?}"),
+    }
+}
+
 /// **The task one stretch of a run is working**, read off the ledger for the pane's header.
 ///
 /// `None` where the execution belongs to no stretch — a run whose steps take no task at all — and

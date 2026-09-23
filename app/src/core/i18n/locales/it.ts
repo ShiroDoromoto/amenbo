@@ -1103,7 +1103,7 @@ export const it: Translation = {
     "auto.run.acknowledge": "Visto",
     "auto.run.paused": "In pausa",
     "auto.run.pausing": "Si mette in pausa alla fine di questo passo",
-    "auto.run.crashed": "l'app è stata riavviata",
+    "auto.run.crashed": "il passo è terminato senza riferire",
     "auto.run.maxTimes": "ha fatto troppi giri",
     "auto.run.noAgent": "non è stato possibile avviare il suo agente",
     "auto.run.noWayOn": "non restava nulla da aprire",

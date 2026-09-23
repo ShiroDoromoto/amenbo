@@ -1095,7 +1095,7 @@ export const de: Translation = {
     "auto.run.acknowledge": "Gesehen",
     "auto.run.paused": "Pausiert",
     "auto.run.pausing": "Pausiert nach diesem Schritt",
-    "auto.run.crashed": "die App wurde neu gestartet",
+    "auto.run.crashed": "der Schritt endete, ohne sich zu melden",
     "auto.run.maxTimes": "zu viele Durchläufe",
     "auto.run.noAgent": "der Agent ließ sich nicht starten",
     "auto.run.noWayOn": "es gab nichts mehr zu öffnen",

@@ -1097,7 +1097,7 @@ export const ja: Translation = {
     "auto.run.acknowledge": "確認した",
     "auto.run.paused": "一時停止中",
     "auto.run.pausing": "このステップの終わりで止まります",
-    "auto.run.crashed": "アプリが再起動した",
+    "auto.run.crashed": "ステップが報告せずに終わった",
     "auto.run.maxTimes": "繰り返しの上限を超えた",
     "auto.run.noAgent": "エージェントを起動できなかった",
     "auto.run.noWayOn": "開けるステップが無くなった",

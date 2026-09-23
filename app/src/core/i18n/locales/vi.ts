@@ -1092,7 +1092,7 @@ export const vi: Translation = {
     "auto.run.acknowledge": "Đã xem",
     "auto.run.paused": "Đã tạm dừng",
     "auto.run.pausing": "Sẽ tạm dừng sau bước này",
-    "auto.run.crashed": "ứng dụng đã khởi động lại",
+    "auto.run.crashed": "bước đã kết thúc mà không báo cáo",
     "auto.run.maxTimes": "lặp quá nhiều vòng",
     "auto.run.noAgent": "không khởi động được tác nhân của nó",
     "auto.run.noWayOn": "không còn gì để mở",

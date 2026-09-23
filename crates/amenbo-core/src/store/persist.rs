@@ -1905,6 +1905,21 @@ impl Store {
         })
     }
 
+    /// **A step's program ended before the step reported** — fail its run as a crash, where the step
+    /// is still the one the run is on (one operation = one transaction). The reach is the run's.
+    pub fn automation_step_ended(
+        &mut self,
+        run_step_id: i64,
+    ) -> Result<Option<crate::ops::automation_stop::Ended>> {
+        let Some(step) = crate::store_engine::read::automation_run_step(self.engine.conn(), run_step_id)?
+        else {
+            return Ok(None);
+        };
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, step.run_id)], |tx| {
+            crate::ops::automation_stop::step_ended(tx, run_step_id)
+        })
+    }
+
     /// **Say a failed run has been seen** (one operation = one transaction), so it leaves the top of the
     /// runs tab for the history under it. The reach is the run's, like stopping it.
     pub fn automation_acknowledge(&mut self, run_id: i64) -> Result<crate::model::AutomationRun> {

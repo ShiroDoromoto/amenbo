@@ -1335,7 +1335,7 @@ const ui = {
   "auto.run.acknowledge": "Acknowledge",
   "auto.run.paused": "Paused",
   "auto.run.pausing": "Pausing after this step",
-  "auto.run.crashed": "the app was restarted under it",
+  "auto.run.crashed": "its step ended without reporting",
   "auto.run.maxTimes": "it went round too many times",
   "auto.run.noAgent": "its agent could not be started",
   "auto.run.noWayOn": "there was nothing left to open",

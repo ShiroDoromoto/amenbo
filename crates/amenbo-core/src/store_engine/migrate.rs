@@ -964,7 +964,145 @@ pub const STEPS: &[Step] = &[
         name: "key the ports — wires, the run's copies and its values name a port by its row",
         apply: Apply::Custom(key_the_ports),
     },
+    Step {
+        to: 66,
+        name: "copy what follows each way out into a run's copies, and mark the one it starts at",
+        apply: Apply::Custom(copy_the_lines_into_the_run),
+    },
 ];
+
+/// v66: a run's copy of a step holds what follows each of its ways out, and the copy the run starts at
+/// is marked (`AMB-D-961`).
+///
+/// A run read the edges live while it moved — what follows a way out, which of the action's ways out a
+/// line inside it returns to, and where the run starts. A launch now resolves them into the copies:
+/// each way out in `automation_run_def.exits` carries the line walked after it (`then`) and the action's
+/// way out it returns to (`returns_to`), and `entry` marks the copy the run starts at.
+///
+/// **Only a run that can still open a step is filled**, `running` or `paused`, for v63's reason: a run
+/// that has ended opens nothing, and today's picture is not the one it ran with.
+///
+/// **What is filled is today's picture**, followed the way a launch follows it: the line inside the
+/// action, and — where that returns to one of the action's ways out — the automation's line from that
+/// way out on the placement, going on to the step the next placement's action opens first. A build that
+/// can write v62 already refuses to edit a definition a run is using, so today's picture is the one the
+/// run launched with.
+///
+/// **The column is appended only where it is missing**, v53's guard and for its reason.
+fn copy_the_lines_into_the_run(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_def")?.iter().any(|c| c == "entry") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_def ADD COLUMN entry BOOLEAN NOT NULL DEFAULT 0 CHECK(entry IN (0, 1));",
+        )?;
+    }
+    let mut copies: Vec<(i64, i64, i64, i64, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT d.id, r.automation_id, d.placement_id, d.step_id, d.exits FROM automation_run_def d
+               JOIN automation_run r ON r.id = d.run_id
+              WHERE r.status IN ('running', 'paused')
+                AND d.placement_id IS NOT NULL AND d.step_id IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+        for row in rows {
+            copies.push(row?);
+        }
+    }
+    // (id, ends, to_id, exit_to_id, max_times) of the line one box's way out has on one picture.
+    type Line = (i64, String, Option<i64>, Option<i64>, Option<i64>);
+    let line_for = |owner_kind: &str, from_id: i64, exit_id: i64| -> Result<Option<Line>> {
+        Ok(tx
+            .query_row(
+                "SELECT id, ends, to_id, exit_to_id, max_times FROM automation_edge
+                  WHERE owner_kind = ?1 AND from_id = ?2 AND exit_id = ?3 ORDER BY id LIMIT 1",
+                rusqlite::params![owner_kind, from_id, exit_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .optional()?)
+    };
+    // The step one placement's action opens first.
+    let opens_first = |placement_id: i64| -> Result<Option<i64>> {
+        Ok(tx
+            .query_row(
+                "SELECT a.entry_step_id FROM automation_placement p
+                   JOIN automation_action a ON a.id = p.action_id WHERE p.id = ?1",
+                rusqlite::params![placement_id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten())
+    };
+    let kept = |picture: &str, from_id: i64, exit_id: i64, line: &Line, placement: Option<i64>, step: Option<i64>| {
+        serde_json::json!({
+            "edge_id": line.0,
+            "picture": picture,
+            "from_id": from_id,
+            "exit_id": exit_id,
+            "ends": line.1,
+            "placement_id": placement,
+            "step_id": step,
+            "max_times": line.4,
+        })
+    };
+    for (def_id, automation_id, placement_id, step_id, exits) in copies {
+        let Ok(mut exits) = serde_json::from_str::<Vec<serde_json::Value>>(&exits) else { continue };
+        let mut changed = false;
+        for exit in exits.iter_mut() {
+            let Some(map) = exit.as_object_mut() else { continue };
+            if map.contains_key("then") || map.contains_key("returns_to") {
+                continue;
+            }
+            let Some(exit_id) = map.get("id").and_then(|i| i.as_i64()) else { continue };
+            let Some(inner) = line_for("action", step_id, exit_id)? else { continue };
+            let (then, returns_to) = if inner.1 != "exit" {
+                let (placement, step) = match (inner.1.as_str(), inner.2) {
+                    ("go", Some(to)) => (Some(placement_id), Some(to)),
+                    _ => (None, None),
+                };
+                (Some(kept("action", step_id, exit_id, &inner, placement, step)), None)
+            } else {
+                let Some(action_exit) = inner.3 else { continue };
+                let then = match line_for("automation", placement_id, action_exit)? {
+                    Some(outer) if outer.1 != "exit" => {
+                        let (placement, step) = match (outer.1.as_str(), outer.2) {
+                            ("go", Some(to)) => (Some(to), opens_first(to)?),
+                            _ => (None, None),
+                        };
+                        Some(kept("automation", placement_id, action_exit, &outer, placement, step))
+                    }
+                    _ => None,
+                };
+                (then, Some(action_exit))
+            };
+            if let Some(then) = then {
+                map.insert("then".to_string(), then);
+            }
+            if let Some(returns_to) = returns_to {
+                map.insert("returns_to".to_string(), serde_json::Value::from(returns_to));
+            }
+            changed = true;
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_run_def SET exits = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(exits).to_string(), def_id],
+            )?;
+        }
+        let entry: Option<i64> = tx
+            .query_row(
+                "SELECT entry_placement_id FROM automation WHERE id = ?1",
+                rusqlite::params![automation_id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten();
+        if entry == Some(placement_id) && opens_first(placement_id)? == Some(step_id) {
+            tx.execute("UPDATE automation_run_def SET entry = 1 WHERE id = ?1", rusqlite::params![def_id])?;
+        }
+    }
+    Ok(())
+}
 
 /// v63: a run's copy of a step holds the wires joined to each of its inputs (`AMB-D-961`).
 ///
@@ -7969,6 +8107,94 @@ mod tests {
                 .unwrap();
             assert_eq!(held, 0, "{table}.{column} is gone");
         }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v66 in full: a copy in a run that can still open a step carries what follows each of its ways
+    /// out — the line inside the action as it stands, and, where that returns to one of the action's
+    /// ways out, the automation's line from that way out going on to the step the next placement opens
+    /// first — and the copy the run starts at is marked. A copy in an ended run is left.
+    #[test]
+    fn the_chain_copies_the_lines_into_a_run_that_can_still_open_a_step() {
+        let dir = scratch("copy-the-lines");
+        let engine = store_at(&dir, 65);
+        engine
+            .conn()
+            .execute_batch(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (7, 1, '書いて見直す'), (8, 1, '出す');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES
+                     (11, 7, '書く'), (12, 7, '見直す'), (13, 8, '出す');
+                 UPDATE automation_action SET entry_step_id = 11 WHERE id = 7;
+                 UPDATE automation_action SET entry_step_id = 13 WHERE id = 8;
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (3, 1, 7), (4, 1, 8);
+                 UPDATE automation SET entry_placement_id = 3 WHERE id = 1;
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (21, 'step', 11, NULL), (22, 'step', 12, NULL), (25, 'action', 7, NULL);
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, max_times) VALUES
+                     (61, 'action', 7, 11, 21, 12, 'go', NULL, 3),
+                     (62, 'action', 7, 12, 22, NULL, 'exit', 25, NULL),
+                     (63, 'automation', 1, 3, 25, 4, 'go', NULL, NULL);
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES
+                     (1, 1, 1, 'running'), (2, 1, 1, 'completed');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, step_id, name, agent, exits, ins, cfg) VALUES
+                     (81, 1, 3, 11, '書く', 'claude', '[{"id":21,"name":null,"outs":[]}]', '[]', '[]'),
+                     (82, 1, 3, 12, '見直す', 'claude', '[{"id":22,"name":null,"outs":[]}]', '[]', '[]'),
+                     (83, 1, 4, 13, '出す', 'claude', '[]', '[]', '[]'),
+                     (84, 2, 3, 11, '書く', 'claude', '[{"id":21,"name":null,"outs":[]}]', '[]', '[]');"#,
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let exits = |id: i64| -> Vec<crate::model::RunDefExit> {
+            let json: String = conn
+                .query_row("SELECT exits FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            serde_json::from_str(&json).expect("a copy reads back as today's shape")
+        };
+        use crate::model::{AutomationEnds, AutomationPictureOwner, RunDefLine};
+        let inside = exits(81);
+        assert_eq!(
+            inside[0].then,
+            Some(RunDefLine {
+                edge_id: 61,
+                picture: AutomationPictureOwner::Action,
+                from_id: 11,
+                exit_id: 21,
+                ends: AutomationEnds::Go,
+                placement_id: Some(3),
+                step_id: Some(12),
+                max_times: Some(3),
+            }),
+            "inside the action, on to its next step",
+        );
+        assert_eq!(inside[0].returns_to, None);
+        let across = exits(82);
+        assert_eq!(
+            across[0].then,
+            Some(RunDefLine {
+                edge_id: 63,
+                picture: AutomationPictureOwner::Automation,
+                from_id: 3,
+                exit_id: 25,
+                ends: AutomationEnds::Go,
+                placement_id: Some(4),
+                step_id: Some(13),
+                max_times: None,
+            }),
+            "out across the automation, to the step the next placement opens first",
+        );
+        assert_eq!(across[0].returns_to, Some(25));
+        assert_eq!(exits(84)[0].then, None, "an ended run is not given today's lines");
+        let marked: Vec<i64> = {
+            let mut stmt = conn.prepare("SELECT id FROM automation_run_def WHERE entry = 1 ORDER BY id").unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(marked, vec![81], "the copy the running run starts at, and no other");
         std::fs::remove_dir_all(&dir).ok();
     }
 

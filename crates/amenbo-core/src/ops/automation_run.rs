@@ -38,7 +38,7 @@ use crate::model::{
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
-    RunDefCfg, RunDefExit, RunDefIn, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
+    RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -665,8 +665,11 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
     };
     emit_create(tx, record::automation_run(&run))?;
     for placement in read::automation_placements_of(tx.conn(), automation_id)? {
+        let opens_first =
+            read::automation_action(tx.conn(), placement.action_id)?.and_then(|a| a.entry_step_id);
         for step in steps_opened_by(tx.conn(), placement.action_id)? {
-            if let Some(def) = snapshot(tx, run.id, &placement, &step, now)? {
+            let entry = automation.entry_placement_id == Some(placement.id) && opens_first == Some(step.id);
+            if let Some(def) = snapshot(tx, run.id, &placement, &step, entry, now)? {
                 emit_create(tx, record::automation_run_def(&def))?;
             }
         }
@@ -719,6 +722,7 @@ fn snapshot(
     run_id: i64,
     placement: &AutomationPlacement,
     step: &AutomationStep,
+    entry: bool,
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
     let conn = tx.conn();
@@ -731,7 +735,8 @@ fn snapshot(
             .into_iter()
             .map(|p| RunDefPort { id: p.id, name: p.name, kind: p.kind, required: p.required })
             .collect();
-        exits.push(RunDefExit { id: exit.id, name: exit.name.clone(), outs });
+        let (then, returns_to) = line_after(conn, placement, step.id, exit.id)?;
+        exits.push(RunDefExit { id: exit.id, name: exit.name.clone(), outs, then, returns_to });
     }
     let mut ins: Vec<RunDefIn> = Vec::new();
     let declared =
@@ -767,9 +772,74 @@ fn snapshot(
         exits: serde_json::to_string(&exits).map_err(Error::from)?,
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
+        entry,
         created_at: now,
         updated_at: now,
     }))
+}
+
+/// **What follows one way out of one step of one placement**, read off the two pictures at launch —
+/// the line the copy keeps ([`RunDefExit::then`]), and the action's way out it returns to where it
+/// leaves the action ([`RunDefExit::returns_to`]).
+///
+/// The step's own action is asked first: the line drawn inside it from this way out either goes on to
+/// another of its steps, ends or halts the run, or returns to one of the action's ways out
+/// ([`AutomationEnds::Exit`]). Only in that last case is the automation's picture asked, from this
+/// placement, on the action's way out that line keys — so a run crosses the action's edge exactly
+/// where its author drew it, and the line kept is the one it walks.
+fn line_after(
+    conn: &Connection,
+    placement: &AutomationPlacement,
+    step_id: i64,
+    exit_id: i64,
+) -> Result<(Option<RunDefLine>, Option<i64>)> {
+    let Some(inner) = read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step_id, exit_id)?
+    else {
+        return Ok((None, None));
+    };
+    if inner.ends != AutomationEnds::Exit {
+        let step = match inner.ends {
+            AutomationEnds::Go => inner.to_id,
+            _ => None,
+        };
+        return Ok((Some(kept(&inner, Some(placement.id).filter(|_| step.is_some()), step)), None));
+    }
+    let Some(action_exit) = inner.exit_to_id else { return Ok((None, None)) };
+    let outer =
+        read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, placement.id, action_exit)?;
+    let line = match outer {
+        // An automation's picture has no edge of its own to return to, and the write side refuses one.
+        None => None,
+        Some(outer) if outer.ends == AutomationEnds::Exit => None,
+        Some(outer) => {
+            let (to, step) = match (outer.ends, outer.to_id) {
+                (AutomationEnds::Go, Some(to)) => {
+                    let opens = match read::automation_placement(conn, to)? {
+                        Some(p) => read::automation_action(conn, p.action_id)?.and_then(|a| a.entry_step_id),
+                        None => None,
+                    };
+                    (Some(to), opens)
+                }
+                _ => (None, None),
+            };
+            Some(kept(&outer, to, step))
+        }
+    };
+    Ok((line, Some(action_exit)))
+}
+
+/// One live line as the copy keeps it, going on to `placement_id` / `step_id` where it goes on at all.
+fn kept(edge: &AutomationEdge, placement_id: Option<i64>, step_id: Option<i64>) -> RunDefLine {
+    RunDefLine {
+        edge_id: edge.id,
+        picture: edge.owner_kind,
+        from_id: edge.from_id,
+        exit_id: edge.exit_id,
+        ends: edge.ends,
+        placement_id,
+        step_id,
+        max_times: edge.max_times,
+    }
 }
 
 /// **Every step output the wires join to one input of one step**, followed across the action's edge —
@@ -831,22 +901,6 @@ fn wired_into(
     Ok(out)
 }
 
-/// The copy a run took of the step a placement opens first, or `None` where it took none.
-///
-/// Which step that is, is read off the live action (`entry_step_id`) and matched against the copies,
-/// because the copy does not say which of an action's steps was its entry — the same reason
-/// [`entry_def`] reads the automation's entry live.
-fn opened_at(conn: &Connection, run_id: i64, placement_id: i64) -> Result<Option<AutomationRunDef>> {
-    let Some(placement) = read::automation_placement(conn, placement_id)? else {
-        return Ok(None);
-    };
-    let Some(step) = read::automation_action(conn, placement.action_id)?.and_then(|a| a.entry_step_id)
-    else {
-        return Ok(None);
-    };
-    copy_of(conn, run_id, placement_id, step)
-}
-
 /// The copy a run took of one step of one placement.
 fn copy_of(
     conn: &Connection,
@@ -859,98 +913,56 @@ fn copy_of(
         .find(|def| def.placement_id == Some(placement_id) && def.step_id == Some(step_id)))
 }
 
-/// **The spot a run starts at** — the copy taken at launch of the step the automation's entry placement
-/// opens first, or `None` where the automation has since lost its entry or the run carries no copy of
-/// it.
-///
-/// It is read off the live definition's `entry_placement_id` and matched against the copies by
-/// `placement_id`, because the copy itself does not say which of them the entry was: the picture is
-/// walked from the entry along the edges, and a run that is under way has already walked past it.
+/// **The spot a run starts at** — the copy marked at launch as the step the automation's entry placement
+/// opened first ([`AutomationRunDef::entry`]), or `None` where the run carries no such copy.
 pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
-    let Some(run) = read::automation_run(conn, run_id)? else {
+    if read::automation_run(conn, run_id)?.is_none() {
         return Err(not_found("run", run_id));
-    };
-    let Some(entry) = read::automation(conn, run.automation_id)?.and_then(|a| a.entry_placement_id)
-    else {
-        return Ok(None);
-    };
-    opened_at(conn, run_id, entry)
+    }
+    Ok(read::automation_run_defs_of(conn, run_id)?.into_iter().find(|def| def.entry))
 }
 
-/// **What follows one way out of one step**, read off the two pictures as they stand now.
-///
-/// The step's own action is asked first: the line drawn inside it from this way out either goes on to
-/// another of its steps, ends or halts the run, or returns to one of the action's ways out
-/// ([`AutomationEnds::Exit`]). Only in that last case is the automation's picture asked, from the
-/// placement the step was opened from, on the action's way out that line keys — so a run crosses the
-/// action's edge exactly where its author drew it.
-///
-/// Both pictures are read live, like every other walk of them; the copies say only what a step is.
+/// **What follows one way out of one step**, as the step's copy says ([`RunDefExit::then`]) — resolved
+/// at launch, so a run under way reads no picture but its own copies (`AMB-D-961`).
 pub(crate) enum Onward {
-    /// Open this copy next. `edge` is the line that leads to it — the one inside the action for a step
+    /// Open this copy next. `line` is the line that leads to it — the one inside the action for a step
     /// of the same placement, the automation's for the first step of another — which is what a limit on
     /// how often it may be taken is counted against ([`crate::ops::automation_report`]).
-    Go { def: Box<AutomationRunDef>, edge: AutomationEdge },
+    Go { def: Box<AutomationRunDef>, line: RunDefLine },
     /// The way out closes the run.
     Done,
     /// The way out halts the run and calls a person.
     Halt,
-    /// Nothing says what follows, or what it leads to is no longer in the picture or was never copied
-    /// into this run.
+    /// Nothing says what follows, or what it leads to was never copied into this run.
     Nowhere,
 }
 
 pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64>) -> Result<Onward> {
-    let (Some(placement_id), Some(step_id), Some(exit)) = (def.placement_id, def.step_id, exit) else {
+    let Some(exit) = exit else { return Ok(Onward::Nowhere) };
+    let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
+    let Some(line) = exits.into_iter().find(|e| e.id == exit).and_then(|e| e.then) else {
         return Ok(Onward::Nowhere);
     };
-    let Some(inner) =
-        read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step_id, exit)?
-    else {
-        return Ok(Onward::Nowhere);
-    };
-    let (edge, next) = match inner.ends {
-        AutomationEnds::Done => return Ok(Onward::Done),
-        AutomationEnds::Halt => return Ok(Onward::Halt),
+    Ok(match line.ends {
+        AutomationEnds::Done => Onward::Done,
+        AutomationEnds::Halt => Onward::Halt,
+        AutomationEnds::Exit => Onward::Nowhere,
         AutomationEnds::Go => {
-            let Some(to) = inner.to_id else { return Ok(Onward::Nowhere) };
-            let next = copy_of(conn, def.run_id, placement_id, to)?;
-            (inner, next)
-        }
-        AutomationEnds::Exit => {
-            let Some(action_exit) = inner.exit_to_id else { return Ok(Onward::Nowhere) };
-            let Some(outer) = read::automation_edge_for_exit(
-                conn,
-                AutomationPictureOwner::Automation,
-                placement_id,
-                action_exit,
-            )?
-            else {
+            let (Some(placement_id), Some(step_id)) = (line.placement_id, line.step_id) else {
                 return Ok(Onward::Nowhere);
             };
-            match outer.ends {
-                AutomationEnds::Done => return Ok(Onward::Done),
-                AutomationEnds::Halt => return Ok(Onward::Halt),
-                // An automation's picture has no edge of its own to return to, and the write side
-                // refuses one there.
-                AutomationEnds::Exit => return Ok(Onward::Nowhere),
-                AutomationEnds::Go => {
-                    let Some(to) = outer.to_id else { return Ok(Onward::Nowhere) };
-                    let next = opened_at(conn, def.run_id, to)?;
-                    (outer, next)
-                }
+            match copy_of(conn, def.run_id, placement_id, step_id)? {
+                Some(next) => Onward::Go { def: Box::new(next), line },
+                None => Onward::Nowhere,
             }
         }
-    };
-    Ok(match next {
-        Some(def) => Onward::Go { def: Box::new(def), edge },
-        None => Onward::Nowhere,
     })
 }
 
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out
 /// the line drawn from it inside the action keys, where that line is an [`AutomationEnds::Exit`].
-/// `None` where it leaves the action by no way out.
+/// `None` where it leaves the action by no way out. Read off the live action, which is what a launch
+/// resolves its copies from; a run under way reads [`RunDefExit::returns_to`] instead.
 pub(crate) fn returns_to(conn: &Connection, step_id: i64, exit: i64) -> Result<Option<i64>> {
     Ok(read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step_id, exit)?
         .filter(|edge| edge.ends == AutomationEnds::Exit)
@@ -969,14 +981,13 @@ pub enum Waiting {
     Step(Box<AutomationRunDef>),
     /// Nothing for anybody to do: a step is under way, or the run is not running at all.
     Nothing,
-    /// **The run cannot go on.** Nothing is under way and nothing leads anywhere — the picture it was
-    /// copied from has been changed under it, or the step it would start at is no longer in it. It
-    /// will never move again on its own, so it is ended rather than looked at every second.
+    /// **The run cannot go on.** Nothing is under way and nothing leads anywhere — its copies say
+    /// nothing follows the way out it took, or mark no step to start at. It will never move again on
+    /// its own, so it is ended rather than looked at every second.
     ///
     /// **Nobody can walk a run into this on purpose**, which is why it is held by the tests below and
-    /// by no scenario (`AMB-T-5307`). No op edits a definition a run is going on (`AMB-D-961`); what
-    /// is left is a store written by a build that let one be edited under a run, whose picture may
-    /// already have moved.
+    /// by no scenario (`AMB-T-5307`). A launch copies every line and marks where it starts
+    /// (`AMB-D-961`); what is left is a store carried in from before it did, whose copies hold neither.
     NoWayOn,
 }
 
@@ -988,14 +999,12 @@ pub enum Waiting {
 /// whose last execution has reported, where the answer is read off the way out it took.
 ///
 /// **It derives rather than remembers**, because the report already wrote down everything it takes:
-/// the execution carries the way out, and the picture says what follows one
-/// ([`crate::ops::automation_report::done`] resolved the same edge to decide whether the run goes on
+/// the execution carries the way out, and the step's copy says what follows one
+/// ([`crate::ops::automation_report::done`] resolved the same line to decide whether the run goes on
 /// at all). A second copy kept for the watcher's benefit would be a second thing to keep true.
 ///
-/// **Deriving is also what puts a run in the way of `NoWayOn`.** A store written before a definition
-/// was held under its runs (`AMB-D-961`) can carry a run whose way out has since lost its edge, whose
-/// entry was taken off, or whose step was deleted — and the run standing between two steps then has
-/// nowhere to stand towards.
+/// **Deriving is also what puts a run in the way of `NoWayOn`**: a copy carried in from before a
+/// launch copied the lines can say nothing follows the way out a run has already taken.
 pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     let Some(run) = read::automation_run(conn, run_id)? else {
         return Err(not_found("run", run_id));
@@ -1004,18 +1013,17 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
         return Ok(Waiting::Nothing);
     }
     let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else {
-        // Nothing has run yet, so what is waiting to be opened is where the run starts. A run that
-        // carries no copy of its entry cannot start at all: the entry was taken off the definition
-        // between the launch and this look.
+        // Nothing has run yet, so what is waiting to be opened is where the run starts. A run whose
+        // copies mark none cannot start at all.
         return Ok(entry_def(conn, run_id)?
             .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
     };
     if last.status == AutomationRunStepStatus::Running {
         return Ok(Waiting::Nothing);
     }
-    // Everything below is a run standing between two steps with nothing to stand towards. A way out
-    // that closed or halted the run would have done so in the report that took it, so a run still
-    // `running` here is one whose picture stopped leading anywhere after it had already left.
+    // Everything below is a run standing between two steps. A way out that closed or halted the run
+    // would have done so in the report that took it, so a run still `running` here is standing
+    // towards the step the copy says comes next — or towards nothing, where the copy says nothing.
     let Some(from) = read::automation_run_def(conn, last.run_def_id)? else {
         return Ok(Waiting::NoWayOn);
     };
@@ -1629,21 +1637,23 @@ mod tests {
     /// **A run with nowhere to go says so**, rather than reading as a run somebody is about to move.
     ///
     /// The two are one answer to look at — nothing is open either way — and telling them apart is the
-    /// whole of why there are three. No op edits a definition a run is going on (`AMB-D-961`), but a
-    /// store written before that held runs whose picture moved under them, so a run that has lost the
-    /// spot it would start at is a shape a store can hold; left as "nothing to do" it holds its task
-    /// for the rest of the session. The tests draw that shape [`automation::past_the_guard`].
+    /// whole of why there are three. A run reads where it starts off its copies (`AMB-D-961`), and a
+    /// store carried in from before a launch marked it can hold a run whose copies mark none; left as
+    /// "nothing to do" it holds its task for the rest of the session.
     #[test]
-    fn a_run_that_has_lost_the_spot_it_would_start_at_says_it_cannot_go_on() {
+    fn a_run_whose_copies_mark_no_start_says_it_cannot_go_on() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
-            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Step(_)));
+            let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the entry is what a fresh run waits for")
+            };
+            assert!(entry.entry, "the copy it starts at is marked at launch");
 
-            // Taken off the definition while the run is out. The run's own copies are still there —
-            // what it has lost is the one saying where to start.
-            automation::past_the_guard(|| automation::set_entry(tx, automation.id, None))
-                .expect("entry off");
+            let mut unmarked = (*entry).clone();
+            unmarked.entry = false;
+            crate::ops::emit_update(tx, record::automation_run_def(&entry), record::automation_run_def(&unmarked))
+                .expect("unmark it");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
             assert_eq!(
@@ -1713,74 +1723,61 @@ mod tests {
         read::automation_run(tx.conn(), run.id).expect("read").expect("the run")
     }
 
-    /// **The spot it left from is no longer in the picture.** The run's copy of it is still there —
-    /// that is what a copy is for — but the copy no longer names a live placement, and a way out is
-    /// read off the live picture.
+    /// **A run goes on by its copies, whatever the picture has become** (`AMB-D-961`). What follows a
+    /// way out was copied at launch, so a picture moved under the run — the spot it left taken off, the
+    /// line out of it pointed at an ending, or at a placement added since — changes nothing about where
+    /// it goes next. No op moves a definition a run is going on; a store written before that was held
+    /// can, and the run still reads only what it launched with.
     #[test]
-    fn a_run_whose_spot_was_taken_out_from_under_it_says_it_cannot_go_on() {
+    fn a_run_goes_on_by_its_copies_whatever_the_picture_has_become() {
         with_tx(|tx| {
-            let (automation, first, _) = two_spots(tx);
+            let (automation, first, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
+            let waits_for = |tx: &WriteTx<'_>| match next_def(tx.conn(), run.id).expect("next") {
+                Waiting::Step(def) => def.name,
+                other => panic!("the run should still stand towards its second spot: {other:?}"),
+            };
+            assert_eq!(waits_for(tx), "読む");
 
-            automation::past_the_guard(|| automation::placement_delete(tx, first.id))
-                .expect("take the placement off");
-
-            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
-            assert_eq!(
-                read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
-                AutomationRunStatus::Running,
-                "reading it says nothing about it — ending it is the watch's",
-            );
-        });
-    }
-
-    /// **The way out it left through decides nothing now.** The edge is gone, so the picture has no
-    /// answer for a run that has already taken it.
-    #[test]
-    fn a_run_whose_way_out_lost_its_edge_says_it_cannot_go_on() {
-        with_tx(|tx| {
-            let (automation, _, onward) = two_spots(tx);
-            let run = standing_between(tx, &automation);
-
-            automation::past_the_guard(|| automation::edge_delete(tx, onward.id))
-                .expect("delete the edge");
-
-            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
-        });
-    }
-
-    /// **The way out ends the run now instead of leading on.** Nothing is opened for an edge that
-    /// closes or stops: the run that has already left through it is standing towards an ending it
-    /// cannot reach by itself.
-    #[test]
-    fn a_run_whose_way_out_now_ends_the_run_says_it_cannot_go_on() {
-        with_tx(|tx| {
-            let (automation, _, onward) = two_spots(tx);
-            let run = standing_between(tx, &automation);
-
-            automation::past_the_guard(|| {
-                automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
-            })
-            .expect("point it at an ending");
-
-            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
-        });
-    }
-
-    /// **It leads to a spot the run never copied down.** A placement added after the launch is not in
-    /// the run's own copies, and a run reads its copies rather than the live picture — so an edge
-    /// pointed at one leads nowhere this run can go.
-    #[test]
-    fn a_run_sent_to_a_spot_added_after_it_launched_says_it_cannot_go_on() {
-        with_tx(|tx| {
-            let (automation, _, onward) = two_spots(tx);
-            let run = standing_between(tx, &automation);
+            automation::past_the_guard(|| automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None))
+                .expect("point it at an ending");
+            assert_eq!(waits_for(tx), "読む", "the line it copied still leads on");
 
             automation::past_the_guard(|| {
                 let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
                 automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
             })
-            .expect("point it at the new placement");
+            .expect("point it at a new placement");
+            assert_eq!(waits_for(tx), "読む", "a placement added since is not in its copies");
+
+            automation::past_the_guard(|| automation::edge_delete(tx, onward.id)).expect("delete the edge");
+            automation::past_the_guard(|| automation::placement_delete(tx, first.id))
+                .expect("take the placement off");
+            assert_eq!(waits_for(tx), "読む", "nor is a line or a spot taken off");
+        });
+    }
+
+    /// **A copy that says nothing follows its way out leaves the run nowhere to go**, and it says so. A
+    /// launch always copies the line; a copy carried in from before one did, of a run that had ended by
+    /// then, is the shape that holds none.
+    #[test]
+    fn a_run_whose_copy_says_nothing_follows_says_it_cannot_go_on() {
+        with_tx(|tx| {
+            let (automation, first, _) = two_spots(tx);
+            let run = standing_between(tx, &automation);
+            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.placement_id == Some(first.id))
+                .expect("the first spot's copy");
+            let mut exits: Vec<RunDefExit> = serde_json::from_str(&copy.exits).expect("exits");
+            for exit in exits.iter_mut() {
+                exit.then = None;
+            }
+            let mut bare = copy.clone();
+            bare.exits = serde_json::to_string(&exits).expect("json");
+            crate::ops::emit_update(tx, record::automation_run_def(&copy), record::automation_run_def(&bare))
+                .expect("strip the lines");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
         });

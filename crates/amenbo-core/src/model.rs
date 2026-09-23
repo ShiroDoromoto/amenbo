@@ -1964,6 +1964,10 @@ pub struct AutomationRunDef {
     pub ins: String,
     /// The settings and the answers written for them — JSON ([`RunDefCfg`]).
     pub cfg: String,
+    /// Is this the copy the run starts at — the step the automation's entry placement opens first, as
+    /// the picture stood at launch.
+    #[serde(default)]
+    pub entry: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -1993,6 +1997,42 @@ pub struct RunDefExit {
     #[serde(default)]
     pub name: Option<String>,
     pub outs: Vec<RunDefPort>,
+    /// What follows leaving by it, resolved at launch across the action's edge — `None` where nothing
+    /// was drawn after it (`AMB-D-961`).
+    #[serde(default)]
+    pub then: Option<RunDefLine>,
+    /// The action's way out a line inside the action returns this one to, where it leaves the action —
+    /// what the automation's picture is read by, and what a limit on the automation's line is counted
+    /// against.
+    #[serde(default)]
+    pub returns_to: Option<i64>,
+}
+
+/// **What follows one way out**, as the run copied it at launch ([`RunDefExit::then`]): the line walked,
+/// and where it goes. A line inside the action that returns to one of the action's ways out has been
+/// followed out to the automation's line from that way out, so what is kept is always the line the
+/// run actually walks next — never [`AutomationEnds::Exit`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunDefLine {
+    /// The [`AutomationEdge`] row walked — what a limit on how often it may be taken is counted
+    /// against.
+    pub edge_id: i64,
+    /// Which picture that line is drawn on, the box it leaves and the way out it leaves by — the three
+    /// its turns are counted on.
+    pub picture: AutomationPictureOwner,
+    pub from_id: i64,
+    pub exit_id: i64,
+    /// `Go`, `Done` or `Halt`.
+    pub ends: AutomationEnds,
+    /// For `Go`: the copy opened next, by the placement and the step it was taken from. `step_id` is
+    /// `None` where the placement's action had no step to open.
+    #[serde(default)]
+    pub placement_id: Option<i64>,
+    #[serde(default)]
+    pub step_id: Option<i64>,
+    /// How often the line may be taken for one task; `None` is no limit.
+    #[serde(default)]
+    pub max_times: Option<i64>,
 }
 
 /// One port, as the snapshot holds it — which row it was, its name, what it carries, and whether it

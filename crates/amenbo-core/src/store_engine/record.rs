@@ -739,6 +739,7 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
                 ("exits", tv(&d.exits)),
                 ("ins", tv(&d.ins)),
                 ("cfg", tv(&d.cfg)),
+                ("entry", bv(d.entry)),
             ],
             &d.created_at,
             &d.updated_at,

@@ -1,0 +1,83 @@
+# What a library action is for is written by the person who built it, and read where the library is
+# looked at — the row on the actions tab carries its first line under the name. Two actions of like
+# names are told apart by that line, which is why the road ends on the row and not on the build
+# screen it was written on: a note that stayed where it was typed would tell nobody choosing from the
+# list anything.
+#
+# ── Why the terminal's note has two lines ───────────────────────────────────────────────────────
+# The row carries the first line and no more; the whole of it is on the build screen. The terminal's
+# road writes two, so a build that put the whole note on the row — or the second line instead of the
+# first — reads back as a mismatch. The screen's road writes one, since a line break is not a thing an
+# instruction can ask an operator to type and have read back the same.
+#
+# Nothing written here reaches a run, and no step here launches one: what is walked is
+# the note being drawn, not being kept out of a launch.
+id: write-what-an-action-is-for
+title: What a library action is for is written on its build screen, and its first line is read on the library's row
+description: >
+  Put one action in the library, write what it is for, and read the row the actions tab draws for it:
+  the first line of the note stands under the name. The terminal writes a note of two lines and reads
+  the first back off the listing; the screen writes it on the action's own build screen and reads it
+  off the row after going back to the list.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — triage }, as: act }
+
+steps_cli:
+  # Before anything is written, the row has no line under its name.
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: act
+      note: ""
+
+  - type: action
+    domain: automation
+    op: action-update
+    with:
+      target: act
+      note: "sorts what came in overnight\nand leaves the rest for a person"
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: act
+      note: sorts what came in overnight
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: act
+
+  # Written as the caret leaves the box — there is no Save on the build screen.
+  - type: action
+    domain: automation
+    op: action-update
+    with:
+      target: act
+      note: sorts what came in overnight
+
+  # And read where the library is looked at. The build screen replaced the list, so the road goes back
+  # to the tab before it reads the row.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: act
+      note: sorts what came in overnight
+      present: true

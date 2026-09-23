@@ -4051,7 +4051,9 @@ const REGISTRY: &[OpSpec] = &[
     // with `step-add`. `project` is the shelf it lands on; left out, it is the project the run
     // stands in.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-add", required: &["name"], refs: &["project"], strings: &["name"], binds: true },
-    // Its name, and `note` — what it is for, drawn where it is built and never carried into a launch.
+    // Its name, and `note` — what it is for, drawn where it is built and on the library's row, and
+    // never carried into a launch. The screen writes both on the action's own build screen, each as
+    // the caret leaves its box.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-update", required: &["target"], refs: &["target"], strings: &["name", "note"], binds: false },
     // A step inside an action (`target`): its own prompt, and who carries it out. `agent` is the
     // launch catalog's id (`claude-code`), not the command it runs — the launch check judges the
@@ -4133,8 +4135,9 @@ const REGISTRY: &[OpSpec] = &[
     // A library action's row. `used_by` is counted in automations and not in placements — what the
     // number is read for is how far a rewrite of what it holds carries — `steps` is how many it holds
     // (the terminal's alone: the tab's row draws no such count), and `reach` says which of the two
-    // libraries the row is from.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach"], binds: false },
+    // libraries the row is from. `note` is the line the row draws under the name: the first line of
+    // what the action is for that is not blank, and `""` where it has none.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-listed", required: &[], refs: &["target"], strings: &["reach", "note"], binds: false },
     //
     // **And a whole definition, read back as text — the terminal's alone.** It is read in two layers,
     // the way it is built: `automation show` prints the placements on an automation with what each

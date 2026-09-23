@@ -1593,8 +1593,8 @@ pub struct AutomationAction {
     #[serde(default)]
     pub project_id: Option<i64>,
     pub name: String,
-    /// What this action is for, in the builder's own words. It is shown on the build screen and
-    /// nowhere else — a launch never carries it, the same way [`Automation::notes`] does not.
+    /// What this action is for, in the builder's own words. It is shown on the build screen and on
+    /// the library's row, and a launch never carries it, the same way [`Automation::notes`] does not.
     pub note: String,
     /// The step this action opens first. `None` while it is still being built; launching an
     /// automation that places it is refused at the launch check, not here.

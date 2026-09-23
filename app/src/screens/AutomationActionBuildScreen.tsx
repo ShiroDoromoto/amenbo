@@ -48,16 +48,6 @@ import { Icon } from "../components/Icon";
 import { useDraft, type Run } from "./automationPanel";
 import type { AutomationActionDetailDto } from "../bindings/bindings";
 
-/**
- * What carries out a step put in on a line — the likeliest answer for the one being put in front of
- * it. An action whose steps name none falls back to the first agent the catalog lists, which is what
- * `automation step-add` asks for and never guesses.
- */
-function agentOn(action: AutomationActionDetailDto | null, edgeId: number): string {
-  const edge = action?.edges.find((one) => one.id === edgeId);
-  return action?.steps.find((one) => one.id === edge?.fromId)?.agent ?? "claude-code";
-}
-
 /** The first line of what the action is for — all the band has room for; the panel holds the rest. */
 function firstLine(note: string): string {
   return note.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
@@ -323,7 +313,6 @@ export function AutomationActionBuildScreen({
             <AutomationActionStepPanel
               action={action}
               stepId={step}
-              projectId={projectId}
               onRemoved={() => setStep(null)}
             />
           </Panel>
@@ -333,7 +322,6 @@ export function AutomationActionBuildScreen({
       {adding !== null && (
         <AutomationStepAdd
           into={adding}
-          agent={"edgeId" in adding ? agentOn(action, adding.edgeId) : "claude-code"}
           onClose={() => setAdding(null)}
         />
       )}

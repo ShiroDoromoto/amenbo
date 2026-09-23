@@ -427,7 +427,8 @@ export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<Automatio
  * already resolved.
  *
  * `id` is the placement's, which is what an edge and a wire name; `action_id` and `step_id` are what
- * the panel writes through — a declaration is the action's, and a prompt is its step's.
+ * the panel writes through — a declaration is the action's, and a prompt is its step's. Who carries
+ * each step out is this spot's own (`steps`, `AMB-D-960`).
  */
 export type AutomationPlacementDto = { id: number, 
 /**
@@ -442,11 +443,7 @@ stepId?: number,
 /**
  * The prompt that step runs on — empty where there is no step.
  */
-prompt: string, agent: string, 
-/**
- * Absent leaves the agent's own default model.
- */
-model?: string, interactive: boolean, 
+prompt: string, interactive: boolean, 
 /**
  * The name of the setting or the input the working folder is taken from — a name, not a path.
  */
@@ -454,7 +451,26 @@ workDirRef?: string, reportToTask: boolean, showHistory: boolean, exits: Array<A
 /**
  * What this spot takes in, in declaration order.
  */
-inputs: Array<AutomationPortDto>, settings: Array<AutomationCfgDto>, };
+inputs: Array<AutomationPortDto>, settings: Array<AutomationCfgDto>, 
+/**
+ * Every step of the action standing here, in display order, with who carries it out at this spot.
+ */
+steps: Array<AutomationPlacementStepDto>, };
+
+/**
+ * **One step of the action standing on a spot**, and who is chosen to carry it out there
+ * (`AMB-D-960`). `agent` absent is nobody chosen yet, which the launch check names for a step a run
+ * could open.
+ */
+export type AutomationPlacementStepDto = { stepId: number, 
+/**
+ * What the step is called, on the action's own screen.
+ */
+name: string, agent?: string, 
+/**
+ * Absent leaves the agent's own default model.
+ */
+model?: string, };
 
 /**
  * **What a spot takes, or what a way out of it hands on.**
@@ -562,14 +578,11 @@ export type AutomationRunTaskDto = { id: number, ref: string, title: string, };
 /**
  * **One step inside an action**: the terminal it stands up, and what it declares inside the picture.
  *
- * The prompt, the agent, the model and the three flags are the step's own (`AMB-D-950`), which is
- * why they are read here rather than off the action.
+ * The prompt and the three flags are the step's own, which is why they are read here rather than off
+ * the action. Who carries it out is not: that is chosen where the action is placed
+ * ([`AutomationPlacementStepDto`], `AMB-D-960`).
  */
-export type AutomationStepDto = { id: number, name: string, prompt: string, agent: string, 
-/**
- * Absent leaves the agent's own default model.
- */
-model?: string, interactive: boolean, 
+export type AutomationStepDto = { id: number, name: string, prompt: string, interactive: boolean, 
 /**
  * The name of the setting or the input the working folder is taken from — a name, not a path.
  */

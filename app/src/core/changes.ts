@@ -97,6 +97,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // action a spot on some picture stands on (`AMB-D-949`).
   automation_action: ["automationActions"],
   automation_placement: ["automationActions", "automations"],
+  // Who carries a step out is read on the automation's definition alone; the library does not show it.
+  automation_placement_step: ["automations"],
   automation_action_step: ["automationActions", "automations"],
   automation_cfg: ["automationActions", "automations"],
   automation_exit: ["automationActions", "automations"],

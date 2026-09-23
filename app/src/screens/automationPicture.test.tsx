@@ -27,13 +27,13 @@ function step(
   return {
     actionId: 900 + over.id,
     prompt: "",
-    agent: "claude-code",
     interactive: false,
     reportToTask: false,
     showHistory: true,
     exits: [{ id: over.id * 10, outputs: [{ name: "task", kind: "task_take", required: true }] }],
     inputs: [],
     settings: [],
+    steps: [],
     ...over,
   };
 }

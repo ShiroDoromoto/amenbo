@@ -5,8 +5,9 @@
 //
 // What these guard: **nothing pressed says so** rather than drawing an empty form; **only what is
 // this spot's own is written here** (`AMB-D-954`) — the answer to a setting, the wire into an input,
-// what happens after each way out, and the entry — while **what the action declares and what its
-// steps carry are read, not written**: no box to rename, no prompt, no agent, nothing to declare;
+// what happens after each way out, the entry, and **who carries out each step** (`AMB-D-960`) —
+// while **what the action declares and what its steps carry are read, not written**: no box to
+// rename, no prompt, nothing to declare;
 // **the action is named with the press that goes to where it is built**, and an empty one says so;
 // **a setting is answered by the control its kind takes**, a task filter on rows rather than in a
 // filter expression; **an input is filled from a list of what fits**; **the error way out is always
@@ -23,6 +24,7 @@ import type {
 const hoisted = vi.hoisted(() => ({
   action: null as AutomationActionDetailDto | null,
   answerCfg: vi.fn(),
+  chooseAgent: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
   setEntry: vi.fn(),
@@ -35,6 +37,7 @@ const hoisted = vi.hoisted(() => ({
 vi.mock("../core/automations", () => ({
   useAutomationAction: () => hoisted.action,
   answerAutomationCfg: hoisted.answerCfg,
+  chooseAutomationAgent: hoisted.chooseAgent,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
   setAutomationEntry: hoisted.setEntry,
@@ -52,7 +55,7 @@ vi.mock("../core/boundFolders", () => ({
 // what the panel draws is the spot's own value plus whatever these would have added.
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -68,13 +71,13 @@ function spot(over: Partial<AutomationPlacementDto> = {}): AutomationPlacementDt
     actionId: 4,
     stepId: 11,
     prompt: "take one",
-    agent: "claude-code",
     interactive: false,
     reportToTask: false,
     showHistory: true,
     exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }],
     inputs: [],
     settings: [],
+    steps: [],
     ...over,
   };
 }
@@ -202,8 +205,6 @@ describe("the panel of one spot", () => {
     });
     await render({ automation: one, placementId: 1 });
     expect(container.querySelector("textarea")).toBeNull();
-    expect(container.textContent).not.toContain(t("auto.step.agent"));
-    expect(container.textContent).not.toContain(t("auto.step.model"));
     expect(container.querySelector(".autostep__declare")).toBeNull();
     // The names are drawn as words, not in boxes to rewrite.
     expect(boxes().some((one) => one.value === "got one" || one.value === "Take the next task")).toBe(false);
@@ -211,6 +212,36 @@ describe("the panel of one spot", () => {
     expect(container.textContent).toContain("task");
     expect(container.textContent).toContain("note");
     expect(container.textContent).toContain("depth");
+  });
+
+  /// Who carries a step out is this spot's own (`AMB-D-960`): one row per step of the action, the
+  /// agent first and then its model, and the empty agent is nobody chosen.
+  it("chooses who carries out each step of the action here", async () => {
+    const chosen = detail({
+      placements: [
+        spot({
+          steps: [
+            { stepId: 11, name: "取る", agent: "claude-code", model: "opus" },
+            { stepId: 12, name: "見直す" },
+          ],
+        }),
+      ],
+    });
+    await render({ automation: chosen, placementId: 1 });
+    expect(container.textContent).toContain(t("auto.place.agents"));
+    const agentOf = (step: string) =>
+      selects().find((one) => one.getAttribute("aria-label") === tf("auto.place.agentOf", { step }))!;
+    const modelOf = (step: string) =>
+      selects().find((one) => one.getAttribute("aria-label") === tf("auto.place.modelOf", { step }))!;
+    expect(agentOf("取る").value).toBe("claude-code");
+    expect(modelOf("取る").value).toBe("opus");
+    expect(agentOf("見直す").value).toBe("");
+    expect(modelOf("見直す").disabled).toBe(true);
+
+    await pick(modelOf("取る"), "");
+    expect(hoisted.chooseAgent).toHaveBeenCalledWith(1, 11, "claude-code", null);
+    await pick(agentOf("取る"), "");
+    expect(hoisted.chooseAgent).toHaveBeenCalledWith(1, 11, null, null);
   });
 
   it("names the action with its reach and a press to where it is built", async () => {
@@ -231,7 +262,7 @@ describe("the panel of one spot", () => {
     await render({ automation: detail(), placementId: 1 });
     expect(container.textContent).toContain(t("auto.place.empty"));
     hoisted.action = action({
-      steps: [{ id: 11, name: "claim", prompt: "take", agent: "claude-code", interactive: false, reportToTask: false, showHistory: true, exits: [], inputs: [] } as unknown as AutomationActionDetailDto["steps"][number]],
+      steps: [{ id: 11, name: "claim", prompt: "take", interactive: false, reportToTask: false, showHistory: true, exits: [], inputs: [] } as unknown as AutomationActionDetailDto["steps"][number]],
     });
     await render({ automation: detail(), placementId: 1 });
     expect(container.textContent).not.toContain(t("auto.place.empty"));

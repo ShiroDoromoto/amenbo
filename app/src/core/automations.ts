@@ -151,8 +151,7 @@ export function useAutomationActions(projectId: number | null): AutomationAction
  *
  * `project` is `null` for the device's library, which every project on this machine reaches, and the
  * project's id for its own. **It is born empty** — no steps, no entry — and the first step, with its
- * prompt and the agent asked to carry it out, is written in the build screen the press lands in
- * (`../screens/AutomationActionBuildScreen`).
+ * prompt, is written in the build screen the press lands in (`../screens/AutomationActionBuildScreen`).
  */
 export async function addAutomationAction(name: string, project: number | null): Promise<void> {
   if (!inTauri()) return;
@@ -172,7 +171,8 @@ export async function setAutomationActionScope(id: number, projectId: number | n
 
 /**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
- * action's own: the prompt, the agent and the flags belong to its steps (`editAutomationStep`).
+ * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
+ * each step out to where the action is placed (`chooseAutomationAgent`).
  *
  * **Every picture standing on this action reads the new name at once**, a placement pointing at it
  * by key — which is what a library is for. The note reaches no launch (`AMB-D-952`).
@@ -332,7 +332,6 @@ export async function addAutomationStep(
   step: {
     name: string;
     prompt: string;
-    agent: string;
     interactive?: boolean;
     exits?: readonly string[];
     inputs?: readonly { name: string; kind: string; required: boolean }[];
@@ -343,7 +342,6 @@ export async function addAutomationStep(
     actionId,
     name: step.name,
     prompt: step.prompt,
-    agent: step.agent,
     interactive: step.interactive ?? false,
     exits: [...(step.exits ?? [])],
     inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
@@ -362,7 +360,6 @@ export async function insertAutomationActionStep(
   step: {
     name: string;
     prompt: string;
-    agent: string;
     interactive?: boolean;
     exits?: readonly string[];
     inputs?: readonly { name: string; kind: string; required: boolean }[];
@@ -373,7 +370,6 @@ export async function insertAutomationActionStep(
     edgeId,
     name: step.name,
     prompt: step.prompt,
-    agent: step.agent,
     interactive: step.interactive ?? false,
     exits: [...(step.exits ?? [])],
     inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
@@ -404,20 +400,19 @@ export async function setAutomationActionEntry(
  * **Change the step one library action opens.** Only what is passed is written, and the answer comes
  * back as an ack, so the definition and the launch check are both re-read (`./mutations`).
  *
- * The fields are the step's: a prompt, who is asked to carry it out, the model and the three flags
- * are the terminal's, and an action holds the steps. Writing one reaches every placement of that
- * action, which is what the library is for.
+ * The fields are the step's: a prompt and the three flags are the terminal's, and an action holds
+ * the steps. Writing one reaches every placement of that action, which is what the library is for.
+ * Who carries the step out is not among them — that is chosen where the action is placed
+ * (`chooseAutomationAgent`, `AMB-D-960`).
  *
- * `model` and `workDir` each take `null` to mean "leave it to the default" — the agent's own model,
- * and a step that names no folder — as against not being passed, which leaves them alone.
+ * `workDir` takes `null` to mean a step that names no folder, as against not being passed, which
+ * leaves it alone.
  */
 export async function editAutomationStep(
   id: number,
   patch: {
     name?: string;
     prompt?: string;
-    agent?: string;
-    model?: string | null;
     interactive?: boolean;
     workDir?: string | null;
     reportToTask?: boolean;
@@ -429,9 +424,6 @@ export async function editAutomationStep(
     id,
     name: patch.name ?? null,
     prompt: patch.prompt ?? null,
-    agent: patch.agent ?? null,
-    model: patch.model ?? null,
-    clearModel: patch.model === null,
     interactive: patch.interactive ?? null,
     workDir: patch.workDir ?? null,
     clearWorkDir: patch.workDir === null,
@@ -453,6 +445,21 @@ export async function answerAutomationCfg(
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_cfg_answer", { placementId, name, value });
+}
+
+/**
+ * **Choose who carries one step out at one placement** — the agent, and the model where one is
+ * named (`null` is the agent's own default) — or, with `agent` `null`, leave nobody chosen
+ * (`AMB-D-960`). The same action placed on two pictures is chosen for apart, step by step.
+ */
+export async function chooseAutomationAgent(
+  placementId: number,
+  stepId: number,
+  agent: string | null,
+  model: string | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_placement_step_set", { placementId, stepId, agent, model });
 }
 
 /** Which of the two declares a way out or an input: the library action, or one step inside it. */

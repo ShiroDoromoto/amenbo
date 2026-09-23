@@ -502,6 +502,7 @@ pub fn run() {
       automation::automation_edge_edit,
       automation::automation_edge_remove,
       automation::automation_cfg_answer,
+      automation::automation_placement_step_set,
       automation::automation_exit_declare,
       automation::automation_exit_rename,
       automation::automation_exit_remove,

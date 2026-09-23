@@ -83,7 +83,6 @@ describe("putting a step in inside an action", () => {
       root.render(
         createElement(AutomationStepAdd, {
           into,
-          agent: "claude-code",
           onClose: () => undefined,
         }),
       );
@@ -104,7 +103,6 @@ describe("putting a step in inside an action", () => {
     expect(hoisted.insertInside).toHaveBeenCalledWith(9, {
       name: "直す",
       prompt: "やる",
-      agent: "claude-code",
       interactive: false,
       exits: [],
       inputs: [],
@@ -119,7 +117,6 @@ describe("putting a step in inside an action", () => {
     expect(hoisted.add).toHaveBeenCalledWith(4, {
       name: "取る",
       prompt: "やる",
-      agent: "claude-code",
       interactive: false,
       exits: [],
       inputs: [],
@@ -225,7 +222,6 @@ describe("leaving either dialog", () => {
     "the one that puts a step in": (onClose: () => void) =>
       createElement(AutomationStepAdd, {
         into: { picture: "action", edgeId: 9 },
-        agent: "claude-code",
         onClose,
       }),
     "the one that makes an action on the spot": (onClose: () => void) =>

@@ -62,7 +62,6 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     id: 11,
     name: "Take the next task",
     prompt: "take one",
-    agent: "claude-code",
     interactive: false,
     reportToTask: false,
     showHistory: true,

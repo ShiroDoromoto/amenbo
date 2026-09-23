@@ -24,7 +24,6 @@ function step(
   return {
     actionId: 900 + over.id,
     prompt: "",
-    agent: "claude-code",
     interactive: false,
     reportToTask: false,
     showHistory: true,
@@ -35,6 +34,7 @@ function step(
     ],
     inputs: [],
     settings: [],
+    steps: [],
     ...over,
   };
 }

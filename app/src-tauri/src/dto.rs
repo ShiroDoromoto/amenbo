@@ -3327,7 +3327,8 @@ pub struct AutomationDetailDto {
 /// already resolved.
 ///
 /// `id` is the placement's, which is what an edge and a wire name; `action_id` and `step_id` are what
-/// the panel writes through — a declaration is the action's, and a prompt is its step's.
+/// the panel writes through — a declaration is the action's, and a prompt is its step's. Who carries
+/// each step out is this spot's own (`steps`, `AMB-D-960`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3345,11 +3346,6 @@ pub struct AutomationPlacementDto {
     pub(crate) step_id: Option<i64>,
     /// The prompt that step runs on — empty where there is no step.
     pub(crate) prompt: String,
-    pub(crate) agent: String,
-    /// Absent leaves the agent's own default model.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) model: Option<String>,
     pub(crate) interactive: bool,
     /// The name of the setting or the input the working folder is taken from — a name, not a path.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3361,6 +3357,28 @@ pub struct AutomationPlacementDto {
     /// What this spot takes in, in declaration order.
     pub(crate) inputs: Vec<AutomationPortDto>,
     pub(crate) settings: Vec<AutomationCfgDto>,
+    /// Every step of the action standing here, in display order, with who carries it out at this spot.
+    pub(crate) steps: Vec<AutomationPlacementStepDto>,
+}
+
+/// **One step of the action standing on a spot**, and who is chosen to carry it out there
+/// (`AMB-D-960`). `agent` absent is nobody chosen yet, which the launch check names for a step a run
+/// could open.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationPlacementStepDto {
+    #[ts(type = "number")]
+    pub(crate) step_id: i64,
+    /// What the step is called, on the action's own screen.
+    pub(crate) name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) agent: Option<String>,
+    /// Absent leaves the agent's own default model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) model: Option<String>,
 }
 
 /// **One library action's whole definition** — the steps inside it, the lines drawn between them, and
@@ -3404,8 +3422,9 @@ pub struct AutomationActionDetailDto {
 
 /// **One step inside an action**: the terminal it stands up, and what it declares inside the picture.
 ///
-/// The prompt, the agent, the model and the three flags are the step's own (`AMB-D-950`), which is
-/// why they are read here rather than off the action.
+/// The prompt and the three flags are the step's own, which is why they are read here rather than off
+/// the action. Who carries it out is not: that is chosen where the action is placed
+/// ([`AutomationPlacementStepDto`], `AMB-D-960`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3414,11 +3433,6 @@ pub struct AutomationStepDto {
     pub(crate) id: i64,
     pub(crate) name: String,
     pub(crate) prompt: String,
-    pub(crate) agent: String,
-    /// Absent leaves the agent's own default model.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) model: Option<String>,
     pub(crate) interactive: bool,
     /// The name of the setting or the input the working folder is taken from — a name, not a path.
     #[serde(skip_serializing_if = "Option::is_none")]

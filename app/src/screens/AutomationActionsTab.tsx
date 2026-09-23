@@ -21,11 +21,17 @@
 // reach from: a global action is made and changed there and nowhere else, and a project's own are
 // its project's. So the reach narrowing has nothing to narrow, and what is made is global.
 //
+// **A reach is moved from the row, on the entrance that owns it now** (`AMB-D-954`): a project's
+// own action goes to the device's library from that project, and a global one goes into a project
+// from the sidebar, which asks which. A move into a project that another project's automation still
+// places is refused by core, naming each — the row keeps the sentence, and nothing is copied.
+//
 // **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
 // prompts written. Making one here asks for a name and a reach and no prompt: an action is born
 // empty, and the screen the press lands on is where the words go.
 import { useEffect, useMemo, useState } from "react";
-import { addAutomationAction, useAutomationActions } from "../core/automations";
+import { addAutomationAction, setAutomationActionScope, useAutomationActions } from "../core/automations";
+import { dataAdapter } from "../mock/adapter";
 import { asTyped } from "../core/keys";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
@@ -154,31 +160,129 @@ export function AutomationActionsTab({
           <ul className="actlib__rows">
             {shown.map((one) => (
               <li key={one.id}>
-                <button type="button" className="auto__row actlib__row" onClick={() => onOpen(one.id)}>
-                  <span className="auto__name">
-                    {one.name}
-                    {firstLine(one.note) !== "" && (
-                      <span className="auto__note">{firstLine(one.note)}</span>
-                    )}
-                  </span>
-                  <span>
-                    <ReachChip global={one.global} />
-                  </span>
-                  <span className={one.steps === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
-                    {one.steps === 0 ? t("auto.actions.noSteps") : one.steps}
-                  </span>
-                  <span className={one.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
-                    {one.usedBy === 0
-                      ? t("auto.actions.usedNone")
-                      : tf("auto.actions.usedN", { n: one.usedBy })}
-                  </span>
-                </button>
+                <div className="actlib__line">
+                  <button type="button" className="auto__row actlib__row" onClick={() => onOpen(one.id)}>
+                    <span className="auto__name">
+                      {one.name}
+                      {firstLine(one.note) !== "" && (
+                        <span className="auto__note">{firstLine(one.note)}</span>
+                      )}
+                    </span>
+                    <span>
+                      <ReachChip global={one.global} />
+                    </span>
+                    <span className={one.steps === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
+                      {one.steps === 0 ? t("auto.actions.noSteps") : one.steps}
+                    </span>
+                    <span className={one.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
+                      {one.usedBy === 0
+                        ? t("auto.actions.usedNone")
+                        : tf("auto.actions.usedN", { n: one.usedBy })}
+                    </span>
+                  </button>
+                  {/* Only the entrance that owns it now moves it: a project its own, the sidebar a
+                      global one. */}
+                  {(projectId === null) === one.global ? (
+                    <ReachMove action={one} projectId={projectId} />
+                  ) : (
+                    // The slot stands empty rather than going, so the columns stay under their heads.
+                    <span className="actlib__moveslot" />
+                  )}
+                </div>
               </li>
             ))}
           </ul>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * **Move one action's reach**, from the row. From a project it is one press, to the device's library.
+ * From the sidebar it asks which project first, and moves nothing until one is picked.
+ *
+ * A refusal is core's sentence and stays under the row until the next press: it names the automations
+ * of other projects that place the action, which is what a reader needs in front of them to decide
+ * again (`amenbo_core::ops::automation::action_set_scope`).
+ */
+function ReachMove({
+  action,
+  projectId,
+}: {
+  action: AutomationActionCardDto;
+  /** The entrance: a project's own action is moved from it, a global one from the sidebar (`null`). */
+  projectId: number | null;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [to, setTo] = useState("");
+  const [moving, setMoving] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+
+  const move = async (target: number | null) => {
+    setRefused(null);
+    setMoving(true);
+    try {
+      await setAutomationActionScope(action.id, target);
+      setPicking(false);
+      setTo("");
+    } catch (err) {
+      setRefused(errText(err));
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  return (
+    <>
+      <span className="actlib__moveslot">
+        {projectId !== null && (
+          <button type="button" className="btn" disabled={moving} onClick={() => void move(null)}>
+            {t("auto.actions.toGlobal")}
+          </button>
+        )}
+        {projectId === null && (
+          <button type="button" className="btn" disabled={picking} onClick={() => setPicking(true)}>
+            {t("auto.actions.toProject")}
+          </button>
+        )}
+      </span>
+      {/* Under the row, the width of it: which project, and what core said. */}
+      {(picking || refused !== null) && (
+        <div className="actlib__moveplace">
+          {projectId === null && picking && (
+            <>
+              <select aria-label={t("auto.actions.toWhich")} value={to} onChange={(e) => setTo(e.target.value)}>
+                <option value="">{t("auto.actions.toWhich")}</option>
+                {dataAdapter.listProjects().map((p) => (
+                  <option key={p.id} value={String(p.id)}>{p.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={moving || to === ""}
+                onClick={() => void move(Number(to))}
+              >
+                {t("auto.actions.move")}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setPicking(false);
+                  setTo("");
+                  setRefused(null);
+                }}
+              >
+                {t("auto.actions.cancel")}
+              </button>
+            </>
+          )}
+          {refused !== null && <ErrorNote>{refused}</ErrorNote>}
+        </div>
+      )}
+    </>
   );
 }
 

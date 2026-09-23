@@ -160,6 +160,17 @@ export async function addAutomationAction(name: string, project: number | null):
 }
 
 /**
+ * **Move a library action to another reach** — `null` for the device's library, a project's id for
+ * that project's. Core refuses a move into a project while another project's automation places it,
+ * naming each; the refusal reaches the caller as core's own sentence
+ * (`amenbo_core::ops::automation::action_set_scope`).
+ */
+export async function setAutomationActionScope(id: number, projectId: number | null): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_set_scope", { id, projectId });
+}
+
+/**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
  * action's own: the prompt, the agent and the flags belong to its steps (`editAutomationStep`).
  *

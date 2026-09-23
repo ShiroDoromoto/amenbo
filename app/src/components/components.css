@@ -1587,6 +1587,18 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-xs); color: var(--c-text-faint);
 }
 .actlib__rows { list-style: none; margin: 0; padding: 0; }
+/* A row and the press that moves its reach, which stands beside it rather than inside it — a press
+   inside a press is not one. The slot is one width on every row, so the heads above stay over their
+   columns; which project, and a refusal, go under the row. */
+.actlib__line { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-2); }
+.actlib__line > .actlib__row { flex: 1 1 0; min-width: 0; }
+.actlib__moveslot { flex: none; width: 10rem; display: flex; justify-content: flex-end; padding-inline-end: var(--s-2); }
+.actlib__moveslot > .btn { white-space: nowrap; }
+.actlib__moveplace {
+  flex: 1 0 100%; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+}
+.actlib__cols { padding-inline-end: calc(10rem + var(--s-2) + var(--s-2)); }
 .actlib__rows > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
 .actlib__num { text-align: end; font-variant-numeric: tabular-nums; }
 .actlib__zero { font-size: var(--fs-xs); color: var(--c-text-faint); }

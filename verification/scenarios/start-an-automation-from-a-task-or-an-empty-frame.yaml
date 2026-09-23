@@ -12,7 +12,7 @@ description: >
   pane it stands up and by its row on the running tab. Both are walked in one road because what is
   under test is that they agree — a single way in proves only itself.
 given:
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the one a run is started from }, as: seed }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the

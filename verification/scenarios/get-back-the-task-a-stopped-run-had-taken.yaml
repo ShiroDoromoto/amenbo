@@ -13,7 +13,7 @@ description: >
   says so too. What separates this road from close-the-pane-a-run-is-drawn-in is the task — that one
   stops a run that never took any, and the giving back is not on it.
 given:
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task a run will take and give back }, as: seed }
 

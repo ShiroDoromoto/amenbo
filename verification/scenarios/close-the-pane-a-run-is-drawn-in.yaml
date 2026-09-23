@@ -11,7 +11,7 @@ description: >
   rather than clicked past — a build that put the ordinary question there would
   let a reader close it without ever being told what closing it does.
 given:
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.

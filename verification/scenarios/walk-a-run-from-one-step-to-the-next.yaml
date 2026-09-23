@@ -16,9 +16,10 @@ description: >
   action it belongs to. The value is handed along the wires out of the first action and into the
   second, so that the second step has a reason to open at all.
 given:
-  # One agent this machine can start, so no step is refused for who carries it out. `reads` keeps the
-  # stand-in standing, which is what leaves a pane on screen to walk.
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  # Claude Code is one of the two agents this machine can start — two being the fewest the premise
+  # stands up — so no step is refused for who carries it out. `runs` keeps the stand-in standing and
+  # carries out what is typed at it, which is what the three commands a step types need.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
   # The task the first step goes and takes. It is named here rather than found, because what the
   # command takes is a ref and a road cannot know the number in advance.

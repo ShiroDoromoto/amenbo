@@ -5,12 +5,11 @@
 //! the values wired into it. An agent that had to fetch would need a
 //! vocabulary for fetching, and every step would spend its first turns on it.
 //!
-//! **What is read from the snapshot, what is read live, and what is neither.** The step's own
-//! declarations — its ways out, its inputs, its settings — come from
+//! **What is read from the snapshot, and what is not.** The step's own declarations — its ways out,
+//! its inputs, its settings — and the wires joined to its inputs come from
 //! [`crate::model::AutomationRunDef`], the copy taken at launch, so editing an automation cannot
-//! change what a run under way is doing. What is read live is the wires: a wire is the picture
-//! rather than the step, and the picture is walked afresh at every move. The preamble is neither: no
-//! row holds it, so it is composed from the build ([`crate::agents::preamble`]) at every launch.
+//! change what a run under way is doing (`AMB-D-961`). The preamble is not: no row holds it, so it is
+//! composed from the build ([`crate::agents::preamble`]) at every launch.
 //!
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
@@ -24,11 +23,10 @@
 use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::model::{
-    AutomationPictureOwner, AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStoppedReason, RunDefExit, RunDefPort, ACTION_BOUNDARY, ERROR_EXIT,
+    AutomationStoppedReason, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
 };
-use crate::ops::automation_run;
 use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -121,7 +119,7 @@ pub fn open(
         }
     }
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
-    let ins: Vec<RunDefPort> = serde_json::from_str(&def.ins).map_err(Error::from)?;
+    let ins: Vec<RunDefIn> = serde_json::from_str(&def.ins).map_err(Error::from)?;
 
     // The stretch this execution belongs to, decided before anything is written: a step that takes a
     // fresh task starts one, and every other step joins whatever is under way.
@@ -133,10 +131,10 @@ pub fn open(
     // Every input, and what is actually standing ready to fill it.
     let mut handed: Vec<Handed> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
-    for port in &ins {
-        match latest_for(tx, &def, port, current.as_ref(), opens_a_stretch)? {
+    for input in &ins {
+        match latest_for(tx, input, current.as_ref(), opens_a_stretch)? {
             Some(found) => handed.push(found),
-            None if port.required => missing.push(port.name.clone()),
+            None if input.port.required => missing.push(input.port.name.clone()),
             None => {}
         }
     }
@@ -195,9 +193,9 @@ struct Handed {
     from: AutomationRunValue,
 }
 
-/// **What is standing ready for one input.** Only what a wire joins to it counts, and only what was
-/// produced within the stretch under way — a value from the task before this one is about a task this
-/// step is not working on.
+/// **What is standing ready for one input.** Only what a wire joined to it at launch counts
+/// ([`RunDefIn::from`]), and only what was produced within the stretch under way — a value from the
+/// task before this one is about a task this step is not working on.
 ///
 /// Where several wires feed one input — two ways out that cannot both be taken, or a step visited
 /// twice — the newest wins, `seq` being the move number the producing execution was.
@@ -206,19 +204,15 @@ struct Handed {
 /// begun, and the one before it belongs to another task.
 fn latest_for(
     tx: &WriteTx<'_>,
-    def: &AutomationRunDef,
-    port: &RunDefPort,
+    input: &RunDefIn,
     stretch: Option<&AutomationRunTask>,
     opens_a_stretch: bool,
 ) -> Result<Option<Handed>> {
     let conn = tx.conn();
-    let (Some(placement_id), Some(step_id), Some(stretch), false) =
-        (def.placement_id, def.step_id, stretch, opens_a_stretch)
-    else {
+    let (Some(stretch), false) = (stretch, opens_a_stretch) else {
         return Ok(None);
     };
-    let sources = sources_of(conn, placement_id, step_id, &port.name)?;
-    if sources.is_empty() {
+    if input.from.is_empty() {
         return Ok(None);
     }
     let mut best: Option<(i64, AutomationRunValue)> = None;
@@ -230,10 +224,10 @@ fn latest_for(
             if value.direction != AutomationPortDirection::Out {
                 continue;
             }
-            let joined = sources.iter().any(|source| {
+            let joined = input.from.iter().any(|source| {
                 Some(source.placement_id) == from_def.placement_id
                     && Some(source.step_id) == from_def.step_id
-                    && source.exit == value.exit_id
+                    && source.exit_id == value.exit_id
                     && source.port == value.name
             });
             if !joined {
@@ -244,78 +238,7 @@ fn latest_for(
             }
         }
     }
-    Ok(best.map(|(_, from)| Handed { port: port.clone(), from }))
-}
-
-/// One output of one step of one placement — a place a value an input is handed can come from.
-struct Source {
-    placement_id: i64,
-    step_id: i64,
-    exit: Option<i64>,
-    port: String,
-}
-
-/// **Every step output the wires join to one input of one step**, followed across the action's edge.
-///
-/// A wire inside the action from another of its steps is a source as it stands. A wire from the
-/// action itself ([`ACTION_BOUNDARY`]) hands on one of the action's inputs, so it is followed out to the
-/// automation's picture: to the wires feeding that input on this placement, and from each of them back
-/// into the action placed at the far end, to the wires that fill the output it names. Those are drawn
-/// into the boundary from a step's way out, and they count only where that way out returns to the very
-/// way out of the action the automation's wire leaves by ([`automation_run::returns_to`]) — the wire
-/// into the boundary does not name one, and the line from the step's way out is what says which.
-///
-/// All of it is read live, like the edges: the wires are the picture rather than the step.
-fn sources_of(
-    conn: &rusqlite::Connection,
-    placement_id: i64,
-    step_id: i64,
-    port_name: &str,
-) -> Result<Vec<Source>> {
-    let Some(placement) = read::automation_placement(conn, placement_id)? else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    for wire in read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)? {
-        if wire.to_id != step_id || wire.to_port_name != port_name {
-            continue;
-        }
-        if wire.from_id != ACTION_BOUNDARY {
-            out.push(Source {
-                placement_id,
-                step_id: wire.from_id,
-                exit: wire.from_exit_id,
-                port: wire.from_port_name,
-            });
-            continue;
-        }
-        for outer in read::automation_wires_to_port(
-            conn,
-            AutomationPictureOwner::Automation,
-            placement_id,
-            &wire.from_port_name,
-        )? {
-            let Some(far) = read::automation_placement(conn, outer.from_id)? else { continue };
-            for inner in
-                read::automation_wires_of(conn, AutomationPictureOwner::Action, far.action_id)?
-            {
-                if inner.to_id != ACTION_BOUNDARY || inner.to_port_name != outer.from_port_name {
-                    continue;
-                }
-                let Some(inner_exit) = inner.from_exit_id else { continue };
-                let leaves_by = automation_run::returns_to(conn, inner.from_id, inner_exit)?;
-                if leaves_by.is_some() && leaves_by == outer.from_exit_id {
-                    out.push(Source {
-                        placement_id: far.id,
-                        step_id: inner.from_id,
-                        exit: inner.from_exit_id,
-                        port: inner.from_port_name,
-                    });
-                }
-            }
-        }
-    }
-    Ok(out)
+    Ok(best.map(|(_, from)| Handed { port: input.port.clone(), from }))
 }
 
 /// Fail a run because a required input had nothing to fill it, through the one cleanup every ending
@@ -939,6 +862,26 @@ mod tests {
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed[0].value.as_deref(), Some("the second note"));
+        });
+    }
+
+    /// **A value travels along the wires the run launched with** (`AMB-D-961`). The copy holds them, so a
+    /// picture that has since lost its wire — written straight to the table here, since a definition a
+    /// run is using refuses the edit — still hands the note on.
+    #[test]
+    fn a_value_travels_along_the_wire_the_run_launched_with_after_the_picture_loses_it() {
+        with_tx(|tx| {
+            let p = picture(tx, true, true);
+            let run = a_run(tx, &p.automation);
+            tx.conn().execute("DELETE FROM automation_wire", []).expect("the picture moves on");
+
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let handed =
+                read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
+            assert_eq!(handed.len(), 1);
+            assert_eq!(handed[0].value.as_deref(), Some("the note"));
         });
     }
 

@@ -1942,7 +1942,7 @@ pub struct AutomationRunDef {
     pub show_history: bool,
     /// The ways out, with the outputs declared on each — JSON ([`RunDefExit`]).
     pub exits: String,
-    /// The inputs the step takes — JSON ([`RunDefPort`]).
+    /// The inputs the step takes, each with the outputs wired into it — JSON ([`RunDefIn`]).
     pub ins: String,
     /// The settings and the answers written for them — JSON ([`RunDefCfg`]).
     pub cfg: String,
@@ -1969,6 +1969,33 @@ pub struct RunDefPort {
     pub name: String,
     pub kind: AutomationPortKind,
     pub required: bool,
+}
+
+/// One input, as [`AutomationRunDef::ins`] holds it: the port, and every step output the wires joined
+/// to it at launch.
+///
+/// The wires are copied with the step, not read while the run moves (`AMB-D-961`): a value reaches this
+/// input from the outputs named here and from nothing else, whatever the picture has since become.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunDefIn {
+    #[serde(flatten)]
+    pub port: RunDefPort,
+    /// Empty where no wire reached it — and in a copy no launch ever resolved, which v63 fills in only
+    /// for runs that could still open a step.
+    #[serde(default)]
+    pub from: Vec<RunDefSource>,
+}
+
+/// One output of one step of one placement that a wire joined to an input — which copy of a step it
+/// leaves ([`AutomationRunDef::placement_id`], [`AutomationRunDef::step_id`]), the way out it leaves by,
+/// and the output's name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunDefSource {
+    pub placement_id: i64,
+    pub step_id: i64,
+    #[serde(default)]
+    pub exit_id: Option<i64>,
+    pub port: String,
 }
 
 /// One setting and the answer written for it while the automation was built.

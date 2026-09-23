@@ -484,6 +484,7 @@ pub fn run() {
       automation::automation_action_page,
       automation::automation_action_add,
       automation::automation_action_edit,
+      automation::automation_action_set_scope,
       automation::automation_placement_add,
       automation::automation_placement_add_new,
       automation::automation_placement_insert_new,

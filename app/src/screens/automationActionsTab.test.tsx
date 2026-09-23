@@ -20,11 +20,16 @@ import type { AutomationActionCardDto } from "../bindings/bindings";
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
   add: vi.fn(async (_name: string, _project: number | null) => {}),
+  scope: vi.fn(async (_id: number, _project: number | null) => {}),
 }));
 
 vi.mock("../core/automations", () => ({
   useAutomationActions: () => hoisted.actions,
   addAutomationAction: hoisted.add,
+  setAutomationActionScope: hoisted.scope,
+}));
+vi.mock("../mock/adapter", () => ({
+  dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }, { id: 2, name: "site" }] },
 }));
 
 import { t, tf } from "../core/i18n";
@@ -261,5 +266,55 @@ describe("the library opened from the sidebar", () => {
     type(nameBox(), "Review");
     await act(async () => { button(t("auto.actions.add")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", null);
+  });
+});
+
+// Moving a reach from the row, on the entrance that owns it now (`AMB-D-954`): a project moves its own
+// to the device's library in one press; the sidebar asks which project for a global one; a refusal
+// stays under the row in core's words.
+describe("moving an action's reach", () => {
+  beforeEach(() => {
+    hoisted.scope.mockReset();
+    hoisted.scope.mockResolvedValue(undefined);
+  });
+
+  async function renderAt(projectId: number | null) {
+    await act(async () => {
+      root.render(createElement(AutomationActionsTab, { projectId, onOpen: (id: number) => opened.push(id) }));
+    });
+  }
+
+  it("moves a project's own action to the device's library from that project", async () => {
+    hoisted.actions = [action({ id: 3, global: false }), action({ id: 5, name: "Shared", global: true })];
+    await renderAt(1);
+    const moves = [...container.querySelectorAll(".actlib__moveslot button")];
+    expect(moves).toHaveLength(1);
+    await act(async () => { button(t("auto.actions.toGlobal")).click(); });
+    expect(hoisted.scope).toHaveBeenCalledWith(3, null);
+    expect(opened).toEqual([]);
+  });
+
+  it("asks which project before moving a global action from the sidebar", async () => {
+    hoisted.actions = [action({ id: 5, name: "Shared", global: true })];
+    await renderAt(null);
+    await act(async () => { button(t("auto.actions.toProject")).click(); });
+    const move = () => [...container.querySelectorAll<HTMLButtonElement>(".actlib__moveplace button")]
+      .find((b) => b.textContent === t("auto.actions.move"))!;
+    expect(move().disabled).toBe(true);
+    const pick = container.querySelector<HTMLSelectElement>(".actlib__moveplace select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(pick, "2");
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { move().click(); });
+    expect(hoisted.scope).toHaveBeenCalledWith(5, 2);
+  });
+
+  it("keeps core's refusal under the row", async () => {
+    hoisted.actions = [action({ id: 3, global: false })];
+    hoisted.scope.mockRejectedValue("placed by Nightly (7) in site");
+    await renderAt(1);
+    await act(async () => { button(t("auto.actions.toGlobal")).click(); });
+    expect(container.querySelector(".actlib__moveplace")?.textContent).toContain("Nightly");
   });
 });

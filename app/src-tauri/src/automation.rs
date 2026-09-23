@@ -260,6 +260,25 @@ pub fn automation_action_edit(id: i64, name: Option<String>, note: Option<String
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
+/// **Move a library action to another reach** — `null` to the device's library, a project's id to that
+/// project's ([`amenbo_core::ops::automation::action_set_scope`]).
+///
+/// Into the device's library it always goes. Into a project it goes only while no automation of any
+/// other project places it; otherwise core refuses and names each of those automations with its
+/// project, which is the sentence the screen puts under the row. **Nothing is copied**: two actions of
+/// the same words would part the moment one was rewritten (`AMB-D-954`).
+///
+/// Every picture standing on the action draws its reach, so the ack moves the automations as well as
+/// the library.
+#[tauri::command]
+pub fn automation_action_set_scope(id: i64, project_id: Option<i64>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_set_scope(id, project_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
 /// **Change the step one library action opens.** Only what is `Some` is written.
 ///
 /// The fields are the step's, not the placement's: a prompt, who is asked to carry it out, the model

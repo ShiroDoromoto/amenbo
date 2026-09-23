@@ -1,9 +1,23 @@
 // One automation, opened — the screen it is built and started from.
 //
-// **Four places, each named on the screen**: "launch", which refuses; "build", the picture of the
-// placements with the row that puts another action on it (`./AutomationPicture`); "placement", what
-// the pressed spot holds (`./AutomationStepPanel`); and last, the definition's own name, notes and
-// archiving, with the press that deletes it (`./AutomationAboutPanel`).
+// **It is laid out the way an action's build screen is** (`./AutomationActionBuildScreen`): a head
+// with the way back and the name, a band over the picture, and the picture with a panel pinned to its
+// right. The two screens are one move a layer apart (`AMB-D-949`), and a reader going between them
+// should not have to learn a second arrangement.
+//
+// **Three places, each named on the screen**: "launch", the band that refuses; "build", the picture of
+// the placements (`./AutomationPicture`); and "placement", what the pressed spot holds
+// (`./AutomationStepPanel`), which is the panel's reading of a press on a box.
+//
+// **Everything else the screen asks is the panel too.** A `+` on a line, or the press on an empty
+// picture, opens the library in it (`./AutomationLibraryPanel`); "Edit" on the head opens the
+// definition's own name, notes and archiving, with the press that deletes it
+// (`./AutomationAboutPanel`). They are one panel rather than four places stacked under the picture:
+// a picture that runs long would push whatever is under it off the bottom of the window, and the
+// panel stands where the reader is looking however far they scrolled. Only the picture scrolls.
+//
+// **A dialog opens for one thing only: making an action on the spot** (`./AutomationStepAdd`). Picking
+// one off the shelf is done beside the picture, where the line it goes on can still be seen.
 //
 // **What stands on the picture is a placement of a library action** (`AMB-D-949`). Nothing here
 // writes a step: a step is inside the action, and the screen that draws those is the action's own.
@@ -11,9 +25,9 @@
 // **The delete takes the screen with it**, so the press hands back the same way out the "back"
 // button does: there is no definition left for this screen to be drawn from.
 //
-// **Which spot is pressed is the screen's, not the picture's.** Two places read it — the picture
-// marks that box and the panel draws that spot — so it is held where both can see it, and the panel
-// hands it back when the spot it was drawn from is taken off.
+// **What the panel shows is the screen's, not the picture's.** The picture marks the pressed box and
+// the panel draws it, so it is held where both can see it, and the panel hands it back when the spot
+// it was drawn from is taken off.
 //
 // **The launch place refuses, the build place never does.** Building is always half-finished — a step
 // with no way onward, an input nobody has wired — and every one of those saves
@@ -37,15 +51,16 @@
 // standing is handed down from the shell, which is the one place that knows which window holds it.
 import { useState } from "react";
 import { AutomationAboutPanel } from "./AutomationAboutPanel";
+import { Panel } from "./AutomationActionBuildScreen";
+import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
-import { automationGraph } from "./automationLayout";
-import { AutomationPlaceRow } from "./AutomationPlaceRow";
+import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { AutomationStepAdd } from "./AutomationStepAdd";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
-import { errSentence, t } from "../core/i18n";
+import { errSentence, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto } from "../bindings/bindings";
 
@@ -54,10 +69,27 @@ import type { AutomationDetailDto } from "../bindings/bindings";
  * it, and what the dialog starts on. A definition that names none falls back to the first agent the
  * catalog lists, which is what `automation step-add` asks for and never guesses.
  */
-function agentOn(automation: AutomationDetailDto | null, edgeId: number): string {
-  const edge = automation?.edges.find((one) => one.id === edgeId);
+function agentOn(automation: AutomationDetailDto | null, target: PlaceTarget): string {
+  if (!("edgeId" in target)) return "claude-code";
+  const edge = automation?.edges.find((one) => one.id === target.edgeId);
   return automation?.placements.find((one) => one.id === edge?.fromId)?.agent ?? "claude-code";
 }
+
+/** Where the library's pick will go, in a sentence: after which way out of which box, or first. */
+function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): string {
+  if (!("edgeId" in target)) return t("auto.lib.first");
+  const edge = automation?.edges.find((one) => one.id === target.edgeId);
+  const box = automation?.placements.find((one) => one.id === edge?.fromId)?.name ?? "";
+  if (edge?.exitName === undefined) return tf("auto.lib.after", { box });
+  const exit = edge.exitName === ERROR_EXIT ? t("auto.pic.errorExit") : edge.exitName;
+  return tf("auto.lib.afterExit", { box, exit });
+}
+
+/** What the panel is showing, if anything. */
+type Showing =
+  | { kind: "box"; id: number }
+  | { kind: "library"; target: PlaceTarget }
+  | { kind: "about" };
 
 export function AutomationBuildScreen({
   id, projectId, workspaceOpen, onBack,
@@ -74,42 +106,67 @@ export function AutomationBuildScreen({
   onBack: () => void;
 }) {
   const automation = useAutomation(id);
-  // Which step the panel is showing. Nothing until a box is pressed — a definition opens on the
-  // picture, and a step picked for the reader would be one they did not choose.
-  const [step, setStep] = useState<number | null>(null);
-  // The line a `+` was pressed on, while the dialog that puts a step in front of it is open. It is
-  // the edge and not the step, because what the new step takes over is where that one line went.
-  const [inserting, setInserting] = useState<number | null>(null);
+  // Nothing until something is pressed — a definition opens on the picture, and a box picked for the
+  // reader would be one they did not choose.
+  const [showing, setShowing] = useState<Showing | null>(null);
+  // Where the dialog that makes an action on the spot is about to put it, while it is open.
+  const [making, setMaking] = useState<PlaceTarget | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
   // is where an automation is built, not a third place for a launch to behave differently.
   const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
 
+  const pressed =
+    showing?.kind === "box"
+      ? automation?.placements.find((one) => one.id === showing.id) ?? null
+      : null;
+  const close = () => setShowing(null);
+  const panelOpen =
+    automation !== null && (showing?.kind === "library" || showing?.kind === "about" || pressed !== null);
+
   return (
-    <div className="settings">
-      <div className="settings__section">
-        <div className="settings__body">
-          <div className="auto__head">
-            <button type="button" className="btn" onClick={onBack}>
-              <Icon name="chevronLeft" /> {t("auto.build.back")}
-            </button>
-            <span className="auto__name">{automation?.name ?? ""}</span>
-          </div>
-        </div>
+    <div className="actbuild">
+      <div className="actbuild__head">
+        <button type="button" className="btn" onClick={onBack}>
+          <Icon name="chevronLeft" /> {t("auto.build.back")}
+        </button>
+        <span className="actbuild__name">{automation?.name ?? ""}</span>
+        <button
+          type="button"
+          className={showing?.kind === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
+          aria-pressed={showing?.kind === "about"}
+          // It opens and does not toggle: a second press while the panel stands is somebody meaning
+          // to be there, and the panel's own × is the way out of it.
+          onClick={() => setShowing({ kind: "about" })}
+        >
+          {t("auto.build.edit")}
+        </button>
       </div>
 
-      <div className="settings__section">
-        <div className="settings__body">
-          <h3 className="auto__place">{t("auto.build.launch")}</h3>
+      <div className="autolaunch">
+        <span className="actbuild__sec">{t("auto.build.launch")}</span>
 
-          {check === null && <div className="auto__empty">{t("app.loading")}</div>}
+        {check === null && <div className="auto__empty">{t("app.loading")}</div>}
 
-          {check?.ready && <div className="auto__ready">{t("auto.ready")}</div>}
-
-          {check && !check.ready && (
-            <>
-              <div className="auto__notready">{t("auto.notReady")}</div>
+        {check !== null && (
+          <div className={check.ready ? "autolaunch__box autolaunch__box--ok" : "autolaunch__box autolaunch__box--no"}>
+            <div className="autolaunch__title">
+              {check.ready ? (
+                <span className="auto__ready">{t("auto.ready")}</span>
+              ) : (
+                <span className="auto__notready">{t("auto.notReady")}</span>
+              )}
+              <button
+                type="button"
+                className="btn btn--primary autolaunch__start"
+                disabled={!check.ready || starting || projectId === null}
+                onClick={() => void start(id, folders.live.map((one) => one.path))}
+              >
+                {t("auto.start")}
+              </button>
+            </div>
+            {!check.ready && (
               <ul className="auto__blocks">
                 {/* Each reason names itself, so the sentence comes from the same place the press's
                     refusal writes its own from (`core/i18n`'s `errSentence`) — this list and that one
@@ -118,62 +175,81 @@ export function AutomationBuildScreen({
                   <li key={`${block.code}-${nth}`}>{errSentence(block)}</li>
                 ))}
               </ul>
-            </>
-          )}
+            )}
+          </div>
+        )}
 
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!check?.ready || starting || projectId === null}
-            onClick={() => void start(id, folders.live.map((one) => one.path))}
-          >
-            {t("auto.start")}
-          </button>
-
-          {refused !== null && <div className="auto__notready">{refused}</div>}
-        </div>
+        {refused !== null && <div className="auto__notready">{refused}</div>}
       </div>
 
-      <div className="settings__section">
-        <div className="settings__body">
-          <h3 className="auto__place">{t("auto.build.picture")}</h3>
+      <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
+        <div className="actbuild__canvashead">
+          <span className="actbuild__sec">{t("auto.build.picture")}</span>
+        </div>
+        <div className="actbuild__canvas">
           <AutomationPicture
             graph={automationGraph(automation)}
-            selectedBoxId={step ?? undefined}
-            onPickBox={setStep}
-            onInsert={setInserting}
+            selectedBoxId={pressed?.id}
+            onPickBox={(box) => setShowing({ kind: "box", id: box })}
+            onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
           />
-          <AutomationPlaceRow automationId={id} projectId={projectId} />
+          {automation !== null && automation.placements.length === 0 && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
+            >
+              {t("auto.pic.first")}
+            </button>
+          )}
         </div>
-      </div>
 
-      <div className="settings__section">
-        <div className="settings__body">
-          <h3 className="auto__place">{t("auto.build.step")}</h3>
-          <AutomationStepPanel
-            automation={automation}
-            placementId={step}
-            projectId={projectId}
-            onRemoved={() => setStep(null)}
-          />
-        </div>
-      </div>
+        {automation !== null && showing?.kind === "library" && (
+          <Panel place={t("auto.pic.place")} title="" onClose={close}>
+            <AutomationLibraryPanel
+              // A new line pressed is a new pick: what was typed and opened for one line is not
+              // carried to another.
+              key={"edgeId" in showing.target ? `e${showing.target.edgeId}` : "first"}
+              target={showing.target}
+              projectId={projectId}
+              where={whereTo(automation, showing.target)}
+              onPlaced={close}
+              onMake={() => setMaking(showing.target)}
+            />
+          </Panel>
+        )}
 
-      {automation !== null && (
-        <div className="settings__section">
-          <div className="settings__body">
-            <h3 className="auto__place">{t("auto.build.about")}</h3>
+        {automation !== null && showing?.kind === "about" && (
+          <Panel place={t("auto.build.edit")} title={automation.name} onClose={close}>
             <AutomationAboutPanel automation={automation} onDeleted={onBack} />
-          </div>
-        </div>
-      )}
+          </Panel>
+        )}
 
-      {inserting !== null && (
+        {pressed !== null && (
+          <Panel place={t("auto.build.step")} title={pressed.name} onClose={close}>
+            <AutomationStepPanel
+              automation={automation}
+              placementId={pressed.id}
+              projectId={projectId}
+              onRemoved={close}
+            />
+          </Panel>
+        )}
+      </div>
+
+      {making !== null && (
         <AutomationStepAdd
-          into={{ picture: "automation", edgeId: inserting }}
+          into={
+            "edgeId" in making
+              ? { picture: "automation", edgeId: making.edgeId }
+              : { picture: "automation", automationId: making.automationId }
+          }
           projectId={projectId}
-          agent={agentOn(automation, inserting)}
-          onClose={() => setInserting(null)}
+          agent={agentOn(automation, making)}
+          // Put in, the box is on the picture and the library has done its part; given up, the
+          // reader is back at the library they left, still on the same line.
+          onPut={close}
+          onClose={() => setMaking(null)}
         />
       )}
     </div>

@@ -4,23 +4,20 @@
 // **It serves both pictures** (`AMB-D-949`): on an automation what goes in is a placement, a spot
 // with a library action standing on it; inside an action it is a step carrying its own prompt. The
 // fields are the same ones either way, so what differs is the door the press goes through
-// (`../core/automations`) and whether the library is offered at all — an action places no actions.
+// (`../core/automations`).
 //
 // **On a line, nothing is left running past a box.** The way out that was pressed comes to point at
 // the new box, and the new box goes on to whatever that way out used to reach
 // (`amenbo_core::ops::automation::placement_insert`, `…::step_insert`) — one act.
 //
-// **A picture with nothing on it is opened the same way.** The row under it (`./AutomationPlaceRow`,
-// and the press above an action's picture) names the picture instead of a line, and the box it puts
-// down stands on its own with nothing pointing at it — so the first box of all is written here too,
-// rather than only in the library tab.
+// **A picture with nothing on it is opened the same way.** The press on an empty picture names the
+// picture instead of a line, and the box it puts down stands on its own with nothing pointing at it
+// — so the first box of all is written here too, rather than only in the library tab.
 //
-// **A box on an automation runs a library action, or carries a prompt written here and becomes
-// one.** A prompt typed here becomes an ordinary action and is placed in the same act
-// (`AMB-T-5317`); an action picked from the library declares nothing of its own — its ways out and
-// its inputs are the action's — so those two sections are not drawn for it rather than drawn and
-// refused. **Only the line's road offers the library**: the row that opens this dialog on a whole
-// picture has a pulldown of its own beside it, and two of them would be one question asked twice.
+// **On an automation it writes an action, and nothing else.** Picking one off the shelf is the
+// panel's (`./AutomationLibraryPanel`), done beside the picture rather than in front of it; this is
+// what the panel's "make one" press opens. A prompt typed here becomes an ordinary action and is
+// placed in the same act (`AMB-T-5317`).
 //
 // **Where the written action is kept is asked here, not assumed** (`AMB-T-5317`). It is an ordinary
 // action once written, so it lands either in the device's library, which every project on this
@@ -41,7 +38,6 @@ import {
   insertAutomationActionStep,
   insertAutomationStep,
   placeAutomationActionFromPrompt,
-  useAutomationActions,
   type ActionShelf,
 } from "../core/automations";
 import { t } from "../core/i18n";
@@ -65,49 +61,41 @@ export function AutomationStepAdd({
   into,
   projectId,
   agent,
+  onPut,
   onClose,
 }: {
   into: AddTarget;
   projectId: number | null;
   /** What the box this line leaves is carried out by, which is the likeliest answer for the new one. */
   agent: string;
+  /** The box went in — told before `onClose`, which both buttons call. */
+  onPut?: () => void;
   onClose: () => void;
 }) {
-  const actions = useAutomationActions(projectId);
   const [name, setName] = useState("");
-  const [action, setAction] = useState<string>("");
   const [shelf, setShelf] = useState<ActionShelf>("project");
   const [prompt, setPrompt] = useState("");
   const [interactive, setInteractive] = useState(false);
   const [exits, setExits] = useState<string[]>([]);
   const [inputs, setInputs] = useState<Draft[]>([]);
-  // The library is offered on an automation's line and nowhere else: inside an action there is none
-  // to pick from (`AMB-D-949`), and the row that opens this on a whole picture has its own pulldown.
-  const offerLibrary = into.picture === "automation" && "edgeId" in into;
-  // So what goes in carries its own words wherever the library was not offered, or not picked from.
-  const own = !offerLibrary || action === "";
   // Which library a written action lands in. A project's own is the likelier answer and the one
   // offered first, but with no project open the device's is the only one there is.
   const shelfPicked = projectId === null ? "device" : shelf;
 
-  const ready = name.trim() !== "" && (!own || prompt.trim() !== "");
+  const ready = name.trim() !== "" && prompt.trim() !== "";
   const put = () => {
     if (!ready) return;
     const declared = {
-      exits: own ? exits.map((one) => one.trim()).filter((one) => one !== "") : [],
-      inputs: own
-        ? inputs
-            .filter((one) => one.name.trim() !== "")
-            .map((one) => ({ ...one, name: one.name.trim() }))
-        : [],
+      exits: exits.map((one) => one.trim()).filter((one) => one !== ""),
+      inputs: inputs
+        .filter((one) => one.name.trim() !== "")
+        .map((one) => ({ ...one, name: one.name.trim() })),
     };
     if (into.picture === "automation") {
       void ("edgeId" in into
         ? insertAutomationStep(into.edgeId, {
             name: name.trim(),
-            source: own
-              ? { prompt: prompt.trim(), shelf: shelfPicked }
-              : { action: Number(action) },
+            source: { prompt: prompt.trim(), shelf: shelfPicked },
             agent,
             interactive,
             ...declared,
@@ -126,6 +114,7 @@ export function AutomationStepAdd({
         ? insertAutomationActionStep(into.edgeId, step)
         : addAutomationStep(into.actionId, step));
     }
+    onPut?.();
     onClose();
   };
 
@@ -146,21 +135,7 @@ export function AutomationStepAdd({
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
-        {offerLibrary && (
-          <label className="autostep__field">
-            <span className="autostep__label">{t("auto.step.source")}</span>
-            <select value={action} onChange={(e) => setAction(e.target.value)}>
-              <option value="">{t("auto.step.sourceOwn")}</option>
-              {actions.map((one) => (
-                <option key={one.id} value={String(one.id)}>
-                  {one.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {own && into.picture === "automation" && projectId !== null && (
+        {into.picture === "automation" && projectId !== null && (
           <label className="autostep__field">
             <span className="autostep__label">{t("auto.actions.reach")}</span>
             <select value={shelf} onChange={(e) => setShelf(e.target.value as ActionShelf)}>
@@ -170,102 +145,96 @@ export function AutomationStepAdd({
           </label>
         )}
 
-        {own && (
-          <label className="autostep__field">
-            <span className="autostep__label">{t("auto.step.prompt")}</span>
-            <textarea
-              className="autostep__prompt"
-              rows={5}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-            />
-          </label>
-        )}
+        <label className="autostep__field">
+          <span className="autostep__label">{t("auto.step.prompt")}</span>
+          <textarea
+            className="autostep__prompt"
+            rows={5}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
+        </label>
 
-        {own && (
-          <div className="autostep__field">
-            <span className="autostep__label">{t("auto.step.exits")}</span>
-            {exits.map((one, nth) => (
-              <div key={nth} className="autodlg__row">
-                <input
-                  placeholder={t("auto.add.exitPh")}
-                  value={one}
-                  onChange={(e) =>
-                    setExits(exits.map((was, i) => (i === nth ? e.target.value : was)))
-                  }
-                />
-                <button
-                  type="button"
-                  className="btn"
-                  aria-label={t("auto.add.drop")}
-                  onClick={() => setExits(exits.filter((_, i) => i !== nth))}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-            ))}
-            <button type="button" className="btn" onClick={() => setExits([...exits, ""])}>
-              {t("auto.add.exitAdd")}
-            </button>
-          </div>
-        )}
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.exits")}</span>
+          {exits.map((one, nth) => (
+            <div key={nth} className="autodlg__row">
+              <input
+                placeholder={t("auto.add.exitPh")}
+                value={one}
+                onChange={(e) =>
+                  setExits(exits.map((was, i) => (i === nth ? e.target.value : was)))
+                }
+              />
+              <button
+                type="button"
+                className="btn"
+                aria-label={t("auto.add.drop")}
+                onClick={() => setExits(exits.filter((_, i) => i !== nth))}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="btn" onClick={() => setExits([...exits, ""])}>
+            {t("auto.add.exitAdd")}
+          </button>
+        </div>
 
-        {own && (
-          <div className="autostep__field">
-            <span className="autostep__label">{t("auto.step.inputs")}</span>
-            {inputs.map((one, nth) => (
-              <div key={nth} className="autodlg__row">
-                <input
-                  placeholder={t("auto.add.namePh")}
-                  value={one.name}
-                  onChange={(e) =>
-                    setInputs(inputs.map((was, i) => (i === nth ? { ...was, name: e.target.value } : was)))
-                  }
-                />
-                <select
-                  value={one.kind}
-                  onChange={(e) =>
-                    setInputs(inputs.map((was, i) => (i === nth ? { ...was, kind: e.target.value } : was)))
-                  }
-                >
-                  {PORT_KINDS.map((kind) => (
-                    <option key={kind.id} value={kind.id}>
-                      {kind.label()}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={one.required ? "yes" : "no"}
-                  onChange={(e) =>
-                    setInputs(
-                      inputs.map((was, i) =>
-                        i === nth ? { ...was, required: e.target.value === "yes" } : was,
-                      ),
-                    )
-                  }
-                >
-                  <option value="yes">{t("auto.add.required")}</option>
-                  <option value="no">{t("auto.add.optional")}</option>
-                </select>
-                <button
-                  type="button"
-                  className="btn"
-                  aria-label={t("auto.add.drop")}
-                  onClick={() => setInputs(inputs.filter((_, i) => i !== nth))}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setInputs([...inputs, { name: "", kind: "value", required: true }])}
-            >
-              {t("auto.add.inputAdd")}
-            </button>
-          </div>
-        )}
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.inputs")}</span>
+          {inputs.map((one, nth) => (
+            <div key={nth} className="autodlg__row">
+              <input
+                placeholder={t("auto.add.namePh")}
+                value={one.name}
+                onChange={(e) =>
+                  setInputs(inputs.map((was, i) => (i === nth ? { ...was, name: e.target.value } : was)))
+                }
+              />
+              <select
+                value={one.kind}
+                onChange={(e) =>
+                  setInputs(inputs.map((was, i) => (i === nth ? { ...was, kind: e.target.value } : was)))
+                }
+              >
+                {PORT_KINDS.map((kind) => (
+                  <option key={kind.id} value={kind.id}>
+                    {kind.label()}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={one.required ? "yes" : "no"}
+                onChange={(e) =>
+                  setInputs(
+                    inputs.map((was, i) =>
+                      i === nth ? { ...was, required: e.target.value === "yes" } : was,
+                    ),
+                  )
+                }
+              >
+                <option value="yes">{t("auto.add.required")}</option>
+                <option value="no">{t("auto.add.optional")}</option>
+              </select>
+              <button
+                type="button"
+                className="btn"
+                aria-label={t("auto.add.drop")}
+                onClick={() => setInputs(inputs.filter((_, i) => i !== nth))}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setInputs([...inputs, { name: "", kind: "value", required: true }])}
+          >
+            {t("auto.add.inputAdd")}
+          </button>
+        </div>
 
         <label className="autostep__check">
           <input

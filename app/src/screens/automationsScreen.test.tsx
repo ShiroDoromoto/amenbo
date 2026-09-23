@@ -3,8 +3,11 @@
 // stubbed; the tabs, the list, the wording of each reason and what the button does all run for real.
 //
 // What these guard: **the screen is three tabs and opens on the definitions**, so the two that are
-// not built yet cannot quietly become the one a reader lands on; **a row opens the build screen** in
-// place of the list rather than beside it; **the launch place says what is in the way, in words**,
+// not built yet cannot quietly become the one a reader lands on; **a row says whether its automation
+// could be started**, from the same check the launch place reads; **a row opens the build screen** in
+// place of the list rather than beside it; **the panel beside the picture is opened by what was
+// pressed** — the library by the press on an empty picture, the definition's own fields by "Edit" —
+// and by nothing else; **the launch place says what is in the way, in words**,
 // every reason the check can give taking a line a person can act on — including the unnamed way out,
 // which has no name to put in a sentence; and **the button is shut while anything is in the way**,
 // which is the whole of what the launch place is for.
@@ -30,6 +33,9 @@ vi.mock("../core/automations", () => ({
   useAutomation: () => hoisted.detail,
   useLaunchCheck: () => hoisted.check,
   useAutomationActions: () => [],
+  useAutomationAction: () => null,
+  insertAutomationAction: () => Promise.resolve(),
+  placeAutomationAction: () => Promise.resolve(),
   launchAutomation: hoisted.launch,
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
@@ -126,25 +132,72 @@ describe("the automations screen", () => {
     expect(container.textContent).toContain(t("auto.empty"));
   });
 
-  it("names each automation and how many steps it is built out of", async () => {
+  it("names each automation, how many actions are placed on it and whether it could start", async () => {
     hoisted.automations = [card({ placements: 3 }), card({ id: 8, name: "Nightly", archived: true })];
+    hoisted.check = { ready: false, blocks: [] };
     await render();
-    const rows = [...container.querySelectorAll(".auto__row")].map((one) => one.textContent ?? "");
+    const rows = [...container.querySelectorAll(".autolist__row")].map((one) => one.textContent ?? "");
     expect(rows[0]).toContain("Morning round");
     expect(rows[0]).toContain(tf("auto.stepCount", { count: 3 }));
+    expect(rows[0]).toContain(t("auto.notReady"));
     expect(rows[1]).toContain(t("auto.archived"));
   });
 
-  it("opens the build screen in place of the list", async () => {
+  it("says nothing of a row's readiness until the check answers", async () => {
+    hoisted.automations = [card()];
+    await render();
+    const row = container.querySelector(".autolist__row")?.textContent ?? "";
+    expect(row).not.toContain(t("auto.ready"));
+    expect(row).not.toContain(t("auto.notReady"));
+  });
+
+  it("opens the build screen in place of the list, with no panel open", async () => {
     hoisted.automations = [card()];
     hoisted.detail = detail();
     hoisted.check = { ready: true, blocks: [] };
     await render();
     await act(async () => { button("Morning round").click(); });
-    expect(container.querySelector(".auto__list")).toBeNull();
+    expect(container.querySelector(".autolist")).toBeNull();
     expect(container.textContent).toContain(t("auto.build.launch"));
     expect(container.textContent).toContain(t("auto.build.picture"));
-    expect(container.textContent).toContain(t("auto.build.step"));
+    expect(container.querySelector(".actpanel")).toBeNull();
+  });
+});
+
+describe("the panel beside the picture", () => {
+  async function open() {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: false, blocks: [] };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+  }
+  const panelPlace = () => container.querySelector(".actpanel__head .actbuild__sec")?.textContent;
+
+  it("opens the library from the press on an empty picture", async () => {
+    await open();
+    await act(async () => { button(t("auto.pic.first")).click(); });
+    expect(panelPlace()).toBe(t("auto.pic.place"));
+    expect(container.textContent).toContain(t("auto.lib.first"));
+    expect(container.textContent).toContain(t("auto.lib.make"));
+  });
+
+  it("opens the definition's own fields from Edit, and keeps them open on a second press", async () => {
+    await open();
+    await act(async () => { button(t("auto.build.edit")).click(); });
+    expect(panelPlace()).toBe(t("auto.build.edit"));
+    expect(container.textContent).toContain(t("auto.about.remove"));
+    await act(async () => { button(t("auto.build.edit")).click(); });
+    expect(panelPlace()).toBe(t("auto.build.edit"));
+  });
+
+  it("closes from its own ×", async () => {
+    await open();
+    await act(async () => { button(t("auto.build.edit")).click(); });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(".actpanel__close")!.click();
+    });
+    expect(container.querySelector(".actpanel")).toBeNull();
   });
 });
 

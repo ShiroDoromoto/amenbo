@@ -1142,8 +1142,8 @@ const ui = {
   "auto.build.back": "Back to the list",
   "auto.build.launch": "Launch",
   "auto.build.picture": "Build",
+  "auto.build.edit": "Edit",
   "auto.build.step": "What the placement holds",
-  "auto.build.about": "This automation",
   "auto.start": "Start",
   "auto.ready": "Ready to start.",
   "auto.notReady": "Not ready to start:",
@@ -1162,8 +1162,13 @@ const ui = {
   "auto.pic.entry": "Starts here",
   "auto.pic.place": "Place an action",
   "auto.pic.placeDo": "Place",
-  "auto.pic.libraryEmpty": "The library holds no action yet — write one here, or make one on the actions tab",
-  "auto.pic.writeDo": "Write one here",
+  "auto.pic.first": "＋ Place the first action",
+  "auto.lib.first": "Goes on as the first placement",
+  "auto.lib.after": "Goes in after “{box}”",
+  "auto.lib.afterExit": "Goes in after “{box}” leaves by “{exit}”",
+  "auto.lib.device": "This device (any project can place these)",
+  "auto.lib.makeWhat": "Not in the library? Make one and place it",
+  "auto.lib.make": "Make a new one and place it",
   // The panel beside the picture: what the pressed step holds, field by field. The three rows a
   // task filter is answered on borrow the words the board's filters already use
   // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.
@@ -1182,8 +1187,6 @@ const ui = {
   "auto.step.task": "The task it is about",
   "auto.step.takesTask": "It goes and takes the next task",
   "auto.step.carriesTask": "Works the task the one before it took",
-  "auto.step.source": "What stands here",
-  "auto.step.sourceOwn": "Write a prompt here",
   "auto.step.prompt": "Prompt",
   "auto.step.cfg": "Settings",
   "auto.step.declaresNone": "None declared",
@@ -1284,7 +1287,7 @@ const ui = {
   "auto.about.archive": "Archived",
   "auto.about.archiveWhat": "An archived automation keeps everything it was built from, and a run already under way goes on.",
   "auto.about.remove": "Delete this automation",
-  "auto.about.removeConfirm": "Delete this automation? Its steps, their ways out and everything wired between them go with it. This cannot be undone.",
+  "auto.about.removeConfirm": "Delete this automation? Its placements, what happens after each and the wires between them go with it. The actions it placed stay in the library. This cannot be undone.",
 
   // The "running" tab: what is under way, what each run is on, and the three presses that
   // move it (`app/src/screens/RunningTab.tsx`).

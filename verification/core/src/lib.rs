@@ -4206,7 +4206,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
     // Pressing a box, which is what puts what it holds in the panel beside the picture.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-box", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // The `+` on a line, and the dialog it opens. The box is put in **in front of** the line named:
+    // The `+` on a line, and what it opens — on an automation's picture the library in the panel,
+    // whose own press opens the dialog for a written one. The box is put in **in front of** the line named:
     // `after` is the box the line leaves and `exit` the way out it leaves by, which is the pair a line
     // hangs on.
     //
@@ -4218,8 +4219,9 @@ const REGISTRY: &[OpSpec] = &[
     // `exits` is the named ways out the dialog is to declare on the new box, and `inputs` what it is
     // to take in — each of those a `name` and a `kind`, and `required` where it is one. Both are
     // lists, and both are only ever written beside a `prompt`: an action picked off the library
-    // declares neither here, those being already the action's.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after", "name"], refs: &["action"], strings: &["after", "exit", "name", "prompt"], binds: false },
+    // declares neither here, those being already the action's. `name` is the written action's, and
+    // one picked off the library needs none: it is placed from the panel, which asks nothing — so the driver asks for it only on the arm that writes.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "prompt"], binds: false },
     // The `+ output artefact` on a way out, and the dialog it opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //
@@ -4240,8 +4242,9 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "to", "ends"], binds: false },
     //
     // **The automation build screen's own three.** An automation's picture has no line until two
-    // placements are joined either, so the first placement — and any that is not put in on a line —
-    // comes from the row under the picture, which picks a library action (`action`) and places it.
+    // placements are joined either, so the first placement comes from the press in the empty picture,
+    // which opens the library in the panel beside it, where a library action (`action`) is picked and
+    // placed. Every later one goes in on a line (`insert-box`).
     // The box it draws is named by that action, as every placement's is.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-action", required: &["action"], refs: &["action"], strings: &[], binds: false },
     // Where a run opens, said on the pressed placement's panel. `on: false` gives the entry back,

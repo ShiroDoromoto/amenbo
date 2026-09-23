@@ -98,8 +98,11 @@ function AboutRow({
   );
 }
 
-/** The panel pinned to the right of the picture: a head that names what it shows, and a way to close. */
-function Panel({
+/**
+ * The panel pinned to the right of the picture: a head that names what it shows, and a way to close.
+ * The automation's build screen pins the same one beside its own picture (`./AutomationBuildScreen`).
+ */
+export function Panel({
   place,
   title,
   onClose,

@@ -1,9 +1,10 @@
-// What the pressed spot holds, on the build screen's third place (`AMB-T-5256`, `AMB-T-5282`).
+// What the pressed spot holds — the build screen's "placement" place, drawn in the panel pinned to the
+// picture's right (`AMB-T-5256`, `AMB-T-5282`, `AMB-T-5360`).
 //
 // **It stands where it stands, whatever the picture does.** A definition of forty boxes draws a
 // picture two thousand pixels tall, and a panel that followed the box a reader pressed would put the
-// contents off the bottom of the screen — so the picture scrolls inside its own place
-// (`./AutomationPicture`) and this one is always in the same spot.
+// contents off the bottom of the screen — so the panel is pinned beside the picture
+// (`./AutomationBuildScreen`) and this one is always in the same spot.
 //
 // **Every field writes on the spot.** There is no Save: what a reader changed is what the definition
 // now says, and a panel with a button would leave a spot half-edited every time somebody pressed

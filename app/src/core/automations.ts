@@ -655,6 +655,22 @@ export async function insertAutomationStep(
 }
 
 /**
+ * **Put a library action in on a line** — `insertAutomationStep` with an action off the shelf, which
+ * is what the library in the build screen's panel places. Nothing is written with it: what the action
+ * declares is its own, so the fields a written one takes go empty.
+ */
+export async function insertAutomationAction(edgeId: number, actionId: number): Promise<void> {
+  return insertAutomationStep(edgeId, {
+    name: "",
+    source: { action: actionId },
+    agent: "",
+    interactive: false,
+    exits: [],
+    inputs: [],
+  });
+}
+
+/**
  * **Write an action from one prompt and put it on the picture**, standing on its own with nothing
  * pointing at it — `insertAutomationStep`'s road for a picture that has no line to press
  * (`AMB-T-5317`).

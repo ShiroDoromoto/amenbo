@@ -3864,7 +3864,7 @@ impl Instructor {
             // **Making one from the list.** The press takes a name and nothing else, and lands on the
             // build screen of what it made — so the step that makes one is also the step that opens
             // it, and the road reads the build screen next rather than pressing a row. Notes are not
-            // asked for here: the panel at the foot of the build screen is where they are written.
+            // asked for here: the panel "Edit" opens on the build screen is where they are written.
             (Domain::Automation, "create") => {
                 if with.contains_key("notes") {
                     return Err(
@@ -3933,10 +3933,10 @@ impl Instructor {
                 req(with, "step")?,
                 req(with, "prompt")?
             ),
-            // The three fields the definition itself holds, written in the place at the foot of the
-            // build screen. There is no Save there: a box of text writes as the caret leaves it, the
-            // way the panel's do, and the tick writes on the press — which is the difference
-            // the last clause of the instruction turns on.
+            // The three fields the definition itself holds, written in the panel "Edit" on the head of
+            // the build screen opens. There is no Save there: a box of text writes as the caret leaves
+            // it, the way the placement panel's do, and the tick writes on the press — which is the
+            // difference the last clause of the instruction turns on.
             (Domain::Automation, "update") => {
                 let mut said: Vec<String> = Vec::new();
                 if let Some(name) = arg_str(with, "name") {
@@ -3958,7 +3958,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "In the build screen, in the place named for the automation itself, {}.{}",
+                    "In the build screen, press the Edit button on its head, and in the panel it opens beside the picture, {}.{}",
                     listed(&said),
                     // Only the boxes of text wait for the caret to leave them. The archived mark is
                     // a tick, and it writes on the press — an instruction telling an operator to
@@ -3972,7 +3972,7 @@ impl Instructor {
             // **The one press on this screen that cannot be taken back**, so the machine's own
             // question stands between it and the write. The road names both halves: a step that
             // stopped at the press would file a shot of a question nobody answered.
-            (Domain::Automation, "remove") => "In the build screen, press the button that deletes this automation, and answer the question the machine asks with the answer that goes ahead.".to_string(),
+            (Domain::Automation, "remove") => "In the build screen, press the Edit button on its head, press the button in the panel that deletes this automation, and answer the question the machine asks with the answer that goes ahead.".to_string(),
             // Pressing a box is what puts what it holds in the panel beside the picture. On an
             // automation's picture the box is named by the action standing on it; inside an action,
             // by the step.
@@ -3983,19 +3983,39 @@ impl Instructor {
             // The `+` on a line. The box goes in **in front of** that line, so the road names the box
             // the line leaves and the way out it leaves by — the pair a line hangs on.
             //
-            // A prompt is written the same way on either picture: on an automation's, the pulldown of
-            // what stands here starts on writing one, so the instruction need not touch it — and inside
-            // an action there is no such pulldown to touch. Only an action picked off the library
-            // names it, which is the automation's picture's alone.
-            (Domain::Automation, "insert-box") => format!(
-                "In the build screen's picture, press the `+` on the line leaving the box \"{}\" by {}. In the dialog, write the name \"{}\"{}{}{}, then press the button that puts it in.",
-                req(with, "after")?,
-                way_out(with),
-                req(with, "name")?,
+            // It is the automation picture's `+`, which opens the library in the panel beside the
+            // picture: an action off the shelf is picked and placed there, and one
+            // written here is made from the panel's own press, which opens the dialog. The `+` inside
+            // an action opens the dialog straight away, and no road walks it yet.
+            (Domain::Automation, "insert-box") => {
+                let written = |lead: &str| -> Result<String, String> {
+                    Ok(format!(
+                        "{lead} In the dialog, write the name \"{}\" and write \"{}\" as its prompt{}{}, then press the button that puts it in.",
+                        req(with, "name")?,
+                        req(with, "prompt")?,
+                        match declared_exits(with)?.as_slice() {
+                            [] => String::new(),
+                            [one] => format!(", add a way out called {one}"),
+                            ways => format!(", add a way out for each of {}", listed(ways)),
+                        },
+                        match declared_inputs(with)?.as_slice() {
+                            [] => String::new(),
+                            [one] => format!(", add an input {one}"),
+                            ports => format!(", add an input for each of {}", listed(ports)),
+                        }
+                    ))
+                };
+                let plus = format!(
+                    "In the build screen's picture, press the `+` on the line leaving the box \"{}\" by {}.",
+                    req(with, "after")?,
+                    way_out(with)
+                );
                 match (arg_str(with, "prompt"), with.get("action")) {
-                    (Some(prompt), None) => format!(" and write \"{prompt}\" as its prompt"),
+                    (Some(_), None) => written(&format!(
+                        "{plus} In the panel that opens beside the picture, press the button that makes a new action and places it."
+                    ))?,
                     (None, Some(_)) => format!(
-                        ", and pick the library action \"{}\" as what stands here",
+                        "{plus} In the panel that opens beside the picture, press the library action \"{}\", then press the button under it that places it.",
                         self.labels
                             .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
                             .cloned()
@@ -4005,18 +4025,8 @@ impl Instructor {
                         "a box put in writes a prompt here or names a library action, never both and never neither"
                             .to_string(),
                     ),
-                },
-                match declared_exits(with)?.as_slice() {
-                    [] => String::new(),
-                    [one] => format!(", add a way out called {one}"),
-                    ways => format!(", add a way out for each of {}", listed(ways)),
-                },
-                match declared_inputs(with)?.as_slice() {
-                    [] => String::new(),
-                    [one] => format!(", add an input {one}"),
-                    ports => format!(", add an input for each of {}", listed(ports)),
                 }
-            ),
+            }
             // What a way out hands on, declared from the way out it belongs to.
             (Domain::Automation, "add-output") => format!(
                 "In the panel showing what the pressed box holds, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
@@ -4091,11 +4101,12 @@ impl Instructor {
             // **The one press on the action's step panel that cannot be taken back**, so the machine's
             // own question stands between it and the write, the way it does for deleting an automation.
             (Domain::Automation, "remove-step") => "In the panel showing what the pressed step holds, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
-            // The row under an automation's picture, which places a library action on its own rather
-            // than on a line. The action is picked off the row's pulldown and not written, so the
-            // row's other press — the one that opens the dialog for writing one — is left alone.
+            // The first action on an automation's picture. A picture with nothing on it has no line to
+            // press a `+` on, so the press in the empty picture opens the library in the panel, and
+            // the action is picked and placed there. There is no press for a second one on its own:
+            // a box nothing points at is never reached, so every later one goes in on a line.
             (Domain::Automation, "place-action") => format!(
-                "On the automation build screen, on the row under the picture that places an action, pick the library action \"{}\" off the pulldown and press the button that places it.",
+                "On the automation build screen, whose picture has nothing on it, press the button in the picture that places the first action. In the panel that opens beside the picture, press the library action \"{}\", then press the button under it that places it.",
                 self.labels
                     .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
                     .cloned()
@@ -8280,7 +8291,7 @@ steps_gui:
         assert!(ins.expectation(&steps[5]).is_none(), "a line gone is an eye's");
     }
 
-    /// The automation build screen's own: an action placed from the row under the picture, the
+    /// The automation build screen's own: the first action placed from the empty picture, the
     /// entry ticked and given back, and a placement taken off past the machine's question. The
     /// entry's mark is the interface's words, so it is read by an eye and not as text.
     #[test]
@@ -8319,7 +8330,7 @@ steps_gui:
         let steps = s.steps(Driver::Gui);
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("places an action") && lines[0].contains("\"draft\""), "{}", lines[0]);
+        assert!(lines[0].contains("places the first action") && lines[0].contains("\"draft\""), "{}", lines[0]);
         assert!(lines[1].contains("tick the box saying a run starts here"), "{}", lines[1]);
         assert!(lines[2].contains("clear the box saying a run starts here"), "{}", lines[2]);
         assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);

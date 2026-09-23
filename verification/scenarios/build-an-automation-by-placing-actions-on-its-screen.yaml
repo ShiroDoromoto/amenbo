@@ -1,19 +1,21 @@
 # An automation's picture is built on its own screen, one layer over an action's: every box on it is
 # a placement of a library action. What a reader does there that no other screen asks of them is
-# five things. A picture with nothing on it has no `+` to press, so an action is placed from the row
-# under it. Where a run opens is said on a placement, and drawn on its box. What leaving one way out
-# leads to is said on that way out's row, with the limit a line to a box carries. And a placement is
-# taken off outright, with the action left in the library. A build that lost any of them would leave
-# an automation nobody could finish from the screen.
+# five things. A picture with nothing on it has no `+` to press, so the first action is placed from
+# the press in the empty picture, picked off the library the panel opens beside it; every later one
+# goes in on a line, off the same library. Where a run opens is said on a placement, and drawn on its
+# box. What leaving one way out leads to is said on that way out's row, with the limit a line to a box
+# carries. And a placement is taken off outright, with the action left in the library. A build that
+# lost any of them would leave an automation nobody could finish from the screen.
 id: build-an-automation-by-placing-actions-on-its-screen
 title: An automation's placements are put down, entered by, joined, let go of and taken off on its own screen
 description: >
-  Open an automation with nothing on it, place two library actions from the row under the picture,
-  and say a run starts at the first — then read the mark on its box. Say on the first one's way out
-  that leaving by it opens the second, write a limit on that line and empty it again, say instead
-  that leaving it finishes the task, and take that back. Take the second placement off, give the
-  entry back, and find the second action still in the library. Each change is read on the picture,
-  because the panel alone could say a thing the picture never drew.
+  Open an automation with nothing on it, place a library action from the press in the empty picture,
+  and say a run starts there — then read the mark on its box. Say its way out finishes the task, put
+  a second library action in on that line, and read both halves of what that did. Write a limit on
+  the line to the second and empty it again, say instead that leaving it finishes the task, and take
+  that back. Take the second placement off, give the entry back, and find the second action still in
+  the library. Each change is read on the picture, because the panel alone could say a thing the
+  picture never drew.
 given:
   # Two library actions, each with a step inside it so a placement's panel has a first step to show.
   # The first declares a way out of its own, which is the row the lines are said on.
@@ -40,8 +42,8 @@ steps_gui:
     with:
       target: auto
 
-  # Two placements, each from the row under the picture. The first goes on a picture with no line at
-  # all, which is the case the `+` on a line cannot reach.
+  # The first placement, from the press in the empty picture. A picture with no line at all is the
+  # case the `+` on a line cannot reach.
   - type: action
     domain: automation
     op: place-action
@@ -53,19 +55,6 @@ steps_gui:
     op: pictured
     with:
       name: draft
-      present: true
-
-  - type: action
-    domain: automation
-    op: place-action
-    with:
-      action: review
-
-  - type: assert
-    domain: automation
-    op: pictured
-    with:
-      name: review
       present: true
 
   # Where a run opens. It is said on the panel and read on the box, because two stretches nothing
@@ -87,14 +76,30 @@ steps_gui:
       name: draft
       entry: true
 
-  # Said on the way out's row, read on the picture. A new line to a box is born with a limit, so the
-  # limit is written and then emptied — the two ends of that box.
+  # A line to put the second one in on: leaving by the way out finishes the task.
   - type: action
     domain: automation
     op: set-next
     with:
       exit: drafted
-      to: review
+      ends: done
+
+  # The second placement, off the library the `+` on that line opens beside the picture. The way out
+  # comes to open it, and it goes on to where the way out used to — both halves read on the picture.
+  - type: action
+    domain: automation
+    op: insert-box
+    with:
+      after: draft
+      exit: drafted
+      action: review
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: review
+      present: true
 
   - type: assert
     domain: automation
@@ -103,6 +108,22 @@ steps_gui:
       from: draft
       exit: drafted
       to: review
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: review
+      ends: done
+
+  # Said on the way out's row, read on the picture. A new line to a box is born with a limit, so the
+  # limit is written and then emptied — the two ends of that box. The placing closed the panel, so
+  # the first box is pressed again to bring its rows back.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: draft
 
   - type: action
     domain: automation

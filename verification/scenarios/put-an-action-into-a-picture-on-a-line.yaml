@@ -1,14 +1,14 @@
-# A picture already drawn is added to on a line as well as under it. The row under the picture puts
-# an action down on its own, with nothing pointing at it; the `+` on a line is the road that leaves
-# nothing running past a box — the way out pressed comes to point at the new placement, and the new
+# A picture already drawn is added to on a line. The `+` on a line is the road that leaves nothing
+# running past a box — the way out pressed comes to point at the new placement, and the new
 # placement goes on to what that way out named. A build that made the placement and left the line
 # running past it would leave a picture nobody asked for, and one that made the placement and dropped
 # what the line used to reach would quietly throw away a decision somebody had made.
 #
 # ── Why the prompt is written in the dialog ─────────────────────────────────────────────────────
 # What stands on an automation's picture is always a placement of a library action, so
-# a prompt written on the line becomes an action of its own and is placed in the same press. It is the
-# arm of the dialog that makes the most — an action, the step inside it, the ways out it declares and
+# a prompt written on the line becomes an action of its own and is placed in the same press — made
+# from the press the library panel beside the picture holds under its lists. It is the arm of the
+# dialog that makes the most — an action, the step inside it, the ways out it declares and
 # the placement — which is why it is the one walked here.
 id: put-an-action-into-a-picture-on-a-line
 title: An action put in on a line takes over where that line went, and says what leaving it hands on

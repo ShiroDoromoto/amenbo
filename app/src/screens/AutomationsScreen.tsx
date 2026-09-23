@@ -21,6 +21,10 @@
 // (`./AutomationActionBuildScreen`). It is the same move one layer down (`AMB-D-949`), so the list
 // it replaces is the "actions" tab's rather than the "automations" tab's.
 //
+// **A row says whether its automation could be started now**, beside how many actions are placed on
+// it: "what is this" and "is it built yet" are the two things the list is read for. It is the build
+// screen's own launch check, so the list and the launch place cannot disagree (`AMB-T-5272`).
+//
 // **A new one is made from the list**, which is where this side of the app makes one at all. The
 // press takes a name and nothing else, and lands in the build screen on what it just made — what an
 // automation is for is the picture, and a form asking for its notes first would be asked before
@@ -30,9 +34,11 @@ import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { RunningTab } from "./RunningTab";
-import { addAutomation, useAutomations } from "../core/automations";
+import { addAutomation, useAutomations, useLaunchCheck } from "../core/automations";
+import { useBoundFolders } from "../core/boundFolders";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { t, tf } from "../core/i18n";
+import type { AutomationCardDto } from "../bindings/bindings";
 
 /** Which of the three tabs the screen is on. */
 type Tab = "running" | "automations" | "actions";
@@ -64,6 +70,7 @@ export function AutomationsScreen({
   // in place of the list rather than beside it.
   const [openAction, setOpenAction] = useState<number | null>(null);
   const automations = useAutomations(projectId);
+  const folders = useBoundFolders(projectId).live.map((one) => one.path);
 
   if (openAction !== null) {
     return (
@@ -118,14 +125,15 @@ export function AutomationsScreen({
           )}
 
           {tab === "automations" && automations.length > 0 && (
-            <ul className="auto__list">
+            <ul className="autolist">
               {automations.map((one) => (
                 <li key={one.id}>
-                  <button type="button" className="auto__row" onClick={() => setOpen(one.id)}>
-                    <span className="auto__name">{one.name}</span>
-                    {one.archived && <span className="auto__mark">{t("auto.archived")}</span>}
-                    <span className="auto__steps">{tf("auto.stepCount", { count: one.placements })}</span>
-                  </button>
+                  <AutomationRow
+                    automation={one}
+                    projectId={projectId}
+                    folders={folders}
+                    onOpen={() => setOpen(one.id)}
+                  />
                 </li>
               ))}
             </ul>
@@ -133,6 +141,43 @@ export function AutomationsScreen({
         </div>
       </div>
     </div>
+  );
+}
+
+/** One definition on the list — the whole row is the press that opens it. */
+function AutomationRow({
+  automation,
+  projectId,
+  folders,
+  onOpen,
+}: {
+  automation: AutomationCardDto;
+  projectId: number | null;
+  folders: readonly string[];
+  onOpen: () => void;
+}) {
+  const check = useLaunchCheck(automation.id, projectId, folders);
+  return (
+    <button
+      type="button"
+      className={automation.archived ? "autolist__row autolist__row--archived" : "autolist__row"}
+      onClick={onOpen}
+    >
+      <span className="autolist__name">
+        {automation.name}
+        {automation.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
+      </span>
+      <span className="autolist__meta">{tf("auto.stepCount", { count: automation.placements })}</span>
+      {/* Nothing until the check answers: a guess either way would be a word the build screen may
+          then contradict. */}
+      <span
+        className={
+          check === null ? "autolist__ready" : `autolist__ready autolist__ready--${check.ready ? "ok" : "no"}`
+        }
+      >
+        {check === null ? "" : check.ready ? t("auto.ready") : t("auto.notReady")}
+      </span>
+    </button>
   );
 }
 
@@ -182,7 +227,7 @@ function AutomationNew({
 
   if (!open) {
     return (
-      <div className="settings__row">
+      <div className="autolist__head">
         <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
           {t("auto.new")}
         </button>
@@ -191,18 +236,18 @@ function AutomationNew({
   }
 
   return (
-    <div className="settings__form">
-      <label className="field">
-        <span className="fieldlabel">{t("auto.new.name")}</span>
-        <input
-          {...asTyped}
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (isEnterSubmit(e)) void make(); }}
-        />
-      </label>
-      <div className="settings__row">
+    <div className="autolist__head">
+      <div className="autolist__new">
+        <label className="autolist__newname">
+          <span className="actlib__sec">{t("auto.new.name")}</span>
+          <input
+            {...asTyped}
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (isEnterSubmit(e)) void make(); }}
+          />
+        </label>
         <button
           type="button"
           className="btn btn--primary"

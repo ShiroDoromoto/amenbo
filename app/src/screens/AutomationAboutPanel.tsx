@@ -1,10 +1,11 @@
 // What the automation itself holds — its name, its notes, whether it is kept out of the way, and the
 // one press that takes the whole definition away.
 //
-// **It stands last on the build screen, under the picture.** What a reader opens a definition for is
-// the picture and the step they are about to fix; the name is already drawn on the head of the
-// screen, and everything here is reached once — when something is renamed, put away, or is not
-// wanted any more.
+// **It opens in the build screen's panel, from "Edit" on the head** (`./AutomationBuildScreen`). What a
+// reader opens a definition for is the picture and the spot they are about to fix; the name is
+// already drawn on the head of the screen, and everything here is reached once — when something is
+// renamed, put away, or is not wanted any more. Stacked under the picture it would move further off
+// with every placement; in the panel it is in the same spot however long the picture runs.
 //
 // **A field writes when the caret leaves it**, the way the step panel beside it does
 // (`./AutomationStepPanel`): there is no Save on this screen, so a definition never carries a change

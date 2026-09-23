@@ -1309,20 +1309,11 @@ button.feed__target:hover { color: var(--c-accent); }
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
-.auto__steps { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The way back to the list, and the name of the automation that is open, on one line. */
-.auto__head { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); font-weight: var(--fw-bold); }
-/* The name of one of the build screen's three places. It is a heading and not a card title: the
-   card is the place, and this says which one it is. */
-.auto__place { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); }
 .auto__ready { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* What stands between this automation and a launch. Marked on the heed step rather than the stop:
    an automation still being built is short of something, not broken. */
 .auto__notready { font-size: var(--fs-md); color: var(--c-heed); font-weight: var(--fw-bold); }
 .auto__blocks { margin: 0; padding-inline-start: var(--s-4); font-size: var(--fs-md); }
-/* What a rewrite in the library reaches, said where the rewrite is happening: under the prompt box
-   and over Save, so it is read on the way to the press rather than after it. */
-.auto__reaches { font-size: var(--fs-md); color: var(--c-text-muted); }
 
 /* ---------- starting an automation from somewhere else (`app/src/components/StartAutomation.tsx`) ---------- */
 /* The rows wrap: an automation's name is as long as somebody made it. */
@@ -1631,6 +1622,91 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .actpanel__close:hover { color: var(--c-text); }
 .actpanel__body { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }
+
+/* ── One automation, opened (`../screens/AutomationBuildScreen`) ──
+   The action build screen's frame (`.actbuild`), with the launch band where that one has its
+   declaration. "Edit" stands at the far end of the head. */
+.actbuild__edit { margin-inline-start: auto; }
+.autolaunch {
+  display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) var(--s-3) var(--s-3);
+  border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+/* Whether it can be started, boxed in the colour of the answer, with the press on the same line. */
+.autolaunch__box {
+  --tone: var(--c-edge);
+  padding: var(--s-2); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--tone);
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+}
+.autolaunch__box--ok { --tone: var(--c-done); }
+.autolaunch__box--no { --tone: var(--c-heed); }
+.autolaunch__title { display: flex; align-items: center; gap: var(--s-2); }
+.autolaunch__box--ok .auto__ready { color: var(--c-done); font-weight: var(--fw-bold); }
+.autolaunch__start { margin-inline-start: auto; }
+.autolaunch__box .auto__blocks { margin-block-start: var(--s-1); }
+
+/* The list of definitions: one bordered stack of rows, each the press that opens one. */
+.autolist__head { display: flex; align-items: center; gap: var(--s-2); }
+.autolist__new {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--s-2); flex: 1 1 auto;
+  padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken);
+}
+.autolist__newname { display: flex; flex-direction: column; gap: 2px; flex: 1 1 16em; min-width: 0; }
+.autolist {
+  list-style: none; margin: 0; padding: 0;
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;
+}
+.autolist > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
+.autolist__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 8rem; align-items: baseline; gap: var(--s-3);
+  width: 100%; padding: var(--s-2) var(--s-3); text-align: start;
+  background: none; border: 0; color: var(--c-text); font: inherit; font-size: var(--fs-md); cursor: pointer;
+}
+.autolist__row:hover { background: var(--c-hover); }
+.autolist__name { min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-bold); }
+.autolist__row--archived .autolist__name { color: var(--c-text-muted); }
+.autolist__tag {
+  margin-inline-start: var(--s-2); padding: 0 var(--s-2); border-radius: 999px; vertical-align: 1px;
+  border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-sunken-pic) var(--c-sunken);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted);
+}
+.autolist__meta { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
+.autolist__ready { font-size: var(--fs-xs); font-weight: var(--fw-bold); white-space: nowrap; text-align: end; }
+.autolist__ready--ok { color: var(--c-done); }
+.autolist__ready--no { color: var(--c-heed); }
+
+/* The library in the panel (`../screens/AutomationLibraryPanel`): two groups by reach, and the row
+   pressed opens in place with what the action declares and the press that places it. */
+.autolib__group {
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;
+}
+.autolib__head {
+  padding: var(--s-1) var(--s-2); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-sunken-pic) var(--c-sunken);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.06em; color: var(--c-text-faint);
+}
+.autolib__group > div + div { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
+.autolib__row {
+  display: flex; align-items: baseline; gap: var(--s-2); width: 100%; padding: var(--s-2);
+  background: none; border: 0; text-align: start; color: var(--c-text); font: inherit; cursor: pointer;
+}
+.autolib__row:hover, .autolib__row--on { background: var(--c-accent-weak); }
+.autolib__row--on { box-shadow: inset 3px 0 0 var(--c-accent); }
+.autolib__name { flex: 1 1 auto; min-width: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+.autolib__meta { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autolib__none { padding: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-faint); }
+.autolib__picked {
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-3) var(--s-3);
+  border-block-start: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-sunken-pic) var(--c-sunken); box-shadow: inset 3px 0 0 var(--c-accent);
+}
+.autolib__picked .actdecl__rows { margin-block-start: 0; }
+.autolib__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
+.autolib__make {
+  display: flex; flex-direction: column; gap: var(--s-1);
+  padding-block-start: var(--s-2); border-block-start: var(--border-w) dashed var(--c-edge);
+}
 
 /* The action itself on its own picture (`../screens/automationLayout`): where a placement comes in, and
    the ways out it is left by. Dashed pills rather than boxes — nothing opens on them. */

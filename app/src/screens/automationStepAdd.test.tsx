@@ -2,11 +2,12 @@
 // The dialog that puts a step in on a line, and the one that declares what a way out hands on
 // (`AMB-T-5257`).
 //
-// What these guard: **a box on an automation runs a library action or carries a prompt written
-// here**, and one that runs an action is not asked to declare what the action declares; **inside an
-// action there is no library to pick from** (`AMB-D-949`) and the press goes through that picture's
-// own door — the line it was opened from, or the action itself where there is no line yet
-// (`AMB-T-5315`); **a written action is asked which library to land in** (`AMB-T-5317`); **what the
+// What these guard: **on an automation the dialog writes an action and offers no library** — picking
+// one off the shelf is the build screen's panel (`./AutomationLibraryPanel`, `AMB-T-5360`); **the
+// press goes through each picture's own door** — the line it was opened from, or the picture itself
+// where there is no line yet (`AMB-T-5315`, `AMB-T-5317`); **a put is told apart from a cancel**, so
+// the screen can close its panel on the one and not the other; **a written action is asked which
+// library to land in** (`AMB-T-5317`); **what the
 // dialog took is what is sent**, ways out and inputs together; **nothing
 // is sent until the dialog has what a step cannot be made without**; and, for the output artefact, **the name starts on
 // the way out's own and stops following once somebody writes their own** — but only where that way
@@ -18,14 +19,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   insert: vi.fn(),
+  place: vi.fn(),
   insertInside: vi.fn(),
   add: vi.fn(),
   output: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
-  useAutomationActions: () => [{ id: 4, name: "Review", steps: 1, global: false, usedBy: 1 }],
   insertAutomationStep: hoisted.insert,
+  placeAutomationActionFromPrompt: hoisted.place,
   insertAutomationActionStep: hoisted.insertInside,
   addAutomationStep: hoisted.add,
   addAutomationOutput: hoisted.output,
@@ -67,6 +69,7 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   hoisted.insert.mockReset();
+  hoisted.place.mockReset();
   hoisted.insertInside.mockReset();
   hoisted.add.mockReset();
   hoisted.output.mockReset();
@@ -78,14 +81,19 @@ afterEach(() => {
 });
 
 describe("putting a step in on a line", () => {
-  async function open() {
+  const put = vi.fn();
+  const closed = vi.fn();
+  async function open(into: { edgeId: number } | { automationId: number } = { edgeId: 9 }) {
+    put.mockReset();
+    closed.mockReset();
     await act(async () => {
       root.render(
         createElement(AutomationStepAdd, {
-          into: { picture: "automation", edgeId: 9 },
+          into: { picture: "automation", ...into },
           projectId: 1,
           agent: "claude-code",
-          onClose: () => undefined,
+          onPut: put,
+          onClose: closed,
         }),
       );
     });
@@ -126,7 +134,7 @@ describe("putting a step in on a line", () => {
     await open();
     await typeInto(boxes()[0]!, "実装する");
     await typeInto(document.body.querySelector("textarea")!, "やる");
-    await pick(selects()[1]!, "device");
+    await pick(selects()[0]!, "device");
     await act(async () => button(t("auto.add.put")).click());
 
     expect(hoisted.insert.mock.calls[0]![1]).toMatchObject({
@@ -134,21 +142,43 @@ describe("putting a step in on a line", () => {
     });
   });
 
-  it("asks a step that runs a library action for nothing the action declares", async () => {
+  it("offers no library to pick from — the panel beside the picture is where one is picked", async () => {
     await open();
-    await typeInto(boxes()[0]!, "見直す");
-    await pick(selects()[0]!, "4");
-    expect(document.body.querySelector("textarea")).toBeNull();
-    // Including the library to keep it in: an action off the shelf is already kept somewhere.
+    // The one pulldown is the library a written action lands in, which has two answers and no blank.
     expect(selects()).toHaveLength(1);
-    expect(buttons().some((b) => b.textContent === t("auto.add.exitAdd"))).toBe(false);
-    expect(buttons().some((b) => b.textContent === t("auto.add.inputAdd"))).toBe(false);
+    expect([...selects()[0]!.options].map((one) => one.value)).toEqual(["project", "device"]);
+    expect(document.body.querySelector("textarea")).not.toBeNull();
+  });
+
+  it("writes the first action where the picture has no line to press", async () => {
+    await open({ automationId: 7 });
+    await typeInto(boxes()[0]!, "取る");
+    await typeInto(document.body.querySelector("textarea")!, "やる");
     await act(async () => button(t("auto.add.put")).click());
-    expect(hoisted.insert.mock.calls[0]![1]).toMatchObject({
-      source: { action: 4 },
+    expect(hoisted.place).toHaveBeenCalledWith(7, {
+      name: "取る",
+      prompt: "やる",
+      shelf: "project",
+      agent: "claude-code",
+      interactive: false,
       exits: [],
       inputs: [],
     });
+    expect(hoisted.insert).not.toHaveBeenCalled();
+  });
+
+  it("tells a put apart from a cancel", async () => {
+    await open();
+    await act(async () => button(t("auto.add.cancel")).click());
+    expect(put).not.toHaveBeenCalled();
+    expect(closed).toHaveBeenCalledTimes(1);
+
+    await open();
+    await typeInto(boxes()[0]!, "実装する");
+    await typeInto(document.body.querySelector("textarea")!, "やる");
+    await act(async () => button(t("auto.add.put")).click());
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 });
 

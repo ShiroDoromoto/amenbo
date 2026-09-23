@@ -3075,9 +3075,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drag-pane", required: &["pane", "onto", "side"], refs: &[], strings: &["pane", "onto", "side"], binds: false },
     // And the other gesture the page itself offers: the corner of a pane pulled until it is the size
     // the reader wants. It is the grip at the bottom right and nowhere else, for the reason the row
-    // above is the handle — the rest of a pane belongs to what is running in it. It is the only way
-    // to a size the face has: the row of six shapes that stood at the top of it is gone, a size being
-    // one pane's answer and that row having lit one of six for the whole page.
+    // above is the handle — the rest of a pane belongs to what is running in it. It is one of the two
+    // ways to a size, the other being the list on the pane's own row (`pick-pane-size`): the corner
+    // measures from the pane's left edge, so a pane in the right-hand column cannot be pulled out to
+    // the whole page, and the list is what reaches it.
     //
     // It is not a change of look. The panes are one list laid down in order and the pages fall out of
     // that, so a pane that grew takes room the ones behind it were in and pushes the overflow onto
@@ -3096,6 +3097,12 @@ const REGISTRY: &[OpSpec] = &[
     // the terminal inside would be re-drawn at every step of the pull. What moves while the pointer
     // does is an outline over the page, and the pane under it is the size it was.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "stretch-pane", required: &["size"], refs: &[], strings: &["size", "shows"], binds: false },
+    // The size picked from the pane's own row instead: the mark beside the row's menu draws the size
+    // the pane takes now, and the list it opens holds the six, each drawn and named. It lands the
+    // way a let-go corner does — the pane at that size, the panes after it laid down again — and it
+    // reaches every size, which the corner of a pane in the right-hand column cannot. `size` and
+    // `shows` are read as on `stretch-pane`.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "pick-pane-size", required: &["size"], refs: &[], strings: &["size", "shows"], binds: false },
     // The panes put in an order the person asked for. It is four ops and not one,
     // because what is being defended is that they are four separate moments: the modal is opened,
     // cards are carried about inside it, and then the arrangement is either taken or thrown away. A

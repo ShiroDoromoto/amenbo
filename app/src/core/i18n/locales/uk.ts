@@ -624,6 +624,8 @@ export const uk: Translation = {
     "face.tabsNamed": "Показувати назви",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "Скільки сторінки займає ця панель",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 вертикально", "pane.size.halfDown": "1/2 горизонтально",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.one": "{n} панель", "face.panes.few": "{n} панелі", "face.panes.many": "{n} панелей", "face.panes.other": "{n} панелі",
     "face.pages": "Сторінки",
     "face.page": "Сторінка {n}",

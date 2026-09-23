@@ -609,6 +609,8 @@ export const tr: Translation = {
     "face.tabsNamed": "Adları göster",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "Bu bölmenin sayfadan aldığı yer",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 dikey", "pane.size.halfDown": "1/2 yatay",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.one": "{n} bölme", "face.panes.other": "{n} bölme",
     "face.pages": "Sayfalar",
     "face.page": "Sayfa {n}",

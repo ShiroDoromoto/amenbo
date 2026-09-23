@@ -615,6 +615,8 @@ export const ja: Translation = {
     "face.tabsNamed": "名前を出す",
     "face.tabPanes": "{name}、{panes}",
     "face.paneSize": "このペインが取るページの広さ",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 縦", "pane.size.halfDown": "1/2 横",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.other": "{n}枚",
     "face.pages": "ページ",
     "face.page": "{n} ページ目",

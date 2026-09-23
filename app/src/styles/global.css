@@ -489,6 +489,39 @@ input[type="color"] {
 }
 .slot__more:hover { color: var(--c-text); }
 
+/* The size a pane takes, on its row beside the menu (`../shell/PaneSize`): the page drawn on its own
+   twelve-by-two grid, and what the pane takes of it filled in. The list is the menu's surface, laid
+   across in one row, the six drawn the same way with their names under them. */
+.panesize {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  /* Taller than the mark, which is eight pixels of drawing and too thin to aim at on its own. */
+  padding: 6px var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted);
+}
+.panesize:hover, .panesize[aria-expanded="true"] { color: var(--c-text); }
+.panesize__mark { width: 24px; height: 8px; display: block; }
+.panesize__page { fill: none; stroke: currentColor; stroke-width: 1; }
+.panesize__took { fill: currentColor; stroke: currentColor; stroke-width: 1; }
+.panesize__list {
+  position: fixed; z-index: 20;
+  display: flex; gap: var(--s-1);
+  padding: var(--s-1);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+}
+.panesize__one {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: var(--s-1) var(--s-2);
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
+  background: none; color: var(--c-text-muted); font: inherit; font-size: var(--fs-xs); cursor: pointer;
+  white-space: nowrap;
+}
+.panesize__one:hover { background: var(--c-hover); color: var(--c-text); }
+.panesize__one--now { border-color: var(--c-accent); color: var(--c-text); }
+.panesize__one .panesize__mark { width: 36px; height: 12px; }
+
 /* The box under the terminal, where a line is written before it is sent (`../shell/TerminalPane`).
    It is the third band of the slot's one column — the row, the terminal, this — and it takes room
    rather than being drawn over the pane: a terminal writes into every row it was told it has, so a

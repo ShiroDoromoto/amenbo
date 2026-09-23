@@ -624,6 +624,8 @@ export const pl: Translation = {
     "face.tabsNamed": "Pokaż nazwy",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "Ile strony zajmuje ten panel",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 pionowo", "pane.size.halfDown": "1/2 poziomo",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.one": "{n} panel", "face.panes.few": "{n} panele", "face.panes.many": "{n} paneli", "face.panes.other": "{n} panelu",
     "face.pages": "Strony",
     "face.page": "Strona {n}",

@@ -33,6 +33,8 @@ import { asTyped, isComposing, isEnterSubmit } from "../core/keys";
 import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
+import { PaneSize } from "./PaneSize";
+import type { Size } from "../talk/layout";
 
 /**
  * Put a record on the band's list, or leave the list as it is where it is already there.
@@ -98,7 +100,7 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, run = null, onGrab, onStretch,
+  inserted = [], composeOpen, held = false, goes = null, run = null, onGrab, onStretch, size, onSize,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -165,6 +167,11 @@ export function TerminalPane({
   onGrab?: (e: ReactPointerEvent<HTMLElement>) => void;
   /** Pull this pane's corner, to leave it at one of the sizes there are (`./paneDrag`). */
   onStretch?: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** The size this pane takes now, which the row's mark draws (`./PaneSize`). */
+  size?: Size;
+  /** Put this pane at one of the sizes, picked from the row — the way to every size the corner
+   *  cannot pull to (`./PaneSize`). Left out where the pane has no page to be sized on. */
+  onSize?: (to: Size) => void;
   onOpened: (frame: string, session: string, folder: string | null, agent: string | null) => void;
   onSaid: (statement: SessionSaidDto) => void;
   /** A file path drawn in this pane was clicked, as it was drawn. */
@@ -780,6 +787,9 @@ export function TerminalPane({
               **It is drawn only while a terminal is running**, and it is the one way in to naming a
               pane (`AMB-D-838`) — so an empty frame has no name. A place nobody has opened anything in
               is a place there is nothing to call. */}
+          {/* The size, beside the menu rather than in it: it is about the place and not the terminal,
+              so it is there whether or not anything is running — the way the corner is. */}
+          {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}
           {live !== null && (
             <button
               className="slot__more"

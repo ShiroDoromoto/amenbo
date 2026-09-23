@@ -609,6 +609,8 @@ export const nl: Translation = {
     "face.tabsNamed": "Namen tonen",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "Hoeveel van de pagina dit deelvenster inneemt",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 hoog", "pane.size.halfDown": "1/2 breed",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.one": "{n} deelvenster", "face.panes.other": "{n} deelvensters",
     "face.pages": "Pagina's",
     "face.page": "Pagina {n}",

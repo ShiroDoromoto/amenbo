@@ -621,6 +621,8 @@ export const ptBR: Translation = {
     "face.tabsNamed": "Mostrar os nomes",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "Quanto da página este painel ocupa",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 vertical", "pane.size.halfDown": "1/2 horizontal",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.one": "{n} painel", "face.panes.many": "{n} painéis", "face.panes.other": "{n} painéis",
     "face.pages": "Páginas",
     "face.page": "Página {n}",

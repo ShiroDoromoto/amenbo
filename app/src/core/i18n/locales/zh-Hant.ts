@@ -608,6 +608,8 @@ export const zhHant: Translation = {
     "face.tabsNamed": "顯示名稱",
     "face.tabPanes": "{name}，{panes}",
     "face.paneSize": "這個窗格佔頁面的多少",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 直", "pane.size.halfDown": "1/2 橫",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.other": "{n} 個",
     "face.pages": "頁",
     "face.page": "第 {n} 頁",

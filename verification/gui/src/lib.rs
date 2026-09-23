@@ -6408,12 +6408,15 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
 fn run_state(state: &str) -> Result<&'static str, String> {
     Ok(match state {
         "running" => "under way",
+        // Pause pressed while a step is open: the run is still `running`, and the row says it will
+        // hold once that step reports rather than either of the two it sits between.
+        "pausing" => "going to hold at the end of the step it is on",
         "paused" => "held",
         "stopped" => "stopped",
         "done" => "finished",
         other => {
             return Err(format!(
-                "`state` does not know `{other}` — it is running / paused / stopped / done"
+                "`state` does not know `{other}` — it is running / pausing / paused / stopped / done"
             ))
         }
     })

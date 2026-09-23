@@ -13,7 +13,10 @@ description: >
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
-  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the first step takes on the screen. A hold settles only when a step reports and the run
+  # has somewhere to go on to, so the screen road works the first step to its end.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the held run works }, as: seed }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.
@@ -26,10 +29,18 @@ given:
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  # The action the run goes on to. It is what makes the hold settle: a step that reports with nothing
+  # after it closes the run, and a closed run is not a held one.
+  - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
+  - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, agent: claude-code, prompt: carry on with the task }, as: wait }
+  - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_after } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_after } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 # A run started from the terminal opens no step — the host that opens them is the app's — so holding
@@ -141,12 +152,56 @@ steps_gui:
       target: run
       state: running
 
+  # Holding while the first step is open. The step cannot be cut in half, so the row says the run
+  # will hold when that step ends, not that it already has.
   - type: action
     domain: automation
     op: press-run
     with:
       target: run
       press: pause
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: pausing
+
+  # The step's agent finishing, typed in the pane the run opened for it. Reporting is what lets the
+  # hold settle, and the way out it leaves by has a placement after it to go on to.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: automation
+    op: take-in-pane
+    with:
+      target: run
+      task: seed
+
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: took the task and stopped where the hold asked
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
 
   - type: assert
     domain: automation

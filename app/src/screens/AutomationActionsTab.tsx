@@ -14,14 +14,18 @@
 // **Under the name, the row carries the first line of what the action is for** (`AMB-D-952`) — the
 // note written on the build screen, which is what tells two actions of like names apart.
 //
+// **It is searched and narrowed in place** — by what the name and the note say, and by reach — since
+// a library grows past what a reader scans by eye, and the two reaches stay one list either way.
+//
 // **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
 // prompts written. Making one here asks for a name and a reach and no prompt: an action is born
 // empty, and the screen the press lands on is where the words go.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addAutomationAction, useAutomationActions } from "../core/automations";
 import { asTyped } from "../core/keys";
-import { errText, t, tn } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
+import type { AutomationActionCardDto } from "../bindings/bindings";
 
 /**
  * **The row carries the note's first line, and no more.** It is what tells two actions of like names
@@ -29,6 +33,26 @@ import { ErrorNote } from "../components/ErrorNote";
  */
 function firstLine(note: string): string {
   return note.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+}
+
+/** Which reach the list is narrowed to. */
+type Reach = "all" | "device" | "project";
+
+/** The reach an action sits in, as a chip — the same one the build screen's declaration draws. */
+export function ReachChip({ global }: { global: boolean }) {
+  return (
+    <span className={global ? "actscope actscope--device" : "actscope"}>
+      <em aria-hidden="true" />
+      {global ? t("auto.actions.reachDevice") : t("auto.actions.reachProject")}
+    </span>
+  );
+}
+
+function matches(one: AutomationActionCardDto, words: string, reach: Reach): boolean {
+  if (reach === "device" && !one.global) return false;
+  if (reach === "project" && one.global) return false;
+  const w = words.trim().toLowerCase();
+  return w === "" || `${one.name} ${one.note}`.toLowerCase().includes(w);
 }
 
 export function AutomationActionsTab({
@@ -43,6 +67,13 @@ export function AutomationActionsTab({
   // The ids the library held when Make was pressed, while the row that was made is still on its way.
   // Nothing while none is.
   const [born, setBorn] = useState<ReadonlySet<number> | null>(null);
+  const [making, setMaking] = useState(false);
+  const [words, setWords] = useState("");
+  const [reach, setReach] = useState<Reach>("all");
+  const shown = useMemo(
+    () => actions.filter((one) => matches(one, words, reach)),
+    [actions, words, reach],
+  );
 
   // **The new row is the one the library did not hold before.** A write answers with an ack — the
   // ids it touched and what to re-read, never a body — so which row was made is read off the list
@@ -59,39 +90,90 @@ export function AutomationActionsTab({
   async function make(name: string, project: number | null) {
     const before = new Set(actions.map((one) => one.id));
     await addAutomationAction(name, project);
+    setMaking(false);
     setBorn(before);
   }
 
+  const reaches: { id: Reach; label: string }[] = [
+    { id: "all", label: t("auto.actions.all") },
+    { id: "device", label: t("auto.actions.reachDevice") },
+    { id: "project", label: t("auto.actions.reachProject") },
+  ];
+
   return (
-    <>
-      <ActionAdd projectId={projectId} onMake={make} />
-      {actions.length === 0 ? (
-        <div className="auto__empty">{t("auto.actions.empty")}</div>
-      ) : (
-        <ul className="auto__list">
-          {actions.map((one) => (
-            <li key={one.id}>
-              <button type="button" className="auto__row" onClick={() => onOpen(one.id)}>
-                <span className="auto__name">
-                  {one.name}
-                  {firstLine(one.note) !== "" && (
-                    <span className="auto__note">{firstLine(one.note)}</span>
-                  )}
-                </span>
-                <span className="auto__mark">
-                  {one.global ? t("auto.actions.reachDevice") : t("auto.actions.reachProject")}
-                </span>
-                <span className="auto__steps">
-                  {one.usedBy === 0
-                    ? t("auto.actions.unused")
-                    : tn("auto.actions.usedBy", one.usedBy)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+    <div className="actlib">
+      <div className="actlib__head">
+        <span className="actlib__sec">{t("auto.actions.library")}</span>
+        {!making && (
+          <button type="button" className="btn btn--primary" onClick={() => setMaking(true)}>
+            {t("auto.actions.add")}
+          </button>
+        )}
+      </div>
+      {making && (
+        <ActionAdd projectId={projectId} onMake={make} onCancel={() => setMaking(false)} />
       )}
-    </>
+      <div className="actlib__tools">
+        <input
+          {...asTyped}
+          type="search"
+          className="actlib__search"
+          placeholder={t("auto.actions.search")}
+          value={words}
+          onChange={(e) => setWords(e.target.value)}
+        />
+        {reaches.map((one) => (
+          <button
+            key={one.id}
+            type="button"
+            className={reach === one.id ? "actchip actchip--on" : "actchip"}
+            aria-pressed={reach === one.id}
+            onClick={() => setReach(one.id)}
+          >
+            {one.label}
+          </button>
+        ))}
+      </div>
+      {actions.length === 0 ? (
+        <div className="actlib__none">{t("auto.actions.empty")}</div>
+      ) : shown.length === 0 ? (
+        <div className="actlib__none">{t("auto.actions.noMatch")}</div>
+      ) : (
+        <div className="actlib__table">
+          <div className="actlib__cols" aria-hidden="true">
+            <span>{t("auto.actions.name")}</span>
+            <span>{t("auto.actions.reach")}</span>
+            <span className="actlib__num">{t("auto.actions.colSteps")}</span>
+            <span className="actlib__num">{t("auto.actions.colUsed")}</span>
+          </div>
+          <ul className="actlib__rows">
+            {shown.map((one) => (
+              <li key={one.id}>
+                <button type="button" className="auto__row actlib__row" onClick={() => onOpen(one.id)}>
+                  <span className="auto__name">
+                    {one.name}
+                    {firstLine(one.note) !== "" && (
+                      <span className="auto__note">{firstLine(one.note)}</span>
+                    )}
+                  </span>
+                  <span>
+                    <ReachChip global={one.global} />
+                  </span>
+                  <span className={one.steps === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
+                    {one.steps === 0 ? t("auto.actions.noSteps") : one.steps}
+                  </span>
+                  <span className={one.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
+                    {one.usedBy === 0
+                      ? t("auto.actions.usedNone")
+                      : tf("auto.actions.usedN", { n: one.usedBy })}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -103,41 +185,30 @@ export function AutomationActionsTab({
  * and a field here would be writing one before there is a step to write it on — so what this makes
  * is the row, and the press lands in the build screen on it (`./AutomationActionBuildScreen`).
  *
- * **The reach is asked for rather than defaulted.** The device's library is reached by every project
- * on this machine and the project's by one, and moving an action between them is not something this
- * screen does — so it is a choice made here rather than one a reader finds out about later.
- *
- * It stands over the list whether or not the library has anything in it: an empty library is exactly
- * where the way to fill it has to be.
+ * **The reach is asked for with nothing picked** (`AMB-D-954`). Whether an action is general or this
+ * project's own is read off what it does, which only the person making it knows — so the form leaves
+ * the choice open and makes nothing until one is picked, rather than filing it in a reach they did not
+ * choose.
  */
 function ActionAdd({
   projectId,
   onMake,
+  onCancel,
 }: {
   projectId: number | null;
   onMake: (name: string, project: number | null) => Promise<void>;
+  onCancel: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [wide, setWide] = useState(false);
+  const [reach, setReach] = useState<"" | "device" | "project">("");
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!open) {
-    return (
-      <button type="button" className="btn" onClick={() => setOpen(true)}>
-        {t("auto.actions.add")}
-      </button>
-    );
-  }
 
   const make = async () => {
     setError(null);
     setMaking(true);
     try {
-      await onMake(name.trim(), wide ? null : projectId);
-      setName("");
-      setOpen(false);
+      await onMake(name.trim(), reach === "device" ? null : projectId);
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -146,34 +217,36 @@ function ActionAdd({
   };
 
   return (
-    <div className="settings__form">
-      <label className="field">
-        <span className="fieldlabel">{t("auto.actions.name")}</span>
+    <div className="actlib__make">
+      <label className="actlib__field">
+        <span>{t("auto.actions.name")}</span>
         <input {...asTyped} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <label className="field">
-        <span className="fieldlabel">{t("auto.actions.reach")}</span>
+      <label className="actlib__field">
+        <span>{t("auto.actions.reach")}</span>
         <select
-          value={wide ? "device" : "project"}
-          onChange={(e) => setWide(e.target.value === "device")}
+          value={reach}
+          onChange={(e) => setReach(e.target.value as "" | "device" | "project")}
         >
+          <option value="">{t("auto.actions.pickReach")}</option>
           <option value="project">{t("auto.actions.reachProject")}</option>
           <option value="device">{t("auto.actions.reachDevice")}</option>
         </select>
       </label>
-      <div className="settings__row">
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={making || name.trim() === "" || (!wide && projectId === null)}
-          onClick={() => void make()}
-        >
-          {t("auto.actions.add")}
-        </button>
-        <button type="button" className="btn" onClick={() => setOpen(false)}>
-          {t("auto.actions.cancel")}
-        </button>
-      </div>
+      <button
+        type="button"
+        className="btn btn--primary"
+        disabled={
+          making || name.trim() === "" || reach === "" || (reach === "project" && projectId === null)
+        }
+        onClick={() => void make()}
+      >
+        {t("auto.actions.add")}
+      </button>
+      <button type="button" className="btn" onClick={onCancel}>
+        {t("auto.actions.cancel")}
+      </button>
+      <p className="actlib__said">{t("auto.actions.makeSaid")}</p>
       {error !== null && <ErrorNote>{error}</ErrorNote>}
     </div>
   );

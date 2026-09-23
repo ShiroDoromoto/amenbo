@@ -3891,20 +3891,20 @@ impl Instructor {
             ),
             // **Making an action from the library's own list.** It takes a name and a reach and no
             // prompt — the prompt is a step's, and there is no step until the build screen the press
-            // lands on puts one in. The reach is left alone where the road names none, the pulldown
-            // starting on this project's library.
+            // lands on puts one in. The reach pulldown starts on nothing picked, so the
+            // operator picks one either way: this project's where the road names none.
             (Domain::Automation, "action-make") => format!(
-                "On the actions tab, press the button that adds an action, write \"{}\" as its name{}, and press the button that makes it. Confirm the action build screen for it opens in place of the list.",
+                "On the actions tab, press the button that adds an action, write \"{}\" as its name, {}, and press the button that makes it. Confirm the action build screen for it opens in place of the list.",
                 req(with, "name")?,
                 match arg_str(with, "reach") {
-                    None | Some("project") => String::new(),
-                    Some("device") => ", set where it is kept to this device's library".to_string(),
+                    None | Some("project") => "set where it is kept to this project's library".to_string(),
+                    Some("device") => "set where it is kept to this device's library".to_string(),
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
-            // What the action is called and what it is for, written in the place at the head of its
-            // own build screen. There is no Save there: each box writes as the caret leaves it, the
-            // way the automation's own do.
+            // What the action is called and what it is for, written in its declaration — the panel
+            // the button over the picture opens beside it. There is no Save there: each box writes as
+            // the caret leaves it, the way the automation's own do.
             (Domain::Automation, "action-update") => {
                 let mut said: Vec<String> = Vec::new();
                 if let Some(name) = arg_str(with, "name") {
@@ -3920,7 +3920,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "On the action build screen for \"{}\", in the place named for the action itself, {}. Move off the box afterwards, so what you wrote is taken.",
+                    "On the action build screen for \"{}\", press the button that edits the declaration, and in the panel it opens, {}. Move off the box afterwards, so what you wrote is taken.",
                     self.target_label(with),
                     listed(&said)
                 )
@@ -6007,14 +6007,13 @@ impl Instructor {
                     Some(_) => format!(", saying {} automations use it", count(with, "used_by")?),
                     None => String::new(),
                 },
-                // How many steps it holds is the terminal's to read: the row draws the note, the
-                // reach and the count of automations, and a road asking the screen for a number it
-                // does not draw would be handing the operator nothing to look at.
+                // How many steps it holds, in its own column. None is drawn in words rather than as
+                // a zero, the way the count of automations is.
                 match with.get("steps") {
-                    Some(_) => return Err(
-                        "the actions tab draws no count of steps — read it at the terminal (`steps_cli`)"
-                            .to_string(),
-                    ),
+                    Some(_) => match count(with, "steps")? {
+                        0 => ", saying it holds no steps yet".to_string(),
+                        n => format!(", saying it holds {n} steps"),
+                    },
                     None => String::new(),
                 },
                 // The line under the name is the note's first one, and no line at all where there is

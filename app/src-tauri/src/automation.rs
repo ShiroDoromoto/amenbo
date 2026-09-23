@@ -45,11 +45,12 @@
 use amenbo_core::model::{
     ActorKind, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationOwner, AutomationPictureOwner, AutomationPort, AutomationPortDirection,
-    AutomationPortKind, AutomationPortOwner, AutomationRunStatus, AutomationStoppedReason,
+    AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
     AutomationWire,
 };
 use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_run::{self, Unmet};
+use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
 use amenbo_core::ops::automation_view;
@@ -1466,7 +1467,7 @@ fn stop_if_going(
     if !going {
         return Ok(None);
     }
-    Ok(Some(store.automation_stop(run_id, AutomationStoppedReason::ByHuman)?))
+    Ok(Some(store.automation_stop(run_id, Ending::Canceled)?))
 }
 
 // ───────────────────────────── shaping ─────────────────────────────

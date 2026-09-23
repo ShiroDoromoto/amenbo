@@ -2169,7 +2169,7 @@ pub enum AutomationCmd {
         /// close the run
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// stop the run and call a person
+        /// end the run failed (halted) and call a person
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task (left out: 10, the standing limit)
@@ -2193,7 +2193,7 @@ pub enum AutomationCmd {
         /// close the run
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// stop the run and call a person
+        /// end the run failed (halted) and call a person
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task
@@ -2271,8 +2271,8 @@ pub enum AutomationCmd {
         /// run id
         run: i64,
     },
-    /// Stop a run: hand the task it was working back, and leave a comment on the task saying how
-    /// far it got
+    /// Stop a run, which ends it canceled: hand the task it was working back, and leave a comment on
+    /// the task saying how far it got
     Stop {
         /// run id
         run: i64,

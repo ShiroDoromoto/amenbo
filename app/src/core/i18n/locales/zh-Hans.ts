@@ -1063,6 +1063,8 @@ export const zhHans: Translation = {
     "auto.run.noAgent": "无法启动它的代理",
     "auto.run.byHuman": "手动停止",
     "auto.run.noWayOn": "没有可打开的步骤了",
+    "auto.run.noInput": "必填的输入没有值",
+    "auto.run.halted": "在呼叫人的出口停下",
     "auto.run.step": "步骤 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
 

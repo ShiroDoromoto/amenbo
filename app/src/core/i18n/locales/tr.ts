@@ -1061,6 +1061,8 @@ export const tr: Translation = {
     "auto.run.noAgent": "aracısı başlatılamadı",
     "auto.run.byHuman": "elle durduruldu",
     "auto.run.noWayOn": "açılacak bir şey kalmamıştı",
+    "auto.run.noInput": "zorunlu bir girdi boş kaldı",
+    "auto.run.halted": "bir çıkış bir kişiyi çağırdı",
     "auto.run.step": "Adım {n} · {step}",
     "auto.run.inAction": "{action} içindeki {step}",
 

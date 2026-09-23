@@ -1199,16 +1199,16 @@ datasets! {
     // `pause_requested` is the gap between the button and the pause: a step is under way and cannot
     // be cut in half, so the request is recorded and the run reaches `paused` when that step reports.
     //
-    // `stopped_reason` is why it stopped, and it is stored because it cannot be derived: the records
+    // `stopped_reason` is why it failed, and it is stored because it cannot be derived: the records
     // show a crash (that step execution is left `failed`) and say nothing about a loop that ran out
-    // of turns, an agent that was not there, or a person who said stop. Set only while
-    // `status = 'stopped'`.
+    // of turns, an agent that was not there, or an input nothing filled. Set only while
+    // `status = 'failed'` (`AMB-D-955`).
     automation_run {
         automation_id: fk("automation", "RESTRICT"),
         project_id: fk("project", "RESTRICT"),
-        status: enum_col("running", "paused", "done", "stopped"),
+        status: enum_col("running", "paused", "completed", "failed", "canceled"),
         pause_requested: bool_col,
-        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "by_human", "no_way_on"),
+        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted"),
         started_by_kind: actor_kind,
         started_at: ts_opt,
         ended_at: ts_opt,

@@ -220,7 +220,7 @@ mod tests {
             &[
                 ("automation_id", int(automation_id)),
                 ("project_id", int(project_id)),
-                ("status", text("done")),
+                ("status", text("completed")),
             ],
         )
         .unwrap();

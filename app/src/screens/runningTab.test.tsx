@@ -135,11 +135,15 @@ describe("the running tab", () => {
     await render([run({ status: "running" })]);
     expect(labels()).toContain(t("auto.run.pause"));
 
-    await render([run({ status: "stopped", stoppedReason: "by_human" })]);
+    await render([run({ status: "canceled" })]);
     expect(labels()).not.toContain(t("auto.run.stop"));
     expect(labels()).not.toContain(t("auto.run.pause"));
     expect(container.textContent).toContain(t("auto.run.stopped"));
     expect(container.textContent).toContain(t("auto.run.byHuman"));
+
+    await render([run({ status: "failed", stoppedReason: "crashed" })]);
+    expect(labels()).not.toContain(t("auto.run.stop"));
+    expect(container.textContent).toContain(t("auto.run.crashed"));
   });
 
   it("puts every reason a run can stop for into words", async () => {
@@ -149,10 +153,11 @@ describe("the running tab", () => {
       ["crashed", "auto.run.crashed"],
       ["max_times", "auto.run.maxTimes"],
       ["no_agent", "auto.run.noAgent"],
-      ["by_human", "auto.run.byHuman"],
+      ["no_input", "auto.run.noInput"],
       ["no_way_on", "auto.run.noWayOn"],
+      ["halted", "auto.run.halted"],
     ] as const) {
-      await render([run({ status: "stopped", stoppedReason: reason })]);
+      await render([run({ status: "failed", stoppedReason: reason })]);
       expect(container.querySelector(".autorun__why")?.textContent).toBe(t(key));
     }
   });

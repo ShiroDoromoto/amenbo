@@ -595,8 +595,8 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     assert_eq!(paused["automation_run"]["state"].as_str(), Some("asked"));
 
     let stopped = cli.json(&["automation", "stop", &run, "--json"]);
-    assert_eq!(stopped["automation_run"]["status"].as_str(), Some("stopped"));
-    assert_eq!(stopped["automation_run"]["stopped_reason"].as_str(), Some("by_human"));
+    assert_eq!(stopped["automation_run"]["status"].as_str(), Some("canceled"));
+    assert!(stopped["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
 /// The launch check refuses an unfinished automation and names what is missing. Nothing on the

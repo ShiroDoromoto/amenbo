@@ -6775,14 +6775,14 @@ pub fn automation_run_ids_running(conn: &Connection) -> Result<Vec<i64>> {
 
 
 /// **The runs a reader has to be able to see right now**, newest first — everything that is still
-/// going, and the ones that stopped most recently.
+/// going, and the ones cut short most recently.
 ///
 /// It crosses projects because a terminal does: what a run holds is a terminal on this machine, and
 /// this machine is not divided up per project. The under-way runs come first and are all of them,
-/// however many that is. The stopped ones follow and are capped at `stopped`, because a stop is kept so
-/// that a failure nobody was watching is still seen, not so that every failure since the store was made
-/// is listed. **A run that is `done` is not here at all**: what it did is read from the task it worked
-/// or the automation it came from ([`automation_run_ids`]).
+/// however many that is. The failed and canceled ones follow and are capped at `stopped`, because they
+/// are kept so that a failure nobody was watching is still seen, not so that every failure since the
+/// store was made is listed. **A run that is `completed` is not here at all**: what it did is read from
+/// the task it worked or the automation it came from ([`automation_run_ids`]).
 pub fn automation_runs_live(
     conn: &Connection,
     stopped: usize,
@@ -6793,7 +6793,7 @@ pub fn automation_runs_live(
     let mut out = automation_run_rows(conn, &under_way, None)?;
     out.extend(automation_run_rows(
         conn,
-        &Pred::eq(R.status, S::Stopped.as_str()),
+        &Pred::is_in(R.status, [S::Failed.as_str(), S::Canceled.as_str()]),
         Some(stopped as i64),
     )?);
     Ok(out)

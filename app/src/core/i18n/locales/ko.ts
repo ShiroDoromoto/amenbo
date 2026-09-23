@@ -1058,6 +1058,8 @@ export const ko: Translation = {
     "auto.run.noAgent": "에이전트를 시작하지 못함",
     "auto.run.byHuman": "직접 중지함",
     "auto.run.noWayOn": "열 단계가 남아 있지 않았다",
+    "auto.run.noInput": "필수 입력이 비어 있었다",
+    "auto.run.halted": "사람을 부르는 출구로 멈췄다",
     "auto.run.step": "단계 {n} · {step}",
     "auto.run.inAction": "{action}의 {step}",
 

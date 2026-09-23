@@ -934,6 +934,11 @@ pub const STEPS: &[Step] = &[
         name: "drop the shared documents, and give an action a note of its own",
         apply: Apply::Custom(take_the_shared_documents_away),
     },
+    Step {
+        to: 60,
+        name: "say how a run ended — completed, failed or canceled — instead of done or stopped",
+        apply: Apply::Custom(say_how_a_run_ended),
+    },
 ];
 
 /// v59: the shared documents go, and `automation_action.note` arrives (`AMB-D-952`).
@@ -978,6 +983,80 @@ fn take_the_shared_documents_away(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
+/// v60: `automation_run.status` ends on `completed`, `failed` or `canceled` in place of `done` and
+/// `stopped` (`AMB-D-955`).
+///
+/// **What the rows become.** `done` is the picture run out, which is `completed`. A `stopped` run that a
+/// person stopped (`by_human`) is `canceled`, and loses the reason — a cancel carries none. Every other
+/// `stopped` run is `failed` and keeps the reason it has. The reason set takes `no_input` and `halted` — what
+/// an input nothing filled and a way out that calls a person write — and drops `by_human`.
+///
+/// **A `stopped` row with no reason stays without one.** It is a run that halted on a way out, ran out
+/// of picture mid-walk, or had an input nothing filled, and the row does not say which. It becomes
+/// `failed`, because each of the three is; naming one of them would make the record say something it
+/// never knew.
+///
+/// **The declarations first, the rows second, one transaction** — v51's order. SQLite checks a `CHECK`
+/// on write and never on the rows already there, so the rows can be moved onto the new values once the
+/// columns admit them. This is v9's procedure met an eighth time, copied rather than called, for the
+/// reasons [`admit_rejected_task_status`] gives.
+fn say_how_a_run_ended(ctx: &Ctx<'_>) -> Result<()> {
+    /// The two closed sets as every store from v52 on declares them — frozen text, like every step's.
+    const OLD_STATUS: &str = "CHECK(status IN ('', 'running', 'paused', 'done', 'stopped'))";
+    const OLD_REASON: &str =
+        "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'by_human', 'no_way_on'))";
+    /// The same columns with the three endings, and the reasons only a failure carries.
+    const NEW_STATUS: &str =
+        "CHECK(status IN ('', 'running', 'paused', 'completed', 'failed', 'canceled'))";
+    const NEW_REASON: &str = "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', \
+                              'no_way_on', 'halted'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_run'",
+        [],
+        |r| r.get(0),
+    )?;
+    if !(declared.contains(NEW_STATUS) && declared.contains(NEW_REASON)) {
+        // Not already rewritten: a store born from a registry that carries the new sets, stamped back
+        // to an earlier version, is the one that arrives here with nothing to rewrite.
+        for expected in [OLD_STATUS, OLD_REASON] {
+            if !declared.contains(expected) {
+                return Err(super::StoreEngineError::UnrecognisedDdl {
+                    table: "automation_run",
+                    expected,
+                });
+            }
+        }
+        let rewritten = declared.replace(OLD_STATUS, NEW_STATUS).replace(OLD_REASON, NEW_REASON);
+
+        let before = column_names(ctx.tx, "automation_run")?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_run'",
+            [&rewritten],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the `UPDATE`s below
+        // see the new sets instead of the ones this connection read at open.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, "automation_run")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_run",
+                expected: OLD_STATUS,
+            });
+        }
+    }
+
+    ctx.tx.execute_batch(
+        "UPDATE automation_run SET status = 'completed' WHERE status = 'done';
+         UPDATE automation_run SET status = 'canceled', stopped_reason = NULL
+          WHERE status = 'stopped' AND stopped_reason = 'by_human';
+         UPDATE automation_run SET status = 'failed' WHERE status = 'stopped';",
+    )?;
+    Ok(())
+}
+
 /// v52: `automation_run.stopped_reason` admits `no_way_on`.
 ///
 /// The value reached the model with the watch that writes it
@@ -1003,9 +1082,10 @@ fn admit_the_run_with_nowhere_to_go(ctx: &Ctx<'_>) -> Result<()> {
         [],
         |r| r.get(0),
     )?;
-    if declared.contains(WIDE) {
+    if declared.contains(WIDE) || (!declared.contains(NARROW) && declared.contains("'no_way_on'")) {
         // Already wide: a store born from a registry that carries the value, stamped back to an
-        // earlier version. Nothing to widen, and nothing wrong.
+        // earlier version. Nothing to widen, and nothing wrong. The registry's set may have moved on
+        // since (v60 renames it), so what is read is the value, not this step's own spelling of the set.
         return Ok(());
     }
     if !declared.contains(NARROW) {
@@ -1070,9 +1150,13 @@ fn take_the_run_queue_away(ctx: &Ctx<'_>) -> Result<()> {
         [],
         |r| r.get(0),
     )?;
-    if !declared.contains(WITHOUT_QUEUE) {
-        // Not already narrowed: a store born from a registry that no longer carries the value, stamped
-        // back to an earlier version, is the one that arrives here with nothing to rewrite.
+    // Already narrowed: a store born from a registry that no longer carries the value, stamped back to
+    // an earlier version, is the one that arrives here with nothing to rewrite. The registry's set may
+    // have moved on since (v60 renames the endings), so what is read is the value's absence, not this
+    // step's own spelling of the set.
+    let narrowed_already =
+        declared.contains(WITHOUT_QUEUE) || !declared.contains("'queued'");
+    if !narrowed_already {
         if !declared.contains(WITH_QUEUE) {
             return Err(super::StoreEngineError::UnrecognisedDdl {
                 table: "automation_run",
@@ -7078,6 +7162,71 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v60 in full: every ending lands on the word for what happened (`AMB-D-955`). A finished run is
+    /// `completed`, one a person stopped is `canceled` with no reason, and every other stop is `failed`
+    /// with the reason it had — or with none, where the row never said which of three it was. What is
+    /// still going is untouched, and the retired words are refused on the way in.
+    #[test]
+    fn a_run_s_ending_lands_on_the_word_for_what_happened() {
+        let dir = scratch("run-endings");
+        let engine = store_at(&dir, 59);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, stopped_reason) VALUES
+                     (1, 1, 1, 'done',    NULL),
+                     (2, 1, 1, 'stopped', 'by_human'),
+                     (3, 1, 1, 'stopped', 'crashed'),
+                     (4, 1, 1, 'stopped', NULL),
+                     (5, 1, 1, 'running', NULL),
+                     (6, 1, 1, 'paused',  NULL);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let after: Vec<(String, Option<String>)> = {
+            let conn = engine.conn();
+            let mut stmt =
+                conn.prepare("SELECT status, stopped_reason FROM automation_run ORDER BY id").unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        let said = |status: &str, reason: Option<&str>| (status.to_string(), reason.map(str::to_string));
+        assert_eq!(
+            after,
+            vec![
+                said("completed", None),
+                said("canceled", None),
+                said("failed", Some("crashed")),
+                said("failed", None),
+                said("running", None),
+                said("paused", None),
+            ],
+        );
+
+        let declared = declared_sql(&engine, "automation_run");
+        assert!(
+            declared.contains("CHECK(status IN ('', 'running', 'paused', 'completed', 'failed', 'canceled'))"),
+            "the status set is the new one: {declared}"
+        );
+        for retired in [
+            "UPDATE automation_run SET status = 'stopped' WHERE id = 5",
+            "UPDATE automation_run SET status = 'done' WHERE id = 5",
+            "UPDATE automation_run SET stopped_reason = 'by_human' WHERE id = 3",
+        ] {
+            assert!(engine.conn().execute(retired, []).is_err(), "refused on the way in: {retired}");
+        }
+        engine
+            .conn()
+            .execute("UPDATE automation_run SET stopped_reason = 'halted' WHERE id = 4", [])
+            .expect("the reason a halt now writes goes in");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v52 in full: the reason set admits `no_way_on`, and the rows are left alone — no store can be
     /// carrying a value its column never accepted (`AMB-T-5296` wrote the variant and not the
     /// `CHECK`, so the write was refused wherever it was tried).
@@ -7095,9 +7244,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v52: v60 renames both sets, and the whole chain would be proving that step.
+        run(&engine, &dir, steps_through(52), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 52);
         let declared = declared_sql(&engine, "automation_run");
         assert!(
             declared.contains(
@@ -7141,9 +7291,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v51: v60 renames the endings, and the whole chain would be proving that step.
+        run(&engine, &dir, steps_through(51), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 51);
         let after: Vec<(i64, String, Option<String>, Option<String>)> = {
             let conn = engine.conn();
             let mut stmt = conn

@@ -3672,13 +3672,15 @@ pub struct AutomationRunCardDto {
     /// What the automation was called at launch. Read from the run's own copy of the entry step's
     /// automation where the definition has since been deleted, and empty where neither is left.
     pub(crate) automation_name: String,
-    #[ts(type = "\"running\" | \"paused\" | \"stopped\"")]
+    /// Where the run stands. A `completed` run is never on this card: the tab lists what is going and
+    /// what was cut short (`AMB-D-955`).
+    #[ts(type = "\"running\" | \"paused\" | \"failed\" | \"canceled\"")]
     pub(crate) status: &'static str,
     /// Whether a pause has been asked for and the step under way has not reported yet. The run is
     /// still `running` — this is the gap between the button and the pause
     /// ([`amenbo_core::ops::automation_stop::pause`]).
     pub(crate) pause_requested: bool,
-    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"by_human\" | \"no_way_on\" | null")]
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,

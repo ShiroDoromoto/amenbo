@@ -1004,7 +1004,7 @@ export const ko: Translation = {
     "auto.actions.noteWhat": "여기와 액션 목록에만 나옵니다. 여기 있는 것은 실행에 들어가지 않습니다.",
     "auto.actions.cancel": "취소",
     "auto.act.aboutPlace": "액션",
-    "auto.act.edit": "고치기",
+    "auto.act.edit": "편집",
     "auto.act.stepsPlace": "스텝",
     "auto.act.stepsHint": "위의 '입력'에서 들어와 스텝을 거쳐 아래 '출력' 중 하나로 끝난다",
     "auto.act.usedWhere": "{n}개. 여기서 고치면 모두에 적용된다",

@@ -1009,7 +1009,7 @@ export const zhHant: Translation = {
     "auto.actions.noteWhat": "只顯示在這裡和動作列表中。這裡的內容不會進入執行。",
     "auto.actions.cancel": "取消",
     "auto.act.aboutPlace": "動作",
-    "auto.act.edit": "修改",
+    "auto.act.edit": "編輯",
     "auto.act.stepsPlace": "步驟",
     "auto.act.stepsHint": "從上方的「輸入」進入，經過各步驟，在下方某個「輸出」結束",
     "auto.act.usedWhere": "{n} 個。在這裡修改，全部都會生效",

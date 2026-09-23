@@ -4076,7 +4076,10 @@ impl Instructor {
                     (Some(to), None) => format!("choose the line that opens \"{to}\""),
                     (None, Some("done")) => "choose the line saying the task is finished".to_string(),
                     (None, Some("halt")) => "choose the line saying the run stops and calls a person".to_string(),
-                    (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt")),
+                    // Inside an action, a step may end the action by one of its outputs — the way out
+                    // of the action it returns to, named in `exit_to` (left out, the unnamed one).
+                    (None, Some("exit")) => format!("choose the line that ends with the output {}", action_output(with)),
+                    (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt / exit")),
                     (None, None) => "choose the line saying nothing is said yet".to_string(),
                     (Some(_), Some(_)) => return Err(
                         "a way out goes on to a box (`to`) or ends the task or the run (`ends`), never both"
@@ -4208,10 +4211,41 @@ impl Instructor {
                     req(with, "name")?
                 )
             }
-            // A wire is picked from what fits rather than drawn between two points.
-            (Domain::Automation, "pick-wire") => format!(
-                "In the panel showing what the pressed box holds, under the inputs, set \"{}\" to what comes from \"{}\".",
-                req(with, "input")?,
+            // A wire is picked from what fits rather than drawn between two points. Inside an action,
+            // an input may be fed from what the action itself takes in (`from_action: true`), which
+            // is listed first and named by the action rather than by a step.
+            (Domain::Automation, "pick-wire") => match step_mark(with, "from_action")? {
+                Some(true) => format!(
+                    "In the panel showing what the pressed box holds, under the inputs, set \"{}\" to what the action itself takes in as \"{}\".",
+                    req(with, "input")?,
+                    req(with, "from")?
+                ),
+                _ => format!(
+                    "In the panel showing what the pressed box holds, under the inputs, set \"{}\" to what comes from \"{}\".",
+                    req(with, "input")?,
+                    req(with, "from")?
+                ),
+            },
+            // The action's own places, each opened in the panel beside the picture the way a step is.
+            (Domain::Automation, "open-part") => format!(
+                "On the action build screen, press {} — the panel beside the picture opens on it.",
+                match req(with, "part")? {
+                    "action" => "the edit button on the row for the action itself",
+                    "input" => "the input frame over the picture",
+                    "output" => "the output frame under the picture",
+                    other => return Err(format!("`part` does not know `{other}` — it is action / input / output")),
+                }
+            ),
+            // What fills one output of the action: picked, like a wire into a step, from what fits —
+            // the outputs of the steps that end the action by that way out.
+            (Domain::Automation, "fill-output") => format!(
+                "In the panel showing the action's output, under {}, set the output \"{}\" to what comes from \"{}\".",
+                match arg_str(with, "exit") {
+                    None => "its only way out".to_string(),
+                    Some("*") => "its error way out".to_string(),
+                    Some(name) => format!("the way out \"{name}\""),
+                },
+                req(with, "output")?,
                 req(with, "from")?
             ),
             // The press that makes a run. It is the build screen's, and the two other ways in below
@@ -6084,7 +6118,8 @@ impl Instructor {
                     (Some(to), None) => format!("going on to the box \"{to}\""),
                     (None, Some("done")) => "and that what is written at its foot says the task is finished".to_string(),
                     (None, Some("halt")) => "and that what is written at its foot says the run stops and calls a person".to_string(),
-                    (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt")),
+                    (None, Some("exit")) => format!("going into the output {} in the output frame under the picture", action_output(with)),
+                    (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt / exit")),
                     _ => return Err(
                         "a line goes on to a box (`to`) or ends the task or the run (`ends`), never both and never neither"
                             .to_string(),
@@ -6310,6 +6345,16 @@ fn automation_tab(tab: &str) -> Result<&'static str, String> {
 /// The way out a box leaves by, said the way the panel and the picture both say it. The unnamed one
 /// is the one a box with a single way out has, and the error one is the name core fixes; neither is
 /// quoted, having no name a road gave it.
+/// The way out of the action an `exit` line returns to, as its output frame names it — `exit_to` left
+/// out is the unnamed one.
+fn action_output(with: &Args) -> String {
+    match arg_str(with, "exit_to") {
+        None => "that stands for its only way out".to_string(),
+        Some("*") => "that stands for its error way out".to_string(),
+        Some(name) => format!("\"{name}\""),
+    }
+}
+
 fn way_out(with: &Args) -> String {
     match arg_str(with, "exit") {
         None => "its only way out".to_string(),

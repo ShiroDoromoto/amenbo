@@ -1032,6 +1032,8 @@ export const zhHans: Translation = {
     "auto.act.read": "查看",
     "auto.act.openInSidebar": "在侧边栏中打开",
     "auto.act.globalReadOnly": "全局操作在侧边栏的“自动化”中修改。这里只能查看。",
+    "auto.held.place": "正在使用它的运行",
+    "auto.held.what": "使用它的运行在进行中或已暂停时，无法编辑。停止该运行，或等它结束后，即可再次编辑。",
     "auto.act.stepsPlace": "步骤",
     "auto.act.stepsHint": "从上方的「输入」进入，经过各步骤，在下方某个「输出」结束",
     "auto.act.usedWhere": "{n} 个。在这里修改，全部都会生效",

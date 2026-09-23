@@ -368,7 +368,8 @@ amenbo automation pause 7                              # ...at the end of the st
 amenbo automation stop 7                               # ...now, handing the task back to todo
 # Inside a step's own terminal, the agent carrying it out reports through three more:
 # `automation step-take` (the task the step is about), `automation step-out` (each thing it hands on)
-# and `automation step-done` (the way out taken, and what it did). Those three, with `list` / `show` /
+# and `automation step-done` (the way out taken — by the id the step's text lists for it — and what
+# it did). Those three, with `list` / `show` /
 # `action-list` / `action-show` / `run-list` / `run-show` to read where it stands, are all that
 # terminal reaches — every other verb here is typed outside a run.
 amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task

@@ -233,7 +233,7 @@ fn latest_for(
             let joined = sources.iter().any(|source| {
                 Some(source.placement_id) == from_def.placement_id
                     && Some(source.step_id) == from_def.step_id
-                    && source.exit.as_deref() == value.exit_name.as_deref()
+                    && source.exit == value.exit_id
                     && source.port == value.name
             });
             if !joined {
@@ -251,7 +251,7 @@ fn latest_for(
 struct Source {
     placement_id: i64,
     step_id: i64,
-    exit: Option<String>,
+    exit: Option<i64>,
     port: String,
 }
 
@@ -284,7 +284,7 @@ fn sources_of(
             out.push(Source {
                 placement_id,
                 step_id: wire.from_id,
-                exit: wire.from_exit_name,
+                exit: wire.from_exit_id,
                 port: wire.from_port_name,
             });
             continue;
@@ -302,16 +302,13 @@ fn sources_of(
                 if inner.to_id != ACTION_BOUNDARY || inner.to_port_name != outer.from_port_name {
                     continue;
                 }
-                let leaves_by = automation_run::returns_to(
-                    conn,
-                    inner.from_id,
-                    inner.from_exit_name.as_deref(),
-                )?;
-                if leaves_by.is_some_and(|to| to == outer.from_exit_name) {
+                let Some(inner_exit) = inner.from_exit_id else { continue };
+                let leaves_by = automation_run::returns_to(conn, inner.from_id, inner_exit)?;
+                if leaves_by.is_some() && leaves_by == outer.from_exit_id {
                     out.push(Source {
                         placement_id: far.id,
                         step_id: inner.from_id,
-                        exit: inner.from_exit_name,
+                        exit: inner.from_exit_id,
                         port: inner.from_port_name,
                     });
                 }
@@ -392,7 +389,7 @@ fn new_execution(
         run_def_id: def.id,
         run_task_id: stretch.map(|s| s.id),
         seq: moves.iter().map(|s| s.seq).max().unwrap_or(0) + 1,
-        exit_name: None,
+        exit_id: None,
         report: String::new(),
         status: AutomationRunStepStatus::Running,
         started_at: Some(now),
@@ -418,7 +415,7 @@ fn write_in(
         direction: AutomationPortDirection::In,
         // What way out it left by is the producing side's fact, and it is kept on that row. Here it
         // would answer a question nobody asks of an input.
-        exit_name: None,
+        exit_id: None,
         name: handed.port.name.clone(),
         kind: handed.port.kind,
         value: handed.from.value.clone(),
@@ -491,20 +488,28 @@ fn story_so_far(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result
         if execution.status == AutomationRunStepStatus::Running {
             continue;
         }
-        let name = read::automation_run_def(conn, execution.run_def_id)?
-            .map(|d| d.name)
-            .unwrap_or_else(|| "a step".to_string());
+        let def = read::automation_run_def(conn, execution.run_def_id)?;
+        let left_by = def.as_ref().and_then(|d| exit_in(d, execution.exit_id));
+        let name = def.map(|d| d.name).unwrap_or_else(|| "a step".to_string());
         let first = execution.report.lines().next().unwrap_or("").trim().to_string();
         let said = match first.is_empty() {
             true => String::new(),
             false => format!(": {first}"),
         };
-        lines.push(format!("{}. {name} — left through {}{said}", execution.seq, named(execution.exit_name.as_deref())));
+        lines.push(format!("{}. {name} — left through {}{said}", execution.seq, named(left_by.as_deref())));
     }
     if lines.is_empty() {
         return Ok(None);
     }
     Ok(Some(format!("## What has happened so far\n\n{}", lines.join("\n"))))
+}
+
+/// The name of the way out an execution left by, read from the run's copy of the step it ran — the
+/// live row may have been renamed or deleted since. `None` is the unnamed one, and a way out the copy
+/// does not hold reads as that too.
+fn exit_in(def: &AutomationRunDef, exit_id: Option<i64>) -> Option<String> {
+    let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).ok()?;
+    exits.into_iter().find(|e| Some(e.id) == exit_id).and_then(|e| e.name)
 }
 
 /// How a way out is spoken of in a sentence: by its name, or as the unnamed one.
@@ -538,7 +543,8 @@ fn one_value(handed: &Handed) -> String {
 }
 
 /// How to hand the work back: the ways out this step may leave through, what each of them is declared
-/// to carry, and the one thing every step owes.
+/// to carry, and the one thing every step owes. Each way out is listed with the id `step-done --exit`
+/// takes (`AMB-D-961`) — a name is what a person reads, and the unnamed way out has none to type.
 ///
 /// **The error way out is named but not offered.** It is where a step that fell over goes, and a step
 /// choosing it on purpose is saying it failed — which is a real answer, and a different one from
@@ -571,7 +577,7 @@ fn handing_back(exits: &[RunDefExit]) -> String {
                 .collect::<Vec<_>>()
                 .join(", "),
         };
-        lines.push(format!("- {} — {outs}", named(exit.name.as_deref())));
+        lines.push(format!("- `--exit {}` — {} — {outs}", exit.id, named(exit.name.as_deref())));
     }
     let kinds: BTreeSet<AutomationPortKind> =
         exits.iter().flat_map(|e| e.outs.iter().map(|p| p.kind)).collect();
@@ -601,8 +607,8 @@ fn handing_back(exits: &[RunDefExit]) -> String {
     }
     lines.push(String::new());
     lines.push(format!(
-        "Then finish with `{cli} automation step-done --exit \"<way out>\" --report -`. A report is owed \
-         whichever way out you take."
+        "Then finish with `{cli} automation step-done --exit <id> --report -`, the id being the way out's \
+         from the list above. A report is owed whichever way out you take."
     ));
     lines.join("\n")
 }
@@ -709,7 +715,7 @@ mod tests {
     fn reported(tx: &WriteTx<'_>, run_step: &AutomationRunStep, exit: &str, report: &str, note: &str) {
         let now = Timestamp::now();
         let mut done = run_step.clone();
-        done.exit_name = Some(exit.to_string());
+        done.exit_id = crate::ops::test_support::way_out(tx, run_step.id, exit);
         done.report = report.to_string();
         done.status = AutomationRunStepStatus::Done;
         done.ended_at = Some(now);
@@ -724,7 +730,7 @@ mod tests {
             id: read::next_id(tx.conn(), "automation_run_value").expect("id"),
             run_step_id: run_step.id,
             direction: AutomationPortDirection::Out,
-            exit_name: Some(exit.to_string()),
+            exit_id: done.exit_id,
             name: "note".to_string(),
             kind: AutomationPortKind::Value,
             value: Some(note.to_string()),

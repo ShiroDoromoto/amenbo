@@ -80,6 +80,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     placements: [],
     edges: [],
     wires: [],
+    heldBy: [],
     ...over,
   })!;
 }

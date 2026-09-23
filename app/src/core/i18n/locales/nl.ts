@@ -1030,6 +1030,8 @@ export const nl: Translation = {
     "auto.act.read": "Bekijken",
     "auto.act.openInSidebar": "Openen in de zijbalk",
     "auto.act.globalReadOnly": "Een globale actie wijzig je via Automatiseringen in de zijbalk. Hier kun je hem alleen lezen.",
+    "auto.held.place": "Uitvoeringen die het gebruiken",
+    "auto.held.what": "Zolang een uitvoering die dit gebruikt loopt of gepauzeerd is, kun je het niet bewerken. Stop de uitvoering, of wacht tot die klaar is, om het weer te bewerken.",
     "auto.act.stepsPlace": "Stappen",
     "auto.act.stepsHint": "Komt binnen bij de Invoer boven, loopt door de stappen en eindigt bij een van de Uitvoeren onder",
     "auto.act.usedWhere": "{n}. Een wijziging hier geldt voor allemaal.",

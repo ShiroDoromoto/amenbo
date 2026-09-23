@@ -1,35 +1,23 @@
-# A way out is named, and the two things built against it name it back: a line hangs on a way out by
-# its name, and a wire leaves by one. So renaming a way out is not a relabelling. Core parts every
-# edge and every wire that named the old name from it rather than rewriting the graph underneath the
-# reader — the parting is then something they can see and act on, which is the whole reason it is
-# done that way (`amenbo_core::ops::automation::exit_rename`).
+# A way out is keyed, not named: a line hangs on the way out's row, a wire leaves by it,
+# and a run is told its id. So renaming a way out is a relabelling and nothing more — every line and
+# every wire on it stays where it was, and the definition is exactly as ready to start as it was.
 #
 # ── Why the picture and the launch place are both read ──────────────────────────────────────────
-# The two halves of what comes off are drawn in different places. The line that hung on the old name
-# is in the picture, still written with the name it always carried — a name nobody declares any more.
-# What the parting costs is on the launch place: the renamed way out now has nothing set to happen
-# after it, and the placement the wire fed is left with a required input nothing reaches. A build that
-# rewrote the graph on the quiet would keep the launch place green and draw a line under the new
-# name, and both readings here would go red on it.
-#
-# ── Why the name is given back at the end ───────────────────────────────────────────────────────
-# What was parted was parted by name, so writing the old name back on the row is the whole of the
-# undoing — the line and the wire find their way out again and the definition is ready as it opened.
-# It is the reading that says the edges and the wire were left standing rather than thrown away: a
-# build that dropped them on the rename would pass everything above and leave a definition that
-# cannot be put back.
+# The two halves of what hangs on a way out are drawn in different places. The line is in the
+# picture, and after the rename it is drawn under the new name. The wire's half is on the launch place
+# and on the placement it feeds: a build that parted the wire on the rename would name the fed
+# placement's input as reached by nothing, and mark the placement for it.
 #
 # ── Where the rename is made ────────────────────────────────────────────────────────────────────
-# A way out is the action's, so it is renamed on the action's own output panel, and what the rename
-# parted is read back on the automation placing it — the road goes there and back.
-id: rename-a-way-out-and-find-what-hung-on-it-let-go
-title: Renaming a way out parts the line and the wire that named it, and writing the name back brings them home
+# A way out is the action's, so it is renamed on the action's own output panel, and what hangs on it
+# is read back on the automation placing it — the road goes there and back.
+id: rename-a-way-out-and-keep-what-hangs-on-it
+title: Renaming a way out keeps the line and the wire on it, and the definition stays ready to start
 description: >
   Open a definition that is ready to start, and rename one placed action's named way out on that
-  action's own screen. The line that left by the old name is still drawn under that name, the renamed way out is
-  named on the launch place as having nothing after it, and the placement the wire fed wears the
-  mark for a required input nothing reaches. Then write the old name back, and every one of those
-  goes.
+  action's own screen. Back on the definition, the line that left by that way out is drawn under the
+  new name and still goes on to the same placement, the launch place still says it is ready, and the
+  placement the wire feeds wears no mark for an input nothing reaches.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up — so nothing on the launch place is ever about who carries a step out.
@@ -133,91 +121,7 @@ steps_gui:
       name: got one
       to: found one
 
-  # What it parted, read on the definition placing it.
-  - type: action
-    domain: automation
-    op: screen
-    with:
-      tab: automations
-
-  - type: action
-    domain: automation
-    op: open
-    with:
-      target: auto
-
-  - type: assert
-    domain: automation
-    op: launch
-    with:
-      ready: false
-      reason: open_exit
-      box: take
-      at: found one
-      present: true
-
-  - type: assert
-    domain: automation
-    op: launch
-    with:
-      ready: false
-      reason: open_exit
-      box: claim
-      at: got one
-      present: true
-
-  - type: assert
-    domain: automation
-    op: launch
-    with:
-      ready: false
-      reason: unwired_input
-      box: work
-      at: note
-      present: true
-
-  - type: assert
-    domain: automation
-    op: pictured
-    with:
-      name: work
-      unfed: true
-
-  - type: assert
-    domain: automation
-    op: line-pictured
-    with:
-      from: take
-      exit: got one
-      to: work
-
-  # The old name written back on the action, and everything it parted home again.
-  - type: action
-    domain: automation
-    op: screen
-    with:
-      tab: actions
-
-  - type: action
-    domain: automation
-    op: action-open
-    with:
-      target: take
-
-  - type: action
-    domain: automation
-    op: open-part
-    with:
-      part: output
-
-  - type: action
-    domain: automation
-    op: redeclare
-    with:
-      what: exit
-      name: found one
-      to: got one
-
+  # What hangs on it, read on the definition placing it.
   - type: action
     domain: automation
     op: screen
@@ -235,10 +139,14 @@ steps_gui:
     op: launch
     with:
       ready: true
-      reason: open_exit
-      box: take
-      at: found one
-      present: false
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: take
+      exit: found one
+      to: work
 
   - type: assert
     domain: automation

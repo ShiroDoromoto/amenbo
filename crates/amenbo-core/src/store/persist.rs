@@ -1879,12 +1879,12 @@ impl Store {
     pub fn automation_done(
         &mut self,
         run_step_id: i64,
-        exit_name: Option<&str>,
+        exit_id: Option<i64>,
         report: &str,
     ) -> Result<crate::ops::automation_report::Next> {
         self.write_one(
             &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
-            |tx| crate::ops::automation_report::done(tx, run_step_id, exit_name, report),
+            |tx| crate::ops::automation_report::done(tx, run_step_id, exit_id, report),
         )
     }
 

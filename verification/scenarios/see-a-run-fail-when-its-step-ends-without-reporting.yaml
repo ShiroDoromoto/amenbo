@@ -1,0 +1,99 @@
+# The agent carrying out a step can go without a word: it gives up, or falls over, and its program
+# ends before `step-done` was typed. Until the host heard of that, the run stayed `running` on a step
+# nobody was working — holding its task, and the definitions nobody may edit while a run uses them —
+# until the next startup swept it. Now the host hears the terminal end by itself and
+# fails the run there, with the reason that says the step ended without reporting
+# (`app/src-tauri/src/pty.rs`, `crate::automation::step_program_ended`).
+#
+# The program has to end by its own doing, which is why the road types `exit` at it (`quit-in-pane`)
+# rather than closing the pane: a closed pane is Amenbo ending the terminal, which is a stop and
+# moves the run to `canceled`, not to this.
+id: see-a-run-fail-when-its-step-ends-without-reporting
+title: A run whose step's program ends before the step reports fails there, and its row says why
+description: >
+  Start a run of one step, and in the pane it is drawn in end the program carrying the step out
+  before it reports. The running tab's row says the run failed because its step ended without
+  reporting — at once, not on the next startup.
+given:
+  # Claude Code is one of the two agents this machine can start — two being the fewest the premise
+  # stands up. `runs` keeps the stand-in standing and carries out what is typed at it, which is what
+  # lets a typed `exit` end the program itself.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # One action holding one step, which leaves by the unnamed way out and takes nothing in: the only
+  # thing that can end this run early is its program going.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work and report }, as: do }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step goes silent" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_work } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # The step's program ends before it reports. Nothing was typed that the run would read as a report,
+  # so what the run hears is the terminal ending by itself.
+  - type: action
+    domain: automation
+    op: quit-in-pane
+    with:
+      target: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  # A failure nobody has acknowledged stays on the running tab, with the reason under its state.
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: failed
+      reason: crashed

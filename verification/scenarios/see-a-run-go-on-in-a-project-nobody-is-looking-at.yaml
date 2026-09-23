@@ -1,0 +1,125 @@
+# A run goes on whether or not anybody is looking at its project. Its step's terminal is started by
+# the app the moment the step opens, and the pane in the project's workspace takes it up when that
+# project is next shown (`app/src-tauri/src/pty.rs`, `open_step`). Before that, the terminal was
+# started by the pane itself, and a pane is drawn only on the page on screen — so a run of a project
+# nobody was looking at showed "running" and did nothing.
+#
+# The other roads that walk a run type its reports in the run's own pane, and opening that pane starts
+# the terminal on the spot either way. This one never opens it: the run is started from the sidebar's
+# list while another project is on screen, and its first step is reported from a shell in that other
+# project. What says the run went on is the run's pane, stood up only when the road goes back, already
+# on the second step.
+id: see-a-run-go-on-in-a-project-nobody-is-looking-at
+title: A run of a project that is not on screen goes on to its next step, and its pane is on that step when the project is shown
+description: >
+  With another project in the workspace, start this project's automation from the sidebar's list.
+  Without going to this project, report the run's first step from a shell in the other project. Then
+  go to this project and read the run's pane standing on the second step.
+given:
+  # The stand-ins stay and read rather than print and end: a step whose terminal has ended is not one
+  # a pane coming up takes over, and the pane read at the end is the point of the road.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+
+  # The two projects. The folder is named on the create for `be-asked-before-the-app-takes-every-
+  # terminal-with-it`'s reason: one folder each, so opening a pane asks nothing about where it works.
+  - { type: action, domain: project, op: create, with: { name: Harbour, dir: harbour }, as: harbour }
+  - { type: action, domain: project, op: create, with: { name: Foundry, dir: forge }, as: foundry }
+
+  # Two actions of one step each, placed one after the other. Nothing is handed on between them: what
+  # the road reads is that the second step opened at all.
+  - { type: action, domain: automation, op: action-add, with: { name: first, project: harbour }, as: first }
+  - { type: action, domain: automation, op: step-add, with: { target: first, name: begin, prompt: begin the round }, as: begin }
+  - { type: action, domain: automation, op: action-entry, with: { target: first, step: begin } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: begin, exit_to: "" } }
+
+  - { type: action, domain: automation, op: action-add, with: { name: second, project: harbour }, as: second }
+  - { type: action, domain: automation, op: step-add, with: { target: second, name: follow, prompt: follow the round through }, as: follow }
+  - { type: action, domain: automation, op: action-entry, with: { target: second, step: follow } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: follow, exit_to: "" } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the harbour round", project: harbour }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: first }, as: at_first }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_first, step: begin, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: second }, as: at_second }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_second, step: follow, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_first, to: at_second } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_second } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_first } }
+
+steps_gui:
+  # The other project, on screen, with a plain shell in it — the only pane this road types in.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Foundry
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  # Started from the list rather than from the automation's own screen, which is in its project: the
+  # list holds every project's, and pressing beside a row leaves the workspace where it is.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: task
+    op: open-view
+    with:
+      view: automations
+
+  - type: action
+    domain: automation
+    op: start-from-list
+    with:
+      target: auto
+    as: run
+
+  # The report, from Foundry's shell. The run's pane has not been opened, so a terminal for the step
+  # after this one is started by nothing but the app. The step reads the run's number off the list it
+  # was started from before it goes back to that shell.
+  - type: action
+    domain: automation
+    op: done-outside-pane
+    with:
+      target: run
+      report: began the round from outside its pane
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Harbour
+
+  # The pane stands for the first time now, and on the second step: the run went on while its project
+  # was not on screen.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: follow
+      action: second
+      present: true

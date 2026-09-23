@@ -946,10 +946,211 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 62,
+        name: "key the ways out — lines, the run's copies and its records name a way out by its row",
+        apply: Apply::Custom(key_the_ways_out),
+    },
+    Step {
+        to: 63,
         name: "choose a step's agent and model where its action is placed, not on the step",
         apply: Apply::Custom(choose_the_agent_where_the_action_is_placed),
     },
 ];
+
+/// v62: a way out is keyed, not named (`AMB-D-961`).
+///
+/// An edge named the way out it hangs on and the way out of the action it returns to, a wire the way out
+/// it leaves by, and a run's records the way out a step left by — all by name. So renaming a way out
+/// parted every line on it, and the unnamed way out had no name a step could type. Each of them now
+/// holds the `automation_exit` row's id, and a run's copy of a step (`automation_run_def.exits`) holds
+/// the id beside the name, which is what the run's records are read against.
+///
+/// **What cannot be keyed goes.** An edge or a wire whose name no way out of its box carries any more
+/// was already parted — it decided nothing and carried nothing — and a key has nowhere to point it. An
+/// `exit` edge whose action no longer declares the way out it returns to keeps its row with no key, and
+/// reads as leaving the action by nothing, which is what it did.
+///
+/// **A copy whose step is gone keeps its ways out under ids of its own.** Nothing live answers for
+/// those names, but the run's records still say which of them a step left by, so each is numbered
+/// below zero — an id no row can have — and the records key to that.
+///
+/// **In a record, no name was two things.** A step that had finished and a value it handed on with no
+/// name left by the unnamed way out; a step still running had left by nothing yet. Only `done` and
+/// `running` are ever written for a step, so the status says which.
+///
+/// **Probed, not bare**, table by table: a store born from today's registry has the keys and never had
+/// the names, and arrives here with nothing to move.
+fn key_the_ways_out(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let has = |table: &str, column: &str| -> Result<bool> {
+        Ok(column_names(tx, table)?.iter().any(|c| c == column))
+    };
+
+    if has("automation_edge", "exit_name")? {
+        if !has("automation_edge", "exit_id")? {
+            tx.execute_batch("ALTER TABLE automation_edge ADD COLUMN exit_id BIGINT NOT NULL DEFAULT 0;")?;
+        }
+        if !has("automation_edge", "exit_to_id")? {
+            tx.execute_batch("ALTER TABLE automation_edge ADD COLUMN exit_to_id BIGINT;")?;
+        }
+        tx.execute_batch(
+            "UPDATE automation_edge SET exit_id = COALESCE((
+                 SELECT x.id FROM automation_exit x
+                   JOIN automation_placement p ON p.action_id = x.owner_id
+                  WHERE x.owner_kind = 'action' AND p.id = automation_edge.from_id
+                    AND x.name IS automation_edge.exit_name), 0)
+              WHERE owner_kind = 'automation';
+             UPDATE automation_edge SET exit_id = COALESCE((
+                 SELECT x.id FROM automation_exit x
+                  WHERE x.owner_kind = 'step' AND x.owner_id = automation_edge.from_id
+                    AND x.name IS automation_edge.exit_name), 0)
+              WHERE owner_kind = 'action';
+             UPDATE automation_edge SET exit_to_id = (
+                 SELECT x.id FROM automation_exit x
+                  WHERE x.owner_kind = 'action' AND x.owner_id = automation_edge.owner_id
+                    AND x.name IS automation_edge.exit_to)
+              WHERE ends = 'exit';
+             DELETE FROM automation_edge WHERE exit_id = 0;
+             ALTER TABLE automation_edge DROP COLUMN exit_name;
+             ALTER TABLE automation_edge DROP COLUMN exit_to;",
+        )?;
+    }
+
+    if has("automation_wire", "from_exit_name")? {
+        if !has("automation_wire", "from_exit_id")? {
+            tx.execute_batch("ALTER TABLE automation_wire ADD COLUMN from_exit_id BIGINT;")?;
+        }
+        tx.execute_batch(
+            "UPDATE automation_wire SET from_exit_id = (
+                 SELECT x.id FROM automation_exit x
+                   JOIN automation_placement p ON p.action_id = x.owner_id
+                  WHERE x.owner_kind = 'action' AND p.id = automation_wire.from_id
+                    AND x.name IS automation_wire.from_exit_name)
+              WHERE owner_kind = 'automation';
+             UPDATE automation_wire SET from_exit_id = (
+                 SELECT x.id FROM automation_exit x
+                  WHERE x.owner_kind = 'step' AND x.owner_id = automation_wire.from_id
+                    AND x.name IS automation_wire.from_exit_name)
+              WHERE owner_kind = 'action' AND from_id <> 0;
+             DELETE FROM automation_wire WHERE from_id <> 0 AND from_exit_id IS NULL;
+             ALTER TABLE automation_wire DROP COLUMN from_exit_name;",
+        )?;
+    }
+
+    // The run's copies: an id beside each way out's name, from the live row where the step still has
+    // it, and below zero where it does not.
+    let mut copies: Vec<(i64, Option<i64>, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, step_id, exits FROM automation_run_def")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        for row in rows {
+            copies.push(row?);
+        }
+    }
+    // (copy id, name) → the id the copy now keys that way out by.
+    let mut keyed: std::collections::HashMap<(i64, Option<String>), i64> = std::collections::HashMap::new();
+    for (def_id, step_id, exits) in copies {
+        let Ok(mut exits) = serde_json::from_str::<Vec<serde_json::Value>>(&exits) else { continue };
+        let mut changed = false;
+        let mut stand_in = -1;
+        for exit in exits.iter_mut() {
+            let name = exit.get("name").and_then(|n| n.as_str()).map(str::to_string);
+            let id = match exit.get("id").and_then(|i| i.as_i64()) {
+                Some(id) => id,
+                None => {
+                    let live: Option<i64> = match step_id {
+                        Some(step_id) => tx
+                            .query_row(
+                                "SELECT id FROM automation_exit \
+                                  WHERE owner_kind = 'step' AND owner_id = ?1 AND name IS ?2",
+                                rusqlite::params![step_id, name],
+                                |r| r.get(0),
+                            )
+                            .optional()?,
+                        None => None,
+                    };
+                    let id = match live {
+                        Some(id) => id,
+                        None => {
+                            stand_in -= 1;
+                            stand_in + 1
+                        }
+                    };
+                    if let Some(map) = exit.as_object_mut() {
+                        map.insert("id".to_string(), serde_json::Value::from(id));
+                    }
+                    changed = true;
+                    id
+                }
+            };
+            keyed.insert((def_id, name), id);
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_run_def SET exits = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(exits).to_string(), def_id],
+            )?;
+        }
+    }
+
+    if has("automation_run_step", "exit_name")? {
+        if !has("automation_run_step", "exit_id")? {
+            tx.execute_batch("ALTER TABLE automation_run_step ADD COLUMN exit_id BIGINT;")?;
+        }
+        let mut steps: Vec<(i64, i64, Option<String>)> = Vec::new();
+        {
+            let mut stmt = tx.prepare(
+                "SELECT id, run_def_id, exit_name FROM automation_run_step WHERE status = 'done'",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            for row in rows {
+                steps.push(row?);
+            }
+        }
+        for (id, def_id, name) in steps {
+            if let Some(exit) = keyed.get(&(def_id, name)) {
+                tx.execute(
+                    "UPDATE automation_run_step SET exit_id = ?1 WHERE id = ?2",
+                    rusqlite::params![exit, id],
+                )?;
+            }
+        }
+    }
+
+    if has("automation_run_value", "exit_name")? {
+        if !has("automation_run_value", "exit_id")? {
+            tx.execute_batch("ALTER TABLE automation_run_value ADD COLUMN exit_id BIGINT;")?;
+        }
+        let mut values: Vec<(i64, i64, Option<String>)> = Vec::new();
+        {
+            let mut stmt = tx.prepare(
+                "SELECT v.id, s.run_def_id, v.exit_name FROM automation_run_value v
+                   JOIN automation_run_step s ON s.id = v.run_step_id
+                  WHERE v.direction = 'out' AND (v.exit_name IS NOT NULL OR s.status = 'done')",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            for row in rows {
+                values.push(row?);
+            }
+        }
+        for (id, def_id, name) in values {
+            if let Some(exit) = keyed.get(&(def_id, name)) {
+                tx.execute(
+                    "UPDATE automation_run_value SET exit_id = ?1 WHERE id = ?2",
+                    rusqlite::params![exit, id],
+                )?;
+            }
+        }
+    }
+
+    // The names go last: every read above is from them.
+    if has("automation_run_step", "exit_name")? {
+        tx.execute_batch("ALTER TABLE automation_run_step DROP COLUMN exit_name;")?;
+    }
+    if has("automation_run_value", "exit_name")? {
+        tx.execute_batch("ALTER TABLE automation_run_value DROP COLUMN exit_name;")?;
+    }
+    Ok(())
+}
 
 /// v59: the shared documents go, and `automation_action.note` arrives (`AMB-D-952`).
 ///
@@ -1015,7 +1216,7 @@ fn let_a_failure_be_acknowledged(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v62: a step's agent and model move off the step, onto the placement of its action
+/// v63: a step's agent and model move off the step, onto the placement of its action
 /// (`automation_placement_step`, `AMB-D-960`).
 ///
 /// **What each step said is written onto every placement of its action**, one row per pair. An action
@@ -1060,7 +1261,7 @@ fn choose_the_agent_where_the_action_is_placed(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// The table v62 lays down — frozen text, like every step's.
+/// The table v63 lays down — frozen text, like every step's.
 const PLACEMENT_STEP_TABLE: &str = r"
 CREATE TABLE IF NOT EXISTS automation_placement_step (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -3564,7 +3765,7 @@ impl Minting {
 /// **Every v52 library action gains one step**, carrying the prompt the action itself used to carry.
 ///
 /// **The one thing this cannot carry across** is two spots running one library action under two
-/// different agents. `agent` and `model` are a step's at this version (`AMB-D-950`; v62 moves them
+/// different agents. `agent` and `model` are a step's at this version (`AMB-D-950`; v63 moves them
 /// onto the placement), and an action has one step here, so the first spot's answer becomes the
 /// action's and the second's is not written. An action
 /// nothing pointed at gets no agent at all, which the launch check names rather than guesses at.
@@ -6782,7 +6983,8 @@ mod tests {
             ))
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Through v61: v62 keys what this step names (`key_the_ways_out`), and is read on its own.
+        run(&engine, &dir, steps_through(61), &mut crate::progress::ignore).unwrap();
 
         let conn = engine.conn();
         let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
@@ -6875,7 +7077,8 @@ mod tests {
             ))
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Through v61: v62 keys what this step names (`key_the_ways_out`), and is read on its own.
+        run(&engine, &dir, steps_through(61), &mut crate::progress::ignore).unwrap();
 
         let conn = engine.conn();
         let drawn = {
@@ -7257,13 +7460,130 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v62 in full: what each step said is written onto every placement of its action, a step that said
+    /// v62 in full: every line and every record keys the way out it named (`AMB-D-961`). A line whose
+    /// name no way out carries any more goes; a copy whose step is gone keeps its ways out under ids
+    /// below zero; and a record with no name reads as the unnamed way out where the step had finished,
+    /// and as none where it was still running.
+    #[test]
+    fn the_chain_keys_every_way_out_a_line_or_a_record_named() {
+        let dir = scratch("key-the-ways-out");
+        let engine = store_at(&dir, 61);
+        engine
+            .conn()
+            .execute_batch(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (7, 1, '点検する');
+                 INSERT INTO automation_action_step (id, action_id, name, agent) VALUES (11, 7, '点検する', 'claude');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (3, 1, 7);
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (21, 'step', 11, NULL), (22, 'step', 11, '*'), (23, 'step', 11, '直す'),
+                     (25, 'action', 7, NULL), (26, 'action', 7, '*'), (27, 'action', 7, '直す');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_name, ends, exit_to) VALUES
+                     (61, 'automation', 1, 3, '直す', 'done', NULL),
+                     (62, 'automation', 1, 3, NULL, 'done', NULL),
+                     (63, 'action', 7, 11, '直す', 'exit', '直す'),
+                     (64, 'action', 7, 11, NULL, 'exit', NULL),
+                     (65, 'action', 7, 11, '改名前', 'done', NULL),
+                     (66, 'action', 7, 11, '*', 'exit', '消えた');
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_name, from_port_name, to_id, to_port_name) VALUES
+                     (71, 'action', 7, 11, '直す', 'メモ', 0, 'メモ'),
+                     (72, 'action', 7, 0, NULL, '差分', 11, '差分'),
+                     (73, 'automation', 1, 3, '直す', 'メモ', 3, 'メモ'),
+                     (74, 'action', 7, 11, '改名前', 'メモ', 0, 'メモ');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, step_id, name, agent, exits, ins, cfg) VALUES
+                     (81, 1, 3, 11, '点検する', 'claude',
+                      '[{"name":null,"outs":[]},{"name":"*","outs":[]},{"name":"直す","outs":[]}]', '[]', '{}'),
+                     (82, 1, NULL, NULL, '消えた', 'claude',
+                      '[{"name":null,"outs":[]},{"name":"戻す","outs":[]}]', '[]', '{}');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, exit_name, status) VALUES
+                     (91, 1, 81, 1, '直す', 'done'),
+                     (92, 1, 81, 2, NULL, 'done'),
+                     (93, 1, 82, 3, '戻す', 'done'),
+                     (94, 1, 81, 4, NULL, 'running');
+                 INSERT INTO automation_run_value (id, run_step_id, direction, exit_name, name, kind) VALUES
+                     (101, 91, 'out', '直す', 'メモ', 'value'),
+                     (102, 92, 'out', NULL, 'メモ', 'value'),
+                     (103, 94, 'out', NULL, 'メモ', 'value'),
+                     (104, 91, 'in', NULL, '差分', 'value');"#,
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let rows = |sql: &str| -> Vec<(i64, Option<i64>, Option<i64>)> {
+            let mut stmt = conn.prepare(sql).unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        };
+        assert_eq!(
+            rows("SELECT id, exit_id, exit_to_id FROM automation_edge ORDER BY id"),
+            vec![
+                (61, Some(27), None),
+                (62, Some(25), None),
+                (63, Some(23), Some(27)),
+                (64, Some(21), Some(25)),
+                (66, Some(22), None),
+            ],
+            "the edge on a name nobody carries went; the one returning to one keeps no key",
+        );
+        assert_eq!(
+            rows("SELECT id, from_exit_id, to_id FROM automation_wire ORDER BY id"),
+            vec![(71, Some(23), Some(0)), (72, None, Some(11)), (73, Some(27), Some(3))],
+        );
+        let copies: Vec<(i64, String)> = {
+            let mut stmt = conn.prepare("SELECT id, exits FROM automation_run_def ORDER BY id").unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let ids = |json: &str| -> Vec<i64> {
+            serde_json::from_str::<Vec<crate::model::RunDefExit>>(json)
+                .expect("a copy reads back as today's shape")
+                .iter()
+                .map(|e| e.id)
+                .collect()
+        };
+        assert_eq!(ids(&copies[0].1), vec![21, 22, 23], "from the live rows");
+        assert_eq!(ids(&copies[1].1), vec![-1, -2], "the step is gone, so below zero");
+        assert_eq!(
+            rows("SELECT id, exit_id, NULL FROM automation_run_step ORDER BY id"),
+            vec![(91, Some(23), None), (92, Some(21), None), (93, Some(-2), None), (94, None, None)],
+            "a finished step with no name left by the unnamed way out; a running one by none",
+        );
+        assert_eq!(
+            rows("SELECT id, exit_id, NULL FROM automation_run_value ORDER BY id"),
+            vec![(101, Some(23), None), (102, Some(21), None), (103, None, None), (104, None, None)],
+        );
+        for (table, column) in [
+            ("automation_edge", "exit_name"),
+            ("automation_edge", "exit_to"),
+            ("automation_wire", "from_exit_name"),
+            ("automation_run_step", "exit_name"),
+            ("automation_run_value", "exit_name"),
+        ] {
+            let held: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+                    [table, column],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(held, 0, "{table}.{column} is gone");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v63 in full: what each step said is written onto every placement of its action, a step that said
     /// nothing is left with nobody chosen, an action placed nowhere carries its answer nowhere, and the
     /// two columns are gone from the step (`AMB-D-960`).
     #[test]
     fn a_step_s_agent_is_chosen_at_every_placement_of_its_action() {
         let dir = scratch("placement-step");
-        let engine = store_at(&dir, 61);
+        let engine = store_at(&dir, 62);
         engine
             .conn()
             .execute_batch(

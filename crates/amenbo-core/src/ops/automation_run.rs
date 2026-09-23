@@ -280,7 +280,7 @@ pub fn check(
             if exit.name.as_deref() == Some(ERROR_EXIT) {
                 continue;
             }
-            if !decided(conn, placement.id, exit.name.as_deref(), &by_id)? {
+            if !decided(conn, placement.id, exit.id, &by_id)? {
                 unmet.push(Unmet::OpenExit { step: name.clone(), exit: exit.name.clone() });
             }
         }
@@ -338,6 +338,19 @@ pub fn check(
     Ok(unmet)
 }
 
+/// **The way out a line is keyed to**, where that row is still one the given owner declares — `None`
+/// for a line keyed to nothing, or to a row that is gone or belongs elsewhere.
+fn declared_exit(
+    conn: &Connection,
+    exit_id: Option<i64>,
+    owner_kind: AutomationOwner,
+    owner_id: i64,
+) -> Result<Option<AutomationExit>> {
+    let Some(id) = exit_id else { return Ok(None) };
+    Ok(read::automation_exit(conn, id)?
+        .filter(|exit| exit.owner_kind == owner_kind && exit.owner_id == owner_id))
+}
+
 /// **What is missing inside the action standing on one placement** — the same two questions the
 /// placement is asked, put to every step a run could open inside it ([`steps_opened_by`]).
 ///
@@ -367,24 +380,17 @@ fn inside(
             if exit.name.as_deref() == Some(ERROR_EXIT) {
                 continue;
             }
-            let edge = read::automation_edge_for_exit(
-                conn,
-                AutomationPictureOwner::Action,
-                step.id,
-                exit.name.as_deref(),
-            )?;
+            let edge =
+                read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step.id, exit.id)?;
             let decided = match edge {
                 None => false,
                 Some(edge) => match edge.ends {
                     AutomationEnds::Done | AutomationEnds::Halt => true,
                     AutomationEnds::Go => edge.to_id.is_some_and(|to| opened.contains(&to)),
-                    AutomationEnds::Exit => read::automation_exit_by_name(
-                        conn,
-                        AutomationOwner::Action,
-                        placement.action_id,
-                        edge.exit_to.as_deref(),
-                    )?
-                    .is_some(),
+                    AutomationEnds::Exit => {
+                        declared_exit(conn, edge.exit_to_id, AutomationOwner::Action, placement.action_id)?
+                            .is_some()
+                    }
                 },
             };
             if !decided {
@@ -413,12 +419,7 @@ fn inside(
                     .any(|p| p.name == wire.from_port_name);
                     declared && fed(conn, placement, &wire.from_port_name, live, by_id)?
                 } else if opened.contains(&wire.from_id) {
-                    let exit = read::automation_exit_by_name(
-                        conn,
-                        AutomationOwner::Step,
-                        wire.from_id,
-                        wire.from_exit_name.as_deref(),
-                    )?;
+                    let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Step, wire.from_id)?;
                     match exit {
                         Some(exit) => {
                             outs_of(conn, &exit)?.iter().any(|p| p.name == wire.from_port_name)
@@ -505,12 +506,8 @@ fn reachable(
         }
         let placement = by_id[&id];
         for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
-            let edge = read::automation_edge_for_exit(
-                conn,
-                AutomationPictureOwner::Automation,
-                id,
-                exit.name.as_deref(),
-            )?;
+            let edge =
+                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, id, exit.id)?;
             if let Some(next) = edge.and_then(|e| e.to_id) {
                 todo.push(next);
             }
@@ -524,15 +521,11 @@ fn reachable(
 fn decided(
     conn: &Connection,
     placement_id: i64,
-    exit_name: Option<&str>,
+    exit_id: i64,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<bool> {
-    let Some(edge) = read::automation_edge_for_exit(
-        conn,
-        AutomationPictureOwner::Automation,
-        placement_id,
-        exit_name,
-    )?
+    let Some(edge) =
+        read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, placement_id, exit_id)?
     else {
         return Ok(false);
     };
@@ -567,7 +560,7 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
 
 /// Whether anything actually reaches one input. A wire counts only where **both** halves hold: its far
 /// end is declared — that placement's way out really hands on a port of that name — and that placement
-/// is reachable from the entry. A wire whose far end was renamed underneath it is parted rather than
+/// is reachable from the entry. A wire whose far port was renamed underneath it is parted rather than
 /// rewritten ([`crate::ops::automation`]), and a wire from a placement no run reaches would never carry
 /// anything, so neither of them feeds an input.
 fn fed(
@@ -587,12 +580,7 @@ fn fed(
             continue;
         }
         let Some(from) = by_id.get(&wire.from_id) else { continue };
-        let exit = read::automation_exit_by_name(
-            conn,
-            AutomationOwner::Action,
-            from.action_id,
-            wire.from_exit_name.as_deref(),
-        )?;
+        let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Action, from.action_id)?;
         let Some(exit) = exit else { continue };
         if outs_of(conn, &exit)?.iter().any(|p| p.name == wire.from_port_name) {
             return Ok(true);
@@ -743,7 +731,7 @@ fn snapshot(
             .into_iter()
             .map(|p| RunDefPort { name: p.name, kind: p.kind, required: p.required })
             .collect();
-        exits.push(RunDefExit { name: exit.name.clone(), outs });
+        exits.push(RunDefExit { id: exit.id, name: exit.name.clone(), outs });
     }
     let ins: Vec<RunDefPort> = read::automation_ports_of(
         conn,
@@ -836,8 +824,8 @@ pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunD
 /// The step's own action is asked first: the line drawn inside it from this way out either goes on to
 /// another of its steps, ends or halts the run, or returns to one of the action's ways out
 /// ([`AutomationEnds::Exit`]). Only in that last case is the automation's picture asked, from the
-/// placement the step was opened from, under the name of the action's way out — so a run crosses the
-/// action's edge exactly where its author drew it, and never on a name that merely matches.
+/// placement the step was opened from, on the action's way out that line keys — so a run crosses the
+/// action's edge exactly where its author drew it.
 ///
 /// Both pictures are read live, like every other walk of them; the copies say only what a step is.
 pub(crate) enum Onward {
@@ -854,8 +842,8 @@ pub(crate) enum Onward {
     Nowhere,
 }
 
-pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<&str>) -> Result<Onward> {
-    let (Some(placement_id), Some(step_id)) = (def.placement_id, def.step_id) else {
+pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64>) -> Result<Onward> {
+    let (Some(placement_id), Some(step_id), Some(exit)) = (def.placement_id, def.step_id, exit) else {
         return Ok(Onward::Nowhere);
     };
     let Some(inner) =
@@ -872,11 +860,12 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<&st
             (inner, next)
         }
         AutomationEnds::Exit => {
+            let Some(action_exit) = inner.exit_to_id else { return Ok(Onward::Nowhere) };
             let Some(outer) = read::automation_edge_for_exit(
                 conn,
                 AutomationPictureOwner::Automation,
                 placement_id,
-                inner.exit_to.as_deref(),
+                action_exit,
             )?
             else {
                 return Ok(Onward::Nowhere);
@@ -901,17 +890,13 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<&st
     })
 }
 
-/// **Which of an action's ways out one way out of a step inside it returns to** — `Some(name)` where
-/// the line drawn from it inside the action is an [`AutomationEnds::Exit`], the inner `Option` being
-/// the action's way out (`None` its unnamed one). `None` where it leaves the action by no way out.
-pub(crate) fn returns_to(
-    conn: &Connection,
-    step_id: i64,
-    exit: Option<&str>,
-) -> Result<Option<Option<String>>> {
+/// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out
+/// the line drawn from it inside the action keys, where that line is an [`AutomationEnds::Exit`].
+/// `None` where it leaves the action by no way out.
+pub(crate) fn returns_to(conn: &Connection, step_id: i64, exit: i64) -> Result<Option<i64>> {
     Ok(read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step_id, exit)?
         .filter(|edge| edge.ends == AutomationEnds::Exit)
-        .map(|edge| edge.exit_to))
+        .and_then(|edge| edge.exit_to_id))
 }
 
 /// **What a run is waiting for**, in the three shapes a watcher has to tell apart.
@@ -976,7 +961,7 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     let Some(from) = read::automation_run_def(conn, last.run_def_id)? else {
         return Ok(Waiting::NoWayOn);
     };
-    Ok(match onward(conn, &from, last.exit_name.as_deref())? {
+    Ok(match onward(conn, &from, last.exit_id)? {
         Onward::Go { def, .. } => Waiting::Step(def),
         Onward::Done | Onward::Halt | Onward::Nowhere => Waiting::NoWayOn,
     })
@@ -987,7 +972,7 @@ mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
-    use crate::ops::test_support::{mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
+    use crate::ops::test_support::{exit_id, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
@@ -1284,7 +1269,12 @@ mod tests {
     ) {
         let entry = only_step(tx, action);
         let leaves_by =
-            read::automation_edge_for_exit(tx.conn(), AutomationPictureOwner::Action, entry.id, None)
+            read::automation_edge_for_exit(
+                tx.conn(),
+                AutomationPictureOwner::Action,
+                entry.id,
+                exit_id(tx, AutomationOwner::Step, entry.id, None),
+            )
                 .expect("read the line out of the action")
                 .expect("the step an action is written with leaves it by its unnamed way out");
         let step = automation::step_insert(tx, leaves_by.id, NewStep::new(name, "続ける"), &[], &[])
@@ -1772,7 +1762,8 @@ mod tests {
         automation::placement_step_set(tx, placement.id, second.id, "claude", None)
             .expect("choose who carries it out");
         let on = AutomationPictureOwner::Action;
-        let leaves = read::automation_edge_for_exit(tx.conn(), on, first.id, None)
+        let unnamed = exit_id(tx, AutomationOwner::Step, first.id, None);
+        let leaves = read::automation_edge_for_exit(tx.conn(), on, first.id, unnamed)
             .expect("read")
             .expect("the line out of the first step");
         automation::edge_update(tx, leaves.id, Some(EdgeTarget::Go(second.id)), None).expect("on");
@@ -1792,38 +1783,52 @@ mod tests {
         });
     }
 
+    /// **A line returning to a way out of the action stays on it when the way out is renamed, and goes
+    /// with it when it is deleted** (`AMB-D-961`). The line keys the row, so a rename changes nothing
+    /// the check reads; a delete takes the line, which leaves the step's way out leading nowhere.
     #[test]
-    fn a_way_out_inside_returning_to_one_the_action_no_longer_declares_is_refused() {
+    fn a_way_out_inside_follows_the_action_s_way_out_through_a_rename_and_goes_with_it() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
             let second = a_second_step(tx, &action, &placement);
-            let back = automation::edge_add(
+            let mine = automation::exit_add(tx, AutomationOwner::Action, action.id, Some("差し戻し"))
+                .expect("the action's way out");
+            automation::edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placement.id,
+                Some("差し戻し"),
+                EdgeTarget::Done,
+                None,
+            )
+            .expect("the automation closes on it");
+            automation::edge_add(
                 tx,
                 AutomationPictureOwner::Action,
                 second.id,
                 None,
-                EdgeTarget::Exit(None),
+                EdgeTarget::Exit(Some("差し戻し".into())),
                 None,
             )
-            .expect("edge");
+            .expect("return to it");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
-                "returning to the action's unnamed way out, which the automation closes on",
             );
 
-            // The action's own way out is renamed underneath the line returning to it, which is left
-            // naming what is no longer there.
-            let mine = automation::exit_add(tx, AutomationOwner::Action, action.id, Some("差し戻し"))
-                .expect("the action's way out");
-            automation::edge_update(tx, back.id, Some(EdgeTarget::Exit(Some("差し戻し".into()))), None)
-                .expect("return to it");
             automation::exit_rename(tx, mine.id, Some("戻す")).expect("rename");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
+                "both lines stay on the way out they key",
+            );
+
+            automation::exit_delete(tx, mine.id).expect("delete");
             let unmet =
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert!(
                 unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: None }),
-                "{unmet:?}",
+                "the line returning to it went with it: {unmet:?}",
             );
         });
     }

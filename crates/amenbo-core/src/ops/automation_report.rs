@@ -247,7 +247,7 @@ fn put(
         id: read::next_id(tx.conn(), "automation_run_value")?,
         run_step_id: run_step.id,
         direction: AutomationPortDirection::Out,
-        exit_name: exit.and_then(|e| e.name.clone()),
+        exit_id: exit.map(|e| e.id),
         name: port.name.clone(),
         kind: port.kind,
         value,
@@ -266,13 +266,12 @@ fn put(
 /// **The step is finished**: it names the way out it took, hands its report over, and the run reads the
 /// picture to see what comes next.
 ///
-/// **A way out the step does not declare is refused, and the ones it does are named.** The way out is
-/// the condition the picture reads to pick what comes next, so one nobody drew cannot be walked; guessing
-/// which real one was meant would send the run down a road on a guess, and reading it as the error one
-/// stopped the run for a person over a slip of the pen (`--exit ""` for the unnamed way out, three runs
-/// out of three in `AMB-T-5385`). Refused before anything is written, the step stays running and the
-/// agent types it again from the list. An empty name is one nobody declared, not the unnamed way out —
-/// that one is said by leaving `--exit` off. The error way out is always there to be taken.
+/// **The way out is named by its id** (`AMB-D-961`), as the step's copy keys it — the unnamed one
+/// included, which can also be said by leaving `--exit` off. An id the step does not declare is refused
+/// before anything is written, naming the ones it does: the way out is the condition the picture reads
+/// to pick what comes next, so one nobody drew cannot be walked, and reading it as the error one
+/// stopped the run for a person over a slip of the pen (`AMB-T-5385`). The step stays running and the
+/// agent types it again from the list. The error way out is always among them.
 ///
 /// **A report is owed.** The one step that owes none is the one that went looking for a task and found
 /// none: there was nothing to report on. That step's stretch is taken back down with it, which is what
@@ -284,7 +283,7 @@ fn put(
 pub fn done(
     tx: &WriteTx<'_>,
     run_step_id: i64,
-    exit_name: Option<&str>,
+    exit_id: Option<i64>,
     report: &str,
 ) -> Result<Next> {
     let run_step = live_execution(tx, run_step_id)?;
@@ -296,12 +295,13 @@ pub fn done(
     };
     let took_a_task = stretch.as_ref().is_some_and(|s| s.task_id.is_some());
 
-    let declared =
-        exit_name == Some(ERROR_EXIT) || exits.iter().any(|e| e.name.as_deref() == exit_name);
-    if !declared {
-        return Err(undeclared(&def.name, exit_name, &exits));
-    }
-    let taken = exit_name.map(str::to_string);
+    // The way out, as the step's copy declares it: by its id, or — left unsaid — the unnamed one.
+    let Some(taken) = exits.iter().find(|e| match exit_id {
+        Some(id) => e.id == id,
+        None => e.name.is_none(),
+    }) else {
+        return Err(undeclared(&def.name, exit_id, &exits));
+    };
 
     if report.trim().is_empty() && took_a_task {
         return Err(Error::invalid(
@@ -311,10 +311,9 @@ pub fn done(
     }
 
     let produced = read::automation_run_values_of(tx.conn(), run_step.id)?;
-    let missing: Vec<String> = exits
+    let missing: Vec<String> = taken
+        .outs
         .iter()
-        .filter(|e| e.name.as_deref() == taken.as_deref())
-        .flat_map(|e| e.outs.iter())
         .filter(|p| p.required)
         .filter(|p| {
             !produced
@@ -327,7 +326,7 @@ pub fn done(
         return Err(Error::invalid(format!(
             "step '{}' has not handed on what leaving through {} requires: {}",
             def.name,
-            named(taken.as_deref()),
+            named(taken.name.as_deref()),
             missing.join(", "),
         )));
     }
@@ -336,11 +335,11 @@ pub fn done(
     // Every value this step put down belongs to the way out it turned out to take. A value already
     // carrying one came from `take`, where the way out was never in question.
     for standing in produced {
-        if standing.direction != AutomationPortDirection::Out || standing.exit_name.is_some() {
+        if standing.direction != AutomationPortDirection::Out || standing.exit_id.is_some() {
             continue;
         }
         let mut stamped = standing.clone();
-        stamped.exit_name = taken.clone();
+        stamped.exit_id = Some(taken.id);
         stamped.updated_at = now;
         crate::ops::emit_update(
             tx,
@@ -350,7 +349,7 @@ pub fn done(
     }
 
     let mut ended = run_step.clone();
-    ended.exit_name = taken.clone();
+    ended.exit_id = Some(taken.id);
     ended.report = report.to_string();
     ended.status = AutomationRunStepStatus::Done;
     ended.ended_at = Some(now);
@@ -375,24 +374,27 @@ pub fn done(
     if !took_a_task {
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
     }
-    whats_next(tx, &def, &ended, taken.as_deref())
+    whats_next(tx, &def, &ended, taken.id)
 }
 
 /// The refusal of a way out the step does not declare, carrying the ones it does as they are typed, so
 /// the agent can say it again from here rather than go and look.
-fn undeclared(step: &str, said: Option<&str>, exits: &[RunDefExit]) -> Error {
+fn undeclared(step: &str, said: Option<i64>, exits: &[RunDefExit]) -> Error {
     let said = match said {
-        Some(name) => format!("--exit \"{name}\""),
+        Some(id) => format!("--exit {id}"),
         None => "left unnamed (--exit left off)".to_string(),
     };
-    let mut ways: Vec<String> = exits
+    let ways: Vec<String> = exits
         .iter()
-        .map(|e| match e.name.as_deref() {
-            Some(name) => format!("--exit \"{name}\""),
-            None => "--exit left off (the unnamed way out)".to_string(),
+        .map(|e| {
+            let what = match e.name.as_deref() {
+                Some(ERROR_EXIT) => "the error way out, for a step that could not finish".to_string(),
+                Some(name) => format!("\"{name}\""),
+                None => "the unnamed way out".to_string(),
+            };
+            format!("--exit {} ({what})", e.id)
         })
         .collect();
-    ways.push(format!("--exit \"{ERROR_EXIT}\" (the error way out, for a step that could not finish)"));
     Error::invalid(format!(
         "step '{step}' does not declare a way out {said}, so nothing was recorded and the step is still \
          running. Finish it again with one it declares: {}",
@@ -445,11 +447,11 @@ fn whats_next(
     tx: &WriteTx<'_>,
     def: &AutomationRunDef,
     ended: &AutomationRunStep,
-    taken: Option<&str>,
+    taken: i64,
 ) -> Result<Next> {
     let conn = tx.conn();
     let run = read::automation_run(conn, def.run_id)?.ok_or_else(|| not_found("run", def.run_id))?;
-    match automation_run::onward(conn, def, taken)? {
+    match automation_run::onward(conn, def, Some(taken))? {
         Onward::Done => {
             Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?))
         }
@@ -515,12 +517,14 @@ fn over_its_turns(
             AutomationPictureOwner::Action => {
                 def.placement_id == from.placement_id
                     && step_id == edge.from_id
-                    && step.exit_name.as_deref() == edge.exit_name.as_deref()
+                    && step.exit_id == Some(edge.exit_id)
             }
             AutomationPictureOwner::Automation => {
                 def.placement_id == Some(edge.from_id)
-                    && automation_run::returns_to(conn, step_id, step.exit_name.as_deref())?
-                        .is_some_and(|to| to.as_deref() == edge.exit_name.as_deref())
+                    && match step.exit_id {
+                        Some(exit) => automation_run::returns_to(conn, step_id, exit)? == Some(edge.exit_id),
+                        None => false,
+                    }
             }
         };
         if took_it {
@@ -548,7 +552,7 @@ mod tests {
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
-    use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, with_tx};
+    use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, way_out, with_tx};
 
     /// The picture these tests walk: a spot that takes a task and hands a note on through "found", and
     /// a second spot wired to read it. Both ways out of both are decided, so it launches.
@@ -732,8 +736,8 @@ mod tests {
             assert_eq!(declared[0].kind, AutomationPortKind::TaskTake);
             assert_eq!(declared[0].task_id, Some(task.id));
             assert_eq!(
-                declared[0].exit_name.as_deref(),
-                Some("found"),
+                declared[0].exit_id,
+                way_out(tx, step.run_step.id, "found"),
                 "the one way out that declares it was never in question",
             );
         });
@@ -798,8 +802,8 @@ mod tests {
             take(tx, step.run_step.id, task.id).expect("take");
             out(tx, step.run_step.id, "note", Produced::Value("what I found")).expect("out");
 
-            let next = done(tx, step.run_step.id, Some("found"), "Looked at it.")
-                .expect("done");
+            let found = way_out(tx, step.run_step.id, "found");
+            let next = done(tx, step.run_step.id, found, "Looked at it.").expect("done");
             match next {
                 Next::Step(def) => assert_eq!(def.step_id, Some(p.second.id)),
                 other => panic!("the edge goes on to the second step: {other:?}"),
@@ -808,13 +812,13 @@ mod tests {
                 .into_iter()
                 .find(|v| v.name == "note")
                 .expect("the note");
-            assert_eq!(note.exit_name.as_deref(), Some("found"));
+            assert_eq!(note.exit_id, found);
 
             let ended = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
                 .expect("the execution");
             assert_eq!(ended.status, AutomationRunStepStatus::Done);
-            assert_eq!(ended.exit_name.as_deref(), Some("found"));
+            assert_eq!(ended.exit_id, found);
             assert_eq!(ended.report, "Looked at it.");
         });
     }
@@ -828,7 +832,7 @@ mod tests {
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
 
-            let refused = done(tx, step.run_step.id, Some("found"), "Looked at it.")
+            let refused = done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
                 .expect_err("the note is required");
             assert!(refused.to_string().contains("note"), "{refused}");
             let still = read::automation_run_step(tx.conn(), step.run_step.id)
@@ -848,7 +852,7 @@ mod tests {
             take(tx, step.run_step.id, task.id).expect("take");
 
             let refused =
-                done(tx, step.run_step.id, Some("found"), "   ")
+                done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "   ")
                 .expect_err("a report is owed");
             assert!(refused.to_string().contains("owes a report"), "{refused}");
         });
@@ -885,25 +889,28 @@ mod tests {
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
 
-            // A made-up name, and an empty one — which is not the unnamed way out.
-            for said in ["all good", ""] {
+            // An id no way out of this step carries — another step's, or none at all.
+            let found = way_out(tx, step.run_step.id, "found").expect("found");
+            let error = way_out(tx, step.run_step.id, ERROR_EXIT).expect("the error way out");
+            for said in [9_999, -1] {
                 let err = done(tx, step.run_step.id, Some(said), "Did the thing.")
                     .expect_err("a way out the step does not declare");
                 assert_eq!(err.code(), "invalid_value");
                 let message = err.to_string();
-                assert!(message.contains("--exit \"found\""), "{message}");
-                assert!(message.contains("--exit left off"), "the unnamed way out: {message}");
-                assert!(message.contains("--exit \"*\""), "the error way out is offered: {message}");
+                assert!(message.contains(&format!("--exit {said}")), "what was said: {message}");
+                assert!(message.contains(&format!("--exit {found} (\"found\")")), "{message}");
+                assert!(message.contains("(the unnamed way out)"), "{message}");
+                assert!(message.contains(&format!("--exit {error} (the error way out")), "{message}");
             }
             let still = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
                 .expect("the execution");
             assert_eq!(still.status, AutomationRunStepStatus::Running, "nothing was recorded");
-            assert_eq!(still.exit_name, None);
+            assert_eq!(still.exit_id, None);
             assert!(still.report.is_empty(), "{}", still.report);
 
             // Said again from the list, it finishes.
-            done(tx, step.run_step.id, Some(ERROR_EXIT), "Could not.").expect("the error way out");
+            done(tx, step.run_step.id, Some(error), "Could not.").expect("the error way out");
         });
     }
 
@@ -917,7 +924,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
-            done(tx, step.run_step.id, Some("found"), "Looked at it.")
+            done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
                 .expect("done");
 
             let ids = read::task_comment_ids(tx.conn(), task.id).expect("comments");

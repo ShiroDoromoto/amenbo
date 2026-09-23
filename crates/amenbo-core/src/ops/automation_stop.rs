@@ -304,7 +304,7 @@ fn next_after_the_pause(
 ) -> Result<Option<AutomationRunDef>> {
     let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else { return Ok(None) };
     let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
-    Ok(match crate::ops::automation_run::onward(conn, &def, last.exit_name.as_deref())? {
+    Ok(match crate::ops::automation_run::onward(conn, &def, last.exit_id)? {
         crate::ops::automation_run::Onward::Go { def, .. } => Some(*def),
         _ => None,
     })
@@ -410,7 +410,9 @@ mod tests {
     use crate::ops::automation_report::{done, Next};
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
-    use crate::ops::test_support::{mk_exit, mk_out, mk_placed, mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{
+        exit_id, mk_exit, mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx,
+    };
 
 
     /// The picture these tests walk: a spot that takes a task and goes on to a second, and the second
@@ -769,12 +771,12 @@ mod tests {
 
             // Round once: the way back is within its one turn.
             let second = opened(tx, &run, &p.second);
-            let next = done(tx, second.run_step.id, Some("again"), "Not yet.").expect("done");
+            let next = done(tx, second.run_step.id, way_out(tx, second.run_step.id, "again"), "Not yet.").expect("done");
             assert!(matches!(next, Next::Step(_)), "one turn is what it is allowed");
 
             // Round twice: the same way out, the same task — one turn too many.
             let twice = opened(tx, &run, &p.second);
-            let stopped = done(tx, twice.run_step.id, Some("again"), "Still not.")
+            let stopped = done(tx, twice.run_step.id, way_out(tx, twice.run_step.id, "again"), "Still not.")
                 .expect("done");
             assert!(matches!(stopped, Next::Halted(_)));
             assert_eq!(
@@ -915,7 +917,8 @@ mod tests {
         automation::placement_step_set(tx, second.id, review.id, "claude", None)
             .expect("choose who carries it out");
         // The first step no longer leaves the action: it goes on to the second inside it.
-        let leaves = read::automation_edge_for_exit(tx.conn(), Action, write.id, None)
+        let unnamed = exit_id(tx, crate::model::AutomationOwner::Step, write.id, None);
+        let leaves = read::automation_edge_for_exit(tx.conn(), Action, write.id, unnamed)
             .expect("read")
             .expect("the line out of the first step");
         automation::edge_update(tx, leaves.id, Some(EdgeTarget::Go(review.id)), None)
@@ -1053,10 +1056,10 @@ mod tests {
             let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
 
             let review = opened_step(tx, &run, &next);
-            let next = stepped_to(done(tx, review.run_step.id, Some("again"), "Not yet.").expect("done"));
+            let next = stepped_to(done(tx, review.run_step.id, way_out(tx, review.run_step.id, "again"), "Not yet.").expect("done"));
             assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "one turn is allowed");
             let twice = opened_step(tx, &run, &next);
-            let stopped = done(tx, twice.run_step.id, Some("again"), "Still not.").expect("done");
+            let stopped = done(tx, twice.run_step.id, way_out(tx, twice.run_step.id, "again"), "Still not.").expect("done");
             assert!(matches!(stopped, Next::Halted(_)));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("run").stopped_reason,

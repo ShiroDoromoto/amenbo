@@ -1032,6 +1032,8 @@ export const zhHant: Translation = {
     "auto.act.read": "檢視",
     "auto.act.openInSidebar": "在側邊欄開啟",
     "auto.act.globalReadOnly": "全域動作在側邊欄的「自動化」中修改。這裡只能檢視。",
+    "auto.held.place": "正在使用它的執行",
+    "auto.held.what": "使用它的執行在進行中或已暫停時，無法編輯。停止該執行，或等它結束後，即可再次編輯。",
     "auto.act.stepsPlace": "步驟",
     "auto.act.stepsHint": "從上方的「輸入」進入，經過各步驟，在下方某個「輸出」結束",
     "auto.act.usedWhere": "{n} 個。在這裡修改，全部都會生效",

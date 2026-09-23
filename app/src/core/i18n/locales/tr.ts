@@ -1030,6 +1030,8 @@ export const tr: Translation = {
     "auto.act.read": "Görüntüle",
     "auto.act.openInSidebar": "Kenar çubuğunda aç",
     "auto.act.globalReadOnly": "Genel bir eylem, kenar çubuğundaki Otomasyonlar'dan değiştirilir. Burada yalnızca okunur.",
+    "auto.held.place": "Bunu kullanan çalıştırmalar",
+    "auto.held.what": "Bunu kullanan bir çalıştırma sürerken veya duraklatılmışken düzenlenemez. Yeniden düzenlemek için çalıştırmayı durdurun ya da bitmesini bekleyin.",
     "auto.act.stepsPlace": "Adımlar",
     "auto.act.stepsHint": "Yukarıdaki Girdiden girer, adımlardan geçer ve aşağıdaki Çıktılardan birinde biter",
     "auto.act.usedWhere": "{n}. Burada yapılan değişiklik hepsine uygulanır.",

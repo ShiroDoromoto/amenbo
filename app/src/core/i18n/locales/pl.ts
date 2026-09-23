@@ -1047,6 +1047,8 @@ export const pl: Translation = {
     "auto.act.read": "Pokaż",
     "auto.act.openInSidebar": "Otwórz na pasku bocznym",
     "auto.act.globalReadOnly": "Akcję globalną zmienia się w Automatyzacjach na pasku bocznym. Tutaj można ją tylko czytać.",
+    "auto.held.place": "Uruchomienia, które tego używają",
+    "auto.held.what": "Dopóki uruchomienie, które tego używa, trwa lub jest wstrzymane, nie można tego edytować. Zatrzymaj uruchomienie albo poczekaj, aż się skończy, aby znów edytować.",
     "auto.act.stepsPlace": "Kroki",
     "auto.act.stepsHint": "Wchodzi przez Wejście u góry, przechodzi przez kroki i kończy się jednym z Wyjść na dole",
     "auto.act.usedWhere": "{n}. Zmiana tutaj działa na wszystkie.",

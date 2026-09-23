@@ -22,11 +22,10 @@
 //! placed twice on one automation with two different answers, and it is why a step declares none: an
 //! action holds several steps, and each of them reaches a setting by the name the action gave it.
 //!
-//! **Names, not keys, join the parts.** An edge names the way out it hangs on, and a wire names both
-//! ends it joins, because an action's ports can be re-declared underneath a placement of it and a key
-//! would then name a row that is gone (`automation_wire`'s note in
-//! [`crate::store_engine::schema`]). The cost is that renaming a declaration parts whatever named it,
-//! which is the behaviour the specification asks for rather than an oversight.
+//! **A way out is keyed; a port is named.** An edge keys the way out it hangs on and a wire the way
+//! out it leaves by, so renaming a way out leaves every line on it standing, and deleting one takes
+//! the lines with it (`AMB-D-961`). The ports at a wire's two ends are still named, and renaming one
+//! parts the wire from it.
 //!
 //! **Nothing here refuses an unfinished automation.** A box with no way onward, an automation with no
 //! entry, a required setting nobody answered — each of them saves. What refuses them is the launch
@@ -45,7 +44,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
     AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, ERROR_EXIT,
 };
-use crate::ops::{emit_create, emit_update, place, Position};
+use crate::ops::{automation_view, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -144,27 +143,14 @@ fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     if PAST_THE_GUARD.with(std::cell::Cell::get) {
         return Ok(());
     }
-    let automations = match def {
-        Def::Automation(id) => vec![id],
-        Def::Action(id) => {
-            let mut ids = Vec::new();
-            for placement in read::automation_placement_ids_using_action(tx.conn(), id)? {
-                let automation_id = live_placement(tx, placement)?.automation_id;
-                if !ids.contains(&automation_id) {
-                    ids.push(automation_id);
-                }
-            }
-            ids
-        }
+    // The same answer a build screen reads to hold its fields shut, so the two cannot disagree.
+    let runs = match def {
+        Def::Automation(id) => automation_view::run_ids_holding_automation(tx.conn(), id)?,
+        Def::Action(id) => automation_view::run_ids_holding_action(tx.conn(), id)?,
     };
-    let mut runs = Vec::new();
-    for automation_id in automations {
-        runs.extend(read::automation_run_ids_under_way(tx.conn(), automation_id)?);
-    }
     if runs.is_empty() {
         return Ok(());
     }
-    runs.sort_unstable();
     let what = match def {
         Def::Automation(id) => format!("automation '{}'", live_automation(tx, id)?.name),
         Def::Action(id) => format!("action '{}'", live_action(tx, id)?.name),
@@ -317,10 +303,17 @@ fn add_exit_row(
     Ok(exit)
 }
 
-/// Delete one way out and the outputs declared on it. An edge or a wire naming it is **not** swept: they
-/// name it by the name they were written with, and the specification keeps that parting visible rather
-/// than silently rewriting the picture around it.
+/// Delete one way out, the outputs declared on it, and the lines keyed to it — an edge that leaves by
+/// it or returns to it, and a wire that carries what it hands on. A line keyed to a row that is gone
+/// decides nothing and carries nothing, which is why it goes with the row (`AMB-D-961`).
 fn delete_exit_row(tx: &WriteTx<'_>, exit_id: i64) -> Result<()> {
+    let (edges, wires) = read::automation_line_ids_on_exit(tx.conn(), exit_id)?;
+    for wire in wires {
+        tx.delete_record("automation_wire", wire)?;
+    }
+    for edge in edges {
+        tx.delete_record("automation_edge", edge)?;
+    }
     for port in read::automation_port_ids(tx.conn(), AutomationPortOwner::Exit, exit_id)? {
         tx.delete_record("automation_port", port)?;
     }
@@ -1152,7 +1145,10 @@ fn splice_onto_edge(tx: &WriteTx<'_>, edge: &AutomationEdge, new_box: i64) -> Re
         AutomationEnds::Go => EdgeTarget::Go(
             edge.to_id.ok_or_else(|| Error::invalid("the way out goes on to nothing"))?,
         ),
-        AutomationEnds::Exit => EdgeTarget::Exit(edge.exit_to.clone()),
+        AutomationEnds::Exit => EdgeTarget::Exit(match edge.exit_to_id {
+            Some(id) => live_exit(tx, id)?.name,
+            None => None,
+        }),
         AutomationEnds::Done => EdgeTarget::Done,
         AutomationEnds::Halt => EdgeTarget::Halt,
     };
@@ -1338,9 +1334,8 @@ pub fn exit_add(
 
 /// Rename a way out.
 ///
-/// **Whatever named the old name is parted from it.** Edges and wires name a way out by its name, so
-/// renaming one leaves them pointing at a name nobody declares — visibly, in the picture, which is what
-/// the specification asks for rather than a silent rewrite of the graph around it.
+/// **Whatever hangs on it stays.** Edges and wires key a way out by its row, not its name
+/// (`AMB-D-961`), so a rename changes what the picture says and nothing about how it is joined.
 ///
 /// [`ERROR_EXIT`]'s row is refused at both ends: it may not be renamed, and no other may take its name.
 pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<AutomationExit> {
@@ -1382,8 +1377,9 @@ pub fn exit_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationE
     Ok(after)
 }
 
-/// Delete a way out, with the outputs declared on it. [`ERROR_EXIT`]'s row is refused — every step
-/// carries it, and an edge may name it whether or not anyone wrote one.
+/// Delete a way out, with the outputs declared on it and the lines keyed to it ([`delete_exit_row`]).
+/// [`ERROR_EXIT`]'s row is refused — every step carries it, and an edge may hang on it whether or not
+/// anyone wrote one.
 pub fn exit_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let exit = live_exit(tx, id)?;
     not_under_a_run(tx, def_of_declarer(tx, exit.owner_kind, exit.owner_id)?)?;
@@ -1725,7 +1721,8 @@ pub enum EdgeTarget {
     /// Open the next box.
     Go(i64),
     /// Leave the action this picture is inside, by the way out it declares under this name — `None`
-    /// being its unnamed one. An action's picture only: an automation's has nothing outside it.
+    /// being its unnamed one. An action's picture only: an automation's has nothing outside it. The
+    /// name is how the way out is said; what the edge keeps is its row ([`AutomationEdge::exit_to_id`]).
     Exit(Option<String>),
     /// Close the run.
     Done,
@@ -1810,7 +1807,7 @@ pub fn edge_add(
 ) -> Result<AutomationEdge> {
     let owner_id = box_picture(tx, owner_kind, from_id)?;
     not_under_a_run(tx, def_of_picture(owner_kind, owner_id))?;
-    box_exit(tx, owner_kind, from_id, exit_name)?;
+    let exit = box_exit(tx, owner_kind, from_id, exit_name)?;
     let (ends, to_id, exit_to) = target.parts();
     if let Some(to_id) = to_id {
         if box_picture(tx, owner_kind, to_id)? != owner_id {
@@ -1820,11 +1817,12 @@ pub fn edge_add(
             )));
         }
     }
-    if ends == AutomationEnds::Exit {
-        returning_exit(tx, owner_kind, owner_id, exit_to.as_deref())?;
-    }
+    let exit_to_id = match ends {
+        AutomationEnds::Exit => Some(returning_exit(tx, owner_kind, owner_id, exit_to.as_deref())?.id),
+        _ => None,
+    };
     checked_max_times(max_times, ends)?;
-    if read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit_name)?.is_some() {
+    if read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit.id)?.is_some() {
         return Err(Error::invalid(match exit_name {
             Some(n) => format!("'{n}' already says what happens after it"),
             None => "the unnamed way out already says what happens after it".to_string(),
@@ -1839,10 +1837,10 @@ pub fn edge_add(
         owner_kind,
         owner_id,
         from_id,
-        exit_name: exit_name.map(str::to_string),
+        exit_id: exit.id,
         to_id,
         ends,
-        exit_to,
+        exit_to_id,
         max_times,
         order_key,
         created_at: now,
@@ -1874,12 +1872,14 @@ pub fn edge_update(
                 )));
             }
         }
-        if ends == AutomationEnds::Exit {
-            returning_exit(tx, before.owner_kind, before.owner_id, exit_to.as_deref())?;
-        }
+        after.exit_to_id = match ends {
+            AutomationEnds::Exit => {
+                Some(returning_exit(tx, before.owner_kind, before.owner_id, exit_to.as_deref())?.id)
+            }
+            _ => None,
+        };
         after.ends = ends;
         after.to_id = to_id;
-        after.exit_to = exit_to;
     }
     if let Some(max_times) = max_times {
         after.max_times = max_times;
@@ -1958,6 +1958,7 @@ pub fn wire_add(
 ) -> Result<AutomationWire> {
     let owner_id = wire_picture(tx, owner_kind, from_id, to_id)?;
     not_under_a_run(tx, def_of_picture(owner_kind, owner_id))?;
+    let mut from_exit_id = None;
     let out = if from_id == ACTION_BOUNDARY {
         if from_exit_name.is_some() {
             return Err(Error::invalid(
@@ -1974,6 +1975,7 @@ pub fn wire_add(
         .ok_or_else(|| Error::not_found(format!("this action takes in no '{from_port_name}'")))?
     } else {
         let exit = box_exit(tx, owner_kind, from_id, from_exit_name)?;
+        from_exit_id = Some(exit.id);
         read::automation_port_by_name(
             tx.conn(),
             AutomationPortOwner::Exit,
@@ -1989,15 +1991,21 @@ pub fn wire_add(
         })?
     };
     let into = if to_id == ACTION_BOUNDARY {
-        let returns_by = read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, from_exit_name)?
-            .filter(|edge| edge.ends == AutomationEnds::Exit)
+        let returns_by = match from_exit_id {
+            Some(exit_id) => read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit_id)?,
+            None => None,
+        }
+        .filter(|edge| edge.ends == AutomationEnds::Exit)
             .ok_or_else(|| {
                 Error::invalid(format!(
                     "that way out of step '{from_id}' does not leave the action — say which way out of \
                      the action it returns to before handing anything out of it"
                 ))
             })?;
-        let exit = returning_exit(tx, owner_kind, owner_id, returns_by.exit_to.as_deref())?;
+        let exit_id = returns_by
+            .exit_to_id
+            .ok_or_else(|| Error::invalid("that line leaves the action by no way out"))?;
+        let exit = live_exit(tx, exit_id)?;
         read::automation_port_by_name(
             tx.conn(),
             AutomationPortOwner::Exit,
@@ -2038,7 +2046,7 @@ pub fn wire_add(
         tx.conn(),
         owner_kind,
         from_id,
-        from_exit_name,
+        from_exit_id,
         from_port_name,
         to_id,
         to_port_name,
@@ -2052,7 +2060,7 @@ pub fn wire_add(
         owner_kind,
         owner_id,
         from_id,
-        from_exit_name: from_exit_name.map(str::to_string),
+        from_exit_id,
         from_port_name: from_port_name.to_string(),
         to_id,
         to_port_name: to_port_name.to_string(),
@@ -2074,7 +2082,19 @@ pub fn wire_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::test_support::{mk_project, with_tx};
+    use crate::ops::test_support::{exit_id, mk_project, with_tx};
+
+    /// The edge hanging on one way out of one box, the way out said by its name — what a test reads
+    /// where the store keys it (`AMB-D-961`).
+    fn edge_on(
+        tx: &WriteTx<'_>,
+        owner_kind: AutomationPictureOwner,
+        box_id: i64,
+        exit: Option<&str>,
+    ) -> Result<Option<AutomationEdge>> {
+        let exit = box_exit(tx, owner_kind, box_id, exit)?;
+        Ok(read::automation_edge_for_exit(tx.conn(), owner_kind, box_id, exit.id)?)
+    }
 
     fn mk_automation(tx: &WriteTx<'_>) -> Automation {
         let project = mk_project(tx, "amenbo");
@@ -2148,8 +2168,7 @@ mod tests {
             let step = only_step(tx, &action);
 
             for name in [None, Some(ERROR_EXIT), Some("直すところがある")] {
-                let edge = read::automation_edge_for_exit(
-                    tx.conn(),
+                let edge = edge_on(tx,
                     AutomationPictureOwner::Action,
                     step.id,
                     name,
@@ -2158,8 +2177,8 @@ mod tests {
                 .expect("every way out of the step leaves the action");
                 assert_eq!(edge.ends, AutomationEnds::Exit);
                 assert_eq!(
-                    edge.exit_to.as_deref(),
-                    name,
+                    edge.exit_to_id,
+                    Some(exit_id(tx, AutomationOwner::Action, action.id, name)),
                     "and it returns to the action's way out of that name",
                 );
             }
@@ -2168,7 +2187,7 @@ mod tests {
                 .expect("read the wires");
             assert_eq!(wires.len(), 1);
             assert_eq!(wires[0].from_id, ACTION_BOUNDARY, "out of the action itself");
-            assert_eq!(wires[0].from_exit_name, None);
+            assert_eq!(wires[0].from_exit_id, None);
             assert_eq!(wires[0].from_port_name, "差分");
             assert_eq!(wires[0].to_id, step.id);
             assert_eq!(wires[0].to_port_name, "差分");
@@ -2278,8 +2297,7 @@ mod tests {
             )
             .expect("declare the output");
             // The error way out of this step leaves the action, so take that line away first.
-            let drawn = read::automation_edge_for_exit(
-                tx.conn(),
+            let drawn = edge_on(tx,
                 AutomationPictureOwner::Action,
                 step.id,
                 Some(ERROR_EXIT),
@@ -2355,7 +2373,7 @@ mod tests {
         from_id: i64,
         exit: Option<&str>,
     ) -> (AutomationEnds, Option<i64>) {
-        let edge = read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit)
+        let edge = edge_on(tx, owner_kind, from_id, exit)
             .expect("read edge")
             .expect("an edge on that way out");
         (edge.ends, edge.to_id)
@@ -2465,8 +2483,7 @@ mod tests {
                 "and the new placement goes on to where that way out used to reach",
             );
             assert_eq!(
-                read::automation_edge_for_exit(
-                    tx.conn(),
+                edge_on(tx,
                     AutomationPictureOwner::Automation,
                     first.id,
                     None
@@ -2488,8 +2505,7 @@ mod tests {
             let first = only_step(tx, &action);
             // The line the new step goes in on is the one the action was written with: its one step
             // leaves the action by its unnamed way out.
-            let edge = read::automation_edge_for_exit(
-                tx.conn(),
+            let edge = edge_on(tx,
                 AutomationPictureOwner::Action,
                 first.id,
                 None,
@@ -2517,8 +2533,7 @@ mod tests {
                 "leaving the action is what the new step goes on to do",
             );
             assert_eq!(
-                read::automation_edge_for_exit(
-                    tx.conn(),
+                edge_on(tx,
                     AutomationPictureOwner::Action,
                     first.id,
                     None

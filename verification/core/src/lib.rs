@@ -4354,6 +4354,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "out-in-pane", required: &["name", "value"], refs: &["target"], strings: &["name", "value"], binds: false },
     // The step finished: which way out it took — left out, the unnamed one — and the report it owes
     // whichever it took.
+    // A way out the step does not declare — an empty one included — is turned away with
+    // `invalid_value`, nothing written and the step still running, so a road writes `refused:` on it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
     // **Any other `automation` verb, typed in that same terminal.** Building a definition and driving
     // a run belong outside a step, and the binary turns them away there (`automation_outside_only`)
@@ -4362,6 +4364,29 @@ const REGISTRY: &[OpSpec] = &[
     // in them is a gap the operator fills from the line over the pane, the way `<ref>` is elsewhere:
     // the store issues the number.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "verb-in-pane", required: &["verb"], refs: &["target"], strings: &["verb"], binds: false },
+    // **The same report, typed where the run's pane is not.** A step's terminal is started by the app
+    // whether or not its pane is drawn (`app/src-tauri/src/pty.rs`, `open_step`), and the three ops
+    // above cannot tell that from the old way: opening the pane to type in it starts the terminal on
+    // the spot either way. So this one reports a step of a run nobody has opened, from a plain shell
+    // in whatever pane is up, by putting the step the window would have named into the environment
+    // by hand (`amenbo_core::session::STEP_VAR`). What says the terminal ran is the pane opened
+    // afterwards standing on the step after it.
+    //
+    // `target` is which run, read off its row on the running tab — the row carries the run's number,
+    // and the pane that also carries it is the one this road does not open. `report` and `exit` are
+    // `done-in-pane`'s.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-outside-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
+    // **The program in that terminal ending by itself**, before the step has reported. It is the
+    // agent going without a word, which is the one ending a run meets from inside its own step: the
+    // host hears the terminal end and fails the run there (`crashed`). The other ways a terminal ends
+    // are Amenbo's — the next step taking the place, a closed pane — and move nothing, so a road that
+    // reached for one of those would be reading a run that was never going to fail.
+    //
+    // `end-pane` is not this op because it names no run: it is the workspace's, said of whichever
+    // pane has a terminal in it. `target` is which run's pane, read the way `close-run-pane` reads it.
+    // What ends the program is `exit` typed at the stand-in a road stood up to carry lines out
+    // (`can-start`'s `then: runs`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "quit-in-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // A row of the "running" tab. It draws what is going and every failure nobody has acknowledged,
     // across projects, so the row names the project as well as the state.
@@ -4401,6 +4426,18 @@ const REGISTRY: &[OpSpec] = &[
     // What the two run tabs say over their rows when the sidebar opened them: that they hold every
     // run on this device, since no project narrowed them. `tab` is `running` or `history`.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "scope-said", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
+    //
+    // **A definition a run is going on, on its build screen** — an automation's or a library
+    // action's, whichever is open. While a run of it is running or paused, core refuses every rewrite,
+    // and the screen holds itself shut: the runs holding it are listed over the picture, nothing on
+    // the picture adds a box, and the panel's fields are shut. A screen road alone: the terminal's is
+    // the refusal itself (`update` / `action-update` with `refused: conflict`).
+    //
+    // `target` is the run the list names. `present: false` is the release — nothing listed, and the
+    // writes offered again — and names no run.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "held-by", required: &[], refs: &["target"], strings: &[], binds: false },
+    // Pressing a run's row in that list, which goes to the pane it is drawn in — where it is stopped.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "held-go", required: &["target"], refs: &["target"], strings: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

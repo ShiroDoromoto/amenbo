@@ -1042,6 +1042,8 @@ export const fr: Translation = {
     "auto.act.read": "Voir",
     "auto.act.openInSidebar": "Ouvrir dans la barre latérale",
     "auto.act.globalReadOnly": "Une action globale se modifie depuis Automatisations dans la barre latérale. Ici, elle est seulement lue.",
+    "auto.held.place": "Exécutions qui l’utilisent",
+    "auto.held.what": "Tant qu’une exécution qui l’utilise est en cours ou en pause, il ne peut pas être modifié. Arrêtez l’exécution, ou attendez qu’elle se termine, pour le modifier à nouveau.",
     "auto.act.stepsPlace": "Étapes",
     "auto.act.stepsHint": "Entre par l’Entrée en haut, passe par les étapes et finit par l’une des Sorties en bas",
     "auto.act.usedWhere": "{n}. Une modification ici les touche toutes.",

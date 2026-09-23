@@ -790,9 +790,7 @@ pub static LAUNCHES: &[Launch] = &[
         // Comes back on the session's own model, reading its settings file for a new session and not
         // for a resumed one. A name on this line overrides it (`AMB-T-4694`).
         model_on_the_way_back: false,
-        // Written from the documentation and never run — the tool is not on the machine the other five
-        // were tried on (`AMB-T-3838`).
-        confirmed: false,
+        confirmed: true,
     },
 ];
 
@@ -1391,7 +1389,7 @@ mod tests {
         assert_eq!(ids.len(), LAUNCHES.len(), "two rows answer to one id");
         assert_eq!(
             LAUNCHES.iter().filter(|one| !one.confirmed).map(|one| one.id).collect::<Vec<_>>(),
-            ["cursor"],
+            Vec::<&str>::new(),
             "the rows nobody has watched start",
         );
         for launch in LAUNCHES {

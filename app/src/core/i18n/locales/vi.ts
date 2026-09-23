@@ -1031,6 +1031,8 @@ export const vi: Translation = {
     "auto.act.read": "Xem",
     "auto.act.openInSidebar": "Mở ở thanh bên",
     "auto.act.globalReadOnly": "Hành động toàn cục được sửa ở mục Tự động hoá trên thanh bên. Ở đây chỉ đọc.",
+    "auto.held.place": "Các lượt chạy đang dùng",
+    "auto.held.what": "Khi một lượt chạy đang dùng mục này còn chạy hoặc đang tạm dừng, không thể sửa. Hãy dừng lượt chạy, hoặc chờ nó kết thúc, để sửa lại.",
     "auto.act.stepsPlace": "Bước",
     "auto.act.stepsHint": "Vào từ Đầu vào ở trên, đi qua các bước và kết thúc ở một Đầu ra bên dưới",
     "auto.act.usedWhere": "{n}. Sửa ở đây sẽ áp dụng cho tất cả.",

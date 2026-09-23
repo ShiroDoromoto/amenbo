@@ -49,6 +49,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     placements: [step({ id: 1, name: "Take the next task" })],
     edges: [],
     wires: [],
+    heldBy: [],
     ...over,
   })!;
 }

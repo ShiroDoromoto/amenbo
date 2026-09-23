@@ -944,8 +944,10 @@ fn judge_edge(owner: i64, picture: &Picture, with: &Args) -> Result<Outcome, Str
     let Some(from_id) = picture.box_named(from)? else {
         return Ok(Outcome::assert(false, format!("{owner} has no box `{from}` to leave (MISMATCH)")));
     };
-    let Some(edge) = rows_of(picture.view(), "edges").iter().find(|one| {
-        one["from_id"].as_i64() == Some(from_id) && one["exit_name"].as_str().unwrap_or("") == exit
+    let view = picture.view();
+    let Some(edge) = rows_of(view, "edges").iter().find(|one| {
+        one["from_id"].as_i64() == Some(from_id)
+            && exit_named(view, one["exit_id"].as_i64()).as_deref() == Some(exit)
     }) else {
         return Ok(Outcome::assert(false, format!("nothing happens after {named} of `{from}` (MISMATCH)")));
     };
@@ -967,7 +969,7 @@ fn judge_edge(owner: i64, picture: &Picture, with: &Args) -> Result<Outcome, Str
             ));
         }
         (None, Some(want), None) => {
-            let got = edge["exit_to"].as_str().unwrap_or("");
+            let got = exit_named(view, edge["exit_to_id"].as_i64()).unwrap_or_default();
             pass = ends == "exit" && got == want;
             said.push_str(&format!(
                 "leaves the action by `{got}` (`{ends}`, expected the action's way out `{want}`)"
@@ -1012,6 +1014,20 @@ fn placements_named<'a>(view: &'a serde_json::Value, name: &str) -> Vec<&'a serd
         .iter()
         .filter(|one| one["action"]["name"].as_str() == Some(name))
         .collect()
+}
+
+/// **The name of the way out a line keys**, found among every way out the read declares — a
+/// placement's, a step's, the action's own — and named the way an edge names one: the unnamed one is
+/// the empty name. A line keys the row rather than naming it, and a road reads it by
+/// the name the way out carries now. `None` where no way out in the read carries that id.
+fn exit_named(view: &serde_json::Value, id: Option<i64>) -> Option<String> {
+    let id = id?;
+    let boxes = rows_of(view, "placements").iter().chain(rows_of(view, "steps"));
+    boxes
+        .flat_map(|one| rows_of(one, "exits"))
+        .chain(rows_of(view, "exits"))
+        .find(|one| one["exit"]["id"].as_i64() == Some(id))
+        .map(|one| one["exit"]["name"].as_str().unwrap_or("").to_string())
 }
 
 /// The ways out a box declares, named the way an edge names one: the unnamed one it is born with is
@@ -1211,8 +1227,8 @@ mod tests {
                 },
             ],
             "edges": [
-                { "id": 1, "from_id": 1, "exit_name": "got one", "to_id": 2, "exit_to": null, "ends": "go" },
-                { "id": 2, "from_id": 2, "exit_name": null, "to_id": null, "exit_to": null, "ends": "done" },
+                { "id": 1, "from_id": 1, "exit_id": 5, "to_id": 2, "exit_to_id": null, "ends": "go" },
+                { "id": 2, "from_id": 2, "exit_id": 3, "to_id": null, "exit_to_id": null, "ends": "done" },
             ],
             "wires": [],
         })
@@ -1243,10 +1259,15 @@ mod tests {
                 },
             ],
             "edges": [
-                { "id": 3, "from_id": 1, "exit_name": "found", "to_id": 2, "exit_to": null, "ends": "go" },
-                { "id": 4, "from_id": 2, "exit_name": null, "to_id": null, "exit_to": "got one", "ends": "exit" },
+                { "id": 3, "from_id": 1, "exit_id": 8, "to_id": 2, "exit_to_id": null, "ends": "go" },
+                { "id": 4, "from_id": 2, "exit_id": 9, "to_id": null, "exit_to_id": 13, "ends": "exit" },
             ],
             "wires": [],
+            "exits": [
+                { "exit": { "id": 11, "name": null }, "outputs": [] },
+                { "exit": { "id": 12, "name": "*" }, "outputs": [] },
+                { "exit": { "id": 13, "name": "got one" }, "outputs": [] },
+            ],
         })
     }
 

@@ -1031,6 +1031,8 @@ export const id: Translation = {
     "auto.act.read": "Lihat",
     "auto.act.openInSidebar": "Buka di bilah samping",
     "auto.act.globalReadOnly": "Aksi global diubah dari Otomasi di bilah samping. Di sini hanya dibaca.",
+    "auto.held.place": "Eksekusi yang memakainya",
+    "auto.held.what": "Selama eksekusi yang memakainya sedang berjalan atau dijeda, ini tidak bisa diubah. Hentikan eksekusinya, atau tunggu sampai selesai, untuk mengubahnya lagi.",
     "auto.act.stepsPlace": "Langkah",
     "auto.act.stepsHint": "Masuk dari Masukan di atas, melewati langkah-langkah, dan berakhir di salah satu Keluaran di bawah",
     "auto.act.usedWhere": "{n}. Perubahan di sini berlaku untuk semuanya.",

@@ -95,6 +95,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     exits: [{ id: 20, outputs: [] }],
     inputs: [],
     settings: [],
+    heldBy: [],
     ...over,
   };
 }

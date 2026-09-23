@@ -1036,6 +1036,8 @@ export const ja: Translation = {
     "auto.act.read": "見る",
     "auto.act.openInSidebar": "サイドバーで開く",
     "auto.act.globalReadOnly": "グローバルのアクションは、サイドバーの「オートメーション」で直します。ここでは読むだけです。",
+    "auto.held.place": "使っている実行",
+    "auto.held.what": "これを使っている実行が実行中か一時停止中のあいだは、編集できません。実行を止めるか、終わるのを待つと、また編集できます。",
     "auto.act.stepsPlace": "ステップ",
     "auto.act.stepsHint": "上の「入力」から入り、ステップを通って、下の「出力」のどれかで終わる",
     "auto.act.usedWhere": "{n} 本。ここで直すと、全部に効く",

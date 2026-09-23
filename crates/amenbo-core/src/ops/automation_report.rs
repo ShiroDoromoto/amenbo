@@ -266,10 +266,13 @@ fn put(
 /// **The step is finished**: it names the way out it took, hands its report over, and the run reads the
 /// picture to see what comes next.
 ///
-/// **A name nobody declared is read as the error way out, and what was said is kept.** An agent that
-/// invents a way out has not done what was asked, and guessing which of the real ones it meant would
-/// send the run down a road on a guess. The claim goes in front of the report so a person reading the
-/// run can see what happened rather than only that it errored.
+/// **A way out the step does not declare is refused, and the ones it does are named.** The way out is
+/// the condition the picture reads to pick what comes next, so one nobody drew cannot be walked; guessing
+/// which real one was meant would send the run down a road on a guess, and reading it as the error one
+/// stopped the run for a person over a slip of the pen (`--exit ""` for the unnamed way out, three runs
+/// out of three in `AMB-T-5385`). Refused before anything is written, the step stays running and the
+/// agent types it again from the list. An empty name is one nobody declared, not the unnamed way out —
+/// that one is said by leaving `--exit` off. The error way out is always there to be taken.
 ///
 /// **A report is owed.** The one step that owes none is the one that went looking for a task and found
 /// none: there was nothing to report on. That step's stretch is taken back down with it, which is what
@@ -293,14 +296,12 @@ pub fn done(
     };
     let took_a_task = stretch.as_ref().is_some_and(|s| s.task_id.is_some());
 
-    // The way out, as the step named it and as the run is able to read it.
-    let (taken, misnamed) = match exit_name {
-        Some(ERROR_EXIT) => (Some(ERROR_EXIT.to_string()), None),
-        named => match exits.iter().any(|e| e.name.as_deref() == named) {
-            true => (named.map(str::to_string), None),
-            false => (Some(ERROR_EXIT.to_string()), named.map(str::to_string)),
-        },
-    };
+    let declared =
+        exit_name == Some(ERROR_EXIT) || exits.iter().any(|e| e.name.as_deref() == exit_name);
+    if !declared {
+        return Err(undeclared(&def.name, exit_name, &exits));
+    }
+    let taken = exit_name.map(str::to_string);
 
     if report.trim().is_empty() && took_a_task {
         return Err(Error::invalid(
@@ -348,15 +349,9 @@ pub fn done(
         )?;
     }
 
-    let written = match &misnamed {
-        Some(said) => format!(
-            "Said it left through \"{said}\", which this step does not declare.\n\n{report}"
-        ),
-        None => report.to_string(),
-    };
     let mut ended = run_step.clone();
     ended.exit_name = taken.clone();
-    ended.report = written.clone();
+    ended.report = report.to_string();
     ended.status = AutomationRunStepStatus::Done;
     ended.ended_at = Some(now);
     ended.updated_at = now;
@@ -366,13 +361,13 @@ pub fn done(
         record::automation_run_step(&ended),
     )?;
 
-    if def.report_to_task && !written.trim().is_empty() {
+    if def.report_to_task && !report.trim().is_empty() {
         if let Some(task_id) = stretch.as_ref().and_then(|s| s.task_id) {
             crate::ops::comment::add_report_comment(
                 tx,
                 task_id,
                 ActorKind::Ai,
-                &written,
+                report,
                 ended.id,
             )?;
         }
@@ -381,6 +376,28 @@ pub fn done(
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
     }
     whats_next(tx, &def, &ended, taken.as_deref())
+}
+
+/// The refusal of a way out the step does not declare, carrying the ones it does as they are typed, so
+/// the agent can say it again from here rather than go and look.
+fn undeclared(step: &str, said: Option<&str>, exits: &[RunDefExit]) -> Error {
+    let said = match said {
+        Some(name) => format!("--exit \"{name}\""),
+        None => "left unnamed (--exit left off)".to_string(),
+    };
+    let mut ways: Vec<String> = exits
+        .iter()
+        .map(|e| match e.name.as_deref() {
+            Some(name) => format!("--exit \"{name}\""),
+            None => "--exit left off (the unnamed way out)".to_string(),
+        })
+        .collect();
+    ways.push(format!("--exit \"{ERROR_EXIT}\" (the error way out, for a step that could not finish)"));
+    Error::invalid(format!(
+        "step '{step}' does not declare a way out {said}, so nothing was recorded and the step is still \
+         running. Finish it again with one it declares: {}",
+        ways.join("; "),
+    ))
 }
 
 /// A step that went looking for a task and found none leaves no stretch behind it. The row was raised
@@ -860,7 +877,7 @@ mod tests {
     }
 
     #[test]
-    fn a_way_out_nobody_declared_is_read_as_the_error_one_and_what_was_said_is_kept() {
+    fn a_way_out_nobody_declared_is_refused_naming_the_declared_ones_and_the_step_stays_running() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let run = a_run(tx, &p.automation);
@@ -868,19 +885,25 @@ mod tests {
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
 
-            let next = done(tx, step.run_step.id, Some("all good"), "Did the thing.")
-                .expect("done");
-            assert!(matches!(next, Next::Halted(_)), "the error way out halts here: {next:?}");
-            // A halt is an ending the picture chose, and the run says so rather than leaving it blank.
-            let halted = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
-            assert_eq!(halted.status, crate::model::AutomationRunStatus::Failed);
-            assert_eq!(halted.stopped_reason, Some(AutomationStoppedReason::Halted));
-            let ended = read::automation_run_step(tx.conn(), step.run_step.id)
+            // A made-up name, and an empty one — which is not the unnamed way out.
+            for said in ["all good", ""] {
+                let err = done(tx, step.run_step.id, Some(said), "Did the thing.")
+                    .expect_err("a way out the step does not declare");
+                assert_eq!(err.code(), "invalid_value");
+                let message = err.to_string();
+                assert!(message.contains("--exit \"found\""), "{message}");
+                assert!(message.contains("--exit left off"), "the unnamed way out: {message}");
+                assert!(message.contains("--exit \"*\""), "the error way out is offered: {message}");
+            }
+            let still = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
                 .expect("the execution");
-            assert_eq!(ended.exit_name.as_deref(), Some(ERROR_EXIT));
-            assert!(ended.report.contains("\"all good\""), "{}", ended.report);
-            assert!(ended.report.contains("Did the thing."), "{}", ended.report);
+            assert_eq!(still.status, AutomationRunStepStatus::Running, "nothing was recorded");
+            assert_eq!(still.exit_name, None);
+            assert!(still.report.is_empty(), "{}", still.report);
+
+            // Said again from the list, it finishes.
+            done(tx, step.run_step.id, Some(ERROR_EXIT), "Could not.").expect("the error way out");
         });
     }
 

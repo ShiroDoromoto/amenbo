@@ -1092,7 +1092,7 @@ export const id: Translation = {
     "auto.run.acknowledge": "Sudah dilihat",
     "auto.run.paused": "Dijeda",
     "auto.run.pausing": "Dijeda setelah langkah ini",
-    "auto.run.crashed": "aplikasi dimulai ulang",
+    "auto.run.crashed": "langkah berakhir tanpa melapor",
     "auto.run.maxTimes": "terlalu banyak putaran",
     "auto.run.noAgent": "agennya tidak bisa dijalankan",
     "auto.run.noWayOn": "tidak ada lagi yang bisa dibuka",

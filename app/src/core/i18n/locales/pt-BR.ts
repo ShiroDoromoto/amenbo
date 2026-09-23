@@ -1104,7 +1104,7 @@ export const ptBR: Translation = {
     "auto.run.acknowledge": "Visto",
     "auto.run.paused": "Pausada",
     "auto.run.pausing": "Pausa ao fim deste passo",
-    "auto.run.crashed": "o aplicativo foi reiniciado",
+    "auto.run.crashed": "a etapa terminou sem relatar",
     "auto.run.maxTimes": "deu voltas demais",
     "auto.run.noAgent": "não foi possível iniciar seu agente",
     "auto.run.noWayOn": "não restava nada para abrir",

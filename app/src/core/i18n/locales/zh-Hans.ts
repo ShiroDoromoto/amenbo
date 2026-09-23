@@ -1093,7 +1093,7 @@ export const zhHans: Translation = {
     "auto.run.acknowledge": "已确认",
     "auto.run.paused": "已暂停",
     "auto.run.pausing": "将在这一步结束后暂停",
-    "auto.run.crashed": "应用被重新启动",
+    "auto.run.crashed": "步骤未报告就结束了",
     "auto.run.maxTimes": "循环次数超出上限",
     "auto.run.noAgent": "无法启动它的代理",
     "auto.run.noWayOn": "没有可打开的步骤了",

@@ -1092,7 +1092,7 @@ export const th: Translation = {
     "auto.run.acknowledge": "รับทราบแล้ว",
     "auto.run.paused": "หยุดชั่วคราว",
     "auto.run.pausing": "จะหยุดเมื่อจบขั้นตอนนี้",
-    "auto.run.crashed": "แอปเริ่มทำงานใหม่",
+    "auto.run.crashed": "ขั้นตอนจบลงโดยไม่ได้รายงาน",
     "auto.run.maxTimes": "วนซ้ำเกินจำนวนที่กำหนด",
     "auto.run.noAgent": "เริ่มเอเจนต์ไม่ได้",
     "auto.run.noWayOn": "ไม่มีขั้นตอนให้เปิดต่อแล้ว",

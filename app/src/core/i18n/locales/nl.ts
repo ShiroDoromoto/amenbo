@@ -1091,7 +1091,7 @@ export const nl: Translation = {
     "auto.run.acknowledge": "Gezien",
     "auto.run.paused": "Gepauzeerd",
     "auto.run.pausing": "Pauzeert na deze stap",
-    "auto.run.crashed": "de app is opnieuw gestart",
+    "auto.run.crashed": "de stap eindigde zonder te melden",
     "auto.run.maxTimes": "te vaak rondgegaan",
     "auto.run.noAgent": "de agent kon niet worden gestart",
     "auto.run.noWayOn": "er viel niets meer te openen",

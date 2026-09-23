@@ -1108,7 +1108,7 @@ export const ru: Translation = {
     "auto.run.acknowledge": "Просмотрено",
     "auto.run.paused": "Приостановлен",
     "auto.run.pausing": "Приостановится после этого шага",
-    "auto.run.crashed": "приложение было перезапущено",
+    "auto.run.crashed": "шаг завершился, не отчитавшись",
     "auto.run.maxTimes": "слишком много кругов",
     "auto.run.noAgent": "не удалось запустить агента",
     "auto.run.noWayOn": "открывать было больше нечего",

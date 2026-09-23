@@ -1093,7 +1093,7 @@ export const zhHant: Translation = {
     "auto.run.acknowledge": "已確認",
     "auto.run.paused": "已暫停",
     "auto.run.pausing": "將在這一步結束後暫停",
-    "auto.run.crashed": "應用程式被重新啟動",
+    "auto.run.crashed": "步驟未回報就結束了",
     "auto.run.maxTimes": "循環次數超出上限",
     "auto.run.noAgent": "無法啟動它的代理",
     "auto.run.noWayOn": "沒有可開啟的步驟了",

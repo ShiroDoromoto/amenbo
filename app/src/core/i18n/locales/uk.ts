@@ -1108,7 +1108,7 @@ export const uk: Translation = {
     "auto.run.acknowledge": "Переглянуто",
     "auto.run.paused": "Призупинено",
     "auto.run.pausing": "Призупиниться після цього кроку",
-    "auto.run.crashed": "застосунок було перезапущено",
+    "auto.run.crashed": "крок завершився, не звітувавши",
     "auto.run.maxTimes": "забагато кіл",
     "auto.run.noAgent": "не вдалося запустити агента",
     "auto.run.noWayOn": "відкривати вже не було чого",

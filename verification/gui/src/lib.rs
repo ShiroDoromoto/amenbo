@@ -6634,7 +6634,7 @@ fn run_press(press: &str) -> Result<&'static str, String> {
 /// the launch place's reasons are read on.
 fn run_ending(reason: &str) -> Result<&'static str, String> {
     Ok(match reason {
-        "crashed" => "the app was restarted under it",
+        "crashed" => "its step ended without reporting",
         "max_times" => "it went round too many times",
         "no_agent" => "its agent could not be started",
         "no_input" => "a required input had nothing to fill it",

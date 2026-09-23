@@ -1108,7 +1108,7 @@ export const pl: Translation = {
     "auto.run.acknowledge": "Widziane",
     "auto.run.paused": "Wstrzymane",
     "auto.run.pausing": "Wstrzyma się po tym kroku",
-    "auto.run.crashed": "aplikacja została uruchomiona ponownie",
+    "auto.run.crashed": "krok zakończył się bez zgłoszenia",
     "auto.run.maxTimes": "za dużo powtórzeń",
     "auto.run.noAgent": "nie udało się uruchomić jego agenta",
     "auto.run.noWayOn": "nie zostało nic do otwarcia",

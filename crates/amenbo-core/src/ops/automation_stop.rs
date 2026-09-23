@@ -14,15 +14,17 @@
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
 //!
-//! **Nothing here watches for a crash.** A process that died says nothing, and core has no window to
-//! ask; what it has is the fact that a run marked `running` cannot be running in a process that no
-//! longer exists. So the check is made once, at startup ([`sweep`]), by whoever opens the store.
+//! **A crash is told to core, or read at startup.** A step's program that ends before its step has
+//! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
+//! app that went away took its steps with it and can say nothing; what is left is the fact that a
+//! run marked `running` cannot be running in a process that no longer exists. So that check is made
+//! once, at startup ([`sweep`]), by whoever opens the store.
 
 use crate::error::{Error, Result};
 use rusqlite::Connection;
 use crate::model::{
-    ActorKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunTask,
-    AutomationStoppedReason, TaskStatus,
+    ActorKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStepStatus,
+    AutomationRunTask, AutomationStoppedReason, TaskStatus,
 };
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -197,7 +199,7 @@ fn said(tx: &WriteTx<'_>, run: &AutomationRun, ending: Ending) -> Result<String>
 fn why(ending: Ending) -> &'static str {
     match ending {
         Ending::Failed(AutomationStoppedReason::Crashed) => {
-            "An automation run failed: Amenbo was restarted while it was under way."
+            "An automation run failed: a step ended without reporting — its program exited, or Amenbo was restarted while it was under way."
         }
         Ending::Failed(AutomationStoppedReason::MaxTimes) => {
             "An automation run failed: a way back was taken as often as it is allowed to be."
@@ -351,6 +353,33 @@ pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64) -> Result<AutomationRun> {
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
     Ok(after)
+}
+
+/// **The program carrying out a step ended before the step reported** (`AMB-D-961`), so the run
+/// fails as a crash now rather than standing at `running` until the next startup's [`sweep`].
+///
+/// It answers `None` where there is nothing to end, and each of those is an ordinary way for a
+/// step's program to go:
+///
+/// - **the step reported first** — an agent that types `step-done` and then exits;
+/// - **the run has moved past it** — the program of a step before the one the run is on;
+/// - **the run is over** — stopped by a person, which is also what ends the program.
+///
+/// A paused run fails too: pausing waits for the step under way to report, and this one never will.
+pub fn step_ended(tx: &WriteTx<'_>, run_step_id: i64) -> Result<Option<Ended>> {
+    let Some(step) = read::automation_run_step(tx.conn(), run_step_id)? else { return Ok(None) };
+    if step.status != AutomationRunStepStatus::Running {
+        return Ok(None);
+    }
+    let run = live_run(tx, step.run_id)?;
+    if !under_way(run.status) {
+        return Ok(None);
+    }
+    let latest = read::automation_run_steps_of(tx.conn(), run.id)?.last().map(|one| one.id);
+    if latest != Some(step.id) {
+        return Ok(None);
+    }
+    ended(tx, run, Ending::Failed(AutomationStoppedReason::Crashed)).map(Some)
 }
 
 /// **The runs this machine was in the middle of when it last shut down.**
@@ -660,6 +689,72 @@ mod tests {
             assert_eq!(status_of(tx, another.id), AutomationRunStatus::Failed);
             assert!(caught.iter().all(|r| r.stopped_reason
                 == Some(AutomationStoppedReason::Crashed)));
+        });
+    }
+
+    #[test]
+    fn a_step_whose_program_ended_before_it_reported_fails_the_run_there_and_then() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, step.run_step.id);
+
+            let ended = step_ended(tx, step.run_step.id).expect("step ended").expect("a run to end");
+            assert_eq!(ended.run.status, AutomationRunStatus::Failed);
+            assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Crashed));
+            assert_eq!(
+                read::task_status(tx.conn(), task).expect("read"),
+                Some(TaskStatus::Todo),
+                "the task goes back the way it does for every failure",
+            );
+        });
+    }
+
+    #[test]
+    fn a_paused_run_fails_too_when_the_step_it_waits_on_will_never_report() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            pause(tx, run.id).expect("pause");
+
+            assert!(step_ended(tx, step.run_step.id).expect("step ended").is_some());
+            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Failed);
+        });
+    }
+
+    #[test]
+    fn a_program_ending_after_its_step_reported_ends_nothing() {
+        // An agent that types `step-done` and then exits, and the program of a step the run has moved
+        // past: both are how a step's program ordinarily goes.
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+
+            assert!(step_ended(tx, first.run_step.id).expect("step ended").is_none());
+            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Running);
+
+            opened(tx, &run, &p.second);
+            assert!(step_ended(tx, first.run_step.id).expect("step ended").is_none());
+            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Running);
+        });
+    }
+
+    #[test]
+    fn a_program_ending_on_a_run_that_is_over_ends_nothing() {
+        // A person stopping the run is also what ends the program in its pane.
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            stop(tx, run.id, Ending::Canceled).expect("stop");
+
+            assert!(step_ended(tx, step.run_step.id).expect("step ended").is_none());
+            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Canceled);
         });
     }
 

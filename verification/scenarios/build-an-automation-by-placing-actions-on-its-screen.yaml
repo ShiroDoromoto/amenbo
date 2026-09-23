@@ -1,0 +1,211 @@
+# An automation's picture is built on its own screen, one layer over an action's: every box on it is
+# a placement of a library action. What a reader does there that no other screen asks of them is
+# five things. A picture with nothing on it has no `+` to press, so an action is placed from the row
+# under it. Where a run opens is said on a placement, and drawn on its box. What leaving one way out
+# leads to is said on that way out's row, with the limit a line to a box carries. And a placement is
+# taken off outright, with the action left in the library. A build that lost any of them would leave
+# an automation nobody could finish from the screen.
+id: build-an-automation-by-placing-actions-on-its-screen
+title: An automation's placements are put down, entered by, joined, let go of and taken off on its own screen
+description: >
+  Open an automation with nothing on it, place two library actions from the row under the picture,
+  and say a run starts at the first — then read the mark on its box. Say on the first one's way out
+  that leaving by it opens the second, write a limit on that line and empty it again, say instead
+  that leaving it finishes the task, and take that back. Take the second placement off, give the
+  entry back, and find the second action still in the library. Each change is read on the picture,
+  because the panel alone could say a thing the picture never drew.
+given:
+  # Two library actions, each with a step inside it so a placement's panel has a first step to show.
+  # The first declares a way out of its own, which is the row the lines are said on.
+  - { type: action, domain: automation, op: action-add, with: { name: draft }, as: draft }
+  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, agent: claude-code, prompt: write the draft }, as: write }
+  - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
+  - { type: action, domain: automation, op: exit-add, with: { action: draft, name: drafted } }
+  - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, agent: claude-code, prompt: read the draft back }, as: read }
+  - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
+  # An automation is born empty, which is the state the road opens on: nothing placed, and no line.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — placed on screen" }, as: auto }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Two placements, each from the row under the picture. The first goes on a picture with no line at
+  # all, which is the case the `+` on a line cannot reach.
+  - type: action
+    domain: automation
+    op: place-action
+    with:
+      action: draft
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      present: true
+
+  - type: action
+    domain: automation
+    op: place-action
+    with:
+      action: review
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: review
+      present: true
+
+  # Where a run opens. It is said on the panel and read on the box, because two stretches nothing
+  # joins are told apart by that mark alone.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: draft
+
+  - type: action
+    domain: automation
+    op: set-entry
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      entry: true
+
+  # Said on the way out's row, read on the picture. A new line to a box is born with a limit, so the
+  # limit is written and then emptied — the two ends of that box.
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      to: review
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      to: review
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      to: review
+      max_times: 3
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      to: review
+      max_times: ~
+
+  # Changed: the same way out now finishes the task, and the line to the second placement goes.
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      ends: done
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      ends: done
+
+  # Taken back: nothing said about that way out, which is a state of its own rather than an end.
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      present: false
+
+  # Taking a placement off takes its box off the picture. The first placement is left as it was,
+  # entry mark and all.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: review
+
+  - type: action
+    domain: automation
+    op: remove-placement
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: review
+      present: false
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      entry: true
+
+  # And the entry given back: the automation opens nowhere again, and the box stops saying so.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: draft
+
+  - type: action
+    domain: automation
+    op: set-entry
+    with:
+      on: false
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      entry: false
+
+  # What was taken off was the placement and not the action: the library still lists it.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: assert
+    domain: automation
+    op: action-listed
+    with:
+      target: review

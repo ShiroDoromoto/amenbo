@@ -1913,6 +1913,12 @@ pub struct PtySessionDto {
     /// is the control that moves a running pane to another model — a question about the provider in
     /// the pane, so a pane that cannot name the provider draws no control (`AMB-D-865`).
     pub(crate) agent: Option<String>,
+    /// **The automation run this terminal carries a step of**, or absent for every other terminal
+    /// (`crate::pty::open_step`). A step's terminal belongs to the run's own pane and to nothing
+    /// else, so a face putting its panes back never hands it to an ordinary one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) run: Option<i64>,
 }
 
 /// What a pane is handed when it adopts a session already running (`crate::pty::pty_attach`).
@@ -3575,11 +3581,11 @@ pub struct AutomationStepOpenDto {
     pub(crate) missing: Vec<String>,
 }
 
-/// **What one step's terminal is started with.**
+/// **One step of a run, as its pane draws it.**
 ///
-/// `say` is the whole text core composed — the preamble, the documents the step is handed, the story
-/// so far, the values it was given, its own prompt and how to report — and it goes in as the agent's
-/// opening prompt rather than being typed after the fact (`crate::pty::pty_open`'s `say`).
+/// The terminal is already running when this is told: the host started it on the whole text core
+/// composed, as the agent's opening prompt (`crate::pty::open_step`). What the pane is handed is
+/// that terminal's session and what the row above it says.
 #[derive(Serialize, TS, Clone)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3607,13 +3613,15 @@ pub struct AutomationStepRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) task: Option<AutomationRunTaskDto>,
-    pub(crate) say: String,
+    /// **The terminal the host started for this step** (`crate::pty::open_step`). The run's pane takes
+    /// it up whenever it is drawn, and never starts one of its own for the step.
+    pub(crate) session: String,
     pub(crate) agent: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) model: Option<String>,
-    /// Where the terminal runs, resolved from the name the step holds. Absent where the step names
-    /// none, and then the pane opens where a pane of that project opens.
+    /// Where the terminal runs, resolved from the name the step holds — or, where it names none, the
+    /// folder the project is bound to. Absent where there is neither.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) folder: Option<String>,

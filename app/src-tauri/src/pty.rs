@@ -738,6 +738,9 @@ pub struct Terminal {
     /// pane: the one thing it settles is the order [`pty_sessions`] answers in, and a pane is drawn
     /// and thrown away as the session moves windows, so it could not keep it anyway.
     started_at: String,
+    /// The automation run this terminal carries a step of, or `None` for every other terminal. It is
+    /// what the next step of the same run ends it by ([`open_step`]).
+    run: Option<i64>,
 }
 
 /// A session id: sixteen bytes of the operating system's randomness, in hex.
@@ -1130,28 +1133,51 @@ fn gone(session: &str) -> CmdError {
 /// ([`amenbo_core::harness::issue`]). Neither ever crosses to the window: both are read and written
 /// on this side, so a pane's way back is not something a webview could put there.
 ///
-/// **`say` and `fresh` are the automation's two** (`AMB-T-5251`). `say` is what the agent is handed
-/// as its opening prompt in place of the sentence that points it at `agent --json` — a step's own
-/// text already carries the way in among everything else it says. `fresh` opens a session of its own
-/// and writes nothing of it on the frame, which is what lets one pane be reused at every step of a
-/// run without the run coming back into a step that is over.
-// Seven of these are what a window holds about a pane, one answer each. Gathered into a shape they
+/// **`fresh` opens a session of its own and writes nothing of it on the frame** (`AMB-T-5251`), which
+/// is what lets a run's pane be reused after its step without the run coming back into a step that
+/// is over. The step's own terminal is not opened here at all: the host starts it ([`open_step`]).
+// Six of these are what a window holds about a pane, one answer each. Gathered into a shape they
 // would be taken apart again on arrival.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
     window: tauri::Window,
-    terminals: tauri::State<'_, Terminals>,
     frame: Option<String>,
     cwd: Option<String>,
     agent: Option<String>,
     cols: u16,
     rows: u16,
-    say: Option<String>,
     fresh: Option<bool>,
-    run_step: Option<i64>,
 ) -> Result<PtySessionDto, CmdError> {
+    start(
+        &app,
+        window.label(),
+        Opening { frame, cwd, agent, at: (cols, rows), say: None, fresh: fresh.unwrap_or(false), step: None },
+    )
+}
+
+/// What one terminal is started with, whoever asks for it — a pane ([`pty_open`]) or the host
+/// opening a step of a run ([`open_step`]).
+struct Opening {
+    frame: Option<String>,
+    cwd: Option<String>,
+    agent: Option<String>,
+    at: Size,
+    /// What the agent is handed as its opening prompt in place of the sentence that points it at
+    /// `agent --json` — a step's own text already carries the way in among everything else it says.
+    say: Option<String>,
+    fresh: bool,
+    /// The run and the step execution this terminal carries out, where it carries one out.
+    step: Option<(i64, i64)>,
+}
+
+/// Start a terminal and put it in the registry, its output going to the window labelled `target`
+/// until a pane takes it up ([`pty_attach`]).
+fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySessionDto, CmdError> {
+    let Opening { frame, cwd, agent, at: (cols, rows), say, fresh, step } = opening;
+    let run_step = step.map(|(_, run_step)| run_step);
+    let terminals = app.state::<Terminals>();
     // A session of its own, every time, with nothing of it written on the frame — what an
     // automation's step is opened on (`AMB-T-5251`). One step is one session: the frame is reused so
     // the run keeps one place on the page, and reusing the place must not mean reusing the
@@ -1162,7 +1188,6 @@ pub fn pty_open(
     // each of them would leave a step's conversation standing as the place's own: the next run would
     // come up inside a step that is over, and the reader's pane would have been put on the step's
     // model.
-    let fresh = fresh.unwrap_or(false);
     let session = new_session();
     let started_at = amenbo_core::time::Timestamp::now().to_rfc3339_z();
     let opened_at = since_epoch_ms();
@@ -1332,7 +1357,7 @@ pub fn pty_open(
     // The chunks go to whichever window asked for the terminal. Nothing here decides which that is:
     // the pane that called is the pane that draws, and if the user later moves it to the other
     // window, `pty_attach` moves this along with it.
-    let pane = Arc::new(Pane::new(window.label(), (cols, rows)));
+    let pane = Arc::new(Pane::new(target, (cols, rows)));
 
     let opened_in = folder.as_ref().map(|f| f.to_string_lossy().into_owned());
 
@@ -1346,6 +1371,7 @@ pub fn pty_open(
             killer,
             pane: Arc::clone(&pane),
             started_at,
+            run: step.map(|(run, _)| run),
         },
     );
 
@@ -1371,6 +1397,7 @@ pub fn pty_open(
     }
 
     let id = session.clone();
+    let app = app.clone();
     std::thread::spawn(move || {
         drain(&app, &id, &pane, reader);
         // Reap the program before the pane is told, so nothing is left behind for the length of a
@@ -1407,6 +1434,7 @@ pub fn pty_open(
         session,
         folder: opened_in,
         agent: agent_id,
+        run: step.map(|(run, _)| run),
     })
 }
 
@@ -1787,6 +1815,7 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                         session: session.clone(),
                         folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
                         agent: terminal.agent.clone(),
+                        run: terminal.run,
                     },
                 )
             })
@@ -1842,6 +1871,74 @@ pub fn pty_attach(
 /// the terminal is gone instead of trying to kill it twice. The drain ends on its own once the program
 /// does, and emits the close the pane listens for: what is on the screen stays as it is, which is what
 /// a terminal ends with.
+/// Whether the terminal of this session is still running.
+pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
+    app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(session)
+}
+
+/// How large a step's terminal is started, before any pane has measured it. The pane that takes it up
+/// tells it the size it really has ([`pty_resize`]), and what was written before that is replayed at
+/// this one ([`Recent`]).
+const STEP_SIZE: Size = (120, 32);
+
+/// **Start the terminal a step of a run is carried out in** — on the host, whether or not any pane is
+/// on the screen to draw it (`AMB-T-5394`).
+///
+/// A pane is drawn only where the reader is looking: the run's pane may be on another page or in
+/// another project, and a step whose terminal waited for its pane to be drawn was a run standing at
+/// "running" with nothing in it moving. So the terminal is started here, and the run's pane takes it
+/// up whenever it is drawn ([`pty_attach`]), reading back what it said meanwhile.
+///
+/// **The terminal of the run's step before it is ended first.** A step ends when its agent reports,
+/// and the program may still be standing there; left running it would go on alongside the step that
+/// replaces it. It is taken out of the registry before it is killed, the way [`pty_close`] does, so
+/// its ending reads as one Amenbo made and not as the program stopping by itself.
+///
+/// The output goes to the window the workspace is drawn in until a pane takes the terminal up: the
+/// talk window where it has been split out, and the board where it has not (`AMB-D-753`).
+pub fn open_step(
+    app: &tauri::AppHandle,
+    run: i64,
+    run_step: i64,
+    folder: Option<String>,
+    agent: String,
+    say: String,
+) -> Result<String, CmdError> {
+    let terminals = app.state::<Terminals>();
+    let before: Vec<Terminal> = {
+        let mut open = terminals.0.lock().expect("terminals lock");
+        let of_run: Vec<String> =
+            open.iter().filter(|(_, one)| one.run == Some(run)).map(|(id, _)| id.clone()).collect();
+        of_run.iter().filter_map(|id| open.remove(id)).collect()
+    };
+    for mut one in before {
+        if let Err(e) = one.killer.kill() {
+            log::warn!("could not end the terminal of run {run}'s step before: {e}");
+        }
+    }
+    let target = if app.get_webview_window(crate::windows::TALK).is_some() {
+        crate::windows::TALK
+    } else {
+        crate::windows::BOARD
+    };
+    let opened = start(
+        app,
+        target,
+        Opening {
+            // The place the run is drawn in, spelled the way the workspace spells it
+            // (`app/src/talk/layout.ts`'s `runFrameId`).
+            frame: Some(format!("run-{run}")),
+            cwd: folder,
+            agent: Some(agent),
+            at: STEP_SIZE,
+            say: Some(say),
+            fresh: true,
+            step: Some((run, run_step)),
+        },
+    )?;
+    Ok(opened.session)
+}
+
 #[tauri::command]
 pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
     let mut terminal = terminals
@@ -2416,6 +2513,7 @@ mod tests {
                     session: session.into(),
                     folder: Some("/work/repo".into()),
                     agent: None,
+                    run: None,
                 },
             )
         };

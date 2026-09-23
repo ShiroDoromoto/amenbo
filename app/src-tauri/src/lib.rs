@@ -316,6 +316,7 @@ pub fn run() {
     // what a pane types into and what drains its output both reach for the same session, from
     // different threads and long after the call that opened it returned (`pty`).
     .manage(pty::Terminals::default())
+    .manage(automation::StepsStanding::default())
     .manage(folder_watch::FolderWatches::default())
     .manage(folder_search::FolderSearches::default())
     // What this run of the app has put in the machine's bin, held for the life of the app rather
@@ -516,6 +517,7 @@ pub fn run() {
       automation::automation_launch_check,
       automation::automation_launch,
       automation::automation_step_open,
+      automation::automation_steps_standing,
       automation::automation_running_page,
       automation::automation_history_page,
       automation::automation_run_acknowledge,

@@ -65,7 +65,9 @@ use crate::dto::{
     AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto, WriteAck,
 };
 use crate::error::CmdError;
-use tauri::Emitter;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use tauri::{Emitter, Manager};
 
 /// The automations of one project, in the order they were placed in.
 ///
@@ -1383,6 +1385,32 @@ pub fn automation_run_resume(run_id: i64) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// **The step each run last opened**, as it was told to the window — kept for a workspace that was
+/// not there to hear it.
+///
+/// The event reaches only a face that is up. The workspace is put up the first time it is asked for
+/// (`app/src/shell/AppShell.tsx`), and a run started from the command line before then opened its
+/// step with nobody listening: the terminal runs (`crate::pty::open_step`), and without this the
+/// run's pane would never stand. A face coming up reads these ([`automation_steps_standing`]).
+#[derive(Default)]
+pub struct StepsStanding(Mutex<HashMap<i64, AutomationStepOpenDto>>);
+
+/// **The steps whose terminal is still running**, one per run — what a workspace coming up stands
+/// the runs' panes on. A step whose terminal has ended is left out: there is nothing for a pane to
+/// take up, and the run's next step, if it has one, arrives by the event like any other.
+#[tauri::command]
+pub fn automation_steps_standing(app: tauri::AppHandle) -> Vec<AutomationStepOpenDto> {
+    let standing = app.state::<StepsStanding>();
+    let standing = standing.0.lock().expect("steps standing lock");
+    let mut open: Vec<AutomationStepOpenDto> = standing
+        .values()
+        .filter(|one| one.step.as_ref().is_some_and(|step| crate::pty::is_open(&app, &step.session)))
+        .cloned()
+        .collect();
+    open.sort_by_key(|one| one.run);
+    open
+}
+
 /// One step opened and told to the window.
 ///
 /// The answer and the event carry the same thing. The event is what the workspace acts on, and the
@@ -1411,6 +1439,17 @@ fn open_one(
                 .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
                     format!("run '{run_id}' not found"),
                 )))?;
+            let folder = ready.folder.clone().or_else(|| project_folder(store, run.project_id));
+            // Started here and not by the run's pane, which is drawn only where the reader is looking
+            // (`crate::pty::open_step`).
+            let session = crate::pty::open_step(
+                app,
+                run_id,
+                ready.run_step.id,
+                folder.clone(),
+                def.agent.clone(),
+                ready.text.clone(),
+            )?;
             (
                 run.project_id,
                 Some(AutomationStepRunDto {
@@ -1419,10 +1458,10 @@ fn open_one(
                     name: def.name.clone(),
                     action_name: placed_action_name(store, def.placement_id)?,
                     task: worked_task(store, ready.run_step.run_task_id)?,
-                    say: ready.text.clone(),
+                    session,
                     agent: def.agent.clone(),
                     model: def.model.clone(),
-                    folder: ready.folder.clone(),
+                    folder,
                     interactive: def.interactive,
                 }),
                 Vec::new(),
@@ -1444,10 +1483,32 @@ fn open_one(
     // where it costs nothing: that loop is about to come round anyway.
     crate::automation_watch::wake();
     let dto = AutomationStepOpenDto { run: run_id, project, step, missing };
+    {
+        let standing = app.state::<StepsStanding>();
+        let mut standing = standing.0.lock().expect("steps standing lock");
+        match dto.step {
+            Some(_) => standing.insert(run_id, dto.clone()),
+            None => standing.remove(&run_id),
+        };
+    }
     if let Err(e) = app.emit(STEP_EVENT, dto.clone()) {
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
     Ok(dto)
+}
+
+/// **Where a step that names no folder is carried out**: the folder its project is bound to.
+///
+/// A pane opened by a person asks which one where the project has several (`app/src/talk/agent.ts`),
+/// but nobody is there to be asked when a run opens a step, so it is the first of them that is still
+/// on the disk. `None` where the project has none, and the terminal then starts in the user's home.
+fn project_folder(store: &amenbo_core::Store, project: i64) -> Option<String> {
+    store
+        .bindings()
+        .dirs_for_project(project)
+        .into_iter()
+        .find(|dir| std::path::Path::new(dir).is_dir())
+        .map(|dir| dir.to_string())
 }
 
 /// **The task one stretch of a run is working**, read off the ledger for the pane's header.

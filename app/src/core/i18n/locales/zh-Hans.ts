@@ -608,6 +608,8 @@ export const zhHans: Translation = {
     "face.tabsNamed": "显示名称",
     "face.tabPanes": "{name}，{panes}",
     "face.paneSize": "这个窗格占页面的多少",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 竖", "pane.size.halfDown": "1/2 横",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.other": "{n} 个",
     "face.pages": "页",
     "face.page": "第 {n} 页",

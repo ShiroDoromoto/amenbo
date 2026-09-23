@@ -609,6 +609,8 @@ export const hi: Translation = {
     "face.tabsNamed": "नाम दिखाएँ",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "यह पैन पृष्ठ का कितना हिस्सा लेता है",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 खड़ा", "pane.size.halfDown": "1/2 आड़ा",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.one": "{n} पैन", "face.panes.other": "{n} पैन",
     "face.pages": "पृष्ठ",
     "face.page": "पृष्ठ {n}",

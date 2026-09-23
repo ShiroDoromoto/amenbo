@@ -1644,6 +1644,13 @@ export function WorkspaceFace({
                     // the row is not a handle on a project with one pane.
                     onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
                     onStretch={(e) => stretchPane(e, frame.id, { across, down })}
+                    size={frame.size}
+                    onSize={(to) => {
+                      // As the corner does on letting go: the question about where a pane works
+                      // would otherwise stand on whatever page this lands on.
+                      setAsking(null);
+                      setLayout((was) => resized(was, frame.id, to));
+                    }}
                     onOpened={opened}
                     onPath={pathClicked}
                     onSaid={(statement) => {

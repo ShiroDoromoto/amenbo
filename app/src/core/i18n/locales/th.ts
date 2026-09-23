@@ -611,6 +611,8 @@ export const th: Translation = {
     "face.tabsNamed": "แสดงชื่อ",
     "face.tabPanes": "{name} {panes}",
     "face.paneSize": "บานหน้าต่างนี้กินพื้นที่หน้าเท่าใด",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 แนวตั้ง", "pane.size.halfDown": "1/2 แนวนอน",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.other": "{n} บาน",
     "face.pages": "หน้า",
     "face.page": "หน้า {n}",

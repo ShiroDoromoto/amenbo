@@ -2929,8 +2929,8 @@ impl Instructor {
                     side
                 )
             }
-            // The corner pulled to a size — the only way to one since the row of six shapes came off
-            // the header. Three things have to be on it: where the grip is, since the rest of the
+            // The corner pulled to a size — one of the two ways to one, the list on the pane's own row
+            // being the other (`pick-pane-size`). Three things have to be on it: where the grip is, since the rest of the
             // pane belongs to what is running in it; that the pane does not change under the hand —
             // an operator who let go the moment the pointer reached the width they wanted would be
             // letting go at whatever the outline had snapped to, which is the one thing this step
@@ -2949,6 +2949,20 @@ impl Instructor {
                 };
                 format!(
                     "On the page, press and hold the small grip at the bottom right corner of {pane}, and without letting go pull it until the outline drawn over the page is {}. The pane itself does not change while you pull: what moves is that outline, and it does not follow the pointer smoothly — it snaps to one of the six sizes, so pull until the one you want is drawn rather than to a width. Let go there, and the pane comes out at it, and that pane alone. The panes after it in the order are laid down again, so one of them may end up on the next page.",
+                    size(with)?.phrase()
+                )
+            }
+            // The list on the pane's own row. The mark is the size the pane takes now, drawn on the
+            // page's grid, and the list opens as the pointer comes onto it; each size in it is drawn
+            // the same way with its name under it, so the step names the size by what it takes.
+            (Domain::Workspace, "pick-pane-size") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane you are working in (the last one you opened or typed at)"
+                        .to_string(),
+                };
+                format!(
+                    "On the row above {pane}, beside its menu, bring the pointer onto the small mark that draws how much of the page the pane takes. In the row of six sizes that opens, press the one that is {}. The pane comes out at it, and that pane alone; the panes after it in the order are laid down again, so one of them may end up on the next page.",
                     size(with)?.phrase()
                 )
             }

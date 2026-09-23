@@ -1,0 +1,94 @@
+# The reader picked a pane's size from the pane's own row, rather than pulling its corner.
+#
+# ── Why a list as well as the corner ─────────────────────────────────────────────────────────────
+# The corner measures from the pane's left edge to the pointer. A pane in the right-hand column has
+# its corner against the window's edge, so it can never be pulled out to the whole page — the list is
+# what reaches every size wherever the pane stands.
+#
+# ── Why the mark is the size it is now ───────────────────────────────────────────────────────────
+# The mark on the row is the page drawn small with what the pane takes filled in, so the row says the
+# size before anything is opened. The list holds the six drawn the same way, each with its name under
+# it, because two halves that differ only by which way they lie are hard to tell apart by the drawing.
+#
+# ── Why it goes down and back up ─────────────────────────────────────────────────────────────────
+# A road read at one size alone says nothing about the pick having done anything: a pane that already
+# took the whole page and was read at the whole page again is green on a build that ignored the
+# press. So it is made smaller first, and then picked back to the whole page, which is the size the
+# list exists to reach.
+#
+# The world is empty, as on every road on this face: choosing the folder raises the project it
+# belongs to, and the pane runs the reader's own shell.
+id: pick-a-pane-size-from-its-row
+title: A pane's size is picked from the list on its own row, down to a quarter and back to the whole page, and the terminal in it comes through
+description: >
+  Open the workspace, choose the folder it runs in, and get a pane down to a plain shell with a line
+  on it. It takes the whole page. From the mark on its row pick a quarter: the pane comes out at a
+  quarter and three quarters of the page are free. Pick the whole page again: it takes the page, with
+  the line still on it.
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: workshop
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane that was sized from its row
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  - type: action
+    domain: workspace
+    op: pick-pane-size
+    with:
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: quarter
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  - type: action
+    domain: workspace
+    op: pick-pane-size
+    with:
+      size: whole
+
+  - type: assert
+    domain: workspace
+    op: pane-size
+    with:
+      size: whole
+
+  # The same pane: the page was laid out again under it twice, and a fresh terminal would be empty.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane that was sized from its row

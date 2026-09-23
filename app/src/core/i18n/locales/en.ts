@@ -710,6 +710,8 @@ const ui = {
   // What the grip on a pane's corner does (`app/src/shell/TerminalPane.tsx`). The grip is drawn and
   // says nothing by itself, so a screen reader has only what is written here.
   "face.paneSize": "How much of the page this pane takes",
+  "pane.size.whole": "1/1", "pane.size.half": "1/2 tall", "pane.size.halfDown": "1/2 wide",
+  "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
   // How many panes a project has open, read out with the project's name on its tab
   // (`app/src/shell/ProjectTabs.tsx`). As words rather than a bare digit: what stands beside the
   // number is a name, so nothing but this says what the number counts.

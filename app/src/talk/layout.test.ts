@@ -925,3 +925,17 @@ describe("the pane a run stands in", () => {
     expect(restored({ project: 1, frames: [{ id: "1", project: 1 }] }, 1).frames[0]!.run).toBe(null);
   });
 });
+
+// The row's list reaches the sizes the corner cannot (`AMB-D-959`): a pane in the right-hand column
+// has its corner against the window's edge, so the whole page is only reachable from the list — and
+// picking it is the same `resized` the corner lands on, laying the pane on a page of its own.
+describe("a size picked from the row", () => {
+  it("sends a quarter in the right-hand column to a page of its own when it becomes the whole page", () => {
+    const four = withPanes(4, "quarter");
+    expect(idsOn(four, 1)).toEqual(["1", "2", "3", "4"]);
+    const whole = resized(four, "2", "whole");
+    expect(idsOn(whole, 1)).toEqual(["1"]);
+    expect(idsOn(whole, 2)).toEqual(["2"]);
+    expect(pageOfFrame(whole, "2")).toBe(2);
+  });
+});

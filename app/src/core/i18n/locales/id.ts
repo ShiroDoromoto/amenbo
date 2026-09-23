@@ -611,6 +611,8 @@ export const id: Translation = {
     "face.tabsNamed": "Tampilkan nama",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "Seberapa besar bagian halaman untuk panel ini",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 tegak", "pane.size.halfDown": "1/2 mendatar",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.other": "{n} panel",
     "face.pages": "Halaman",
     "face.page": "Halaman {n}",

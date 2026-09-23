@@ -607,6 +607,8 @@ export const ko: Translation = {
     "face.tabsNamed": "이름 표시",
     "face.tabPanes": "{name}, {panes}",
     "face.paneSize": "이 페인이 차지하는 페이지 크기",
+    "pane.size.whole": "1/1", "pane.size.half": "1/2 세로", "pane.size.halfDown": "1/2 가로",
+    "pane.size.quarter": "1/4", "pane.size.sixth": "1/6", "pane.size.eighth": "1/8",
     "face.panes.other": "{n}개",
     "face.pages": "페이지",
     "face.page": "{n}페이지",

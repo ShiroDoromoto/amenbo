@@ -40,10 +40,10 @@ description: >
   which is one of the three places that puts the question, and open the build screen again: the same
   definition now lists one reason, naming the step and the model it asks for.
 given:
-  # One agent, answering with two models it can be started on. The names are the harness's own — a
-  # road never writes a real model name — and the step below names a third of that family, which is
-  # a name this machine has not answered with and never will.
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, models: 2 } }
+  # Two agents, each answering with two models it can be started on. The names are the harness's
+  # own — a road never writes a real model name — and the step below names a third of that family,
+  # which is a name this machine has not answered with and never will.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, models: 2 } }
 
   # The action the panel is read on, holding the one step it runs. The way out that takes the task
   # is declared on both layers, and the line inside the action carries the step's out by the action's.

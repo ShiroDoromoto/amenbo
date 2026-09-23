@@ -12,9 +12,10 @@ description: >
   first, so that the refusal is known to be about the window — a definition still short
   of something would refuse for its own reasons and the road would prove nothing.
 given:
-  # One agent this machine can start, so the launch check has nothing to say about who carries the
-  # step out. `reads` keeps the stand-in standing, which is what leaves a pane on the screen to read.
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  # Claude Code is one of the two agents this machine can start — two being the fewest the premise
+  # stands up — so the launch check has nothing to say about who carries the step out. `reads` keeps
+  # the stand-in standing, which is what leaves a pane on the screen to read.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the

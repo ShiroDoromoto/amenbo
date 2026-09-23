@@ -16,9 +16,10 @@ description: >
   the run is under way. Both are walked because they are two ways to the same end: a build where only
   one arm of the guard was written would turn the first away and let the second through.
 given:
-  # One agent this machine can start, so the step is not refused for who carries it out. `reads` keeps
-  # the stand-in standing, which is what leaves a pane on the screen to type in.
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  # Claude Code is one of the two agents this machine can start — two being the fewest the premise
+  # stands up — so the step is not refused for who carries it out. `runs` keeps the stand-in standing
+  # and carries out what is typed at it, which is what the command typed in the pane needs.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.

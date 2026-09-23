@@ -27,9 +27,9 @@ description: >
   mark for a required input nothing reaches. Then write the old name back, and every one of those
   goes.
 given:
-  # One agent this machine can start, so nothing on the launch place is ever about who carries a step
-  # out.
-  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+  # Claude Code is one of the two agents this machine can start — two being the fewest the premise
+  # stands up — so nothing on the launch place is ever about who carries a step out.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
 
   # The action that takes the task. Its named way out is the one being renamed: it carries the task
   # the run works on, and the value the placement after it is wired to. The step inside it declares

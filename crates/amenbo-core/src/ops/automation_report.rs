@@ -19,10 +19,10 @@
 
 use crate::error::{Error, Result};
 use crate::model::{
-    ActorKind, AttachmentTarget, AutomationEdge, AutomationPictureOwner, AutomationPortDirection,
+    ActorKind, AttachmentTarget, AutomationPictureOwner, AutomationPortDirection,
     AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStep,
     AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, AutomationStoppedReason,
-    RunDefExit, RunDefPort, Task, TaskStatus, ERROR_EXIT,
+    RunDefExit, RunDefLine, RunDefPort, Task, TaskStatus, ERROR_EXIT,
 };
 use crate::ops::automation_run::{self, Onward};
 use crate::ops::automation_stop::{self, Ended, Ending};
@@ -422,16 +422,15 @@ fn no_task_after_all(
     Ok(())
 }
 
-/// Read the picture and say what happens after the way out that was taken.
+/// Say what happens after the way out that was taken, as the step's copy says.
 ///
-/// **The edges are read live**, like every other walk of the picture: which step comes next is the
-/// shape of the automation rather than the step's own declaration, and a run under way follows the
-/// shape as it stands. The line inside the step's own action is read first, and the automation's only
-/// where that one returns to a way out of the action ([`automation_run::onward`]).
+/// **The line is read off the copy** (`AMB-D-961`): what follows each way out was resolved at launch,
+/// across the action's edge where the line inside returns to one of the action's ways out
+/// ([`automation_run::onward`]). A run under way reads no picture but its own copies.
 ///
 /// **A way out nothing decides stops the run.** The launch check refuses an automation with one, so
-/// reaching this means the picture was edited underneath a run — and walking on from a way out that
-/// says nothing would be the run choosing for itself.
+/// reaching this means a copy carried in from before a launch copied the lines — and walking on from
+/// a way out that says nothing would be the run choosing for itself.
 ///
 /// **A pause that was asked for is answered here and nowhere else**, because this is the one moment a
 /// step is known to have finished. It is read last of all: a picture that has run out is over, and
@@ -454,8 +453,8 @@ fn whats_next(
         // such as a placement added after the launch. The run has no snapshot of that and will not
         // read a live one, so there is nowhere to go.
         Onward::Nowhere => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::NoWayOn)?)),
-        Onward::Go { def: next, edge } => {
-            if over_its_turns(tx, def, ended, &edge)? {
+        Onward::Go { def: next, line } => {
+            if over_its_turns(tx, def, ended, &line)? {
                 return Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::MaxTimes)?));
             }
             if run.pause_requested {
@@ -491,11 +490,14 @@ fn failed(tx: &WriteTx<'_>, run: AutomationRun, reason: AutomationStoppedReason)
 /// The execution that has just reported is counted with the rest: it is already stamped `done` and
 /// carrying its way out by the time this is asked, so the count is how many times the edge would have
 /// been taken including this one.
+///
+/// **Everything is read off the run's copies** (`AMB-D-961`): the line as it was copied at launch, and
+/// which of the action's ways out each step's way out returned to ([`RunDefExit::returns_to`]).
 fn over_its_turns(
     tx: &WriteTx<'_>,
     from: &AutomationRunDef,
     ended: &AutomationRunStep,
-    edge: &AutomationEdge,
+    edge: &RunDefLine,
 ) -> Result<bool> {
     let Some(limit) = edge.max_times else { return Ok(false) };
     // A step that went looking for a task and found none left no stretch behind it, and a per-task
@@ -506,7 +508,7 @@ fn over_its_turns(
     for step in read::automation_run_steps_of_task(conn, stretch)? {
         let Some(def) = read::automation_run_def(conn, step.run_def_id)? else { continue };
         let Some(step_id) = def.step_id else { continue };
-        let took_it = match edge.owner_kind {
+        let took_it = match edge.picture {
             AutomationPictureOwner::Action => {
                 def.placement_id == from.placement_id
                     && step_id == edge.from_id
@@ -515,7 +517,10 @@ fn over_its_turns(
             AutomationPictureOwner::Automation => {
                 def.placement_id == Some(edge.from_id)
                     && match step.exit_id {
-                        Some(exit) => automation_run::returns_to(conn, step_id, exit)? == Some(edge.exit_id),
+                        Some(exit) => {
+                            exits_of(&def)?.iter().find(|e| e.id == exit).and_then(|e| e.returns_to)
+                                == Some(edge.exit_id)
+                        }
                         None => false,
                     }
             }

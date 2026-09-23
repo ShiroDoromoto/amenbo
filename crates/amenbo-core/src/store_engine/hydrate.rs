@@ -669,6 +669,7 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         exits: get(r, C.exits)?,
         ins: get(r, C.ins)?,
         cfg: get(r, C.cfg)?,
+        entry: get(r, C.entry)?,
         created_at,
         updated_at,
     })

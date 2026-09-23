@@ -1243,6 +1243,10 @@ datasets! {
     // picture this copy was opened from, and which step of that spot's action it is a copy of. Both
     // are `SET NULL`: a placement taken off, or a step deleted, while building must not take the
     // record of a run that used it, nor be held undeletable by one.
+    //
+    // `entry` marks the one copy the run starts at, and `exits` carries what follows each way out, both
+    // resolved at launch: a run under way reads the picture from its copies alone and never from the
+    // live definition (`AMB-D-961`).
     automation_run_def {
         run_id: fk("automation_run", "RESTRICT"),
         placement_id: fk_opt("automation_placement", "SET NULL"),
@@ -1258,6 +1262,7 @@ datasets! {
         exits: col(REQ),
         ins: col(REQ),
         cfg: col(REQ),
+        entry: bool_col,
     }
 
     // **One task a run worked on**, in the order it took them: `seq` is 1 for a run that never goes

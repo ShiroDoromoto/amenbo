@@ -36,20 +36,20 @@ function firstLine(note: string): string {
 }
 
 /** Which reach the list is narrowed to. */
-type Reach = "all" | "device" | "project";
+type Reach = "all" | "global" | "project";
 
 /** The reach an action sits in, as a chip — the same one the build screen's declaration draws. */
 export function ReachChip({ global }: { global: boolean }) {
   return (
-    <span className={global ? "actscope actscope--device" : "actscope"}>
+    <span className={global ? "actscope actscope--global" : "actscope"}>
       <em aria-hidden="true" />
-      {global ? t("auto.actions.reachDevice") : t("auto.actions.reachProject")}
+      {global ? t("auto.actions.reachGlobal") : t("auto.actions.reachProject")}
     </span>
   );
 }
 
 function matches(one: AutomationActionCardDto, words: string, reach: Reach): boolean {
-  if (reach === "device" && !one.global) return false;
+  if (reach === "global" && !one.global) return false;
   if (reach === "project" && one.global) return false;
   const w = words.trim().toLowerCase();
   return w === "" || `${one.name} ${one.note}`.toLowerCase().includes(w);
@@ -96,7 +96,7 @@ export function AutomationActionsTab({
 
   const reaches: { id: Reach; label: string }[] = [
     { id: "all", label: t("auto.actions.all") },
-    { id: "device", label: t("auto.actions.reachDevice") },
+    { id: "global", label: t("auto.actions.reachGlobal") },
     { id: "project", label: t("auto.actions.reachProject") },
   ];
 
@@ -200,7 +200,7 @@ function ActionAdd({
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
-  const [reach, setReach] = useState<"" | "device" | "project">("");
+  const [reach, setReach] = useState<"" | "global" | "project">("");
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -208,7 +208,7 @@ function ActionAdd({
     setError(null);
     setMaking(true);
     try {
-      await onMake(name.trim(), reach === "device" ? null : projectId);
+      await onMake(name.trim(), reach === "global" ? null : projectId);
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -226,11 +226,11 @@ function ActionAdd({
         <span>{t("auto.actions.reach")}</span>
         <select
           value={reach}
-          onChange={(e) => setReach(e.target.value as "" | "device" | "project")}
+          onChange={(e) => setReach(e.target.value as "" | "global" | "project")}
         >
           <option value="">{t("auto.actions.pickReach")}</option>
           <option value="project">{t("auto.actions.reachProject")}</option>
-          <option value="device">{t("auto.actions.reachDevice")}</option>
+          <option value="global">{t("auto.actions.reachGlobal")}</option>
         </select>
       </label>
       <button

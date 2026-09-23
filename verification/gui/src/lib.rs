@@ -3898,7 +3898,7 @@ impl Instructor {
                 req(with, "name")?,
                 match arg_str(with, "reach") {
                     None | Some("project") => "set where it is kept to this project's library".to_string(),
-                    Some("device") => "set where it is kept to this device's library".to_string(),
+                    Some("device") => "set where it is kept to the global library".to_string(),
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
@@ -6069,7 +6069,7 @@ impl Instructor {
                     None => String::new(),
                 },
                 match arg_str(with, "reach") {
-                    Some("device") => ", and that it is marked as the device's own",
+                    Some("device") => ", and that it is marked as global",
                     Some("project") => ", and that it is marked as this project's",
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                     None => "",
@@ -8254,7 +8254,7 @@ steps_gui:
         assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
         assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);
         assert!(
-            lines.iter().any(|l| l.contains("adds an action") && l.contains("\"Triage\"") && l.contains("this device's library")),
+            lines.iter().any(|l| l.contains("adds an action") && l.contains("\"Triage\"") && l.contains("the global library")),
             "the action made from the list is said with its reach",
         );
     }

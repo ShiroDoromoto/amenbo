@@ -1167,7 +1167,7 @@ const ui = {
   "auto.lib.first": "Goes on as the first placement",
   "auto.lib.after": "Goes in after “{box}”",
   "auto.lib.afterExit": "Goes in after “{box}” leaves by “{exit}”",
-  "auto.lib.device": "This device (any project can place these)",
+  "auto.lib.global": "Global (any project can place these)",
   "auto.lib.makeWhat": "Not in the library? Make one and place it",
   "auto.lib.make": "Make a new one and place it",
   // The panel beside the picture: what the pressed step holds, field by field. The three rows a
@@ -1242,7 +1242,7 @@ const ui = {
   "auto.actions.empty": "The library has no actions yet.",
   "auto.actions.add": "Add an action",
   "auto.actions.reach": "Reach",
-  "auto.actions.reachDevice": "This device",
+  "auto.actions.reachGlobal": "Global",
   "auto.actions.reachProject": "This project",
   "auto.actions.unused": "No automation runs it",
   "auto.actions.usedBy.one": "Run by {n} automation", "auto.actions.usedBy.other": "Run by {n} automations",

@@ -1547,8 +1547,8 @@ button.feed__target:hover { color: var(--c-accent); }
   border: var(--border-w) var(--border-style) var(--c-edge); color: var(--c-text-muted);
 }
 .actscope em { display: block; width: 9px; height: 9px; border-radius: 3px; background: var(--c-heed); }
-.actscope--device { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
-.actscope--device em { background: var(--c-accent); }
+.actscope--global { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
+.actscope--global em { background: var(--c-accent); }
 
 /* ── One action, opened (`../screens/AutomationActionBuildScreen`) ── */
 .actbuild {

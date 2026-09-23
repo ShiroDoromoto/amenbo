@@ -4,20 +4,21 @@
 # running past it would leave a picture nobody asked for, and one that made the placement and dropped
 # what the line used to reach would quietly throw away a decision somebody had made.
 #
-# ── Why the prompt is written in the dialog ─────────────────────────────────────────────────────
-# What stands on an automation's picture is always a placement of a library action, so
-# a prompt written on the line becomes an action of its own and is placed in the same press — made
-# from the press the library panel beside the picture holds under its lists. It is the arm of the
-# dialog that makes the most — an action, the step inside it, the ways out it declares and
-# the placement — which is why it is the one walked here.
+# ── Why the action is made on the spot ───────────────────────────────────────────────────────────
+# What stands on an automation's picture is always a placement of a library action. One made on the
+# line is asked a name and a library and nothing else: it is born empty, placed where it was asked
+# for, and its own build screen opens for its steps. It is the arm of the `+` that makes the most — an
+# action and a placement, and a line spliced — which is why it is the one walked here, and why the
+# launch place is read after it: an empty action is one a run cannot start.
 id: put-an-action-into-a-picture-on-a-line
-title: An action put in on a line takes over where that line went, and says what leaving it hands on
+title: An action made on a line takes over where that line went, and is named empty until it is built
 description: >
-  Stand a definition of one placed action up from the terminal, write a second action in on the line
+  Stand a definition of one placed action up from the terminal, make a second action on the line
   that closes the task, and read both halves of what that press did: the pressed way out now points
-  at the new placement, and the new placement now closes the task. Then declare what the new
-  action's named way out hands on, and read the one thing that dialog does for a reader — the name
-  starts on the way out's own, that way out having handed on nothing yet.
+  at the new placement, and the new placement now closes the task. The launch place then says an
+  action placed on it has nothing in it. Last, declare what the first action's other way out hands
+  on, and read the one thing that dialog does for a reader — the name starts on the way out's own,
+  that way out having handed on nothing yet.
 given:
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
   - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: claude-code, prompt: take the next task }, as: claim }
@@ -27,6 +28,8 @@ given:
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  # A second way out that hands nothing on yet — the one the output artefact is declared on last.
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: drafted } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one action, then two" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
@@ -66,9 +69,6 @@ steps_gui:
       after: take
       exit: got one
       name: work
-      prompt: do the work
-      exits:
-        - drafted
 
   - type: assert
     domain: automation
@@ -95,24 +95,25 @@ steps_gui:
       from: work
       ends: done
 
-  # And the placement the press made is a placement like any other: pressing its box puts what it
-  # holds in the panel, with the prompt the dialog took on the step inside the new action.
+  # Placed but empty: the launch place names it, rather than letting a run start into nothing.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: action_empty
+      box: work
+      present: true
+
+  # And a way out that hands nothing on yet, with a control for saying what leaving by it hands on.
+  # The name the box starts on is that way out's own — a name for what a way out produces is nine
+  # times out of ten the way out's own name.
   - type: action
     domain: automation
     op: pick-box
     with:
-      name: work
+      name: take
 
-  - type: assert
-    domain: automation
-    op: panel-shows
-    with:
-      field: prompt
-      value: do the work
-
-  # And the way out the dialog declared is on it, with a control for saying what leaving by it hands
-  # on. The name the box starts on is that way out's own — it has handed nothing on yet, and a name
-  # for what a way out produces is nine times out of ten the way out's own name.
   - type: action
     domain: automation
     op: add-output

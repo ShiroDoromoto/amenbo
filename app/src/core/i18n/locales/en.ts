@@ -1170,6 +1170,8 @@ const ui = {
   "auto.lib.device": "This device (any project can place these)",
   "auto.lib.makeWhat": "Not in the library? Make one and place it",
   "auto.lib.make": "Make a new one and place it",
+  "auto.make.go": "Make it and open the action",
+  "auto.make.said": "An empty action is placed where you pressed, and its build screen opens so you can build what is inside. Until it is built, this automation cannot be started.",
   // The panel beside the picture: what the pressed step holds, field by field. The three rows a
   // task filter is answered on borrow the words the board's filters already use
   // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.
@@ -1214,7 +1216,6 @@ const ui = {
   "auto.kind.file": "File",
   "auto.kind.taskTake": "Task (taken)",
   "auto.kind.taskMake": "Task (made)",
-  "auto.add.title": "Put an action in",
   "auto.add.exitPh": "What this way out is called",
   "auto.add.exitAdd": "＋ Way out",
   "auto.add.namePh": "What it is called",

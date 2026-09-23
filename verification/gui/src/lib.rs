@@ -3984,36 +3984,34 @@ impl Instructor {
             // the line leaves and the way out it leaves by — the pair a line hangs on.
             //
             // It is the automation picture's `+`, which opens the library in the panel beside the
-            // picture: an action off the shelf is picked and placed there, and one
-            // written here is made from the panel's own press, which opens the dialog. The `+` inside
-            // an action opens the dialog straight away, and no road walks it yet.
+            // picture: an action off the shelf (`action`) is picked and placed there, and one made on
+            // the spot (`name`) is made from the panel's own press. That press asks a name and a
+            // library and nothing else, places the empty action on the line, and goes on to its own
+            // build screen — so the instruction reads that screen and comes back, leaving the operator
+            // on the picture the next step reads. The `+` inside an action opens the step dialog
+            // straight away, and no road walks it yet.
             (Domain::Automation, "insert-box") => {
-                let written = |lead: &str| -> Result<String, String> {
-                    Ok(format!(
-                        "{lead} In the dialog, write the name \"{}\" and write \"{}\" as its prompt{}{}, then press the button that puts it in.",
-                        req(with, "name")?,
-                        req(with, "prompt")?,
-                        match declared_exits(with)?.as_slice() {
-                            [] => String::new(),
-                            [one] => format!(", add a way out called {one}"),
-                            ways => format!(", add a way out for each of {}", listed(ways)),
-                        },
-                        match declared_inputs(with)?.as_slice() {
-                            [] => String::new(),
-                            [one] => format!(", add an input {one}"),
-                            ports => format!(", add an input for each of {}", listed(ports)),
-                        }
-                    ))
-                };
                 let plus = format!(
                     "In the build screen's picture, press the `+` on the line leaving the box \"{}\" by {}.",
                     req(with, "after")?,
                     way_out(with)
                 );
-                match (arg_str(with, "prompt"), with.get("action")) {
-                    (Some(_), None) => written(&format!(
-                        "{plus} In the panel that opens beside the picture, press the button that makes a new action and places it."
-                    ))?,
+                if with.contains_key("prompt") || with.contains_key("exits") || with.contains_key("inputs") {
+                    return Err(
+                        "an action made on a line is asked a name and a library and nothing else — its steps, \
+                         prompts, ways out and inputs are built on its own screen"
+                            .to_string(),
+                    );
+                }
+                match (arg_str(with, "name"), with.get("action")) {
+                    (Some(name), None) => format!(
+                        "{plus} In the panel that opens beside the picture, press the button that makes a new action and places it. In the dialog, write the name \"{name}\", set where it is kept to {}, and press the button that makes it and opens the action. Confirm the action build screen for \"{name}\" opens, then press the button that goes back — the automation's build screen comes back.",
+                        match arg_str(with, "reach") {
+                            None | Some("project") => "this project's library",
+                            Some("device") => "this device's library",
+                            Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
+                        }
+                    ),
                     (None, Some(_)) => format!(
                         "{plus} In the panel that opens beside the picture, press the library action \"{}\", then press the button under it that places it.",
                         self.labels
@@ -4022,7 +4020,7 @@ impl Instructor {
                             .unwrap_or_else(|| "<the action>".to_string())
                     ),
                     _ => return Err(
-                        "a box put in writes a prompt here or names a library action, never both and never neither"
+                        "a box put in on a line is made here (`name`) or picked off the library (`action`), never both and never neither"
                             .to_string(),
                     ),
                 }
@@ -8127,7 +8125,7 @@ steps_gui:
   - type: action
     domain: automation
     op: insert-box
-    with: { after: work, exit: got one, name: review, prompt: read it back }
+    with: { after: work, exit: got one, name: review }
   - type: action
     domain: automation
     op: add-output
@@ -8218,7 +8216,7 @@ steps_gui:
     /// differently, and a road that wrote one way out should not be handed a sentence written for a
     /// list.
     #[test]
-    fn a_box_put_in_is_told_what_to_declare_on_it() {
+    fn a_box_made_on_a_line_is_asked_a_name_and_a_library_only() {
         let s = load(r#"
 id: x
 title: y
@@ -8226,23 +8224,19 @@ steps_gui:
   - type: action
     domain: automation
     op: insert-box
-    with:
-      after: take
-      name: work
-      prompt: do it
-      exits: [drafted]
-      inputs:
-        - { name: note, kind: value, required: true }
-        - { name: draft, kind: file }
+    with: { after: take, name: work, reach: device }
+  - type: action
+    domain: automation
+    op: insert-box
+    with: { after: take, name: work, prompt: do it }
 "#);
         let mut ins = Instructor::new();
-        let line = ins.render(&s.steps(Driver::Gui)[0]).expect("it renders");
-        assert!(line.contains("add a way out called \"drafted\""), "{line}");
-        assert!(
-            line.contains("\"note\" carrying a value, marked required"),
-            "{line}",
-        );
-        assert!(line.contains("\"draft\" carrying a file, marked optional"), "{line}");
+        let steps = s.steps(Driver::Gui);
+        let line = ins.render(&steps[0]).expect("it renders");
+        assert!(line.contains("write the name \"work\""), "{line}");
+        assert!(line.contains("this device's library"), "{line}");
+        assert!(line.contains("goes back"), "{line}");
+        assert!(ins.render(&steps[1]).is_err(), "a prompt is the action's steps', not the dialog's");
     }
 
     /// The action build screen's three: a step added from the press above the picture, what leaving a

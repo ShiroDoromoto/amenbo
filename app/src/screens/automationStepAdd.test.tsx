@@ -1,39 +1,37 @@
 // @vitest-environment jsdom
-// The dialog that puts a step in on a line, and the one that declares what a way out hands on
-// (`AMB-T-5257`).
+// The build screens' dialogs: the one that puts a step in inside an action (`AMB-T-5257`), the one
+// that makes an action on the spot from an automation's picture (`AMB-D-956`), and the one that
+// declares what a way out hands on.
 //
-// What these guard: **on an automation the dialog writes an action and offers no library** — picking
-// one off the shelf is the build screen's panel (`./AutomationLibraryPanel`, `AMB-T-5360`); **the
-// press goes through each picture's own door** — the line it was opened from, or the picture itself
-// where there is no line yet (`AMB-T-5315`, `AMB-T-5317`); **a put is told apart from a cancel**, so
-// the screen can close its panel on the one and not the other; **a written action is asked which
-// library to land in** (`AMB-T-5317`); **what the
-// dialog took is what is sent**, ways out and inputs together; **nothing
-// is sent until the dialog has what a step cannot be made without**; and, for the output artefact, **the name starts on
-// the way out's own and stops following once somebody writes their own** — but only where that way
-// out hands on nothing yet. **Neither dialog closes from the backdrop or Escape** (`AMB-T-5363`) — only
-// its buttons do, so a prompt half written is not thrown away by a stray press.
+// What these guard: **inside an action there is no library to pick from** (`AMB-D-949`) and the press
+// goes through that picture's own door — the line it was opened from, or the action itself where
+// there is no line yet (`AMB-T-5315`); **what the dialog took is what is sent**, ways out and inputs
+// together; **nothing is sent until the dialog has what a step cannot be made without**; **an action
+// made on the spot is asked a name and a library and nothing else**, lands where it was asked for,
+// and hands its id on so the screen can go and build it; and, for the output artefact, **the name
+// starts on the way out's own and stops following once somebody writes their own** — but only where
+// that way out hands on nothing yet. **No dialog closes from the backdrop or Escape** (`AMB-T-5363`)
+// — only its buttons do, so what was typed is not thrown away by a stray press.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
-  insert: vi.fn(),
-  place: vi.fn(),
+  make: vi.fn((..._args: unknown[]) => Promise.resolve(21 as number | null)),
   insertInside: vi.fn(),
   add: vi.fn(),
   output: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
-  insertAutomationStep: hoisted.insert,
-  placeAutomationActionFromPrompt: hoisted.place,
+  makeAutomationAction: hoisted.make,
   insertAutomationActionStep: hoisted.insertInside,
   addAutomationStep: hoisted.add,
   addAutomationOutput: hoisted.output,
 }));
 
 import { t } from "../core/i18n";
+import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
 import { AutomationStepAdd } from "./AutomationStepAdd";
 
@@ -68,8 +66,7 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  hoisted.insert.mockReset();
-  hoisted.place.mockReset();
+  hoisted.make.mockClear();
   hoisted.insertInside.mockReset();
   hoisted.add.mockReset();
   hoisted.output.mockReset();
@@ -80,115 +77,12 @@ afterEach(() => {
   host.remove();
 });
 
-describe("putting a step in on a line", () => {
-  const put = vi.fn();
-  const closed = vi.fn();
-  async function open(into: { edgeId: number } | { automationId: number } = { edgeId: 9 }) {
-    put.mockReset();
-    closed.mockReset();
-    await act(async () => {
-      root.render(
-        createElement(AutomationStepAdd, {
-          into: { picture: "automation", ...into },
-          projectId: 1,
-          agent: "claude-code",
-          onPut: put,
-          onClose: closed,
-        }),
-      );
-    });
-  }
-
-  it("will not send a step with no name, nor one with no prompt to run on", async () => {
-    await open();
-    expect(button(t("auto.add.put")).disabled).toBe(true);
-    await typeInto(boxes()[0]!, "実装する");
-    expect(button(t("auto.add.put")).disabled).toBe(true);
-    await typeInto(document.body.querySelector("textarea")!, "やる");
-    expect(button(t("auto.add.put")).disabled).toBe(false);
-  });
-
-  it("sends the ways out and the inputs it took, with the line it was opened from", async () => {
-    await open();
-    await typeInto(boxes()[0]!, "実装する");
-    await typeInto(document.body.querySelector("textarea")!, "やる");
-    await act(async () => button(t("auto.add.exitAdd")).click());
-    await typeInto(boxes()[1]!, "直すところがある");
-    await act(async () => button(t("auto.add.inputAdd")).click());
-    await typeInto(boxes()[2]!, "要件");
-    await act(async () => button(t("auto.add.put")).click());
-
-    expect(hoisted.insert).toHaveBeenCalledWith(9, {
-      name: "実装する",
-      source: { prompt: "やる", shelf: "project" },
-      agent: "claude-code",
-      interactive: false,
-      exits: ["直すところがある"],
-      inputs: [{ name: "要件", kind: "value", required: true }],
-    });
-  });
-
-  /// Where a written action is kept outlives the picture it was written at, so it is asked rather
-  /// than assumed — and asked only of an action being written (`AMB-T-5317`).
-  it("sends the library the written action was told to land in", async () => {
-    await open();
-    await typeInto(boxes()[0]!, "実装する");
-    await typeInto(document.body.querySelector("textarea")!, "やる");
-    await pick(selects()[0]!, "device");
-    await act(async () => button(t("auto.add.put")).click());
-
-    expect(hoisted.insert.mock.calls[0]![1]).toMatchObject({
-      source: { prompt: "やる", shelf: "device" },
-    });
-  });
-
-  it("offers no library to pick from — the panel beside the picture is where one is picked", async () => {
-    await open();
-    // The one pulldown is the library a written action lands in, which has two answers and no blank.
-    expect(selects()).toHaveLength(1);
-    expect([...selects()[0]!.options].map((one) => one.value)).toEqual(["project", "device"]);
-    expect(document.body.querySelector("textarea")).not.toBeNull();
-  });
-
-  it("writes the first action where the picture has no line to press", async () => {
-    await open({ automationId: 7 });
-    await typeInto(boxes()[0]!, "取る");
-    await typeInto(document.body.querySelector("textarea")!, "やる");
-    await act(async () => button(t("auto.add.put")).click());
-    expect(hoisted.place).toHaveBeenCalledWith(7, {
-      name: "取る",
-      prompt: "やる",
-      shelf: "project",
-      agent: "claude-code",
-      interactive: false,
-      exits: [],
-      inputs: [],
-    });
-    expect(hoisted.insert).not.toHaveBeenCalled();
-  });
-
-  it("tells a put apart from a cancel", async () => {
-    await open();
-    await act(async () => button(t("auto.add.cancel")).click());
-    expect(put).not.toHaveBeenCalled();
-    expect(closed).toHaveBeenCalledTimes(1);
-
-    await open();
-    await typeInto(boxes()[0]!, "実装する");
-    await typeInto(document.body.querySelector("textarea")!, "やる");
-    await act(async () => button(t("auto.add.put")).click());
-    expect(put).toHaveBeenCalledTimes(1);
-    expect(closed).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe("putting a step in inside an action", () => {
   async function open(into: { picture: "action"; edgeId: number } | { picture: "action"; actionId: number }) {
     await act(async () => {
       root.render(
         createElement(AutomationStepAdd, {
           into,
-          projectId: 1,
           agent: "claude-code",
           onClose: () => undefined,
         }),
@@ -215,7 +109,6 @@ describe("putting a step in inside an action", () => {
       exits: [],
       inputs: [],
     });
-    expect(hoisted.insert).not.toHaveBeenCalled();
   });
 
   it("adds the first step where the picture has no line to press", async () => {
@@ -231,6 +124,51 @@ describe("putting a step in inside an action", () => {
       exits: [],
       inputs: [],
     });
+  });
+});
+
+describe("making an action on the spot", () => {
+  const made = vi.fn();
+  async function open(into: { edgeId: number } | { automationId: number } = { edgeId: 9 }) {
+    made.mockClear();
+    await act(async () => {
+      root.render(
+        createElement(AutomationActionMake, { into, projectId: 1, onMade: made, onClose: () => undefined }),
+      );
+    });
+  }
+
+  it("asks a name and a library, and nothing an action's steps hold", async () => {
+    await open();
+    expect(document.body.querySelector("textarea")).toBeNull();
+    expect(boxes()).toHaveLength(1);
+    expect([...selects()[0]!.options].map((one) => one.value)).toEqual(["project", "device"]);
+    expect(button(t("auto.make.go")).disabled).toBe(true);
+  });
+
+  it("places it on the line it was opened from, and goes on to build it", async () => {
+    await open({ edgeId: 9 });
+    await typeInto(boxes()[0]!, "書く");
+    await pick(selects()[0]!, "device");
+    await act(async () => button(t("auto.make.go")).click());
+    expect(hoisted.make).toHaveBeenCalledWith({ edgeId: 9 }, "書く", "device");
+    expect(made).toHaveBeenCalledWith(21);
+  });
+
+  it("places it on a picture with no line yet", async () => {
+    await open({ automationId: 7 });
+    await typeInto(boxes()[0]!, "取る");
+    await act(async () => button(t("auto.make.go")).click());
+    expect(hoisted.make).toHaveBeenCalledWith({ automationId: 7 }, "取る", "project");
+  });
+
+  it("draws a refusal and stays where it is", async () => {
+    hoisted.make.mockRejectedValueOnce({ code: "invalid", message_en: "that line is gone" });
+    await open();
+    await typeInto(boxes()[0]!, "書く");
+    await act(async () => button(t("auto.make.go")).click());
+    expect(document.body.textContent).toContain("that line is gone");
+    expect(made).not.toHaveBeenCalled();
   });
 });
 
@@ -286,11 +224,12 @@ describe("leaving either dialog", () => {
   const dialogs = {
     "the one that puts a step in": (onClose: () => void) =>
       createElement(AutomationStepAdd, {
-        into: { picture: "automation", edgeId: 9 },
-        projectId: 1,
+        into: { picture: "action", edgeId: 9 },
         agent: "claude-code",
         onClose,
       }),
+    "the one that makes an action on the spot": (onClose: () => void) =>
+      createElement(AutomationActionMake, { into: { edgeId: 9 }, projectId: 1, onMade: () => undefined, onClose }),
     "the one that declares what a way out hands on": (onClose: () => void) =>
       createElement(AutomationOutputAdd, { exit: { id: 3, name: "drafted", outputs: [] }, onClose }),
   };

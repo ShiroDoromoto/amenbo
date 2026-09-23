@@ -3,8 +3,8 @@
 //
 // **It is a panel and not a dialog**, because picking an action is done while looking at where it
 // goes: a dialog over the picture would hide the very line it is about to be put on. The one thing
-// that does open a dialog is making an action on the spot (`./AutomationStepAdd`), which is a
-// different act — the press after it leaves this screen.
+// that does open a dialog is making an action on the spot (`./AutomationActionMake`), which is a
+// different act — the press after it leaves this screen for the new action's own.
 //
 // **Two lists, by reach.** This project's actions and the device's, each under its own head, since
 // which of the two an action sits in says whether it is this project's own way of doing something or

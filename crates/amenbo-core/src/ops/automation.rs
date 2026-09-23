@@ -774,47 +774,50 @@ impl ActionShelf {
     }
 }
 
-/// **Write an action from one prompt and put it on a picture**, standing on its own with no line
-/// reaching it — the press a build screen makes where the picture has no line to put one in on, which
-/// is every picture with nothing on it yet (`AMB-T-5317`).
+/// **Make an empty action and put it on a picture**, standing on its own with no line reaching it —
+/// the press a build screen makes where the picture has no line to put one in on, which is every
+/// picture with nothing on it yet (`AMB-D-956`).
 ///
-/// It is one act for [`placement_insert_from_prompt`]'s reason: half of it is an action in the
-/// library that nothing stands on.
-pub fn placement_add_from_prompt(
+/// **What it takes is a name and a library, and nothing else.** The inside of an action is its steps,
+/// and each step carries its own prompt, ways out and outputs — so it is built on the action's own
+/// screen, and a dialog that took part of it here would be a second place to declare the same thing
+/// (`AMB-D-954`). Until a step is written in it, the launch check refuses the automation on it
+/// ([`crate::ops::automation_run`]'s `ActionEmpty`).
+///
+/// It is one act for [`placement_insert_new`]'s reason: half of it is an action in the library that
+/// nothing stands on.
+pub fn placement_add_new(
     tx: &WriteTx<'_>,
     automation_id: i64,
     shelf: ActionShelf,
-    new: NewStep,
-    exits: &[String],
-    inputs: &[(String, AutomationPortKind, bool)],
+    name: &str,
 ) -> Result<AutomationPlacement> {
     let automation = live_automation(tx, automation_id)?;
-    let action = action_from_prompt(tx, shelf.under(automation.project_id), new, exits, inputs)?;
+    let action = action_add(tx, shelf.under(automation.project_id), name, "")?;
     placement_add(tx, automation_id, action.id)
 }
 
-/// **Write an action from one prompt and put it in on a line** — the one press a build screen makes
-/// where somebody is writing a prompt rather than picking one out of the library (`AMB-T-5317`).
+/// **Make an empty action and put it in on a line** — [`placement_add_new`] for a picture already
+/// drawn. Where it goes is decided by the press, before there is anything in it: the reader goes on
+/// to build the action and comes back to find it standing where they meant it to (`AMB-D-956`).
 ///
 /// It is one act because half of it is a picture nobody asked for: an action in the library that
 /// nothing stands on, or a line running past a spot that was meant to be on it.
 ///
 /// Which library it lands in is the dialog's answer ([`ActionShelf`]), not this op's: an action
-/// written here is an ordinary action, and where an ordinary action is kept is a choice its author
+/// made here is an ordinary action, and where an ordinary action is kept is a choice its author
 /// makes.
-pub fn placement_insert_from_prompt(
+pub fn placement_insert_new(
     tx: &WriteTx<'_>,
     edge_id: i64,
     shelf: ActionShelf,
-    new: NewStep,
-    exits: &[String],
-    inputs: &[(String, AutomationPortKind, bool)],
+    name: &str,
 ) -> Result<AutomationPlacement> {
     let edge = live_edge(tx, edge_id)?;
     if edge.owner_kind != AutomationPictureOwner::Action {
         let automation_id = box_picture(tx, AutomationPictureOwner::Automation, edge.from_id)?;
         let project_id = live_automation(tx, automation_id)?.project_id;
-        let action = action_from_prompt(tx, shelf.under(project_id), new, exits, inputs)?;
+        let action = action_add(tx, shelf.under(project_id), name, "")?;
         let placement = placement_add(tx, automation_id, action.id)?;
         splice_onto_edge(tx, &edge, placement.id)?;
         return Ok(placement);
@@ -2146,28 +2149,14 @@ mod tests {
     }
 
     #[test]
-    fn an_action_written_at_the_picture_lands_on_the_library_it_was_told_to() {
+    fn an_action_made_at_the_picture_lands_on_the_library_it_was_told_to() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
 
-            let mine = placement_add_from_prompt(
-                tx,
-                automation.id,
-                ActionShelf::Project,
-                NewStep::new("下ごしらえ", "do it", "claude"),
-                &[],
-                &[],
-            )
-            .expect("write it onto the project's shelf");
-            let shared = placement_add_from_prompt(
-                tx,
-                automation.id,
-                ActionShelf::Device,
-                NewStep::new("見直す", "do it", "claude"),
-                &[],
-                &[],
-            )
-            .expect("write it onto the device's shelf");
+            let mine = placement_add_new(tx, automation.id, ActionShelf::Project, "下ごしらえ")
+                .expect("make it on the project's shelf");
+            let shared = placement_add_new(tx, automation.id, ActionShelf::Device, "見直す")
+                .expect("make it on the device's shelf");
 
             assert_eq!(
                 live_action(tx, live_placement(tx, mine.id).unwrap().action_id)
@@ -2192,6 +2181,43 @@ mod tests {
                 .unwrap()
                 .is_empty(),
                 "a box put down this way stands on its own — no line was pressed to put it in on",
+            );
+        });
+    }
+
+    #[test]
+    fn an_action_made_on_a_line_is_born_empty_and_takes_over_where_the_line_went() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let edge = edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                first.id,
+                None,
+                EdgeTarget::Done,
+                None,
+            )
+            .expect("close the task after it");
+
+            let made = placement_insert_new(tx, edge.id, ActionShelf::Project, "書く")
+                .expect("make one on the line");
+
+            let action = live_action(tx, made.action_id).unwrap();
+            assert_eq!(action.name, "書く");
+            assert_eq!(
+                action.entry_step_id, None,
+                "nothing is written in it — the inside is built on the action's own screen",
+            );
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Automation, first.id, None),
+                (AutomationEnds::Go, Some(made.id)),
+                "the pressed way out now opens the new one",
+            );
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Automation, made.id, None),
+                (AutomationEnds::Done, None),
+                "and the new one goes on to where the line used to",
             );
         });
     }

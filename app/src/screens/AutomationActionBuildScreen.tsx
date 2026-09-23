@@ -299,7 +299,6 @@ export function AutomationActionBuildScreen({
       {adding !== null && (
         <AutomationStepAdd
           into={adding}
-          projectId={projectId}
           agent={"edgeId" in adding ? agentOn(action, adding.edgeId) : "claude-code"}
           onClose={() => setAdding(null)}
         />

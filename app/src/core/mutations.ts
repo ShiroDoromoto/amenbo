@@ -28,6 +28,8 @@ export interface WriteAck {
   decisions: number[];
   /** The automations the write made — not an invalidation key, but where a creation's new id comes back. */
   automations: number[];
+  /** The library actions the write made, the same way — where an action made on the spot comes back. */
+  actions: number[];
   scopes: string[]; // "tasks" / "decisions" (empty = nothing to invalidate)
 }
 

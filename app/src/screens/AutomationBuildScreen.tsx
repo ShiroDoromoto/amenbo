@@ -19,8 +19,10 @@
 // **The head leads with the automation's ID**, as the list's rows do: it is what the terminal names
 // the definition by, and it does not change when the name does.
 //
-// **A dialog opens for one thing only: making an action on the spot** (`./AutomationStepAdd`). Picking
-// one off the shelf is done beside the picture, where the line it goes on can still be seen.
+// **A dialog opens for one thing only: making an action on the spot** (`./AutomationActionMake`).
+// Picking one off the shelf is done beside the picture, where the line it goes on can still be seen.
+// The dialog asks a name and a library, puts the empty action where it was asked for, and the screen
+// goes on to that action's own build screen, where its inside is built (`AMB-D-956`).
 //
 // **What stands on the picture is a placement of a library action** (`AMB-D-949`). Nothing here
 // writes a step: a step is inside the action, and the screen that draws those is the action's own.
@@ -58,7 +60,7 @@ import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
-import { AutomationStepAdd } from "./AutomationStepAdd";
+import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
@@ -66,17 +68,6 @@ import { useBoundFolders } from "../core/boundFolders";
 import { errSentence, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto } from "../bindings/bindings";
-
-/**
- * What carries out the step a line leaves — the likeliest answer for the step being put in front of
- * it, and what the dialog starts on. A definition that names none falls back to the first agent the
- * catalog lists, which is what `automation step-add` asks for and never guesses.
- */
-function agentOn(automation: AutomationDetailDto | null, target: PlaceTarget): string {
-  if (!("edgeId" in target)) return "claude-code";
-  const edge = automation?.edges.find((one) => one.id === target.edgeId);
-  return automation?.placements.find((one) => one.id === edge?.fromId)?.agent ?? "claude-code";
-}
 
 /** Where the library's pick will go, in a sentence: after which way out of which box, or first. */
 function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): string {
@@ -95,7 +86,7 @@ type Showing =
   | { kind: "about" };
 
 export function AutomationBuildScreen({
-  id, projectId, workspaceOpen, onBack,
+  id, projectId, workspaceOpen, onBack, onOpenAction,
 }: {
   id: number;
   /** Whose project this automation is — what the machine is asked about, and where its folders are. */
@@ -107,6 +98,8 @@ export function AutomationBuildScreen({
    */
   workspaceOpen: boolean;
   onBack: () => void;
+  /** Go to one library action's own build screen — where an action made here is built. */
+  onOpenAction: (actionId: number) => void;
 }) {
   const automation = useAutomation(id);
   // Nothing until something is pressed — a definition opens on the picture, and a box picked for the
@@ -244,17 +237,13 @@ export function AutomationBuildScreen({
       </div>
 
       {making !== null && (
-        <AutomationStepAdd
-          into={
-            "edgeId" in making
-              ? { picture: "automation", edgeId: making.edgeId }
-              : { picture: "automation", automationId: making.automationId }
-          }
+        <AutomationActionMake
+          into={making}
           projectId={projectId}
-          agent={agentOn(automation, making)}
-          // Put in, the box is on the picture and the library has done its part; given up, the
-          // reader is back at the library they left, still on the same line.
-          onPut={close}
+          onMade={(actionId) => {
+            close();
+            onOpenAction(actionId);
+          }}
           onClose={() => setMaking(null)}
         />
       )}

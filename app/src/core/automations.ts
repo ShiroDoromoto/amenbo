@@ -173,7 +173,7 @@ export async function removeAutomationPlacement(id: number): Promise<void> {
 /**
  * **Put an action on the picture**, standing on its own with nothing pointing at it yet.
  *
- * It is the road `insertAutomationStep` is not: that one joins a picture already drawn, by the line
+ * It is the road `insertAutomationAction` is not: that one joins a picture already drawn, by the line
  * the `+` was pressed on, and an automation with nothing on it has no line to press. Where a run
  * begins is said separately (`setAutomationEntry`) — putting a box down is not choosing the entry.
  */
@@ -598,104 +598,42 @@ export async function setAutomationWire(
   });
 }
 
-/** Which library an action written at a picture lands in — this machine's, or this project's. */
+/** Which library an action made at a picture lands in — this machine's, or this project's. */
 export type ActionShelf = "device" | "project";
 
-/** An action already in the library, or the words to write one from and where to keep it. */
-export type PlacedAction =
-  | { action: number }
-  | { prompt: string; shelf: ActionShelf };
-
-/** What both "write an action here" presses send, the line one of them names aside. */
-function writtenAction(step: {
-  name: string;
-  source: PlacedAction;
-  agent: string;
-  interactive: boolean;
-  exits: readonly string[];
-  inputs: readonly { name: string; kind: string; required: boolean }[];
-}) {
-  return {
-    name: step.name,
-    prompt: "prompt" in step.source ? step.source.prompt : null,
-    // Read only where a prompt was written; a library action is already kept somewhere.
-    shelf: "shelf" in step.source ? step.source.shelf : "project",
-    agent: step.agent,
-    model: null,
-    interactive: step.interactive,
-    exits: [...step.exits],
-    inputs: step.inputs.map((one) => [one.name, one.kind, one.required]),
-  };
-}
-
 /**
- * **Put an action in on a line.** The way out that was pressed comes to point at the new spot, and
- * the new spot goes on to whatever that way out used to reach — one act, one transaction.
- *
- * `source` is a library action to place, or a prompt to write one from with the library it lands in.
- * `exits` and `inputs` are what the dialog took, and belong to the action being written.
- */
-export async function insertAutomationStep(
-  edgeId: number,
-  step: {
-    name: string;
-    source: PlacedAction;
-    agent: string;
-    interactive: boolean;
-    exits: readonly string[];
-    inputs: readonly { name: string; kind: string; required: boolean }[];
-  },
-): Promise<void> {
-  if (!inTauri()) return;
-  return invokeAck("automation_step_insert", {
-    edgeId,
-    action: "action" in step.source ? step.source.action : null,
-    ...writtenAction(step),
-  });
-}
-
-/**
- * **Put a library action in on a line** — `insertAutomationStep` with an action off the shelf, which
- * is what the library in the build screen's panel places. Nothing is written with it: what the action
- * declares is its own, so the fields a written one takes go empty.
+ * **Put a library action in on a line.** The way out that was pressed comes to point at the new
+ * spot, and the new spot goes on to whatever that way out used to reach — one act, one transaction.
+ * It is what the library in the build screen's panel places.
  */
 export async function insertAutomationAction(edgeId: number, actionId: number): Promise<void> {
-  return insertAutomationStep(edgeId, {
-    name: "",
-    source: { action: actionId },
-    agent: "",
-    interactive: false,
-    exits: [],
-    inputs: [],
-  });
+  if (!inTauri()) return;
+  return invokeAck("automation_step_insert", { edgeId, action: actionId });
 }
 
 /**
- * **Write an action from one prompt and put it on the picture**, standing on its own with nothing
- * pointing at it — `insertAutomationStep`'s road for a picture that has no line to press
- * (`AMB-T-5317`).
+ * **Make an empty action and put it on the picture** — on the line pressed, or on a picture with no
+ * line yet — and answer with the action's id, for the screen to go and build it (`AMB-D-956`).
  *
- * It is what the first box of all comes in by where the reader is writing the words rather than
- * picking an action off the shelf, which `placeAutomationAction` is for.
+ * It takes a name and a library and nothing else: the inside of an action is its steps, written on
+ * the action's own screen. Until one is, the launch check names the action as empty. `null` outside
+ * Tauri, where the browser mock holds no automations.
  */
-export async function placeAutomationActionFromPrompt(
-  automationId: number,
-  step: {
-    name: string;
-    prompt: string;
-    shelf: ActionShelf;
-    agent: string;
-    interactive: boolean;
-    exits: readonly string[];
-    inputs: readonly { name: string; kind: string; required: boolean }[];
-  },
-): Promise<void> {
-  if (!inTauri()) return;
-  const { name, prompt, shelf, agent, interactive, exits, inputs } = step;
-  return invokeAck("automation_placement_add_from_prompt", {
-    automationId,
-    ...writtenAction({ name, source: { prompt, shelf }, agent, interactive, exits, inputs }),
-  });
+export async function makeAutomationAction(
+  into: { edgeId: number } | { automationId: number },
+  name: string,
+  shelf: ActionShelf,
+): Promise<number | null> {
+  if (!inTauri()) return null;
+  const ack =
+    "edgeId" in into
+      ? await invokeForAck("automation_placement_insert_new", { edgeId: into.edgeId, name, shelf })
+      : await invokeForAck("automation_placement_add_new", {
+          automationId: into.automationId,
+          name,
+          shelf,
+        });
+  return ack.actions[0] ?? null;
 }
 
 /** **Declare what a way out hands on.** It belongs to the way out, not to the step. */

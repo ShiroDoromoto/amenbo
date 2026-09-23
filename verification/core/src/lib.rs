@@ -3103,6 +3103,11 @@ const REGISTRY: &[OpSpec] = &[
     // reaches every size, which the corner of a pane in the right-hand column cannot. `size` and
     // `shows` are read as on `stretch-pane`.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "pick-pane-size", required: &["size"], refs: &[], strings: &["size", "shows"], binds: false },
+    // What that list holds, read with it open and nothing picked: the six sizes in order from the
+    // whole page down, each drawn with its name under it, and the one the pane takes now framed —
+    // `size` is that one. It is read because the names are the claim: two halves that differ only by
+    // which way they lie are told apart by them, and a list of drawings alone would pass a mark.
+    OpSpec { kind: Kind::Assert, domain: Domain::Workspace, op: "size-list", required: &["size"], refs: &[], strings: &["size", "shows"], binds: false },
     // The panes put in an order the person asked for. It is four ops and not one,
     // because what is being defended is that they are four separate moments: the modal is opened,
     // cards are carried about inside it, and then the arrangement is either taken or thrown away. A

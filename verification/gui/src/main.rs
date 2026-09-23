@@ -226,6 +226,14 @@ fn run(opts: &Opts) -> Result<bool, String> {
         // What the walk noticed and is not asking about. To stderr with the hand-over, since it is
         // read by the same eye at the same moment and a `--json` run keeps stdout to its one line.
         |line| eprintln!("  ! {line}"),
+        // An agent taken back off the machine the premise stood up, out of the run's own directory
+        // of stand-ins. What it did is said with the hand-over's other lines, so the operator reads
+        // what was taken before being handed the step that says so.
+        |command| {
+            let said = amenbo_verify_cli::take_away(&store.tools, command)?;
+            eprintln!("  harness: {said}");
+            Ok(())
+        },
     )?;
 
     let stood = world.as_ref().map(World::stood).unwrap_or_default();

@@ -643,6 +643,48 @@ fn write_program(path: &Path, body: &str) -> Result<(), String> {
     }
 }
 
+/// Take `command` back off the machine `can-start` stood up, part way along a road, and say what was
+/// done.
+///
+/// **Only a stand-in this run wrote can be taken**, for the reason the premise can only add: what the
+/// operator installed is theirs, and nothing handed to a process can take it away. So the name has to
+/// be one of the catalog's and its program has to be lying in the run's own directory.
+///
+/// **And gone is asked, not assumed.** Deleting the stand-in uncovers whatever the machine answers
+/// for that name behind it — on a machine carrying its own agents behind the `PATH`, as the ones these
+/// roads are walked on do, that is a real install. A road reading an agent gone would then open the
+/// operator's program instead, and read as the build having forgotten to look. So what a pane's own
+/// shell answers for the name is asked afterwards, and anything at all is refused by name.
+pub(crate) fn take_away(tools: &Path, command: &str) -> Result<String, String> {
+    if !COMMANDS.contains(&command) {
+        return Err(format!(
+            "`take-away` names `{command}`, which is not a command Amenbo starts an agent as — it is \
+             one of {}",
+            COMMANDS.join(", ")
+        ));
+    }
+    let program = tools.join(command);
+    if !program.is_file() {
+        return Err(format!(
+            "`take-away` was asked to take `{command}` off this machine, and this run never stood it \
+             up — only what `can-start` wrote can be taken, since what the operator installed is \
+             theirs"
+        ));
+    }
+    std::fs::remove_file(&program)
+        .map_err(|e| format!("could not take {} away: {e}", program.display()))?;
+    let answered = answered_from(tools, &[command])?;
+    if let Some((_, at)) = answered.iter().find(|(_, at)| !at.is_empty()) {
+        return Err(format!(
+            "`take-away` took the stand-in for `{command}` away, and a pane's own shell still answers \
+             for that name from {at} — the operator's install, now in front. A road reading the agent \
+             gone would open that program instead. Walk this road on a machine that has no `{command}` \
+             of its own."
+        ));
+    }
+    Ok(format!("this machine can no longer start `{command}`"))
+}
+
 impl Driver<'_> {
     /// The workspace's one action here, and it is a premise's: everything else in this domain is
     /// a move on a screen this driver has not got.
@@ -1173,6 +1215,45 @@ mod tests {
 
         let won = "claude: /opt/an-install-of-their-own/bin/claude";
         assert_eq!(taken, vec![won, "copilot: nothing answered"]);
+    }
+
+    /// Taking an agent away takes the program the premise wrote, and nothing it left beside it.
+    /// Whether the machine then answers for the name from an install of its own is the machine's, so
+    /// both answers are read here: gone, or refused naming what answers instead.
+    #[test]
+    fn taking_an_agent_away_takes_the_stand_in_and_leaves_its_neighbour() {
+        let session = crate::scratch::session("take-away-test", false).expect("a session");
+        stand_up(&session.tools, 2, 0, 0, 0, After::Reads, true).expect("a machine with two agents");
+
+        let said = take_away(&session.tools, "codex");
+
+        assert!(!session.tools.join("codex").exists(), "the stand-in is gone: {said:?}");
+        assert!(session.tools.join("claude").is_file(), "and the one beside it is still standing");
+        match said {
+            Ok(said) => assert!(said.contains("codex"), "{said}"),
+            Err(err) => assert!(err.contains("the operator's install"), "{err}"),
+        }
+    }
+
+    /// A name the run never stood up is not one it can take: what answers for it is the operator's.
+    #[test]
+    fn an_agent_this_run_never_stood_up_cannot_be_taken_away() {
+        let session = crate::scratch::session("take-away-never-test", false).expect("a session");
+        stand_up(&session.tools, 2, 0, 0, 0, After::Ends, true).expect("a machine with two agents");
+
+        let err = take_away(&session.tools, "copilot").expect_err("never stood up");
+
+        assert!(err.contains("never stood it up"), "{err}");
+    }
+
+    /// And a name outside the catalog is not an agent at all.
+    #[test]
+    fn a_name_that_is_no_agent_cannot_be_taken_away() {
+        let session = crate::scratch::session("take-away-unknown-test", false).expect("a session");
+
+        let err = take_away(&session.tools, "vim").expect_err("not an agent");
+
+        assert!(err.contains("not a command Amenbo starts an agent as"), "{err}");
     }
 
     /// Started rather than asked, a stand-in prints what it was started with — one argument to a

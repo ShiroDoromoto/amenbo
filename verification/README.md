@@ -633,7 +633,8 @@ A remark and not a refusal, because the two it cannot tell apart are both ordina
 over and never carried out, and a step that was never going to move anything (a face already
 showing, a tree already open). The driver can tell those apart; the harness cannot. Only actions are
 asked — an assert is meant to shoot the screen the step before it stood up — the app's own restart
-(`store run-again`) is left out, being the harness's move rather than the driver's, and two shots of
+(`store run-again`) and an agent taken off the machine (`workspace take-away`) are left out, being
+the harness's moves rather than the driver's, and two shots of
 two different windows are never held up against each other. The comparison is byte for byte, so two
 shots that differ by a blinking caret are two pictures here and pass without a word: a remark
 withheld costs a run the driver would have caught anyway, where a remark made about a screen that
@@ -1703,6 +1704,18 @@ it.
 what lets a road read a press that ends a program: what a plain prompt draws for a stopped one is a
 mark and a fresh prompt — the two it was already drawing — and a shot cannot tell those from the ones
 that were there before the press.
+
+**`workspace take-away` is the one change to that machine a road makes part way along**, and it
+exists because a premise cannot: it is settled before the app comes up. What it is for is an agent
+that goes while a run is using it — a run looks again each time it opens a step, and a road reaches
+that look only with the agent there at the launch and gone by the next step. It names the program
+(`command: codex`), not the agent's id, because a program is what is taken. The harness does it
+before the step is handed over, the way it runs the app again: the directory is the run's, and
+nobody at the screen can name it. Only a stand-in the premise wrote can be taken, and the harness
+then asks what a pane's own shell answers for the name — an install of the operator's, uncovered, is
+refused by name and ends the walk. The app does not notice by itself: a step is judged against the
+answer the device's settings last kept, so the road has something ask the machine again before the
+step it means to refuse (`see-a-run-end-when-its-agent-is-gone-by-the-next-step`).
 
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it

@@ -877,7 +877,7 @@ const REGISTRY: &[OpSpec] = &[
     // settled here, against everything that was this run's own and goes with it — the places a
     // terminal was drawn in, the names on them — which the app keeps for a run and no longer.
     //
-    // **It is the harness's own step, and the only one that is.** The run owns the app it shoots —
+    // **It is the harness's own step**, as `workspace take-away` is. The run owns the app it shoots —
     // the store it is pointed at is the run's, and the pid is how a shot names this window rather
     // than whatever else of the same build is open — so an operator who quit Amenbo and opened it
     // again from their machine would bring up a second app, on their own backlog, that the run
@@ -2060,6 +2060,29 @@ const REGISTRY: &[OpSpec] = &[
     // program: a program that died quietly leaves a mark and a fresh prompt, which are the two a
     // shell was already drawing and nothing a shot can tell from the ones before the press.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "can-start", required: &["count"], refs: &[], strings: &["then"], binds: false },
+    // One of those taken back off the machine, **part way along the road** — which is what `can-start`
+    // cannot do, being a premise and settled before the app comes up. What it is for is an agent that
+    // goes while a run is using it: a run looks again each time it opens a step (`amenbo_core::ops::automation_step::open`), and a
+    // road can only reach that look with the agent there at the launch and gone by the next step.
+    //
+    // **It is the harness's step, not the operator's.** The directory it takes the program out of is
+    // the run's own, and nobody at the screen can name it — so the harness does it before the step is
+    // handed over, the way it runs the app again (`store run-again`), and the operator is told what was
+    // done. `command` is the program's name rather than an agent's id, because a program is what is
+    // taken: a step naming `codex-cli` is started as `codex`.
+    //
+    // Only a stand-in the premise wrote can be taken, and the harness asks afterwards whether anything
+    // else answers for the name — the operator's install, uncovered — and refuses where something does
+    // (`amenbo_verify_cli::take_away`).
+    //
+    // **The app does not notice by itself.** What a step is judged against is the answer the device's
+    // settings last kept, so a road taking one away has something ask the machine again before the
+    // step it means to refuse is opened — the build screen asks as it is opened, and keeps what comes
+    // back for the next reader.
+    //
+    // A screen road alone. The CLI driver starts a run that opens no steps, so there is no look for
+    // this to be reached by.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "take-away", required: &["command"], refs: &[], strings: &["command"], binds: false },
     // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
     // way between the two, and a road that could not name which it pressed could not say which face
     // the assert after it read.

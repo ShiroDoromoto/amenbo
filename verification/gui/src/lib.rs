@@ -33,10 +33,13 @@
 //! for a resting pointer is read through: they arrive and stop, and the shot after them is of a
 //! screen the step is holding open.
 //!
-//! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
+//! Two steps are nobody's to carry out at the screen. `store run-again` ends this run of the app and
 //! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
 //! Amenbo keeps of a run against what goes out with one. It is the harness's because the app is —
-//! the store it is pointed at and the pid it is shot by are both the run's own.
+//! the store it is pointed at and the pid it is shot by are both the run's own. `workspace
+//! take-away` takes an agent back off the machine the premise stood up
+//! ([`amenbo_verify_cli::take_away`]), and it is the harness's because that machine is: the
+//! directory of stand-ins is the run's, and nobody at the screen can name it.
 //!
 //! The pure part — turning a step into an instruction and an expectation, and walking a scenario
 //! into per-step evidence with a verdict — is separated from the side effects (running the tool,
@@ -1767,6 +1770,15 @@ impl Instructor {
             (Domain::Store, "run-again") =>
                 "Nothing to press: the run has ended Amenbo and started it again on the same store, and the window on the screen is the one the new run drew. Confirm the app you were working in has gone and this one came up in its place — it opens where a fresh launch opens, with nothing of the last run's doing carried out again in front of you — and bring it forward if anything else is standing over it."
                     .to_string(),
+            // An agent taken back off the machine. The harness's too, and for the same reason: the
+            // program lies in the run's own directory, which nobody at the screen can name. It is
+            // already gone when the step is handed over, and nothing on the screen moves for it —
+            // Amenbo is still holding the answer it was last given, and finding out is the next
+            // step's.
+            (Domain::Workspace, "take-away") => format!(
+                "Nothing to press: the run has taken `{}` off this machine, and the screen has not changed for it — Amenbo goes on believing it can start that agent until something asks the machine again. Confirm the screen is standing where the step before this one left it.",
+                req(with, "command")?
+            ),
             // The way out of the app pressed, and nothing answered yet. It is the gesture alone: what
             // comes of it is the app's own business, and which of the two it turns out to be is what
             // the road is reading.
@@ -7521,10 +7533,16 @@ pub struct StepBrief<'a> {
 /// (a face already showing, a tree already open) reads exactly the same and is right to go on; the
 /// driver is the one who can tell the two apart. The remark is made on the spot rather than kept for
 /// the summary, so a run can be stopped while there is still something to stop.
+///
+/// `take_away` is the harness's second move of its own: `workspace take-away` takes one agent back
+/// off the machine the premise stood up, named by the program it is started as. It is done before the
+/// step is handed over, the way `run-again` is — the directory it reaches into is the run's, and
+/// nobody at the screen can name it — and a machine that would still answer for the name ends the
+/// walk there, since every step after it would be reading an agent that had not gone.
 // One argument per side effect the walk has on the world outside it, which is what makes the walk
 // testable without a screen: a struct around them would name the seven and hide none of them.
 #[allow(clippy::too_many_arguments)]
-pub fn walk<C, O, T, M, H, R, S, Q>(
+pub fn walk<C, O, T, M, H, R, S, Q, A>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
@@ -7535,6 +7553,7 @@ pub fn walk<C, O, T, M, H, R, S, Q>(
     mut run_again: R,
     mut read_store: S,
     mut say: Q,
+    mut take_away: A,
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(Option<&str>, &Path) -> Result<(), String>,
@@ -7545,6 +7564,7 @@ where
     R: FnMut() -> Result<(), String>,
     S: FnMut(&Step) -> Result<(bool, String), String>,
     Q: FnMut(&str),
+    A: FnMut(&str) -> Result<(), String>,
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -7588,6 +7608,10 @@ where
             run_again()
                 .map_err(|e| format!("step {}: starting the app again failed: {e}", i + 1))?;
         }
+        if let Some(command) = takes_away(step) {
+            take_away(command)
+                .map_err(|e| format!("step {}: taking `{command}` away failed: {e}", i + 1))?;
+        }
 
         // Handed over first, shot second. The screen is nobody's until somebody has been asked to
         // stand it up, and a shot taken before that is a photograph of the step before this one.
@@ -7623,8 +7647,12 @@ where
         // An action that left the screen where it found it, said out loud before the run goes on.
         // Only an action, since an assert is meant to shoot the screen the step before it stood up;
         // and not the app's own restart, which is the harness's move and comes back to a window that
-        // may well look the same.
-        if kind == "action" && !ends_the_run(step) && !goes_out_the_door(step) {
+        // may well look the same, nor an agent taken away, which moves nothing on the screen at all.
+        if kind == "action"
+            && !ends_the_run(step)
+            && !goes_out_the_door(step)
+            && takes_away(step).is_none()
+        {
             if let Some((aimed, shot)) = &before {
                 if aimed.as_deref() == shot_at && same_picture(shot, &shot_path) {
                     say(&format!(
@@ -7718,7 +7746,7 @@ where
     Ok(WalkOutcome { records, passed })
 }
 
-/// Whether this step is the app itself being run again — the one move on a road that is carried out
+/// Whether this step is the app itself being run again — one of the two moves on a road carried out
 /// by the harness rather than by whoever is standing at the screen.
 ///
 /// It is asked of the step rather than declared in the scenario, because it is not a thing a road
@@ -7726,6 +7754,17 @@ where
 /// restart would be reading a window nothing had put in front of it.
 fn ends_the_run(step: &Step) -> bool {
     matches!(step, Step::Action { domain: Domain::Store, op, .. } if op == "run-again")
+}
+
+/// The agent this step takes off the machine, where it is `workspace take-away` — the other move on
+/// a road the harness carries out itself ([`ends_the_run`] being the first).
+fn takes_away(step: &Step) -> Option<&str> {
+    match step {
+        Step::Action { domain: Domain::Workspace, op, with, .. } if op == "take-away" => {
+            with.get("command").and_then(|v| v.as_str())
+        }
+        _ => None,
+    }
 }
 
 /// Whether this step is the operator ending the app — the way out pressed, and answered so that it
@@ -11065,6 +11104,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11120,6 +11160,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11186,6 +11227,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11460,6 +11502,7 @@ steps_gui:
             },
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11494,6 +11537,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11527,6 +11571,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             |line| said.borrow_mut().push(line.to_string()),
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11563,6 +11608,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             |line| said.borrow_mut().push(line.to_string()),
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11605,6 +11651,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             |line| said.borrow_mut().push(line.to_string()),
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11793,6 +11840,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11823,6 +11871,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
@@ -11859,6 +11908,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11913,6 +11963,7 @@ steps_gui:
             },
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -11922,6 +11973,100 @@ steps_gui:
             "the app is started again for that step alone, and before it is handed over"
         );
         assert_eq!(outcome.records[1].op, "run-again", "and the step is recorded like any other");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An agent taken away is taken by the harness, before the step is handed over — the operator is
+    /// told it has gone rather than asked to take it — and for that step alone.
+    #[test]
+    fn an_agent_is_taken_away_before_its_step_is_handed_over() {
+        let s = load(r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: workspace
+    op: can-start
+    with: { count: 2 }
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with: { face: workspace }
+  - type: action
+    domain: workspace
+    op: take-away
+    with: { command: codex }
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-take-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let done: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        walk(
+            &s,
+            &dir,
+            |_, p| {
+                done.borrow_mut().push("shot".to_string());
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("")),
+            nothing_on_the_tree,
+            nothing_on_the_menu,
+            |b| {
+                done.borrow_mut().push(format!("handed {}", b.index));
+                Ok(())
+            },
+            || Ok(()),
+            nothing_to_read,
+            unheard,
+            |command| {
+                done.borrow_mut().push(format!("took {command}"));
+                Ok(())
+            },
+        )
+        .expect("walk");
+
+        assert_eq!(*done.borrow(), vec!["handed 0", "shot", "took codex", "handed 1", "shot"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A machine that still answers for the name ends the walk there: every step after it would be
+    /// reading an agent that had not gone.
+    #[test]
+    fn an_agent_that_will_not_go_aborts_the_walk() {
+        let s = load(r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: workspace
+    op: can-start
+    with: { count: 2 }
+steps_gui:
+  - type: action
+    domain: workspace
+    op: take-away
+    with: { command: codex }
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-take-red-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let err = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| Ok(reading("")),
+            nothing_on_the_tree,
+            nothing_on_the_menu,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            unheard,
+            |_| Err("the operator's install answers for it".to_string()),
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 1") && err.contains("codex"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -11978,6 +12123,7 @@ given:
             },
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12032,6 +12178,7 @@ steps_gui:
             || Err("no window came up".to_string()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .unwrap_err();
 
@@ -12064,6 +12211,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");
@@ -12128,6 +12276,7 @@ steps_gui:
                 Ok((true, "the store holds 1 blob file(s) (expected 1, as expected)".to_string()))
             },
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12168,6 +12317,7 @@ steps_gui:
             || Ok(()),
             |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12197,6 +12347,7 @@ steps_gui:
             || Ok(()),
             |_| Err("the binary would not run".to_string()),
             unheard,
+            |_| Ok(()),
         )
         .unwrap_err();
 
@@ -12278,6 +12429,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12307,6 +12459,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .unwrap_err();
 
@@ -12350,6 +12503,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12417,6 +12571,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12473,6 +12628,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -12502,6 +12658,7 @@ steps_gui:
             || Ok(()),
             nothing_to_read,
             unheard,
+            |_| Ok(()),
         )
         .unwrap_err();
 

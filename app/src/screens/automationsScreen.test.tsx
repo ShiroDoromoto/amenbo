@@ -261,6 +261,18 @@ describe("the automations screen opened from the sidebar", () => {
   });
 });
 
+describe("arriving on the sidebar with a global action", () => {
+  it("opens on that action's build screen, and goes back to the actions tab", async () => {
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: null, openingAction: 4, workspaceOpen: true }));
+    });
+    expect(container.querySelector(".autotabs")).toBeNull();
+    await act(async () => { button(t("auto.build.back")).click(); });
+    const on = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
+    expect(on?.textContent).toBe(t("auto.tab.actions"));
+  });
+});
+
 describe("arriving from the sidebar's list", () => {
   it("opens on the build screen of the automation that was pressed", async () => {
     hoisted.automations = [card()];

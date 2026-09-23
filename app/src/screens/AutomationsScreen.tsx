@@ -72,29 +72,36 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
 export function AutomationsScreen({
   projectId,
   opening,
+  openingAction,
   workspaceOpen,
   onGoToRun,
   onGoToAutomation,
+  onGoToGlobalAction,
 }: {
   /** The project whose screen this is, or `null` for the sidebar's, which is every project's. */
   projectId: number | null;
   /** The definition to arrive already open on — a press on the sidebar's list that came here. */
   opening?: number;
+  /** The library action to arrive already open on, on the "actions" tab — a global action a project
+   *  sent here to be changed. */
+  openingAction?: number;
   /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
   workspaceOpen: boolean;
   /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
   onGoToRun?: (project: number, run: number) => void;
   /** Go to one automation's build screen in its project — a press on a row of the sidebar's list. */
   onGoToAutomation?: (project: number, automation: number) => void;
+  /** Go to a global action on the sidebar's entrance, where it is changed — from a project's screen. */
+  onGoToGlobalAction?: (action: number) => void;
 }) {
   const everywhere = projectId === null;
-  const [tab, setTab] = useState<Tab>("automations");
+  const [tab, setTab] = useState<Tab>(openingAction === undefined ? "automations" : "actions");
   // Which definition is open, or nothing while the list is. The build screen replaces the list
   // rather than standing beside it, so this is where the screen is and not a selection within it.
   const [open, setOpen] = useState<number | null>(opening ?? null);
   // Which library action is open, for the same reason and in the same spot: the build screen stands
   // in place of the list rather than beside it.
-  const [openAction, setOpenAction] = useState<number | null>(null);
+  const [openAction, setOpenAction] = useState<number | null>(openingAction ?? null);
   const automations = useAutomations(projectId);
   const folders = useBoundFolders(projectId).live.map((one) => one.path);
 
@@ -104,6 +111,7 @@ export function AutomationsScreen({
         id={openAction}
         projectId={projectId}
         onBack={() => setOpenAction(null)}
+        onGoToGlobal={onGoToGlobalAction}
       />
     );
   }

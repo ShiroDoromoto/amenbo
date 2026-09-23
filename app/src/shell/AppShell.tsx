@@ -46,7 +46,8 @@ import { Icon } from "../components/Icon";
 /**
  * `automation` is the definition a project arrives with open on its build screen — a press on the
  * sidebar's list of every project's automations, which goes to the project that owns the row
- * (`AMB-D-954`). It is kept on the place for `pick`'s reason.
+ * (`AMB-D-954`). `action` is the other way: the global action the sidebar's automations arrive with
+ * open, sent there from a project, which only reads it. Both are kept on the place for `pick`'s reason.
  *
  * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the gear in the board toolbar.
  *
@@ -55,7 +56,13 @@ import { Icon } from "../components/Icon";
  * are rather than a message passed alongside, so ＜/＞ land back on the same screen holding the same
  * project; a way in that names no project simply leaves it off.
  */
-export type Nav = { type: "view" | "project" | "projectSettings"; id: string; pick?: number; automation?: number };
+export type Nav = {
+  type: "view" | "project" | "projectSettings";
+  id: string;
+  pick?: number;
+  automation?: number;
+  action?: number;
+};
 
 /**
  * Where a new task gets created. A task only gets placed in a project; classification (assigning it to a
@@ -706,6 +713,7 @@ export function AppShell() {
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
               openAutomation={nav.automation}
+              onGoToGlobalAction={(action) => navTo({ type: "view", id: "automations", action })}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -734,7 +742,10 @@ export function AppShell() {
           )}
           {nav.type === "view" && nav.id === "automations" && (
             <AutomationsScreen
+              // A fresh screen per place: what it arrives holding is read once, as it opens.
+              key={nav.action ?? "list"}
               projectId={null}
+              openingAction={nav.action}
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
               onGoToAutomation={(project, automation) => navTo({ type: "project", id: String(project), automation })}

@@ -97,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal, workspaceOpen, onGoToRun, openAutomation,
+  onStartTerminal, workspaceOpen, onGoToRun, openAutomation, onGoToGlobalAction,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -120,6 +120,8 @@ export function BoardScreen({
   /** The automation to arrive on, open on its build screen — a press on the sidebar's list of every
    *  project's automations (`./AutomationsScreen`). */
   openAutomation?: number;
+  /** Go to a global action on the sidebar's entrance, where it is changed (`./AutomationsScreen`). */
+  onGoToGlobalAction?: (action: number) => void;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -343,6 +345,7 @@ export function BoardScreen({
         <AutomationsScreen
           projectId={projectId}
           opening={openAutomation}
+          onGoToGlobalAction={onGoToGlobalAction}
           workspaceOpen={workspaceOpen}
           onGoToRun={onGoToRun}
         />

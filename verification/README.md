@@ -738,7 +738,10 @@ between them and the marks along them are drawn nowhere else — neither face is
 The two listings — a row per definition, a row per library action — are read on both (`listed`,
 `action-listed`). So is moving an action to the other library (`action-scope`) and what a refused
 move into a project names (`scope-refusal-names`): the terminal reads the error it is turned away
-with, a screen the sentence left under the row.
+with, a screen the sentence left under the row. The list the sidebar opens is a screen's alone, since
+no terminal lists every project's automations: a row naming its project (`every-listed`), the start
+beside it (`start-from-list`), the row going to its project (`every-open`), and the run tabs saying
+they hold everything on this device (`scope-said`).
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation but the one that makes one from the list opens on a definition that is already
 there, so a premise builds all three layers — the action, the steps inside it, and the placement on

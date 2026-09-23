@@ -903,6 +903,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 print_json(&spec);
                 return Ok(0);
             }
+            // Inside a step of a run the entry is the step's own: the whole entry is about working a
+            // mailbox, and the step's work came with the text it was started on. `--full` still answers
+            // whole, for whoever asked for every command on purpose.
+            if !full && amenbo_core::env::automation_step().is_some() {
+                print_json(&agent::build_step());
+                return Ok(0);
+            }
             // Attach the opened store's version / format state to the static spec as runtime information.
             // The spec proper (the command definitions) stays core's truth source, untouched. Whether an
             // update exists comes from the upstream latest.json.

@@ -487,7 +487,7 @@ const AGENT_CYCLE: &[Step] = &[
 /// longer said twice.
 fn agent_cycle() -> Value {
     json!({
-        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. A step's `cycles` are the cold-path cycles that branch off it — take one only when its own trigger fires, then come back. **None of it applies inside a step of an automation run** — a terminal a run opened, which says so in the text it starts you on: the work came with that text, so you take nothing out of the mailbox, and it goes back through `automation step-take` (the task this step is about, where it declares one), `automation step-out` (each thing it hands on) and `automation step-done` (the way out taken, and the report owed whichever one it is). Opening the step after yours is the run's. Those three, with `automation list` / `show` / `action-list` / `action-show` / `run-list` / `run-show`, are all that terminal reaches: every other `automation` verb is refused there as `automation_outside_only`, and is typed outside a run.",
+        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. A step's `cycles` are the cold-path cycles that branch off it — take one only when its own trigger fires, then come back. **None of it applies inside a step of an automation run** — a terminal a run opened, where `agent --json` answers with the step's own entry instead of this one.",
         "steps": AGENT_CYCLE.iter().map(|s| s.to_value(None)).collect::<Vec<Value>>(),
     })
 }
@@ -2122,6 +2122,52 @@ fn index(in_a_pane: bool) -> Value {
     spec
 }
 
+/// **What a terminal a run opened for a step reaches**, of the `automation` verbs: the three that hand
+/// the step's work back, and the six that read where it stands. Every other `automation` verb is
+/// refused there as `automation_outside_only` — the CLI's `typed_in` is the gate, and this is the list
+/// the step's own entry teaches ([`build_step`]).
+pub const STEP_COMMANDS: [&str; 9] = [
+    "automation step-take",
+    "automation step-out",
+    "automation step-done",
+    "automation list",
+    "automation show",
+    "automation action-list",
+    "automation action-show",
+    "automation run-list",
+    "automation run-show",
+];
+
+/// **The entry point inside a step of an automation run** — what `agent --json` answers in a terminal
+/// a run opened ([`crate::env::automation_step`]), in place of [`build_index`].
+///
+/// A step's session is started afresh for every step, and the folder's own instructions send the
+/// agent to `agent --json` first. The whole entry is about working a mailbox, none of which applies
+/// in a step, and an agent reads only its head — which never reached the `automation step-*` verbs a
+/// step does need (`AMB-T-5385`). So this says the two things a step needs and nothing else: the text
+/// it was started on is the whole of its work, and these are the commands it reaches, the three that
+/// hand the work back in full. `agent --command` and `agent --full` answer as they do anywhere.
+pub fn build_step() -> Value {
+    let cli = Paths::command_name();
+    let (hand_back, read): (Vec<&str>, Vec<&str>) =
+        STEP_COMMANDS.iter().partition(|name| name.starts_with("automation step-"));
+    let hand_back: Vec<Value> = hand_back
+        .iter()
+        .map(|name| command_spec(name).unwrap_or_else(|| json!({ "name": name })))
+        .collect();
+    json!({
+        "mode": "step",
+        "version": VERSION,
+        "schemaVersion": SCHEMA_VERSION,
+        "step": format!("This terminal is a step of an automation run. The text it started you on is the whole of this session's work: do it, then hand it back with the commands below — `{cli} automation step-take` for the task the step is about (where it declares one), `step-out` for each thing it hands on, and `step-done` for the way out taken and the report owed whichever one it is. Take nothing from the mailbox and file no other work; opening the step after yours is the run's. Pass --actor ai on every command."),
+        "commands": hand_back,
+        "reads": {
+            "commands": read,
+            "note": format!("To read where the step stands. Every other `{cli} automation` verb is refused here as `automation_outside_only`. `{cli} agent --command <name>` prints any command's full spec."),
+        },
+    })
+}
+
 /// One command's full spec (`name` / `summary` / `args` / `flags` / `examples`) — the detail side an
 /// index row points at. `name` is the name the command is registered under in the agent spec,
 /// compound names with a space (`task add`) included; [`command_names`] is the canonical list.
@@ -2305,6 +2351,34 @@ mod tests {
     /// The most the whole entry point may weigh. Every AI session reads it before it does anything,
     /// so this is the standing cost of the tool having a face at all.
     const MOST_THE_ENTRY_SAYS: usize = 48_000;
+
+    /// The most the entry inside a step may weigh. It is read once for every step of every run, so it
+    /// carries what a step needs and nothing else ([`build_step`]).
+    const MOST_THE_STEP_ENTRY_SAYS: usize = 8_000;
+
+    /// Discipline: the entry inside a step stays short, and every command it names is one the spec
+    /// registers — a name that drifted would teach a verb that answers `unknown_command`.
+    #[test]
+    fn the_entry_inside_a_step_is_short_and_names_registered_commands() {
+        let entry = build_step();
+        let whole = entry.to_string().len();
+        assert!(
+            whole <= MOST_THE_STEP_ENTRY_SAYS,
+            "the entry inside a step weighs {whole} bytes, past the {MOST_THE_STEP_ENTRY_SAYS} it may",
+        );
+        let names = command_names();
+        for name in STEP_COMMANDS {
+            assert!(names.iter().any(|n| n == name), "{name} is not a registered command");
+        }
+        let handed_back: Vec<&str> =
+            entry["commands"].as_array().expect("commands").iter().filter_map(|c| c["name"].as_str()).collect();
+        assert_eq!(
+            handed_back,
+            vec!["automation step-take", "automation step-out", "automation step-done"],
+            "the three that hand the work back come in full",
+        );
+        assert!(entry["commands"][2]["flags"].is_array(), "with their flags");
+    }
 
     /// Discipline: nothing in the spec says more than its share. The ceilings are deliberately above
     /// where the writing sits — they catch the piece that ran away, not the sentence that grew, which

@@ -554,7 +554,9 @@ that needs a hand has already been said on a banner.
 `AGENTS.md` whose one job is to tell the AI: *before you work here, run `amenbo
 agent --json` and follow it.* That block is a thin, frozen pointer — the actual
 workflow and rules live in `amenbo agent --json` (in the binary, so an update
-ships them immediately), not duplicated in the block.
+ships them immediately), not duplicated in the block. In a terminal an automation
+run opened for one of its steps, the same command answers with that step's own
+short entry instead — what the step is, and the commands it reaches.
 
 **The binding is also the AI's reach.** An AI (`--actor ai` — the one way a facet
 is declared) started in a bound folder operates that folder's project and nothing else: it

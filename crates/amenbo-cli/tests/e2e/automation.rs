@@ -700,3 +700,28 @@ fn inside_a_step_the_reading_verbs_still_answer() {
         assert_eq!(code, 0, "{args:?}: {out}");
     }
 }
+
+/// **Inside a step, `agent --json` is the step's own entry** (`AMB-T-5385`): the folder sends every
+/// step's fresh session there first, and the whole entry is about a mailbox a step does not work. The
+/// three verbs that hand the work back come in full; `--full` still answers with everything.
+#[test]
+fn inside_a_step_the_entry_is_the_steps_own() {
+    let cli = Cli::new();
+    let (out, code) = cli.run_env(&[("AMENBO_AUTOMATION_STEP", "1")], &["agent", "--json"]);
+    assert_eq!(code, 0, "{out}");
+    let entry: serde_json::Value = serde_json::from_str(&out).expect("json");
+    assert_eq!(entry["mode"], "step", "{out}");
+    assert!(entry.get("agentCycle").is_none(), "none of the mailbox comes with it: {out}");
+    let names: Vec<&str> =
+        entry["commands"].as_array().expect("commands").iter().filter_map(|c| c["name"].as_str()).collect();
+    assert_eq!(names, ["automation step-take", "automation step-out", "automation step-done"]);
+
+    let (out, code) = cli.run_env(&[("AMENBO_AUTOMATION_STEP", "1")], &["agent", "--json", "--full"]);
+    assert_eq!(code, 0, "{out}");
+    let full: serde_json::Value = serde_json::from_str(&out).expect("json");
+    assert_eq!(full["mode"], "personal", "--full is asked for on purpose");
+
+    let (out, _) = cli.run_env(&[], &["agent", "--json"]);
+    let outside: serde_json::Value = serde_json::from_str(&out).expect("json");
+    assert!(outside.get("agentCycle").is_some(), "outside a step the entry is the whole one");
+}

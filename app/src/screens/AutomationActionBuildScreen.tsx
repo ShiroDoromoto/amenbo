@@ -24,6 +24,12 @@
 // that runs long would otherwise carry a low step's contents off the bottom of the window, and the
 // press would show nothing.
 //
+// **A global action opened from a project is read, not written** (`AMB-D-954`). It is no one
+// project's, so it is changed from the sidebar's entrance and nowhere else: here the panels still open
+// to be read, with everything in them held shut, nothing adds a step, and the action's row carries the
+// press that goes to it there. One place to change a thing is what keeps a reader from wondering which
+// of two is the real one.
+//
 // **Which step is pressed is the screen's, not the picture's**, for the automation screen's reason:
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
@@ -65,10 +71,16 @@ function AboutRow({
   action,
   editing,
   onEdit,
+  readOnly,
+  onGoToOwner,
 }: {
   action: AutomationActionDetailDto;
   editing: boolean;
   onEdit: () => void;
+  /** Whether it is read here and changed elsewhere — a global action opened from a project. */
+  readOnly: boolean;
+  /** Go to where it is changed — the sidebar's entrance, for a global action. */
+  onGoToOwner?: () => void;
 }) {
   return (
     <div className="actdecl">
@@ -91,9 +103,15 @@ function AboutRow({
           aria-pressed={editing}
           onClick={onEdit}
         >
-          {t("auto.act.edit")}
+          {readOnly ? t("auto.act.read") : t("auto.act.edit")}
         </button>
+        {readOnly && onGoToOwner && (
+          <button type="button" className="btn" onClick={onGoToOwner}>
+            {t("auto.act.openInSidebar")}
+          </button>
+        )}
       </div>
+      {readOnly && <p className="actdecl__elsewhere">{t("auto.act.globalReadOnly")}</p>}
     </div>
   );
 }
@@ -106,11 +124,14 @@ export function Panel({
   place,
   title,
   onClose,
+  readOnly = false,
   children,
 }: {
   place: string;
   title: string;
   onClose: () => void;
+  /** Hold every field and press in the body shut — the head's close stays live. */
+  readOnly?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -128,7 +149,9 @@ export function Panel({
             <Icon name="close" />
           </button>
         </div>
-        <div className="actpanel__body">{children}</div>
+        {/* A disabled fieldset shuts every control under it, the panels' own included, without
+            each of them having to be told. */}
+        <fieldset className="actpanel__body" disabled={readOnly}>{children}</fieldset>
       </div>
     </aside>
   );
@@ -138,13 +161,18 @@ export function AutomationActionBuildScreen({
   id,
   projectId,
   onBack,
+  onGoToGlobal,
 }: {
   id: number;
-  /** Whose project this is — what the machine is asked about when a step picks an agent. */
+  /** Whose project this is — what the machine is asked about when a step picks an agent. `null` is
+   *  the sidebar's entrance, where a global action is changed. */
   projectId: number | null;
   onBack: () => void;
+  /** Go to a global action on the sidebar's entrance, where it is changed. */
+  onGoToGlobal?: (id: number) => void;
 }) {
   const action = useAutomationAction(id);
+  const readOnly = projectId !== null && action?.global === true;
   // What the panel is showing: a pressed step, the action itself, its input or its output — or
   // nothing, until one is pressed. An action opens on the picture, and a place picked for the reader
   // would be one they did not choose.
@@ -194,14 +222,20 @@ export function AutomationActionBuildScreen({
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
       {action !== null && (
-        <AboutRow action={action} editing={part === "about"} onEdit={() => pickPart("about")} />
+        <AboutRow
+          action={action}
+          editing={part === "about"}
+          onEdit={() => pickPart("about")}
+          readOnly={readOnly}
+          onGoToOwner={onGoToGlobal && (() => onGoToGlobal(action.id))}
+        />
       )}
 
       <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
         <div className="actbuild__canvashead">
           <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>
           <span className="actbuild__hint">{t("auto.act.stepsHint")}</span>
-          {action !== null && action.steps.length > 0 && (
+          {action !== null && action.steps.length > 0 && !readOnly && (
             <button
               type="button"
               className="btn"
@@ -221,11 +255,11 @@ export function AutomationActionBuildScreen({
             insertLabel={t("auto.act.insert")}
             selectedBoxId={step ?? undefined}
             onPickBox={pickBox}
-            onInsert={(edgeId) => setAdding({ picture: "action", edgeId })}
+            onInsert={readOnly ? undefined : (edgeId) => setAdding({ picture: "action", edgeId })}
             selectedPart={part === "in" || part === "out" ? part : undefined}
             onPickPart={pickPart}
           />
-          {action !== null && action.steps.length === 0 && (
+          {action !== null && action.steps.length === 0 && !readOnly && (
             <button
               type="button"
               className="btn btn--primary"
@@ -237,7 +271,7 @@ export function AutomationActionBuildScreen({
         </div>
 
         {action !== null && part !== null && (
-          <Panel place={partPlace[part]} title={action.name} onClose={() => setPart(null)}>
+          <Panel place={partPlace[part]} title={action.name} onClose={() => setPart(null)} readOnly={readOnly}>
             {part === "about" ? (
               <>
                 <label className="autostep__field">
@@ -285,7 +319,7 @@ export function AutomationActionBuildScreen({
         )}
 
         {pressed !== null && part === null && (
-          <Panel place={t("auto.act.step")} title={pressed.name} onClose={() => setStep(null)}>
+          <Panel place={t("auto.act.step")} title={pressed.name} onClose={() => setStep(null)} readOnly={readOnly}>
             <AutomationActionStepPanel
               action={action}
               stepId={step}

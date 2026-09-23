@@ -1672,7 +1672,13 @@ button.feed__target:hover { color: var(--c-accent); }
   margin-inline-start: auto; border: 0; background: none; color: var(--c-text-muted); cursor: pointer; padding: 0;
 }
 .actpanel__close:hover { color: var(--c-text); }
-.actpanel__body { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }
+.actpanel__body {
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  /* A fieldset, so that one attribute can shut the whole body; none of its own frame is wanted. */
+  margin: 0; border: 0; min-width: 0;
+}
+/* Under the action's row, where a global action is only read: where it is changed instead. */
+.actdecl__elsewhere { margin: var(--s-1) 0 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 
 /* ── One automation, opened (`../screens/AutomationBuildScreen`) ──
    The action build screen's frame (`.actbuild`), with the launch band where that one has its

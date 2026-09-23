@@ -234,3 +234,67 @@ describe("the action build screen", () => {
     expect(container.textContent).toContain(t("auto.act.noEntry"));
   });
 });
+
+// A global action opened from a project (`AMB-D-954`): read there and changed from the sidebar. The
+// panels still open, with every control in them shut; nothing adds a step; and the row carries the
+// press that goes to where it is changed. Opened from the sidebar, or a project's own, it is written.
+describe("a global action opened from a project", () => {
+  const goTo = vi.fn();
+  async function renderAt(projectId: number | null, global = true) {
+    hoisted.action = action({ global });
+    await act(async () => {
+      root.render(
+        createElement(AutomationActionBuildScreen, {
+          id: 4,
+          projectId,
+          onBack: () => undefined,
+          onGoToGlobal: goTo,
+        }),
+      );
+    });
+  }
+  beforeEach(() => goTo.mockClear());
+
+  it("says it is changed from the sidebar, and goes there on the row's press", async () => {
+    await renderAt(1);
+    expect(container.textContent).toContain(t("auto.act.globalReadOnly"));
+    await act(async () => {
+      buttons().find((one) => one.textContent === t("auto.act.openInSidebar"))!.click();
+    });
+    expect(goTo).toHaveBeenCalledWith(4);
+  });
+
+  it("opens what it is for to be read, with the fields shut", async () => {
+    await renderAt(1);
+    expect(has(t("auto.act.edit"))).toBe(false);
+    await act(async () => {
+      buttons().find((one) => one.textContent === t("auto.act.read"))!.click();
+    });
+    expect(noteBox().closest("fieldset")?.disabled).toBe(true);
+  });
+
+  it("opens a step to be read, with the fields shut", async () => {
+    await renderAt(1);
+    await act(async () => { nodes()[0].click(); });
+    const body = container.querySelector<HTMLFieldSetElement>(".actpanel__body");
+    expect(body?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>(".actpanel__close")?.disabled).toBe(false);
+  });
+
+  it("offers no way to add a step", async () => {
+    await renderAt(1);
+    expect(has(t("auto.act.stepAdd"))).toBe(false);
+  });
+
+  it("is written from the sidebar, where it is changed", async () => {
+    await renderAt(null);
+    expect(has(t("auto.act.edit"))).toBe(true);
+    expect(container.textContent).not.toContain(t("auto.act.globalReadOnly"));
+  });
+
+  it("leaves a project's own action written from that project", async () => {
+    await renderAt(1, false);
+    expect(has(t("auto.act.edit"))).toBe(true);
+    expect(has(t("auto.act.openInSidebar"))).toBe(false);
+  });
+});

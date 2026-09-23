@@ -117,6 +117,15 @@ pub fn stand_world<'a>(
     Ok(World { stood, driver })
 }
 
+/// Take one agent back off the machine a premise stood up (`workspace can-start`), part way along a
+/// screen road — the one move there that is the machine's and not the screen's.
+///
+/// It is here rather than on the [`World`] because nothing about it is the store: what it touches is
+/// the session's directory of stand-ins, which the app under test reads its `PATH` through.
+pub fn take_away(tools: &Path, command: &str) -> Result<String, String> {
+    domain::workspace::take_away(tools, command)
+}
+
 /// A world that has been stood up, and is standing for as long as this is held.
 pub struct World<'a> {
     stood: Vec<String>,

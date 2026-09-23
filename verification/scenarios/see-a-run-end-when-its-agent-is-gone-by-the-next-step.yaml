@@ -1,0 +1,195 @@
+# A run is out for as long as its work takes, and the agent a step names can go in the middle of it.
+# The launch check asked about every step once, before the run began; what asks again is the step
+# being opened (`crates/amenbo-core/src/ops/automation_step.rs`). An agent gone by then ends the run
+# there, with the reason that says so, rather than leaving it `running` on a step nobody can open —
+# which would hold the task it took for the rest of the session.
+#
+# Only a unit test held that look until this road. It needs the agent there at the launch and gone by
+# the second step, which no premise can stand up: a premise is settled before the app comes up. So
+# the machine is changed part way along (`workspace take-away`), by the harness, out of the run's own
+# directory of stand-ins.
+#
+# ── Why the machine is asked again on the road ──────────────────────────────────────────────────
+# What a step is judged against is the answer the device's settings last kept, never a fresh look —
+# a look starts a login shell, and opening a step is not the moment to pay for one. So taking the
+# program away changes nothing Amenbo holds until something asks. The build screen asks as it is
+# opened, and keeps what comes back behind the answer it draws: the first opening sets the look off,
+# and the second draws what it found. That second one is read here too, so the road does not go on
+# to the step on the strength of a look nobody saw land.
+#
+# ── Why codex ────────────────────────────────────────────────────────────────────────────────────
+# The machines these roads are walked on carry Claude Code of their own behind the `PATH` a run hands
+# over (`devtool/vmclaude.go`). Taking `claude` away would uncover that install, and the harness would
+# refuse. Both steps are carried by Codex CLI, whose program is `codex`, the second the premise stands
+# up.
+id: see-a-run-end-when-its-agent-is-gone-by-the-next-step
+title: A run whose agent has gone by the next step ends there, and its row says why
+description: >
+  Start a run of two placed actions, one step in each, both carried out by Codex CLI. Work the first
+  step as far as taking the task, then take Codex CLI off the machine and have Amenbo look again —
+  the build screen, opened twice, says the automation could not be started now. Report the first
+  step, and read what opening the second did: the run is stopped, and the running tab's row says its
+  agent could not be started.
+given:
+  # Two agents, Claude Code and Codex CLI. `runs` keeps a stand-in in the pane and carries out what is
+  # typed at it, which is what the three commands a step types need.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task this run walks }, as: seed }
+
+  # The first action: one step that takes the task and leaves by "got one". The run starts on it, so
+  # it takes a task, and the way out carries the task on to the action's own way out.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, agent: codex-cli, prompt: take the next task and say what it is about }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+
+  # The second action: one step, carried out by the same agent. It takes nothing in, so the only thing
+  # that can stop it opening is the agent.
+  - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, agent: codex-cli, prompt: read what the step before did }, as: read }
+  - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an agent gone part way" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_review } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_review } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: claim
+      action: take
+      present: true
+
+  - type: action
+    domain: automation
+    op: take-in-pane
+    with:
+      target: run
+      task: seed
+
+  # The agent goes while the first step is still open. Its pane goes on — the program was already
+  # running — and nothing on the screen moves.
+  - type: action
+    domain: workspace
+    op: take-away
+    with:
+      command: codex
+
+  # Amenbo looks again. The first opening sets the look off, and the second draws what it found.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: agent_missing
+      present: true
+
+  # The first step reports. What it opens next is the second step, whose agent has gone.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: took the task and handed it on
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: stopped
+      reason: no_agent

@@ -126,6 +126,18 @@ impl Driver<'_> {
                 self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 Ok(Outcome::action(format!("rewrote library action {action}")))
             }
+            // Into the other library, by the command a person types for it. Refused into a project
+            // another project's automation still places it in — the step that says so carries
+            // `refused: invalid`, and what the refusal names is `scope-refusal-names`'.
+            "action-scope" => {
+                let action = self.resolve(with)?;
+                let args = self.scope_args(action, with)?;
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!(
+                    "moved library action {action} to the {} library",
+                    req_str(with, "reach")?
+                )))
+            }
             // A step inside an action, carrying its own prompt — the one layer that is a terminal.
             "step-add" => {
                 let action = self.resolve(with)?;
@@ -591,6 +603,29 @@ impl Driver<'_> {
                 said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
                 Ok(Outcome::assert(pass, said))
             }
+            // The move is asked again and the error it is turned away with is read — a refusal writes
+            // nothing, so the second ask leaves the store as the first did. Core names each
+            // automation standing in the way as `'<name>' (<id>)`, so the id in brackets is what is
+            // looked for: the name is a road's to change, the id is not.
+            "scope-refusal-names" => {
+                let action = self.resolve(with)?;
+                let named = self.resolve_key(with, "names")?;
+                let args = self.scope_args(action, with)?;
+                let error = self.refusal_in(
+                    &self.session.cwd,
+                    &args.iter().map(String::as_str).collect::<Vec<_>>(),
+                )?;
+                let message = error["message"].as_str().unwrap_or("");
+                let pass = message.contains(&format!("({named})"));
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "moving library action {action} was refused saying \"{message}\" — {} automation {named}{}",
+                        if pass { "naming" } else { "without naming" },
+                        if pass { ", as expected" } else { " (MISMATCH)" }
+                    ),
+                ))
+            }
             // One placement on an automation, read back off `automation show`: what it runs under,
             // with the answers written on this placement. The families are asked for whole, so a
             // build that grew a way out nobody declared is a mismatch rather than something nobody
@@ -619,6 +654,26 @@ impl Driver<'_> {
     }
 
     /// One automation's definition, resolved — the placements on it and what joins them.
+    /// The command that moves `action` to the reach a step names: `--global` for the device's
+    /// library, `--project <id>` for a named project's, and no flag for the project the run stands
+    /// in — which is what the command does with neither.
+    fn scope_args(&self, action: i64, with: &Args) -> Result<Vec<String>, String> {
+        let mut args: Vec<String> =
+            vec!["automation".into(), "action-scope-set".into(), action.to_string()];
+        match req_str(with, "reach")? {
+            "device" => args.push("--global".into()),
+            "project" => {
+                if with.contains_key("project") {
+                    args.push("--project".into());
+                    args.push(self.resolve_key(with, "project")?.to_string());
+                }
+            }
+            other => return Err(format!("`reach` does not know `{other}` — it is device / project")),
+        }
+        args.push("--json".into());
+        Ok(args)
+    }
+
     fn definition(&self, automation: i64) -> Result<serde_json::Value, String> {
         self.run_json(&["automation", "show", &automation.to_string(), "--json"])
     }

@@ -351,9 +351,18 @@ entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacem
  */
 export type AutomationEdgeDto = { id: number, fromId: number, exitName?: string, 
 /**
- * Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
+ * Where it goes, for `go`. Absent for the others, which open no box.
  */
-toId?: number, ends: "go" | "done" | "halt", 
+toId?: number, 
+/**
+ * `exit` leaves the action a step is inside, by the way out of the action it returns to.
+ */
+ends: "go" | "exit" | "done" | "halt", 
+/**
+ * Which way out of the action an `exit` edge returns to. Absent for the unnamed one, and for
+ * every edge that is not `exit`.
+ */
+exitTo?: string, 
 /**
  * How often this edge may be taken for one task. Absent is no limit.
  */

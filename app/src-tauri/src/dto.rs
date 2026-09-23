@@ -3469,12 +3469,18 @@ pub struct AutomationEdgeDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) exit_name: Option<String>,
-    /// Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
+    /// Where it goes, for `go`. Absent for the others, which open no box.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) to_id: Option<i64>,
-    #[ts(type = "\"go\" | \"done\" | \"halt\"")]
+    /// `exit` leaves the action a step is inside, by the way out of the action it returns to.
+    #[ts(type = "\"go\" | \"exit\" | \"done\" | \"halt\"")]
     pub(crate) ends: &'static str,
+    /// Which way out of the action an `exit` edge returns to. Absent for the unnamed one, and for
+    /// every edge that is not `exit`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) exit_to: Option<String>,
     /// How often this edge may be taken for one task. Absent is no limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]

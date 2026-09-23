@@ -23,6 +23,12 @@
 // jumps forward over a row keeps its solid stroke — the reader is being told it leaves the column,
 // not that it runs backwards.
 //
+// **An action's picture has the action itself above and below it** (`AMB-D-949`): a mark for where a
+// placement of it comes in, over the step it opens first, and a mark for each way out it declares,
+// under everything. A step that leaves the action is a line into one of those, and what the action
+// takes in or hands out is a wire from the top mark or into a bottom one — the boundary the core names
+// `ACTION_BOUNDARY`. An automation's picture has no such boundary, and draws neither.
+//
 // **The error way out is drawn only where somebody changed it.** Every box is born carrying it
 // with nothing said about what follows, which core reads as stopping the run and calling a person
 // (`amenbo_core::ops::automation::edge_delete`). So an edge on that way out *is* the change, and a
@@ -51,6 +57,11 @@ export type PicGraph = {
   boxes: readonly PicBox[];
   edges: readonly AutomationEdgeDto[];
   wires: readonly AutomationWireDto[];
+  /**
+   * The action itself, on an action's picture: what it takes in and the ways out it is left by.
+   * Absent on an automation's, which has no boundary to cross.
+   */
+  boundary?: { inputs: readonly AutomationPortDto[]; exits: readonly AutomationExitDto[] };
 };
 
 /** One automation as a picture — its boxes are the actions placed on it. */
@@ -72,8 +83,12 @@ export function actionGraph(detail: AutomationActionDetailDto | null): PicGraph 
     boxes: detail.steps,
     edges: detail.edges,
     wires: detail.wires,
+    boundary: { inputs: detail.inputs, exits: detail.exits },
   };
 }
+
+/** The action itself, as either end of a wire inside it — core's `ACTION_BOUNDARY`. */
+export const ACTION_BOUNDARY = 0;
 
 /** The name core gives the error way out — the one every box of either picture is born with. */
 export const ERROR_EXIT = "*";
@@ -101,6 +116,10 @@ const DROP = 14;
 const STUB = 40;
 /** Where on a line's first leg the `+` that puts a box in sits. */
 const INSERT_DROP = 20;
+/** The marks for the action itself: one over the picture, one per way out under it. */
+const MARK_W = 150;
+const MARK_H = 28;
+const MARK_GAP = 16;
 
 /** A point of a line, in the picture's own pixels. */
 export type PicPoint = { x: number; y: number };
@@ -128,6 +147,8 @@ export type PicLine = {
   points: readonly PicPoint[];
   /** Dashed: it goes back to a row above the one it left. */
   back: boolean;
+  /** It crosses the action's own boundary: in from the top mark, or out into a way out's mark. */
+  leaves?: boolean;
   /** The way out this edge hangs on, as core names it. Absent for the unnamed one and for a wire. */
   exitName?: string;
   /** How the run goes on where this edge names no box — it closes the task, or it stops. */
@@ -143,6 +164,21 @@ export type PicLine = {
 /** The `+` on a line, which puts a box in at that point. */
 export type PicInsert = { edgeId: number; x: number; y: number };
 
+/**
+ * One mark for the action itself: where a placement comes in (`in`), or one way out it is left by
+ * (`out`). A mark is not a box — nothing is pressed on it and no panel opens.
+ */
+export type PicMark = {
+  key: string;
+  kind: "in" | "out";
+  /** The way out, for `out`. Absent for the unnamed one and for `in`. */
+  exitName?: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 /** One picture, laid out. */
 export type Picture = {
   width: number;
@@ -151,6 +187,10 @@ export type Picture = {
   nodes: readonly PicNode[];
   lines: readonly PicLine[];
   inserts: readonly PicInsert[];
+  /** The action's own marks. Empty on an automation's picture. */
+  marks: readonly PicMark[];
+  /** Where the words over the row of ways out are written, when there is that row. */
+  outsAt?: PicPoint;
 };
 
 /**
@@ -259,6 +299,10 @@ function fed(
 ): boolean {
   return graph.wires.some((wire) => {
     if (wire.toId !== boxId || wire.toPortName !== port) return false;
+    // What the action itself was handed is there from the start, whatever the walk reached.
+    if (wire.fromId === ACTION_BOUNDARY) {
+      return graph.boundary?.inputs.some((one) => one.name === wire.fromPortName) ?? false;
+    }
     if (!live.has(wire.fromId)) return false;
     const from = boxes.get(wire.fromId);
     const exit = from?.exits.find((one) => one.name === wire.fromExitName);
@@ -291,8 +335,8 @@ function lanes(spans: readonly { key: string; top: number; bottom: number }[]): 
 
 /** Where a line is tied to a box: the nth way out down the left side, the nth port down the right. */
 function attach(node: PicNode, nth: number, side: "left" | "right"): number {
-  const inward = Math.min(ATTACH + nth * EXIT_GAP, NODE_W - ATTACH);
-  return side === "left" ? node.x + inward : node.x + NODE_W - inward;
+  const inward = Math.min(ATTACH + nth * EXIT_GAP, node.w - ATTACH);
+  return side === "left" ? node.x + inward : node.x + node.w - inward;
 }
 
 /** What one line is called, which is also what tells two of them apart. */
@@ -316,13 +360,18 @@ function word(sx: number, sy: number, nth: number): PicPoint {
  * lanes the left margin turned out to need — which is not known until every line has one.
  */
 export function layOut(graph: PicGraph | null): Picture {
-  const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [] };
+  const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], marks: [] };
   if (graph === null || graph.boxes.length === 0) return empty;
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const { laps, live } = walk(graph);
+  // The action's ways out, the error one last — the order the declaration lists them in.
+  const outs = [...(graph.boundary?.exits ?? [])].sort(
+    (a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT),
+  );
   const contentW = Math.max(
     NODE_W,
+    outs.length * MARK_W + Math.max(0, outs.length - 1) * MARK_GAP,
     ...laps.flatMap((lap) => lap.rows.map((row) => row.length * NODE_W + (row.length - 1) * COL_GAP)),
   );
 
@@ -330,7 +379,9 @@ export function layOut(graph: PicGraph | null): Picture {
   const at = new Map<number, { lap: number; row: number }>();
   const nodes: PicNode[] = [];
   const outlines: PicLap[] = [];
-  let y = PAD;
+  // The mark a placement comes in by stands over everything, with a row's room under it.
+  const over = graph.boundary === undefined ? 0 : MARK_H + ROW_GAP;
+  let y = PAD + over;
   laps.forEach((lap, nth) => {
     const pad = lap.head === null ? 0 : LAP_PAD;
     const top = y;
@@ -362,19 +413,61 @@ export function layOut(graph: PicGraph | null): Picture {
     }
     y = top + height + LAP_GAP;
   });
-  const height = y - LAP_GAP + PAD;
+  const bottom = y - LAP_GAP;
 
-  const node = new Map(nodes.map((one) => [one.boxId, one]));
+  // The action's own marks, laid out as boxes are so a line can be tied to them the same way. They
+  // join the map the lines are routed by and no list of boxes: they are not pressed.
+  const marks: PicMark[] = [];
+  const spots: PicNode[] = [];
+  const outOf = new Map<string, number>();
+  const spot = (id: number, x: number, y: number): PicNode => ({
+    boxId: id,
+    name: "",
+    x,
+    y,
+    w: MARK_W,
+    h: MARK_H,
+    unfed: [],
+  });
+  let outsAt: PicPoint | undefined;
+  if (graph.boundary !== undefined) {
+    const inX = Math.round((contentW - MARK_W) / 2);
+    spots.push(spot(ACTION_BOUNDARY, inX, PAD));
+    marks.push({ key: "in", kind: "in", x: inX, y: PAD, w: MARK_W, h: MARK_H });
+    const outY = bottom + Math.round(ROW_GAP / 2);
+    const startX = Math.round((contentW - (outs.length * MARK_W + (outs.length - 1) * MARK_GAP)) / 2);
+    outs.forEach((exit, nth) => {
+      const id = -(nth + 1);
+      const x = startX + nth * (MARK_W + MARK_GAP);
+      outOf.set(exit.name ?? "", id);
+      spots.push(spot(id, x, outY));
+      marks.push({ key: `out:${exit.name ?? ""}`, kind: "out", exitName: exit.name, x, y: outY, w: MARK_W, h: MARK_H });
+      // The row sits after every stretch, so a box on the last row of the last one is its neighbour.
+      at.set(id, { lap: laps.length, row: 0 });
+    });
+    if (outs.length > 0) outsAt = { x: startX, y: outY - 20 };
+  }
+  const height = (graph.boundary === undefined ? bottom : bottom + Math.round(ROW_GAP / 2) + MARK_H) + PAD;
+
+  const node = new Map([...nodes, ...spots].map((one) => [one.boxId, one]));
+  /** The mark of the way out of the action an `exit` edge returns to. */
+  const returnsTo = (edge: AutomationEdgeDto | undefined): number | undefined =>
+    edge?.ends === "exit" ? outOf.get(edge.exitTo ?? "") : undefined;
   // Two boxes are neighbours when one sits on the row under the other — which the last row of a
   // stretch and the head of the next one do, the outline between them being the only thing in the
   // way. The box that goes on to take the next task is the commonest line there is, and sending it
   // out to a lane would put the one line every automation has in the margin.
   const neighbours = (from: number, to: number): boolean => {
+    // The top mark stands right over the first row of the first stretch.
+    if (from === ACTION_BOUNDARY && graph.boundary !== undefined) {
+      const b = at.get(to);
+      return b !== undefined && b.lap === 0 && b.row === 0;
+    }
     const a = at.get(from);
     const b = at.get(to);
     if (a === undefined || b === undefined) return false;
     if (a.lap === b.lap) return b.row === a.row + 1;
-    return b.lap === a.lap + 1 && b.row === 0 && a.row === laps[a.lap]!.rows.length - 1;
+    return b.lap === a.lap + 1 && b.row === 0 && a.row === laps[a.lap]?.rows.length - 1;
   };
 
   // The lines, in two passes: the ones drawn straight between their boxes, and the ones that have to
@@ -386,6 +479,24 @@ export function layOut(graph: PicGraph | null): Picture {
   const asideLeft: Aside[] = [];
   const asideRight: Aside[] = [];
 
+  // Where a placement comes in: a line from the top mark into the step it opens first.
+  const entered = graph.entryId === undefined ? undefined : node.get(graph.entryId);
+  const door = node.get(ACTION_BOUNDARY);
+  if (graph.boundary !== undefined && entered !== undefined && door !== undefined) {
+    const sx = door.x + Math.round(MARK_W / 2);
+    const sy = door.y + MARK_H;
+    const tx = attach(entered, 0, "left");
+    const mid = Math.round((sy + entered.y) / 2);
+    lines.push({
+      key: "in",
+      kind: "edge",
+      points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: entered.y }],
+      back: false,
+      leaves: true,
+      at: { x: sx, y: sy },
+    });
+  }
+
   for (const edge of graph.edges) {
     const from = node.get(edge.fromId);
     if (from === undefined) continue;
@@ -396,30 +507,32 @@ export function layOut(graph: PicGraph | null): Picture {
     const key = lineKey("edge", edge.id);
     inserts.push({ edgeId: edge.id, x: sx, y: sy + INSERT_DROP });
 
-    if (edge.ends !== "go" || edge.toId === undefined || !node.has(edge.toId)) {
+    const toId = edge.ends === "go" ? edge.toId : returnsTo(edge);
+    if (toId === undefined || !node.has(toId)) {
       lines.push({
         key,
         kind: "edge",
         points: [{ x: sx, y: sy }, { x: sx, y: sy + STUB }],
         back: false,
         exitName: edge.exitName,
-        ends: edge.ends === "go" ? undefined : edge.ends,
+        ends: edge.ends === "done" || edge.ends === "halt" ? edge.ends : undefined,
         at: word(sx, sy, nth),
         endAt: { x: sx + 10, y: sy + STUB + 4 },
       });
       continue;
     }
 
-    const to = node.get(edge.toId)!;
+    const to = node.get(toId)!;
     const tx = attach(to, 0, "left");
     const ty = to.y;
-    if (neighbours(edge.fromId, edge.toId)) {
+    if (neighbours(edge.fromId, toId)) {
       const mid = Math.round((sy + ty) / 2);
       lines.push({
         key,
         kind: "edge",
         points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: ty }],
         back: false,
+        leaves: edge.ends === "exit",
         exitName: edge.exitName,
         at: word(sx, sy, nth),
       });
@@ -442,6 +555,7 @@ export function layOut(graph: PicGraph | null): Picture {
           { x: tx, y: ty },
         ],
         back,
+        leaves: edge.ends === "exit",
         exitName: edge.exitName,
         at: word(sx, sy, nth),
       }),
@@ -449,19 +563,29 @@ export function layOut(graph: PicGraph | null): Picture {
   }
 
   for (const wire of graph.wires) {
+    // Out of the action itself comes one of its inputs, from the top mark; into it goes an output of
+    // the way out the source step leaves the action by, into that way out's mark.
+    const toId =
+      wire.toId === ACTION_BOUNDARY
+        ? returnsTo(
+            graph.edges.find((one) => one.fromId === wire.fromId && one.exitName === wire.fromExitName),
+          )
+        : wire.toId;
     const from = node.get(wire.fromId);
-    const to = node.get(wire.toId);
-    if (from === undefined || to === undefined) continue;
-    const fromBox = boxes.get(wire.fromId)!;
-    const toBox = boxes.get(wire.toId)!;
-    const exit = fromBox.exits.find((one) => one.name === wire.fromExitName);
-    const sx = attach(from, Math.max(0, exit?.outputs.findIndex((p) => p.name === wire.fromPortName) ?? 0), "right");
-    const sy = from.y + NODE_H;
-    const tx = attach(to, Math.max(0, toBox.inputs.findIndex((p) => p.name === wire.toPortName)), "right");
+    const to = toId === undefined ? undefined : node.get(toId);
+    if (from === undefined || to === undefined || toId === undefined) continue;
+    const outputs =
+      wire.fromId === ACTION_BOUNDARY
+        ? graph.boundary?.inputs ?? []
+        : boxes.get(wire.fromId)?.exits.find((one) => one.name === wire.fromExitName)?.outputs ?? [];
+    const inputs = boxes.get(toId)?.inputs ?? [];
+    const sx = attach(from, Math.max(0, outputs.findIndex((p) => p.name === wire.fromPortName)), "right");
+    const sy = from.y + from.h;
+    const tx = attach(to, Math.max(0, inputs.findIndex((p) => p.name === wire.toPortName)), "right");
     const ty = to.y;
     const key = lineKey("wire", wire.id);
     const hands = { from: wire.fromPortName, to: wire.toPortName };
-    if (neighbours(wire.fromId, wire.toId)) {
+    if (neighbours(wire.fromId, toId)) {
       const mid = Math.round((sy + ty) / 2);
       lines.push({
         key,
@@ -516,5 +640,7 @@ export function layOut(graph: PicGraph | null): Picture {
       at: { x: line.at.x + dx, y: line.at.y },
     })),
     inserts: inserts.map((one) => ({ ...one, x: one.x + dx })),
+    marks: marks.map((one) => ({ ...one, x: one.x + dx })),
+    outsAt: outsAt === undefined ? undefined : { x: outsAt.x + dx, y: outsAt.y },
   };
 }

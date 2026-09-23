@@ -198,6 +198,38 @@ describe("what happens after a way out", () => {
     );
   });
 
+  it("offers leaving the action by each way out it declares, and says which", async () => {
+    const declared = action({
+      exits: [{ id: 20, outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
+    });
+    await render({ action: declared, stepId: 11, projectId: 1, onRemoved: () => undefined });
+    const next = nextPicks()[0]!;
+    expect([...next.options].map((one) => one.textContent)).toContain(
+      t("auto.step.nextExit").replace("{name}", "gave up"),
+    );
+    await pick(next, "exit:gave up");
+    expect(hoisted.addEdge).toHaveBeenCalledWith(
+      "action",
+      { boxId: 11, exitName: undefined },
+      { ends: "exit", exitTo: "gave up" },
+    );
+    await pick(next, "exit:");
+    expect(hoisted.addEdge).toHaveBeenLastCalledWith(
+      "action",
+      { boxId: 11, exitName: undefined },
+      { ends: "exit", exitTo: undefined },
+    );
+  });
+
+  it("reads a line that leaves the action back as the way out it returns to", async () => {
+    const leaving = action({
+      exits: [{ id: 20, outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
+      edges: [{ id: 5, fromId: 11, ends: "exit", exitTo: "gave up" }],
+    });
+    await render({ action: leaving, stepId: 11, projectId: 1, onRemoved: () => undefined });
+    expect(nextPicks()[0]!.value).toBe("exit:gave up");
+  });
+
   it("takes the line away where the reader says nothing is decided yet", async () => {
     const wired = action({
       steps: two.steps,

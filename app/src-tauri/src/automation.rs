@@ -905,18 +905,24 @@ pub fn automation_step_insert(
 // opens — never the action, whose ways out are declared elsewhere on this file. One way out decides
 // one thing, and core refuses a second edge on the same one.
 
-/// What a way out is said to do, as the screen sends it: the word, and the placement a `go` opens.
-fn edge_target(ends: &str, to_id: Option<i64>) -> Result<EdgeTarget, CmdError> {
+/// What a way out is said to do, as the screen sends it: the word, the box a `go` opens, and the way
+/// out of the action an `exit` returns to (`None` there being the unnamed one).
+fn edge_target(
+    ends: &str,
+    to_id: Option<i64>,
+    exit_to: Option<String>,
+) -> Result<EdgeTarget, CmdError> {
     match (ends, to_id) {
         ("go", Some(to)) => Ok(EdgeTarget::Go(to)),
         ("go", None) => {
             Err(amenbo_core::Error::invalid("say which box this way out opens").into())
         }
+        ("exit", _) => Ok(EdgeTarget::Exit(exit_to)),
         ("done", _) => Ok(EdgeTarget::Done),
         ("halt", _) => Ok(EdgeTarget::Halt),
         _ => Err(amenbo_core::Error::invalid(format!(
-            "'{ends}' is not one of the three things a way out does — open another box, close the \
-             task, or stop the run"
+            "'{ends}' is not one of the things a way out does — open another box, leave the action, \
+             close the task, or stop the run"
         ))
         .into()),
     }
@@ -939,9 +945,10 @@ pub fn automation_edge_add(
     exit_name: Option<String>,
     ends: String,
     to_id: Option<i64>,
+    exit_to: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     let picture = picture_owner(&picture)?;
-    let target = edge_target(&ends, to_id)?;
+    let target = edge_target(&ends, to_id, exit_to)?;
     let max_times = match target {
         EdgeTarget::Go(_) => Some(amenbo_core::model::DEFAULT_MAX_TIMES),
         _ => None,
@@ -964,11 +971,12 @@ pub fn automation_edge_edit(
     id: i64,
     ends: Option<String>,
     to_id: Option<i64>,
+    exit_to: Option<String>,
     max_times: Option<i64>,
     clear_max_times: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     let target = match ends {
-        Some(ends) => Some(edge_target(&ends, to_id)?),
+        Some(ends) => Some(edge_target(&ends, to_id, exit_to)?),
         None => None,
     };
     let max_times = match (clear_max_times, max_times) {
@@ -1527,6 +1535,7 @@ fn edge_dto(edge: AutomationEdge) -> AutomationEdgeDto {
         exit_name: edge.exit_name,
         to_id: edge.to_id,
         ends: edge.ends.as_str(),
+        exit_to: edge.exit_to,
         max_times: edge.max_times,
     }
 }

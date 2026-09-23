@@ -19,7 +19,7 @@
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again.
-import { layOut, ERROR_EXIT, type PicGraph, type PicLine } from "./automationLayout";
+import { layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
@@ -27,6 +27,14 @@ import { Icon } from "../components/Icon";
 function exitWord(line: PicLine): string {
   if (line.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
   return line.exitName ?? "";
+}
+
+/** One of the action's own marks, in words: where a placement comes in, or one way out of it. */
+function markWord(mark: PicMark): string {
+  if (mark.kind === "in") return t("auto.pic.actionIn");
+  if (mark.exitName === undefined) return t("auto.step.exitUnnamed");
+  if (mark.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
+  return mark.exitName;
 }
 
 /** Where the run goes where a line names no step, in a word. */
@@ -101,7 +109,14 @@ export function AutomationPicture({
             <g key={line.key}>
               <title>{lineTitle(line)}</title>
               <polyline
-                className={`autopic__line autopic__line--${line.kind}${line.back ? " autopic__line--back" : ""}`}
+                className={[
+                  "autopic__line",
+                  `autopic__line--${line.kind}`,
+                  line.back ? "autopic__line--back" : "",
+                  line.leaves ? "autopic__line--leaves" : "",
+                ]
+                  .filter((one) => one !== "")
+                  .join(" ")}
                 points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
               />
               {line.kind === "edge" && exitWord(line) !== "" && (
@@ -125,6 +140,37 @@ export function AutomationPicture({
             style={{ left: `${lap.x + 8}px`, top: `${lap.y}px` }}
           >
             {t("auto.pic.lap")}
+          </span>
+        ))}
+
+        {/* The action itself: where a placement comes in, over everything, and the ways out it is
+            left by, under everything. Words and not buttons — nothing opens on them. */}
+        {picture.outsAt !== undefined && (
+          <span
+            className="autopic__outs"
+            style={{ left: `${picture.outsAt.x}px`, top: `${picture.outsAt.y}px` }}
+          >
+            {t("auto.pic.actionOut")}
+          </span>
+        )}
+        {picture.marks.map((mark) => (
+          <span
+            key={mark.key}
+            className={[
+              "autopic__mark",
+              `autopic__mark--${mark.kind}`,
+              mark.exitName === ERROR_EXIT ? "autopic__mark--error" : "",
+            ]
+              .filter((one) => one !== "")
+              .join(" ")}
+            style={{
+              left: `${mark.x}px`,
+              top: `${mark.y}px`,
+              width: `${mark.w}px`,
+              height: `${mark.h}px`,
+            }}
+          >
+            {markWord(mark)}
           </span>
         ))}
 

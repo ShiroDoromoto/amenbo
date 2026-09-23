@@ -831,11 +831,12 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                         &path,
                         None,
                     )?;
-                    store.automation_out(step, value.trim(), Produced::File(a.id)).map_err(CliError::from)?
+                    let port = port_id(value.trim(), &value)?;
+                    store.automation_out(step, port, Produced::File(a.id)).map_err(CliError::from)?
                 }
                 None => hand_on(store, step, &value)?,
             };
-            write_envelope(flags, "automation.out", "automation_run_value", serde_json::to_value(&v).unwrap(), None, false, format!("✓ Handed on: {}", v.name));
+            write_envelope(flags, "automation.out", "automation_run_value", serde_json::to_value(&v).unwrap(), None, false, format!("✓ Handed on: output {}", v.port_id));
         }
         AutomationCmd::StepDone { report, exit, outs } => {
             let step = speaking_for()?;
@@ -897,12 +898,12 @@ fn startable(store: &Store) -> Option<Vec<String>> {
 /// that nothing can hand back where the agent died in between — so there is no way to say it with
 /// `out`, and being told that by the kind check would not say what to type instead.
 fn hand_on(store: &mut Store, step: i64, one: &str) -> Result<AutomationRunValue, CliError> {
-    let (name, text) = parse_produced(one)?;
-    match store.automation_out_kind(step, &name).map_err(CliError::from)? {
+    let (port, text) = parse_produced(one)?;
+    match store.automation_out_kind(step, port).map_err(CliError::from)? {
         Some(AutomationPortKind::TaskTake) => Err(CliError {
             code: "invalid_value",
             message: format!(
-                "'{name}' is the task this step takes, which is reserved and handed on in one act"
+                "output {port} is the task this step takes, which is reserved and handed on in one act"
             ),
             hint: Some(format!(
                 "take it with `{} automation step-take <task>`",
@@ -912,24 +913,35 @@ fn hand_on(store: &mut Store, step: i64, one: &str) -> Result<AutomationRunValue
         }),
         Some(AutomationPortKind::TaskMake) => {
             let task = resolve_task(store, text.trim()).map_err(CliError::from)?;
-            store.automation_out(step, &name, Produced::Task(task)).map_err(CliError::from)
+            store.automation_out(step, port, Produced::Task(task)).map_err(CliError::from)
         }
-        // A name the step declares nothing under is refused by core, in the sentence it has for it.
-        _ => store.automation_out(step, &name, Produced::Value(&text)).map_err(CliError::from),
+        // An id the step declares no output of is refused by core, naming the ones it does.
+        _ => store.automation_out(step, port, Produced::Value(&text)).map_err(CliError::from),
     }
 }
 
-fn parse_produced(one: &str) -> Result<(String, String), CliError> {
+/// `<id>=<value>`, split — the id being an output's, as the step's text lists it (`AMB-D-961`).
+fn parse_produced(one: &str) -> Result<(i64, String), CliError> {
     match one.split_once('=') {
-        Some((name, value)) if !name.trim().is_empty() => {
-            Ok((name.trim().to_string(), value.to_string()))
-        }
-        _ => Err(CliError {
-            code: "invalid_value",
-            message: format!("'{one}' is not `<name>=<value>`"),
-            hint: Some("write what the step hands on as `note=the answer`, naming an output the step declared".to_string()),
-            exit: 2,
-        }),
+        Some((id, value)) => Ok((port_id(id.trim(), one)?, value.to_string())),
+        None => Err(not_an_output(one)),
+    }
+}
+
+/// The id of an output, as `step-out` takes it; `whole` is what was typed, for the refusal.
+fn port_id(id: &str, whole: &str) -> Result<i64, CliError> {
+    id.parse::<i64>().map_err(|_| not_an_output(whole))
+}
+
+fn not_an_output(one: &str) -> CliError {
+    CliError {
+        code: "invalid_value",
+        message: format!("'{one}' is not `<id>=<value>`"),
+        hint: Some(
+            "write what the step hands on as `12=the answer`, the id being an output's from the step's text"
+                .to_string(),
+        ),
+        exit: 2,
     }
 }
 
@@ -1020,7 +1032,9 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
                 flags,
                 format!(
                     "        wire  {} → placement {} . {}",
-                    wire.from_port_name, wire.to_id, wire.to_port_name
+                    port_named(view.port_name(wire.from_port_id), wire.from_port_id),
+                    wire.to_id,
+                    port_named(view.port_name(wire.to_port_id), wire.to_port_id)
                 ),
             );
         }
@@ -1066,9 +1080,17 @@ fn render_action(flags: &Flags, view: &ActionView) {
         for wire in view
             .wires
             .iter()
-            .filter(|w| w.from_id == amenbo_core::model::ACTION_BOUNDARY && w.from_port_name == port.name)
+            .filter(|w| w.from_id == amenbo_core::model::ACTION_BOUNDARY && w.from_port_id == port.id)
         {
-            human(flags, format!("    wire  {} → step {} . {}", wire.from_port_name, wire.to_id, wire.to_port_name));
+            human(
+                flags,
+                format!(
+                    "    wire  {} → step {} . {}",
+                    port.name,
+                    wire.to_id,
+                    port_named(view.port_name(wire.to_port_id), wire.to_port_id)
+                ),
+            );
         }
     }
     for cfg in &view.settings {
@@ -1131,7 +1153,11 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
             };
             human(
                 flags,
-                format!("        wire  {} → {into} . {}", wire.from_port_name, wire.to_port_name),
+                format!(
+                    "        wire  {} → {into} . {}",
+                    port_named(view.port_name(wire.from_port_id), wire.from_port_id),
+                    port_named(view.port_name(wire.to_port_id), wire.to_port_id)
+                ),
             );
         }
     }
@@ -1139,6 +1165,11 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
 
 /// How a way out is named where it labels a block rather than sits in a sentence — short, so the two
 /// every declarer is born with do not read as the longer phrase a report uses.
+/// A wire's end as a reader reads it: the port's name now, or its id where nothing here declares it.
+fn port_named(name: Option<&str>, id: i64) -> String {
+    name.map(str::to_string).unwrap_or_else(|| format!("port {id}"))
+}
+
 fn one_exit(name: Option<&str>) -> String {
     match name {
         Some(amenbo_core::model::ERROR_EXIT) => "the error one".to_string(),
@@ -1278,8 +1309,9 @@ fn render_move(
             m.status.as_str(),
         ),
     );
+    let def = defs.iter().find(|d| d.id == m.run_def_id);
     for v in store.automation_run_values(m.id).map_err(CliError::from)? {
-        human(flags, format!("      {}", one_run_value(&v)));
+        human(flags, format!("      {}", one_run_value(def, &v)));
     }
     for line in m.report.lines().filter(|l| !l.trim().is_empty()) {
         human(flags, format!("      | {line}"));
@@ -1314,7 +1346,7 @@ fn left_by(defs: &[AutomationRunDef], m: &AutomationRunStep) -> Option<String> {
 }
 
 /// One value on one line, said from the side it was on: what came in, and what went out.
-fn one_run_value(v: &AutomationRunValue) -> String {
+fn one_run_value(def: Option<&AutomationRunDef>, v: &AutomationRunValue) -> String {
     let way = match v.direction {
         amenbo_core::model::AutomationPortDirection::In => "in ",
         amenbo_core::model::AutomationPortDirection::Out => "out",
@@ -1326,7 +1358,10 @@ fn one_run_value(v: &AutomationRunValue) -> String {
         _ => String::new(),
     };
     let from = v.from_run_step_id.map(|_| " (handed on)").unwrap_or_default();
-    format!("{way} {} = {what}{from}", v.name)
+    // The name the port had when the run launched, which is what the step was told and what it answered
+    // to — the live port may since have been renamed or deleted.
+    let name = def.and_then(|d| d.port_name(v.port_id)).unwrap_or_else(|| format!("output {}", v.port_id));
+    format!("{way} {name} = {what}{from}")
 }
 
 /// How long something stood, as the two instants it stood between. An end that has not come reads as

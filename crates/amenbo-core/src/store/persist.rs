@@ -1861,16 +1861,16 @@ impl Store {
         })
     }
 
-    /// **Put down one thing a step produced**, under the name its port was declared with.
+    /// **Put down one thing a step produced**, on the output its id names.
     pub fn automation_out(
         &mut self,
         run_step_id: i64,
-        name: &str,
+        port_id: i64,
         produced: crate::ops::automation_report::Produced<'_>,
     ) -> Result<crate::model::AutomationRunValue> {
         self.write_one(
             &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
-            |tx| crate::ops::automation_report::out(tx, run_step_id, name, produced),
+            |tx| crate::ops::automation_report::out(tx, run_step_id, port_id, produced),
         )
     }
 

@@ -959,6 +959,11 @@ pub const STEPS: &[Step] = &[
         name: "choose a step's agent and model where its action is placed, not on the step",
         apply: Apply::Custom(choose_the_agent_where_the_action_is_placed),
     },
+    Step {
+        to: 65,
+        name: "key the ports — wires, the run's copies and its values name a port by its row",
+        apply: Apply::Custom(key_the_ports),
+    },
 ];
 
 /// v63: a run's copy of a step holds the wires joined to each of its inputs (`AMB-D-961`).
@@ -1265,6 +1270,275 @@ fn key_the_ways_out(ctx: &Ctx<'_>) -> Result<()> {
     }
     if has("automation_run_value", "exit_name")? {
         tx.execute_batch("ALTER TABLE automation_run_value DROP COLUMN exit_name;")?;
+    }
+    Ok(())
+}
+
+/// v65: a port is keyed, not named (`AMB-D-961`) — v62's move, one layer down.
+///
+/// A wire named the ports at its two ends, a run's copy of a step named each port it declared, a copy's
+/// input named the outputs wired into it, and a run's values named the port they went through. So
+/// renaming a port parted every wire on it. Each of them now holds the `automation_port` row's id, and
+/// a copy (`automation_run_def.exits` and `.ins`) holds the id beside the name, which is what the run's
+/// values are read against.
+///
+/// **Where each end of a wire is read from.** A wire leaving a way out leaves from an output on that way
+/// out; one leaving the action itself (`from_id = 0`) hands on an input the action declares. It lands on
+/// an input of the box it reaches — on an automation's picture, an input the action standing there
+/// declares — or, into the action itself, on an output of the action's way out that the line from the
+/// wire's source returns to.
+///
+/// **What cannot be keyed goes**, v62's rule: a wire whose name no port at that end carries any more was
+/// already parted, and carried nothing.
+///
+/// **A copy whose port is gone keeps it under an id of its own**, below zero, as v62 numbers ways out —
+/// the run's values still say which of them they went through.
+///
+/// **A value put down on a step still running had no way out yet** (v62 left it NULL, to be stamped when
+/// the step reported). A value is one output's now, so it takes the way out its port hangs on — the
+/// first that declares the name, where two do.
+///
+/// **Probed, not bare**, for v62's reason.
+fn key_the_ports(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let has = |table: &str, column: &str| -> Result<bool> {
+        Ok(column_names(tx, table)?.iter().any(|c| c == column))
+    };
+
+    if has("automation_wire", "from_port_name")? {
+        for column in ["from_port_id", "to_port_id"] {
+            if !has("automation_wire", column)? {
+                tx.execute_batch(&format!(
+                    "ALTER TABLE automation_wire ADD COLUMN {column} BIGINT NOT NULL DEFAULT 0;"
+                ))?;
+            }
+        }
+        tx.execute_batch(
+            "UPDATE automation_wire SET from_port_id = COALESCE((
+                 SELECT p.id FROM automation_port p
+                  WHERE p.owner_kind = 'exit' AND p.owner_id = automation_wire.from_exit_id
+                    AND p.direction = 'out' AND p.name = automation_wire.from_port_name), 0)
+              WHERE from_exit_id IS NOT NULL;
+             UPDATE automation_wire SET from_port_id = COALESCE((
+                 SELECT p.id FROM automation_port p
+                  WHERE p.owner_kind = 'action' AND p.owner_id = automation_wire.owner_id
+                    AND p.direction = 'in' AND p.name = automation_wire.from_port_name), 0)
+              WHERE owner_kind = 'action' AND from_id = 0;
+             UPDATE automation_wire SET to_port_id = COALESCE((
+                 SELECT p.id FROM automation_port p
+                   JOIN automation_placement pl ON pl.action_id = p.owner_id
+                  WHERE p.owner_kind = 'action' AND pl.id = automation_wire.to_id
+                    AND p.direction = 'in' AND p.name = automation_wire.to_port_name), 0)
+              WHERE owner_kind = 'automation';
+             UPDATE automation_wire SET to_port_id = COALESCE((
+                 SELECT p.id FROM automation_port p
+                  WHERE p.owner_kind = 'step' AND p.owner_id = automation_wire.to_id
+                    AND p.direction = 'in' AND p.name = automation_wire.to_port_name), 0)
+              WHERE owner_kind = 'action' AND to_id <> 0;
+             UPDATE automation_wire SET to_port_id = COALESCE((
+                 SELECT p.id FROM automation_port p
+                   JOIN automation_edge e ON e.exit_to_id = p.owner_id
+                  WHERE p.owner_kind = 'exit' AND p.direction = 'out'
+                    AND p.name = automation_wire.to_port_name
+                    AND e.owner_kind = 'action' AND e.ends = 'exit'
+                    AND e.from_id = automation_wire.from_id
+                    AND e.exit_id = automation_wire.from_exit_id), 0)
+              WHERE owner_kind = 'action' AND to_id = 0;
+             DELETE FROM automation_wire WHERE from_port_id = 0 OR to_port_id = 0;
+             ALTER TABLE automation_wire DROP COLUMN from_port_name;
+             ALTER TABLE automation_wire DROP COLUMN to_port_name;",
+        )?;
+    }
+
+    // The run's copies: an id beside every port's name, from the live row where it is still there and
+    // below zero where it is not. Read whole first, since an input's sources are keyed against the
+    // outputs of other copies of the same run.
+    struct Copy {
+        id: i64,
+        run_id: i64,
+        placement_id: Option<i64>,
+        step_id: Option<i64>,
+        exits: Vec<serde_json::Value>,
+        ins: Vec<serde_json::Value>,
+    }
+    let mut copies: Vec<Copy> = Vec::new();
+    {
+        let mut stmt =
+            tx.prepare("SELECT id, run_id, placement_id, step_id, exits, ins FROM automation_run_def")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, Option<i64>>(2)?,
+                r.get::<_, Option<i64>>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+            ))
+        })?;
+        for row in rows {
+            let (id, run_id, placement_id, step_id, exits, ins) = row?;
+            copies.push(Copy {
+                id,
+                run_id,
+                placement_id,
+                step_id,
+                exits: serde_json::from_str(&exits).unwrap_or_default(),
+                ins: serde_json::from_str(&ins).unwrap_or_default(),
+            });
+        }
+    }
+    let live_port = |owner_kind: &str, owner_id: i64, direction: &str, name: &str| -> Result<Option<i64>> {
+        Ok(tx
+            .query_row(
+                "SELECT id FROM automation_port \
+                  WHERE owner_kind = ?1 AND owner_id = ?2 AND direction = ?3 AND name = ?4",
+                rusqlite::params![owner_kind, owner_id, direction, name],
+                |r| r.get(0),
+            )
+            .optional()?)
+    };
+    // (run, placement, step, way out, output name) → the id a copy keys that output by, for the inputs'
+    // sources; (copy, name, way out) → the same, for the values.
+    type Source = (i64, Option<i64>, Option<i64>, Option<i64>, String);
+    let mut outputs: std::collections::HashMap<Source, i64> = std::collections::HashMap::new();
+    let mut stand_in = -1;
+    let mut next_stand_in = || {
+        stand_in -= 1;
+        stand_in + 1
+    };
+    for copy in copies.iter_mut() {
+        for exit in copy.exits.iter_mut() {
+            let exit_id = exit.get("id").and_then(|i| i.as_i64());
+            let Some(outs) = exit.get_mut("outs").and_then(|o| o.as_array_mut()) else { continue };
+            for port in outs.iter_mut() {
+                let name = port.get("name").and_then(|n| n.as_str()).unwrap_or_default().to_string();
+                let id = match port.get("id").and_then(|i| i.as_i64()) {
+                    Some(id) => id,
+                    None => {
+                        let live = match exit_id {
+                            Some(exit_id) if exit_id > 0 => live_port("exit", exit_id, "out", &name)?,
+                            _ => None,
+                        };
+                        let id = live.unwrap_or_else(&mut next_stand_in);
+                        if let Some(map) = port.as_object_mut() {
+                            map.insert("id".to_string(), serde_json::Value::from(id));
+                        }
+                        id
+                    }
+                };
+                outputs.insert((copy.run_id, copy.placement_id, copy.step_id, exit_id, name), id);
+            }
+        }
+        for input in copy.ins.iter_mut() {
+            if input.get("id").and_then(|i| i.as_i64()).is_some() {
+                continue;
+            }
+            let name = input.get("name").and_then(|n| n.as_str()).unwrap_or_default().to_string();
+            let live = match copy.step_id {
+                Some(step_id) => live_port("step", step_id, "in", &name)?,
+                None => None,
+            };
+            let id = live.unwrap_or_else(&mut next_stand_in);
+            if let Some(map) = input.as_object_mut() {
+                map.insert("id".to_string(), serde_json::Value::from(id));
+            }
+        }
+    }
+    for copy in copies.iter_mut() {
+        let run_id = copy.run_id;
+        for input in copy.ins.iter_mut() {
+            let Some(from) = input.get_mut("from").and_then(|f| f.as_array_mut()) else { continue };
+            let mut keyed = Vec::with_capacity(from.len());
+            for mut source in from.drain(..) {
+                let Some(map) = source.as_object_mut() else { continue };
+                if map.contains_key("port_id") {
+                    keyed.push(source);
+                    continue;
+                }
+                let Some(name) = map.remove("port").and_then(|n| n.as_str().map(str::to_string)) else {
+                    continue;
+                };
+                let exit_id = map.get("exit_id").and_then(|v| v.as_i64());
+                let key = (
+                    run_id,
+                    map.get("placement_id").and_then(|v| v.as_i64()),
+                    map.get("step_id").and_then(|v| v.as_i64()),
+                    exit_id,
+                    name.clone(),
+                );
+                // The copy of the source step keys it; failing that, the way out's live output of the
+                // name. An output neither declares could never have been handed on.
+                let id = match outputs.get(&key) {
+                    Some(id) => Some(*id),
+                    None => match exit_id {
+                        Some(exit_id) if exit_id > 0 => live_port("exit", exit_id, "out", &name)?,
+                        _ => None,
+                    },
+                };
+                if let Some(id) = id {
+                    map.insert("port_id".to_string(), serde_json::Value::from(id));
+                    keyed.push(source);
+                }
+            }
+            *from = keyed;
+        }
+        tx.execute(
+            "UPDATE automation_run_def SET exits = ?1, ins = ?2 WHERE id = ?3",
+            rusqlite::params![
+                serde_json::Value::Array(copy.exits.clone()).to_string(),
+                serde_json::Value::Array(copy.ins.clone()).to_string(),
+                copy.id
+            ],
+        )?;
+    }
+
+    if has("automation_run_value", "name")? {
+        if !has("automation_run_value", "port_id")? {
+            tx.execute_batch(
+                "ALTER TABLE automation_run_value ADD COLUMN port_id BIGINT NOT NULL DEFAULT 0;",
+            )?;
+        }
+        let by_copy: std::collections::HashMap<i64, &Copy> = copies.iter().map(|c| (c.id, c)).collect();
+        let mut values: Vec<(i64, i64, String, Option<i64>, String)> = Vec::new();
+        {
+            let mut stmt = tx.prepare(
+                "SELECT v.id, s.run_def_id, v.direction, v.exit_id, v.name FROM automation_run_value v
+                   JOIN automation_run_step s ON s.id = v.run_step_id",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+            for row in rows {
+                values.push(row?);
+            }
+        }
+        for (id, def_id, direction, exit_id, name) in values {
+            let Some(copy) = by_copy.get(&def_id) else { continue };
+            let found: Option<(i64, Option<i64>)> = if direction == "in" {
+                copy.ins
+                    .iter()
+                    .find(|p| p.get("name").and_then(|n| n.as_str()) == Some(name.as_str()))
+                    .and_then(|p| p.get("id").and_then(|i| i.as_i64()))
+                    .map(|port| (port, None))
+            } else {
+                copy.exits
+                    .iter()
+                    .filter(|e| exit_id.is_none() || e.get("id").and_then(|i| i.as_i64()) == exit_id)
+                    .find_map(|e| {
+                        let exit = e.get("id").and_then(|i| i.as_i64());
+                        e.get("outs")?
+                            .as_array()?
+                            .iter()
+                            .find(|p| p.get("name").and_then(|n| n.as_str()) == Some(name.as_str()))
+                            .and_then(|p| p.get("id").and_then(|i| i.as_i64()))
+                            .map(|port| (port, exit))
+                    })
+            };
+            let Some((port, exit)) = found else { continue };
+            tx.execute(
+                "UPDATE automation_run_value SET port_id = ?1, exit_id = COALESCE(exit_id, ?2) WHERE id = ?3",
+                rusqlite::params![port, exit, id],
+            )?;
+        }
+        tx.execute_batch("ALTER TABLE automation_run_value DROP COLUMN name;")?;
     }
     Ok(())
 }
@@ -7596,6 +7870,10 @@ mod tests {
                  INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
                      (21, 'step', 11, NULL), (22, 'step', 11, '*'), (23, 'step', 11, '直す'),
                      (25, 'action', 7, NULL), (26, 'action', 7, '*'), (27, 'action', 7, '直す');
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind) VALUES
+                     (41, 'exit', 23, 'out', 'メモ', 'value'), (42, 'exit', 27, 'out', 'メモ', 'value'),
+                     (43, 'action', 7, 'in', '差分', 'value'), (44, 'step', 11, 'in', '差分', 'value'),
+                     (45, 'action', 7, 'in', 'メモ', 'value');
                  INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_name, ends, exit_to) VALUES
                      (61, 'automation', 1, 3, '直す', 'done', NULL),
                      (62, 'automation', 1, 3, NULL, 'done', NULL),
@@ -7694,6 +7972,104 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v65 in full: every wire keys its two ports, a run's copies hold each port's id beside its name —
+    /// below zero where the port is gone — an input's sources key the output they come from, and a
+    /// value keys the port it went through, taking the way out that port hangs on where it had none yet
+    /// (`AMB-D-961`). A wire on a name no port carries any more goes.
+    #[test]
+    fn the_chain_keys_every_port_a_wire_a_copy_or_a_value_named() {
+        let dir = scratch("key-the-ports");
+        let engine = store_at(&dir, 64);
+        engine
+            .conn()
+            .execute_batch(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (7, 1, '書く'), (8, 1, '読む');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES (11, 7, '書く'), (12, 8, '読む');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (3, 1, 7), (4, 1, 8);
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (21, 'step', 11, NULL), (25, 'action', 7, NULL);
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, ends, exit_to_id) VALUES
+                     (61, 'action', 7, 11, 21, 'exit', 25);
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind) VALUES
+                     (31, 'exit', 21, 'out', 'メモ', 'value'), (32, 'exit', 25, 'out', 'メモ', 'value'),
+                     (33, 'action', 8, 'in', 'メモ', 'value'), (34, 'step', 12, 'in', 'メモ', 'value');
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_id, from_port_name, to_id, to_port_name) VALUES
+                     (71, 'action', 7, 11, 21, 'メモ', 0, 'メモ'),
+                     (72, 'automation', 1, 3, 25, 'メモ', 4, 'メモ'),
+                     (73, 'action', 8, 0, NULL, 'メモ', 12, 'メモ'),
+                     (74, 'action', 8, 0, NULL, '消えた', 12, 'メモ');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, step_id, name, agent, exits, ins, cfg) VALUES
+                     (81, 1, 3, 11, '書く', 'claude',
+                      '[{"id":21,"name":null,"outs":[{"name":"メモ","kind":"value","required":true}]}]', '[]', '[]'),
+                     (82, 1, 4, 12, '読む', 'claude', '[]',
+                      '[{"name":"メモ","kind":"value","required":false,"from":[{"placement_id":3,"step_id":11,"exit_id":21,"port":"メモ"}]}]', '[]'),
+                     (83, 1, NULL, NULL, '消えた', 'claude',
+                      '[{"id":-1,"name":null,"outs":[{"name":"古い","kind":"value","required":false}]}]', '[]', '[]');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, exit_id, status) VALUES
+                     (91, 1, 81, 1, 21, 'done'), (92, 1, 83, 2, NULL, 'running');
+                 INSERT INTO automation_run_value (id, run_step_id, direction, exit_id, name, kind) VALUES
+                     (101, 91, 'out', 21, 'メモ', 'value'), (102, 92, 'out', NULL, '古い', 'value');"#,
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let wires: Vec<(i64, i64, i64)> = {
+            let mut stmt =
+                conn.prepare("SELECT id, from_port_id, to_port_id FROM automation_wire ORDER BY id").unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(
+            wires,
+            vec![(71, 31, 32), (72, 32, 33), (73, 33, 34)],
+            "into the action's way out, across the picture, out of the action — and the parted one went",
+        );
+        let copy = |id: i64, column: &str| -> String {
+            conn.query_row(&format!("SELECT {column} FROM automation_run_def WHERE id = ?1"), [id], |r| r.get(0))
+                .unwrap()
+        };
+        let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&copy(81, "exits")).unwrap();
+        assert_eq!(exits[0].outs[0].id, 31, "from the live row");
+        let ins: Vec<crate::model::RunDefIn> = serde_json::from_str(&copy(82, "ins")).unwrap();
+        assert_eq!(ins[0].port.id, 34);
+        assert_eq!(
+            ins[0].from,
+            vec![crate::model::RunDefSource { placement_id: 3, step_id: 11, exit_id: Some(21), port_id: 31 }],
+        );
+        let gone: Vec<crate::model::RunDefExit> = serde_json::from_str(&copy(83, "exits")).unwrap();
+        assert!(gone[0].outs[0].id < 0, "the step is gone, so below zero");
+        let values: Vec<(i64, i64, Option<i64>)> = {
+            let mut stmt =
+                conn.prepare("SELECT id, port_id, exit_id FROM automation_run_value ORDER BY id").unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(
+            values,
+            vec![(101, 31, Some(21)), (102, gone[0].outs[0].id, Some(-1))],
+            "a value on a step still running takes the way out its port hangs on",
+        );
+        for (table, column) in [
+            ("automation_wire", "from_port_name"),
+            ("automation_wire", "to_port_name"),
+            ("automation_run_value", "name"),
+        ] {
+            let held: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+                    [table, column],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(held, 0, "{table}.{column} is gone");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v64 in full: what each step said is written onto every placement of its action, a step that said
     /// nothing is left with nobody chosen, an action placed nowhere carries its answer nowhere, and the
     /// two columns are gone from the step (`AMB-D-960`).
@@ -7773,6 +8149,11 @@ mod tests {
                      (21, 'step', 11, NULL), (25, 'action', 7, NULL), (22, 'step', 12, NULL);
                  INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, ends, exit_to_id) VALUES
                      (61, 'action', 7, 11, 21, 'exit', 25);
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind) VALUES
+                     (31, 'exit', 21, 'out', 'メモ', 'value'), (32, 'exit', 25, 'out', 'メモ', 'value'),
+                     (33, 'action', 8, 'in', '下書き', 'value'), (34, 'step', 13, 'in', '下書き', 'value'),
+                     (35, 'exit', 22, 'out', '所見', 'value'), (36, 'step', 13, 'in', '所見', 'value'),
+                     (37, 'step', 13, 'in', '済み', 'value');
                  INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_id, from_port_name, to_id, to_port_name) VALUES
                      (71, 'action', 7, 11, 21, 'メモ', 0, 'メモ'),
                      (72, 'automation', 1, 3, 25, 'メモ', 4, '下書き'),
@@ -7798,19 +8179,20 @@ mod tests {
                 .unwrap();
             serde_json::from_str(&json).expect("a copy reads back as today's shape")
         };
-        let source = |placement_id, step_id, exit_id, port: &str| crate::model::RunDefSource {
+        // Keyed by the port rows from v65 on, which is the shape a copy reads back as today.
+        let source = |placement_id, step_id, exit_id, port_id| crate::model::RunDefSource {
             placement_id,
             step_id,
             exit_id,
-            port: port.to_string(),
+            port_id,
         };
         let running = ins(81);
         assert_eq!(
             running[0].from,
-            vec![source(3, 11, Some(21), "メモ")],
+            vec![source(3, 11, Some(21), 31)],
             "across the automation, to the step behind the way out the far action leaves by",
         );
-        assert_eq!(running[1].from, vec![source(4, 12, Some(22), "所見")], "inside the action");
+        assert_eq!(running[1].from, vec![source(4, 12, Some(22), 35)], "inside the action");
         assert!(running[2].from.is_empty(), "an input a launch resolved is left as it was");
         assert!(ins(82)[0].from.is_empty(), "an ended run is not given today's wires");
         std::fs::remove_dir_all(&dir).ok();

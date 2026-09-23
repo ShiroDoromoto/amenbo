@@ -1032,7 +1032,7 @@ mod tests {
             crate::ops::automation_report::out(
                 tx,
                 looked.run_step.id,
-                "note",
+                crate::ops::test_support::out_port(tx, looked.run_step.id, None, "note"),
                 crate::ops::automation_report::Produced::Value("the third paragraph"),
             )
             .expect("out");

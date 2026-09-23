@@ -228,7 +228,7 @@ fn latest_for(
                 Some(source.placement_id) == from_def.placement_id
                     && Some(source.step_id) == from_def.step_id
                     && source.exit_id == value.exit_id
-                    && source.port == value.name
+                    && source.port_id == value.port_id
             });
             if !joined {
                 continue;
@@ -324,8 +324,8 @@ fn new_execution(
     Ok(run_step)
 }
 
-/// Write down that a value was handed over — under **this step's** name for it, since that is the name
-/// the prompt spells and the one a reader asks the question with.
+/// Write down that a value was handed over — under **this step's** input it filled, since that is the
+/// port the prompt spells and the one a reader asks the question with.
 fn write_in(
     tx: &WriteTx<'_>,
     run_step: &AutomationRunStep,
@@ -339,7 +339,7 @@ fn write_in(
         // What way out it left by is the producing side's fact, and it is kept on that row. Here it
         // would answer a question nobody asks of an input.
         exit_id: None,
-        name: handed.port.name.clone(),
+        port_id: handed.port.id,
         kind: handed.port.kind,
         value: handed.from.value.clone(),
         attachment_id: handed.from.attachment_id,
@@ -467,7 +467,9 @@ fn one_value(handed: &Handed) -> String {
 
 /// How to hand the work back: the ways out this step may leave through, what each of them is declared
 /// to carry, and the one thing every step owes. Each way out is listed with the id `step-done --exit`
-/// takes (`AMB-D-961`) — a name is what a person reads, and the unnamed way out has none to type.
+/// takes, and each output with the id `step-out` takes (`AMB-D-961`) — a name is what a person reads,
+/// and the unnamed way out has none to type. An output is one way out's: two ways out may each declare
+/// one of the same name, and the id is what says which of them a value is put down on.
 ///
 /// **The error way out is named but not offered.** It is where a step that fell over goes, and a step
 /// choosing it on purpose is saying it failed — which is a real answer, and a different one from
@@ -494,8 +496,8 @@ fn handing_back(exits: &[RunDefExit]) -> String {
                 .outs
                 .iter()
                 .map(|p| match p.required {
-                    true => format!("`{}` ({}, required)", p.name, p.kind.as_str()),
-                    false => format!("`{}` ({})", p.name, p.kind.as_str()),
+                    true => format!("`{}` {} ({}, required)", p.id, p.name, p.kind.as_str()),
+                    false => format!("`{}` {} ({})", p.id, p.name, p.kind.as_str()),
                 })
                 .collect::<Vec<_>>()
                 .join(", "),
@@ -506,14 +508,18 @@ fn handing_back(exits: &[RunDefExit]) -> String {
         exits.iter().flat_map(|e| e.outs.iter().map(|p| p.kind)).collect();
     if !kinds.is_empty() {
         lines.push(String::new());
-        lines.push("Put each one down before you finish:".to_string());
+        lines.push(
+            "Put down the ones listed under the way out you take, by the id in front of each, before \
+             you finish:"
+                .to_string(),
+        );
         for kind in &kinds {
             lines.push(match kind {
                 AutomationPortKind::Value => {
-                    format!("- a value — `{cli} automation step-out <name>=<value>`")
+                    format!("- a value — `{cli} automation step-out <id>=<value>`")
                 }
                 AutomationPortKind::File => {
-                    format!("- a file — `{cli} automation step-out <name> --file <path>`")
+                    format!("- a file — `{cli} automation step-out <id> --file <path>`")
                 }
                 // Reserving and declaring are one command, so this one is not `out` and never can be.
                 AutomationPortKind::TaskTake => format!(
@@ -521,7 +527,7 @@ fn handing_back(exits: &[RunDefExit]) -> String {
                      and hands it on in one act. It is refused for a task somebody else already holds."
                 ),
                 AutomationPortKind::TaskMake => format!(
-                    "- a task you raised along the way — `{cli} automation step-out <name>=<task>`. It is \
+                    "- a task you raised along the way — `{cli} automation step-out <id>=<task>`. It is \
                      not the task this run is working: nothing reserves it, and whoever comes to it \
                      next picks it up."
                 ),
@@ -654,7 +660,7 @@ mod tests {
             run_step_id: run_step.id,
             direction: AutomationPortDirection::Out,
             exit_id: done.exit_id,
-            name: "note".to_string(),
+            port_id: crate::ops::test_support::out_port(tx, run_step.id, done.exit_id, "note"),
             kind: AutomationPortKind::Value,
             value: Some(note.to_string()),
             attachment_id: None,
@@ -738,12 +744,18 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let text = opening.text;
 
             assert!(text.starts_with("You are one step of an automation run"), "{text}");
             assert!(text.contains("## What to do\n\nlook at it"), "{text}");
-            assert!(text.contains("\"found\" — `note` (value)"), "{text}");
-            assert!(text.contains("the unnamed way out — `タスク` (task_take, required)"), "{text}");
+            let note = crate::ops::test_support::out_port(tx, opening.run_step.id, None, "note");
+            let task = crate::ops::test_support::out_port(tx, opening.run_step.id, None, "タスク");
+            assert!(text.contains(&format!("\"found\" — `{note}` note (value)")), "{text}");
+            assert!(
+                text.contains(&format!("the unnamed way out — `{task}` タスク (task_take, required)")),
+                "{text}"
+            );
             assert!(text.contains("the error way out — nothing to hand on"), "{text}");
             assert!(
                 !text.contains("## What you have been handed"),
@@ -782,13 +794,13 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
-            assert!(text.contains("- a value — `amenbo automation step-out <name>=<value>`"), "{text}");
+            assert!(text.contains("- a value — `amenbo automation step-out <id>=<value>`"), "{text}");
             assert!(
                 text.contains("the task this step takes — `amenbo automation step-take <task>`"),
                 "{text}"
             );
             assert!(
-                text.contains("a task you raised along the way — `amenbo automation step-out <name>=<task>`"),
+                text.contains("a task you raised along the way — `amenbo automation step-out <id>=<task>`"),
                 "{text}"
             );
             // The line that was wrong: one command for every kind.
@@ -816,7 +828,7 @@ mod tests {
                 .expect("values");
             assert_eq!(handed.len(), 1);
             assert_eq!(handed[0].direction, AutomationPortDirection::In);
-            assert_eq!(handed[0].name, "note");
+            assert_eq!(handed[0].port_id, crate::ops::test_support::in_port(tx, &second.run_step, "note"));
             assert_eq!(handed[0].value.as_deref(), Some("the note"));
             assert_eq!(
                 handed[0].from_run_step_id,

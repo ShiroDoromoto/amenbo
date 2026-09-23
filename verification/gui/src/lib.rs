@@ -4329,10 +4329,12 @@ impl Instructor {
                 "In the pane this run is drawn in, type `amenbo automation step-take <ref>` and run it, putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — where the command says `<ref>`. Confirm the line comes back saying the task was taken.",
                 self.task_label(with)
             ),
+            // The output is typed as its id, which the step's text lists beside its name — so the id
+            // is left as a gap, the store issuing the number, the way the task's ref is above.
             (Domain::Automation, "out-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-out \"{}={}\"` and run it, and confirm the line comes back saying it was handed on.",
-                req(with, "name")?,
-                req(with, "value")?
+                "In the pane this run is drawn in, type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
+                req(with, "value")?,
+                req(with, "name")?
             ),
             // A way out the step does not declare is turned away before anything is written. What the
             // line says is spelled out because it is what the agent finishes again from: the ways out

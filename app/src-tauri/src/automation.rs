@@ -1633,6 +1633,7 @@ fn detail_dto(
     held_by: Vec<AutomationRunCardDto>,
 ) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
+    let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
     let a = view.automation;
     AutomationDetailDto {
         id: a.id,
@@ -1642,7 +1643,7 @@ fn detail_dto(
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
-        wires: view.wires.into_iter().map(|w| wire_dto(w, &names)).collect(),
+        wires,
         placements: view.placements.into_iter().map(placement_dto).collect(),
         held_by,
     }
@@ -1654,6 +1655,7 @@ fn action_detail_dto(
     held_by: Vec<AutomationRunCardDto>,
 ) -> AutomationActionDetailDto {
     let names = exit_names(view.steps.iter().flat_map(|s| s.exits.iter()).chain(view.exits.iter()));
+    let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
     let action = view.action;
     AutomationActionDetailDto {
         id: action.id,
@@ -1664,7 +1666,7 @@ fn action_detail_dto(
         entry_step_id: action.entry_step_id,
         steps: view.steps.into_iter().map(step_dto).collect(),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
-        wires: view.wires.into_iter().map(|w| wire_dto(w, &names)).collect(),
+        wires,
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),
@@ -1716,14 +1718,21 @@ fn edge_dto(edge: AutomationEdge, names: &std::collections::HashMap<i64, Option<
 }
 
 /// One wire of either picture, read the way [`edge_dto`] reads a line.
-fn wire_dto(wire: AutomationWire, names: &std::collections::HashMap<i64, Option<String>>) -> AutomationWireDto {
+///
+/// Its two ports are keyed as its way out is (`AMB-D-961`), and drawn by the names they carry now — which
+/// is what keeps a renamed port's wires on it on screen as in the store.
+fn wire_dto<'a>(
+    wire: &AutomationWire,
+    names: &std::collections::HashMap<i64, Option<String>>,
+    port_name: impl Fn(i64) -> Option<&'a str>,
+) -> AutomationWireDto {
     AutomationWireDto {
         id: wire.id,
         from_id: wire.from_id,
         from_exit_name: exit_name(names, wire.from_exit_id),
-        from_port_name: wire.from_port_name,
+        from_port_name: port_name(wire.from_port_id).unwrap_or_default().to_string(),
         to_id: wire.to_id,
-        to_port_name: wire.to_port_name,
+        to_port_name: port_name(wire.to_port_id).unwrap_or_default().to_string(),
     }
 }
 

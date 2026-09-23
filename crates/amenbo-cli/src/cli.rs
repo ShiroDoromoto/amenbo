@@ -2289,10 +2289,10 @@ pub enum AutomationCmd {
         /// the task to take (AMB-T-n)
         task: String,
     },
-    /// **Put down one thing this step produced**, under the name its port was declared with. Written
-    /// `<name>=<value>`, or `<name> --file <path>` for a file
+    /// **Put down one thing this step produced**, on the output the step's text lists it under. Written
+    /// `<id>=<value>`, or `<id> --file <path>` for a file
     StepOut {
-        /// `<name>=<value>`, or just `<name>` beside --file
+        /// `<id>=<value>`, or just `<id>` beside --file — the id being the output's
         value: String,
         /// a file to hand on, instead of a value
         #[arg(long, value_name = "PATH")]
@@ -2307,8 +2307,8 @@ pub enum AutomationCmd {
         /// the way out taken, by the id the step's text lists for it. Left out is the unnamed one
         #[arg(long, value_name = "ID")]
         exit: Option<i64>,
-        /// one more thing produced, `<name>=<value>` — repeat for several
-        #[arg(long = "out", value_name = "NAME=VALUE")]
+        /// one more thing produced, `<id>=<value>` — repeat for several
+        #[arg(long = "out", value_name = "ID=VALUE")]
         outs: Vec<String>,
     },
 }

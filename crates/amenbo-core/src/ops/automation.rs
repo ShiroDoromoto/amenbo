@@ -315,7 +315,7 @@ fn delete_exit_row(tx: &WriteTx<'_>, exit_id: i64) -> Result<()> {
         tx.delete_record("automation_edge", edge)?;
     }
     for port in read::automation_port_ids(tx.conn(), AutomationPortOwner::Exit, exit_id)? {
-        tx.delete_record("automation_port", port)?;
+        delete_port_row(tx, port)?;
     }
     tx.delete_record("automation_exit", exit_id)?;
     Ok(())
@@ -334,7 +334,7 @@ fn delete_declarations(
         delete_exit_row(tx, exit)?;
     }
     for port in read::automation_port_ids(tx.conn(), port_owner, owner_id)? {
-        tx.delete_record("automation_port", port)?;
+        delete_port_row(tx, port)?;
     }
     Ok(())
 }
@@ -408,9 +408,9 @@ pub fn action_add(
 
 /// Rename a library action, or rewrite what it is for. Only the `Some` fields are written.
 ///
-/// **Renaming the action is safe; renaming what it declares is not.** A placement points at the action
-/// by key (`automation_placement.action_id`), so nothing parts here — while renaming one of its ways out
-/// or its ports parts every edge and wire that named the old one ([`exit_rename`], [`port_update`]).
+/// **Renaming parts nothing.** A placement points at the action by key (`automation_placement.action_id`),
+/// and edges and wires key the ways out and the ports it declares (`AMB-D-961`), so renaming any of them
+/// leaves every line where it was ([`exit_rename`], [`port_update`]).
 pub fn action_update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -1455,7 +1455,8 @@ pub fn port_add(
 
 /// Change a port's name, what it carries, or whether it is required. Only the `Some` fields are written.
 ///
-/// Renaming parts every wire that named the old name, for the reason [`exit_rename`] gives.
+/// Renaming leaves every wire on the port standing: a wire keys the port it joins, not its name
+/// (`AMB-D-961`).
 pub fn port_update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -1510,11 +1511,20 @@ pub fn port_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationP
     Ok(after)
 }
 
-/// Delete a port. The wires that named it are left where they are, parted, for the reason
-/// [`exit_rename`] gives.
+/// Delete a port, and every wire keyed to it at either end — a wire from or into a port that is gone
+/// carries nothing.
 pub fn port_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let port = live_port(tx, id)?;
     not_under_a_run(tx, def_of_port_owner(tx, port.owner_kind, port.owner_id)?)?;
+    delete_port_row(tx, id)
+}
+
+/// One port and the wires keyed to it — what [`port_delete`] does, and what every sweep that takes a
+/// port with its owner does.
+fn delete_port_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    for wire in read::automation_wire_ids_naming_port(tx.conn(), id)? {
+        tx.delete_record("automation_wire", wire)?;
+    }
     tx.delete_record("automation_port", id)?;
     Ok(())
 }
@@ -2047,9 +2057,9 @@ pub fn wire_add(
         owner_kind,
         from_id,
         from_exit_id,
-        from_port_name,
+        out.id,
         to_id,
-        to_port_name,
+        into.id,
     )? {
         return Ok(drawn);
     }
@@ -2061,9 +2071,9 @@ pub fn wire_add(
         owner_id,
         from_id,
         from_exit_id,
-        from_port_name: from_port_name.to_string(),
+        from_port_id: out.id,
         to_id,
-        to_port_name: to_port_name.to_string(),
+        to_port_id: into.id,
         created_at: now,
         updated_at: now,
     };
@@ -2188,9 +2198,15 @@ mod tests {
             assert_eq!(wires.len(), 1);
             assert_eq!(wires[0].from_id, ACTION_BOUNDARY, "out of the action itself");
             assert_eq!(wires[0].from_exit_id, None);
-            assert_eq!(wires[0].from_port_name, "差分");
+            let port = |owner, owner_id| {
+                read::automation_port_by_name(tx.conn(), owner, owner_id, AutomationPortDirection::In, "差分")
+                    .expect("read")
+                    .expect("the input")
+                    .id
+            };
+            assert_eq!(wires[0].from_port_id, port(AutomationPortOwner::Action, action.id));
             assert_eq!(wires[0].to_id, step.id);
-            assert_eq!(wires[0].to_port_name, "差分");
+            assert_eq!(wires[0].to_port_id, port(AutomationPortOwner::Step, step.id));
         });
     }
 
@@ -2713,6 +2729,54 @@ mod tests {
                 None,
             )
             .expect("add edge");
+        });
+    }
+
+    /// **A wire keys the ports at its two ends** (`AMB-D-961`): renaming either port leaves the wire on
+    /// it, and deleting one takes the wire with it — a wire into a port that is gone carries nothing.
+    #[test]
+    fn a_wire_stays_on_a_renamed_port_and_goes_with_a_deleted_one() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (from_action, from) = mk_placed(tx, &automation, "実装する");
+            let (to_action, to) = mk_placed(tx, &automation, "点検する");
+            let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, from_action.id, None)
+                .expect("read")
+                .expect("the unnamed way out");
+            let out = port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "差分",
+                AutomationPortKind::File,
+                true,
+            )
+            .expect("declare the output");
+            let into = port_add(
+                tx,
+                AutomationPortOwner::Action,
+                to_action.id,
+                AutomationPortDirection::In,
+                "差分",
+                AutomationPortKind::File,
+                true,
+            )
+            .expect("declare the input");
+            let on = AutomationPictureOwner::Automation;
+            let wire = wire_add(tx, on, from.id, None, "差分", to.id, "差分").expect("wire");
+            assert_eq!((wire.from_port_id, wire.to_port_id), (out.id, into.id));
+
+            port_update(tx, out.id, Some("変更点"), None, None).expect("rename the output");
+            port_update(tx, into.id, Some("見る差分"), None, None).expect("rename the input");
+            assert_eq!(
+                read::automation_wire(tx.conn(), wire.id).expect("read").map(|w| (w.from_port_id, w.to_port_id)),
+                Some((out.id, into.id)),
+                "both renames leave the wire where it was",
+            );
+
+            port_delete(tx, into.id).expect("delete the input");
+            assert!(read::automation_wire(tx.conn(), wire.id).expect("read").is_none(), "and the wire goes with it");
         });
     }
 

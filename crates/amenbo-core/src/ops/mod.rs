@@ -213,6 +213,41 @@ pub(crate) mod test_support {
         exits.into_iter().find(|e| e.name.as_deref() == Some(name)).map(|e| e.id)
     }
 
+    /// **The id of one output a run's step declares**, by its name — on the way out `exit` keys where it
+    /// says one, and otherwise on the first way out that declares the name. `step-out` takes the id.
+    pub(crate) fn out_port(
+        tx: &WriteTx<'_>,
+        run_step_id: i64,
+        exit: Option<i64>,
+        name: &str,
+    ) -> i64 {
+        let step = crate::store_engine::read::automation_run_step(tx.conn(), run_step_id)
+            .expect("read")
+            .expect("the step execution");
+        let def = crate::store_engine::read::automation_run_def(tx.conn(), step.run_def_id)
+            .expect("read")
+            .expect("the step's copy");
+        let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&def.exits).expect("exits");
+        exits
+            .iter()
+            .filter(|e| exit.is_none() || Some(e.id) == exit)
+            .find_map(|e| e.outs.iter().find(|p| p.name == name))
+            .map(|p| p.id)
+            .unwrap_or_else(|| panic!("no output '{name}' on step execution {run_step_id}"))
+    }
+
+    /// **The id of one input a run's step declares**, by its name — what the values handed to it key.
+    pub(crate) fn in_port(tx: &WriteTx<'_>, run_step: &crate::model::AutomationRunStep, name: &str) -> i64 {
+        let def = crate::store_engine::read::automation_run_def(tx.conn(), run_step.run_def_id)
+            .expect("read")
+            .expect("the step's copy");
+        let ins: Vec<crate::model::RunDefIn> = serde_json::from_str(&def.ins).expect("ins");
+        ins.iter()
+            .find(|i| i.port.name == name)
+            .map(|i| i.port.id)
+            .unwrap_or_else(|| panic!("no input '{name}' on step execution {}", run_step.id))
+    }
+
     /// **The id of one way out a box declares**, by its name — `None` being the unnamed one.
     pub(crate) fn exit_id(
         tx: &WriteTx<'_>,

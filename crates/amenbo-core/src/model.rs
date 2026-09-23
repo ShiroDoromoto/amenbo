@@ -1774,9 +1774,9 @@ pub struct AutomationEdge {
 }
 
 /// **What is handed from one box to the next**, on either of the two pictures an [`AutomationEdge`] is
-/// drawn on. The way out it leaves by is keyed and the ports at either end are named: one action placed
-/// twice on an automation gives two placements whose ports carry the same names, so only `from_id` +
-/// `from_exit_id` + `from_port_name` says which of them is meant.
+/// drawn on. The way out it leaves by and the ports at either end are keyed, so renaming either leaves
+/// the wire on it (`AMB-D-961`). One action placed twice on an automation gives two placements declaring
+/// the same port rows, so `from_id` and `to_id` are what say which of them is meant.
 ///
 /// On an action's picture either end may be [`ACTION_BOUNDARY`] instead of a step, which is how what the
 /// action declares reaches what is inside it. Out of the boundary comes an input the action declares
@@ -1790,9 +1790,13 @@ pub struct AutomationWire {
     pub from_id: i64,
     #[serde(default)]
     pub from_exit_id: Option<i64>,
-    pub from_port_name: String,
+    /// The port it leaves from — an output on that way out, or, from [`ACTION_BOUNDARY`], an input the
+    /// action declares. Keyed, so renaming the port leaves the wire on it (`AMB-D-961`).
+    pub from_port_id: i64,
     pub to_id: i64,
-    pub to_port_name: String,
+    /// The port it lands on — an input of the box, or, into [`ACTION_BOUNDARY`], an output on the way
+    /// out of the action the source returns to.
+    pub to_port_id: i64,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -1964,6 +1968,20 @@ pub struct AutomationRunDef {
     pub updated_at: Timestamp,
 }
 
+impl AutomationRunDef {
+    /// **The name one port of this copy was declared under**, by the id the run's values key it by
+    /// ([`RunDefPort::id`]) — an output on any of its ways out, or one of its inputs. `None` where the
+    /// copy declares no port of that id, or its JSON does not read.
+    pub fn port_name(&self, port_id: i64) -> Option<String> {
+        let exits: Vec<RunDefExit> = serde_json::from_str(&self.exits).ok()?;
+        if let Some(port) = exits.iter().flat_map(|e| e.outs.iter()).find(|p| p.id == port_id) {
+            return Some(port.name.clone());
+        }
+        let ins: Vec<RunDefIn> = serde_json::from_str(&self.ins).ok()?;
+        ins.into_iter().find(|i| i.port.id == port_id).map(|i| i.port.name)
+    }
+}
+
 /// One way out, as [`AutomationRunDef::exits`] holds it: which row it was, its name, and what leaves
 /// through it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1977,9 +1995,13 @@ pub struct RunDefExit {
     pub outs: Vec<RunDefPort>,
 }
 
-/// One port, as the snapshot holds it — a name, what it carries, and whether it has to be there.
+/// One port, as the snapshot holds it — which row it was, its name, what it carries, and whether it
+/// has to be there.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefPort {
+    /// The [`AutomationPort`] row this was copied from — what `step-out` names and what the run's values
+    /// key the port by. Kept after the row itself is renamed or gone.
+    pub id: i64,
     pub name: String,
     pub kind: AutomationPortKind,
     pub required: bool,
@@ -2002,14 +2024,14 @@ pub struct RunDefIn {
 
 /// One output of one step of one placement that a wire joined to an input — which copy of a step it
 /// leaves ([`AutomationRunDef::placement_id`], [`AutomationRunDef::step_id`]), the way out it leaves by,
-/// and the output's name.
+/// and the output, keyed as [`RunDefPort::id`] keys it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefSource {
     pub placement_id: i64,
     pub step_id: i64,
     #[serde(default)]
     pub exit_id: Option<i64>,
-    pub port: String,
+    pub port_id: i64,
 }
 
 /// One setting and the answer written for it while the automation was built.
@@ -2126,7 +2148,8 @@ pub struct AutomationRunValue {
     /// an `In`, and on an `Out` whose step has not finished.
     #[serde(default)]
     pub exit_id: Option<i64>,
-    pub name: String,
+    /// The port it went through, keyed as the run's copy of the step keys it ([`RunDefPort::id`]).
+    pub port_id: i64,
     pub kind: AutomationPortKind,
     #[serde(default)]
     pub value: Option<String>,

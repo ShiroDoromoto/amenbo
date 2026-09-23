@@ -290,7 +290,7 @@ pub fn check(
             placement.action_id,
             AutomationPortDirection::In,
         )? {
-            if port.required && !fed(conn, placement, &port.name, &live, &by_id)? {
+            if port.required && !fed(conn, placement, port.id, &live, &by_id)? {
                 unmet.push(Unmet::UnwiredInput { step: name.clone(), port: port.name });
             }
         }
@@ -407,7 +407,7 @@ fn inside(
                 continue;
             }
             let mut reached = false;
-            for wire in wires.iter().filter(|w| w.to_id == step.id && w.to_port_name == port.name) {
+            for wire in wires.iter().filter(|w| w.to_id == step.id && w.to_port_id == port.id) {
                 reached = if wire.from_id == ACTION_BOUNDARY {
                     let declared = read::automation_ports_of(
                         conn,
@@ -416,13 +416,13 @@ fn inside(
                         AutomationPortDirection::In,
                     )?
                     .iter()
-                    .any(|p| p.name == wire.from_port_name);
-                    declared && fed(conn, placement, &wire.from_port_name, live, by_id)?
+                    .any(|p| p.id == wire.from_port_id);
+                    declared && fed(conn, placement, wire.from_port_id, live, by_id)?
                 } else if opened.contains(&wire.from_id) {
                     let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Step, wire.from_id)?;
                     match exit {
                         Some(exit) => {
-                            outs_of(conn, &exit)?.iter().any(|p| p.name == wire.from_port_name)
+                            outs_of(conn, &exit)?.iter().any(|p| p.id == wire.from_port_id)
                         }
                         None => false,
                     }
@@ -558,15 +558,14 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
     )?)
 }
 
-/// Whether anything actually reaches one input. A wire counts only where **both** halves hold: its far
-/// end is declared — that placement's way out really hands on a port of that name — and that placement
-/// is reachable from the entry. A wire whose far port was renamed underneath it is parted rather than
-/// rewritten ([`crate::ops::automation`]), and a wire from a placement no run reaches would never carry
-/// anything, so neither of them feeds an input.
+/// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
+/// A wire counts only where **both** halves hold: its far end is declared — that placement's way out
+/// really hands on the port it keys — and that placement is reachable from the entry. A wire from a
+/// placement no run reaches would never carry anything, so it feeds no input.
 fn fed(
     conn: &Connection,
     placement: &AutomationPlacement,
-    port_name: &str,
+    port_id: i64,
     live: &BTreeSet<i64>,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<bool> {
@@ -574,7 +573,7 @@ fn fed(
         conn,
         AutomationPictureOwner::Automation,
         placement.id,
-        port_name,
+        port_id,
     )? {
         if !live.contains(&wire.from_id) {
             continue;
@@ -582,7 +581,7 @@ fn fed(
         let Some(from) = by_id.get(&wire.from_id) else { continue };
         let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Action, from.action_id)?;
         let Some(exit) = exit else { continue };
-        if outs_of(conn, &exit)?.iter().any(|p| p.name == wire.from_port_name) {
+        if outs_of(conn, &exit)?.iter().any(|p| p.id == wire.from_port_id) {
             return Ok(true);
         }
     }
@@ -730,7 +729,7 @@ fn snapshot(
     for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
         let outs = outs_of(conn, &exit)?
             .into_iter()
-            .map(|p| RunDefPort { name: p.name, kind: p.kind, required: p.required })
+            .map(|p| RunDefPort { id: p.id, name: p.name, kind: p.kind, required: p.required })
             .collect();
         exits.push(RunDefExit { id: exit.id, name: exit.name.clone(), outs });
     }
@@ -738,8 +737,8 @@ fn snapshot(
     let declared =
         read::automation_ports_of(conn, AutomationPortOwner::Step, step.id, AutomationPortDirection::In)?;
     for p in declared {
-        let from = wired_into(conn, placement, step.id, &p.name)?;
-        let port = RunDefPort { name: p.name, kind: p.kind, required: p.required };
+        let from = wired_into(conn, placement, step.id, p.id)?;
+        let port = RunDefPort { id: p.id, name: p.name, kind: p.kind, required: p.required };
         ins.push(RunDefIn { port, from });
     }
     let cfg: Vec<RunDefCfg> = settings_of(conn, placement)?
@@ -779,7 +778,7 @@ fn snapshot(
 /// A wire inside the action from another of its steps is a source as it stands. A wire from the
 /// action itself ([`ACTION_BOUNDARY`]) hands on one of the action's inputs, so it is followed out to the
 /// automation's picture: to the wires feeding that input on this placement, and from each of them back
-/// into the action placed at the far end, to the wires that fill the output it names. Those are drawn
+/// into the action placed at the far end, to the wires that fill the output it keys. Those are drawn
 /// into the boundary from a step's way out, and they count only where that way out returns to the very
 /// way out of the action the automation's wire leaves by ([`returns_to`]) — the wire into the boundary
 /// does not name one, and the line from the step's way out is what says which.
@@ -787,11 +786,11 @@ fn wired_into(
     conn: &Connection,
     placement: &AutomationPlacement,
     step_id: i64,
-    port_name: &str,
+    port_id: i64,
 ) -> Result<Vec<RunDefSource>> {
     let mut out = Vec::new();
     for wire in read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)? {
-        if wire.to_id != step_id || wire.to_port_name != port_name {
+        if wire.to_id != step_id || wire.to_port_id != port_id {
             continue;
         }
         if wire.from_id != ACTION_BOUNDARY {
@@ -799,7 +798,7 @@ fn wired_into(
                 placement_id: placement.id,
                 step_id: wire.from_id,
                 exit_id: wire.from_exit_id,
-                port: wire.from_port_name,
+                port_id: wire.from_port_id,
             });
             continue;
         }
@@ -807,13 +806,13 @@ fn wired_into(
             conn,
             AutomationPictureOwner::Automation,
             placement.id,
-            &wire.from_port_name,
+            wire.from_port_id,
         )? {
             let Some(far) = read::automation_placement(conn, outer.from_id)? else { continue };
             for inner in
                 read::automation_wires_of(conn, AutomationPictureOwner::Action, far.action_id)?
             {
-                if inner.to_id != ACTION_BOUNDARY || inner.to_port_name != outer.from_port_name {
+                if inner.to_id != ACTION_BOUNDARY || inner.to_port_id != outer.from_port_id {
                     continue;
                 }
                 let Some(inner_exit) = inner.from_exit_id else { continue };
@@ -823,7 +822,7 @@ fn wired_into(
                         placement_id: far.id,
                         step_id: inner.from_id,
                         exit_id: inner.from_exit_id,
-                        port: inner.from_port_name,
+                        port_id: inner.from_port_id,
                     });
                 }
             }

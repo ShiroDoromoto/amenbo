@@ -8,14 +8,14 @@
 //!
 //! **Three doors, in the order a step walks them.** [`take`] reserves the task the run is about and
 //! declares it in one act, since a task reserved but not declared is one nobody can trace back to the
-//! run. [`out`] puts down each thing the step produced, under the name its port was declared with.
-//! [`done`] names the way out, and that name is the whole condition the next step is chosen by.
+//! run. [`out`] puts down each thing the step produced, on the port it was declared as. [`done`] names
+//! the way out, and that way out is the whole condition the next step is chosen by.
 //!
-//! **A way out is stamped onto what was produced at the end, not at the moment of production.** Two
-//! ways out of one step may each declare an output called `report`, and until the step says which it
-//! took there is no answer to which one a value belongs to. So [`out`] writes the value with no way out
-//! against it and [`done`] stamps the taken one across them — which also means a step that died
-//! half-way leaves values nothing can read, since a wire finds a value by the way out it left through.
+//! **An output is one way out's, and a value is put down on it.** Two ways out of one step may each
+//! declare an output called `report`, and they are two port rows with two ids (`AMB-D-961`). [`out`]
+//! names the row, so the way out a value belongs to is known the moment it is put down. A value put down
+//! on another way out than the one the step leaves by is kept as the record of what the step did, and
+//! handed on by nothing: a wire finds a value by the way out and the port it left through.
 
 use crate::error::{Error, Result};
 use crate::model::{
@@ -93,16 +93,15 @@ fn exits_of(def: &AutomationRunDef) -> Result<Vec<RunDefExit>> {
     serde_json::from_str(&def.exits).map_err(Error::from)
 }
 
-/// Find one declared output by name, wherever among the ways out it was declared. The name is enough:
-/// which way out it belongs to is settled at [`done`], not here.
-fn declared_out<'a>(exits: &'a [RunDefExit], name: &str) -> Option<&'a RunDefPort> {
-    exits.iter().find_map(|e| e.outs.iter().find(|p| p.name == name))
+/// Find one declared output by its id, and the way out it hangs on.
+fn declared_out(exits: &[RunDefExit], port_id: i64) -> Option<(&RunDefExit, &RunDefPort)> {
+    exits.iter().find_map(|e| e.outs.iter().find(|p| p.id == port_id).map(|p| (e, p)))
 }
 
-/// **What one of this step's declared outputs carries**, by the name it was declared under — `None`
-/// where the step declares nothing under that name.
+/// **What one of this step's declared outputs carries**, by its id — `None` where the step declares no
+/// output of that id.
 ///
-/// It is read **before** a value is put down, because what a name takes decides which command says it:
+/// It is read **before** a value is put down, because what a port takes decides which command says it:
 /// a value and a file go down with `automation step-out`, the task the run is about is reserved and handed
 /// on in one act by [`take`], and a task the step raised along the way goes down with `out` too, as an
 /// id. A caller that guessed would be refused by [`put`] with a sentence about kinds, which is not the
@@ -110,13 +109,13 @@ fn declared_out<'a>(exits: &'a [RunDefExit], name: &str) -> Option<&'a RunDefPor
 pub fn out_kind(
     conn: &Connection,
     run_step_id: i64,
-    name: &str,
+    port_id: i64,
 ) -> Result<Option<AutomationPortKind>> {
     let run_step = read::automation_run_step(conn, run_step_id)?
         .ok_or_else(|| not_found("step execution", run_step_id))?;
     let def = read::automation_run_def(conn, run_step.run_def_id)?
         .ok_or_else(|| not_found("step of a run", run_step.run_def_id))?;
-    Ok(declared_out(&exits_of(&def)?, name).map(|port| port.kind))
+    Ok(declared_out(&exits_of(&def)?, port_id).map(|(_, port)| port.kind))
 }
 
 // ───────────────────────── take ─────────────────────────
@@ -170,45 +169,55 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
             )?;
         }
     }
-    put(tx, &run_step, port, Some(exit), Produced::Task(task.id))?;
+    put(tx, &run_step, port, exit, Produced::Task(task.id))?;
     Ok(task)
 }
 
 // ───────────────────────── out ─────────────────────────
 
-/// **Put down one thing this step produced**, under the name its port was declared with.
+/// **Put down one thing this step produced**, on the output its id names — which is also the way out
+/// it belongs to, for the reason this module opens with.
 ///
-/// The way out it belongs to is left open here and stamped at [`done`], for the reason this module
-/// opens with. What is checked is that the name was declared at all and that what is being put down is
-/// the kind the declaration asked for — a file written into a `value` port would be a row no wire could
-/// carry and no screen could draw.
+/// What is checked is that the id is one of this step's outputs and that what is being put down is the
+/// kind the declaration asked for — a file written into a `value` port would be a row no wire could
+/// carry and no screen could draw. An id that is not an output here is refused naming the ones that
+/// are, so the agent types it again from the list.
 ///
-/// Putting the same name down twice replaces the first: a step that corrects itself before reporting is
-/// saying the later one is the answer, and two rows under one name would leave a wire choosing.
+/// Putting the same output down twice replaces the first: a step that corrects itself before reporting
+/// is saying the later one is the answer, and two rows on one port would leave a wire choosing.
 pub fn out(
     tx: &WriteTx<'_>,
     run_step_id: i64,
-    name: &str,
+    port_id: i64,
     produced: Produced<'_>,
 ) -> Result<AutomationRunValue> {
     let run_step = live_execution(tx, run_step_id)?;
     let def = def_of(tx, &run_step)?;
     let exits = exits_of(&def)?;
-    let port = declared_out(&exits, name).ok_or_else(|| {
-        Error::invalid(format!("step '{}' declares nothing called '{name}' to hand on", def.name))
+    let (exit, port) = declared_out(&exits, port_id).ok_or_else(|| {
+        let declared = exits
+            .iter()
+            .flat_map(|e| e.outs.iter())
+            .map(|p| format!("{} ({})", p.id, p.name))
+            .collect::<Vec<_>>();
+        Error::invalid(match declared.is_empty() {
+            true => format!("step '{}' declares nothing to hand on", def.name),
+            false => format!(
+                "step '{}' declares no output '{port_id}' — the ones it does: {}",
+                def.name,
+                declared.join(", ")
+            ),
+        })
     })?;
-    put(tx, &run_step, port, None, produced)
+    put(tx, &run_step, port, exit, produced)
 }
 
-/// Write one produced value down, replacing whatever stood under the same name.
-///
-/// `exit` is given only where the way out is already settled — [`take`], whose task came out of the one
-/// way out that declares it. Everything else is stamped at [`done`].
+/// Write one produced value down on its output, replacing whatever stood on the same one.
 fn put(
     tx: &WriteTx<'_>,
     run_step: &AutomationRunStep,
     port: &RunDefPort,
-    exit: Option<&RunDefExit>,
+    exit: &RunDefExit,
     produced: Produced<'_>,
 ) -> Result<AutomationRunValue> {
     let (value, attachment_id, task_id) = match (port.kind, produced) {
@@ -238,7 +247,7 @@ fn put(
         }
     };
     for standing in read::automation_run_values_of(tx.conn(), run_step.id)? {
-        if standing.direction == AutomationPortDirection::Out && standing.name == port.name {
+        if standing.direction == AutomationPortDirection::Out && standing.port_id == port.id {
             tx.delete_record("automation_run_value", standing.id)?;
         }
     }
@@ -247,8 +256,8 @@ fn put(
         id: read::next_id(tx.conn(), "automation_run_value")?,
         run_step_id: run_step.id,
         direction: AutomationPortDirection::Out,
-        exit_id: exit.map(|e| e.id),
-        name: port.name.clone(),
+        exit_id: Some(exit.id),
+        port_id: port.id,
         kind: port.kind,
         value,
         attachment_id,
@@ -318,9 +327,9 @@ pub fn done(
         .filter(|p| {
             !produced
                 .iter()
-                .any(|v| v.direction == AutomationPortDirection::Out && v.name == p.name)
+                .any(|v| v.direction == AutomationPortDirection::Out && v.port_id == p.id)
         })
-        .map(|p| p.name.clone())
+        .map(|p| format!("{} ({})", p.id, p.name))
         .collect();
     if !missing.is_empty() {
         return Err(Error::invalid(format!(
@@ -332,22 +341,6 @@ pub fn done(
     }
 
     let now = Timestamp::now();
-    // Every value this step put down belongs to the way out it turned out to take. A value already
-    // carrying one came from `take`, where the way out was never in question.
-    for standing in produced {
-        if standing.direction != AutomationPortDirection::Out || standing.exit_id.is_some() {
-            continue;
-        }
-        let mut stamped = standing.clone();
-        stamped.exit_id = Some(taken.id);
-        stamped.updated_at = now;
-        crate::ops::emit_update(
-            tx,
-            record::automation_run_value(&standing),
-            record::automation_run_value(&stamped),
-        )?;
-    }
-
     let mut ended = run_step.clone();
     ended.exit_id = Some(taken.id);
     ended.report = report.to_string();
@@ -552,7 +545,9 @@ mod tests {
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_run::{launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
-    use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, way_out, with_tx};
+    use crate::ops::test_support::{
+        mk_exit, mk_in, mk_out, mk_placed, mk_project, out_port, way_out, with_tx,
+    };
 
     /// The picture these tests walk: a spot that takes a task and hands a note on through "found", and
     /// a second spot wired to read it. Both ways out of both are decided, so it launches.
@@ -675,7 +670,13 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first).run_step;
 
-            let kind = |name: &str| out_kind(tx.conn(), step.id, name).expect("read");
+            let kind = |name: &str| {
+                let port = match name {
+                    "nothing of the sort" => 999_999,
+                    name => out_port(tx, step.id, None, name),
+                };
+                out_kind(tx.conn(), step.id, port).expect("read")
+            };
             assert_eq!(kind("note"), Some(AutomationPortKind::Value));
             assert_eq!(kind("タスク"), Some(AutomationPortKind::TaskTake));
             assert_eq!(kind("raised"), Some(AutomationPortKind::TaskMake));
@@ -698,10 +699,10 @@ mod tests {
             take(tx, step.id, working.id).expect("take");
             let raised = a_task(tx, p.project, "あとで直す");
 
-            out(tx, step.id, "raised", Produced::Task(raised.id)).expect("hand it on");
+            out(tx, step.id, out_port(tx, step.id, None, "raised"), Produced::Task(raised.id)).expect("hand it on");
 
             let handed = outs(tx, step.id);
-            let one = handed.iter().find(|v| v.name == "raised").expect("the raised task");
+            let one = handed.iter().find(|v| v.port_id == out_port(tx, step.id, None, "raised")).expect("the raised task");
             assert_eq!(one.task_id, Some(raised.id));
             assert_eq!(
                 read::task_status(tx.conn(), raised.id).expect("read"),
@@ -758,6 +759,41 @@ mod tests {
         });
     }
 
+    /// **An output is one way out's** (`AMB-D-961`). Two ways out declaring an output of one name are two
+    /// ports, and a value put down on one belongs to its way out from that moment: leaving by the other
+    /// way out finds its own output still missing, and the value on the first stays behind with the way
+    /// out it was put down on.
+    #[test]
+    fn a_value_is_put_down_on_one_way_out_s_output() {
+        with_tx(|tx| {
+            let p = picture(tx, true);
+            mk_out(tx, &p.first_action, None, "note", AutomationPortKind::Value, true);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first).run_step;
+            let found = way_out(tx, step.id, "found");
+            let on_found = out_port(tx, step.id, found, "note");
+            let unnamed = exits_of(&read::automation_run_def(tx.conn(), step.run_def_id).unwrap().unwrap())
+                .unwrap()
+                .into_iter()
+                .find(|e| e.name.is_none())
+                .expect("the unnamed way out")
+                .id;
+            let on_unnamed = out_port(tx, step.id, Some(unnamed), "note");
+            assert_ne!(on_found, on_unnamed, "one name, two ports");
+
+            let put = out(tx, step.id, on_found, Produced::Value("for found")).expect("out");
+            assert_eq!(put.exit_id, found, "it is the way out's the moment it is put down");
+            let refused = done(tx, step.id, Some(unnamed), "Nothing to fix.").expect_err("still missing");
+            assert!(refused.to_string().contains(&format!("{on_unnamed} (note)")), "{refused}");
+
+            out(tx, step.id, on_unnamed, Produced::Value("for the unnamed")).expect("out");
+            done(tx, step.id, Some(unnamed), "Nothing to fix.").expect("done");
+            let kept = outs(tx, step.id);
+            assert_eq!(kept.len(), 2, "the value on the other way out is kept as the record");
+            assert!(kept.iter().any(|v| v.port_id == on_found && v.exit_id == found));
+        });
+    }
+
     #[test]
     fn what_is_put_down_has_to_be_declared_and_of_the_declared_kind() {
         with_tx(|tx| {
@@ -765,15 +801,16 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
 
-            let unknown = out(tx, step.run_step.id, "nothing", Produced::Value("x"))
+            let unknown = out(tx, step.run_step.id, 999_999, Produced::Value("x"))
                 .expect_err("nobody declared it");
-            assert!(unknown.to_string().contains("nothing called 'nothing'"), "{unknown}");
+            assert!(unknown.to_string().contains("declares no output '999999'"), "{unknown}");
+            assert!(unknown.to_string().contains("(note)"), "and names the ones it does: {unknown}");
 
-            let wrong_kind = out(tx, step.run_step.id, "note", Produced::Task(1))
+            let wrong_kind = out(tx, step.run_step.id, out_port(tx, step.run_step.id, None, "note"), Produced::Task(1))
                 .expect_err("a note is a value");
             assert!(wrong_kind.to_string().contains("hands on a value"), "{wrong_kind}");
 
-            out(tx, step.run_step.id, "note", Produced::Value("what I found")).expect("out");
+            out(tx, step.run_step.id, out_port(tx, step.run_step.id, None, "note"), Produced::Value("what I found")).expect("out");
         });
     }
 
@@ -784,8 +821,8 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
 
-            out(tx, step.run_step.id, "note", Produced::Value("first")).expect("out");
-            out(tx, step.run_step.id, "note", Produced::Value("second")).expect("out again");
+            out(tx, step.run_step.id, out_port(tx, step.run_step.id, None, "note"), Produced::Value("first")).expect("out");
+            out(tx, step.run_step.id, out_port(tx, step.run_step.id, None, "note"), Produced::Value("second")).expect("out again");
             let standing = outs(tx, step.run_step.id);
             assert_eq!(standing.len(), 1);
             assert_eq!(standing[0].value.as_deref(), Some("second"));
@@ -800,7 +837,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "SCENARIO SEED — the one to work");
             take(tx, step.run_step.id, task.id).expect("take");
-            out(tx, step.run_step.id, "note", Produced::Value("what I found")).expect("out");
+            out(tx, step.run_step.id, out_port(tx, step.run_step.id, None, "note"), Produced::Value("what I found")).expect("out");
 
             let found = way_out(tx, step.run_step.id, "found");
             let next = done(tx, step.run_step.id, found, "Looked at it.").expect("done");
@@ -810,7 +847,7 @@ mod tests {
             }
             let note = outs(tx, step.run_step.id)
                 .into_iter()
-                .find(|v| v.name == "note")
+                .find(|v| v.port_id == out_port(tx, step.run_step.id, None, "note"))
                 .expect("the note");
             assert_eq!(note.exit_id, found);
 
@@ -948,7 +985,7 @@ mod tests {
             done(tx, step.run_step.id, None, "")
                 .expect("done");
 
-            let refused = out(tx, step.run_step.id, "note", Produced::Value("late"))
+            let refused = out(tx, step.run_step.id, out_port(tx, step.run_step.id, None, "note"), Produced::Value("late"))
                 .expect_err("it has ended");
             assert!(refused.to_string().contains("only a running one"), "{refused}");
         });

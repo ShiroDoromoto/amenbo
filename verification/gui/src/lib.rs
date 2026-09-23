@@ -6310,6 +6310,30 @@ impl Instructor {
                 ),
                 false => "On the running tab, confirm no row for this run is drawn.".to_string(),
             },
+            // A row of the history tab: the same line the running tab draws, once the run is over.
+            // A failure is here only once acknowledged, so it is said as failed and nothing more.
+            (Domain::Automation, "history-row") => match present(with) {
+                true => format!(
+                    "On the history tab, confirm a row for this run is listed, saying it is {}{}{}.",
+                    match req(with, "state")? {
+                        "completed" => "completed",
+                        "failed" => "failed",
+                        "canceled" => "canceled",
+                        other => return Err(format!(
+                            "`state` does not know `{other}` on the history — it is completed / failed / canceled"
+                        )),
+                    },
+                    match arg_str(with, "reason") {
+                        Some(reason) => format!(", with the line under it saying {}", run_ending(reason)?),
+                        None => String::new(),
+                    },
+                    match with.get("project") {
+                        Some(_) => format!(", and naming the project \"{}\"", self.key_label(with, "project")),
+                        None => String::new(),
+                    }
+                ),
+                false => "On the history tab, confirm no row for this run is listed.".to_string(),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -8326,6 +8350,10 @@ steps_gui:
     op: start-from-frame
     with: { target: auto }
     as: from_frame
+  - type: assert
+    domain: automation
+    op: history-row
+    with: { target: from_frame, state: canceled }
   - type: assert
     domain: automation
     op: every-listed

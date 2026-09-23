@@ -4418,6 +4418,11 @@ impl Instructor {
                 self.target_label(with),
                 self.key_label(with, "project")
             ),
+            // A row of the runs holding the open build screen's definition. The row is the running
+            // tab's own line, so it goes where that line goes: the pane the run is drawn in.
+            (Domain::Automation, "held-go") => {
+                "On the build screen, under \"Runs using it\", press the row for this run. Confirm the workspace comes forward on the pane the run is drawn in.".to_string()
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -6206,6 +6211,16 @@ impl Instructor {
                 self.target_label(with),
                 self.key_label(with, "project")
             ),
+            // The build screen of a definition a run is going on — an automation's or an action's,
+            // whichever the road has open. Held, it names the run and offers no write; released, the
+            // list is gone and the writes are back.
+            (Domain::Automation, "held-by") => match present(with) {
+                true => match with.contains_key("target") {
+                    true => "On the build screen, confirm \"Runs using it\" is drawn over the picture with a row for this run. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
+                    false => return Err("`held-by` names the run it lists — give it `target`, or say `present: false`".to_string()),
+                },
+                false => "On the build screen, confirm nothing is drawn under \"Runs using it\", and the definition takes writes again: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
+            },
             // The words over the rows are the interface's own, in the language the run is in, so
             // what the step names is what they say rather than how.
             (Domain::Automation, "scope-said") => format!(
@@ -8440,6 +8455,18 @@ steps_gui:
     domain: automation
     op: scope-refusal-names
     with: { target: act, reach: project, names: auto }
+  - type: assert
+    domain: automation
+    op: held-by
+    with: { target: run }
+  - type: action
+    domain: automation
+    op: held-go
+    with: { target: run }
+  - type: assert
+    domain: automation
+    op: held-by
+    with: { present: false }
 "#);
         let mut ins = Instructor::new();
         // What the premise made is what the road then points at, so its labels are learnt without a
@@ -8460,6 +8487,21 @@ steps_gui:
             lines.iter().any(|l| l.contains("adds an action") && l.contains("\"Triage\"") && l.contains("the global library")),
             "the action made from the list is said with its reach",
         );
+        let n = lines.len();
+        assert!(lines[n - 3].contains("\"Runs using it\"") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
+        assert!(lines[n - 2].contains("press the row for this run") && lines[n - 2].contains("pane"), "{}", lines[n - 2]);
+        assert!(lines[n - 1].contains("nothing is drawn") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
+    }
+
+    /// `held-by` lists a run, so a road reading the hold names which one; only the release names
+    /// none.
+    #[test]
+    fn held_by_names_the_run_it_lists() {
+        let ins = Instructor::new();
+        let mut with = Args::new();
+        assert!(ins.assert(Domain::Automation, "held-by", &with).is_err());
+        with.insert("present".to_string(), serde_yaml::Value::Bool(false));
+        assert!(ins.assert(Domain::Automation, "held-by", &with).is_ok());
     }
 
     /// What the dialog that puts a box in is told to declare on it. One of a thing and several read

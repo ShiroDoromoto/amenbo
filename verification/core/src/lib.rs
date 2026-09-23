@@ -4421,6 +4421,18 @@ const REGISTRY: &[OpSpec] = &[
     // What the two run tabs say over their rows when the sidebar opened them: that they hold every
     // run on this device, since no project narrowed them. `tab` is `running` or `history`.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "scope-said", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
+    //
+    // **A definition a run is going on, on its build screen** — an automation's or a library
+    // action's, whichever is open. While a run of it is running or paused, core refuses every rewrite,
+    // and the screen holds itself shut: the runs holding it are listed over the picture, nothing on
+    // the picture adds a box, and the panel's fields are shut. A screen road alone: the terminal's is
+    // the refusal itself (`update` / `action-update` with `refused: conflict`).
+    //
+    // `target` is the run the list names. `present: false` is the release — nothing listed, and the
+    // writes offered again — and names no run.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "held-by", required: &[], refs: &["target"], strings: &[], binds: false },
+    // Pressing a run's row in that list, which goes to the pane it is drawn in — where it is stopped.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "held-go", required: &["target"], refs: &["target"], strings: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

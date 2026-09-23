@@ -1518,7 +1518,7 @@ impl AutomationPortKind {
 ///
 /// `Exit` is an action's picture's alone. It is the line that joins what an action declares to what is
 /// inside it: the inner step ends, and the run leaves the action by the way out
-/// [`AutomationEdge::exit_to`] names, which is the way out the picture the placement stands on then
+/// [`AutomationEdge::exit_to_id`] keys, which is the way out the picture the placement stands on then
 /// reads. On an automation's picture there is nothing outside to leave to, so `Done` is where a run
 /// ends there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1738,17 +1738,18 @@ pub struct AutomationEdge {
     pub owner_kind: AutomationPictureOwner,
     pub owner_id: i64,
     pub from_id: i64,
-    /// The way out this edge hangs on — `None` for the unnamed one, [`ERROR_EXIT`] for the error one.
-    #[serde(default)]
-    pub exit_name: Option<String>,
+    /// The way out this edge hangs on — the [`AutomationExit`] row, not its name, so renaming the way
+    /// out leaves the edge on it (`AMB-D-961`). On an automation's picture it is a way out of the action
+    /// the placement stands on; on an action's, a way out of the step.
+    pub exit_id: i64,
     /// Where it goes, for `ends = Go`. `None` for the three that go to no box of this picture.
     #[serde(default)]
     pub to_id: Option<i64>,
     pub ends: AutomationEnds,
-    /// The way out of the action the run leaves by, for `ends = Exit` — a name among the action this
-    /// picture belongs to declares, `None` being its unnamed one. Read on no other `ends`.
+    /// The way out of the action the run leaves by, for `ends = Exit` — one the action this picture
+    /// belongs to declares. `None` on every other `ends`.
     #[serde(default)]
-    pub exit_to: Option<String>,
+    pub exit_to_id: Option<i64>,
     /// How often this edge may be taken for one task. `None` is no limit, which is the right answer for
     /// an edge into a box that takes a fresh task.
     #[serde(default)]
@@ -1759,13 +1760,13 @@ pub struct AutomationEdge {
 }
 
 /// **What is handed from one box to the next**, on either of the two pictures an [`AutomationEdge`] is
-/// drawn on. Both ends are named rather than keyed: one action placed twice on an automation gives two
-/// placements whose ports carry the same names, so only `from_id` + `from_exit_name` + `from_port_name`
-/// says which of them is meant.
+/// drawn on. The way out it leaves by is keyed and the ports at either end are named: one action placed
+/// twice on an automation gives two placements whose ports carry the same names, so only `from_id` +
+/// `from_exit_id` + `from_port_name` says which of them is meant.
 ///
 /// On an action's picture either end may be [`ACTION_BOUNDARY`] instead of a step, which is how what the
 /// action declares reaches what is inside it. Out of the boundary comes an input the action declares
-/// (`from_exit_name` is `None` — an action's inputs hang on the action, not on a way out); into it goes
+/// (`from_exit_id` is `None` — an action's inputs hang on the action, not on a way out); into it goes
 /// an output declared on the way out of the action that this way out of the step returns to.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationWire {
@@ -1774,7 +1775,7 @@ pub struct AutomationWire {
     pub owner_id: i64,
     pub from_id: i64,
     #[serde(default)]
-    pub from_exit_name: Option<String>,
+    pub from_exit_id: Option<i64>,
     pub from_port_name: String,
     pub to_id: i64,
     pub to_port_name: String,
@@ -1949,9 +1950,13 @@ pub struct AutomationRunDef {
     pub updated_at: Timestamp,
 }
 
-/// One way out, as [`AutomationRunDef::exits`] holds it: the name, and what leaves through it.
+/// One way out, as [`AutomationRunDef::exits`] holds it: which row it was, its name, and what leaves
+/// through it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefExit {
+    /// The [`AutomationExit`] row this was copied from — what `step-done --exit` names and what the
+    /// run's records key the way out by. Kept after the row itself is renamed or gone.
+    pub id: i64,
     /// `None` is the unnamed way out; [`ERROR_EXIT`] is the error one.
     #[serde(default)]
     pub name: Option<String>,
@@ -2052,9 +2057,10 @@ pub struct AutomationRunStep {
     #[serde(default)]
     pub run_task_id: Option<i64>,
     pub seq: i64,
-    /// The way out the agent left through — `None` for the unnamed one, and while it is still running.
+    /// The way out the agent left through, keyed as the run's copy of the step keys it
+    /// ([`RunDefExit::id`]) — `None` while it is still running.
     #[serde(default)]
-    pub exit_name: Option<String>,
+    pub exit_id: Option<i64>,
     pub report: String,
     pub status: AutomationRunStepStatus,
     #[serde(default)]
@@ -2075,9 +2081,10 @@ pub struct AutomationRunValue {
     /// The step execution that received it (`In`) or produced it (`Out`).
     pub run_step_id: i64,
     pub direction: AutomationPortDirection,
-    /// The way out it left through, for an `Out`. `None` on an `In`, and on the unnamed way out.
+    /// The way out it left through, for an `Out`, keyed as [`AutomationRunStep::exit_id`] is. `None` on
+    /// an `In`, and on an `Out` whose step has not finished.
     #[serde(default)]
-    pub exit_name: Option<String>,
+    pub exit_id: Option<i64>,
     pub name: String,
     pub kind: AutomationPortKind,
     #[serde(default)]

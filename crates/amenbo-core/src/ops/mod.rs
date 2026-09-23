@@ -199,6 +199,29 @@ pub(crate) mod test_support {
         (action, placement)
     }
 
+    /// **The id a step execution's copy keys one way out by**, found by its name — what a test that
+    /// reads "leave by `found`" hands `step-done`, which takes the id (`AMB-D-961`). `None` where the
+    /// copy declares no such way out.
+    pub(crate) fn way_out(tx: &WriteTx<'_>, run_step_id: i64, name: &str) -> Option<i64> {
+        let step = crate::store_engine::read::automation_run_step(tx.conn(), run_step_id).ok()??;
+        let def = crate::store_engine::read::automation_run_def(tx.conn(), step.run_def_id).ok()??;
+        let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
+        exits.into_iter().find(|e| e.name.as_deref() == Some(name)).map(|e| e.id)
+    }
+
+    /// **The id of one way out a box declares**, by its name — `None` being the unnamed one.
+    pub(crate) fn exit_id(
+        tx: &WriteTx<'_>,
+        owner: crate::model::AutomationOwner,
+        owner_id: i64,
+        name: Option<&str>,
+    ) -> i64 {
+        crate::store_engine::read::automation_exit_by_name(tx.conn(), owner, owner_id, name)
+            .expect("read")
+            .expect("the way out")
+            .id
+    }
+
     /// The one step a [`mk_placed`] action holds.
     pub(crate) fn only_step(
         tx: &WriteTx<'_>,

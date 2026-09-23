@@ -4335,15 +4335,21 @@ impl Instructor {
                 req(with, "value")?
             ),
             // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
-            // one — which is the shape of the command and not a default this writes in.
-            (Domain::Automation, "done-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\"{}` and run it, and confirm the line comes back saying the step is done.",
-                req(with, "report")?,
+            // one — which is the shape of the command and not a default this writes in. A way out is
+            // typed by its id, which the store issues, so the road names the way out
+            // and the step's own text in the pane is where its id is read — the gap `take-in-pane`
+            // leaves for a task's ref, for the same reason.
+            (Domain::Automation, "done-in-pane") => {
+                let report = req(with, "report")?;
                 match arg_str(with, "exit") {
-                    Some(exit) => format!(" --exit \"{exit}\""),
-                    None => String::new(),
+                    Some(exit) => format!(
+                        "In the pane this run is drawn in, type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
+                    ),
+                    None => format!(
+                        "In the pane this run is drawn in, type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
+                    ),
                 }
-            ),
+            }
             // The other side of those three: a verb that builds or drives, reached for from inside a
             // step. What the line says is spelled out rather than left at "it was refused", because
             // this road is about which refusal — a mistyped number is turned away too, and on a shot

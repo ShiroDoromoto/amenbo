@@ -825,7 +825,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             let report = body_arg(report)?;
             let next = store
-                .automation_done(step, exit.as_deref(), &report)
+                .automation_done(step, exit, &report)
                 .map_err(CliError::from)?;
             let value = json!({ "step": step, "next": next_word(&next) });
             write_envelope(flags, "automation.done", "automation_run_step", value, None, false, next_line(&next));
@@ -974,16 +974,15 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
         human(flags, format!("    set  {}", one_cfg(cfg)));
     }
     for exit in &placement.exits {
-        human(flags, format!("    way out {}", one_exit(exit.exit.name.as_deref())));
+        human(flags, format!("    way out {}  [{}]", one_exit(exit.exit.name.as_deref()), exit.exit.id));
         for port in &exit.outputs {
             human(flags, format!("        hands on  {}", one_port(port)));
         }
-        for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_name == exit.exit.name)
-        {
-            human(flags, format!("        then  {}", one_edge(edge)));
+        for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_id == exit.exit.id) {
+            human(flags, format!("        then  {}", one_edge(edge, &[])));
         }
         for wire in
-            view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_name == exit.exit.name)
+            view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_id == Some(exit.exit.id))
         {
             human(
                 flags,
@@ -994,19 +993,17 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
             );
         }
     }
-    // An edge hanging on a name the action no longer declares is what a way out being renamed or
-    // deleted leaves behind, and it is the reason a picture stops walking — so it is written out
-    // rather than left off the account.
-    let declared: Vec<Option<String>> = placement.exits.iter().map(|e| e.exit.name.clone()).collect();
-    for edge in
-        view.edges.iter().filter(|e| e.from_id == row.id && !declared.contains(&e.exit_name))
-    {
+    // An edge keyed to a way out the action no longer declares is the reason a picture stops walking,
+    // so it is written out rather than left off the account. Deleting a way out takes its edges with it
+    // (`AMB-D-961`); what is left to show here is an edge a store carried in from before that.
+    let declared: Vec<i64> = placement.exits.iter().map(|e| e.exit.id).collect();
+    for edge in view.edges.iter().filter(|e| e.from_id == row.id && !declared.contains(&e.exit_id)) {
         human(
             flags,
             format!(
-                "    way out {} — no longer declared\n        then  {}",
-                one_exit(edge.exit_name.as_deref()),
-                one_edge(edge)
+                "    way out [{}] — no longer declared\n        then  {}",
+                edge.exit_id,
+                one_edge(edge, &[])
             ),
         );
     }
@@ -1084,16 +1081,15 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
         human(flags, format!("    takes  {}", one_port(port)));
     }
     for exit in &step.exits {
-        human(flags, format!("    way out {}", one_exit(exit.exit.name.as_deref())));
+        human(flags, format!("    way out {}  [{}]", one_exit(exit.exit.name.as_deref()), exit.exit.id));
         for port in &exit.outputs {
             human(flags, format!("        hands on  {}", one_port(port)));
         }
-        for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_name == exit.exit.name)
-        {
-            human(flags, format!("        then  {}", one_edge(edge)));
+        for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_id == exit.exit.id) {
+            human(flags, format!("        then  {}", one_edge(edge, &view.exits)));
         }
         for wire in
-            view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_name == exit.exit.name)
+            view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_id == Some(exit.exit.id))
         {
             let into = match wire.to_id {
                 amenbo_core::model::ACTION_BOUNDARY => "the action".to_string(),
@@ -1149,15 +1145,25 @@ fn one_cfg(cfg: &amenbo_core::model::AutomationCfg) -> String {
     format!("{}  {}  {required}{options}{answer}", cfg.name, cfg.kind.as_str())
 }
 
-/// What happens after a way out is taken, as one phrase.
-fn one_edge(edge: &amenbo_core::model::AutomationEdge) -> String {
+/// What happens after a way out is taken, as one phrase. `action_exits` are the ways out of the action
+/// the picture is inside, which a line leaving the action is read against — empty on an automation's
+/// picture, where no line leaves anything.
+fn one_edge(
+    edge: &amenbo_core::model::AutomationEdge,
+    action_exits: &[amenbo_core::ops::automation_view::ExitView],
+) -> String {
     let where_to = match (edge.ends, edge.to_id) {
         (amenbo_core::model::AutomationEnds::Go, Some(next)) => format!("box {next}"),
         (amenbo_core::model::AutomationEnds::Go, None) => "nowhere".to_string(),
-        (amenbo_core::model::AutomationEnds::Exit, _) => match &edge.exit_to {
-            Some(name) => format!("out of the action by '{name}'"),
-            None => "out of the action by its unnamed way out".to_string(),
-        },
+        (amenbo_core::model::AutomationEnds::Exit, _) => {
+            match action_exits.iter().find(|e| Some(e.exit.id) == edge.exit_to_id) {
+                Some(e) => match e.exit.name.as_deref() {
+                    Some(name) => format!("out of the action by '{name}'"),
+                    None => "out of the action by its unnamed way out".to_string(),
+                },
+                None => "out of the action by a way out it no longer declares".to_string(),
+            }
+        }
         (amenbo_core::model::AutomationEnds::Done, _) => "the run is done".to_string(),
         (amenbo_core::model::AutomationEnds::Halt, _) => "the run stops for a person".to_string(),
     };
@@ -1233,7 +1239,7 @@ fn render_move(
             "  {}. {}  left through {}  {}  [{}]",
             m.seq,
             named_step(defs, m),
-            named(m.exit_name.as_deref()),
+            named(left_by(defs, m).as_deref()),
             span(m.started_at, m.ended_at),
             m.status.as_str(),
         ),
@@ -1263,6 +1269,14 @@ fn named_step(defs: &[AutomationRunDef], m: &AutomationRunStep) -> String {
         .find(|d| d.id == m.run_def_id)
         .map(|d| d.name.clone())
         .unwrap_or_else(|| "a step".to_string())
+}
+
+/// The name of the way out an execution left by, read from the run's copy of the step — the live row
+/// may have been renamed or deleted since. `None` is the unnamed one.
+fn left_by(defs: &[AutomationRunDef], m: &AutomationRunStep) -> Option<String> {
+    let def = defs.iter().find(|d| d.id == m.run_def_id)?;
+    let exits: Vec<amenbo_core::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
+    exits.into_iter().find(|e| Some(e.id) == m.exit_id).and_then(|e| e.name)
 }
 
 /// One value on one line, said from the side it was on: what came in, and what went out.

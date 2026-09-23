@@ -2003,8 +2003,7 @@ pub enum AutomationCmd {
         #[arg(long)]
         name: String,
     },
-    /// Rename a way out. Whatever named the old name is parted from it — the edges and wires that named
-    /// it stop resolving, visibly, rather than being rewritten underneath
+    /// Rename a way out. The edges and wires on it key it by its id, so they stay on it
     ExitRename {
         /// way out id
         id: i64,
@@ -2015,7 +2014,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear: bool,
     },
-    /// Delete a way out with the outputs declared on it — confirms unless -y
+    /// Delete a way out with the outputs declared on it and the edges and wires keyed to it — confirms
+    /// unless -y
     ExitRm {
         /// way out id
         id: i64,
@@ -2300,9 +2300,9 @@ pub enum AutomationCmd {
         /// what this step did, for the record and for the steps after it (`-` reads stdin)
         #[arg(long, value_name = "TEXT")]
         report: String,
-        /// the way out taken, as the step declared it. Left out is the unnamed one
-        #[arg(long, value_name = "NAME")]
-        exit: Option<String>,
+        /// the way out taken, by the id the step's text lists for it. Left out is the unnamed one
+        #[arg(long, value_name = "ID")]
+        exit: Option<i64>,
         /// one more thing produced, `<name>=<value>` — repeat for several
         #[arg(long = "out", value_name = "NAME=VALUE")]
         outs: Vec<String>,

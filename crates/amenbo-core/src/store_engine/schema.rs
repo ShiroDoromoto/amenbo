@@ -1144,15 +1144,16 @@ datasets! {
     // because they are one thing — a line from a way out to what follows it — which keeps reading a
     // picture one piece of code instead of two that drift apart.
     //
-    // `exit_name` NULL is the unnamed exit; `'*'` is the error one, which every step and every action
-    // has and nobody can delete. A box with no `'*'` row of its own stops the run rather than
-    // guessing, which is what `ends = 'halt'` says — and `'go'` moves to `to_id`, while `'done'`
-    // closes the run.
+    // `exit_id` is the `automation_exit` row the line hangs on — a key, not a name, so renaming a way
+    // out leaves every line on it standing (`AMB-D-961`). On an automation's picture it is a way out
+    // of the action the placement stands on; on an action's, a way out of the step. A box with no
+    // line on its error way out (`'*'`) stops the run rather than guessing, which is what
+    // `ends = 'halt'` says — and `'go'` moves to `to_id`, while `'done'` closes the run.
     //
     // `'exit'` is an action's picture's alone, and it is the line that joins what an action declares
     // to what is inside it: the inner step ends and the run leaves the action by the way out
-    // `exit_to` names, which is the way out the placement standing on that action is then read by.
-    // `exit_to` NULL is the action's unnamed way out, and no other `ends` reads the column.
+    // `exit_to_id` keys, which is the way out the placement standing on that action is then read by.
+    // No other `ends` reads the column, and it is NULL for them.
     //
     // `max_times` is how often this edge may be taken **for one task**: the count is kept per
     // `automation_run_task` row and starts again at the next task, so a loop that goes back to fix
@@ -1163,20 +1164,20 @@ datasets! {
         // Polymorphic, all three of them — see `automation_cfg`'s note.
         owner_id: col(KEY_REF),
         from_id: col(KEY_REF),
-        exit_name: col(OPT),
+        exit_id: col(KEY_REF),
         to_id: col(KEY_REF_OPT),
         ends: enum_col("go", "done", "halt", "exit"),
-        exit_to: col(OPT),
+        exit_to_id: col(KEY_REF_OPT),
         max_times: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
     // **What is handed from one box to the next**, on either of the two pictures `automation_edge` is
-    // drawn on. Both ends are named rather than keyed: one action placed twice on an automation gives
-    // two placements whose ports carry the same names, so only `from_id` + `from_exit_name` +
-    // `from_port_name` says which of them is meant. The names are also what survives a library
-    // action's ports being re-declared underneath, where an id would be left pointing at a row that
-    // is gone.
+    // drawn on. The way out it leaves by is keyed (`from_exit_id`, `AMB-D-961`), and the ports at
+    // either end are named: one action placed twice on an automation gives two placements whose ports
+    // carry the same names, so only `from_id` + `from_exit_id` + `from_port_name` says which of them
+    // is meant. `from_exit_id` is NULL where the wire starts at the action itself, whose inputs hang
+    // on no way out.
     //
     // On an action's picture either end may be `0` — the action itself, which no step's id can be
     // (`crate::model::ACTION_BOUNDARY`). That is how what the action declares reaches what is inside
@@ -1186,7 +1187,7 @@ datasets! {
         owner_kind: enum_col("automation", "action"),
         owner_id: col(KEY_REF),
         from_id: col(KEY_REF),
-        from_exit_name: col(OPT),
+        from_exit_id: col(KEY_REF_OPT),
         from_port_name: col(REQ),
         to_id: col(KEY_REF),
         to_port_name: col(REQ),
@@ -1270,12 +1271,16 @@ datasets! {
     //
     // `report` is what the agent said when it finished, kept whole. The story handed to later steps
     // shows its first line only, and the full text is here.
+    //
+    // `exit_id` is the way out it left by, NULL while it is running. It keys the way out as the run's
+    // copy of the step does (`automation_run_def.exits`), and its name is read from there: the live
+    // row may since have been renamed or deleted, and the record says what was declared then.
     automation_run_step {
         run_id: fk("automation_run", "RESTRICT"),
         run_def_id: fk("automation_run_def", "RESTRICT"),
         run_task_id: fk_opt("automation_run_task", "RESTRICT"),
         seq: col(COUNT),
-        exit_name: col(OPT),
+        exit_id: col(KEY_REF_OPT),
         report: col(REQ),
         status: enum_col("running", "done", "failed", "stopped"),
         started_at: ts_opt,
@@ -1284,6 +1289,8 @@ datasets! {
 
     // **One value that went in or came out of a step execution**, under the port's *name* — the port
     // row itself may be re-declared or gone by the time this is read, so the name is what is kept.
+    // `exit_id` is the way out it left by, as the run's copy of the step keys it
+    // (`automation_run_def.exits`).
     // Which of the three payload columns means anything is `kind`'s to say, the way `attachment`'s
     // mode decides between its two.
     //
@@ -1293,7 +1300,7 @@ datasets! {
     automation_run_value {
         run_step_id: fk("automation_run_step", "RESTRICT"),
         direction: enum_col("in", "out"),
-        exit_name: col(OPT),
+        exit_id: col(KEY_REF_OPT),
         name: col(REQ),
         kind: enum_col("value", "file", "task_take", "task_make"),
         value: col(OPT),

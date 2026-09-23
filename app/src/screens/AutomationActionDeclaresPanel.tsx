@@ -24,20 +24,24 @@ import {
   removeAutomationExit,
   removeAutomationInput,
   renameAutomationExit,
+  clearAutomationWire,
+  setAutomationWire,
   type CfgKind,
 } from "../core/automations";
 import { t } from "../core/i18n";
-import { ERROR_EXIT } from "./automationLayout";
+import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
 import {
   CFG_KINDS,
   choicesOfKinds,
   DeclareRow,
   DeclEdit,
+  exitLabel,
   useDraft,
   type Run,
 } from "./automationPanel";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
 import { kindLabel, PORT_KINDS } from "./automationPortKinds";
+import { boundaryChoices, choiceKey, wireOutOf } from "./automationWires";
 import type {
   AutomationActionDetailDto,
   AutomationCfgDto,
@@ -62,49 +66,106 @@ function writeChoices(text: string): string | null {
   return choices.length === 0 ? null : JSON.stringify(choices);
 }
 
+/**
+ * One thing a way out of the action hands on, and which step's output fills it.
+ *
+ * **Only the steps that leave by this way out are offered** — core joins an output of the action to
+ * the step it returns from, and a step that never leaves by it has nothing to hand out through it.
+ */
+function OutputRow({
+  action,
+  exitName,
+  port,
+  run,
+}: {
+  action: AutomationActionDetailDto;
+  exitName: string | undefined;
+  port: AutomationPortDto;
+  run: Run;
+}) {
+  const graph = actionGraph(action)!;
+  const now = wireOutOf(graph, exitName, port.name);
+  const choices = boundaryChoices(graph, exitName, port);
+  const picked = now === undefined ? "" : choiceKey(now.fromId, now.fromExitName, now.fromPortName);
+  return (
+    <div className="autostep__outline">
+      <span className="autostep__out">
+        {port.name}
+        <span className="autostep__outkind">{kindLabel(port.kind)}</span>
+      </span>
+      <span aria-hidden="true">←</span>
+      <select
+        aria-label={port.name}
+        value={picked}
+        onChange={(e) => {
+          const chosen = choices.find((one) => one.key === e.target.value);
+          if (chosen === undefined) {
+            if (now !== undefined) void run(clearAutomationWire(now.id));
+            return;
+          }
+          void run(
+            setAutomationWire(
+              "action",
+              { boxId: chosen.boxId, exitName: chosen.exitName, portName: chosen.portName },
+              { boxId: ACTION_BOUNDARY, portName: port.name },
+            ),
+          );
+        }}
+      >
+        <option value="">{t("auto.step.unwired")}</option>
+        {choices.map((one) => (
+          <option key={one.key} value={one.key}>
+            {`${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** One way out of the action: what it is called, and what leaving by it hands on. */
 function ExitRow({
-  actionId,
+  action,
   exit,
   onAddOutput,
   run,
 }: {
-  actionId: number;
+  action: AutomationActionDetailDto;
   exit: AutomationExitDto;
   onAddOutput: () => void;
   run: Run;
 }) {
+  const actionId = action.id;
   const [name, setName] = useDraft(exit.name ?? "");
   const was = exit.name ?? null;
   return (
     <li className="autostep__exit">
-      <input
-        className="autostep__declname"
-        placeholder={t("auto.step.exitUnnamed")}
-        aria-label={t("auto.step.exits")}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => {
-          const now = name.trim() === "" ? null : name.trim();
-          if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
-        }}
-      />
+      <div className="autostep__exithead">
+        <input
+          className="autostep__declname"
+          placeholder={t("auto.step.exitUnnamed")}
+          aria-label={t("auto.step.exits")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            const now = name.trim() === "" ? null : name.trim();
+            if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
+          }}
+        />
+        <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
+          {t("auto.step.outputAdd")}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void run(removeAutomationExit("action", actionId, was))}
+        >
+          {t("auto.step.remove")}
+        </button>
+      </div>
       {exit.outputs.map((port) => (
-        <span key={port.name} className="autostep__out">
-          {port.name}
-          <span className="autostep__outkind">{kindLabel(port.kind)}</span>
-        </span>
+        <OutputRow key={port.name} action={action} exitName={exit.name} port={port} run={run} />
       ))}
-      <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
-        {t("auto.step.outputAdd")}
-      </button>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => void run(removeAutomationExit("action", actionId, was))}
-      >
-        {t("auto.step.remove")}
-      </button>
     </li>
   );
 }
@@ -241,7 +302,7 @@ export function AutomationActionDeclaresPanel({
             .map((one) => (
               <ExitRow
                 key={one.id}
-                actionId={action.id}
+                action={action}
                 exit={one}
                 onAddOutput={() => setAdding(one.id)}
                 run={run}

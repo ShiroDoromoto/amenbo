@@ -161,7 +161,12 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
 fn give_up(run: i64) -> Result<(), crate::error::CmdError> {
     let mut store = crate::commands::open_store()?;
     let ended =
-        store.automation_stop(run, amenbo_core::model::AutomationStoppedReason::NoWayOn)?;
+        store.automation_stop(
+            run,
+            amenbo_core::ops::automation_stop::Ending::Failed(
+                amenbo_core::model::AutomationStoppedReason::NoWayOn,
+            ),
+        )?;
     log::info!("run {} had nowhere left to go and was stopped", ended.run.id);
     Ok(())
 }

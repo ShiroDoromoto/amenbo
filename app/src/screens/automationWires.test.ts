@@ -5,7 +5,7 @@
 // wire drawn last is the one the control shows**, several being allowed to land on one input.
 import { describe, expect, it } from "vitest";
 import { automationGraph, type PicGraph } from "./automationLayout";
-import { choiceKey, wireChoices, wireInto } from "./automationWires";
+import { boundaryChoices, choiceKey, wireChoices, wireInto, wireOutOf } from "./automationWires";
 import type {
   AutomationDetailDto,
   AutomationPortDto,
@@ -80,5 +80,37 @@ describe("what can fill an input", () => {
     ]);
     expect(wireInto(wired, 2, "note")?.id).toBe(2);
     expect(wireInto(wired, 2, "missing")).toBeUndefined();
+  });
+});
+
+describe("what crosses the action's own boundary", () => {
+  const inner: PicGraph = {
+    boxes: [
+      step(1, "draft", [port("draft", "file")], [port("title", "value")]),
+      step(2, "review", [port("notes", "file")]),
+    ],
+    edges: [
+      { id: 21, fromId: 1, ends: "exit", exitTo: "done" },
+      { id: 22, fromId: 2, ends: "go", toId: 1 },
+    ],
+    wires: [{ id: 41, fromId: 1, fromPortName: "draft", toId: 0, toPortName: "result" }],
+    boundary: { inputs: [port("title", "value"), port("file", "file")], exits: [] },
+  };
+
+  it("offers what the action takes in first, as coming from the action itself", () => {
+    const choices = wireChoices(inner, 1, port("title", "value"), "this action");
+    expect(choices[0]).toMatchObject({ boxId: 0, boxName: "this action", portName: "title" });
+    expect(choices.map((one) => one.portName)).not.toContain("file");
+  });
+
+  it("fills a way out of the action only from the steps that leave by it", () => {
+    const choices = boundaryChoices(inner, "done", port("result", "file"));
+    expect(choices.map((one) => `${one.boxName}:${one.portName}`)).toEqual(["draft:draft"]);
+    expect(boundaryChoices(inner, undefined, port("result", "file"))).toEqual([]);
+  });
+
+  it("reads the wire filling a way out's output", () => {
+    expect(wireOutOf(inner, "done", "result")?.id).toBe(41);
+    expect(wireOutOf(inner, "done", "other")).toBeUndefined();
   });
 });

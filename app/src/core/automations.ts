@@ -209,12 +209,13 @@ export type EdgeEnds = AutomationEdgeDto["ends"];
  * another (`editAutomationEdge`).
  *
  * A new `go` edge is born with the limit core's callers give the silence; nothing is passed here, and
- * the number is then a field on the panel.
+ * the number is then a field on the panel. An `exit` edge — a step inside an action leaving it — names
+ * the way out of the action it returns to in `exitTo`, absent for the unnamed one.
  */
 export async function addAutomationEdge(
   picture: Picture,
   from: { boxId: number; exitName?: string },
-  target: { ends: EdgeEnds; to?: number },
+  target: { ends: EdgeEnds; to?: number; exitTo?: string },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_edge_add", {
@@ -223,6 +224,7 @@ export async function addAutomationEdge(
     exitName: from.exitName ?? null,
     ends: target.ends,
     toId: target.to ?? null,
+    exitTo: target.exitTo ?? null,
   });
 }
 
@@ -235,13 +237,14 @@ export async function addAutomationEdge(
  */
 export async function editAutomationEdge(
   id: number,
-  patch: { ends?: EdgeEnds; to?: number; maxTimes?: number | null },
+  patch: { ends?: EdgeEnds; to?: number; exitTo?: string; maxTimes?: number | null },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_edge_edit", {
     id,
     ends: patch.ends ?? null,
     toId: patch.to ?? null,
+    exitTo: patch.exitTo ?? null,
     maxTimes: patch.maxTimes ?? null,
     clearMaxTimes: patch.maxTimes === null,
   });

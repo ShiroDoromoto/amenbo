@@ -37,19 +37,28 @@ function statusText(run: AutomationRunCardDto): string {
   switch (run.status) {
     case "running": return t("auto.run.running");
     case "paused": return t("auto.run.paused");
-    case "stopped": return t("auto.run.stopped");
+    // Failed and canceled keep the one word the tab has had for a run cut short; what tells them apart
+    // on the row is the reason beside it. The words of their own are the tab's redraw (`AMB-D-955`).
+    case "failed":
+    case "canceled": return t("auto.run.stopped");
     default: return run.status;
   }
 }
 
-/** Why it stopped, where core named one. A stop with no reason on it says nothing rather than guessing. */
+/**
+ * Why it ended, where there is something to say. A cancel carries no reason in core — the person who
+ * pressed stop is the reason — so it is said here. A failure with no reason on it says nothing rather
+ * than guessing.
+ */
 function reasonText(run: AutomationRunCardDto): string | null {
+  if (run.status === "canceled") return t("auto.run.byHuman");
   switch (run.stoppedReason) {
     case "crashed": return t("auto.run.crashed");
     case "max_times": return t("auto.run.maxTimes");
     case "no_agent": return t("auto.run.noAgent");
-    case "by_human": return t("auto.run.byHuman");
+    case "no_input": return t("auto.run.noInput");
     case "no_way_on": return t("auto.run.noWayOn");
+    case "halted": return t("auto.run.halted");
     default: return null;
   }
 }
@@ -90,7 +99,7 @@ export function RunningTab({
       <ul className="auto__list">
         {runs.map((run) => {
           const reason = reasonText(run);
-          const over = run.status === "stopped";
+          const over = run.status === "failed" || run.status === "canceled";
           return (
             <li key={run.run} className="autorun">
               <button

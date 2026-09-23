@@ -351,9 +351,18 @@ entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacem
  */
 export type AutomationEdgeDto = { id: number, fromId: number, exitName?: string, 
 /**
- * Where it goes, for `go`. Absent for `done` and `halt`, which go nowhere.
+ * Where it goes, for `go`. Absent for the others, which open no box.
  */
-toId?: number, ends: "go" | "done" | "halt", 
+toId?: number, 
+/**
+ * `exit` leaves the action a step is inside, by the way out of the action it returns to.
+ */
+ends: "go" | "exit" | "done" | "halt", 
+/**
+ * Which way out of the action an `exit` edge returns to. Absent for the unnamed one, and for
+ * every edge that is not `exit`.
+ */
+exitTo?: string, 
 /**
  * How often this edge may be taken for one task. Absent is no limit.
  */
@@ -472,13 +481,18 @@ project: number, projectName: string, automation: number,
  * What the automation was called at launch. Read from the run's own copy of the entry step's
  * automation where the definition has since been deleted, and empty where neither is left.
  */
-automationName: string, status: "running" | "paused" | "stopped", 
+automationName: string, 
+/**
+ * Where the run stands. A `completed` run is never on this card: the tab lists what is going and
+ * what was cut short (`AMB-D-955`).
+ */
+status: "running" | "paused" | "failed" | "canceled", 
 /**
  * Whether a pause has been asked for and the step under way has not reported yet. The run is
  * still `running` — this is the gap between the button and the pause
  * ([`amenbo_core::ops::automation_stop::pause`]).
  */
-pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "by_human" | "no_way_on" | null, 
+pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | null, 
 /**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */

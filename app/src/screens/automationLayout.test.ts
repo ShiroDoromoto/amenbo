@@ -329,3 +329,110 @@ describe("the picture of an automation", () => {
     expect(at(picture, 1).unfed).toEqual([]);
   });
 });
+
+describe("the picture inside an action", () => {
+  /** An action of two steps, the first leaving the action by "done" and the second by the unnamed. */
+  function inside(over: Partial<PicGraph> = {}): PicGraph {
+    return {
+      entryId: 1,
+      boxes: [
+        step({ id: 1, name: "draft", exits: [{ id: 11, name: "written", outputs: [port("draft", "file")] }] }),
+        step({ id: 2, name: "review" }),
+      ],
+      edges: [
+        edge({ id: 21, fromId: 1, exitName: "written", toId: 2 }),
+        edge({ id: 22, fromId: 2, ends: "exit" }),
+        edge({ id: 23, fromId: 1, exitName: "*", ends: "exit", exitTo: "gave up" }),
+      ],
+      wires: [],
+      boundary: {
+        inputs: [port("title", "value")],
+        exits: [
+          { id: 31, outputs: [] },
+          { id: 32, name: "*", outputs: [] },
+          { id: 33, name: "gave up", outputs: [port("reason", "file")] },
+        ],
+      },
+      ...over,
+    };
+  }
+
+  it("marks where a placement comes in over everything, and each way out under everything", () => {
+    const picture = layOut(inside());
+    const marks = picture.marks.map((one) => `${one.kind}:${one.exitName ?? ""}`);
+    // The error way out last, the way the declaration lists them.
+    expect(marks).toEqual(["in:", "out:", "out:gave up", "out:*"]);
+    const lowest = Math.max(...picture.nodes.map((one) => one.y + one.h));
+    for (const mark of picture.marks) {
+      if (mark.kind === "in") expect(mark.y + mark.h).toBeLessThan(at(picture, 1).y);
+      else expect(mark.y).toBeGreaterThan(lowest);
+    }
+    expect(picture.outsAt).toBeDefined();
+  });
+
+  it("draws a line from the top mark into the step opened first", () => {
+    const picture = layOut(inside());
+    const line = picture.lines.find((one) => one.key === "in")!;
+    expect(line.leaves).toBe(true);
+    expect(line.points[line.points.length - 1]!.y).toBe(at(picture, 1).y);
+  });
+
+  it("ends a line that leaves the action on the mark of the way out it returns to", () => {
+    const picture = layOut(inside());
+    const gaveUp = picture.marks.find((one) => one.exitName === "gave up")!;
+    const line = picture.lines.find((one) => one.key.endsWith("23"))!;
+    expect(line.leaves).toBe(true);
+    const end = line.points[line.points.length - 1]!;
+    expect(end.y).toBe(gaveUp.y);
+    expect(end.x).toBeGreaterThanOrEqual(gaveUp.x);
+    expect(end.x).toBeLessThanOrEqual(gaveUp.x + gaveUp.w);
+  });
+
+  it("wires what the action takes in from the top mark, and what it hands out into a way out's mark", () => {
+    const picture = layOut(
+      inside({
+        boxes: [
+          step({
+            id: 1,
+            name: "draft",
+            inputs: [port("title", "value")],
+            exits: [{ id: 11, name: "*", outputs: [port("reason", "file")] }],
+          }),
+          step({ id: 2, name: "review" }),
+        ],
+        wires: [
+          wire({ id: 41, fromId: 0, fromPortName: "title", toId: 1, toPortName: "title" }),
+          wire({ id: 42, fromId: 1, fromExitName: "*", fromPortName: "reason", toId: 0, toPortName: "reason" }),
+        ],
+      }),
+    );
+    const wires = picture.lines.filter((one) => one.kind === "wire");
+    expect(wires.map((one) => one.hands)).toEqual([
+      { from: "title", to: "title" },
+      { from: "reason", to: "reason" },
+    ]);
+    const gaveUp = picture.marks.find((one) => one.exitName === "gave up")!;
+    expect(wires[1]!.points[wires[1]!.points.length - 1]!.y).toBe(gaveUp.y);
+  });
+
+  it("draws no marks on an automation's picture", () => {
+    const picture = layOut(detail({ placements: [step({ id: 1, name: "one" })] }));
+    expect(picture.marks).toEqual([]);
+    expect(picture.outsAt).toBeUndefined();
+  });
+});
+
+describe("what the action itself hands in", () => {
+  it("counts an input wired from the action itself as fed, and draws that wire straight down", () => {
+    const picture = layOut({
+      entryId: 1,
+      boxes: [step({ id: 1, name: "draft", inputs: [port("title", "value")] })],
+      edges: [],
+      wires: [wire({ id: 41, fromId: 0, fromPortName: "title", toId: 1, toPortName: "title" })],
+      boundary: { inputs: [port("title", "value")], exits: [] },
+    });
+    expect(at(picture, 1).unfed).toEqual([]);
+    const line = picture.lines.find((one) => one.kind === "wire")!;
+    expect(line.points).toHaveLength(4);
+  });
+});

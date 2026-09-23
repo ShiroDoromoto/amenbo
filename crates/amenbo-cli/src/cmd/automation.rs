@@ -23,7 +23,8 @@ use amenbo_core::model::{
 use amenbo_core::model::{
     AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
 };
-use amenbo_core::model::{AttachmentTarget, AutomationStoppedReason};
+use amenbo_core::model::AttachmentTarget;
+use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
 use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_report::{Next, Produced};
@@ -784,9 +785,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
         AutomationCmd::Stop { run } => {
             let ended = store
-                .automation_stop(run, AutomationStoppedReason::ByHuman)
+                .automation_stop(run, Ending::Canceled)
                 .map_err(CliError::from)?;
-            write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} stopped", ended.run.id));
+            write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} canceled", ended.run.id));
         }
 
         AutomationCmd::StepTake { task } => {
@@ -925,7 +926,7 @@ fn next_line(next: &Next) -> String {
     match next {
         Next::Step(def) => format!("✓ Step done — next is {} ({})", def.name, def.id),
         Next::Closed(_) => "✓ Step done — the run is over".to_string(),
-        Next::Halted(_) => "✓ Step done — the run stopped and is waiting for a person".to_string(),
+        Next::Halted(_) => "✓ Step done — the run failed and is waiting for a person".to_string(),
         Next::Paused(_) => "✓ Step done — the run is paused".to_string(),
     }
 }

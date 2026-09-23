@@ -12,7 +12,7 @@
 // (`amenbo_core::ops::automation::wire_add`), so an output of another kind in the list would be a
 // choice that is refused the moment it is made.
 import type { AutomationPortDto, AutomationWireDto } from "../bindings/bindings";
-import type { PicGraph } from "./automationLayout";
+import { ACTION_BOUNDARY, type PicGraph } from "./automationLayout";
 
 /** One thing that could fill an input: the way out of the box that hands it on. */
 export type WireChoice = {
@@ -35,13 +35,27 @@ export function choiceKey(boxId: number, exitName: string | undefined, portName:
  *
  * A box's own ways out are left off: what it hands on is read after it has run, and by then it is
  * past the point of taking anything in.
+ *
+ * **Inside an action, the action's own inputs come first** — what the placement standing on it was
+ * handed, passed in from the action itself (`ACTION_BOUNDARY`). `selfName` is what that end is called
+ * on screen; the list carries it so each choice reads whole.
  */
 export function wireChoices(
   graph: PicGraph,
   boxId: number,
   input: AutomationPortDto,
+  selfName = "",
 ): WireChoice[] {
   const out: WireChoice[] = [];
+  for (const port of graph.boundary?.inputs ?? []) {
+    if (port.kind !== input.kind) continue;
+    out.push({
+      key: choiceKey(ACTION_BOUNDARY, undefined, port.name),
+      boxId: ACTION_BOUNDARY,
+      boxName: selfName,
+      portName: port.name,
+    });
+  }
   for (const box of graph.boxes) {
     if (box.id === boxId) continue;
     for (const exit of box.exits) {
@@ -72,5 +86,56 @@ export function wireInto(
   portName: string,
 ): AutomationWireDto | undefined {
   const all = graph.wires.filter((one) => one.toId === boxId && one.toPortName === portName);
+  return all[all.length - 1];
+}
+
+/**
+ * **What could fill one output a way out of the action hands on** — an output of the same kind, on a
+ * way out of a step that leaves the action by that same way out. Core asks for the leaving line first
+ * (`amenbo_core::ops::automation::wire_add`), so a step that does not leave by it is not offered.
+ */
+export function boundaryChoices(
+  graph: PicGraph,
+  exitName: string | undefined,
+  port: AutomationPortDto,
+): WireChoice[] {
+  const out: WireChoice[] = [];
+  for (const edge of graph.edges) {
+    if (edge.ends !== "exit" || edge.exitTo !== exitName) continue;
+    const box = graph.boxes.find((one) => one.id === edge.fromId);
+    const exit = box?.exits.find((one) => one.name === edge.exitName);
+    if (box === undefined || exit === undefined) continue;
+    for (const one of exit.outputs) {
+      if (one.kind !== port.kind) continue;
+      out.push({
+        key: choiceKey(box.id, exit.name, one.name),
+        boxId: box.id,
+        boxName: box.name,
+        exitName: exit.name,
+        portName: one.name,
+      });
+    }
+  }
+  return out;
+}
+
+/** The wire filling one output of a way out of the action now, or nothing where none is. */
+export function wireOutOf(
+  graph: PicGraph,
+  exitName: string | undefined,
+  portName: string,
+): AutomationWireDto | undefined {
+  const all = graph.wires.filter(
+    (wire) =>
+      wire.toId === ACTION_BOUNDARY &&
+      wire.toPortName === portName &&
+      graph.edges.some(
+        (edge) =>
+          edge.ends === "exit" &&
+          edge.exitTo === exitName &&
+          edge.fromId === wire.fromId &&
+          edge.exitName === wire.fromExitName,
+      ),
+  );
   return all[all.length - 1];
 }

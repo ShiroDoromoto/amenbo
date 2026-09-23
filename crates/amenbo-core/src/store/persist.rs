@@ -1907,14 +1907,15 @@ impl Store {
     /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
     /// it was holding, and the line left on that task.
     ///
-    /// `reason` is which of the five stops this is.
+    /// `ending` is how it ends: [`crate::ops::automation_stop::Ending::Canceled`] for a person who
+    /// said stop, a failure with its reason for everything else.
     pub fn automation_stop(
         &mut self,
         run_id: i64,
-        reason: crate::model::AutomationStoppedReason,
+        ending: crate::ops::automation_stop::Ending,
     ) -> Result<crate::ops::automation_stop::Ended> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::stop(tx, run_id, reason)
+            crate::ops::automation_stop::stop(tx, run_id, ending)
         })
     }
 

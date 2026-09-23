@@ -1784,19 +1784,25 @@ pub struct AutomationWire {
 
 // ───────────────────────── automation: what ran ─────────────────────────
 
-/// Where one launch of one automation stands.
+/// Where one launch of one automation stands (`AMB-D-955`).
 ///
 /// `Running` is where every launch begins: nothing limits how many may be under way at once, so a
-/// launch never waits (`AMB-D-947`). `Paused` keeps the place, `Done` and `Stopped` are the two ends —
-/// reached by running out of picture, and by everything else.
+/// launch never waits (`AMB-D-947`). `Paused` keeps the place. The three ends say what happened rather
+/// than how it was reached: `Completed` is the picture run out, `Failed` is a run that could not get
+/// there, and `Canceled` is a person who said stop.
+///
+/// **`Completed` is not success.** Reaching the end of the picture says nothing about whether the work
+/// went well — an automation can wire a "could not fix it" way out to the end — and nothing here judges
+/// that, so the word does not claim it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationRunStatus {
     #[default]
     Running,
     Paused,
-    Done,
-    Stopped,
+    Completed,
+    Failed,
+    Canceled,
 }
 
 impl AutomationRunStatus {
@@ -1804,8 +1810,9 @@ impl AutomationRunStatus {
         match self {
             AutomationRunStatus::Running => "running",
             AutomationRunStatus::Paused => "paused",
-            AutomationRunStatus::Done => "done",
-            AutomationRunStatus::Stopped => "stopped",
+            AutomationRunStatus::Completed => "completed",
+            AutomationRunStatus::Failed => "failed",
+            AutomationRunStatus::Canceled => "canceled",
         }
     }
 
@@ -1813,28 +1820,35 @@ impl AutomationRunStatus {
         match s {
             "running" => Some(AutomationRunStatus::Running),
             "paused" => Some(AutomationRunStatus::Paused),
-            "done" => Some(AutomationRunStatus::Done),
-            "stopped" => Some(AutomationRunStatus::Stopped),
+            "completed" => Some(AutomationRunStatus::Completed),
+            "failed" => Some(AutomationRunStatus::Failed),
+            "canceled" => Some(AutomationRunStatus::Canceled),
             _ => None,
         }
     }
 }
 
-/// Why a run stopped, where stopping was not the picture running out.
+/// Why a run failed — carried only by a [`AutomationRunStatus::Failed`] run.
 ///
 /// It is stored rather than worked out afterwards: the records show a crash (the step execution is left
-/// `failed`) and say nothing about a loop that ran out of turns, an agent that was not there, or a
-/// person who pressed stop.
+/// `failed`) and say nothing about a loop that ran out of turns, an agent that was not there, or an input
+/// nothing filled. A person who pressed stop is not here: that run is `Canceled`, and the person knows
+/// why.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationStoppedReason {
     Crashed,
     MaxTimes,
     NoAgent,
-    ByHuman,
+    /// A step's required input had nothing to fill it ([`crate::ops::automation_step`]).
+    NoInput,
     /// Nothing was left for it to open: the picture it was copied from stopped leading anywhere while
-    /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]).
+    /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]), or a way out leads to a spot the
+    /// run never copied down.
     NoWayOn,
+    /// A step left through a way out the picture wires to "stop and call a person" — an ending the
+    /// author of the automation chose, rather than one the machinery ran into.
+    Halted,
 }
 
 impl AutomationStoppedReason {
@@ -1843,8 +1857,9 @@ impl AutomationStoppedReason {
             AutomationStoppedReason::Crashed => "crashed",
             AutomationStoppedReason::MaxTimes => "max_times",
             AutomationStoppedReason::NoAgent => "no_agent",
-            AutomationStoppedReason::ByHuman => "by_human",
+            AutomationStoppedReason::NoInput => "no_input",
             AutomationStoppedReason::NoWayOn => "no_way_on",
+            AutomationStoppedReason::Halted => "halted",
         }
     }
 
@@ -1853,8 +1868,9 @@ impl AutomationStoppedReason {
             "crashed" => Some(AutomationStoppedReason::Crashed),
             "max_times" => Some(AutomationStoppedReason::MaxTimes),
             "no_agent" => Some(AutomationStoppedReason::NoAgent),
-            "by_human" => Some(AutomationStoppedReason::ByHuman),
+            "no_input" => Some(AutomationStoppedReason::NoInput),
             "no_way_on" => Some(AutomationStoppedReason::NoWayOn),
+            "halted" => Some(AutomationStoppedReason::Halted),
             _ => None,
         }
     }
@@ -1873,7 +1889,7 @@ pub struct AutomationRun {
     pub project_id: i64,
     pub status: AutomationRunStatus,
     pub pause_requested: bool,
-    /// Why it stopped. Set only while `status` is `Stopped`.
+    /// Why it failed. Set only while `status` is `Failed`.
     #[serde(default)]
     pub stopped_reason: Option<AutomationStoppedReason>,
     /// Who pressed launch. `None` for a run whose launcher said nothing about itself.

@@ -1110,7 +1110,7 @@ mod tests {
             "INSERT INTO automation_run \
                  (automation_id, project_id, status, pause_requested, started_by_kind, \
                   started_at, ended_at, created_at, updated_at) \
-             VALUES (?1, ?2, 'done', 0, 'ai', ?3, ?3, ?3, ?3)",
+             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3)",
             rusqlite::params![automation, project, at],
         );
         let run_def = put(

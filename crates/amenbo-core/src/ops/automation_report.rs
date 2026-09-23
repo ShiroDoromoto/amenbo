@@ -20,12 +20,12 @@
 use crate::error::{Error, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, AutomationEdge, AutomationPictureOwner, AutomationPortDirection,
-    AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStep,
+    AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStep,
     AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, AutomationStoppedReason,
     RunDefExit, RunDefPort, Task, TaskStatus, ERROR_EXIT,
 };
 use crate::ops::automation_run::{self, Onward};
-use crate::ops::automation_stop::{self, Ended};
+use crate::ops::automation_stop::{self, Ended, Ending};
 use crate::ops::emit_create;
 use rusqlite::Connection;
 use crate::store_engine::{read, record, WriteTx};
@@ -434,16 +434,17 @@ fn whats_next(
     let run = read::automation_run(conn, def.run_id)?.ok_or_else(|| not_found("run", def.run_id))?;
     match automation_run::onward(conn, def, taken)? {
         Onward::Done => {
-            Ok(Next::Closed(automation_stop::ended(tx, run, AutomationRunStatus::Done, None)?))
+            Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?))
         }
-        // The way out halts, or nothing says what follows it — or it leads somewhere the run never
-        // copied down, such as a placement added after the launch. The run has no snapshot of that and
-        // will not read a live one, so there is nowhere to go.
-        Onward::Halt | Onward::Nowhere => Ok(Next::Halted(stopped(tx, run, None)?)),
+        // The way out calls a person: an ending the author of the picture chose.
+        Onward::Halt => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::Halted)?)),
+        // Nothing says what follows the way out — or it leads somewhere the run never copied down,
+        // such as a placement added after the launch. The run has no snapshot of that and will not
+        // read a live one, so there is nowhere to go.
+        Onward::Nowhere => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::NoWayOn)?)),
         Onward::Go { def: next, edge } => {
             if over_its_turns(tx, def, ended, &edge)? {
-                let reason = Some(AutomationStoppedReason::MaxTimes);
-                return Ok(Next::Halted(stopped(tx, run, reason)?));
+                return Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::MaxTimes)?));
             }
             if run.pause_requested {
                 return Ok(Next::Paused(automation_stop::settle(tx, run)?));
@@ -453,14 +454,10 @@ fn whats_next(
     }
 }
 
-/// Stop the run, through the one cleanup every ending goes through
+/// Fail the run, through the one cleanup every ending goes through
 /// ([`super::automation_stop::ended`]).
-fn stopped(
-    tx: &WriteTx<'_>,
-    run: AutomationRun,
-    reason: Option<AutomationStoppedReason>,
-) -> Result<Ended> {
-    automation_stop::ended(tx, run, AutomationRunStatus::Stopped, reason)
+fn failed(tx: &WriteTx<'_>, run: AutomationRun, reason: AutomationStoppedReason) -> Result<Ended> {
+    automation_stop::ended(tx, run, Ending::Failed(reason))
 }
 
 /// **Has this way back been taken as often as it is allowed to be?**
@@ -874,6 +871,10 @@ mod tests {
             let next = done(tx, step.run_step.id, Some("all good"), "Did the thing.")
                 .expect("done");
             assert!(matches!(next, Next::Halted(_)), "the error way out halts here: {next:?}");
+            // A halt is an ending the picture chose, and the run says so rather than leaving it blank.
+            let halted = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            assert_eq!(halted.status, crate::model::AutomationRunStatus::Failed);
+            assert_eq!(halted.stopped_reason, Some(AutomationStoppedReason::Halted));
             let ended = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
                 .expect("the execution");

@@ -32,7 +32,7 @@ import {
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
-import { actionGraph, ERROR_EXIT } from "./automationLayout";
+import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
 import {
   choicesOfKinds,
   DeclareRow,
@@ -139,7 +139,7 @@ function InputRow({
 }) {
   const graph = actionGraph(action)!;
   const now = wireInto(graph, step.id, input.name);
-  const choices = wireChoices(graph, step.id, input);
+  const choices = wireChoices(graph, step.id, input, t("auto.pic.actionSelf"));
   const picked = now === undefined ? "" : choiceKey(now.fromId, now.fromExitName, now.fromPortName);
   return (
     <div className="autostep__wire">
@@ -183,7 +183,11 @@ function InputRow({
         <option value="">{t("auto.step.unwired")}</option>
         {choices.map((one) => (
           <option key={one.key} value={one.key}>
-            {`${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
+            {/* What the action was handed comes in from the action itself, which leaves by no way
+                out — so it is named without one. */}
+            {one.boxId === ACTION_BOUNDARY
+              ? `${one.boxName} · ${one.portName}`
+              : `${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
           </option>
         ))}
       </select>

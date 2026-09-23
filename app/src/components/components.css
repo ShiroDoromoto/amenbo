@@ -1610,7 +1610,7 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-surface-pic) var(--c-surface);
 }
 /* Sticky within the stage, so a press on a low step shows its contents where the reader is looking. */
-.actpanel__inner { position: sticky; inset-block-start: 0; max-height: 100vh; overflow: auto; }
+.actpanel__inner { position: sticky; inset-block-start: 0; max-height: min(100vh, 100%); overflow: auto; }
 .actpanel__head {
   position: sticky; inset-block-start: 0; z-index: 1; display: flex; align-items: baseline; gap: var(--s-2);
   padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
@@ -1707,3 +1707,19 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; flex-direction: column; gap: var(--s-1);
   padding-block-start: var(--s-2); border-block-start: var(--border-w) dashed var(--c-edge);
 }
+
+/* The action itself on its own picture (`../screens/automationLayout`): where a placement comes in, and
+   the ways out it is left by. Dashed pills rather than boxes — nothing opens on them. */
+.autopic__mark {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  padding: 0 var(--s-2); border-radius: 999px; box-sizing: border-box;
+  border: var(--border-w) dashed var(--c-accent); color: var(--c-accent);
+  background: var(--c-surface-pic) var(--c-surface);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.autopic__mark--error { border-color: var(--c-stop); color: var(--c-stop); font-weight: var(--fw-normal); }
+.autopic__outs { position: absolute; font-size: var(--fs-xs); color: var(--c-text-faint); white-space: nowrap; }
+.autopic__line--leaves { stroke: var(--c-accent); }
+/* One output a way out of the action hands on, and the step output that fills it. */
+.autostep__outline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }

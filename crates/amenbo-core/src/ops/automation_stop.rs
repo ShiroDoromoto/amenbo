@@ -1,11 +1,10 @@
 //! **Stopping a run** — pausing it, picking it up again, ending it, and the one cleanup every one of
 //! those goes through.
 //!
-//! **A run ends by exactly one road** ([`ended`]). Four things end a run — the picture running out, a
-//! person pressing stop, an input nothing filled, this machine having been restarted under it — and
-//! each of them owes the same two acts: release the task the run was holding, and leave a line on that
-//! task saying what became of it. Four roads would have been four places for one of the two to be
-//! forgotten.
+//! **A run ends by exactly one road** ([`ended`]), and says which of three endings it was
+//! ([`Ending`], `AMB-D-955`): completed, failed or canceled. Every ending but completed owes the same
+//! two acts: release the task the run was holding, and leave a line on that task saying what became of
+//! it. A road per ending would have been a place per ending for one of the two to be forgotten.
 //!
 //! **Pausing is a request, not a stop.** A step under way cannot be cut in half — it is an agent in a
 //! terminal, mid-sentence — so pressing pause writes `pause_requested` and the run goes on until that
@@ -32,6 +31,42 @@ use crate::time::Timestamp;
 #[derive(Clone, Debug)]
 pub struct Ended {
     pub run: AutomationRun,
+}
+
+/// **How a run ended** (`AMB-D-955`) — the status it lands on, and the reason only a failure carries.
+///
+/// One value rather than a status and a reason side by side, so that a reason on anything but a failure,
+/// or a failure with none, is not something a caller can write.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ending {
+    /// The picture ran out.
+    Completed,
+    /// It could not get to the end of the picture, for this reason.
+    Failed(AutomationStoppedReason),
+    /// A person said stop — pressed it, or closed the run's pane.
+    Canceled,
+}
+
+impl Ending {
+    pub fn status(self) -> AutomationRunStatus {
+        match self {
+            Ending::Completed => AutomationRunStatus::Completed,
+            Ending::Failed(_) => AutomationRunStatus::Failed,
+            Ending::Canceled => AutomationRunStatus::Canceled,
+        }
+    }
+
+    pub fn reason(self) -> Option<AutomationStoppedReason> {
+        match self {
+            Ending::Failed(reason) => Some(reason),
+            Ending::Completed | Ending::Canceled => None,
+        }
+    }
+
+    /// Whether the run was cut off before the picture ran out — the endings that hand the task back.
+    fn cut_short(self) -> bool {
+        !matches!(self, Ending::Completed)
+    }
 }
 
 /// What pressing pause did.
@@ -73,32 +108,23 @@ fn under_way(status: AutomationRunStatus) -> bool {
 
 /// **End a run and hand back the task it was holding.** Every way a run can end comes through here.
 ///
-/// `status` is [`AutomationRunStatus::Done`] where the picture ran out and
-/// [`AutomationRunStatus::Stopped`] everywhere else, and `reason` says which kind of stop it was —
-/// left `None` for a run that simply reached the end, and for one stopped by something
-/// [`AutomationStoppedReason`] does not name.
-///
-/// **The task goes back to `todo` only on a stop.** A run that finished left its task wherever its steps
-/// put it, which is the outcome somebody asked for; a run that was cut off left it reserved by nobody,
-/// and a task held by a run that is gone is one no session will ever pick up.
-pub fn ended(
-    tx: &WriteTx<'_>,
-    before: AutomationRun,
-    status: AutomationRunStatus,
-    reason: Option<AutomationStoppedReason>,
-) -> Result<Ended> {
+/// **The task goes back to `todo` only when the run was cut short** — failed or canceled. A run that
+/// completed left its task wherever its steps put it, which is the outcome somebody asked for; a run
+/// that was cut off left it reserved by nobody, and a task held by a run that is gone is one no session
+/// will ever pick up.
+pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     let now = Timestamp::now();
     let mut after = before.clone();
-    after.status = status;
-    after.stopped_reason = (status == AutomationRunStatus::Stopped).then_some(reason).flatten();
+    after.status = ending.status();
+    after.stopped_reason = ending.reason();
     after.pause_requested = false;
     after.ended_at = Some(now);
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
 
     let stretch = close_stretch(tx, before.id, now)?;
-    if status == AutomationRunStatus::Stopped {
-        hand_the_task_back(tx, &after, stretch.as_ref(), reason)?;
+    if ending.cut_short() {
+        hand_the_task_back(tx, &after, stretch.as_ref(), ending)?;
     }
     Ok(Ended { run: after })
 }
@@ -140,13 +166,13 @@ fn hand_the_task_back(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
     stretch: Option<&AutomationRunTask>,
-    reason: Option<AutomationStoppedReason>,
+    ending: Ending,
 ) -> Result<()> {
     let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(()) };
     if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
         crate::ops::task::set_status(tx, task_id, TaskStatus::Todo)?;
     }
-    crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &said(tx, run, reason)?)?;
+    crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &said(tx, run, ending)?)?;
     Ok(())
 }
 
@@ -155,11 +181,7 @@ fn hand_the_task_back(
 /// The run's id is in it because that is the only handle a person has on a run from a task — the two
 /// are not linked by a column, and a task that has been round three runs would otherwise say only that
 /// one of them stopped.
-fn said(
-    tx: &WriteTx<'_>,
-    run: &AutomationRun,
-    reason: Option<AutomationStoppedReason>,
-) -> Result<String> {
+fn said(tx: &WriteTx<'_>, run: &AutomationRun, ending: Ending) -> Result<String> {
     let walked = read::automation_run_steps_of(tx.conn(), run.id)?;
     let reached = walked
         .last()
@@ -168,26 +190,32 @@ fn said(
             _ => "It got as far as a step that is no longer there.".to_string(),
         })
         .unwrap_or_else(|| "It stopped before opening a step.".to_string());
-    Ok(format!("{} {reached} (run {})", why(reason), run.id))
+    Ok(format!("{} {reached} (run {})", why(ending), run.id))
 }
 
-/// The first sentence of that line: what stopped the run, in the words each reason is worth.
-fn why(reason: Option<AutomationStoppedReason>) -> &'static str {
-    match reason {
-        Some(AutomationStoppedReason::Crashed) => {
-            "An automation run stopped: Amenbo was restarted while it was under way."
+/// The first sentence of that line: what ended the run, in the words each ending is worth.
+fn why(ending: Ending) -> &'static str {
+    match ending {
+        Ending::Failed(AutomationStoppedReason::Crashed) => {
+            "An automation run failed: Amenbo was restarted while it was under way."
         }
-        Some(AutomationStoppedReason::MaxTimes) => {
-            "An automation run stopped: a way back was taken as often as it is allowed to be."
+        Ending::Failed(AutomationStoppedReason::MaxTimes) => {
+            "An automation run failed: a way back was taken as often as it is allowed to be."
         }
-        Some(AutomationStoppedReason::NoAgent) => {
-            "An automation run stopped: the agent a step asked for could not be started."
+        Ending::Failed(AutomationStoppedReason::NoAgent) => {
+            "An automation run failed: the agent a step asked for could not be started."
         }
-        Some(AutomationStoppedReason::ByHuman) => "An automation run was stopped.",
-        Some(AutomationStoppedReason::NoWayOn) => {
-            "An automation run stopped: nothing was left for it to open."
+        Ending::Failed(AutomationStoppedReason::NoInput) => {
+            "An automation run failed: a step's required input had nothing to fill it."
         }
-        None => "An automation run stopped.",
+        Ending::Failed(AutomationStoppedReason::NoWayOn) => {
+            "An automation run failed: nothing was left for it to open."
+        }
+        Ending::Failed(AutomationStoppedReason::Halted) => {
+            "An automation run stopped to call a person: a step left through a way out that asks for one."
+        }
+        Ending::Canceled => "An automation run was canceled.",
+        Ending::Completed => "An automation run completed.",
     }
 }
 
@@ -250,10 +278,10 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64) -> Result<Resumed> {
         )));
     }
     let Some(next) = next_after_the_pause(tx.conn(), &before)? else {
-        ended(tx, before, AutomationRunStatus::Stopped, None)?;
+        ended(tx, before, Ending::Failed(AutomationStoppedReason::NoWayOn))?;
         return Err(Error::invalid(format!(
             "run '{run_id}' cannot go on: what followed the step it paused after is no longer in the \
-             picture, so it has been stopped"
+             picture, so it has failed"
         )));
     };
     let now = Timestamp::now();
@@ -282,13 +310,15 @@ fn next_after_the_pause(
 
 /// **Stop a run now** — the terminal is closed wherever it is, and the cleanup runs.
 ///
-/// This is what a person presses when pausing will not do, and what closing a run's pane means. It is
-/// also the door a crash sweep and a loop out of turns come through, each naming its own reason.
-pub fn stop(
-    tx: &WriteTx<'_>,
-    run_id: i64,
-    reason: AutomationStoppedReason,
-) -> Result<Ended> {
+/// This is what a person presses when pausing will not do, and what closing a run's pane means — both
+/// [`Ending::Canceled`]. It is also the door the watch comes through when a run has nowhere left to go,
+/// naming the failure. A run is not completed from here: that is the picture running out.
+pub fn stop(tx: &WriteTx<'_>, run_id: i64, ending: Ending) -> Result<Ended> {
+    if ending == Ending::Completed {
+        return Err(Error::invalid(format!(
+            "run '{run_id}' is completed by running out of picture, not by being stopped"
+        )));
+    }
     let before = live_run(tx, run_id)?;
     if !under_way(before.status) {
         return Err(Error::invalid(format!(
@@ -296,14 +326,14 @@ pub fn stop(
             before.status.as_str()
         )));
     }
-    ended(tx, before, AutomationRunStatus::Stopped, Some(reason))
+    ended(tx, before, ending)
 }
 
 /// **The runs this machine was in the middle of when it last shut down.**
 ///
 /// Run at startup, before anything else touches a run. Every `running` row is one from a process that
-/// is gone: a terminal does not outlive the app that drew it. Each is stopped as a crash, which hands
-/// back its task and says so on it.
+/// is gone: a terminal does not outlive the app that drew it. Each fails as a crash, which hands back
+/// its task and says so on it.
 ///
 /// It answers what it stopped, in id order, so a face can say how many runs did not survive the
 /// restart rather than leaving somebody to notice on their own.
@@ -313,7 +343,7 @@ pub fn sweep(tx: &WriteTx<'_>) -> Result<Vec<AutomationRun>> {
     for id in caught {
         let Some(run) = read::automation_run(tx.conn(), id)? else { continue };
         stopped.push(
-            ended(tx, run, AutomationRunStatus::Stopped, Some(AutomationStoppedReason::Crashed))?.run,
+            ended(tx, run, Ending::Failed(AutomationStoppedReason::Crashed))?.run,
         );
     }
     Ok(stopped)
@@ -436,7 +466,7 @@ mod tests {
             let paused = a_run(tx, &p.automation);
             let stopped = a_run(tx, &p.automation);
             settle(tx, paused.clone()).expect("pause");
-            stop(tx, stopped.id, AutomationStoppedReason::ByHuman).expect("stop");
+            stop(tx, stopped.id, Ending::Canceled).expect("stop");
             let live: Vec<i64> = read::automation_runs_live(tx.conn(), 20)
                 .expect("live")
                 .into_iter()
@@ -449,9 +479,9 @@ mod tests {
             assert_eq!(over, live.len() - 1, "a stop sits behind everything still going");
 
             // What is over is not on it. A finished run is read from the task it worked.
-            ended(tx, running, AutomationRunStatus::Done, None).expect("done");
+            ended(tx, running, Ending::Completed).expect("completed");
             let after = read::automation_runs_live(tx.conn(), 20).expect("live");
-            assert!(after.iter().all(|one| one.status != AutomationRunStatus::Done));
+            assert!(after.iter().all(|one| one.status != AutomationRunStatus::Completed));
         });
     }
 
@@ -474,7 +504,7 @@ mod tests {
             assert_eq!(swept.len(), 2, "both were going when the window went");
 
             for run in [&going, &other] {
-                assert_eq!(status_of(tx, run.id), AutomationRunStatus::Stopped);
+                assert_eq!(status_of(tx, run.id), AutomationRunStatus::Failed);
             }
             assert_eq!(
                 read::automation_run(tx.conn(), going.id).expect("read").expect("it").stopped_reason,
@@ -552,9 +582,9 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, step.run_step.id);
 
-            let after = stop(tx, run.id, AutomationStoppedReason::ByHuman).expect("stop");
-            assert_eq!(after.run.status, AutomationRunStatus::Stopped);
-            assert_eq!(after.run.stopped_reason, Some(AutomationStoppedReason::ByHuman));
+            let after = stop(tx, run.id, Ending::Canceled).expect("stop");
+            assert_eq!(after.run.status, AutomationRunStatus::Canceled);
+            assert_eq!(after.run.stopped_reason, None, "a person who said stop needs no reason");
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::Todo),
@@ -578,7 +608,7 @@ mod tests {
             let second = opened(tx, &run, &p.second);
             done(tx, second.run_step.id, None, "Fixed it.").expect("done");
 
-            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Done);
+            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Completed);
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::InProgress),
@@ -600,8 +630,8 @@ mod tests {
 
             let caught = sweep(tx).expect("sweep");
             assert_eq!(caught.len(), 2, "a terminal does not outlive the app that drew it");
-            assert_eq!(status_of(tx, one.id), AutomationRunStatus::Stopped);
-            assert_eq!(status_of(tx, another.id), AutomationRunStatus::Stopped);
+            assert_eq!(status_of(tx, one.id), AutomationRunStatus::Failed);
+            assert_eq!(status_of(tx, another.id), AutomationRunStatus::Failed);
             assert!(caught.iter().all(|r| r.stopped_reason
                 == Some(AutomationStoppedReason::Crashed)));
         });
@@ -638,9 +668,8 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false);
             let run = a_run(tx, &p.automation);
-            stop(tx, run.id, AutomationStoppedReason::ByHuman).expect("stop");
-            let refused = stop(tx, run.id, AutomationStoppedReason::ByHuman)
-                .expect_err("it is over already");
+            stop(tx, run.id, Ending::Canceled).expect("stop");
+            let refused = stop(tx, run.id, Ending::Canceled).expect_err("it is over already");
             assert!(refused.to_string().contains("over already"), "{refused}");
         });
     }

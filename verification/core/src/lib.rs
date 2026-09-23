@@ -4206,22 +4206,15 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
     // Pressing a box, which is what puts what it holds in the panel beside the picture.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-box", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // The `+` on a line, and what it opens — on an automation's picture the library in the panel,
-    // whose own press opens the dialog for a written one. The box is put in **in front of** the line named:
-    // `after` is the box the line leaves and `exit` the way out it leaves by, which is the pair a line
-    // hangs on.
+    // The `+` on an automation's picture, and the library it opens in the panel. The box is put in
+    // **in front of** the line named: `after` is the box the line leaves and `exit` the way out it
+    // leaves by, which is the pair a line hangs on.
     //
-    // **What goes in differs by picture.** On an automation's it is a placement: an action picked off
-    // the library (`action`), or a prompt written in the dialog (`prompt`), which becomes an action of
-    // its own and is placed in the same press. Inside an action it is a step, and a step always
-    // carries its own prompt.
-    //
-    // `exits` is the named ways out the dialog is to declare on the new box, and `inputs` what it is
-    // to take in — each of those a `name` and a `kind`, and `required` where it is one. Both are
-    // lists, and both are only ever written beside a `prompt`: an action picked off the library
-    // declares neither here, those being already the action's. `name` is the written action's, and
-    // one picked off the library needs none: it is placed from the panel, which asks nothing — so the driver asks for it only on the arm that writes.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "prompt"], binds: false },
+    // What goes in is a placement: an action picked off the library (`action`), or one made on the
+    // spot (`name`, and `reach` for which library keeps it — this project's where none is named).
+    // One made on the spot is asked nothing else: it is born empty, its steps built on its own
+    // screen, so a road that names a prompt, ways out or inputs here is refused.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach"], binds: false },
     // The `+ output artefact` on a way out, and the dialog it opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //

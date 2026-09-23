@@ -725,6 +725,9 @@ pub struct WriteAck {
     /// screen that has just made an automation can open it without going to look for the row that
     /// was not there before.
     pub(crate) automations: Vec<i64>,
+    /// Library action ids the write made — [`Self::automations`] one layer down, for a build screen
+    /// that has just made an action on the spot and goes on to build it (`AMB-D-956`).
+    pub(crate) actions: Vec<i64>,
     /// Coarse-grained scopes to invalidate ("tasks"/"decisions"). Empty means there is no query to
     /// invalidate — as with a roster write, where refetching the snapshot in `loadSnapshot` is
     /// enough to show the change.

@@ -516,6 +516,12 @@ impl WriteAck {
         self.automations.push(id);
         self
     }
+    /// Name the library action a write made, so the screen that pressed it can open it
+    /// ([`crate::dto::WriteAck::actions`]).
+    pub(crate) fn action(mut self, id: i64) -> WriteAck {
+        self.actions.push(id);
+        self
+    }
 }
 
 /// The store file being watched (there is only one store). `None` when the path cannot be resolved.

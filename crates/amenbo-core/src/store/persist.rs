@@ -1732,52 +1732,38 @@ impl Store {
         })
     }
 
-    /// Write an action from one prompt and put it in on a line (one operation = one transaction): the
-    /// action, its one step, the ways out and inputs they are declared with, the placement, and the
-    /// two edges that leave nothing pointing at nothing.
+    /// Make an empty action and put it in on a line (one operation = one transaction): the action,
+    /// the placement, and the two edges that leave nothing pointing at nothing.
     ///
     /// The write declares the shelf as well as the line, because the action being born is what the
     /// device's library would gain — a target the edge alone does not name.
-    pub fn automation_placement_insert_from_prompt(
+    pub fn automation_placement_insert_new(
         &mut self,
         edge_id: i64,
         shelf: crate::ops::automation::ActionShelf,
-        new: crate::ops::automation::NewStep,
-        exits: &[String],
-        inputs: &[(String, crate::model::AutomationPortKind, bool)],
+        name: &str,
     ) -> Result<crate::model::AutomationPlacement> {
         let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)];
         targets.extend(device_shelf(shelf));
         self.write_one(&targets, |tx| {
-            crate::ops::automation::placement_insert_from_prompt(
-                tx, edge_id, shelf, new, exits, inputs,
-            )
+            crate::ops::automation::placement_insert_new(tx, edge_id, shelf, name)
         })
     }
 
-    /// Write an action from one prompt and put it on a picture, standing on its own (one operation =
-    /// one transaction) — [`Self::automation_placement_insert_from_prompt`] for a picture that has no
-    /// line to put one in on.
-    pub fn automation_placement_add_from_prompt(
+    /// Make an empty action and put it on a picture, standing on its own (one operation = one
+    /// transaction) — [`Self::automation_placement_insert_new`] for a picture that has no line to put
+    /// one in on.
+    pub fn automation_placement_add_new(
         &mut self,
         automation_id: i64,
         shelf: crate::ops::automation::ActionShelf,
-        new: crate::ops::automation::NewStep,
-        exits: &[String],
-        inputs: &[(String, crate::model::AutomationPortKind, bool)],
+        name: &str,
     ) -> Result<crate::model::AutomationPlacement> {
         let mut targets =
             vec![WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)];
         targets.extend(device_shelf(shelf));
         self.write_one(&targets, |tx| {
-            crate::ops::automation::placement_add_from_prompt(
-                tx,
-                automation_id,
-                shelf,
-                new,
-                exits,
-                inputs,
-            )
+            crate::ops::automation::placement_add_new(tx, automation_id, shelf, name)
         })
     }
 

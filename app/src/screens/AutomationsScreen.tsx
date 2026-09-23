@@ -19,7 +19,9 @@
 //
 // **A library action opens the same way**, into the screen its steps are drawn in
 // (`./AutomationActionBuildScreen`). It is the same move one layer down (`AMB-D-949`), so the list
-// it replaces is the "actions" tab's rather than the "automations" tab's.
+// it replaces is the "actions" tab's rather than the "automations" tab's. The automation build
+// screen opens one as well — the action it has just made on the spot, to be built (`AMB-D-956`) —
+// and "back" from there lands on that build screen again, which is still open underneath.
 //
 // **A row leads with the automation's ID**, the number the terminal names it by
 // (`amenbo automation start <ID>`): a name can be changed, so the ID is what ties a row on this
@@ -93,6 +95,7 @@ export function AutomationsScreen({
         projectId={projectId}
         workspaceOpen={workspaceOpen}
         onBack={() => setOpen(null)}
+        onOpenAction={setOpenAction}
       />
     );
   }

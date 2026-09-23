@@ -10,7 +10,8 @@
 // dialog took is what is sent**, ways out and inputs together; **nothing
 // is sent until the dialog has what a step cannot be made without**; and, for the output artefact, **the name starts on
 // the way out's own and stops following once somebody writes their own** — but only where that way
-// out hands on nothing yet.
+// out hands on nothing yet. **Neither dialog closes from the backdrop or Escape** (`AMB-T-5363`) — only
+// its buttons do, so a prompt half written is not thrown away by a stray press.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -249,4 +250,33 @@ describe("declaring what a way out hands on", () => {
       required: false,
     });
   });
+});
+
+describe("leaving either dialog", () => {
+  const dialogs = {
+    "the one that puts a step in": (onClose: () => void) =>
+      createElement(AutomationStepAdd, {
+        into: { picture: "automation", edgeId: 9 },
+        projectId: 1,
+        agent: "claude-code",
+        onClose,
+      }),
+    "the one that declares what a way out hands on": (onClose: () => void) =>
+      createElement(AutomationOutputAdd, { exit: { id: 3, name: "drafted", outputs: [] }, onClose }),
+  };
+
+  for (const [which, make] of Object.entries(dialogs)) {
+    it(`closes ${which} only from its buttons, not from the backdrop or Escape`, async () => {
+      const onClose = vi.fn();
+      await act(async () => root.render(make(onClose)));
+      const backdrop = document.querySelector<HTMLDivElement>(".modal__overlay")!;
+      await act(async () => backdrop.click());
+      await act(async () => {
+        document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => button(t("auto.add.cancel")).click());
+      expect(onClose).toHaveBeenCalledOnce();
+    });
+  }
 });

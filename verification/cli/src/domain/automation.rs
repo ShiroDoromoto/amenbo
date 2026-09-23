@@ -420,6 +420,15 @@ impl Driver<'_> {
                     pass = pass && got == why;
                     said.push_str(&format!(", stopped because `{got}`, expected `{why}`"));
                 }
+                // Whether a pause has been asked for and not yet settled. Pausing waits for the step
+                // under way to report, so a run pressed pause on is still `running`; this is the one
+                // thing that says the press landed.
+                if let Some(want) = opt_bool(with, "pause_requested") {
+                    let got = row["pause_requested"].as_bool();
+                    pass = pass && got == Some(want);
+                    let got = got.map_or("(none reported)".to_string(), |b| b.to_string());
+                    said.push_str(&format!(", pause asked `{got}`, expected `{want}`"));
+                }
                 said.push_str(if pass { ", as expected)" } else { ", MISMATCH)" });
                 Ok(Outcome::assert(pass, said))
             }

@@ -11,7 +11,9 @@ description: >
   where a person meets the same three controls. Stopping is asserted last on both roads because it
   is the one that cannot be taken back.
 given:
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.
@@ -30,6 +32,10 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
+# A run started from the terminal opens no step — the host that opens them is the app's — so holding
+# it never settles: pause is recorded as asked for and the run stays `running`, waiting for a step
+# that will not report. Letting it go is only for a run that has settled, so the terminal road stops
+# at the request and leaves the settled hold, and picking it up again, to the screen.
 steps_cli:
   - type: action
     domain: automation
@@ -44,6 +50,7 @@ steps_cli:
     with:
       target: run
       status: running
+      pause_requested: false
 
   - type: action
     domain: automation
@@ -56,20 +63,8 @@ steps_cli:
     op: run
     with:
       target: run
-      status: paused
-
-  - type: action
-    domain: automation
-    op: resume
-    with:
-      target: run
-
-  - type: assert
-    domain: automation
-    op: run
-    with:
-      target: run
       status: running
+      pause_requested: true
 
   - type: action
     domain: automation

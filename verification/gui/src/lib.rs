@@ -4358,6 +4358,12 @@ impl Instructor {
                     "In the pane this run is drawn in, type `amenbo automation {verb}` and run it{standing_in}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
             }
+            // The program ending itself, in the run's own pane. The stand-in carries out the line it
+            // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
+            (Domain::Automation, "quit-in-pane") => {
+                "In the pane this run is drawn in, type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
+                    .to_string()
+            }
             (Domain::Automation, "press-run") => format!(
                 "On the running tab, on the row for this run, {}.",
                 run_press(req(with, "press")?)?

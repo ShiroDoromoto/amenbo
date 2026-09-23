@@ -27,7 +27,7 @@ vi.mock("../core/automations", () => ({
   addAutomationAction: hoisted.add,
 }));
 
-import { t, tn } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -67,6 +67,18 @@ function button(label: string): HTMLButtonElement {
   const found = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(label));
   if (!found) throw new Error(`no button labelled ${label}`);
   return found;
+}
+
+/** The name box of the make form — the list's search box stands beside it. */
+const nameBox = () => container.querySelector<HTMLInputElement>(".actlib__make input")!;
+
+/** Pick a reach in the make form, which starts with none picked. */
+async function pickReach(value: "project" | "device") {
+  const reach = container.querySelector<HTMLSelectElement>(".actlib__make select")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(reach, value);
+    reach.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 /** Typing into a controlled field: React listens for `input`, not for the value being assigned. */
@@ -110,7 +122,7 @@ describe("the library", () => {
   it("says how many automations run each action", async () => {
     hoisted.actions = [action({ usedBy: 4 })];
     await render();
-    expect(rows()[0]).toContain(tn("auto.actions.usedBy", 4));
+    expect(rows()[0]).toContain(tf("auto.actions.usedN", { n: 4 }));
   });
 
   it("carries the first line of what an action is for, and nothing where none is written", async () => {
@@ -128,8 +140,29 @@ describe("the library", () => {
   it("says in words that nobody runs one, rather than counting to zero", async () => {
     hoisted.actions = [action({ usedBy: 0 })];
     await render();
-    expect(rows()[0]).toContain(t("auto.actions.unused"));
-    expect(rows()[0]).not.toContain(tn("auto.actions.usedBy", 0));
+    expect(rows()[0]).toContain(t("auto.actions.usedNone"));
+    expect(rows()[0]).not.toContain(tf("auto.actions.usedN", { n: 0 }));
+  });
+});
+
+describe("narrowing it", () => {
+  it("finds an action by what its name and its note say", async () => {
+    hoisted.actions = [
+      action({ id: 1, name: "Report", note: "Says what the run did" }),
+      action({ id: 2, name: "Take one", note: "" }),
+    ];
+    await render();
+    await act(async () => { type(container.querySelector<HTMLInputElement>(".actlib__search")!, "run did"); });
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toContain("Report");
+  });
+
+  it("narrows to one reach, and says so when nothing is left", async () => {
+    hoisted.actions = [action({ id: 1, name: "Report", global: true })];
+    await render();
+    await act(async () => { button(t("auto.actions.reachProject")).click(); });
+    expect(rows()).toHaveLength(0);
+    expect(container.textContent).toContain(t("auto.actions.noMatch"));
   });
 });
 
@@ -157,26 +190,29 @@ describe("making one", () => {
 
   it("asks for a name and a reach, and for no prompt", async () => {
     await openForm();
-    expect(container.querySelector("input")).not.toBeNull();
+    expect(container.querySelector(".actlib__make input")).not.toBeNull();
     expect(container.querySelector("select")).not.toBeNull();
     expect(container.querySelector("textarea")).toBeNull();
   });
 
-  it("makes it in this project's library by default", async () => {
+  it("makes nothing until a reach is picked", async () => {
     await openForm();
-    type(container.querySelector("input")!, "Review");
+    type(nameBox(), "Review");
+    expect(button(t("auto.actions.add")).disabled).toBe(true);
+  });
+
+  it("makes it in this project's library when that reach is picked", async () => {
+    await openForm();
+    type(nameBox(), "Review");
+    await pickReach("project");
     await act(async () => { button(t("auto.actions.add")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", 1);
   });
 
   it("makes it in the device's library when that reach is picked", async () => {
     await openForm();
-    type(container.querySelector("input")!, "Review");
-    const reach = container.querySelector("select")!;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(reach, "device");
-      reach.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    type(nameBox(), "Review");
+    await pickReach("device");
     await act(async () => { button(t("auto.actions.add")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", null);
   });
@@ -193,7 +229,8 @@ describe("making one", () => {
     });
     await render();
     await act(async () => { button(t("auto.actions.add")).click(); });
-    type(container.querySelector("input")!, "Review");
+    type(nameBox(), "Review");
+    await pickReach("project");
     await act(async () => { button(t("auto.actions.add")).click(); });
     expect(opened).toEqual([9]);
   });

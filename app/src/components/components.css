@@ -1511,3 +1511,123 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__decl, .autostep__declare { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .autostep__declare { padding-block: var(--s-1); }
 .autostep__declname { flex: 1 1 8rem; min-width: 0; }
+
+/* ── The library of actions (`../screens/AutomationActionsTab`) ── */
+/* A place is named by a small caps word over it, the way the build screen names its three. */
+.actlib__sec, .actbuild__sec {
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.07em; color: var(--c-text-faint);
+}
+.actlib { display: flex; flex-direction: column; gap: var(--s-2); }
+.actlib__head { display: flex; align-items: center; gap: var(--s-2); }
+.actlib__head .btn { margin-inline-start: auto; }
+.actlib__make {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--s-2);
+  padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken);
+}
+.actlib__field { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-faint); }
+.actlib__field input { width: 18em; max-width: 100%; }
+.actlib__said { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); color: var(--c-text-faint); }
+.actlib__tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.actlib__search { flex: 1 1 180px; min-width: 0; }
+.actchip {
+  font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); border-radius: 999px; cursor: pointer;
+  border: var(--border-w) var(--border-style) var(--c-edge); background: none; color: var(--c-text-muted);
+}
+.actchip:hover { border-color: var(--c-accent); color: var(--c-accent); }
+.actchip--on, .actchip--on:hover { border-color: var(--c-accent); background: var(--c-accent); color: var(--c-on-accent); }
+.actlib__none { padding: var(--s-6) var(--s-2); text-align: center; font-size: var(--fs-md); color: var(--c-text-faint); }
+/* One grid for the heads and every row, so the four columns line up without a table's markup. */
+.actlib__cols, .actlib__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 9rem 5rem 11rem; align-items: baseline; gap: var(--s-2);
+}
+.actlib__cols {
+  padding: var(--s-1) var(--s-2); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+  font-size: var(--fs-xs); color: var(--c-text-faint);
+}
+.actlib__rows { list-style: none; margin: 0; padding: 0; }
+.actlib__rows > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
+.actlib__num { text-align: end; font-variant-numeric: tabular-nums; }
+.actlib__zero { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* Which reach holds an action. The device's is the accent; a project's wears the project-ish amber. */
+.actscope {
+  display: inline-flex; align-items: center; gap: var(--s-1); white-space: nowrap;
+  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: 999px;
+  border: var(--border-w) var(--border-style) var(--c-edge); color: var(--c-text-muted);
+}
+.actscope em { display: block; width: 9px; height: 9px; border-radius: 3px; background: var(--c-heed); }
+.actscope--device { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
+.actscope--device em { background: var(--c-accent); }
+
+/* ── One action, opened (`../screens/AutomationActionBuildScreen`) ── */
+.actbuild {
+  display: flex; flex-direction: column; margin: var(--s-4);
+  background: var(--c-surface-pic) var(--c-surface);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+}
+.actbuild__head {
+  display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3);
+  border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.actbuild__name { font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.actdecl { padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
+.actdecl__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.actdecl__note {
+  flex: 1 1 20em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-md); color: var(--c-text-muted);
+}
+.actdecl__used { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.actdecl .btn--on { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
+.actdecl__rows {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s-1) var(--s-3);
+  margin-block-start: var(--s-2);
+}
+.actdecl__key { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.actdecl__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
+.actdecl__none { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* A declared port, setting or way out, coloured by what it carries (the picture's own colours). */
+.actport {
+  --tone: var(--c-edge);
+  display: inline-flex; align-items: center; white-space: nowrap;
+  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: 999px;
+  border: var(--border-w) var(--border-style) var(--tone); color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+}
+.actport__kind { margin-inline-start: var(--s-1); padding-inline-start: var(--s-1); border-inline-start: 1px solid currentColor; }
+.actport--value { --tone: var(--c-accent); }
+.actport--file { --tone: var(--c-ai); }
+.actport--task_take { --tone: var(--c-done); }
+.actport--task_make { --tone: var(--c-done); border-style: dashed; background: none; }
+.actport--cfg { --tone: var(--c-heed); }
+.actport--exit { --tone: var(--c-accent); color: var(--c-text); background: var(--c-surface-pic) var(--c-surface); }
+.actport--error { --tone: var(--c-stop); color: var(--c-stop); border-style: dashed; background: none; }
+/* The picture and the panel pinned to its right. The panel stands over the stage's right edge, and
+   the picture leaves that much room at its end so no box sits under it. */
+.actbuild__stage { position: relative; }
+.actbuild__canvashead { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0; }
+.actbuild__canvashead .btn { margin-inline-start: auto; }
+.actbuild__notready { margin: var(--s-2) var(--s-3) 0; }
+.actbuild__canvas {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2);
+  padding: var(--s-3) var(--s-3) var(--s-5); min-height: 560px; overflow-x: auto;
+}
+.actbuild__canvas .autopic { max-height: none; align-self: stretch; }
+.actbuild__stage--panel .actbuild__canvas { padding-inline-end: calc(min(430px, 80%) + var(--s-3)); }
+.actpanel {
+  position: absolute; inset-block: 0; inset-inline-end: 0; width: min(430px, 80%);
+  border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface);
+}
+/* Sticky within the stage, so a press on a low step shows its contents where the reader is looking. */
+.actpanel__inner { position: sticky; inset-block-start: 0; max-height: 100vh; overflow: auto; }
+.actpanel__head {
+  position: sticky; inset-block-start: 0; z-index: 1; display: flex; align-items: baseline; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface);
+}
+.actpanel__title { font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+.actpanel__close {
+  margin-inline-start: auto; border: 0; background: none; color: var(--c-text-muted); cursor: pointer; padding: 0;
+}
+.actpanel__close:hover { color: var(--c-text); }
+.actpanel__body { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }

@@ -115,6 +115,12 @@ function noteBox(): HTMLTextAreaElement {
   return field!.querySelector("textarea")!;
 }
 
+/** Open the declaration in the panel, the way a reader does: its one button over the picture. */
+async function openDeclaration() {
+  const edit = buttons().find((one) => one.textContent === t("auto.act.declEdit"))!;
+  await act(async () => edit.click());
+}
+
 /** Typing into a controlled field: React listens for `input`, not for the value being assigned. */
 function type(field: HTMLTextAreaElement, text: string) {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, text);
@@ -153,11 +159,32 @@ describe("the action build screen", () => {
     ]);
   });
 
-  it("shows what the pressed step holds", async () => {
+  it("opens on the picture alone, and pins what the pressed step holds beside it", async () => {
     await render();
-    expect(container.textContent).toContain(t("auto.act.stepNone"));
+    expect(container.querySelector(".actpanel")).toBeNull();
     await act(async () => nodes()[0]!.click());
+    expect(container.querySelector(".actpanel__title")?.textContent).toBe("Take the next task");
     expect(textareas().map((one) => one.value)).toContain("take one");
+  });
+
+  it("closes the panel from its own close button", async () => {
+    await render();
+    await act(async () => nodes()[0]!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>(".actpanel__close")!.click());
+    expect(container.querySelector(".actpanel")).toBeNull();
+  });
+
+  it("reads the declaration in the band without opening anything", async () => {
+    hoisted.action = action({
+      note: "Takes the next task off the queue\nand says which",
+      exits: [
+        { id: 1, outputs: [] },
+        { id: 2, name: "*", outputs: [] },
+      ],
+    });
+    await render();
+    expect(container.querySelector(".actdecl__note")?.textContent).toBe("Takes the next task off the queue");
+    expect(container.querySelector(".actdecl")?.textContent).toContain(t("auto.pic.errorExit"));
   });
 
   it("offers the first step while the picture is empty, and not once there is one", async () => {
@@ -174,6 +201,7 @@ describe("the action build screen", () => {
   it("shows what the action is for, and writes it when the caret leaves the box", async () => {
     hoisted.action = action({ note: "Takes the next task off the queue" });
     await render();
+    await openDeclaration();
     expect(noteBox().value).toBe("Takes the next task off the queue");
     expect(container.textContent).toContain(t("auto.actions.noteWhat"));
 
@@ -187,6 +215,7 @@ describe("the action build screen", () => {
   it("writes nothing when the caret leaves a note it did not change", async () => {
     hoisted.action = action({ note: "Takes one task" });
     await render();
+    await openDeclaration();
     await act(async () => leave(noteBox()));
     expect(hoisted.editAction).not.toHaveBeenCalled();
   });

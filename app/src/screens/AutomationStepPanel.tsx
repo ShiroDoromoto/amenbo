@@ -242,6 +242,7 @@ export function AutomationStepPanel({
   placementId,
   onRemoved,
   onOpenAction,
+  readOnly = false,
 }: {
   automation: AutomationDetailDto | null;
   /** The spot the picture is showing as pressed, or nothing while none is. */
@@ -250,6 +251,11 @@ export function AutomationStepPanel({
   onRemoved: () => void;
   /** Go to the action's own build screen, where what it declares and what its steps carry are written. */
   onOpenAction: (actionId: number) => void;
+  /**
+   * Hold every write shut — a run is going on the automation (`AMB-D-961`). The press that goes to the
+   * action stays live: it writes nothing, and it is where a reader goes to read what the steps carry.
+   */
+  readOnly?: boolean;
 }) {
   const placement = automation?.placements.find((one) => one.id === placementId) ?? null;
   const action = useAutomationAction(placement?.actionId ?? null);
@@ -308,91 +314,94 @@ export function AutomationStepPanel({
         </div>
       </div>
 
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={automation.entryPlacementId === placement.id}
-          onChange={(e) =>
-            void run(setAutomationEntry(automation.id, e.target.checked ? placement.id : null))
-          }
-        />
-        {t("auto.step.entry")}
-      </label>
-      <div className="autostep__said">{t("auto.step.entryWhat")}</div>
+      <fieldset className="autostep__writes" disabled={readOnly}>
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.task")}</span>
-        <span className="autostep__said">
-          {takesTask ? t("auto.step.takesTask") : t("auto.step.carriesTask")}
-        </span>
-      </div>
+        <label className="autostep__check">
+          <input
+            type="checkbox"
+            checked={automation.entryPlacementId === placement.id}
+            onChange={(e) =>
+              void run(setAutomationEntry(automation.id, e.target.checked ? placement.id : null))
+            }
+          />
+          {t("auto.step.entry")}
+        </label>
+        <div className="autostep__said">{t("auto.step.entryWhat")}</div>
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.cfg")}</span>
-        {placement.settings.length === 0 && (
-          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-        )}
-        {placement.settings.map((cfg) => (
-          <CfgRow key={cfg.name} placementId={placement.id} cfg={cfg} run={run} />
-        ))}
-      </div>
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.task")}</span>
+          <span className="autostep__said">
+            {takesTask ? t("auto.step.takesTask") : t("auto.step.carriesTask")}
+          </span>
+        </div>
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.inputs")}</span>
-        {placement.inputs.length === 0 && (
-          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-        )}
-        {placement.inputs.map((input) => (
-          <InputRow key={input.name} automation={automation} placement={placement} input={input} run={run} />
-        ))}
-      </div>
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.cfg")}</span>
+          {placement.settings.length === 0 && (
+            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
+          )}
+          {placement.settings.map((cfg) => (
+            <CfgRow key={cfg.name} placementId={placement.id} cfg={cfg} run={run} />
+          ))}
+        </div>
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.exits")}</span>
-        <span className="autostep__said">{t("auto.place.exitsWhat")}</span>
-        <ul className="autostep__exits">
-          {named.map((one) => (
-            <li key={one.id} className="autostep__exit">
-              <div className="autostep__exithead">
-                <span className="actport actport--exit">
-                  {one.name ?? t("auto.step.exitUnnamed")}
-                  {one.outputs.length > 0 && (
-                    <span className="actport__kind">{one.outputs.map((out) => out.name).join("・")}</span>
-                  )}
-                </span>
-              </div>
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.inputs")}</span>
+          {placement.inputs.length === 0 && (
+            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
+          )}
+          {placement.inputs.map((input) => (
+            <InputRow key={input.name} automation={automation} placement={placement} input={input} run={run} />
+          ))}
+        </div>
+
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.exits")}</span>
+          <span className="autostep__said">{t("auto.place.exitsWhat")}</span>
+          <ul className="autostep__exits">
+            {named.map((one) => (
+              <li key={one.id} className="autostep__exit">
+                <div className="autostep__exithead">
+                  <span className="actport actport--exit">
+                    {one.name ?? t("auto.step.exitUnnamed")}
+                    {one.outputs.length > 0 && (
+                      <span className="actport__kind">{one.outputs.map((out) => out.name).join("・")}</span>
+                    )}
+                  </span>
+                </div>
+                <NextRow
+                  graph={automationGraph(automation)!}
+                  picture="automation"
+                  boxId={placement.id}
+                  exitName={one.name}
+                  run={run}
+                />
+              </li>
+            ))}
+            {/* The error way out, always drawn and always last: every action carries one, and a list
+                that left it off where nobody had said anything about it would read as a spot that
+                cannot fail. Saying nothing after it stops the run and calls a person, and the row is
+                where a picture says otherwise. */}
+            <li className="autostep__exiterr">
+              <span className="autostep__label">{t("auto.pic.errorExit")}</span>
               <NextRow
                 graph={automationGraph(automation)!}
                 picture="automation"
                 boxId={placement.id}
-                exitName={one.name}
+                exitName={ERROR_EXIT}
                 run={run}
               />
             </li>
-          ))}
-          {/* The error way out, always drawn and always last: every action carries one, and a list
-              that left it off where nobody had said anything about it would read as a spot that
-              cannot fail. Saying nothing after it stops the run and calls a person, and the row is
-              where a picture says otherwise. */}
-          <li className="autostep__exiterr">
-            <span className="autostep__label">{t("auto.pic.errorExit")}</span>
-            <NextRow
-              graph={automationGraph(automation)!}
-              picture="automation"
-              boxId={placement.id}
-              exitName={ERROR_EXIT}
-              run={run}
-            />
-          </li>
-        </ul>
-      </div>
+          </ul>
+        </div>
 
-      <div className="settings__row">
-        <button type="button" className="btn btn--danger" onClick={() => void remove()}>
-          {t("auto.step.placementRemove")}
-        </button>
-      </div>
-      <div className="autostep__said">{t("auto.step.placementRemoveWhat")}</div>
+        <div className="settings__row">
+          <button type="button" className="btn btn--danger" onClick={() => void remove()}>
+            {t("auto.step.placementRemove")}
+          </button>
+        </div>
+        <div className="autostep__said">{t("auto.step.placementRemoveWhat")}</div>
+      </fieldset>
     </div>
   );
 }

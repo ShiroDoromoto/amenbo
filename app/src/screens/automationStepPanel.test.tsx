@@ -90,6 +90,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     placements: [spot()],
     edges: [],
     wires: [],
+    heldBy: [],
     ...over,
   };
 }
@@ -110,6 +111,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     exits: [],
     inputs: [],
     settings: [],
+    heldBy: [],
     ...over,
   };
 }
@@ -225,6 +227,21 @@ describe("the panel of one spot", () => {
     )!;
     await act(async () => press.click());
     expect(opened).toHaveBeenCalledWith(4);
+  });
+
+  it("holds every write shut while a run holds the automation, and still goes to the action (AMB-D-961)", async () => {
+    const opened = vi.fn();
+    await render({ automation: detail(), placementId: 1, onOpenAction: opened, readOnly: true });
+    const press = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.textContent === t("auto.place.open"),
+    )!;
+    expect(press.closest("fieldset")).toBeNull();
+    await act(async () => press.click());
+    expect(opened).toHaveBeenCalledWith(4);
+    const remove = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.textContent === t("auto.step.placementRemove"),
+    )!;
+    expect(remove.closest("fieldset")?.disabled).toBe(true);
   });
 
   it("says an action with nothing in it cannot be started until it is built", async () => {

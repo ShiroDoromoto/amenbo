@@ -1271,6 +1271,8 @@ const ui = {
   "auto.act.read": "View",
   "auto.act.openInSidebar": "Open in the sidebar",
   "auto.act.globalReadOnly": "A global action is changed from Automations in the sidebar. Here it is only read.",
+  "auto.held.place": "Runs using it",
+  "auto.held.what": "While a run using this is running or paused, it cannot be edited. Stop the run, or let it finish, to edit it again.",
   "auto.act.stepsPlace": "Steps",
   "auto.act.stepsHint": "Comes in at the Input above, runs through the steps, and ends at one of the Outputs below",
   "auto.act.usedWhere": "{n}. A change here reaches all of them.",

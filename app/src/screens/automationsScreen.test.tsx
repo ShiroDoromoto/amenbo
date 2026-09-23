@@ -19,6 +19,7 @@ import type {
   AutomationDetailDto,
   AutomationLaunchBlockDto,
   AutomationLaunchCheckDto,
+  AutomationRunCardDto,
   EveryAutomationCardDto,
 } from "../bindings/bindings";
 
@@ -77,6 +78,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     placements: [],
     edges: [],
     wires: [],
+    heldBy: [],
     ...over,
   };
 }
@@ -458,5 +460,54 @@ describe("the press that starts a run", () => {
     // core said rather than a blank — this is the road every uncoded refusal still takes.
     await refusedWith({ code: "invalid", message_en: "something core has no code for" });
     expect(container.textContent).toContain("something core has no code for");
+  });
+});
+
+describe("an automation a run is going on (AMB-D-961)", () => {
+  const goToRun = vi.fn();
+  const run: AutomationRunCardDto = {
+    run: 31,
+    project: 1,
+    projectName: "Here",
+    automation: 7,
+    automationName: "Morning round",
+    status: "paused",
+    pauseRequested: false,
+    stepsDone: 2,
+  };
+  async function openHeld(heldBy: AutomationRunCardDto[] = [run]) {
+    hoisted.automations = [card()];
+    hoisted.detail = detail({ heldBy });
+    hoisted.check = { ready: true, blocks: [] };
+    goToRun.mockClear();
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: 1, opening: 7, workspaceOpen: true, onGoToRun: goToRun }));
+    });
+  }
+
+  it("names the runs using it, and goes to a run's pane on its line", async () => {
+    await openHeld();
+    expect(container.querySelector(".autoheld")?.textContent).toContain(t("auto.held.what"));
+    await act(async () => { container.querySelector<HTMLButtonElement>(".autoheld .autorun__go")!.click(); });
+    expect(goToRun).toHaveBeenCalledWith(1, 31);
+  });
+
+  it("offers nothing to place, and opens its own fields with them shut", async () => {
+    await openHeld();
+    expect(buttons().some((b) => b.textContent === t("auto.pic.first"))).toBe(false);
+    await act(async () => { button(t("auto.build.edit")).click(); });
+    expect(container.querySelector<HTMLFieldSetElement>(".actpanel__body")?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>(".actpanel__close")?.disabled).toBe(false);
+  });
+
+  it("still offers a start, which is not a rewrite", async () => {
+    await openHeld();
+    expect(button(t("auto.start")).disabled).toBe(false);
+  });
+
+  it("says nothing of runs, and holds nothing shut, while none is going", async () => {
+    await openHeld([]);
+    expect(container.querySelector(".autoheld")).toBeNull();
+    expect(buttons().some((b) => b.textContent === t("auto.pic.first"))).toBe(true);
   });
 });

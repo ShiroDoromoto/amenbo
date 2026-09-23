@@ -30,6 +30,12 @@
 // **The delete takes the screen with it**, so the press hands back the same way out the "back"
 // button does: there is no definition left for this screen to be drawn from.
 //
+// **An automation a run is going on is read, not written, for as long as the run goes** (`AMB-D-961`).
+// Core refuses every rewrite of it while a run of it is running or paused, so nothing adds to the
+// picture, the panels open to be read with every write in them held shut, and the runs are named over
+// the picture with the way to each one's pane (`./AutomationHeldBy`). Starting another run is not a
+// rewrite, and stays.
+//
 // **What the panel shows is the screen's, not the picture's.** The picture marks the pressed box and
 // the panel draws it, so it is held where both can see it, and the panel hands it back when the spot
 // it was drawn from is taken off.
@@ -61,6 +67,7 @@ import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPan
 import { AutomationPicture } from "./AutomationPicture";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
+import { AutomationHeldBy } from "./AutomationHeldBy";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
@@ -86,7 +93,7 @@ type Showing =
   | { kind: "about" };
 
 export function AutomationBuildScreen({
-  id, projectId, workspaceOpen, onBack, onOpenAction,
+  id, projectId, workspaceOpen, onBack, onOpenAction, onGoToRun,
 }: {
   id: number;
   /** Whose project this automation is — what the machine is asked about, and where its folders are. */
@@ -100,8 +107,11 @@ export function AutomationBuildScreen({
   onBack: () => void;
   /** Go to one library action's own build screen — where an action made here is built. */
   onOpenAction: (actionId: number) => void;
+  /** Go to the pane a run holding this automation is drawn in. */
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const automation = useAutomation(id);
+  const held = (automation?.heldBy.length ?? 0) > 0;
   // Nothing until something is pressed — a definition opens on the picture, and a box picked for the
   // reader would be one they did not choose.
   const [showing, setShowing] = useState<Showing | null>(null);
@@ -181,6 +191,8 @@ export function AutomationBuildScreen({
         {refused !== null && <div className="auto__notready">{refused}</div>}
       </div>
 
+      {automation !== null && <AutomationHeldBy runs={automation.heldBy} onGoToRun={onGoToRun} />}
+
       <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
         <div className="actbuild__canvashead">
           <span className="actbuild__sec">{t("auto.build.picture")}</span>
@@ -190,9 +202,9 @@ export function AutomationBuildScreen({
             graph={automationGraph(automation)}
             selectedBoxId={pressed?.id}
             onPickBox={(box) => setShowing({ kind: "box", id: box })}
-            onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
+            onInsert={held ? undefined : (edgeId) => setShowing({ kind: "library", target: { edgeId } })}
           />
-          {automation !== null && automation.placements.length === 0 && (
+          {automation !== null && automation.placements.length === 0 && !held && (
             <button
               type="button"
               className="btn btn--primary"
@@ -203,7 +215,7 @@ export function AutomationBuildScreen({
           )}
         </div>
 
-        {automation !== null && showing?.kind === "library" && (
+        {automation !== null && showing?.kind === "library" && !held && (
           <Panel place={t("auto.pic.place")} title="" onClose={close}>
             <AutomationLibraryPanel
               // A new line pressed is a new pick: what was typed and opened for one line is not
@@ -219,7 +231,7 @@ export function AutomationBuildScreen({
         )}
 
         {automation !== null && showing?.kind === "about" && (
-          <Panel place={t("auto.build.edit")} title={automation.name} onClose={close}>
+          <Panel place={t("auto.build.edit")} title={automation.name} onClose={close} readOnly={held}>
             <AutomationAboutPanel automation={automation} onDeleted={onBack} />
           </Panel>
         )}
@@ -231,6 +243,7 @@ export function AutomationBuildScreen({
               placementId={pressed.id}
               onRemoved={close}
               onOpenAction={onOpenAction}
+              readOnly={held}
             />
           </Panel>
         )}

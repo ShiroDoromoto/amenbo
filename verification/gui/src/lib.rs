@@ -4334,6 +4334,17 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "value")?
             ),
+            // A way out the step does not declare is turned away before anything is written. What the
+            // line says is spelled out because it is what the agent finishes again from: the ways out
+            // the step does declare, as they are typed, the error one among them — and the step still
+            // running, which the pane is read for afterwards.
+            // The way out is typed as an id here, since what is refused is an id the step does not
+            // carry — a road names one no row can have.
+            (Domain::Automation, "done-in-pane") if with.contains_key("refused") => format!(
+                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
+                req(with, "report")?,
+                req(with, "exit")?
+            ),
             // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
             // one — which is the shape of the command and not a default this writes in. A way out is
             // typed by its id, which the store issues, so the road names the way out
@@ -4363,6 +4374,31 @@ impl Instructor {
                 format!(
                     "In the pane this run is drawn in, type `amenbo automation {verb}` and run it{standing_in}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
+            }
+            // The report made without the run's pane. The step's number is not on any screen — the
+            // window hands it to the step's terminal and nowhere else — so it is read off the run's
+            // own account, and the run's number off its row, the one place it is drawn outside the
+            // pane this road leaves shut.
+            //
+            // It leaves by the unnamed way out alone: any other is typed by its id, and the step's
+            // own text — the one place the ids are listed — is in the pane this road leaves shut.
+            (Domain::Automation, "done-outside-pane") => {
+                if arg_str(with, "exit").is_some() {
+                    return Err(
+                        "`done-outside-pane` leaves by the unnamed way out alone — another is typed by its id, and the step's text that lists the ids is in the pane this op leaves shut"
+                            .to_string(),
+                    );
+                }
+                format!(
+                    "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\"` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
+                    req(with, "report")?
+                )
+            }
+            // The program ending itself, in the run's own pane. The stand-in carries out the line it
+            // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
+            (Domain::Automation, "quit-in-pane") => {
+                "In the pane this run is drawn in, type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
+                    .to_string()
             }
             (Domain::Automation, "press-run") => format!(
                 "On the running tab, on the row for this run, {}.",
@@ -4394,6 +4430,11 @@ impl Instructor {
                 self.target_label(with),
                 self.key_label(with, "project")
             ),
+            // A row of the runs holding the open build screen's definition. The row is the running
+            // tab's own line, so it goes where that line goes: the pane the run is drawn in.
+            (Domain::Automation, "held-go") => {
+                "On the build screen, under \"Runs using it\", press the row for this run. Confirm the workspace comes forward on the pane the run is drawn in.".to_string()
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -6182,6 +6223,16 @@ impl Instructor {
                 self.target_label(with),
                 self.key_label(with, "project")
             ),
+            // The build screen of a definition a run is going on — an automation's or an action's,
+            // whichever the road has open. Held, it names the run and offers no write; released, the
+            // list is gone and the writes are back.
+            (Domain::Automation, "held-by") => match present(with) {
+                true => match with.contains_key("target") {
+                    true => "On the build screen, confirm \"Runs using it\" is drawn over the picture with a row for this run. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
+                    false => return Err("`held-by` names the run it lists — give it `target`, or say `present: false`".to_string()),
+                },
+                false => "On the build screen, confirm nothing is drawn under \"Runs using it\", and the definition takes writes again: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
+            },
             // The words over the rows are the interface's own, in the language the run is in, so
             // what the step names is what they say rather than how.
             (Domain::Automation, "scope-said") => format!(
@@ -8416,6 +8467,18 @@ steps_gui:
     domain: automation
     op: scope-refusal-names
     with: { target: act, reach: project, names: auto }
+  - type: assert
+    domain: automation
+    op: held-by
+    with: { target: run }
+  - type: action
+    domain: automation
+    op: held-go
+    with: { target: run }
+  - type: assert
+    domain: automation
+    op: held-by
+    with: { present: false }
 "#);
         let mut ins = Instructor::new();
         // What the premise made is what the road then points at, so its labels are learnt without a
@@ -8436,6 +8499,21 @@ steps_gui:
             lines.iter().any(|l| l.contains("adds an action") && l.contains("\"Triage\"") && l.contains("the global library")),
             "the action made from the list is said with its reach",
         );
+        let n = lines.len();
+        assert!(lines[n - 3].contains("\"Runs using it\"") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
+        assert!(lines[n - 2].contains("press the row for this run") && lines[n - 2].contains("pane"), "{}", lines[n - 2]);
+        assert!(lines[n - 1].contains("nothing is drawn") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
+    }
+
+    /// `held-by` lists a run, so a road reading the hold names which one; only the release names
+    /// none.
+    #[test]
+    fn held_by_names_the_run_it_lists() {
+        let ins = Instructor::new();
+        let mut with = Args::new();
+        assert!(ins.assert(Domain::Automation, "held-by", &with).is_err());
+        with.insert("present".to_string(), serde_yaml::Value::Bool(false));
+        assert!(ins.assert(Domain::Automation, "held-by", &with).is_ok());
     }
 
     /// What the dialog that puts a box in is told to declare on it. One of a thing and several read

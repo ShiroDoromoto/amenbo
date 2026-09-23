@@ -741,7 +741,10 @@ move into a project names (`scope-refusal-names`): the terminal reads the error 
 with, a screen the sentence left under the row. The list the sidebar opens is a screen's alone, since
 no terminal lists every project's automations: a row naming its project (`every-listed`), the start
 beside it (`start-from-list`), the row going to its project (`every-open`), and the run tabs saying
-they hold everything on this device (`scope-said`).
+they hold everything on this device (`scope-said`). So is a definition held by a run: on either build
+screen the runs holding it are listed over a picture that takes no write (`held-by`, `present: false`
+once the run is over), and a run's row there goes to its pane (`held-go`) — the terminal's half is the
+refusal itself, `refused: conflict` on the write.
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation but the one that makes one from the list opens on a definition that is already
 there, so a premise builds all three layers — the action, the steps inside it, and the placement on
@@ -751,10 +754,20 @@ takes them on or behind the flags the command does.
 **What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 three are refused anywhere else — and a run started at the terminal opens no pane to type them in.
+`done-in-pane` also takes `refused: invalid_value`, for a way out the step does not declare: the
+line then names the declared ones and the step stays running, which the pane is read for after it.
 `verb-in-pane` is the other side of the same seam: any other `automation` verb, typed at that same
 terminal, where building a definition and driving a run are turned away (`automation_outside_only`).
 A road writes `refused:` on it, and the words after `automation` are the road's to spell — a `<run>`
 among them is a gap the operator fills off the line over the pane.
+`done-outside-pane` is the report made **without** that pane: a step's terminal is started whether or
+not its pane is drawn, and opening the pane to type in it would start one on the spot either way. So
+it is typed at a plain shell in whatever pane is up, with the step the window would have named put
+into the environment by hand — the run's number off its row on the running tab, the step's off
+`run-show`.
+`quit-in-pane` is the step's program ending by itself before it reports — `exit` typed at a stand-in
+that carries lines out (`can-start`'s `then: runs`) — which fails the run there as `crashed`. Closing
+the pane is Amenbo ending the terminal, a stop, and not this.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

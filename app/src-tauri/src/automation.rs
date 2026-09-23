@@ -542,7 +542,12 @@ pub fn automation_action_entry_set(
 pub fn automation_action_detail(id: i64) -> Result<Option<AutomationActionDetailDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_action_detail");
     let store = open_store_read()?;
-    Ok(automation_view::action_detail(store.read_model().conn(), id)?.map(action_detail_dto))
+    let Some(view) = automation_view::action_detail(store.read_model().conn(), id)? else {
+        return Ok(None);
+    };
+    let held_by =
+        run_cards(&store, automation_view::run_ids_holding_action(store.read_model().conn(), id)?)?;
+    Ok(Some(action_detail_dto(view, held_by)))
 }
 
 /// **Take one action off a picture**, with the answers written on it and every line naming it. The
@@ -1089,7 +1094,10 @@ pub fn automation_wire_clear(id: i64) -> Result<WriteAck, CmdError> {
 pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_detail");
     let store = open_store_read()?;
-    Ok(automation_view::detail(store.read_model().conn(), id)?.map(detail_dto))
+    let Some(view) = automation_view::detail(store.read_model().conn(), id)? else { return Ok(None) };
+    let held_by =
+        run_cards(&store, automation_view::run_ids_holding_automation(store.read_model().conn(), id)?)?;
+    Ok(Some(detail_dto(view, held_by)))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -1275,6 +1283,17 @@ fn placed_action_name(
 }
 
 /// One run as the tab draws it: what it is, how far in, and what it is on.
+/// The rows of the runs named, in the order named — a run gone from under an id is left out.
+fn run_cards(store: &amenbo_core::Store, ids: Vec<i64>) -> Result<Vec<AutomationRunCardDto>, CmdError> {
+    let mut out = Vec::new();
+    for id in ids {
+        if let Some(run) = read::automation_run(store.read_model().conn(), id)? {
+            out.push(run_card(store, run)?);
+        }
+    }
+    Ok(out)
+}
+
 fn run_card(
     store: &amenbo_core::Store,
     run: amenbo_core::model::AutomationRun,
@@ -1598,7 +1617,10 @@ fn stop_if_going(
 // reads the store — a DTO is the same rows under the names a screen draws them by.
 
 /// One automation's whole definition, under the names the build screen draws it by.
-fn detail_dto(view: automation_view::AutomationView) -> AutomationDetailDto {
+fn detail_dto(
+    view: automation_view::AutomationView,
+    held_by: Vec<AutomationRunCardDto>,
+) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let a = view.automation;
     AutomationDetailDto {
@@ -1611,11 +1633,15 @@ fn detail_dto(view: automation_view::AutomationView) -> AutomationDetailDto {
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires: view.wires.into_iter().map(|w| wire_dto(w, &names)).collect(),
         placements: view.placements.into_iter().map(placement_dto).collect(),
+        held_by,
     }
 }
 
 /// One library action's whole definition, under the names the action build screen draws it by.
-fn action_detail_dto(view: automation_view::ActionView) -> AutomationActionDetailDto {
+fn action_detail_dto(
+    view: automation_view::ActionView,
+    held_by: Vec<AutomationRunCardDto>,
+) -> AutomationActionDetailDto {
     let names = exit_names(view.steps.iter().flat_map(|s| s.exits.iter()).chain(view.exits.iter()));
     let action = view.action;
     AutomationActionDetailDto {
@@ -1631,6 +1657,7 @@ fn action_detail_dto(view: automation_view::ActionView) -> AutomationActionDetai
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),
+        held_by,
     }
 }
 

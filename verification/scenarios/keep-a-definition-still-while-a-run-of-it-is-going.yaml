@@ -7,8 +7,9 @@ title: A definition a run is going on refuses to be edited, and takes edits agai
 description: >
   Start a run, then try to rename the automation, archive it, and rename the action placed on it —
   each is refused as a conflict while the run is going. Stop the run, and the same renames go
-  through. The terminal is the road here; what the screen shows while a run holds the definition is a
-  road of its own.
+  through. On the screen the same hold is read rather than pressed into: the automation's build
+  screen and the action's list the run over the picture and offer no write, the run's row goes to its
+  pane, and once the run is stopped the list is gone and the writes are back.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
@@ -100,3 +101,131 @@ steps_cli:
     with:
       target: take
       name: take, renamed once the run ended
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # The automation's own build screen, which the start was pressed on: the run is named over the
+  # picture, and nothing on it can be written.
+  - type: assert
+    domain: automation
+    op: held-by
+    with:
+      target: run
+
+  # The action placed on it is held by the same run, read from the library's side.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: assert
+    domain: automation
+    op: held-by
+    with:
+      target: run
+
+  # The row names the way out of the hold: the pane the run is drawn in, where it is stopped.
+  - type: action
+    domain: automation
+    op: held-go
+    with:
+      target: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: stop
+
+  # Once the run is over nothing holds the definition, and both build screens take writes again.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: held-by
+    with:
+      present: false
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: take
+
+  - type: assert
+    domain: automation
+    op: held-by
+    with:
+      present: false

@@ -1177,7 +1177,10 @@ impl Instructor {
             // colour — an outline round the whole — and a reading answers which words are on a shot,
             // so a step naming it would pass on a build that had lost the mark and kept the name. That
             // is an eye's.
-            (Domain::Automation, "pictured") if with.contains_key("unfed") => None,
+            //
+            // The entry's mark is words and not colour, but they are the interface's own and in the
+            // machine's language — so it is an eye's for the same reason.
+            (Domain::Automation, "pictured") if with.contains_key("unfed") || with.contains_key("entry") => None,
             (Domain::Automation, "pictured") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
@@ -4044,6 +4047,25 @@ impl Instructor {
             // **The one press on the action's step panel that cannot be taken back**, so the machine's
             // own question stands between it and the write, the way it does for deleting an automation.
             (Domain::Automation, "remove-step") => "In the panel showing what the pressed step holds, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
+            // The row under an automation's picture, which places a library action on its own rather
+            // than on a line. The action is picked off the row's pulldown and not written, so the
+            // row's other press — the one that opens the dialog for writing one — is left alone.
+            (Domain::Automation, "place-action") => format!(
+                "On the automation build screen, on the row under the picture that places an action, pick the library action \"{}\" off the pulldown and press the button that places it.",
+                self.labels
+                    .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
+                    .cloned()
+                    .unwrap_or_else(|| "<the action>".to_string())
+            ),
+            // One box on the pressed placement's panel, ticked for where a run opens and cleared to
+            // give it back. One automation has one entry, so ticking it here moves it off any other.
+            (Domain::Automation, "set-entry") => match step_mark(with, "on")? {
+                None | Some(true) => "In the panel showing what the pressed placement holds, tick the box saying a run starts here.".to_string(),
+                Some(false) => "In the panel showing what the pressed placement holds, clear the box saying a run starts here.".to_string(),
+            },
+            // **The one press on the placement's panel that cannot be taken back**, which is why the
+            // road answers the machine's question and does not stop at the press.
+            (Domain::Automation, "remove-placement") => "In the panel showing what the pressed placement holds, press the button that takes this placement off, and answer the question the machine asks with the answer that goes ahead.".to_string(),
             // One row of the panel, written. Every control there writes on the spot, and a box of
             // text writes as the caret leaves it — so the instruction says to leave the box.
             (Domain::Automation, "panel-set") => format!(
@@ -5962,11 +5984,16 @@ impl Instructor {
             // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
                 true => format!(
-                    "In the build screen's picture, confirm a box \"{}\" is drawn{}.",
+                    "In the build screen's picture, confirm a box \"{}\" is drawn{}{}.",
                     req(with, "name")?,
                     match step_mark(with, "unfed")? {
                         Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
                         Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and names no input under its name",
+                        None => "",
+                    },
+                    match step_mark(with, "entry")? {
+                        Some(true) => ", with the words saying a run starts here written in it, above its name",
+                        Some(false) => ", with no words saying a run starts here written in it",
                         None => "",
                     }
                 ),
@@ -8171,6 +8198,54 @@ steps_gui:
         assert!(lines[4].contains("deletes this step") && lines[4].contains("goes ahead"), "{}", lines[4]);
         assert!(lines[5].contains("no line leaves the box \"draft\""), "{}", lines[5]);
         assert!(ins.expectation(&steps[5]).is_none(), "a line gone is an eye's");
+    }
+
+    /// The automation build screen's own: an action placed from the row under the picture, the
+    /// entry ticked and given back, and a placement taken off past the machine's question. The
+    /// entry's mark is the interface's words, so it is read by an eye and not as text.
+    #[test]
+    fn an_automation_is_built_by_placing_actions_on_its_own_screen() {
+        let s = load(r#"
+id: x
+title: y
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: draft }, as: draft }
+steps_gui:
+  - type: action
+    domain: automation
+    op: place-action
+    with: { action: draft }
+  - type: action
+    domain: automation
+    op: set-entry
+  - type: action
+    domain: automation
+    op: set-entry
+    with: { on: false }
+  - type: action
+    domain: automation
+    op: remove-placement
+  - type: assert
+    domain: automation
+    op: pictured
+    with: { name: draft, entry: true }
+  - type: assert
+    domain: automation
+    op: pictured
+    with: { name: draft, entry: false }
+"#);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> =
+            steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("places an action") && lines[0].contains("\"draft\""), "{}", lines[0]);
+        assert!(lines[1].contains("tick the box saying a run starts here"), "{}", lines[1]);
+        assert!(lines[2].contains("clear the box saying a run starts here"), "{}", lines[2]);
+        assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);
+        assert!(lines[4].contains("a run starts here written in it"), "{}", lines[4]);
+        assert!(lines[5].contains("no words saying a run starts here"), "{}", lines[5]);
+        assert!(ins.expectation(&steps[4]).is_none(), "the entry's mark is an eye's");
     }
 
     /// A limit belongs to a way out going on to a box, so a road writing one on an end is refused

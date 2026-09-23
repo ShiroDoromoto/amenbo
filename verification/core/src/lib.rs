@@ -4163,9 +4163,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-make", required: &["name"], refs: &[], strings: &["name", "reach"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-rewrite", required: &["step", "prompt"], refs: &[], strings: &["step", "prompt"], binds: false },
     //
-    // The picture. One box, and the mark it may wear: `unfed` is the outline it takes on while a
-    // required input has nothing reaching it. It is drawn as colour, so a road naming it is asking an
-    // eye.
+    // The picture. One box, and the marks it may wear: `unfed` is the outline it takes on while a
+    // required input has nothing reaching it, and `entry` the words drawn in the box of the placement
+    // a run opens first. The one is colour and the other the interface's own words, so a road naming
+    // either is asking an eye.
     //
     // **A box is a fixed size and the name in it is cut at two lines**, so a road gives its actions
     // and steps names short enough to stand whole — what is read here is the shot, and a cut name is
@@ -4211,6 +4212,19 @@ const REGISTRY: &[OpSpec] = &[
     // naming neither takes what was said away — "nothing said yet", which is a state of its own.
     // `max_times` is the limit a way out going on to a box carries, and `~` empties it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "to", "ends"], binds: false },
+    //
+    // **The automation build screen's own three.** An automation's picture has no line until two
+    // placements are joined either, so the first placement — and any that is not put in on a line —
+    // comes from the row under the picture, which picks a library action (`action`) and places it.
+    // The box it draws is named by that action, as every placement's is.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-action", required: &["action"], refs: &["action"], strings: &[], binds: false },
+    // Where a run opens, said on the pressed placement's panel. `on: false` gives the entry back,
+    // which leaves the automation with none — a state the launch check names.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-entry", required: &[], refs: &[], strings: &[], binds: false },
+    // Taking the pressed placement off. It takes the settings answered on it and every line naming
+    // it, and leaves the action in the library — so the machine's own question stands between the
+    // press and the write, the way it does for deleting a step.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "remove-placement", required: &[], refs: &[], strings: &[], binds: false },
     //
     // The panel beside the picture — what the pressed box holds. `field` is the row it is read on or
     // written in, named the way the panel names it rather than by the column underneath: a road reads

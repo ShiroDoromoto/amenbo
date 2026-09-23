@@ -6,8 +6,8 @@
 id: close-the-pane-a-run-is-drawn-in
 title: Taking away the pane a run is drawn in stops the run and hands its task back
 description: >
-  Start a run, take away the pane it is drawn in, and read what that press did: the run is stopped
-  and the pane is gone. The question the press puts is walked
+  Start a run, take away the pane it is drawn in, and read what that press did: the run is stopped,
+  the pane is gone, and its row on the history tab says it was canceled. The question the press puts is walked
   rather than clicked past — a build that put the ordinary question there would
   let a reader close it without ever being told what closing it does.
 given:
@@ -93,3 +93,17 @@ steps_gui:
       target: run
       present: false
 
+  # The run itself, read on the tab that holds the runs that are over: a canceled one goes straight
+  # there, since the person who stopped it knows already.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: run
+      state: canceled

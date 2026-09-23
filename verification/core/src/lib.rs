@@ -4354,6 +4354,11 @@ const REGISTRY: &[OpSpec] = &[
     // sentence the interface owns. It belongs to `failed` alone — every other state is its own whole
     // answer — and a row read without it is a road asking about the state and nothing more.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-row", required: &["state"], refs: &["target", "project"], strings: &["state", "reason"], binds: false },
+    // A row of the "history" tab — a run that is over and needs nobody: completed, canceled, or a
+    // failure somebody acknowledged, so `state` is one of those three. A canceled run goes straight
+    // here, since the person who stopped it knows already; a failure only once it is acknowledged.
+    // `reason` is the failed row's line, as on `run-row`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "history-row", required: &["state"], refs: &["target", "project"], strings: &["state", "reason"], binds: false },
     // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again, or
     // stop it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press"], binds: false },

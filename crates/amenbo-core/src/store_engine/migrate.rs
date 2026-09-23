@@ -951,10 +951,127 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 63,
+        name: "copy the wires into a run's copy of each step it can still open",
+        apply: Apply::Custom(copy_the_wires_into_the_run),
+    },
+    Step {
+        to: 64,
         name: "choose a step's agent and model where its action is placed, not on the step",
         apply: Apply::Custom(choose_the_agent_where_the_action_is_placed),
     },
 ];
+
+/// v63: a run's copy of a step holds the wires joined to each of its inputs (`AMB-D-961`).
+///
+/// A run read the wires live while it moved, the one part of the definition it did not copy at launch.
+/// A launch now resolves them into `automation_run_def.ins` — each input carries the step outputs wired
+/// into it — and opening a step reads only that.
+///
+/// **Only a run that can still open a step is filled**, `running` or `paused`. A run that has ended
+/// opens nothing, and the wires standing today are not the ones it ran with, so writing them in would
+/// make its copy say something that was never true. Those copies keep inputs with nothing wired, which
+/// no reader asks of them.
+///
+/// **What is filled is today's picture**, followed the way a launch follows it: a wire inside the action
+/// from one of its steps, or a wire from the action's own input out across the automation to the step
+/// behind the far placement's way out. A build that can write v62 already refuses to edit a definition
+/// a run is using, so for a run started under it today's picture is the one it launched with.
+///
+/// **Probed, not bare**: an input that already names its sources was copied by a launch, and is left.
+fn copy_the_wires_into_the_run(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let mut copies: Vec<(i64, i64, i64, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT d.id, d.placement_id, d.step_id, d.ins FROM automation_run_def d
+               JOIN automation_run r ON r.id = d.run_id
+              WHERE r.status IN ('running', 'paused')
+                AND d.placement_id IS NOT NULL AND d.step_id IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        for row in rows {
+            copies.push(row?);
+        }
+    }
+    let action_of = |placement_id: i64| -> Result<Option<i64>> {
+        Ok(tx
+            .query_row(
+                "SELECT action_id FROM automation_placement WHERE id = ?1",
+                rusqlite::params![placement_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    };
+    // (from_id, from_exit_id, from_port_name) of the wires in one picture that end at one port.
+    let wires_to = |owner_kind: &str,
+                    owner_id: Option<i64>,
+                    to_id: i64,
+                    port: &str|
+     -> Result<Vec<(i64, Option<i64>, String)>> {
+        let mut stmt = tx.prepare(
+            "SELECT from_id, from_exit_id, from_port_name FROM automation_wire
+              WHERE owner_kind = ?1 AND (?2 IS NULL OR owner_id = ?2) AND to_id = ?3 AND to_port_name = ?4
+              ORDER BY id",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![owner_kind, owner_id, to_id, port], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    };
+    for (def_id, placement_id, step_id, ins) in copies {
+        let Ok(mut ins) = serde_json::from_str::<Vec<serde_json::Value>>(&ins) else { continue };
+        let Some(action_id) = action_of(placement_id)? else { continue };
+        let mut changed = false;
+        for input in ins.iter_mut() {
+            let Some(map) = input.as_object_mut() else { continue };
+            if map.contains_key("from") {
+                continue;
+            }
+            let Some(name) = map.get("name").and_then(|n| n.as_str()).map(str::to_string) else { continue };
+            let mut from = Vec::new();
+            for (from_id, exit, port) in wires_to("action", Some(action_id), step_id, &name)? {
+                if from_id != 0 {
+                    from.push(serde_json::json!({
+                        "placement_id": placement_id, "step_id": from_id, "exit_id": exit, "port": port,
+                    }));
+                    continue;
+                }
+                for (far_id, far_exit, far_port) in wires_to("automation", None, placement_id, &port)? {
+                    let Some(far_action) = action_of(far_id)? else { continue };
+                    let inner = wires_to("action", Some(far_action), 0, &far_port)?;
+                    for (inner_from, inner_exit, inner_port) in inner {
+                        let Some(inner_exit) = inner_exit else { continue };
+                        let leaves_by: Option<i64> = tx
+                            .query_row(
+                                "SELECT ends, exit_to_id FROM automation_edge
+                                  WHERE owner_kind = 'action' AND from_id = ?1 AND exit_id = ?2
+                                  ORDER BY id LIMIT 1",
+                                rusqlite::params![inner_from, inner_exit],
+                                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<i64>>(1)?)),
+                            )
+                            .optional()?
+                            .and_then(|(ends, to)| if ends == "exit" { to } else { None });
+                        if leaves_by.is_some() && leaves_by == far_exit {
+                            from.push(serde_json::json!({
+                                "placement_id": far_id, "step_id": inner_from,
+                                "exit_id": inner_exit, "port": inner_port,
+                            }));
+                        }
+                    }
+                }
+            }
+            map.insert("from".to_string(), serde_json::Value::Array(from));
+            changed = true;
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_run_def SET ins = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(ins).to_string(), def_id],
+            )?;
+        }
+    }
+    Ok(())
+}
 
 /// v62: a way out is keyed, not named (`AMB-D-961`).
 ///
@@ -1216,7 +1333,7 @@ fn let_a_failure_be_acknowledged(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v63: a step's agent and model move off the step, onto the placement of its action
+/// v64: a step's agent and model move off the step, onto the placement of its action
 /// (`automation_placement_step`, `AMB-D-960`).
 ///
 /// **What each step said is written onto every placement of its action**, one row per pair. An action
@@ -1261,7 +1378,7 @@ fn choose_the_agent_where_the_action_is_placed(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// The table v63 lays down — frozen text, like every step's.
+/// The table v64 lays down — frozen text, like every step's.
 const PLACEMENT_STEP_TABLE: &str = r"
 CREATE TABLE IF NOT EXISTS automation_placement_step (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -3765,7 +3882,7 @@ impl Minting {
 /// **Every v52 library action gains one step**, carrying the prompt the action itself used to carry.
 ///
 /// **The one thing this cannot carry across** is two spots running one library action under two
-/// different agents. `agent` and `model` are a step's at this version (`AMB-D-950`; v63 moves them
+/// different agents. `agent` and `model` are a step's at this version (`AMB-D-950`; v64 moves them
 /// onto the placement), and an action has one step here, so the first spot's answer becomes the
 /// action's and the second's is not written. An action
 /// nothing pointed at gets no agent at all, which the launch check names rather than guesses at.
@@ -7577,13 +7694,13 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v63 in full: what each step said is written onto every placement of its action, a step that said
+    /// v64 in full: what each step said is written onto every placement of its action, a step that said
     /// nothing is left with nobody chosen, an action placed nowhere carries its answer nowhere, and the
     /// two columns are gone from the step (`AMB-D-960`).
     #[test]
     fn a_step_s_agent_is_chosen_at_every_placement_of_its_action() {
         let dir = scratch("placement-step");
-        let engine = store_at(&dir, 62);
+        let engine = store_at(&dir, 63);
         engine
             .conn()
             .execute_batch(
@@ -7633,6 +7750,69 @@ mod tests {
             )
             .unwrap();
         assert_eq!(left, 0, "the step names no agent and no model any more");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v63 in full: a copy of a step in a run that can still open one carries the wires joined to each
+    /// input — inside the action, and out across the automation to the step behind the far placement's
+    /// way out — while a copy in an ended run, and an input a launch already resolved, are left.
+    #[test]
+    fn the_chain_copies_the_wires_into_a_run_that_can_still_open_a_step() {
+        let dir = scratch("copy-the-wires");
+        let engine = store_at(&dir, 62);
+        engine
+            .conn()
+            .execute_batch(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (7, 1, '書く'), (8, 1, '直す');
+                 INSERT INTO automation_action_step (id, action_id, name, agent) VALUES
+                     (11, 7, '書く', 'claude'), (12, 8, '読む', 'claude'), (13, 8, '直す', 'claude');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (3, 1, 7), (4, 1, 8);
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (21, 'step', 11, NULL), (25, 'action', 7, NULL), (22, 'step', 12, NULL);
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, ends, exit_to_id) VALUES
+                     (61, 'action', 7, 11, 21, 'exit', 25);
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_id, from_port_name, to_id, to_port_name) VALUES
+                     (71, 'action', 7, 11, 21, 'メモ', 0, 'メモ'),
+                     (72, 'automation', 1, 3, 25, 'メモ', 4, '下書き'),
+                     (73, 'action', 8, 0, NULL, '下書き', 13, '下書き'),
+                     (74, 'action', 8, 12, 22, '所見', 13, '所見');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES
+                     (1, 1, 1, 'running'), (2, 1, 1, 'completed');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, step_id, name, agent, exits, ins, cfg) VALUES
+                     (81, 1, 4, 13, '直す', 'claude', '[]',
+                      '[{"name":"下書き","kind":"value","required":true},{"name":"所見","kind":"value","required":false},{"name":"済み","kind":"value","required":false,"from":[]}]', '[]'),
+                     (82, 2, 4, 13, '直す', 'claude', '[]',
+                      '[{"name":"下書き","kind":"value","required":true}]', '[]');"#,
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let ins = |id: i64| -> Vec<crate::model::RunDefIn> {
+            let json: String = engine
+                .conn()
+                .query_row("SELECT ins FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            serde_json::from_str(&json).expect("a copy reads back as today's shape")
+        };
+        let source = |placement_id, step_id, exit_id, port: &str| crate::model::RunDefSource {
+            placement_id,
+            step_id,
+            exit_id,
+            port: port.to_string(),
+        };
+        let running = ins(81);
+        assert_eq!(
+            running[0].from,
+            vec![source(3, 11, Some(21), "メモ")],
+            "across the automation, to the step behind the way out the far action leaves by",
+        );
+        assert_eq!(running[1].from, vec![source(4, 12, Some(22), "所見")], "inside the action");
+        assert!(running[2].from.is_empty(), "an input a launch resolved is left as it was");
+        assert!(ins(82)[0].from.is_empty(), "an ended run is not given today's wires");
         std::fs::remove_dir_all(&dir).ok();
     }
 

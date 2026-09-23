@@ -258,8 +258,6 @@ CREATE TABLE IF NOT EXISTS automation_action_step (
     action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     name TEXT NOT NULL DEFAULT '',
     prompt TEXT NOT NULL DEFAULT '',
-    agent TEXT NOT NULL DEFAULT '',
-    model TEXT,
     interactive BOOLEAN NOT NULL DEFAULT 0 CHECK(interactive IN (0, 1)),
     work_dir_ref TEXT,
     report_to_task BOOLEAN NOT NULL DEFAULT 0 CHECK(report_to_task IN (0, 1)),
@@ -267,6 +265,16 @@ CREATE TABLE IF NOT EXISTS automation_action_step (
     order_key TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_placement_step (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    placement_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action_step(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    agent TEXT NOT NULL DEFAULT '',
+    model TEXT,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (placement_id, step_id)
 );
 CREATE TABLE IF NOT EXISTS automation_cfg (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

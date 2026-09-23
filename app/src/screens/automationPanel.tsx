@@ -219,7 +219,10 @@ export function DeclEdit({
  */
 function edgeKey(edge: AutomationEdgeDto | undefined): string {
   if (edge === undefined) return "";
-  return edge.ends === "go" ? `go:${edge.toId ?? ""}` : edge.ends;
+  if (edge.ends === "go") return `go:${edge.toId ?? ""}`;
+  // A way out's name is never empty, so the empty one after the colon is the unnamed way out.
+  if (edge.ends === "exit") return `exit:${edge.exitTo ?? ""}`;
+  return edge.ends;
 }
 
 /**
@@ -264,9 +267,12 @@ export function NextRow({
       if (edge !== undefined) void run(removeAutomationEdge(edge.id));
       return;
     }
+    const back = key.slice("exit:".length);
     const target = key.startsWith("go:")
       ? { ends: "go" as EdgeEnds, to: Number(key.slice("go:".length)) }
-      : { ends: key as EdgeEnds };
+      : key.startsWith("exit:")
+        ? { ends: "exit" as EdgeEnds, exitTo: back === "" ? undefined : back }
+        : { ends: key as EdgeEnds };
     void run(
       edge === undefined
         ? addAutomationEdge(picture, { boxId, exitName }, target)
@@ -298,6 +304,15 @@ export function NextRow({
             {tf("auto.step.nextGo", { name: one.name })}
           </option>
         ))}
+        {/* Inside an action a step may leave it, by one of the ways out the action declares — which
+            is where the placement standing on it goes on from. An automation's picture has none. */}
+        {[...(graph.boundary?.exits ?? [])]
+          .sort((a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT))
+          .map((one) => (
+            <option key={`exit:${one.name ?? ""}`} value={`exit:${one.name ?? ""}`}>
+              {tf("auto.step.nextExit", { name: exitLabel(one.name) })}
+            </option>
+          ))}
         <option value="done">{t("auto.pic.endsDone")}</option>
         <option value="halt">{t("auto.pic.endsHalt")}</option>
       </select>

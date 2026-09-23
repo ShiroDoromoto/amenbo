@@ -1,5 +1,8 @@
 // What the action declares to the automations that place it, on the action build screen
-// (`AMB-T-5315`).
+// (`AMB-T-5315`) — drawn as two panels, the action's input and its output (`AMB-T-5369`): what it
+// takes in and the settings it asks for, opened from the frame over the picture, and the ways out it
+// is left by with what each hands on, opened from the frame under it. The screen reads the steps as
+// running from the one to the other, so the two halves stand where the picture begins and ends.
 //
 // **This is the outside of the action**, and the panel beside it is the inside
 // (`./AutomationActionStepPanel`). A way out declared here is one a placement of this action can be
@@ -28,7 +31,7 @@ import {
   setAutomationWire,
   type CfgKind,
 } from "../core/automations";
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
 import {
   CFG_KINDS,
@@ -223,77 +226,87 @@ function CfgRow({
 
 export function AutomationActionDeclaresPanel({
   action,
+  part,
   run,
 }: {
   action: AutomationActionDetailDto;
+  /** Which half: what the action takes in and asks for, or the ways out it is left by. */
+  part: "in" | "out";
   /** The screen's one runner, so a refusal lands where every other one does. */
   run: Run;
 }) {
   // The way out an output artefact is being declared on, while that dialog is open.
   const [adding, setAdding] = useState<number | null>(null);
 
-  return (
-    <div className="autostep">
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.cfg")}</span>
-        {action.settings.length === 0 && (
-          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-        )}
-        {action.settings.map((cfg) => (
-          <CfgRow key={cfg.name} actionId={action.id} cfg={cfg} run={run} />
-        ))}
-        <DeclareRow
-          what={t("auto.step.cfgName")}
-          kinds={choicesOfKinds(CFG_KINDS)}
-          onAdd={(declared, kind) =>
-            run(declareAutomationCfg(action.id, { name: declared, kind: kind as CfgKind }))
-          }
-        />
-      </div>
-
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.inputs")}</span>
-        {action.inputs.length === 0 && (
-          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-        )}
-        {action.inputs.map((input) => (
-          <DeclEdit
-            key={input.name}
-            label={t("auto.step.inputs")}
-            name={input.name}
-            kind={input.kind}
+  if (part === "in") {
+    return (
+      <div className="autostep">
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.inputs")}</span>
+          {action.inputs.length === 0 && (
+            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
+          )}
+          {action.inputs.map((input) => (
+            <DeclEdit
+              key={input.name}
+              label={t("auto.step.inputs")}
+              name={input.name}
+              kind={input.kind}
+              kinds={choicesOfKinds(PORT_KINDS)}
+              required={input.required}
+              onRename={(to) =>
+                void run(editAutomationInput("action", action.id, input.name, { name: to }))
+              }
+              onKind={(to) =>
+                void run(
+                  editAutomationInput("action", action.id, input.name, {
+                    kind: to as AutomationPortDto["kind"],
+                  }),
+                )
+              }
+              onRequired={(to) =>
+                void run(editAutomationInput("action", action.id, input.name, { required: to }))
+              }
+              onRemove={() => void run(removeAutomationInput("action", action.id, input.name))}
+            />
+          ))}
+          <DeclareRow
+            what={t("auto.step.inputName")}
             kinds={choicesOfKinds(PORT_KINDS)}
-            required={input.required}
-            onRename={(to) =>
-              void run(editAutomationInput("action", action.id, input.name, { name: to }))
-            }
-            onKind={(to) =>
-              void run(
-                editAutomationInput("action", action.id, input.name, {
-                  kind: to as AutomationPortDto["kind"],
+            onAdd={(declared, kind) =>
+              run(
+                declareAutomationInput("action", action.id, {
+                  name: declared,
+                  kind: kind as AutomationPortDto["kind"],
                 }),
               )
             }
-            onRequired={(to) =>
-              void run(editAutomationInput("action", action.id, input.name, { required: to }))
-            }
-            onRemove={() => void run(removeAutomationInput("action", action.id, input.name))}
           />
-        ))}
-        <DeclareRow
-          what={t("auto.step.inputName")}
-          kinds={choicesOfKinds(PORT_KINDS)}
-          onAdd={(declared, kind) =>
-            run(
-              declareAutomationInput("action", action.id, {
-                name: declared,
-                kind: kind as AutomationPortDto["kind"],
-              }),
-            )
-          }
-        />
-      </div>
+        </div>
 
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.cfg")}</span>
+          <span className="autostep__said">{tf("auto.act.declaresWhat", { name: action.name })}</span>
+          {action.settings.length === 0 && (
+            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
+          )}
+          {action.settings.map((cfg) => (
+            <CfgRow key={cfg.name} actionId={action.id} cfg={cfg} run={run} />
+          ))}
+          <DeclareRow
+            what={t("auto.step.cfgName")}
+            kinds={choicesOfKinds(CFG_KINDS)}
+            onAdd={(declared, kind) =>
+              run(declareAutomationCfg(action.id, { name: declared, kind: kind as CfgKind }))
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="autostep">
       <div className="autostep__field">
         <span className="autostep__label">{t("auto.step.exits")}</span>
         <ul className="autostep__exits">

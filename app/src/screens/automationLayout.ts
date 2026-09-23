@@ -23,9 +23,9 @@
 // jumps forward over a row keeps its solid stroke — the reader is being told it leaves the column,
 // not that it runs backwards.
 //
-// **An action's picture has the action itself above and below it** (`AMB-D-949`): a mark for where a
-// placement of it comes in, over the step it opens first, and a mark for each way out it declares,
-// under everything. A step that leaves the action is a line into one of those, and what the action
+// **An action's picture has the action itself above and below it** (`AMB-D-949`): its input, a frame
+// over the step it opens first, and its output, a frame under everything holding a mark for each way
+// out it declares — so the steps read as running from the one to the other (`AMB-T-5369`). A step that leaves the action is a line into one of those, and what the action
 // takes in or hands out is a wire from the top mark or into a bottom one — the boundary the core names
 // `ACTION_BOUNDARY`. An automation's picture has no such boundary, and draws neither.
 //
@@ -116,10 +116,16 @@ const DROP = 14;
 const STUB = 40;
 /** Where on a line's first leg the `+` that puts a box in sits. */
 const INSERT_DROP = 20;
-/** The marks for the action itself: one over the picture, one per way out under it. */
-const MARK_W = 150;
-const MARK_H = 28;
-const MARK_GAP = 16;
+/** The action's input, a frame over the picture: its title, and what it takes in on one line. */
+const IN_W = 260;
+const IN_H = 54;
+/** One way out of the action under the picture: its name, and what it hands on on one line. */
+const OUT_W = 140;
+const OUT_H = 44;
+const OUT_GAP = 16;
+/** The frame the ways out stand in: the room round them, and the room its title takes. */
+const FRAME_PAD = 12;
+const FRAME_TITLE = 22;
 
 /** A point of a line, in the picture's own pixels. */
 export type PicPoint = { x: number; y: number };
@@ -165,19 +171,25 @@ export type PicLine = {
 export type PicInsert = { edgeId: number; x: number; y: number };
 
 /**
- * One mark for the action itself: where a placement comes in (`in`), or one way out it is left by
- * (`out`). A mark is not a box — nothing is pressed on it and no panel opens.
+ * One mark for the action itself: its input over the picture (`in`), or one way out it is left by
+ * (`out`) in the output frame under it. A mark is not a box: pressing one opens the action's own
+ * input or output, not a step.
  */
 export type PicMark = {
   key: string;
   kind: "in" | "out";
   /** The way out, for `out`. Absent for the unnamed one and for `in`. */
   exitName?: string;
+  /** What the action takes in, for `in`; what leaving by this way out hands on, for `out`. */
+  ports: readonly AutomationPortDto[];
   x: number;
   y: number;
   w: number;
   h: number;
 };
+
+/** A rectangle of the picture, in its own pixels. */
+export type PicRect = { x: number; y: number; w: number; h: number };
 
 /** One picture, laid out. */
 export type Picture = {
@@ -189,8 +201,8 @@ export type Picture = {
   inserts: readonly PicInsert[];
   /** The action's own marks. Empty on an automation's picture. */
   marks: readonly PicMark[];
-  /** Where the words over the row of ways out are written, when there is that row. */
-  outsAt?: PicPoint;
+  /** The frame the ways out of the action stand in, when there is that row. */
+  outFrame?: PicRect;
 };
 
 /**
@@ -371,7 +383,8 @@ export function layOut(graph: PicGraph | null): Picture {
   );
   const contentW = Math.max(
     NODE_W,
-    outs.length * MARK_W + Math.max(0, outs.length - 1) * MARK_GAP,
+    IN_W,
+    outs.length * OUT_W + Math.max(0, outs.length - 1) * OUT_GAP + FRAME_PAD * 2,
     ...laps.flatMap((lap) => lap.rows.map((row) => row.length * NODE_W + (row.length - 1) * COL_GAP)),
   );
 
@@ -380,7 +393,7 @@ export function layOut(graph: PicGraph | null): Picture {
   const nodes: PicNode[] = [];
   const outlines: PicLap[] = [];
   // The mark a placement comes in by stands over everything, with a row's room under it.
-  const over = graph.boundary === undefined ? 0 : MARK_H + ROW_GAP;
+  const over = graph.boundary === undefined ? 0 : IN_H + ROW_GAP;
   let y = PAD + over;
   laps.forEach((lap, nth) => {
     const pad = lap.head === null ? 0 : LAP_PAD;
@@ -420,34 +433,52 @@ export function layOut(graph: PicGraph | null): Picture {
   const marks: PicMark[] = [];
   const spots: PicNode[] = [];
   const outOf = new Map<string, number>();
-  const spot = (id: number, x: number, y: number): PicNode => ({
+  const spot = (id: number, x: number, y: number, w: number, h: number): PicNode => ({
     boxId: id,
     name: "",
     x,
     y,
-    w: MARK_W,
-    h: MARK_H,
+    w,
+    h,
     unfed: [],
   });
-  let outsAt: PicPoint | undefined;
+  let outFrame: PicRect | undefined;
+  let height = bottom + PAD;
   if (graph.boundary !== undefined) {
-    const inX = Math.round((contentW - MARK_W) / 2);
-    spots.push(spot(ACTION_BOUNDARY, inX, PAD));
-    marks.push({ key: "in", kind: "in", x: inX, y: PAD, w: MARK_W, h: MARK_H });
-    const outY = bottom + Math.round(ROW_GAP / 2);
-    const startX = Math.round((contentW - (outs.length * MARK_W + (outs.length - 1) * MARK_GAP)) / 2);
+    const inX = Math.round((contentW - IN_W) / 2);
+    spots.push(spot(ACTION_BOUNDARY, inX, PAD, IN_W, IN_H));
+    marks.push({ key: "in", kind: "in", ports: graph.boundary.inputs, x: inX, y: PAD, w: IN_W, h: IN_H });
+    // The frame stands half a row under the last stretch; the ways out sit inside it, under its title.
+    const frameY = bottom + Math.round(ROW_GAP / 2);
+    const outY = frameY + FRAME_TITLE;
+    const rowW = outs.length * OUT_W + Math.max(0, outs.length - 1) * OUT_GAP;
+    const startX = Math.round((contentW - rowW) / 2);
     outs.forEach((exit, nth) => {
       const id = -(nth + 1);
-      const x = startX + nth * (MARK_W + MARK_GAP);
+      const x = startX + nth * (OUT_W + OUT_GAP);
       outOf.set(exit.name ?? "", id);
-      spots.push(spot(id, x, outY));
-      marks.push({ key: `out:${exit.name ?? ""}`, kind: "out", exitName: exit.name, x, y: outY, w: MARK_W, h: MARK_H });
+      spots.push(spot(id, x, outY, OUT_W, OUT_H));
+      marks.push({
+        key: `out:${exit.name ?? ""}`,
+        kind: "out",
+        exitName: exit.name,
+        ports: exit.outputs,
+        x,
+        y: outY,
+        w: OUT_W,
+        h: OUT_H,
+      });
       // The row sits after every stretch, so a box on the last row of the last one is its neighbour.
       at.set(id, { lap: laps.length, row: 0 });
     });
-    if (outs.length > 0) outsAt = { x: startX, y: outY - 20 };
+    outFrame = {
+      x: startX - FRAME_PAD,
+      y: frameY,
+      w: rowW + FRAME_PAD * 2,
+      h: FRAME_TITLE + OUT_H + FRAME_PAD,
+    };
+    height = frameY + outFrame.h + PAD;
   }
-  const height = (graph.boundary === undefined ? bottom : bottom + Math.round(ROW_GAP / 2) + MARK_H) + PAD;
 
   const node = new Map([...nodes, ...spots].map((one) => [one.boxId, one]));
   /** The mark of the way out of the action an `exit` edge returns to. */
@@ -483,8 +514,8 @@ export function layOut(graph: PicGraph | null): Picture {
   const entered = graph.entryId === undefined ? undefined : node.get(graph.entryId);
   const door = node.get(ACTION_BOUNDARY);
   if (graph.boundary !== undefined && entered !== undefined && door !== undefined) {
-    const sx = door.x + Math.round(MARK_W / 2);
-    const sy = door.y + MARK_H;
+    const sx = door.x + Math.round(door.w / 2);
+    const sy = door.y + door.h;
     const tx = attach(entered, 0, "left");
     const mid = Math.round((sy + entered.y) / 2);
     lines.push({
@@ -641,6 +672,6 @@ export function layOut(graph: PicGraph | null): Picture {
     })),
     inserts: inserts.map((one) => ({ ...one, x: one.x + dx })),
     marks: marks.map((one) => ({ ...one, x: one.x + dx })),
-    outsAt: outsAt === undefined ? undefined : { x: outsAt.x + dx, y: outsAt.y },
+    outFrame: outFrame === undefined ? undefined : { ...outFrame, x: outFrame.x + dx },
   };
 }

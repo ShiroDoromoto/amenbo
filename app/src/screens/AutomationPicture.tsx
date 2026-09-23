@@ -21,6 +21,7 @@
 // every time the definition is read again.
 import { layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
+import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
 
 /** The way out a line hangs on, in a word. Empty for the unnamed one, which has no name to write. */
@@ -29,12 +30,19 @@ function exitWord(line: PicLine): string {
   return line.exitName ?? "";
 }
 
-/** One of the action's own marks, in words: where a placement comes in, or one way out of it. */
+/** One way out of the action, in words: the unnamed one and the error one have names of their own. */
 function markWord(mark: PicMark): string {
-  if (mark.kind === "in") return t("auto.pic.actionIn");
   if (mark.exitName === undefined) return t("auto.step.exitUnnamed");
   if (mark.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
   return mark.exitName;
+}
+
+/** What the action takes in, on the input frame's second line: each name with its kind. */
+function inputsLine(mark: PicMark): string {
+  if (mark.ports.length === 0) return t("auto.act.none");
+  return mark.ports
+    .map((port) => `${port.name} ${kindLabel(port.kind)}${port.required ? `・${t("auto.step.required")}` : ""}`)
+    .join("　");
 }
 
 /** Where the run goes where a line names no step, in a word. */
@@ -59,6 +67,8 @@ export function AutomationPicture({
   selectedBoxId,
   onPickBox,
   onInsert,
+  onPickPart,
+  selectedPart,
 }: {
   graph: PicGraph | null;
   /**
@@ -76,6 +86,13 @@ export function AutomationPicture({
    * built, and every `+` is held shut until it is there.
    */
   onInsert?: (edgeId: number) => void;
+  /**
+   * The action's own input or output, pressed — its frame over or under the picture. Only an
+   * action's picture has them; the panel beside it opens on the one pressed, as it does on a step.
+   */
+  onPickPart?: (part: "in" | "out") => void;
+  /** Which of the action's two frames the panel is showing, if either. */
+  selectedPart?: "in" | "out";
 }) {
   const picture = layOut(graph);
   if (picture.nodes.length === 0) {
@@ -143,36 +160,62 @@ export function AutomationPicture({
           </span>
         ))}
 
-        {/* The action itself: where a placement comes in, over everything, and the ways out it is
-            left by, under everything. Words and not buttons — nothing opens on them. */}
-        {picture.outsAt !== undefined && (
-          <span
-            className="autopic__outs"
-            style={{ left: `${picture.outsAt.x}px`, top: `${picture.outsAt.y}px` }}
-          >
-            {t("auto.pic.actionOut")}
-          </span>
-        )}
-        {picture.marks.map((mark) => (
-          <span
-            key={mark.key}
-            className={[
-              "autopic__mark",
-              `autopic__mark--${mark.kind}`,
-              mark.exitName === ERROR_EXIT ? "autopic__mark--error" : "",
-            ]
-              .filter((one) => one !== "")
-              .join(" ")}
+        {/* The action itself: its input, a frame over everything, and its output, a frame under
+            everything holding each way out it is left by. Pressing either opens it in the panel. */}
+        {picture.outFrame !== undefined && (
+          <button
+            type="button"
+            className={selectedPart === "out" ? "autopic__frame autopic__frame--on" : "autopic__frame"}
             style={{
-              left: `${mark.x}px`,
-              top: `${mark.y}px`,
-              width: `${mark.w}px`,
-              height: `${mark.h}px`,
+              left: `${picture.outFrame.x}px`,
+              top: `${picture.outFrame.y}px`,
+              width: `${picture.outFrame.w}px`,
+              height: `${picture.outFrame.h}px`,
             }}
+            aria-pressed={selectedPart === "out"}
+            disabled={onPickPart === undefined}
+            onClick={() => onPickPart?.("out")}
           >
-            {markWord(mark)}
-          </span>
-        ))}
+            <span className="autopic__frametitle">{t("auto.pic.actionOut")}</span>
+          </button>
+        )}
+        {picture.marks.map((mark) =>
+          mark.kind === "in" ? (
+            <button
+              key={mark.key}
+              type="button"
+              className={selectedPart === "in" ? "autopic__frame autopic__frame--in autopic__frame--on" : "autopic__frame autopic__frame--in"}
+              style={{
+                left: `${mark.x}px`,
+                top: `${mark.y}px`,
+                width: `${mark.w}px`,
+                height: `${mark.h}px`,
+              }}
+              aria-pressed={selectedPart === "in"}
+              disabled={onPickPart === undefined}
+              onClick={() => onPickPart?.("in")}
+            >
+              <span className="autopic__frametitle">{t("auto.pic.actionIn")}</span>
+              <span className="autopic__frameline">{inputsLine(mark)}</span>
+            </button>
+          ) : (
+            <span
+              key={mark.key}
+              className={mark.exitName === ERROR_EXIT ? "autopic__mark autopic__mark--error" : "autopic__mark"}
+              style={{
+                left: `${mark.x}px`,
+                top: `${mark.y}px`,
+                width: `${mark.w}px`,
+                height: `${mark.h}px`,
+              }}
+            >
+              <span className="autopic__markname">{markWord(mark)}</span>
+              {mark.ports.length > 0 && (
+                <span className="autopic__markports">{mark.ports.map((one) => one.name).join("・")}</span>
+              )}
+            </span>
+          ),
+        )}
 
         {picture.nodes.map((node) => (
           <button

@@ -3902,9 +3902,9 @@ impl Instructor {
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
-            // What the action is called and what it is for, written in its declaration — the panel
-            // the button over the picture opens beside it. There is no Save there: each box writes as
-            // the caret leaves it, the way the automation's own do.
+            // What the action is called and what it is for, written in the panel the edit button on
+            // the action's own row opens beside the picture. There is no Save there: each box writes
+            // as the caret leaves it, the way the automation's own do.
             (Domain::Automation, "action-update") => {
                 let mut said: Vec<String> = Vec::new();
                 if let Some(name) = arg_str(with, "name") {
@@ -3920,7 +3920,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "On the action build screen for \"{}\", press the button that edits the declaration, and in the panel it opens, {}. Move off the box afterwards, so what you wrote is taken.",
+                    "On the action build screen for \"{}\", press the edit button on the row for the action itself, and in the panel it opens, {}. Move off the box afterwards, so what you wrote is taken.",
                     self.target_label(with),
                     listed(&said)
                 )

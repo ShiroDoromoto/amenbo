@@ -1577,35 +1577,14 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-md); color: var(--c-text-muted);
 }
 .actdecl__used { font-size: var(--fs-xs); color: var(--c-text-muted); }
-.actdecl .btn--on { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
-.actdecl__rows {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s-1) var(--s-3);
-  margin-block-start: var(--s-2);
-}
-.actdecl__key { font-size: var(--fs-xs); color: var(--c-text-faint); }
-.actdecl__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
 .actdecl__none { font-size: var(--fs-xs); color: var(--c-text-faint); }
-/* A declared port, setting or way out, coloured by what it carries (the picture's own colours). */
-.actport {
-  --tone: var(--c-edge);
-  display: inline-flex; align-items: center; white-space: nowrap;
-  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: 999px;
-  border: var(--border-w) var(--border-style) var(--tone); color: var(--tone);
-  background: color-mix(in srgb, var(--tone) 12%, transparent);
-}
-.actport__kind { margin-inline-start: var(--s-1); padding-inline-start: var(--s-1); border-inline-start: 1px solid currentColor; }
-.actport--value { --tone: var(--c-accent); }
-.actport--file { --tone: var(--c-ai); }
-.actport--task_take { --tone: var(--c-done); }
-.actport--task_make { --tone: var(--c-done); border-style: dashed; background: none; }
-.actport--cfg { --tone: var(--c-heed); }
-.actport--exit { --tone: var(--c-accent); color: var(--c-text); background: var(--c-surface-pic) var(--c-surface); }
-.actport--error { --tone: var(--c-stop); color: var(--c-stop); border-style: dashed; background: none; }
+.actdecl .btn--on { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
 /* The picture and the panel pinned to its right. The panel stands over the stage's right edge, and
    the picture leaves that much room at its end so no box sits under it. */
 .actbuild__stage { position: relative; }
 .actbuild__canvashead { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0; }
 .actbuild__canvashead .btn { margin-inline-start: auto; }
+.actbuild__hint { font-size: var(--fs-xs); color: var(--c-text-faint); }
 .actbuild__notready { margin: var(--s-2) var(--s-3) 0; }
 .actbuild__canvas {
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2);
@@ -1632,18 +1611,35 @@ button.feed__target:hover { color: var(--c-accent); }
 .actpanel__close:hover { color: var(--c-text); }
 .actpanel__body { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }
 
-/* The action itself on its own picture (`../screens/automationLayout`): where a placement comes in, and
-   the ways out it is left by. Dashed pills rather than boxes — nothing opens on them. */
+/* The action itself on its own picture (`../screens/automationLayout`): its input, a frame over the
+   steps, and its output, a frame under them holding each way out. Both frames are pressed to open the
+   panel; the ways out inside the output frame let the press through to it. */
+.autopic__frame {
+  position: absolute; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  box-sizing: border-box; padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule); background: none;
+  color: var(--c-text); font: inherit; text-align: start; cursor: pointer;
+}
+.autopic__frame:disabled { cursor: default; }
+.autopic__frame:enabled:hover { border-color: var(--c-edge); }
+.autopic__frame--in { border-style: dashed; border-color: var(--c-accent); background: var(--c-surface-pic) var(--c-surface); }
+.autopic__frame--on, .autopic__frame--on:enabled:hover { border-color: var(--c-accent); background: var(--c-accent-faint); }
+.autopic__frametitle { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.autopic__frameline {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: var(--fw-bold);
+}
 .autopic__mark {
-  position: absolute; display: flex; align-items: center; justify-content: center;
-  padding: 0 var(--s-2); border-radius: 999px; box-sizing: border-box;
+  position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-sizing: border-box; padding: 0 var(--s-2); border-radius: var(--r-md); pointer-events: none;
   border: var(--border-w) dashed var(--c-accent); color: var(--c-accent);
   background: var(--c-surface-pic) var(--c-surface);
-  font-size: var(--fs-xs); font-weight: var(--fw-bold);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs);
 }
-.autopic__mark--error { border-color: var(--c-stop); color: var(--c-stop); font-weight: var(--fw-normal); }
-.autopic__outs { position: absolute; font-size: var(--fs-xs); color: var(--c-text-faint); white-space: nowrap; }
+.autopic__mark--error { border-color: var(--c-stop); color: var(--c-stop); }
+.autopic__markname, .autopic__markports { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autopic__markname { font-weight: var(--fw-bold); }
+.autopic__markports { color: var(--c-text); }
 .autopic__line--leaves { stroke: var(--c-accent); }
 /* One output a way out of the action hands on, and the step output that fills it. */
 .autostep__outline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }

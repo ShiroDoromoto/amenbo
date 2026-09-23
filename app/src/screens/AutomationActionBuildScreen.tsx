@@ -16,11 +16,13 @@
 // (`../core/automations`), and every later one a reader then says what leads to with the way out's
 // own pulldown (`./AutomationActionStepPanel`).
 //
-// **Three places, named on the screen: the declaration, the build and a step's contents.** The
-// declaration is read in one band over the picture and edited in the panel "Edit the declaration"
-// opens; a pressed step's contents are that same panel's other reading. The panel is pinned to the
-// right of the picture rather than stacked under it: a picture that runs long would otherwise carry a
-// low step's contents off the bottom of the window, and the press would show nothing.
+// **Four places, top to bottom: the action, its input, its steps and its output** (`AMB-T-5369`). The
+// action is one row — what it is for, its reach and how far a rewrite carries — and the input and the
+// output are frames over and under the picture of the steps, so the screen reads as what comes in,
+// what is done with it and what goes out. Pressing the row's edit button, either frame or a step opens
+// that one in the panel pinned to the right of the picture rather than stacked under it: a picture
+// that runs long would otherwise carry a low step's contents off the bottom of the window, and the
+// press would show nothing.
 //
 // **Which step is pressed is the screen's, not the picture's**, for the automation screen's reason:
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
@@ -32,14 +34,13 @@ import { ReachChip } from "./AutomationActionsTab";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
 import { editAutomationAction, useAutomationAction } from "../core/automations";
-import { actionGraph, ERROR_EXIT } from "./automationLayout";
+import { actionGraph } from "./automationLayout";
 import { errText, t, tf, tn } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { CFG_KINDS, useDraft, type Run } from "./automationPanel";
-import { kindLabel } from "./automationPortKinds";
-import type { AutomationActionDetailDto, AutomationPortDto } from "../bindings/bindings";
+import { useDraft, type Run } from "./automationPanel";
+import type { AutomationActionDetailDto } from "../bindings/bindings";
 
 /**
  * What carries out a step put in on a line — the likeliest answer for the one being put in front of
@@ -56,32 +57,11 @@ function firstLine(note: string): string {
   return note.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
 }
 
-/** A way out, in words: the unnamed one and the error one have names of their own on screen. */
-function exitLabel(name: string | undefined): string {
-  if (name === undefined) return t("auto.step.exitUnnamed");
-  if (name === ERROR_EXIT) return t("auto.pic.errorExit");
-  return name;
-}
-
-/** One port as a chip, coloured by what it carries — the same colours the picture's wires take. */
-function PortChip({ port }: { port: AutomationPortDto }) {
-  return (
-    <span className={`actport actport--${port.kind}`}>
-      {port.name}
-      <span className="actport__kind">
-        {kindLabel(port.kind)}
-        {port.required && `・${t("auto.step.required")}`}
-      </span>
-    </span>
-  );
-}
-
 /**
- * **The declaration, read in one band.** What a placement of this action sees from outside — what it
- * is for, its reach, how far a rewrite carries, and what it takes in, asks and leaves by — laid out to
- * read, not to write: spread out to edit, it would push the picture off the bottom of the window.
+ * **The action, in one row**: what it is for, its reach, and how many automations a rewrite here
+ * reaches — read, not written. Its edit button opens the same fields in the panel.
  */
-function DeclBand({
+function AboutRow({
   action,
   editing,
   onEdit,
@@ -90,11 +70,10 @@ function DeclBand({
   editing: boolean;
   onEdit: () => void;
 }) {
-  const none = <span className="actdecl__none">{t("auto.act.none")}</span>;
   return (
     <div className="actdecl">
       <div className="actdecl__head">
-        <span className="actbuild__sec">{t("auto.act.declare")}</span>
+        <span className="actbuild__sec">{t("auto.act.aboutPlace")}</span>
         <span className="actdecl__note">
           {firstLine(action.note) !== "" ? (
             firstLine(action.note)
@@ -112,45 +91,8 @@ function DeclBand({
           aria-pressed={editing}
           onClick={onEdit}
         >
-          {t("auto.act.declEdit")}
+          {t("auto.act.edit")}
         </button>
-      </div>
-      <div className="actdecl__rows">
-        <span className="actdecl__key">{t("auto.step.inputs")}</span>
-        <span className="actdecl__chips">
-          {action.inputs.length === 0 ? none : action.inputs.map((one) => <PortChip key={one.name} port={one} />)}
-        </span>
-        <span className="actdecl__key">{t("auto.step.cfg")}</span>
-        <span className="actdecl__chips">
-          {action.settings.length === 0
-            ? none
-            : action.settings.map((one) => (
-                <span key={one.name} className="actport actport--cfg">
-                  {one.name}
-                  <span className="actport__kind">
-                    {CFG_KINDS.find((kind) => kind.id === one.kind)?.label() ?? one.kind}
-                    {one.required && `・${t("auto.step.required")}`}
-                  </span>
-                </span>
-              ))}
-        </span>
-        <span className="actdecl__key">{t("auto.step.exits")}</span>
-        <span className="actdecl__chips">
-          {/* The error way out last, the way the panel lists it: it is the one every action has. */}
-          {[...action.exits]
-            .sort((a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT))
-            .map((one) => (
-              <span
-                key={one.id}
-                className={one.name === ERROR_EXIT ? "actport actport--exit actport--error" : "actport actport--exit"}
-              >
-                {exitLabel(one.name)}
-                {one.outputs.length > 0 && (
-                  <span className="actport__kind">{one.outputs.map((out) => out.name).join("・")}</span>
-                )}
-              </span>
-            ))}
-        </span>
       </div>
     </div>
   );
@@ -200,11 +142,11 @@ export function AutomationActionBuildScreen({
   onBack: () => void;
 }) {
   const action = useAutomationAction(id);
-  // What the panel is showing: a pressed step, the declaration, or nothing. Nothing until one is
-  // pressed — an action opens on the picture, and a step picked for the reader would be one they did
-  // not choose.
+  // What the panel is showing: a pressed step, the action itself, its input or its output — or
+  // nothing, until one is pressed. An action opens on the picture, and a place picked for the reader
+  // would be one they did not choose.
   const [step, setStep] = useState<number | null>(null);
-  const [declaring, setDeclaring] = useState(false);
+  const [part, setPart] = useState<"about" | "in" | "out" | null>(null);
   // Where the dialog that writes a step is about to put one, while it is open.
   const [adding, setAdding] = useState<AddTarget | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
@@ -221,12 +163,21 @@ export function AutomationActionBuildScreen({
       });
   };
 
-  const pick = (box: number | null) => {
-    setDeclaring(false);
+  const pickBox = (box: number | null) => {
+    setPart(null);
     setStep(box);
   };
+  const pickPart = (one: "about" | "in" | "out") => {
+    setStep(null);
+    setPart(part === one ? null : one);
+  };
   const pressed = action?.steps.find((one) => one.id === step) ?? null;
-  const panelOpen = action !== null && (declaring || pressed !== null);
+  const panelOpen = action !== null && (part !== null || pressed !== null);
+  const partPlace = {
+    about: t("auto.act.aboutPlace"),
+    in: t("auto.pic.actionIn"),
+    out: t("auto.pic.actionOut"),
+  };
 
   return (
     <div className="actbuild">
@@ -240,19 +191,13 @@ export function AutomationActionBuildScreen({
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
       {action !== null && (
-        <DeclBand
-          action={action}
-          editing={declaring}
-          onEdit={() => {
-            setStep(null);
-            setDeclaring(!declaring);
-          }}
-        />
+        <AboutRow action={action} editing={part === "about"} onEdit={() => pickPart("about")} />
       )}
 
       <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
         <div className="actbuild__canvashead">
-          <span className="actbuild__sec">{t("auto.build.picture")}</span>
+          <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>
+          <span className="actbuild__hint">{t("auto.act.stepsHint")}</span>
           {action !== null && action.steps.length > 0 && (
             <button
               type="button"
@@ -272,8 +217,10 @@ export function AutomationActionBuildScreen({
             empty={t("auto.act.empty")}
             insertLabel={t("auto.act.insert")}
             selectedBoxId={step ?? undefined}
-            onPickBox={pick}
+            onPickBox={pickBox}
             onInsert={(edgeId) => setAdding({ picture: "action", edgeId })}
+            selectedPart={part === "in" || part === "out" ? part : undefined}
+            onPickPart={pickPart}
           />
           {action !== null && action.steps.length === 0 && (
             <button
@@ -286,43 +233,55 @@ export function AutomationActionBuildScreen({
           )}
         </div>
 
-        {action !== null && declaring && (
-          <Panel place={t("auto.act.declare")} title={action.name} onClose={() => setDeclaring(false)}>
-            <label className="autostep__field">
-              <span className="autostep__label">{t("auto.actions.name")}</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() =>
-                  name !== action.name && void run(editAutomationAction(action.id, { name }))
-                }
-              />
-            </label>
-            <label className="autostep__field">
-              <span className="autostep__label">{t("auto.actions.note")}</span>
-              <textarea
-                {...asTyped}
-                rows={3}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onBlur={() =>
-                  note !== action.note && void run(editAutomationAction(action.id, { note }))
-                }
-              />
-              <span className="autostep__said">{t("auto.actions.noteWhat")}</span>
-            </label>
-            <div className="autostep__field">
-              <span className="autostep__label">{t("auto.actions.reach")}</span>
-              <span>
-                <ReachChip global={action.global} />
-              </span>
-            </div>
-            <div className="autostep__said">{tf("auto.act.declaresWhat", { name: action.name })}</div>
-            <AutomationActionDeclaresPanel action={action} run={run} />
+        {action !== null && part !== null && (
+          <Panel place={partPlace[part]} title={action.name} onClose={() => setPart(null)}>
+            {part === "about" ? (
+              <>
+                <label className="autostep__field">
+                  <span className="autostep__label">{t("auto.actions.name")}</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onBlur={() =>
+                      name !== action.name && void run(editAutomationAction(action.id, { name }))
+                    }
+                  />
+                </label>
+                <label className="autostep__field">
+                  <span className="autostep__label">{t("auto.actions.note")}</span>
+                  <textarea
+                    {...asTyped}
+                    rows={3}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    onBlur={() =>
+                      note !== action.note && void run(editAutomationAction(action.id, { note }))
+                    }
+                  />
+                  <span className="autostep__said">{t("auto.actions.noteWhat")}</span>
+                </label>
+                <div className="autostep__field">
+                  <span className="autostep__label">{t("auto.actions.reach")}</span>
+                  <span>
+                    <ReachChip global={action.global} />
+                  </span>
+                </div>
+                <div className="autostep__field">
+                  <span className="autostep__label">{t("auto.actions.colUsed")}</span>
+                  <span className="autostep__said">
+                    {action.usedBy === 0
+                      ? t("auto.actions.usedNone")
+                      : tf("auto.act.usedWhere", { n: action.usedBy })}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <AutomationActionDeclaresPanel action={action} part={part} run={run} />
+            )}
           </Panel>
         )}
 
-        {pressed !== null && !declaring && (
+        {pressed !== null && part === null && (
           <Panel place={t("auto.act.step")} title={pressed.name} onClose={() => setStep(null)}>
             <AutomationActionStepPanel
               action={action}

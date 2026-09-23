@@ -6735,6 +6735,16 @@ pub fn automation_run_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i
     select_ids(conn, R.id, Some(&Pred::eq(R.automation_id, automation_id)))
 }
 
+/// The runs of one automation that are still going — `running` or `paused`. A paused run can be picked
+/// up again, so the definition it launched from is as much in use as a running one's (`AMB-D-961`).
+pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.automation_id, automation_id)
+        .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
 /// The automations of one project, for the project delete's walk.
 pub fn automation_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
     const A: col::automation::Cols = col::automation::ALL;

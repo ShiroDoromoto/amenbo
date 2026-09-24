@@ -372,7 +372,9 @@ function walk(graph: PicGraph): Walk {
 export type PicOrder = {
   /** Counted from 1, stretch by stretch and row by row — top to bottom, left to right. */
   numberOf: ReadonlyMap<number, number>;
-  /** A line to a row no lower than the one it leaves — the one the picture draws dashed. */
+  /** A line that would close a loop — the one the picture draws dashed. It is asked of lines not
+   *  drawn yet as well, so it is not read off the rows: a box with no line into it sits on the top
+   *  row, and a line to it goes down once it is drawn. */
   goesBack: (fromId: number, toId: number) => boolean;
   /** The box begins a stretch of its own, the next task being what it goes and finds. */
   takesTask: (boxId: number) => boolean;
@@ -385,23 +387,38 @@ export type PicOrder = {
 export function pictureOrder(graph: PicGraph): PicOrder {
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const numberOf = new Map<number, number>();
-  const at = new Map<number, { lap: number; row: number }>();
-  walk(graph).laps.forEach((lap, nth) =>
-    lap.rows.forEach((row, depth) =>
+  const { laps, back } = walk(graph);
+  laps.forEach((lap) =>
+    lap.rows.forEach((row) =>
       row.forEach((boxId) => {
         numberOf.set(boxId, numberOf.size + 1);
-        at.set(boxId, { lap: nth, row: depth });
       }),
     ),
   );
+  // The lines that go down. They hold no loop, so a line goes back exactly when its far end already
+  // leads down to where it leaves — the reading the walk gives the lines already drawn.
+  const down = new Map<number, number[]>();
+  for (const edge of graph.edges) {
+    if (edge.ends !== "go" || edge.toId === undefined || back.has(edge.id)) continue;
+    down.set(edge.fromId, [...(down.get(edge.fromId) ?? []), edge.toId]);
+  }
+  const leadsTo = (fromId: number, toId: number): boolean => {
+    const seen = new Set([fromId]);
+    const queue = [fromId];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (id === toId) return true;
+      for (const next of down.get(id) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+    return false;
+  };
   return {
     numberOf,
-    goesBack: (fromId, toId) => {
-      const a = at.get(fromId);
-      const b = at.get(toId);
-      if (a === undefined || b === undefined) return false;
-      return b.lap < a.lap || (b.lap === a.lap && b.row <= a.row);
-    },
+    goesBack: (fromId, toId) => boxes.has(fromId) && boxes.has(toId) && leadsTo(toId, fromId),
     takesTask: (boxId) => {
       const box = boxes.get(boxId);
       return box !== undefined && takesTask(box);

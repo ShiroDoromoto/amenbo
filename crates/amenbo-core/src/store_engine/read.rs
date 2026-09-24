@@ -929,6 +929,13 @@ fn priority_rank(priority: Col<SqlText, Nullable>) -> String {
     )
 }
 
+/// **Whether `sort` is a key `task list --sort` takes** (`-` for descending included). The one list of
+/// keys is [`order_by`]'s, so a caller that stores an order to run later — a task filter's answer — is
+/// checked against the same keys the run will be sorted by.
+pub fn is_task_sort(sort: &str) -> bool {
+    order_by(sort).is_ok()
+}
+
 /// Build the `ORDER BY` body for `sort`. Ties break on `id`; `-` reverses the whole ordering, so every
 /// component (including the `id` tiebreak and any NULLs-grouping term) flips direction together. Every
 /// term names its column through the registry, so a

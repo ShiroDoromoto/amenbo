@@ -29,7 +29,8 @@ interface Store {
    * Move a task's status. `rejected` is the one value that carries a reason, and it is required — the
    * pull-down collects it and this routes it to the write that keeps it (`AMB-D-397`).
    */
-  setStatus(id: number, status: Status, reason?: string): void;
+  // `text` is what the two terminals carry: the reason for `rejected`, the report for `done`.
+  setStatus(id: number, status: Status, text?: string): void;
   /**
    * End the second stage of a creation (`AMB-D-554`): the task stops being held out of the mailbox and
    * out of a reservation. It runs one way — nothing puts a task back to being created.
@@ -180,10 +181,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     listActivity() { return activity; },
 
     addTask(projectId, title, notes, due, start) { return runResult(mut.addTask(projectId, title, notes, due, start)); },
-    setStatus(id, status, reason) {
-      // The one fork on the way down: a rejection goes through the write that also keeps the reason, so
-      // no surface can reach `rejected` and leave the reasoning behind.
-      run(status === "rejected" ? mut.rejectTask(id, reason ?? "") : mut.setStatus(id, status));
+    setStatus(id, status, text) {
+      // The fork on the way down: each terminal goes through the write that also keeps its text — the
+      // reason for a rejection, the report for a completion — so no surface can reach either one and
+      // leave it behind.
+      if (status === "rejected") run(mut.rejectTask(id, text ?? ""));
+      else if (status === "done") run(mut.completeTask(id, text ?? ""));
+      else run(mut.setStatus(id, status));
     },
     finishCreating(id) { run(mut.finishTaskCreation(id)); },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },

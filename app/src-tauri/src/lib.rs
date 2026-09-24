@@ -556,6 +556,7 @@ pub fn run() {
       commands::task_add,
       commands::task_finish_creating,
       commands::task_status,
+      commands::task_done,
       commands::task_reject,
       commands::task_delete,
       commands::comment_add,

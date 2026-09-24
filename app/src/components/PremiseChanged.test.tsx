@@ -145,6 +145,8 @@ describe("PremiseChangedField (the detail pane's spelled-out surface)", () => {
 });
 
 describe("StatusSelect premise-change safety net (AMB-D-366)", () => {
+  // Leaving by `blocked`, which writes on the pick: the two terminals ask for their text first
+  // (`CloseTaskModal`), and what is under test here is the toast on the way out, not that question.
   function fireChange(props: Parameters<typeof StatusSelect>[0], next: string): string[] {
     const notices: string[] = [];
     const unsub = subscribeNotice((m) => notices.push(m));
@@ -163,18 +165,18 @@ describe("StatusSelect premise-change safety net (AMB-D-366)", () => {
     const notices = fireChange({
       id: 7, status: "in_progress", onStatus: (id, s) => { got = [id, s]; },
       premiseChange: change({ addedBlockers: [{ id: 2, name: "後付け" }] }),
-    }, "done");
+    }, "blocked");
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain("後付け");
     // Surface, not veto: the transition is still handed on.
-    expect(got).toEqual([7, "done"]);
+    expect(got).toEqual([7, "blocked"]);
   });
 
   it("names a ground that stopped being settled, not only the ones pinned on", () => {
     const notices = fireChange({
       id: 7, status: "in_progress", onStatus: () => {},
       premiseChange: change({ reopenedDecisions: [{ id: 373, name: "開き直った決定", ref: "D-373" }] }),
-    }, "done");
+    }, "blocked");
     // The toast once fired with an empty detail here: the axis was in the chip and missing from the warn.
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain("開き直った決定");
@@ -183,7 +185,7 @@ describe("StatusSelect premise-change safety net (AMB-D-366)", () => {
   it("stays silent when there is no premise change", () => {
     const notices = fireChange({
       id: 7, status: "in_progress", onStatus: () => {},
-    }, "done");
+    }, "blocked");
     expect(notices).toHaveLength(0);
   });
 

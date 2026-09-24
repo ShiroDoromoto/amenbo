@@ -4,7 +4,7 @@ import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
 import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip,
+  BlockedChips, CloseTaskModal, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
@@ -144,8 +144,14 @@ export function BoardScreen({
   // Nothing here asks whether the write would change anything: a card let go where it already was
   // never reaches this, because the gesture compares the column it came from with the one it landed
   // on and says nothing when they are the same.
+  //
+  // The done column is the one drop that does not write on landing: a task is done with its report
+  // (`AMB-D-963`), so letting a card go there asks for the report first, the way the pull-down does. The
+  // card stays in the column it came from until the report is given, and cancelling writes nothing.
+  const [finishing, setFinishing] = useState<number | null>(null);
   const dropOn = useCallback((column: string, id: number) => {
-    store.setStatus(id, column as Status);
+    if (column === "done") setFinishing(id);
+    else store.setStatus(id, column as Status);
   }, [store]);
   // Dragging a card is pointer events now, not HTML5 drag: the OS handler that lets a file be dropped
   // on the window swallows the latter on two of the three operating systems (`./boardDrag`, `AMB-D-775`).
@@ -507,6 +513,14 @@ export function BoardScreen({
       )}
       {dimMgrOpen && <DimensionManager projectId={projectId} onClose={() => setDimMgrOpen(false)} />}
       </>
+      )}
+      {finishing !== null && (
+        <CloseTaskModal
+          id={finishing}
+          status="done"
+          onCancel={() => setFinishing(null)}
+          onClose={(report) => { setFinishing(null); store.setStatus(finishing, "done", report); }}
+        />
       )}
     </>
   );

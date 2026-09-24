@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addComment, addTask, deleteProject, deleteTask, finishTaskCreation, rejectTask, setDue, setStart, setStatus } from "./mutations";
+import { addComment, addTask, completeTask, deleteProject, deleteTask, finishTaskCreation, rejectTask, setDue, setStart, setStatus } from "./mutations";
 import { whenLabel } from "./i18n";
 import { addDays, todayStr } from "./calendar";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
@@ -193,6 +193,32 @@ describe("rejectTask (browser-loop mock)", () => {
   it("does not pile the reason on a second time (re-rejecting changes nothing)", async () => {
     seedTasks([full(10, { status: "rejected" })]);
     await rejectTask(10, "また同じことを言う");
+    expect(getSnapshot().tasks[0].comments).toBe(0);
+  });
+});
+
+describe("completeTask (browser-loop mock)", () => {
+  it("keeps the report as a comment, and carries a completion time (AMB-D-963)", async () => {
+    seedTasks([full(10)]);
+    await completeTask(10, "  入口を足して、テストで押さえた  ");
+
+    const t = getSnapshot().tasks[0];
+    expect(t.status).toBe("done");
+    expect(t.completedAt).not.toBeNull();
+    expect(t.comments).toBe(1);
+    expect(getSnapshot().activity.some((a) => a.text === "入口を足して、テストで押さえた")).toBe(true);
+  });
+
+  it("refuses an empty report, and writes nothing", async () => {
+    seedTasks([full(10)]);
+    await expect(completeTask(10, "   ")).rejects.toMatchObject({ code: "invalid_value" });
+    expect(getSnapshot().tasks[0].status).toBe("todo");
+    expect(getSnapshot().activity).toEqual([]);
+  });
+
+  it("does not pile the report on a second time (re-marking changes nothing)", async () => {
+    seedTasks([full(10, { status: "done" })]);
+    await completeTask(10, "もう一度報告する");
     expect(getSnapshot().tasks[0].comments).toBe(0);
   });
 });

@@ -180,19 +180,17 @@ fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
             exit: 2,
         });
     }
-    // Read as the filter it will be run as, so a value nothing accepts is refused while the person who
-    // wrote it is still here — rather than at the launch of a run, days later.
-    let expr = filtered
-        .iter()
-        .map(|(k, v)| format!("{k}:{}", v.join(",")))
-        .collect::<Vec<_>>()
-        .join(" ");
-    amenbo_core::query::Filter::parse(&expr, amenbo_core::time::today()).map_err(CliError::from)?;
     let mut map = serde_json::Map::new();
     for (k, v) in filtered {
         map.insert(k.to_string(), json!(v));
     }
-    Ok(Some(Value::Object(map)))
+    let value = Value::Object(map);
+    // Read as the filter it will be run as — the same expression the step's prompt spells — so a value
+    // nothing accepts is refused while the person who wrote it is still here, rather than at the launch
+    // of a run, days later.
+    let expr = amenbo_core::ops::automation_step::taskfilter_expr(&value.to_string()).unwrap_or_default();
+    amenbo_core::query::Filter::parse(&expr, amenbo_core::time::today()).map_err(CliError::from)?;
+    Ok(Some(value))
 }
 
 /// The options `cfg set` answers a setting with, gathered off the parsed command.

@@ -174,7 +174,11 @@ pub fn preamble(cmd: &str) -> String {
          and `{cmd} attach save` writes out; a task arrives as `AMB-T-<n>`.\n\
          \n\
          Nothing else crosses. A file you leave beside you, or a word you write in this terminal, \
-         reaches no later step."
+         reaches no later step.\n\
+         \n\
+         **Your settings** carries the answers written for this step where it was placed, one line \
+         each. A task filter arrives as the `{cmd} task list --filter \"…\"` that lists the tasks it \
+         means: run that one as it stands rather than writing a filter of your own."
     )
 }
 

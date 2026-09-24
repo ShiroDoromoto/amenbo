@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # verify-gui-front.sh — say which frontend a built (or installed) .app carries, and fail when it
-# is not the one currently in app/dist.
+# is not the one currently in app/dist. With --commit, say instead whether a CI-built .app was built
+# from that commit.
 #
 # Why this exists:
 #   A GUI dev cycle is `make install-gui-dev` → click the app → look at it. When the bundle carries
@@ -21,20 +22,45 @@
 #   named by dist/index.html (`/assets/index-<hash>.js`) is greppable in the binary — and it *is*
 #   the frontend's identity, because vite renames it on every content change.
 #
+# By commit, for a bundle built somewhere else:
+#   A bundle a CI run built (devgui-build-manual.yml) and `gh run download` brought here has no
+#   app/dist beside it to compare with — nothing was built here, and the local app/dist may be of
+#   another commit altogether. What it does carry is the commit CI built it from: AMENBO_BUILD_SHA is
+#   compiled into the app (amenbo-core's config.rs, for the dev badge) as the full hash, and a full
+#   hash is a string nothing else in the binary happens to spell. So the question becomes "was this
+#   built from the commit in front of me", which is the one a stale download gets wrong. A local
+#   build leaves that variable unset, so this form fails on it — it is for CI builds only.
+#
 # Usage: verify-gui-front.sh <app-bundle.app> [dist-dir]
+#        verify-gui-front.sh <app-bundle.app> --commit <sha>
 set -euo pipefail
 
-APP="${1:?usage: verify-gui-front.sh <app-bundle.app> [dist-dir]}"
-DIST="${2:-app/dist}"
-INDEX="$DIST/index.html"
+APP="${1:?usage: verify-gui-front.sh <app-bundle.app> [dist-dir] | --commit <sha>}"
 # The executable's name is the bundle's to say: a dev bundle carries its own (`amenbo-app-dev…`), so
 # that a click or a `pgrep` can be aimed at one app and not at whichever is frontmost. Ask the bundle
 # rather than assuming a name, and fall back to the prod one where plutil cannot answer.
 BIN_NAME=$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist" 2>/dev/null || echo amenbo-app)
 BIN="$APP/Contents/MacOS/$BIN_NAME"
-
-[ -f "$INDEX" ] || { echo "✗ nothing to compare against: $INDEX is missing (build the frontend first)"; exit 1; }
 [ -f "$BIN" ] || { echo "✗ not an amenbo app bundle: $BIN is missing"; exit 1; }
+
+if [ "${2:-}" = "--commit" ]; then
+  SHA="${3:?usage: verify-gui-front.sh <app-bundle.app> --commit <sha>}"
+  # The whole hash, never a prefix: a short one can turn up in any binary by chance.
+  printf '%s' "$SHA" | grep -Eqx '[0-9a-f]{40}' || { echo "✗ --commit takes a full 40-character hash — got '$SHA'"; exit 1; }
+  if ! grep -aqF "$SHA" "$BIN"; then
+    echo "✗ the bundle was not built from $SHA:"
+    echo "  → $APP"
+    echo "  Either the build is of an older push, or this is a local build (which carries no commit)."
+    echo "  Push, run devgui-build-manual.yml on this commit, and take that run's artifact."
+    exit 1
+  fi
+  echo "→ built from ${SHA:0:8} ($APP)"
+  exit 0
+fi
+
+DIST="${2:-app/dist}"
+INDEX="$DIST/index.html"
+[ -f "$INDEX" ] || { echo "✗ nothing to compare against: $INDEX is missing (build the frontend first)"; exit 1; }
 
 # What index.html loads directly = the entry chunk and its stylesheet. Everything else is reached
 # through them, so these two are enough to name the build.

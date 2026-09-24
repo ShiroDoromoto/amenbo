@@ -38,15 +38,6 @@ func taskDevAppData(id string) string { return sharedDevAppData + "-" + id }
 // taskDevBundle is the product name — and so the bundle's file name — of that same instance.
 func taskDevBundle(id string) string { return "amenbo (dev " + id + ")" }
 
-// taskDevCLI is the file name of the CLI copy that instance id is driven from, and taskDevCLIPath
-// where that copy sits: straight in the home of the machine it was sent to. Only the VM route puts
-// one anywhere — a checkout builds its CLI in the worktree and runs it from there, so on this
-// machine nothing of the sort exists — but it is spelled here beside the other two names because
-// the same scan reads all three back.
-func taskDevCLI(id string) string { return "amenbo-cli-" + id }
-
-func taskDevCLIPath(home, id string) string { return filepath.Join(home, taskDevCLI(id)) }
-
 // taskDevExecutable is the name the instance's own process runs under (the Makefile's GUI_DEV_BIN),
 // which is how the OS is asked about one instance and not another: `pgrep -x` matches a process
 // name exactly, and the bundle name — parentheses, spaces and all — is no name a process carries.
@@ -110,13 +101,12 @@ func appDataDir(home, appName string) string {
 	return filepath.Join(appSupportDir(home), appDataDirName(appName))
 }
 
-// taskIDFromBundleName, taskIDFromAppDataName and taskIDFromCLIName read a task id back out of what
-// an instance is called on disk — the inverse of taskDevBundle / taskDevAppData / taskDevCLI, held
-// to them by a round-trip test.
+// taskIDFromBundleName and taskIDFromAppDataName read a task id back out of what an instance is
+// called on disk — the inverse of taskDevBundle / taskDevAppData, held to them by a round-trip test.
 // Reading the id off the name is the only way to find an instance whose session never came back to
 // finish it: nothing else on the machine records that it was ever created.
 //
-// All three go through canonicalID, so only digits are taken. That is the same line taskIDFromCheckout
+// Both go through canonicalID, so only digits are taken. That is the same line taskIDFromCheckout
 // draws, and it matters more here: a hand-made `amenbo (dev wip).app` is somebody's own, and a sweep
 // that read it as a task instance would delete it.
 func taskIDFromBundleName(name string) string {
@@ -135,14 +125,6 @@ func taskIDFromAppDataName(name string) string {
 	rest, ok := strings.CutPrefix(name, appDataDirName(sharedDevAppData)+"-")
 	if !ok {
 		return "" // the shared dev store itself lands here too, and it is nobody's to sweep
-	}
-	return digitsOnly(rest)
-}
-
-func taskIDFromCLIName(name string) string {
-	rest, ok := strings.CutPrefix(name, taskDevCLI(""))
-	if !ok {
-		return ""
 	}
 	return digitsOnly(rest)
 }
@@ -170,9 +152,7 @@ type taskDevGUIInstance struct {
 // The two roots and the live set are arguments so the whole scan can be pointed at a temp dir; the
 // caller is what binds it to /Applications and to `git worktree list`.
 func scanTaskDevGUIs(home, appsDir string, liveIDs []string) []taskDevGUIInstance {
-	// No CLI listing: the copy an instance is driven from is the VM route's alone, so on this
-	// machine that third half is empty and the reading comes out as it always did.
-	return instancesFrom(dirNames(appsDir), dirNames(appSupportDir(home)), nil, home, appsDir, liveIDs)
+	return instancesFrom(dirNames(appsDir), dirNames(appSupportDir(home)), home, appsDir, liveIDs)
 }
 
 // dirNames lists what is in dir, and nothing at all when it cannot be read: nothing readable there
@@ -189,24 +169,19 @@ func dirNames(dir string) []string {
 	return names
 }
 
-// instancesFrom reads the instances out of three directory listings — what is in the applications
-// folder, what is in Application Support, and what is in the home the CLI copies are sent to. It
-// reports what is there rather than what a whole instance should be: an instance whose bundle was
-// built and whose app-data was removed by hand is still an instance, and still worth reclaiming, so
-// `paths` holds only the halves the listings name.
-//
-// The CLI half is what finds an instance the other two cannot see at all. `devgui cli --vm` runs
-// before any bundle is built, and teardown takes the bundle and the store together — so a copy left
-// behind by either is a file no listing of those two names.
+// instancesFrom reads the instances out of two directory listings — what is in the applications
+// folder, and what is in Application Support. It reports what is there rather than what a whole
+// instance should be: an instance whose bundle was built and whose app-data was removed by hand is
+// still an instance, and still worth reclaiming, so `paths` holds only the halves the listings name.
 //
 // Presence comes from the listings and nothing else. That is what lets the same reading run over a
 // machine this process cannot stat — the guest's — where each listing is one `ls` over ssh.
-func instancesFrom(bundleNames, storeNames, cliNames []string, home, appsDir string, liveIDs []string) []taskDevGUIInstance {
+func instancesFrom(bundleNames, storeNames []string, home, appsDir string, liveIDs []string) []taskDevGUIInstance {
 	live := make(map[string]bool, len(liveIDs))
 	for _, id := range liveIDs {
 		live[id] = true
 	}
-	hasBundle, hasStore, hasCLI := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	hasBundle, hasStore := map[string]bool{}, map[string]bool{}
 	halves := []struct {
 		names []string
 		idOf  func(string) string
@@ -214,7 +189,6 @@ func instancesFrom(bundleNames, storeNames, cliNames []string, home, appsDir str
 	}{
 		{bundleNames, taskIDFromBundleName, hasBundle},
 		{storeNames, taskIDFromAppDataName, hasStore},
-		{cliNames, taskIDFromCLIName, hasCLI},
 	}
 	for _, half := range halves {
 		for _, name := range half.names {
@@ -223,7 +197,7 @@ func instancesFrom(bundleNames, storeNames, cliNames []string, home, appsDir str
 			}
 		}
 	}
-	ids := make([]string, 0, len(hasBundle)+len(hasStore)+len(hasCLI))
+	ids := make([]string, 0, len(hasBundle)+len(hasStore))
 	seen := map[string]bool{}
 	for _, half := range halves {
 		for id := range half.into {
@@ -238,8 +212,8 @@ func instancesFrom(bundleNames, storeNames, cliNames []string, home, appsDir str
 	instances := make([]taskDevGUIInstance, 0, len(ids))
 	for _, id := range ids {
 		inst := taskDevGUIInstance{id: id, live: live[id]}
-		all := append(taskDevGUIPaths(home, appsDir, id), taskDevCLIPath(home, id))
-		for i, present := range []bool{hasBundle[id], hasStore[id], hasCLI[id]} {
+		all := taskDevGUIPaths(home, appsDir, id)
+		for i, present := range []bool{hasBundle[id], hasStore[id]} {
 			if present {
 				inst.paths = append(inst.paths, all[i])
 			}

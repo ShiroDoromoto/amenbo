@@ -13,9 +13,11 @@ import (
 
 // Putting a task's own dev GUI in the throwaway VM instead of on this machine.
 //
-// The build stays on the host and only the placing moves: the guest then needs neither Rust nor
-// node, and the `.app` that was just baked here runs there unchanged because the two are the same
-// arch and the same OS generation (measured: 43MB across in 0.96s).
+// The bundle is built outside the guest and only placed there: the guest then needs neither Rust
+// nor node, and a `.app` baked for this arch and OS generation runs there unchanged (measured: 43MB
+// across in 0.96s). Where it is baked is the caller's choice — on this machine, or on a CI macOS
+// runner (`devgui-build-manual.yml`), whose artifact is downloaded here and sent across. The guest
+// holds neither `gh` nor a token, and needs neither.
 //
 // The host route is untouched and stays the default — `make install-gui-dev AMB-T-ID=<id>` still
 // installs on this machine. This is a second destination, not a replacement: a clone or a fork with
@@ -37,9 +39,8 @@ const vmStagingDir = "/tmp"
 const guiBundleBuildDir = "app/src-tauri/target/release/bundle/macos"
 
 // vmTaskDevBundle and vmTaskDevAppData are the two places an instance occupies on both machines —
-// the ones the host holds (taskDevGUIPaths), read under the guest's own home. The other two are the
-// guest's alone: the CLI it is driven from (vmTaskCLIBin) and the folder it is worked from
-// (vmTaskWorkDir).
+// the ones the host holds (taskDevGUIPaths), read under the guest's own home. The folder it is
+// worked from (vmTaskWorkDir) is the guest's alone.
 func vmTaskDevBundle(id string) string {
 	return filepath.Join(macAppsDir, taskDevBundle(id)+".app")
 }
@@ -48,9 +49,12 @@ func vmTaskDevAppData(id string) string {
 	return appDataDir(vmGuestHome, taskDevAppData(id))
 }
 
-// vmTaskCLIBin is the copy of this task's CLI that was sent in there, straight in the guest's home.
-func vmTaskCLIBin(id string) string {
-	return taskDevCLIPath(vmGuestHome, id)
+// vmTaskGuestCLI is the CLI the instance's own bundle carries, where it sits in the guest. The
+// bundle ships it beside the app under the instance's app-data name, and it was built with that name,
+// so it opens the instance's store and introduces itself by the instance's channel. Driving the
+// instance with it means nothing has to be built or sent for the CLI at all.
+func vmTaskGuestCLI(id string) string {
+	return filepath.Join(vmTaskDevBundle(id), "Contents", "MacOS", taskDevAppData(id))
 }
 
 // vmTaskWorkDir is the folder in the guest an instance is worked *from* — its own bound folder, and
@@ -79,8 +83,13 @@ func shq(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// devGUIInstallVM puts task id's own dev GUI in the throwaway VM: the bundle built here, and a store
+// devGUIInstallVM puts task id's own dev GUI in the throwaway VM: a bundle built for it, and a store
 // for it to open on.
+//
+// The bundle is the one built in the task's worktree, unless `app` names one (a `.app`, or the `.zip`
+// a CI run packs it in) or `fromRun` names the CI run to download it from. A bundle from anywhere
+// but the worktree is held to the worktree's HEAD (devGUIBundleFromCI), because it was built from
+// whatever was pushed and not from what is in front of the person placing it.
 //
 // It raises the clone if it is not running rather than refusing: what a person decides is when the
 // VM is thrown away, never when it is raised, and there is nothing to place until one is up.
@@ -88,17 +97,27 @@ func shq(s string) string {
 // **What it does refuse is a screen somebody else is driving** (vmscreen.go): the guest has one, and
 // an instance placed in there while a pre-distribution road is walking is a window over the app that
 // road is pressing.
-func devGUIInstallVM(id string) error {
+func devGUIInstallVM(id, app, fromRun string) error {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("the dev GUI and the VM it is put in are both macOS-only")
 	}
-	_, worktree, err := paths(id)
+	root, worktree, err := paths(id)
 	if err != nil {
 		return err
 	}
-	bundle := filepath.Join(worktree, guiBundleBuildDir, taskDevBundle(id)+".app")
-	if _, err := os.Stat(bundle); err != nil {
-		return fmt.Errorf("no bundle built for task %s at %s — `make install-gui-dev-vm AMB-T-ID=%s` builds it and puts it there", id, bundle, id)
+	var bundle string
+	if app == "" && fromRun == "" {
+		bundle = filepath.Join(worktree, guiBundleBuildDir, taskDevBundle(id)+".app")
+		if _, err := os.Stat(bundle); err != nil {
+			return fmt.Errorf("no bundle built for task %s at %s — `make install-gui-dev-vm AMB-T-ID=%s` builds it and puts it there, or pass `--from-run <run id>` to take the one a CI run built", id, bundle, id)
+		}
+	} else {
+		var cleanup func()
+		bundle, cleanup, err = devGUIBundleFromCI(root, worktree, id, app, fromRun)
+		defer cleanup()
+		if err != nil {
+			return err
+		}
 	}
 
 	release, err := vmTakeScreen("`devtool devgui install " + id + " --vm`")
@@ -121,12 +140,106 @@ func devGUIInstallVM(id string) error {
 		return err
 	}
 	vmSeedAppData(ip, id)
-	vmSeedWorkDir(ip, id, worktree)
+	vmSeedWorkDir(ip, id)
 
 	dest := vmTaskDevBundle(id)
 	logf("  dev GUI : open it in there — `devtool vm exec -- open -a %s`", shq(dest))
 	fmt.Printf("%s\n", dest)
 	return nil
+}
+
+// devGUIArtifact is the name devgui-build-manual.yml uploads task id's bundle under.
+func devGUIArtifact(id string) string { return "devgui-" + id + "-macos-arm64" }
+
+// devGUIBundleFromCI answers with a bundle built somewhere other than the worktree: unpacked from
+// `app` (a `.zip` as CI packs it, or a `.app` already unpacked), or downloaded from run `fromRun`
+// first. What comes back with it removes whatever was unpacked, and is always safe to call.
+//
+// Two things are checked before it is handed on, because either failing puts a bundle in the VM
+// that looks exactly like an implementation that does not work:
+//
+//   - **It is this task's.** The bundle's name carries the task number, and so does every name
+//     inside it — the executable the instance is quit by, the app-data it opens. One built for
+//     another task would be placed under this one's path and answer to none of this one's names.
+//   - **It was built from the worktree's HEAD.** A CI build is of a pushed commit, and the commit
+//     in front of the person placing it may have moved on since. The frontend check the host
+//     route makes (the bundle against `app/dist`) has nothing to compare with here — nothing was
+//     built here — so the commit CI embedded in the build is compared instead
+//     (`scripts/verify-gui-front.sh --commit`).
+func devGUIBundleFromCI(root, worktree, id, app, fromRun string) (bundle string, cleanup func(), err error) {
+	cleanup = func() {}
+	if app != "" && fromRun != "" {
+		return "", cleanup, fmt.Errorf("pass either --app or --from-run, not both — they name two different builds")
+	}
+	var dirs []string
+	cleanup = func() {
+		for _, d := range dirs {
+			os.RemoveAll(d)
+		}
+	}
+	temp := func() (string, error) {
+		d, err := os.MkdirTemp("", "amenbo-devgui-"+id+"-")
+		if err == nil {
+			dirs = append(dirs, d)
+		}
+		return d, err
+	}
+
+	if fromRun != "" {
+		repo, err := originRepo(root)
+		if err != nil {
+			return "", cleanup, err
+		}
+		dir, err := temp()
+		if err != nil {
+			return "", cleanup, err
+		}
+		logf("  dev GUI : downloading %s from run %s of %s", devGUIArtifact(id), fromRun, repo)
+		if _, err := run(root, "gh", "run", "download", fromRun, "--repo", repo, "--name", devGUIArtifact(id), "--dir", dir); err != nil {
+			return "", cleanup, fmt.Errorf("downloading the build: %w", err)
+		}
+		zips, _ := filepath.Glob(filepath.Join(dir, "*.zip"))
+		if len(zips) != 1 {
+			return "", cleanup, fmt.Errorf("%s holds %d zip(s), not the one bundle it is built with", devGUIArtifact(id), len(zips))
+		}
+		app = zips[0]
+	}
+
+	bundle = app
+	if strings.HasSuffix(app, ".zip") {
+		dir, err := temp()
+		if err != nil {
+			return "", cleanup, err
+		}
+		// ditto, for the reason CI packs with it: it keeps the executable bits, the symlinks and the
+		// signature that `unzip` does not promise to.
+		if _, err := run("", "ditto", "-x", "-k", app, dir); err != nil {
+			return "", cleanup, fmt.Errorf("unpacking %s: %w", app, err)
+		}
+		bundle = filepath.Join(dir, taskDevBundle(id)+".app")
+		if _, err := os.Stat(bundle); err != nil {
+			return "", cleanup, fmt.Errorf("%s holds no %s.app — is it task %s's build?", filepath.Base(app), taskDevBundle(id), id)
+		}
+	}
+	if want := taskDevBundle(id) + ".app"; filepath.Base(strings.TrimSuffix(bundle, "/")) != want {
+		return "", cleanup, fmt.Errorf("%s is not task %s's bundle (%s) — every name inside it is another instance's", bundle, id, want)
+	}
+
+	head, err := run(worktree, "git", "rev-parse", "HEAD")
+	if err != nil {
+		return "", cleanup, fmt.Errorf("reading the worktree's HEAD to hold the build to: %w", err)
+	}
+	if out, err := run(worktree, filepath.Join(worktree, "scripts", "verify-gui-front.sh"), bundle, "--commit", head); err != nil {
+		return "", cleanup, err
+	} else if out != "" {
+		logf("  %s", out)
+	}
+	// Uncommitted work is in the worktree and not in anything CI could have built. Said rather than
+	// refused: the commit matches, and what is on top of it may be nothing the screen shows.
+	if dirty, err := run(worktree, "git", "status", "--porcelain"); err == nil && dirty != "" {
+		logf("  dev GUI : warning — the worktree has uncommitted changes, and this build has none of them")
+	}
+	return bundle, cleanup, nil
 }
 
 // vmStopTaskDevGUI asks the instance to quit in the guest and reports whether it is gone, for the
@@ -220,16 +333,12 @@ func vmSeedAppData(ip, id string) {
 
 // vmSeedWorkDir cuts the instance's own folder in the guest and binds it to a project in that
 // instance's store, so the AI facet has somewhere to stand (vmTaskWorkDir says why the folder has to
-// be its own).
+// be its own). The bind is made with the CLI the bundle just placed carries (vmTaskGuestCLI).
 //
 // Every arm reports and returns, the way the app-data seeding above it does: an instance whose
 // folder could not be bound is a poorer one to drive — its CLI has to be told which project by hand
 // — never a reason to fail the placing that asked.
-//
-// The CLI is not built for this: the bundle placing is not a step anyone should have to wait on a
-// second toolchain run for. If this checkout has no debug build yet the folder is left cut and
-// unbound, and the first `devgui cli --vm` — which rebuilds and sends one anyway — binds it.
-func vmSeedWorkDir(ip, id, worktree string) {
+func vmSeedWorkDir(ip, id string) {
 	dir := vmTaskWorkDir(id)
 	bound, err := vmCutWorkDir(ip, dir)
 	if err != nil {
@@ -240,12 +349,7 @@ func vmSeedWorkDir(ip, id, worktree string) {
 		logf("  dev GUI : %s is bound already in %s — left as it is", filepath.Base(dir), vmCloneName)
 		return
 	}
-	bin, err := vmSendCLI(ip, id, worktree, true)
-	if err != nil {
-		logf("  dev GUI : %s is cut but not bound yet (%v) — the first `devtool devgui cli %s --vm` binds it", filepath.Base(dir), err, id)
-		return
-	}
-	vmBindWorkDir(ip, id, bin, dir)
+	vmBindWorkDir(ip, id, vmTaskGuestCLI(id), dir)
 }
 
 // vmCutWorkDir makes the instance's folder in the guest if it is not there, and answers whether it
@@ -362,9 +466,9 @@ func lowestProjectID(listing string) (string, error) {
 // removal is an `rm -rf` over ssh, and the screen tool being driven is the copy `devtool vm screen`
 // put in there.
 //
-// Two of them cannot be answered from inside the guest at all, which is the reason they live here
-// rather than as something typed in there: the sweep needs `git worktree list`, which only this
-// machine can answer, and the CLI is a build of this checkout. Both reach across.
+// The sweep cannot be answered from inside the guest at all, which is the reason these live here
+// rather than as something typed in there: it needs `git worktree list`, which only this machine can
+// answer.
 
 // vmInstanceID answers which task's instance a `--vm` command addresses: the one named, or — with
 // no id — the one this checkout is written in.
@@ -516,29 +620,28 @@ func vmDevGUIShot(id string, front bool, window string) error {
 // vmTaskCLI runs an amenbo command against the store the instance **in the guest** reads, so a
 // screen in there can be given something to show.
 //
-// The CLI is this checkout's own build, sent across: the guest holds no toolchain, and the two
-// machines are the same arch, so what is built here runs there. It is pointed at the store with
-// `AMENBO_HOME`, the way the host route points its own (see taskCLI).
+// The CLI is the one the instance's bundle carries (vmTaskGuestCLI), run where it already is: it is
+// a build of the same commit as the app, and nothing has to be built or sent for it. So the bundle
+// has to be placed first. It is pointed at the store with `AMENBO_HOME` all the same, the way the
+// host route points its own (see taskCLI) — the store it opens by its own name is that one anyway.
 //
 // Where it runs is the one place the two routes part: the host route runs in the store's own
 // directory, and this one runs in the instance's bound folder (vmTaskWorkDir). On this machine every
 // instance's store is a folder of its own, so a pointer beside one is one instance's and no other's;
 // in the guest that same reading put every instance on the one home directory they share.
-func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
+func vmTaskCLI(id string, argv []string) (int, error) {
 	if len(argv) == 0 {
 		return 0, fmt.Errorf("nothing to run — `devtool devgui cli %s --vm -- <amenbo args…>`", id)
-	}
-	_, worktree, err := paths(id)
-	if err != nil {
-		return 0, err
 	}
 	ip, err := vmIP()
 	if err != nil {
 		return 0, err
 	}
-	guestBin, err := vmSendCLI(ip, id, worktree, noBuild)
-	if err != nil {
-		return 0, err
+	guestBin := vmTaskGuestCLI(id)
+	if out, err := sshRun(ip, "[ -x "+shq(guestBin)+" ] && echo yes || echo no"); err != nil {
+		return 0, fmt.Errorf("asking %s for the instance's CLI: %w", vmCloneName, err)
+	} else if strings.TrimSpace(out) != "yes" {
+		return 0, fmt.Errorf("%s is not in %s, and its CLI comes with it — put it there first (`devtool devgui install %s --vm`)", taskDevBundle(id), vmCloneName, id)
 	}
 
 	store := vmTaskDevAppData(id)
@@ -547,9 +650,8 @@ func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
 	if _, err := sshRun(ip, "mkdir -p "+shq(store)); err != nil {
 		return 0, fmt.Errorf("make the task's store dir in %s: %w", vmCloneName, err)
 	}
-	// The folder is cut here as well as at placing, because an instance can be seeded before its
-	// bundle is ever put in there — and a run that cannot stand anywhere is one that fails at the
-	// `cd` below rather than reporting and carrying on.
+	// The folder is cut here as well as at placing: a placing that could not bind it reported and
+	// carried on, and a run that cannot stand anywhere is one that fails at the `cd` below.
 	dir := vmTaskWorkDir(id)
 	bound, err := vmCutWorkDir(ip, dir)
 	if err != nil {
@@ -570,31 +672,6 @@ func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
 	return runThrough("", nil, "ssh", sshArgs(ip, cmd)...)
 }
 
-// vmSendCLI puts this checkout's CLI in the guest and answers with where it landed.
-//
-// It is sent on every run rather than once: the CLI is rebuilt first precisely because the tree it
-// seeds a store for keeps moving, and a stale copy in there would write what the old code wrote.
-func vmSendCLI(ip, id, worktree string, noBuild bool) (string, error) {
-	if _, err := os.Stat(worktree); err != nil {
-		return "", fmt.Errorf("no worktree for task %s (%s missing) — cut one with `amenbo worktree start` first", id, worktree)
-	}
-	if !noBuild {
-		if _, err := runEnv(worktree, buildEnv(), "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
-			return "", fmt.Errorf("build the task's CLI: %w", err)
-		}
-	}
-	bin := taskCLIBin(worktree)
-	if _, err := os.Stat(bin); err != nil {
-		return "", fmt.Errorf("no CLI at %s — drop --no-build so it is built", bin)
-	}
-	guestBin := vmTaskCLIBin(id)
-	scpArgs := append(sshOpts(), bin, vmUser+"@"+ip+":"+guestBin)
-	if _, err := run("", "scp", scpArgs...); err != nil {
-		return "", fmt.Errorf("sending the CLI to %s: %w", vmCloneName, err)
-	}
-	return guestBin, nil
-}
-
 // vmRemoveTaskDevGUI deletes one instance in the guest — the two halves the host teardown takes,
 // and the bound folder that only the guest has.
 //
@@ -613,12 +690,11 @@ func vmRemoveTaskDevGUI(id string) error {
 }
 
 // vmTaskDevGUIPaths lists everything an instance occupies in the guest, in the order teardown
-// removes it — the guest's own reading of taskDevGUIPaths, plus the CLI copy and the bound folder
-// that exist only in there. The two guest-only ones come last because they are the small ones, and
-// the ones whose absence is hardest to notice: a CLI left behind is 29 MB nobody looks for, and a
-// pointer left behind names a store that teardown has just deleted.
+// removes it — the guest's own reading of taskDevGUIPaths, plus the bound folder that exists only in
+// there. The folder comes last because it is the small one, and the one whose absence is hardest to
+// notice: a pointer left behind names a store that teardown has just deleted.
 func vmTaskDevGUIPaths(id string) []string {
-	return append(taskDevGUIPaths(vmGuestHome, macAppsDir, id), vmTaskCLIBin(id), vmTaskWorkDir(id))
+	return append(taskDevGUIPaths(vmGuestHome, macAppsDir, id), vmTaskWorkDir(id))
 }
 
 // vmReclaim removes each of `paths` in the guest that is actually there and reports it. One round
@@ -676,12 +752,8 @@ func vmDevGUISweep(apply bool) error {
 	if err != nil {
 		return err
 	}
-	clis, err := vmListDir(ip, vmGuestHome)
-	if err != nil {
-		return err
-	}
 
-	instances := instancesFrom(bundles, stores, clis, vmGuestHome, macAppsDir, liveIDs)
+	instances := instancesFrom(bundles, stores, vmGuestHome, macAppsDir, liveIDs)
 	if len(instances) == 0 {
 		logf("  no per-task dev GUI in %s", vmCloneName)
 		return nil

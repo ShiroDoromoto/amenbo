@@ -76,8 +76,9 @@ lives.
 | deleted by | nothing — it is permanent | `devtool devgui rm <id>` |
 
 The right-hand column is where it lands on **this machine**. The same instance goes
-into the throwaway VM instead with `make install-gui-dev-vm AMB-T-ID=<id>` — same
-names, same layout, another machine — and every command that addresses it answers
+into the throwaway VM instead with `make install-gui-dev-vm AMB-T-ID=<id>`, or
+built on a CI runner and placed with `devtool devgui install <id> --vm --from-run
+<run id>` — same names, same layout, another machine — and every command that addresses it answers
 for that machine with `--vm`. See [`devgui install`](#devtool-devgui-install-id---vm)
 and [the destination flag](#which-machine-a-command-is-about----vm).
 
@@ -179,11 +180,10 @@ host route has to keep working unchanged; `--vm` is a second destination.
 Only the machine asked changes. The guest layout mirrors this one, so the same
 names, the same paths and the same pid lookup do the work — a listing becomes an
 `ls` over ssh, a removal an `rm -rf`, and the screen tool driven is the copy
-`devtool vm screen` put in there. Two of them cannot be typed in the guest at
-all: the sweep needs `git worktree list`, which only this machine can answer, and
-`cli` runs a build of this checkout.
+`devtool vm screen` put in there. The sweep cannot be typed in the guest at all:
+it needs `git worktree list`, which only this machine can answer.
 
-### `devtool devgui install <id> --vm`
+### `devtool devgui install <id> --vm [--app <path> | --from-run <run id>]`
 
 Puts the task's own dev GUI **in the throwaway VM** instead of on this machine —
 the screen it is driven on, so a verification run does not take this Mac's
@@ -193,7 +193,30 @@ keyboard and mouse:
 make install-gui-dev-vm AMB-T-ID=696     # build it here, put it in there
 devtool devgui install 696 --vm          # put the built bundle in there again
 # /Applications/amenbo (dev 696).app
+
+# or build it on a CI macOS runner, and only place it from here
+gh workflow run devgui-build-manual.yml -f task=696 -f branch=task/696
+devtool devgui install 696 --vm --from-run <run id>
 ```
+
+**The bundle can be built on CI instead of here.** `devgui-build-manual.yml` runs
+the same `make gui-dev AMB-T-ID=<id>` on a macOS runner, over a pushed branch, and
+uploads the `.app` as `devgui-<id>-macos-arm64`. `--from-run` downloads that
+artifact here with `gh run download` and places it; `--app` takes one already
+downloaded, as the `.zip` or unpacked. The artifact is fetched on this machine and
+sent across, so the guest holds neither `gh` nor a token (19.5MB zip: 7.6s to
+download, 0.28s across). Two checks come before the placing:
+
+- **It is this task's bundle** — its name carries the number, and so does every
+  name inside it.
+- **It was built from the worktree's HEAD.** CI embeds the commit it built in
+  the app, and `scripts/verify-gui-front.sh --commit` looks for the worktree's
+  HEAD in there. That stands in for the frontend check the local route makes
+  against `app/dist`, which a build made elsewhere has nothing to compare with.
+  A worktree with uncommitted changes gets a warning: none of them are in it.
+
+The two builds differ only in the header badge: a CI build carries the commit
+and the time it was built, and a local build carries neither.
 
 **One build per id at a time.** The make route runs under a lock named for the id
 (`~/Library/Caches/amenbo-devgui-<id>.lock`), and a second run of the same id stops
@@ -203,9 +226,9 @@ lock on build directory") — so a build asked for twice looks alive from the ou
 while neither side moves. Another id is another worktree and another `target`, and is
 not held up by this. See `scripts/devgui-build-lock.sh`.
 
-**The build stays on the host.** Only the placing moves, so the guest needs
-neither Rust nor node, and the `.app` baked here runs in there unchanged — same
-arch, same OS generation (43MB across in 0.96s, measured).
+**Nothing is built in the guest.** Only the placing happens there, so the guest
+needs neither Rust nor node, and a `.app` baked here or on CI runs in there
+unchanged — same arch, same OS generation (43MB across in 0.96s, measured).
 
 **This machine stays the default destination**, and that route is the Makefile's
 own (`make install-gui-dev AMB-T-ID=<id>`): a clone or a fork with one Mac has no
@@ -247,18 +270,14 @@ command exists, and without it you are asking for the route that has one already
   `devtool devgui cli <id> --vm -- --actor human bind --project <n> --force`. A
   store holding no project at all gets one raised in the folder instead (`init`,
   which binds as it goes) — the same move `make verify INIT=1` makes on its own
-  throwaway store.
-  **No CLI is built for this** — placing a bundle should not wait on a second
-  toolchain run — so a checkout with no debug build yet leaves the folder cut and
-  unbound, and the first `devgui cli --vm` binds it.
+  throwaway store. The bind is made with the CLI the bundle carries
+  (`Contents/MacOS/amenbo-dev-<id>`), so nothing is built or sent for it.
 - **The guest layout mirrors this machine's exactly** (`/Applications` bundle,
   `~/Library/Application Support` store), so what addresses an instance by path
-  reads the same on both sides and only the machine it is asked of changes. Two
-  things the guest holds have no counterpart here: the bound folder — on this
+  reads the same on both sides and only the machine it is asked of changes. One
+  thing the guest holds has no counterpart here: the bound folder — on this
   machine every instance's store is a directory of its own, so a pointer beside
-  one is already one instance's and no other's — and the CLI copy
-  (`/Users/admin/amenbo-cli-<id>`, ~29MB) that `devgui cli --vm` sends across,
-  which a checkout has no need of because it runs its own build in place.
+  one is already one instance's and no other's.
 - **Nothing lands on this machine.** The bundle is read out of the build
   directory, so the host `/Applications` and the host app-data are untouched —
   and `devgui rm` reclaims neither of the guest's halves. Throwing the VM away is
@@ -308,12 +327,13 @@ Details worth knowing:
   task's own GUI is built from the same tree and would carry it forward the
   moment it opened.
 
-`--vm` writes the store of the instance in the guest instead. The same build is
-sent across — the guest holds no toolchain, and the two machines are the same
-arch — and run in there, pointed at that store the same way. It is sent on every
-run, because the reason the CLI is rebuilt first is that the tree it seeds a
-store for keeps moving. It lands in the guest's home as `amenbo-cli-<id>` and is
-reclaimed with the rest of the instance by `devgui rm --vm` and the sweep.
+`--vm` writes the store of the instance in the guest instead, with **the CLI the
+instance's bundle carries** (`Contents/MacOS/amenbo-dev-<id>`), run where it
+already is and pointed at that store the same way. It is a build of the same
+commit as the app, built with the instance's own app-data name, so it also
+introduces itself by the instance's channel. Nothing is built or sent for it, so
+the bundle has to be placed first, and `--no-build` is refused as having nothing
+to skip.
 
 Where it runs is the one place the two routes part: **in the guest it runs in the
 instance's bound folder** (`/Users/admin/amenbo-work-<id>`), not in the store.
@@ -326,8 +346,7 @@ devtool devgui cli 696 --vm -- --actor ai task add --title 'due today' --due tod
 ```
 
 The folder is cut and bound by `devgui install --vm`, and by this command when it
-finds one missing (an instance can be seeded before a bundle is ever put in
-there). It is bound to the store's lowest-numbered project; re-point it with
+finds one missing (a placing that could not bind it reports and carries on). It is bound to the store's lowest-numbered project; re-point it with
 `--actor human bind --project <n> --force`, which lands there like any other
 command run through here.
 
@@ -413,9 +432,8 @@ that reported it reclaimed reads as green while the leftover returns minutes
 later.
 
 `--vm` takes the instance in the guest, the same two halves the same way, plus
-the two the guest alone holds: the CLI copy and the bound folder. A CLI left
-behind is ~29MB nobody goes looking for, and a pointer left behind would name a
-store that has just been deleted. Throwing the VM away (`devtool vm rm`) takes
+the one the guest alone holds: the bound folder. A pointer left behind would name
+a store that has just been deleted. Throwing the VM away (`devtool vm rm`) takes
 every instance in there at once, so this is for reclaiming one while the clone
 goes on being used.
 
@@ -440,10 +458,7 @@ a store behind under a number nobody will type again.
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
 
-`--vm` sweeps the guest instead. There the CLI copy counts as a half of its own:
-`devgui cli --vm` sends one before any bundle is built, and teardown takes the
-bundle and the store together, so an instance whose only trace is that copy is
-one nothing else in the guest names. An orphan's bound folder still goes with
+`--vm` sweeps the guest instead. An orphan's bound folder still goes with
 its halves without being one — a folder holding one JSON file is not evidence of
 a dev GUI. And the sweep **can only be asked from here**: what makes an instance
 live is a checkout, and the checkouts are on this machine.

@@ -60,7 +60,7 @@ fn cut(carry: &Carry<'_, '_>) -> Result<Carried> {
 
 /// **The repository the task is worked in**: the one its own folder is in, or else the one every
 /// folder of its project is in.
-fn repository(conn: &Connection, project_id: i64, at: Option<i64>) -> Result<PathBuf> {
+pub(super) fn repository(conn: &Connection, project_id: i64, at: Option<i64>) -> Result<PathBuf> {
     let folders: Vec<_> = crate::overview::bound_folders(conn)?
         .into_iter()
         .filter(|f| f.project_id == project_id)
@@ -84,7 +84,7 @@ fn repository(conn: &Connection, project_id: i64, at: Option<i64>) -> Result<Pat
 }
 
 /// A refusal from the git side, as one sentence.
-fn refused(refusal: Refusal) -> Error {
+pub(super) fn refused(refusal: Refusal) -> Error {
     Error::invalid(match refusal {
         Refusal::NoGit => "there is no git on this machine to cut a worktree with".to_string(),
         Refusal::NotARepository(why) => format!("the task's folder is in no repository: {why}"),
@@ -96,21 +96,14 @@ fn refused(refusal: Refusal) -> Error {
     })
 }
 
+/// A remote and a clone of it on disk, for the built-ins that drive git to be tested against.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::{ActorKind, Automation, AutomationPictureOwner, AutomationRun};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
-    use crate::ops::automation_builtin::action;
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
-    use crate::ops::automation_report::Next;
-    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
-    use crate::ops::automation_step::{open, Opened};
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
+pub(super) mod fixture {
     use crate::store_engine::WriteTx;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    fn git(dir: &Path, args: &[&str]) -> String {
+    pub(crate) fn git(dir: &Path, args: &[&str]) -> String {
         let out = Command::new("git")
             .current_dir(dir)
             .args(["-c", "user.name=Alice", "-c", "user.email=alice@example.com", "-c", "init.defaultBranch=main"])
@@ -124,7 +117,7 @@ mod tests {
     /// A remote with one commit, a clone of it — the project's folder — and a second commit that lands
     /// on the remote after the clone, so the clone's own `main` is one behind. Answers the clone and the
     /// newest commit on the remote.
-    fn repositories(tag: &str) -> (PathBuf, String) {
+    pub(crate) fn repositories(tag: &str) -> (PathBuf, String) {
         let dir = amenbo_scratch::scratch(tag);
         let work = dir.join("work");
         std::fs::create_dir_all(&work).expect("mkdir");
@@ -137,13 +130,28 @@ mod tests {
         (dir.join("app"), git(&work, &["rev-parse", "HEAD"]))
     }
 
-    fn bind(tx: &WriteTx<'_>, project: i64, dirs: &[&Path]) {
+    pub(crate) fn bind(tx: &WriteTx<'_>, project: i64, dirs: &[&Path]) {
         let mut reg = crate::binding::Registry::default();
         for dir in dirs {
             reg.project_dirs.entry(project).or_default().insert(dir.to_string_lossy().into_owned());
         }
         crate::overview::write_bindings(tx, &reg).expect("bind");
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{ActorKind, Automation, AutomationPictureOwner, AutomationRun};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
+    use crate::ops::automation_builtin::action;
+    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_report::Next;
+    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
+    use crate::ops::automation_step::{open, Opened};
+    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
+    use super::fixture::{bind, git, repositories};
+    use crate::store_engine::WriteTx;
 
     /// Take a task, cut its worktree, and go on to an agent's step.
     fn picture(tx: &WriteTx<'_>, project: i64) -> Automation {

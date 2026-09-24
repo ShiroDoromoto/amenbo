@@ -39,9 +39,10 @@ import type { AutomationActionCardDto } from "../bindings/bindings";
 
 /**
  * **The row carries the note's first line, and no more.** It is what tells two actions of like names
- * apart, which one line does; the whole of it is on the build screen a press on the row opens.
+ * apart, which one line does; the whole of it is on the build screen a press on the row opens. The
+ * automations tab's rows carry an automation's notes the same way (`./AutomationsScreen`).
  */
-function firstLine(note: string): string {
+export function firstLine(note: string): string {
   return note.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
 }
 

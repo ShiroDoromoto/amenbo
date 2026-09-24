@@ -65,7 +65,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
-  return { id: 7, name: "Morning round", placements: 3, archived: false, ...over };
+  return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, ...over };
 }
 
 function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
@@ -157,6 +157,14 @@ describe("the automations screen", () => {
     expect(rows[0]).toContain(tf("auto.stepCount", { count: 3 }));
     expect(rows[0]).toContain(t("auto.notReady"));
     expect(rows[1]).toContain(t("auto.archived"));
+  });
+
+  it("puts the first line of an automation's notes under its name, and nothing where there are none", async () => {
+    hoisted.automations = [card({ notes: "\n  Take one from the inbox and write it.  \nThen show it." }), card({ id: 8 })];
+    await render();
+    const rows = [...container.querySelectorAll(".autolist__row")];
+    expect(rows[0].querySelector(".auto__note")?.textContent).toBe("Take one from the inbox and write it.");
+    expect(rows[1].querySelector(".auto__note")).toBeNull();
   });
 
   it("leads each row with the automation's ID, the number the terminal names it by", async () => {

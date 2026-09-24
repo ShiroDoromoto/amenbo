@@ -172,21 +172,25 @@ impl Driver<'_> {
                 ])?;
                 Ok(Outcome::action(format!("a placement of library action {action} opens step {step} first")))
             }
-            // **The picture.** What stands on it is a placement of an action, never a prompt.
+            // **The picture.** What stands on it is a placement of an action, never a prompt — a
+            // library action, or one of Amenbo's built-ins named by its key.
             "place-add" => {
                 let automation = self.resolve(with)?;
-                let action = self.resolve_key(with, "action")?;
+                let (flag, placed, what) = match with.get("builtin").and_then(|v| v.as_str()) {
+                    Some(key) => ("--builtin", key.to_string(), "built-in"),
+                    None => ("--action", self.resolve_key(with, "action")?.to_string(), "library action"),
+                };
                 let args = [
                     "automation".into(),
                     "place-add".into(),
                     automation.to_string(),
-                    "--action".into(),
-                    action.to_string(),
+                    flag.into(),
+                    placed.clone(),
                     "--json".into(),
                 ];
                 let id = self.bound_id(&args, "automation_placement", bind)?;
                 Ok(Outcome::action(format!(
-                    "placed library action {action} on automation {automation} (placement {id})"
+                    "placed {what} {placed} on automation {automation} (placement {id})"
                 )))
             }
             // Who carries one step out at one placement.

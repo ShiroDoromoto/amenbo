@@ -1,0 +1,156 @@
+name: check-branch-manual
+
+# Run one branch's targeted tests and `make verify` on a Linux runner, instead of on the machine
+# the session is sitting at. Several sessions share one Mac, and the first build in a fresh worktree
+# is what they fight over: `target/` starts empty per worktree, so the first targeted test run costs
+# about 780 CPU-seconds and the first `make verify` about 439. A run here costs minutes of waiting
+# and none of that machine.
+#
+# It is not a gate. The merge gate is `_ci.yml`, reached through `ci-change.yml`; this answers a
+# question the session asked while it is still working, and nothing requires it. Linux alone: the
+# macOS-only branches are read by the screen check in the VM and by the nightly `full` leg.
+#
+# Dispatch it from main and name the branch — the workflow is read from the ref it is dispatched on,
+# so dispatching on the branch would also work, but only once the branch carries this file:
+#
+#   gh workflow run check-branch-manual.yml -f branch=task/<id> \
+#     -f test='cargo nextest run -p amenbo-core some_filter'
+#   gh workflow run check-branch-manual.yml -f branch=task/<id> \
+#     -f verify_args='task list --json' -f verify_init=true
+#
+# The answer is the log (`gh run view <run> --log`). With `verify_keep` the two throwaway dirs —
+# the store's home and the CWD — are uploaded as an artifact, which is what `KEEP=1` meant on a
+# machine where the dirs outlived the run.
+#
+# Push the branch before opening its PR if the PR's own CI is not wanted yet: `ci-change.yml` takes a
+# `push` on main only, so a push to a branch with no PR starts nothing but what is dispatched here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: the branch to check out (e.g. task/1234)
+        type: string
+        required: true
+      test:
+        description: the test command, run from the repo root (e.g. cargo nextest run -p amenbo-core some_filter)
+        type: string
+        required: false
+        default: ''
+      verify_args:
+        description: ARGS for make verify — one CLI command, quoted as at a prompt
+        type: string
+        required: false
+        default: ''
+      verify_script:
+        description: the lines of a SCRIPT for make verify — one CLI command per line (exclusive with verify_args)
+        type: string
+        required: false
+        default: ''
+      verify_init:
+        description: INIT=1 — raise a store in the throwaway CWD first (what --actor ai needs)
+        type: boolean
+        default: false
+      verify_keep:
+        description: upload the throwaway home and CWD as an artifact
+        type: boolean
+        default: false
+
+# The run is named after the branch, so a session finds its own run in a list several sessions feed.
+run-name: check ${{ inputs.branch }}
+
+# No concurrency group. Two dispatches on one branch are often two different questions — a test and a
+# verify, asked one after the other — and a group would cancel or drop the earlier one. Runs of
+# different branches never wait on each other either way.
+
+permissions:
+  contents: read
+
+# The pair every cargo line has to be told, as in `_ci.yml`: nothing built here is distributed, and
+# the endpoint is loopback on a port nothing listens on. The Makefile's `?=` takes the same values.
+env:
+  AMENBO_APP_NAME: amenbo
+  AMENBO_LATEST_JSON_URL: http://127.0.0.1:1/latest.json
+
+jobs:
+  check:
+    name: check ${{ inputs.branch }}
+    runs-on: ubuntu-latest
+    # A targeted run is one crate's build and a filter over its tests. Past half an hour it is a hang,
+    # and the default of six hours would hold a runner the other sessions are queued for.
+    timeout-minutes: 30
+    steps:
+      - name: Refuse a run that asks nothing
+        if: ${{ inputs.test == '' && inputs.verify_args == '' && inputs.verify_script == '' }}
+        run: |
+          echo "✗ check-branch: give test, verify_args or verify_script — there is nothing to run" >&2
+          exit 1
+
+      - name: Refuse ARGS and SCRIPT together
+        if: ${{ inputs.verify_args != '' && inputs.verify_script != '' }}
+        run: |
+          echo "✗ check-branch: verify_args and verify_script name different runs — give one of them" >&2
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch }}
+
+      # rust-toolchain.toml pins the channel and components; rustup installs them on the first cargo
+      # invocation, which is what this step is for — rust-cache below reads the rustc version.
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      # Main's entry, read and not written — the argument is at the head of `_ci.yml`. A branch's own
+      # entry could be read by nobody else, and would crowd out one main still uses.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+          save-if: false
+
+      - name: Install cargo-nextest
+        if: ${{ inputs.test != '' }}
+        uses: taiki-e/install-action@v2.87.13
+        with:
+          tool: cargo-nextest
+
+      # The command is the input, run as typed. It reaches the shell through the environment rather
+      # than through the expression, so what it says is read as a command once and not spliced into
+      # the script around it.
+      - name: Test
+        if: ${{ inputs.test != '' }}
+        env:
+          TEST: ${{ inputs.test }}
+        run: |
+          echo "→ $TEST"
+          eval "$TEST"
+
+      # `!cancelled()`: a red test does not skip the verify asked for beside it, so one run answers
+      # both questions. TMPDIR puts the two throwaway dirs the script makes under a path this job
+      # knows, which is what the upload below reads — the script itself only prints them.
+      - name: Verify
+        if: ${{ !cancelled() && (inputs.verify_args != '' || inputs.verify_script != '') }}
+        env:
+          ARGS: ${{ inputs.verify_args }}
+          SCRIPT_LINES: ${{ inputs.verify_script }}
+          INIT: ${{ inputs.verify_init && '1' || '' }}
+          KEEP: ${{ inputs.verify_keep && '1' || '' }}
+        run: |
+          export TMPDIR="$RUNNER_TEMP/verify"
+          mkdir -p "$TMPDIR"
+          if [ -n "$SCRIPT_LINES" ]; then
+            printf '%s\n' "$SCRIPT_LINES" > "$RUNNER_TEMP/verify.script"
+            make verify SCRIPT="$RUNNER_TEMP/verify.script" INIT="$INIT" KEEP="$KEEP"
+          else
+            make verify ARGS="$ARGS" INIT="$INIT" KEEP="$KEEP"
+          fi
+
+      - name: Upload the throwaway home and CWD
+        if: ${{ !cancelled() && inputs.verify_keep }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-dirs
+          path: ${{ runner.temp }}/verify
+          include-hidden-files: true
+          if-no-files-found: warn

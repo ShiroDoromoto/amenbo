@@ -300,6 +300,34 @@ describe("the panel of one spot", () => {
     expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "which", '{"assignee":["me-ai"]}');
   });
 
+  it("says the order as a sentence, and writes it beside the parts it orders", async () => {
+    // The order has no label of its own: it is the end of the sentence the rows begin (`AMB-T-5412`).
+    const one = detail({
+      placements: [spot({
+        settings: [{ name: "which", kind: "taskfilter", required: true, value: '{"status":["todo"]}' }],
+      })],
+    });
+    await render({ automation: one, placementId: 1 });
+    const list = container.querySelector<HTMLSelectElement>(".autostep__rows select")!;
+    // An answer that names no order is taken highest priority first, and the list says so.
+    expect(list.value).toBe("priority");
+    expect(list.disabled).toBe(false);
+    expect(list.closest(".autostep__row")?.textContent).toContain(t("auto.step.sort.priority"));
+    await act(async () => {
+      list.value = "due";
+      list.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "which", '{"status":["todo"],"sort":"due"}');
+  });
+
+  it("holds the order back while no row is pressed, there being nothing to order", async () => {
+    const one = detail({
+      placements: [spot({ settings: [{ name: "which", kind: "taskfilter", required: true }] })],
+    });
+    await render({ automation: one, placementId: 1 });
+    expect(container.querySelector<HTMLSelectElement>(".autostep__rows select")!.disabled).toBe(true);
+  });
+
   it("fills an input from what fits, and empties it back to nothing reaching it", async () => {
     const one = detail({
       placements: [

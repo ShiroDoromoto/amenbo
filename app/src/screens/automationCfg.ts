@@ -31,6 +31,21 @@ export const FILTER_ROWS: readonly { key: string; single: boolean; values: reado
   { key: "ready", single: true, values: ["yes", "no"] },
 ];
 
+/**
+ * The orders a task filter can take its tasks in, as `task list --sort` spells them, in the order the
+ * list draws them.
+ *
+ * **The first is what an answer that names none is taken in** (`amenbo_core::ops::automation_step::
+ * TASKFILTER_SORT_DEFAULT`), so it is also what the list shows for one. These are the orders a person
+ * picking the next task to work reaches for; `task list --sort` takes more, and an answer written with
+ * one of those on the command line is shown as it is rather than put back to the first (`sortChoices`).
+ */
+export const FILTER_SORTS: readonly string[] = ["priority", "due", "created"];
+
+/** The key a task filter's answer keeps its order under (`TASKFILTER_SORT_KEY`). It is not a part: it
+ *  says which task comes first, not which are in. */
+const SORT_KEY = "sort";
+
 /** What a step's settings say once the declaration and the answer are read together. */
 export function isAnswered(cfg: AutomationCfgDto): boolean {
   return cfg.value !== undefined && cfg.value !== "";
@@ -64,11 +79,26 @@ export function readFilter(value: string | undefined): TaskFilter {
   if (one === null || typeof one !== "object" || Array.isArray(one)) return {};
   const out: Record<string, string[]> = {};
   for (const [key, part] of Object.entries(one as Record<string, unknown>)) {
-    if (!Array.isArray(part)) continue;
+    if (key === SORT_KEY || !Array.isArray(part)) continue;
     const values = part.filter((v): v is string => typeof v === "string");
     if (values.length > 0) out[key] = values;
   }
   return out;
+}
+
+/** The order a task filter answer takes its tasks in, or the first of `FILTER_SORTS` where it names
+ *  none — which is the order core runs such an answer in. */
+export function readSort(value: string | undefined): string {
+  const one = parsed(value);
+  if (one === null || typeof one !== "object" || Array.isArray(one)) return FILTER_SORTS[0];
+  const sort = (one as Record<string, unknown>)[SORT_KEY];
+  return typeof sort === "string" && sort !== "" ? sort : FILTER_SORTS[0];
+}
+
+/** The orders the list offers for an answer taken in `sort`: the usual ones, and `sort` itself where
+ *  it is none of them — written on the command line, and still the order the step runs in. */
+export function sortChoices(sort: string): readonly string[] {
+  return FILTER_SORTS.includes(sort) ? FILTER_SORTS : [...FILTER_SORTS, sort];
 }
 
 /** What a press on one row does: it takes the value up, or lets it go. */
@@ -97,9 +127,18 @@ export function writeNumber(value: string): string | null {
   return Number.isFinite(n) ? JSON.stringify(n) : null;
 }
 
-/** A task filter on its way to core, or `null` where nothing is pressed on any row. */
-export function writeFilter(filter: TaskFilter): string | null {
+/**
+ * A task filter on its way to core, or `null` where nothing is pressed on any row.
+ *
+ * **The order goes with it on every write**, so a press on a row does not take away an order the
+ * answer was given — on the list beside the rows, or with `--sort` on the command line. The default
+ * order is not written: an answer that names none is taken in it, and one that did would stop
+ * following it.
+ */
+export function writeFilter(filter: TaskFilter, sort: string = FILTER_SORTS[0]): string | null {
   const parts = Object.entries(filter).filter(([, values]) => values.length > 0);
   if (parts.length === 0) return null;
-  return JSON.stringify(Object.fromEntries(parts));
+  const out: Record<string, unknown> = Object.fromEntries(parts);
+  if (sort !== FILTER_SORTS[0]) out[SORT_KEY] = sort;
+  return JSON.stringify(out);
 }

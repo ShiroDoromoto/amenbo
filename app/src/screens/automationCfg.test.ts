@@ -5,14 +5,18 @@
 // takes one answer replaces rather than collects**, `ready` being a yes or a no; **a row emptied
 // leaves no key behind**, so a filter nobody pressed anything on is unanswered rather than an object
 // with empty lists in it; and **an answer nothing can read draws as nothing**, because a definition
-// hand-written from the command line can hold one.
+// hand-written from the command line can hold one. **The order an answer is taken in survives a press
+// on a row** (`AMB-T-5412`): it is kept beside the parts, and a write that dropped it would put an
+// order written on the command line back to the default without anybody choosing that.
 import { describe, expect, it } from "vitest";
 import {
   FILTER_ROWS,
   pressed,
   readFilter,
   readNumber,
+  readSort,
   readText,
+  sortChoices,
   writeFilter,
   writeNumber,
   writeText,
@@ -64,6 +68,28 @@ describe("a setting's answer", () => {
     const off = pressed({ status: ["todo"] }, "status", "todo", false);
     expect(off).toEqual({});
     expect(writeFilter(off)).toBeNull();
+  });
+
+  it("keeps the order beside the parts, and leaves the default unwritten", () => {
+    const filter = { status: ["todo"] };
+    expect(writeFilter(filter, "due")).toBe('{"status":["todo"],"sort":"due"}');
+    // An answer that names no order is taken highest priority first, so writing that one would only
+    // stop the answer following the default.
+    expect(writeFilter(filter, "priority")).toBe('{"status":["todo"]}');
+    // The order is not a part: it says which task comes first, not which are in.
+    expect(readFilter('{"status":["todo"],"sort":"due"}')).toEqual(filter);
+    expect(readSort('{"status":["todo"],"sort":"due"}')).toBe("due");
+    expect(readSort('{"status":["todo"]}')).toBe("priority");
+    expect(readSort(undefined)).toBe("priority");
+  });
+
+  it("keeps an order written on the command line through a press on a row", () => {
+    const was = '{"status":["todo"],"sort":"-created"}';
+    const next = writeFilter(pressed(readFilter(was), "ready", "yes", true), readSort(was));
+    expect(next).toBe('{"status":["todo"],"ready":["yes"],"sort":"-created"}');
+    // And the list offers it, so it is shown as the order it is rather than as the first of the usual.
+    expect(sortChoices("-created")).toEqual(["priority", "due", "created", "-created"]);
+    expect(sortChoices("due")).toEqual(["priority", "due", "created"]);
   });
 
   it("draws the three rows a person reaches for first, premises taking one answer", () => {

@@ -1889,6 +1889,10 @@ pub enum AutomationStoppedReason {
     /// A step left through a way out the picture wires to "stop and call a person" — an ending the
     /// author of the automation chose, rather than one the machinery ran into.
     Halted,
+    /// The run went on — to the next task, or to its end — with the task it had taken still in progress
+    /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
+    /// check missed a line: the machinery's fault, not the author's and not the agent's.
+    LeftTaskOpen,
 }
 
 impl AutomationStoppedReason {
@@ -1900,6 +1904,7 @@ impl AutomationStoppedReason {
             AutomationStoppedReason::NoInput => "no_input",
             AutomationStoppedReason::NoWayOn => "no_way_on",
             AutomationStoppedReason::Halted => "halted",
+            AutomationStoppedReason::LeftTaskOpen => "left_task_open",
         }
     }
 
@@ -1911,6 +1916,7 @@ impl AutomationStoppedReason {
             "no_input" => Some(AutomationStoppedReason::NoInput),
             "no_way_on" => Some(AutomationStoppedReason::NoWayOn),
             "halted" => Some(AutomationStoppedReason::Halted),
+            "left_task_open" => Some(AutomationStoppedReason::LeftTaskOpen),
             _ => None,
         }
     }

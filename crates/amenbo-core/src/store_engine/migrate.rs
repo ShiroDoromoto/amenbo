@@ -993,7 +993,66 @@ pub const STEPS: &[Step] = &[
         // no build before this one had any.
         apply: Apply::Custom(mark_the_builtins),
     },
+    Step {
+        to: 69,
+        name: "admit left_task_open as a reason a run failed",
+        apply: Apply::Custom(admit_the_run_that_left_its_task_open),
+    },
 ];
+
+/// v69: `automation_run.stopped_reason` admits `left_task_open` (`AMB-D-967`).
+///
+/// A run that goes on — to its next task, or to its end — with the task it took still in progress is
+/// failed with a reason of its own ([`crate::model::AutomationStoppedReason::LeftTaskOpen`]). The value
+/// is new with this build, so no row can be carrying it and nothing is written to the rows.
+///
+/// **This is v52's procedure, copied rather than called** — the reasons [`admit_rejected_task_status`]
+/// gives at length.
+fn admit_the_run_that_left_its_task_open(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from v60 on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', \
+                          'no_way_on', 'halted'))";
+    /// The same set with the reason this step admits.
+    const WIDE: &str = "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', \
+                        'no_way_on', 'halted', 'left_task_open'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_run'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(WIDE) || (!declared.contains(NARROW) && declared.contains("'left_task_open'")) {
+        // Already wide: a store born from a registry that carries the value, stamped back to an
+        // earlier version. What is read is the value, not this step's own spelling of the set.
+        return Ok(());
+    }
+    if !declared.contains(NARROW) {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation_run",
+            expected: NARROW,
+        });
+    }
+    let widened = declared.replace(NARROW, WIDE);
+
+    let before = column_names(ctx.tx, "automation_run")?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_run'",
+        [&widened],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+    // statement sees the widened `CHECK` instead of the one this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(ctx.tx, "automation_run")?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation_run",
+            expected: NARROW,
+        });
+    }
+    Ok(())
+}
 
 /// v68: the column that marks a built-in, on the library action, the step and a run's copy of it.
 ///
@@ -1876,7 +1935,9 @@ fn say_how_a_run_ended(ctx: &Ctx<'_>) -> Result<()> {
         [],
         |r| r.get(0),
     )?;
-    if !(declared.contains(NEW_STATUS) && declared.contains(NEW_REASON)) {
+    // Already rewritten is read off the values, not this step's spelling of the reason set: the
+    // registry's set has moved on since (v69 widens it), and a store born from it carries the wider one.
+    if !(declared.contains(NEW_STATUS) && declared.contains("'halted'")) {
         // Not already rewritten: a store born from a registry that carries the new sets, stamped back
         // to an earlier version, is the one that arrives here with nothing to rewrite.
         for expected in [OLD_STATUS, OLD_REASON] {
@@ -8595,6 +8656,43 @@ mod tests {
             .conn()
             .execute("UPDATE automation_run SET stopped_reason = 'halted' WHERE id = 4", [])
             .expect("the reason a halt now writes goes in");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v69 in full: the reason set admits `left_task_open`, and the reasons already written are kept.
+    #[test]
+    fn the_run_that_left_its_task_open_gets_a_reason_the_column_accepts() {
+        let dir = scratch("run-left-task-open");
+        let engine = store_at(&dir, 68);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, stopped_reason) VALUES
+                     (1, 1, 1, 'failed', 'halted');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(69), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 69);
+        let kept: String = engine
+            .conn()
+            .query_row("SELECT stopped_reason FROM automation_run WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kept, "halted", "a reason already written stays");
+        engine
+            .conn()
+            .execute("UPDATE automation_run SET stopped_reason = 'left_task_open' WHERE id = 1", [])
+            .expect("the reason a run that went on with its task open writes goes in");
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE automation_run SET stopped_reason = 'gave_up' WHERE id = 1", [])
+                .is_err(),
+            "and the set is still closed",
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

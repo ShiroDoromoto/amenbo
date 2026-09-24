@@ -116,7 +116,19 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// completed left its task wherever its steps put it, which is the outcome somebody asked for; a run
 /// that was cut off left it reserved by nobody, and a task held by a run that is gone is one no session
 /// will ever pick up.
+///
+/// **A run does not complete with its task still in progress** (`AMB-D-967`). Reaching the end of the
+/// picture that way means nothing closed the task, and a completed run would leave it reserved by
+/// nobody. It fails instead, with [`AutomationStoppedReason::LeftTaskOpen`], and the task is handed back
+/// as any failure's is.
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
+    let ending = if ending == Ending::Completed
+        && left_open(tx, read::automation_run_task_last(tx.conn(), before.id)?.as_ref())?
+    {
+        Ending::Failed(AutomationStoppedReason::LeftTaskOpen)
+    } else {
+        ending
+    };
     let now = Timestamp::now();
     let mut after = before.clone();
     after.status = ending.status();
@@ -131,6 +143,16 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
         hand_the_task_back(tx, &after, stretch.as_ref(), ending)?;
     }
     Ok(Ended { run: after })
+}
+
+/// **Whether a stretch's task is still in progress** — reserved by the run and not closed by anything
+/// since. A stretch with no task in it, or none at all, has nothing left open.
+///
+/// Asked where the run is about to leave the stretch behind: at its end ([`ended`]) and where a step
+/// opens the next one ([`crate::ops::automation_step::open`]).
+pub fn left_open(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result<bool> {
+    let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(false) };
+    Ok(read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress))
 }
 
 /// Close the stretch the run was in, and answer which one it was. A stretch already closed is left
@@ -259,6 +281,9 @@ fn why(ending: Ending) -> &'static str {
         }
         Ending::Failed(AutomationStoppedReason::NoWayOn) => {
             "An automation run failed: nothing was left for it to open."
+        }
+        Ending::Failed(AutomationStoppedReason::LeftTaskOpen) => {
+            "An automation run failed: it went on without closing the task it had taken."
         }
         Ending::Failed(AutomationStoppedReason::Halted) => {
             "An automation run stopped to call a person: a step left through a way out that asks for one."
@@ -537,6 +562,7 @@ mod tests {
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }
 
@@ -772,18 +798,88 @@ mod tests {
             let task = a_task_in_hand(tx, p.project, first.run_step.id);
             done(tx, first.run_step.id, None, "Looked at it.").expect("done");
             let second = opened(tx, &run, &p.second);
+            crate::ops::task::set_status(tx, task, TaskStatus::Blocked).expect("the step parks it");
             done(tx, second.run_step.id, None, "Fixed it.").expect("done");
 
             assert_eq!(status_of(tx, run.id), AutomationRunStatus::Completed);
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
-                Some(TaskStatus::InProgress),
+                Some(TaskStatus::Blocked),
                 "the outcome is what the steps made of it, not what the ending does to it",
             );
             assert!(
                 comments_on(tx, task).is_empty(),
                 "nothing went wrong, so there is nothing to tell anybody",
             );
+        });
+    }
+
+    /// **A run does not complete with its task still in progress** (`AMB-D-967`). It fails with a
+    /// reason of its own, and the task is handed back as any failure's is — to `todo`, with a line, and
+    /// with the assignee it had: this is the machinery's fault, not a question for a person.
+    #[test]
+    fn a_run_that_reaches_the_end_with_its_task_in_progress_fails() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            let assignee = read::task(tx.conn(), task).expect("read").expect("task").assignee_kind;
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+            let second = opened(tx, &run, &p.second);
+            done(tx, second.run_step.id, None, "Fixed it.").expect("done");
+
+            let after = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(after.status, AutomationRunStatus::Failed);
+            assert_eq!(after.stopped_reason, Some(AutomationStoppedReason::LeftTaskOpen));
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Todo));
+            let back = read::task(tx.conn(), task).expect("read").expect("task");
+            assert_eq!(back.assignee_kind, assignee, "nobody is called");
+            let said = comments_on(tx, task);
+            assert_eq!(said.len(), 1, "{said:?}");
+            assert!(said[0].contains("without closing the task"), "{said:?}");
+        });
+    }
+
+    /// **A step that takes a fresh task is not opened while the one before is in progress**
+    /// (`AMB-D-967`): the run fails there, and the task before is the one handed back.
+    #[test]
+    fn a_run_that_goes_for_the_next_task_with_the_last_in_progress_fails() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = automation::add(
+                tx,
+                project,
+                NewAutomation { name: "回し続ける".into(), ..Default::default() },
+            )
+            .expect("add automation");
+            let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
+            let (_, second) = mk_placed(tx, &automation, "直す", "fix", "claude");
+            mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+            let on = crate::model::AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None)
+                .expect("onward");
+            automation::edge_add(tx, on, second.id, None, EdgeTarget::Go(first.id), None)
+                .expect("round again");
+            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+
+            let run = a_run(tx, &automation);
+            let step = opened(tx, &run, &first);
+            let task = a_task_in_hand(tx, project, step.run_step.id);
+            done(tx, step.run_step.id, None, "Looked at it.").expect("done");
+            let fixing = opened(tx, &run, &second);
+            done(tx, fixing.run_step.id, None, "Fixed it.").expect("done");
+
+            match open(tx, run.id, def_of(tx, &run, &first).id, None).expect("open") {
+                Opened::LeftTaskOpen { run: stopped } => {
+                    assert_eq!(stopped.status, AutomationRunStatus::Failed);
+                    assert_eq!(stopped.stopped_reason, Some(AutomationStoppedReason::LeftTaskOpen));
+                }
+                other => panic!("the next task is not taken with the last open: {other:?}"),
+            }
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Todo));
+            let walked = read::automation_run_steps_of(tx.conn(), run.id).expect("steps");
+            assert_eq!(walked.len(), 2, "nothing was opened for the step that would have taken one");
         });
     }
 
@@ -1104,6 +1200,7 @@ mod tests {
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }
 

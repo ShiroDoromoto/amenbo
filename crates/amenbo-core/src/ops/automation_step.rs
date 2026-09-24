@@ -636,6 +636,11 @@ fn handing_back(exits: &[RunDefExit]) -> String {
         "Then finish with `{cli} automation step-done --exit <id> --report -`, the id being the way out's \
          from the list above. A report is owed whichever way out you take."
     ));
+    lines.push(String::new());
+    lines.push(format!(
+        "If you close the task with `{cli} task done --report`, that report is what the task carries. \
+         The one you give `step-done` stays on the run's history."
+    ));
     lines.join("\n")
 }
 

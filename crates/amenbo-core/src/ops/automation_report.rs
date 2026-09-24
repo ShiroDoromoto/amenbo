@@ -353,21 +353,31 @@ pub fn done(
         record::automation_run_step(&ended),
     )?;
 
+    // A step that closed its task with `task done --report` has already said its piece there; a closed
+    // task is read by nobody, and the report stays on the run's history (`AMB-D-963`).
     if def.report_to_task && !report.trim().is_empty() {
         if let Some(task_id) = stretch.as_ref().and_then(|s| s.task_id) {
-            crate::ops::comment::add_report_comment(
-                tx,
-                task_id,
-                ActorKind::Ai,
-                report,
-                ended.id,
-            )?;
+            if !closed(tx, task_id)? {
+                crate::ops::comment::add_report_comment(
+                    tx,
+                    task_id,
+                    ActorKind::Ai,
+                    report,
+                    ended.id,
+                )?;
+            }
         }
     }
     if !took_a_task {
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
     }
     whats_next(tx, &def, &ended, taken.id)
+}
+
+/// Is the task closed, so that a line on it would be read by nobody? The same test core refuses a
+/// comment by, so the run and the refusal cannot drift apart.
+pub(crate) fn closed(tx: &WriteTx<'_>, task_id: i64) -> Result<bool> {
+    Ok(read::task_status(tx.conn(), task_id)?.is_some_and(|status| status.is_closed()))
 }
 
 /// The refusal of a way out the step does not declare, carrying the ones it does as they are typed, so
@@ -979,6 +989,36 @@ mod tests {
                 Some(step.run_step.id),
                 "which step of which run carried it",
             );
+        });
+    }
+
+    /// **A step that closed its task still finishes, and leaves no line on it** (`AMB-D-963`).
+    ///
+    /// The agent closes the task with `task done --report` inside the step; the step's own report then
+    /// goes to the run's history alone, and `step-done` must not fail on the task being closed.
+    #[test]
+    fn a_step_that_closed_its_task_finishes_without_a_line_on_it() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            automation::step_update(tx, p.first.id, None, None, None, None, Some(true), None)
+                .expect("report to task");
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task(tx, p.project, "閉じる");
+            take(tx, step.run_step.id, task.id).expect("take");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("the agent closes it");
+
+            done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
+                .expect("the step finishes all the same");
+
+            assert!(
+                read::task_comment_ids(tx.conn(), task.id).expect("comments").is_empty(),
+                "a closed task is read by nobody",
+            );
+            let ended = read::automation_run_step(tx.conn(), step.run_step.id)
+                .expect("read")
+                .expect("the step");
+            assert_eq!(ended.report, "Looked at it.", "the report stays on the run's history");
         });
     }
 

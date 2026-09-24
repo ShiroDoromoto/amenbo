@@ -2171,7 +2171,7 @@ pub enum AutomationCmd {
         /// close the run
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// end the run failed (halted) and call a person
+        /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task (left out: 10, the standing limit) — counted only
@@ -2196,7 +2196,7 @@ pub enum AutomationCmd {
         /// close the run
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// end the run failed (halted) and call a person
+        /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task
@@ -2275,7 +2275,7 @@ pub enum AutomationCmd {
         run: i64,
     },
     /// Stop a run, which ends it canceled: hand the task it was working back, and leave a comment on
-    /// the task saying how far it got
+    /// the task saying how far it got — unless the task is closed (done or rejected), which gets none
     Stop {
         /// run id
         run: i64,

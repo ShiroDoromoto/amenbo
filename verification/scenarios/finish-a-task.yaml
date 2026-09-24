@@ -6,10 +6,12 @@
 id: finish-a-task
 title: A task ends either carried out or decided against, the two read apart, and a closed task can be reopened
 description: >
-  Finish a task and read the ending back three ways — the status, the completed flag the listings
-  filter on, and its disappearance from where fresh work is taken. Reopen it and watch all three come
-  back. Then end the other task the other way, with the reason the command insists on, and read that
-  the store closed it without claiming it was carried out.
+  Finish a task with its report and read the ending back four ways — the report on its timeline, the
+  status, the completed flag the listings filter on, and its disappearance from where fresh work is
+  taken. Reopen it and watch the last three come back. Then end the other task the other way, with
+  the reason the command insists on, and read that the store closed it without claiming it was
+  carried out. On the screen, finish a task through the dialog that asks for its report, and read the
+  report on its timeline.
 steps_cli:
   - type: action
     domain: task
@@ -31,6 +33,17 @@ steps_cli:
     op: done
     with:
       target: done_one
+      report: SCENARIO — carried out, and here is what was done
+
+  # The report is written in the same move that closes the task, so it is on the timeline the moment
+  # the task is done — a closed task is read by nobody afterwards, and a report written later has no
+  # reader.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: done_one
+      text: SCENARIO — carried out, and here is what was done
 
   - type: assert
     domain: task
@@ -159,3 +172,42 @@ steps_cli:
     with:
       target: dropped
       text: SCENARIO — decided against, and here is why
+
+# The same ending from the screen. Picking done on the status pulldown does not close the task by
+# itself: a dialog asks what was done first, and its confirm writes the report and closes the task in
+# one move — so the report is on the timeline when the pane is read, and the status says done.
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — finished on screen
+    as: screen_done
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: screen_done
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: screen_done
+      report: SCENARIO — carried out on screen, and here is what was done
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: screen_done
+      text: SCENARIO — carried out on screen, and here is what was done
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: screen_done
+      field: status
+      equals: done

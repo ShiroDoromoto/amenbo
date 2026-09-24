@@ -169,6 +169,7 @@ steps_cli:
     op: done
     with:
       target: cleared
+      report: SCENARIO — carried out and counted as completed
 
   # The counts follow the tasks, both halves apart: a total that moves while the split behind it
   # stands still is the failure this reads for.

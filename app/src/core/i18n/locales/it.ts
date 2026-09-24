@@ -1122,6 +1122,7 @@ export const it: Translation = {
     "auto.run.halted": "un'uscita ha chiamato una persona",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
+    "auto.run.noTask": "Nessuna attività presa finora",
 
     "mcp.title": "Collegare via MCP",
     "mcp.setupTitle": "Usare i tuoi progetti da un'IA",

@@ -1110,6 +1110,7 @@ export const tr: Translation = {
     "auto.run.halted": "bir çıkış bir kişiyi çağırdı",
     "auto.run.step": "Adım {n} · {step}",
     "auto.run.inAction": "{action} içindeki {step}",
+    "auto.run.noTask": "Henüz görev alınmadı",
 
     "mcp.title": "MCP ile bağlan",
     "mcp.setupTitle": "Projelerinizi bir yapay zekâdan kullanın",

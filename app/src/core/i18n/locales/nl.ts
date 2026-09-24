@@ -1110,6 +1110,7 @@ export const nl: Translation = {
     "auto.run.halted": "een uitgang riep een mens erbij",
     "auto.run.step": "Stap {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
+    "auto.run.noTask": "Nog geen taak opgepakt",
 
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",

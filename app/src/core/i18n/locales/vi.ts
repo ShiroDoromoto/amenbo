@@ -1111,6 +1111,7 @@ export const vi: Translation = {
     "auto.run.halted": "một lối ra đã gọi người",
     "auto.run.step": "Bước {n} · {step}",
     "auto.run.inAction": "{step} trong {action}",
+    "auto.run.noTask": "Chưa nhận việc nào",
 
     "mcp.title": "Kết nối qua MCP",
     "mcp.setupTitle": "Dùng các dự án của bạn từ AI",

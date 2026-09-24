@@ -1271,27 +1271,25 @@ button.feed__target:hover { color: var(--c-accent); }
    are rows read across — names, steps, tasks — and a reading measure would only cut them to "…". It
    is not the settings screen's frame (`.settings`), which is a column of forms and keeps its 720px. */
 .autoscreen { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
-/* The three tabs, drawn as segments of one control: what a reader chooses between is which of the
-   three lists the screen holds, and three buttons sharing no box would read as three things. It is
-   the rail's shape (`.rail__tabs`) at the width a screen has rather than a column. */
+/* The four tabs, left to right on a rule, the one open underlined in the accent. Each is as wide as
+   its word: they name lists, and a tab stretched to a quarter of the screen would be read as a field. */
 .autotabs {
-  display: flex;
-  background: var(--c-sunken-pic) var(--c-sunken);
-  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
-  padding: 2px;
+  display: flex; gap: 2px;
+  border-block-end: var(--border-w) var(--border-style) var(--c-rule);
 }
 .autotabs__tab {
-  flex: 1 1 0; min-width: 0;
-  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
-  padding: var(--s-1) 0;
+  flex: none;
+  background: none; border: 0; border-block-end: 2px solid transparent;
+  margin-block-end: calc(-1 * var(--border-w));
+  padding: var(--s-1) var(--s-3);
   color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); line-height: 1.6;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 .autotabs__tab:hover { color: var(--c-text); }
 .autotabs__tab--on {
-  background: var(--c-surface-pic) var(--c-surface);
   color: var(--c-text); font-weight: var(--fw-bold);
+  border-block-end-color: var(--c-accent);
 }
 /* A tab with nothing in it, and the wait before the first answer: one muted line where the rows
    would be, so neither reads as the other. */
@@ -1314,8 +1312,10 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
 .auto__ready { font-size: var(--fs-md); color: var(--c-text-muted); }
-/* What stands between this automation and a launch. Marked on the heed step rather than the stop:
-   an automation still being built is short of something, not broken. */
+/* What an action still lacks, and a launch that was refused. Marked on the heed step rather than the
+   stop: neither has broken anything. That an automation cannot be launched is said in the stop colour
+   instead (`.autolaunch__box--no`, `.autolist__ready--no`), the one colour the build screen and the
+   list share for it. */
 .auto__notready { font-size: var(--fs-md); color: var(--c-heed); font-weight: var(--fw-bold); }
 .auto__blocks { margin: 0; padding-inline-start: var(--s-4); font-size: var(--fs-md); }
 
@@ -1427,24 +1427,41 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorun__go:hover { background: var(--c-hover); }
 .autorun__go:disabled { cursor: default; }
 .autorun__go:disabled:hover { background: none; }
-.autorun__state { font-weight: var(--fw-bold); font-size: var(--fs-xs); color: var(--c-plain); }
+.autorun__state {
+  display: flex; align-items: center; gap: var(--s-1);
+  font-weight: var(--fw-bold); font-size: var(--fs-xs); color: var(--c-plain);
+}
+/* The state's dot, in the state's colour — the one mark that still says it where the word is muted. */
+.autorun__state::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--dot, var(--c-text-faint));
+}
 .autorun__of { min-width: 0; display: flex; flex-direction: column; }
 .autorun__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-bold); }
 .autorun__project,
 .autorun__step,
 .autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autorun__notask { color: var(--c-text-faint); }
 .autorun__when { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: end; font-variant-numeric: tabular-nums; }
 .autorun__why { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-stop); }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }
 .autorun__acts:empty { display: none; }
-/* The colour is the state's own. One under way wears the colour that says so (`--c-heed`); a failure
-   is the one thing here nothing will move again without a hand put to it, so its whole row takes the
-   stop colour until somebody acknowledges it (`--c-stop`). */
-.autorun--running .autorun__state { color: var(--c-heed); }
-.autorun--completed .autorun__state { color: var(--c-done); }
+/* The colour is the state's own. One under way is the AI at work, so it wears the AI's colour
+   (`--c-ai`). One paused waits on a hand
+   (`--c-heed`). A failure is the one thing here nothing will move again without a hand put to it, so
+   in the running list its whole row takes the stop colour until somebody acknowledges it. What has
+   ended keeps its word muted and says how it ended by the dot alone. */
+.autorun--running { --dot: var(--c-ai); }
+.autorun--running .autorun__state { color: var(--c-ai); }
+.autorun--paused { --dot: var(--c-heed); }
+.autorun--paused .autorun__state { color: var(--c-heed); }
+.autorun--completed { --dot: var(--c-done); }
+.autorun--completed .autorun__state { color: var(--c-text-muted); }
+.autorun--failed { --dot: var(--c-stop); background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
 .autorun--failed .autorun__state { color: var(--c-stop); }
 .autorun--canceled .autorun__state { color: var(--c-text-muted); }
-.autorun--failed { background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
+/* The history is what was acknowledged already: a failure there is read, not waited on. */
+.autoruns--history .autorun--failed { background: none; }
 /* A narrow list keeps what says which run this is, and lets the rest go. What is narrow is the list's
    own width and not the window's: the same rows also stand in the build screen (`AutomationHeldBy`),
    and the main column is the window less the sidebar, whose width the window does not say. */
@@ -1453,19 +1470,9 @@ button.feed__target:hover { color: var(--c-accent); }
   .autorun__project, .autorun__task, .autorun__when { display: none; }
 }
 
-/* The history's narrowing: one segmented control of the four choices, and the pager under the rows. */
-.autohist__filter {
-  display: inline-flex; align-self: flex-start;
-  background: var(--c-sunken-pic) var(--c-sunken);
-  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
-  padding: 2px;
-}
-.autohist__only {
-  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
-  padding: 2px var(--s-3); color: var(--c-text-muted); font: inherit; font-size: var(--fs-md); cursor: pointer;
-}
-.autohist__only:hover { color: var(--c-text); }
-.autohist__only--on { background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
+/* The history's narrowing: the four choices as the chips the action tab narrows by (`.actchip`), and
+   the pager under the rows. */
+.autohist__filter { display: flex; flex-wrap: wrap; gap: var(--s-1); }
 .autohist__pager { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .autohist__page {
   min-width: 2em; padding: 2px var(--s-1);
@@ -1762,9 +1769,10 @@ button.feed__target:hover { color: var(--c-accent); }
   background: color-mix(in srgb, var(--tone) 10%, transparent);
 }
 .autolaunch__box--ok { --tone: var(--c-done); }
-.autolaunch__box--no { --tone: var(--c-heed); }
+.autolaunch__box--no { --tone: var(--c-stop); }
 .autolaunch__title { display: flex; align-items: center; gap: var(--s-2); }
 .autolaunch__box--ok .auto__ready { color: var(--c-done); font-weight: var(--fw-bold); }
+.autolaunch__box--no .auto__notready { color: var(--c-stop); }
 .autolaunch__start { margin-inline-start: auto; }
 .autolaunch__box .auto__blocks { margin-block-start: var(--s-1); }
 
@@ -1798,12 +1806,14 @@ button.feed__target:hover { color: var(--c-accent); }
 .autolist__meta { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
 .autolist__ready { font-size: var(--fs-xs); font-weight: var(--fw-bold); white-space: nowrap; text-align: end; }
 .autolist__ready--ok { color: var(--c-done); }
-.autolist__ready--no { color: var(--c-heed); }
+.autolist__ready--no { color: var(--c-stop); }
 /* The sidebar's list (`../screens/AutomationsScreen`): the row goes to its project, and the start
    press stands beside it rather than inside it — the same shape a run's row has (`.autorun`). */
 .autolist__line { display: flex; align-items: center; gap: var(--s-2); padding-inline-end: var(--s-2); }
 .autolist__line .autolist__row { flex: 1 1 auto; min-width: 0; }
-.autolist__line > .btn { flex: none; white-space: nowrap; }
+/* The start press is the row's, not the screen's: drawn at the row's small type, and no taller than
+   the floor a press keeps (`--tap-min`). */
+.autolist__line > .btn { flex: none; white-space: nowrap; font-size: var(--fs-xs); padding: 0 var(--s-2); }
 .autolist__row--everywhere { grid-template-columns: minmax(0, 1fr) minmax(0, 10rem) auto 8rem; }
 .autolist__project {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

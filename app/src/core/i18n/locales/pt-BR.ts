@@ -1123,6 +1123,7 @@ export const ptBR: Translation = {
     "auto.run.halted": "uma saída chamou uma pessoa",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} em {action}",
+    "auto.run.noTask": "Nenhuma tarefa pega ainda",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar seus projetos a partir de uma IA",

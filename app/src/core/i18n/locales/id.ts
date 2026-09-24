@@ -1111,6 +1111,7 @@ export const id: Translation = {
     "auto.run.halted": "jalan keluar memanggil seseorang",
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
+    "auto.run.noTask": "Belum mengambil tugas",
 
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",

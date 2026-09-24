@@ -1116,6 +1116,7 @@ export const ja: Translation = {
     "auto.run.halted": "人を呼ぶ出口で止まった",
     "auto.run.step": "ステップ {n} · {step}",
     "auto.run.inAction": "{action} の {step}",
+    "auto.run.noTask": "まだ取っていません",
 
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",

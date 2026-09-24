@@ -11,8 +11,11 @@
 #   the same cert. (This serves the dev builds only: the prod CLI is not built
 #   locally — it ships inside the unified installer.)
 #
-# This is macOS-only dev tooling. On non-macOS, or when the identity has not been
-# set up, it is a clean no-op so Linux/CI builds are unaffected.
+# This is macOS-only dev tooling: on non-macOS it is a clean no-op. Where the identity
+# has not been set up (a CI macOS runner, a fresh machine), a plain binary keeps its
+# linker signature, but a .app bundle is re-signed ad-hoc as a whole — tauri's
+# linker-signed bundle has no sealed Info.plist or resources, and launchd refuses to
+# register the tick from such a bundle ("Codesigning failure loading plist ... -67056").
 #
 # Usage:
 #   codesign-local.sh sign  <binary> <code-sign-identifier>   # plain binary
@@ -33,7 +36,13 @@ cmd_sign() {
   is_macos || return 0
   have codesign || return 0
   if ! have_identity; then
-    echo "→ codesign: identity '$IDENTITY' not set up — leaving ad-hoc signature."
+    if [ -d "$target" ]; then
+      # No certificate is needed for an ad-hoc signature, so this runs on a CI runner too.
+      codesign --force --deep --sign - "$target"
+      echo "→ codesign: identity '$IDENTITY' not set up — signed bundle '$target' ad-hoc."
+    else
+      echo "→ codesign: identity '$IDENTITY' not set up — leaving ad-hoc signature."
+    fi
     echo "  (run 'make codesign-cert' once to stop the keychain re-prompting each rebuild)"
     return 0
   fi

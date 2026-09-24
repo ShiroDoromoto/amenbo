@@ -28,6 +28,7 @@ import { invokeAck, invokeForAck } from "./mutations";
 import type {
   AutomationActionCardDto,
   AutomationActionDetailDto,
+  AutomationBuiltinDto,
   AutomationCardDto,
   AutomationCfgDto,
   AutomationDetailDto,
@@ -144,6 +145,38 @@ export function useAutomationActions(projectId: number | null): AutomationAction
     () => fetchAutomationActions(projectId),
   );
   return data ?? [];
+}
+
+/**
+ * **The built-ins** (`AMB-D-964`) — Amenbo's own actions, read off the code's definition rather than
+ * the library, since a built-in's action is only written the first time one is placed.
+ *
+ * Its key starts with `automationActions` so a placement, which moves how many automations place one,
+ * re-reads it with the library.
+ */
+export function useAutomationBuiltins(): AutomationBuiltinDto[] {
+  const { data } = useQuery<AutomationBuiltinDto[]>(["automationActions", "builtins"], () =>
+    inTauri() ? invoke<AutomationBuiltinDto[]>("automation_builtin_page") : Promise.resolve([]),
+  );
+  return data ?? [];
+}
+
+/**
+ * **Put a built-in on the picture**, standing on its own — `placeAutomationAction` for a built-in,
+ * named by its key. Its library action is written the first time any automation places it.
+ */
+export async function placeAutomationBuiltin(automationId: number, key: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_builtin_place", { automationId, key });
+}
+
+/**
+ * **Put a built-in in on a line** — `insertAutomationAction` for a built-in: the way out that was
+ * pressed comes to point at the new spot, and the new spot goes on to where that way out used to.
+ */
+export async function insertAutomationBuiltin(edgeId: number, key: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_builtin_insert", { edgeId, key });
 }
 
 /**

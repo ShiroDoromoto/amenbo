@@ -12,19 +12,25 @@
 // where it is most needed; **it sends a name and a reach and no prompt**, because a prompt belongs
 // to a step; and **the screen opens on the row that was just made**, which is how the two halves are
 // one act to the reader.
+//
+// And on the built-ins (`AMB-D-964`): **they are listed after the library's rows at both entrances,
+// saying they are Amenbo's own**, narrowed by their own chip and by the box; **a press opens one to be
+// read**, by its key; and **nothing on the row moves one**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationActionCardDto } from "../bindings/bindings";
+import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
+  builtins: [] as AutomationBuiltinDto[],
   add: vi.fn(async (_name: string, _project: number | null) => {}),
   scope: vi.fn(async (_id: number, _project: number | null) => {}),
 }));
 
 vi.mock("../core/automations", () => ({
   useAutomationActions: () => hoisted.actions,
+  useAutomationBuiltins: () => hoisted.builtins,
   addAutomationAction: hoisted.add,
   setAutomationActionScope: hoisted.scope,
 }));
@@ -54,6 +60,9 @@ function action(over: Partial<AutomationActionCardDto> = {}): AutomationActionCa
 
 /** What a press on a row asked to open, in the order it was asked. */
 let opened: number[] = [];
+/** The built-ins a press on a row asked to open, by key. */
+let openedBuiltin: string[] = [];
+const openBuiltin = (key: string) => void openedBuiltin.push(key);
 
 async function render() {
   await act(async () => {
@@ -61,6 +70,7 @@ async function render() {
       createElement(AutomationActionsTab, {
         projectId: 1,
         onOpen: (id: number) => opened.push(id),
+        onOpenBuiltin: openBuiltin,
       }),
     );
   });
@@ -247,7 +257,11 @@ describe("the library opened from the sidebar", () => {
   async function renderDevice() {
     await act(async () => {
       root.render(
-        createElement(AutomationActionsTab, { projectId: null, onOpen: (id: number) => opened.push(id) }),
+        createElement(AutomationActionsTab, {
+          projectId: null,
+          onOpen: (id: number) => opened.push(id),
+          onOpenBuiltin: openBuiltin,
+        }),
       );
     });
   }
@@ -280,7 +294,13 @@ describe("moving an action's reach", () => {
 
   async function renderAt(projectId: number | null) {
     await act(async () => {
-      root.render(createElement(AutomationActionsTab, { projectId, onOpen: (id: number) => opened.push(id) }));
+      root.render(
+        createElement(AutomationActionsTab, {
+          projectId,
+          onOpen: (id: number) => opened.push(id),
+          onOpenBuiltin: openBuiltin,
+        }),
+      );
     });
   }
 
@@ -316,5 +336,71 @@ describe("moving an action's reach", () => {
     await renderAt(1);
     await act(async () => { button(t("auto.actions.toGlobal")).click(); });
     expect(container.querySelector(".actlib__moveplace")?.textContent).toContain("Nightly");
+  });
+});
+
+describe("the built-ins", () => {
+  const take: AutomationBuiltinDto = {
+    key: "task_take",
+    name: "Take a task",
+    does: "reserves the first task the filter finds",
+    settings: [],
+    inputs: [],
+    exits: [{ name: "taken", outputs: [] }],
+    usedBy: 0,
+  };
+
+  beforeEach(() => {
+    hoisted.actions = [action({ id: 3, name: "Review" })];
+    hoisted.builtins = [take];
+    openedBuiltin = [];
+  });
+  afterEach(() => {
+    hoisted.builtins = [];
+  });
+
+  it("are listed after the library's rows, as Amenbo's own", async () => {
+    await render();
+    const all = rows();
+    expect(all).toHaveLength(2);
+    expect(all[0]).toContain("Review");
+    expect(all[1]).toContain("Take a task");
+    expect(all[1]).toContain(t("auto.actions.reachBuiltin"));
+    expect(all[1]).toContain(t("auto.actions.usedNone"));
+  });
+
+  it("are narrowed by their own chip, and left out by another reach's", async () => {
+    await render();
+    await act(async () => { button(t("auto.actions.reachBuiltin")).click(); });
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toContain("Take a task");
+    await act(async () => { button(t("auto.actions.reachProject")).click(); });
+    expect(rows().some((one) => one.includes("Take a task"))).toBe(false);
+  });
+
+  it("open to be read, by key, and carry nothing that moves them", async () => {
+    await render();
+    const row = [...container.querySelectorAll(".actlib__line")].find((one) =>
+      one.textContent?.includes("Take a task"),
+    )!;
+    expect(row.querySelector(".actlib__moveslot button")).toBeNull();
+    await act(async () => { button("Take a task").click(); });
+    expect(openedBuiltin).toEqual(["task_take"]);
+    expect(opened).toEqual([]);
+  });
+
+  it("are listed on the sidebar's entrance too", async () => {
+    hoisted.actions = [];
+    await act(async () => {
+      root.render(
+        createElement(AutomationActionsTab, {
+          projectId: null,
+          onOpen: (id: number) => opened.push(id),
+          onOpenBuiltin: openBuiltin,
+        }),
+      );
+    });
+    expect(container.textContent).not.toContain(t("auto.actions.empty"));
+    expect(rows()[0]).toContain("Take a task");
   });
 });

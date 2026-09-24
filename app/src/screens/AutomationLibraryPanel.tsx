@@ -11,6 +11,12 @@
 // one every project shares. Both are searched by the one box over them, by name and by note, the way
 // the library tab searches (`./AutomationActionsTab`).
 //
+// **The built-ins come third, under their own head** (`AMB-D-964`): Amenbo's own actions, listed from
+// the code's definition, since a built-in's library action is only written the first time one is
+// placed. Picking one is named by its key, and its library action is written on the way
+// (`placeAutomationBuiltin`, `insertAutomationBuiltin`). The head is left out while the build carries
+// none.
+//
 // **A row opens in place, with the button that places it.** What a reader weighs before placing is
 // what the action asks and how it leaves — its settings, its inputs, its ways out — and that is read
 // right under the row pressed rather than at the foot of a list that may run long.
@@ -21,9 +27,12 @@
 import { useState } from "react";
 import {
   insertAutomationAction,
+  insertAutomationBuiltin,
   placeAutomationAction,
+  placeAutomationBuiltin,
   useAutomationAction,
   useAutomationActions,
+  useAutomationBuiltins,
 } from "../core/automations";
 import { errText, t, tn } from "../core/i18n";
 import { asTyped } from "../core/keys";
@@ -31,7 +40,8 @@ import { ErrorNote } from "../components/ErrorNote";
 import { ERROR_EXIT } from "./automationLayout";
 import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
-import type { AutomationActionCardDto } from "../bindings/bindings";
+import { BuiltinDecl } from "./AutomationBuiltinScreen";
+import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
 
 /** Where the picked action goes: onto a line, or onto a picture with no line yet. */
 export type PlaceTarget = { edgeId: number } | { automationId: number };
@@ -116,8 +126,10 @@ export function AutomationLibraryPanel({
   onMake: () => void;
 }) {
   const actions = useAutomationActions(projectId);
+  const builtins = useAutomationBuiltins();
   const [words, setWords] = useState("");
-  const [picked, setPicked] = useState<number | null>(null);
+  // An action's id, or a built-in's key: the two lists never share a row.
+  const [picked, setPicked] = useState<number | string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
   // Core refuses an action another project's library holds, and a line that went away underneath;
@@ -128,6 +140,14 @@ export function AutomationLibraryPanel({
       "edgeId" in target
         ? insertAutomationAction(target.edgeId, actionId)
         : placeAutomationAction(target.automationId, actionId);
+    void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
+  };
+  const placeBuiltin = (key: string) => {
+    setRefused(null);
+    const write =
+      "edgeId" in target
+        ? insertAutomationBuiltin(target.edgeId, key)
+        : placeAutomationBuiltin(target.automationId, key);
     void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
   };
 
@@ -156,6 +176,39 @@ export function AutomationLibraryPanel({
     ));
   };
 
+  const builtinRows = () => {
+    const found = builtins.filter(
+      (one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w),
+    );
+    if (found.length === 0) return <div className="autolib__none">{t("auto.actions.noMatch")}</div>;
+    return found.map((one) => (
+      <div key={one.key}>
+        <button
+          type="button"
+          className={picked === one.key ? "autolib__row autolib__row--on" : "autolib__row"}
+          aria-expanded={picked === one.key}
+          onClick={() => setPicked(picked === one.key ? null : one.key)}
+        >
+          <span className="autolib__name">{one.name}</span>
+          <span className="autolib__meta">
+            {one.usedBy === 0 ? t("auto.actions.unused") : tn("auto.actions.usedBy", one.usedBy)}
+          </span>
+        </button>
+        {picked === one.key && (
+          <div className="autolib__picked">
+            <div className="autolib__note">{one.does}</div>
+            <BuiltinDecl builtin={one} />
+            <div>
+              <button type="button" className="btn btn--primary" onClick={() => placeBuiltin(one.key)}>
+                {t("auto.pic.placeDo")}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    ));
+  };
+
   return (
     <>
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
@@ -178,6 +231,12 @@ export function AutomationLibraryPanel({
         <div className="autolib__head">{t("auto.lib.global")}</div>
         {rows(true)}
       </div>
+      {builtins.length > 0 && (
+        <div className="autolib__group">
+          <div className="autolib__head">{t("auto.lib.builtin")}</div>
+          {builtinRows()}
+        </div>
+      )}
       <div className="autolib__make">
         <div className="autostep__said">{t("auto.lib.makeWhat")}</div>
         <div>

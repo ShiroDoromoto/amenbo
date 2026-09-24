@@ -3301,6 +3301,47 @@ pub struct AutomationActionCardDto {
     pub(crate) used_by: usize,
 }
 
+/// **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,
+/// beside the device's actions and the project's, and what opening one reads.
+///
+/// It is read off the code's definition ([`amenbo_core::ops::automation_builtin::all`]) rather than off
+/// a stored action, because the library action is only written the first time one is placed: a
+/// built-in nobody has placed yet is still one a reader can pick. So nothing here carries an id —
+/// `key` is what placing one names.
+///
+/// `used_by` is how many automations place it, counted off the library action where one was written —
+/// the same number an action's row carries.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationBuiltinDto {
+    pub(crate) key: String,
+    pub(crate) name: String,
+    /// What it does, in a sentence a person building with it reads.
+    pub(crate) does: String,
+    /// The settings it reads, answered where it is placed. None carries an answer.
+    pub(crate) settings: Vec<AutomationCfgDto>,
+    pub(crate) inputs: Vec<AutomationPortDto>,
+    /// The ways out it leaves by, each with what it hands on. The error way out every step carries is
+    /// not among them.
+    pub(crate) exits: Vec<AutomationBuiltinExitDto>,
+    #[ts(type = "number")]
+    pub(crate) used_by: usize,
+}
+
+/// **A way out of a built-in**, and what leaving through it hands on — [`AutomationExitDto`] without
+/// the row id, since the definition is not a row.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationBuiltinExitDto {
+    /// Absent is the unnamed way out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) name: Option<String>,
+    pub(crate) outputs: Vec<AutomationPortDto>,
+}
+
 /// **One automation's whole definition** — every placement, every way out of each, and what joins
 /// them.
 ///
@@ -3349,6 +3390,11 @@ pub struct AutomationPlacementDto {
     /// The action standing here is held by the device rather than by this project — the reach the
     /// box says under its name, as the library list does. False where the action is gone.
     pub(crate) global: bool,
+    /// **The built-in the action standing here is**, by its key (`AMB-D-964`) — what the box says under
+    /// its name in place of the reach, and what opening it reads instead of an action to build.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) builtin: Option<String>,
     /// The step this spot opens first. Absent where the action holds no step yet, which the launch
     /// check names.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3412,6 +3458,11 @@ pub struct AutomationActionDetailDto {
     pub(crate) note: String,
     /// Held by the device rather than by one project — the reach, as the library list draws it.
     pub(crate) global: bool,
+    /// **The built-in this action is**, by its key (`AMB-D-964`). Its rows are Amenbo's own and are
+    /// not edited, so the screen that opens it reads the definition rather than building it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) builtin: Option<String>,
     /// How many automations place it: what a rewrite here reaches.
     #[ts(type = "number")]
     pub(crate) used_by: usize,

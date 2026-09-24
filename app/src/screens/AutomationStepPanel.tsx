@@ -414,7 +414,7 @@ export function AutomationStepPanel({
         <div className="autoplace__action">
           <div className="autoplace__actionhead">
             <span className="autoplace__actionname">{placement.name}</span>
-            {action !== null && <ReachChip global={action.global} />}
+            {action !== null && <ReachChip global={action.global} builtin={placement.builtin !== undefined} />}
           </div>
           {action !== null && action.note.trim() !== "" && (
             <div className="autoplace__note">{action.note}</div>
@@ -453,7 +453,8 @@ export function AutomationStepPanel({
           </span>
         </div>
 
-        {placement.steps.length > 0 && (
+        {/* Amenbo carries a built-in out itself, and core refuses anybody chosen for it (`AMB-D-964`). */}
+        {placement.steps.length > 0 && placement.builtin === undefined && (
           <div className="autostep__field">
             <span className="autostep__label">{t("auto.place.agents")}</span>
             <span className="autostep__said">{t("auto.place.agentsWhat")}</span>

@@ -29,8 +29,17 @@
 // **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
 // prompts written. Making one here asks for a name and a reach and no prompt: an action is born
 // empty, and the screen the press lands on is where the words go.
+//
+// **The built-ins are a third reach** (`AMB-D-964`), at both entrances: Amenbo's own actions, listed
+// from the code's definition after the library's rows. Nothing moves one or builds one, so a press on
+// the row opens it to be read (`./AutomationBuiltinScreen`).
 import { useEffect, useMemo, useState } from "react";
-import { addAutomationAction, setAutomationActionScope, useAutomationActions } from "../core/automations";
+import {
+  addAutomationAction,
+  setAutomationActionScope,
+  useAutomationActions,
+  useAutomationBuiltins,
+} from "../core/automations";
 import { dataAdapter } from "../mock/adapter";
 import { asTyped } from "../core/keys";
 import { errText, t, tf } from "../core/i18n";
@@ -47,35 +56,53 @@ export function firstLine(note: string): string {
 }
 
 /** Which reach the list is narrowed to. */
-type Reach = "all" | "global" | "project";
+type Reach = "all" | "global" | "project" | "builtin";
 
-/** The reach an action sits in, as a chip — the same one the build screen's declaration draws. */
-export function ReachChip({ global }: { global: boolean }) {
+/**
+ * The reach an action sits in, as a chip — the same one the build screen's declaration draws. A
+ * built-in is kept on the device's shelf, but what it is to a reader is Amenbo's own.
+ */
+export function ReachChip({ global, builtin = false }: { global: boolean; builtin?: boolean }) {
+  const tone = builtin ? "actscope actscope--builtin" : global ? "actscope actscope--global" : "actscope";
   return (
-    <span className={global ? "actscope actscope--global" : "actscope"}>
+    <span className={tone}>
       <em aria-hidden="true" />
-      {global ? t("auto.actions.reachGlobal") : t("auto.actions.reachProject")}
+      {builtin
+        ? t("auto.actions.reachBuiltin")
+        : global
+          ? t("auto.actions.reachGlobal")
+          : t("auto.actions.reachProject")}
     </span>
   );
 }
 
 function matches(one: AutomationActionCardDto, words: string, reach: Reach): boolean {
+  if (reach === "builtin") return false;
   if (reach === "global" && !one.global) return false;
   if (reach === "project" && one.global) return false;
+  return said(`${one.name} ${one.note}`, words);
+}
+
+/** Whether what a row says holds the words typed in the box. */
+function said(text: string, words: string): boolean {
   const w = words.trim().toLowerCase();
-  return w === "" || `${one.name} ${one.note}`.toLowerCase().includes(w);
+  return w === "" || text.toLowerCase().includes(w);
 }
 
 export function AutomationActionsTab({
   projectId,
   onOpen,
+  onOpenBuiltin,
 }: {
   /** Whose library this is, besides the device's — `null` for the sidebar's, the device's alone. */
   projectId: number | null;
   /** Open the build screen on this action — a press on a row, and on the row a press just made. */
   onOpen: (id: number) => void;
+  /** Open a built-in to be read, by its key. */
+  onOpenBuiltin: (key: string) => void;
 }) {
   const actions = useAutomationActions(projectId);
+  const builtins = useAutomationBuiltins();
   // The ids the library held when Make was pressed, while the row that was made is still on its way.
   // Nothing while none is.
   const [born, setBorn] = useState<ReadonlySet<number> | null>(null);
@@ -85,6 +112,13 @@ export function AutomationActionsTab({
   const shown = useMemo(
     () => actions.filter((one) => matches(one, words, reach)),
     [actions, words, reach],
+  );
+  const shownBuiltins = useMemo(
+    () =>
+      reach === "all" || reach === "builtin"
+        ? builtins.filter((one) => said(`${one.name} ${one.does}`, words))
+        : [],
+    [builtins, words, reach],
   );
 
   // **The new row is the one the library did not hold before.** A write answers with an ack — the
@@ -110,6 +144,9 @@ export function AutomationActionsTab({
     { id: "all", label: t("auto.actions.all") },
     { id: "global", label: t("auto.actions.reachGlobal") },
     { id: "project", label: t("auto.actions.reachProject") },
+    ...(builtins.length > 0
+      ? [{ id: "builtin" as const, label: t("auto.actions.reachBuiltin") }]
+      : []),
   ];
 
   return (
@@ -146,9 +183,9 @@ export function AutomationActionsTab({
           </button>
         ))}
       </div>
-      {actions.length === 0 ? (
+      {actions.length === 0 && builtins.length === 0 ? (
         <div className="actlib__none">{t("auto.actions.empty")}</div>
-      ) : shown.length === 0 ? (
+      ) : shown.length === 0 && shownBuiltins.length === 0 ? (
         <div className="actlib__none">{t("auto.actions.noMatch")}</div>
       ) : (
         <div className="actlib__table">
@@ -189,6 +226,30 @@ export function AutomationActionsTab({
                     // The slot stands empty rather than going, so the columns stay under their heads.
                     <span className="actlib__moveslot" />
                   )}
+                </div>
+              </li>
+            ))}
+            {shownBuiltins.map((one) => (
+              <li key={one.key}>
+                <div className="actlib__line">
+                  <button type="button" className="auto__row actlib__row" onClick={() => onOpenBuiltin(one.key)}>
+                    <span className="auto__name">
+                      {one.name}
+                      <span className="auto__note">{one.does}</span>
+                    </span>
+                    <span>
+                      <ReachChip global builtin />
+                    </span>
+                    {/* A built-in is one thing Amenbo does, not steps a reader counts. */}
+                    <span className="actlib__num" />
+                    <span className={one.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
+                      {one.usedBy === 0
+                        ? t("auto.actions.usedNone")
+                        : tf("auto.actions.usedN", { n: one.usedBy })}
+                    </span>
+                  </button>
+                  {/* Nothing moves a built-in to another reach. */}
+                  <span className="actlib__moveslot" />
                 </div>
               </li>
             ))}

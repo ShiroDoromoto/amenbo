@@ -6,15 +6,22 @@
 // press **goes through the door the target names** — a line, or a picture with none yet; **a refusal
 // is drawn and leaves the panel standing**, rather than closing on a placement that did not happen;
 // and **making one here is handed back to the screen**, which opens the dialog.
+//
+// And the built-ins (`AMB-D-964`): **they come third under their own head, and not at all while the
+// build carries none**; **a picked one shows what it does and declares**; and **placing one names it by
+// its key** through the built-in's own doors, on a line or on an empty picture.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationActionCardDto } from "../bindings/bindings";
+import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
+  builtins: [] as AutomationBuiltinDto[],
   insert: vi.fn((..._args: unknown[]) => Promise.resolve()),
   place: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  insertBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  placeBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -24,6 +31,9 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => null,
   insertAutomationAction: hoisted.insert,
   placeAutomationAction: hoisted.place,
+  useAutomationBuiltins: () => hoisted.builtins,
+  insertAutomationBuiltin: hoisted.insertBuiltin,
+  placeAutomationBuiltin: hoisted.placeBuiltin,
 }));
 
 import { t } from "../core/i18n";
@@ -137,5 +147,67 @@ describe("the library in the panel", () => {
     await render();
     await act(async () => { button(t("auto.lib.make")).click(); });
     expect(make).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the built-ins in the panel", () => {
+  const take: AutomationBuiltinDto = {
+    key: "task_take",
+    name: "Take a task",
+    does: "reserves the first task the filter finds",
+    settings: [{ name: "filter", kind: "taskfilter", required: true }],
+    inputs: [],
+    exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { outputs: [] }],
+    usedBy: 1,
+  };
+
+  beforeEach(() => {
+    hoisted.builtins = [take];
+    hoisted.insertBuiltin.mockClear();
+    hoisted.placeBuiltin.mockClear();
+  });
+  afterEach(() => {
+    hoisted.builtins = [];
+  });
+
+  it("come third, under their own head", async () => {
+    await render();
+    const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
+    expect(heads).toEqual([t("auto.actions.reachProject"), t("auto.lib.global"), t("auto.lib.builtin")]);
+    expect([...container.querySelectorAll(".autolib__group")][2]!.textContent).toContain("Take a task");
+  });
+
+  it("have no head while the build carries none", async () => {
+    hoisted.builtins = [];
+    await render();
+    const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
+    expect(heads).not.toContain(t("auto.lib.builtin"));
+  });
+
+  it("show what a picked one does and declares", async () => {
+    await render();
+    await act(async () => { button("Take a task").click(); });
+    const picked = container.querySelector(".autolib__picked")!;
+    expect(picked.textContent).toContain("reserves the first task the filter finds");
+    expect(picked.textContent).toContain("filter");
+    expect(picked.textContent).toContain("taken");
+    expect(picked.textContent).toContain(t("auto.step.exitUnnamed"));
+  });
+
+  it("put one in on the line by its key", async () => {
+    await render({ edgeId: 9 });
+    await act(async () => { button("Take a task").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(hoisted.insertBuiltin).toHaveBeenCalledWith(9, "task_take");
+    expect(hoisted.insert).not.toHaveBeenCalled();
+    expect(placed).toHaveBeenCalledTimes(1);
+  });
+
+  it("place one on its own where the picture has no line yet", async () => {
+    await render({ automationId: 7 });
+    await act(async () => { button("Take a task").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(hoisted.placeBuiltin).toHaveBeenCalledWith(7, "task_take");
+    expect(hoisted.place).not.toHaveBeenCalled();
   });
 });

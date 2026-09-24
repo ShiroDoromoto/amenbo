@@ -32,6 +32,9 @@
 // screen opens one as well — the action it has just made on the spot, to be built (`AMB-D-956`) —
 // and "back" from there lands on that build screen again, which is still open underneath.
 //
+// **A built-in opens the same way, to be read** (`./AutomationBuiltinScreen`): it is Amenbo's own, so
+// what stands in place of the list is its definition rather than a screen to build it in.
+//
 // **The tabs stay over a build screen** (`AMB-T-5419`), so another tab is one press away rather than
 // "back" and then the tab. The tab lit is the one the open screen belongs to — "actions" over an
 // action, "automations" over an automation — and a press on any tab, that one included, closes what is
@@ -52,6 +55,7 @@
 import { useState } from "react";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab, firstLine } from "./AutomationActionsTab";
+import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { HistoryTab } from "./HistoryTab";
 import { RunningTab } from "./RunningTab";
@@ -107,13 +111,17 @@ export function AutomationsScreen({
   // Which library action is open, for the same reason and in the same spot: the build screen stands
   // in place of the list rather than beside it.
   const [openAction, setOpenAction] = useState<number | null>(openingAction ?? null);
+  // Which built-in is open to be read, by its key — in the same spot again.
+  const [openBuiltin, setOpenBuiltin] = useState<string | null>(null);
   const automations = useAutomations(projectId);
   const folders = useBoundFolders(projectId).live.map((one) => one.path);
 
   // The tab the reader sees lit: the open screen's own while one is open, the chosen one otherwise.
-  const lit: Tab = openAction !== null ? "actions" : open !== null ? "automations" : tab;
+  const lit: Tab =
+    openAction !== null || openBuiltin !== null ? "actions" : open !== null ? "automations" : tab;
 
   function choose(next: Tab) {
+    setOpenBuiltin(null);
     setOpenAction(null);
     setOpen(null);
     setTab(next);
@@ -135,6 +143,15 @@ export function AutomationsScreen({
       ))}
     </div>
   );
+
+  if (openBuiltin !== null) {
+    return (
+      <div className="autoscreen autoscreen--build">
+        {tabs}
+        <AutomationBuiltinScreen builtinKey={openBuiltin} onBack={() => setOpenBuiltin(null)} />
+      </div>
+    );
+  }
 
   if (openAction !== null) {
     return (
@@ -183,7 +200,7 @@ export function AutomationsScreen({
       {tab === "history" && <HistoryTab projectId={projectId} />}
 
       {tab === "actions" && (
-        <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />
+        <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} onOpenBuiltin={setOpenBuiltin} />
       )}
 
       {tab === "automations" && everywhere && (

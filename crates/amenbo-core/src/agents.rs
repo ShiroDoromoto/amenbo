@@ -162,6 +162,11 @@ pub fn preamble(cmd: &str) -> String {
          - Hand on what this step was asked to hand on, under the names it declares — nothing else travels to the next step.\n\
          - If you cannot finish, say so and leave through the error way out rather than reporting work you did not do.\n\
          \n\
+         **The task this run is on** carries that task as it stood when this step opened — its notes, \
+         the decisions linked to it and its comments, each whole — where this step was built to be \
+         handed it. Work from it as written rather than reading the task again with `{cmd} task show`. \
+         It is left out before the run has taken a task.\n\
+         \n\
          Each step of a run is opened in a session of its own, so what the steps before you did reaches \
          you only where it is written down. Two blocks below carry it, each left out when it is empty:\n\
          \n\

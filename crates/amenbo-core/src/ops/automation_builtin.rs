@@ -577,7 +577,7 @@ mod tests {
             refused(automation::action_update(tx, written.id, Some("mine"), None).map(drop), "rename the action");
             refused(automation::action_delete(tx, written.id), "delete the action");
             refused(
-                automation::step_update(tx, step.id, None, Some("do more"), None, None, None, None).map(drop),
+                automation::step_update(tx, step.id, None, Some("do more"), None, None, None, None, None).map(drop),
                 "rewrite the step",
             );
             refused(
@@ -630,7 +630,7 @@ mod tests {
             assert_eq!(inputs.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["note"]);
 
             assert!(
-                automation::step_update(tx, step.id, Some("renamed"), None, None, None, None, None).is_err(),
+                automation::step_update(tx, step.id, Some("renamed"), None, None, None, None, None, None).is_err(),
                 "the built-in's own row is not edited",
             );
             automation::action_update(tx, mine.id, Some("Still mine"), None).expect("the action is");

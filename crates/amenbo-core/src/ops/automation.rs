@@ -1119,8 +1119,9 @@ fn checked_step_of_placement(
 
 // ───────────────────────────── steps ─────────────────────────────
 
-/// What a new step is made of. `show_history` starts on — a step is handed the run's story so far unless
-/// somebody says otherwise — while `interactive` and `report_to_task` start off.
+/// What a new step is made of. `show_history` and `show_task` start on — a step is handed the run's story
+/// so far and the task it is on unless somebody says otherwise — while `interactive` and `report_to_task`
+/// start off.
 #[derive(Clone, Debug)]
 pub struct NewStep {
     pub name: String,
@@ -1130,10 +1131,11 @@ pub struct NewStep {
     pub work_dir_ref: Option<String>,
     pub report_to_task: bool,
     pub show_history: bool,
+    pub show_task: bool,
 }
 
 impl NewStep {
-    /// A step with the three flags where they start.
+    /// A step with the four flags where they start.
     pub fn new(name: &str, prompt: &str) -> NewStep {
         NewStep {
             name: name.to_string(),
@@ -1142,6 +1144,7 @@ impl NewStep {
             work_dir_ref: None,
             report_to_task: false,
             show_history: true,
+            show_task: true,
         }
     }
 }
@@ -1180,6 +1183,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
         work_dir_ref: new.work_dir_ref,
         report_to_task: new.report_to_task,
         show_history: new.show_history,
+        show_task: new.show_task,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1275,6 +1279,7 @@ pub fn step_update(
     work_dir_ref: Option<Option<&str>>,
     report_to_task: Option<bool>,
     show_history: Option<bool>,
+    show_task: Option<bool>,
 ) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
     not_under_a_run(tx, Def::Step(id))?;
@@ -1296,6 +1301,9 @@ pub fn step_update(
     }
     if let Some(show_history) = show_history {
         after.show_history = show_history;
+    }
+    if let Some(show_task) = show_task {
+        after.show_task = show_task;
     }
     after.updated_at = Timestamp::now();
     emit_update(
@@ -3633,7 +3641,7 @@ mod held_by_a_run {
         held(
             "rewrite a step",
             run,
-            step_update(tx, step.id, None, Some("again"), None, None, None, None),
+            step_update(tx, step.id, None, Some("again"), None, None, None, None, None),
         );
         held("reorder a step", run, step_move(tx, step.id, Position::Bottom));
         held("delete a step", run, step_delete(tx, step.id));

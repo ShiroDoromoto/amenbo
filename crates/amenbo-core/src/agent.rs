@@ -1865,7 +1865,7 @@ fn all_commands() -> Value {
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation resume 7 --actor ai"])),
-        cmd("automation stop", "Stops a run, which ends canceled: hands the task it was working back to todo, and leaves a comment on that task saying how far it got. Unlike pause it does not wait for the step under way — use it where a pause will not land.",
+        cmd("automation stop", "Stops a run, which ends canceled: hands the task it was working back to todo, and leaves a comment on that task saying how far it got — unless the task is closed (done or rejected), which gets no comment. Unlike pause it does not wait for the step under way — use it where a pause will not land.",
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation stop 7 --actor ai"])),

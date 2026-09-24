@@ -537,11 +537,11 @@ impl Instructor {
     /// Follow a task into and out of its terminal states, which is what decides whether the title a
     /// later step names is drawn with a line through it.
     ///
-    /// The four ops here are every one the registry has for moving a task across that line, and the
-    /// world is where all of it happens today: a premise takes `status` and none of the other three,
-    /// and a screen road can end nothing at all, since this harness maps no op that would. It is
-    /// walked on the road as well anyway — the rule is that an action noted is an action walked, so
-    /// mapping one of them later needs nothing remembered here.
+    /// The four ops here are every one the registry has for moving a task across that line. A premise
+    /// takes `status` and none of the other three, and a screen road ends a task with `done` alone —
+    /// the one of them this harness maps. It is walked on the road as well as in the world — the rule
+    /// is that an action noted is an action walked, so mapping another of them later needs nothing
+    /// remembered here.
     ///
     fn note_end(&mut self, domain: Domain, op: &str, with: &Args) {
         if domain != Domain::Task {
@@ -1280,6 +1280,17 @@ impl Instructor {
             (Domain::Task, "finish-creating") => format!(
                 "Open the task \"{}\" and press the button that finishes creating it.",
                 self.target_label(with)
+            ),
+            // Finishing a task is a pick on its status pulldown that does not go through on its own: the
+            // screen asks for the report first, in a dialog of its own, and only its confirm closes the
+            // task. The report is written there rather than as a remark afterwards — it lands on the
+            // timeline in the same write as the close, and a closed task takes no remark at all. The
+            // board's drop onto the done column opens the same dialog; the pulldown is the one walked
+            // here because it is on the pane the timeline is read off next.
+            (Domain::Task, "done") => format!(
+                "Open the task \"{}\", choose done on its status pulldown, write \"{}\" in the box the dialog asks for what was done, and press the button that marks the task done.",
+                self.target_label(with),
+                req(with, "report")?
             ),
             (Domain::Task, "assign") => format!(
                 "Open the task \"{}\" and set its assignee to \"{}\".",
@@ -10874,6 +10885,23 @@ steps_gui:
         assert!(held.contains("shut") && held.contains("named beside it"), "got: {held}");
         let ended = Instructor::new().render(&finish(false)).unwrap();
         assert!(ended.contains("press the button"), "got: {ended}");
+
+        // Finishing the task goes through the dialog that asks for the report, and the report is
+        // what the step says to write there — not a remark added once the task is closed.
+        let done = Step::Action {
+            domain: Domain::Task,
+            op: "done".to_string(),
+            with: [
+                ("target".to_string(), serde_yaml::Value::from("seed")),
+                ("report".to_string(), serde_yaml::Value::from("carried out")),
+            ]
+            .into_iter()
+            .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&done).unwrap();
+        assert!(said.contains("status pulldown") && said.contains("write \"carried out\""), "got: {said}");
 
         // And the answer itself, put on from the task's own pane — the place the held button sends a
         // reader, so the line names the axis as well as the value.

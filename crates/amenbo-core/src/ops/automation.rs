@@ -36,6 +36,8 @@
 //! sibling `order_key`, the name it has to find free — inside that same transaction. The subtree
 //! deletes ride on one transaction too: apply them half-way and a step's ways out outlive the step.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::error::{Error, Result};
 use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind,
@@ -1776,6 +1778,74 @@ fn returning_exit(
     )
 }
 
+/// **Which lines of one picture go back** — the edges a limit on how often they are taken is counted on
+/// ([`AutomationEdge::max_times`]).
+///
+/// A walk down from the entry, depth first, following each box's `go` edges in the order given: an edge
+/// to a box still on the path the walk came down by goes back. What the entry does not reach is walked
+/// afterwards, box by box in the order given, so every edge has an answer. `boxes` and `edges` are the
+/// picture in display order — which decides the answer where a loop could be read from either end — and
+/// the GUI draws the same edges dashed by the same walk (`app/src/screens/automationLayout.ts`, `walk`).
+///
+/// **A line that goes forward is never counted**, whatever it carries. Only a way back can spin, and a
+/// limit on a line going down would stop a run on a number nobody is shown. Whether a line goes back
+/// depends on every other line of the picture, so it is read here, off the whole picture, rather than
+/// kept on the edge.
+pub fn lines_back(entry: Option<i64>, boxes: &[i64], edges: &[AutomationEdge]) -> BTreeSet<i64> {
+    let known: BTreeSet<i64> = boxes.iter().copied().collect();
+    let mut out: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
+    for edge in edges {
+        let Some(to) = edge.to_id.filter(|to| edge.ends == AutomationEnds::Go && known.contains(to))
+        else {
+            continue;
+        };
+        out.entry(edge.from_id).or_default().push((edge.id, to));
+    }
+    let mut back = BTreeSet::new();
+    let mut seen = BTreeSet::new();
+    let starts = entry.filter(|id| known.contains(id)).into_iter().chain(boxes.iter().copied());
+    for start in starts {
+        if !seen.insert(start) {
+            continue;
+        }
+        // The path down, each box with how many of its edges have been followed.
+        let mut path: Vec<(i64, usize)> = vec![(start, 0)];
+        while let Some((id, next)) = path.last_mut() {
+            let Some(&(edge_id, to)) = out.get(id).and_then(|lines| lines.get(*next)) else {
+                path.pop();
+                continue;
+            };
+            *next += 1;
+            if path.iter().any(|(on, _)| *on == to) {
+                back.insert(edge_id);
+            } else if seen.insert(to) {
+                path.push((to, 0));
+            }
+        }
+    }
+    back
+}
+
+/// [`lines_back`] of the picture one box is drawn on, read off the store.
+pub(crate) fn lines_back_on(
+    conn: &rusqlite::Connection,
+    owner_kind: AutomationPictureOwner,
+    owner_id: i64,
+) -> Result<BTreeSet<i64>> {
+    let (entry, boxes) = match owner_kind {
+        AutomationPictureOwner::Automation => (
+            read::automation(conn, owner_id)?.and_then(|a| a.entry_placement_id),
+            read::automation_placements_of(conn, owner_id)?.iter().map(|p| p.id).collect::<Vec<_>>(),
+        ),
+        AutomationPictureOwner::Action => (
+            read::automation_action(conn, owner_id)?.and_then(|a| a.entry_step_id),
+            read::automation_action_steps_of(conn, owner_id)?.iter().map(|s| s.id).collect(),
+        ),
+    };
+    let edges = read::automation_edges_of(conn, owner_kind, owner_id)?;
+    Ok(lines_back(entry, &boxes, &edges))
+}
+
 /// A limit counts something that can be taken twice, and it counts at least once.
 fn checked_max_times(max_times: Option<i64>, ends: AutomationEnds) -> Result<()> {
     if max_times.is_some() && ends != AutomationEnds::Go {
@@ -1799,7 +1869,9 @@ fn checked_max_times(max_times: Option<i64>, ends: AutomationEnds) -> Result<()>
 /// `None` is no limit, which is the right answer for an edge into a box that takes a fresh task, since
 /// the count would restart there anyway. It is carried only by `Go`: an edge that closes or stops the
 /// run is taken once and has nothing to count. On a `Go` edge the caller's `None` means no limit, and
-/// [`crate::model::DEFAULT_MAX_TIMES`] is what the surface above puts there when nobody said.
+/// [`crate::model::DEFAULT_MAX_TIMES`] is what the surface above puts there when nobody said. **It is
+/// counted only while the edge goes back** ([`lines_back`]), so it is written whichever way the edge
+/// goes: one drawn going down can come to go back as the rest of the picture is drawn.
 ///
 /// **One way out decides one thing**, so a second edge on the same way out is refused rather than
 /// leaving the run to pick between them.
@@ -2093,6 +2165,60 @@ pub fn wire_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 mod tests {
     use super::*;
     use crate::ops::test_support::{exit_id, mk_project, with_tx};
+
+    /// A `go` edge between two boxes, as [`lines_back`] reads one — nothing but its ends matter there.
+    fn line(id: i64, from_id: i64, to_id: i64) -> AutomationEdge {
+        let now = Timestamp::now();
+        AutomationEdge {
+            id,
+            owner_kind: AutomationPictureOwner::Action,
+            owner_id: 1,
+            from_id,
+            exit_id: id,
+            to_id: Some(to_id),
+            ends: AutomationEnds::Go,
+            exit_to_id: None,
+            max_times: Some(DEFAULT_MAX_TIMES),
+            order_key: String::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// **Of a loop, only the line back to where it began goes back** (`AMB-T-5440`): in 7→8→7, the line
+    /// 8→7. The line down 7→8 is taken once per turn and is not what spins.
+    #[test]
+    fn of_a_loop_only_the_line_back_goes_back() {
+        let back = lines_back(Some(7), &[7, 8, 9], &[line(1, 7, 8), line(2, 8, 7), line(3, 8, 9)]);
+        assert_eq!(back, BTreeSet::from([2]));
+    }
+
+    /// A box that goes back to itself goes back; a line to a box already walked by another way is not
+    /// one, however high up it is drawn.
+    #[test]
+    fn a_line_to_itself_goes_back_and_one_across_does_not() {
+        let edges = [line(1, 1, 2), line(2, 1, 3), line(3, 2, 3), line(4, 3, 3)];
+        assert_eq!(lines_back(Some(1), &[1, 2, 3], &edges), BTreeSet::from([4]));
+    }
+
+    /// **Whether a line goes back turns on the rest of the picture**, which is why the limit is written
+    /// on every line into a box: 8→7 goes down from where nothing reaches, until 7→8 is drawn.
+    #[test]
+    fn a_line_comes_to_go_back_when_the_loop_is_closed() {
+        let alone = lines_back(Some(6), &[6, 7, 8], &[line(1, 6, 7), line(2, 8, 7)]);
+        assert!(alone.is_empty(), "8 is walked on its own, and 7 is not on its way down");
+        let closed = lines_back(Some(6), &[6, 7, 8], &[line(1, 6, 7), line(2, 8, 7), line(3, 7, 8)]);
+        assert_eq!(closed, BTreeSet::from([2]));
+    }
+
+    /// What the entry does not reach is still read, so a loop drawn before it is joined up goes back
+    /// too; with no entry, the walk starts at the first box.
+    #[test]
+    fn a_loop_nothing_reaches_still_has_a_way_back() {
+        let edges = [line(1, 2, 3), line(2, 3, 2)];
+        assert_eq!(lines_back(Some(1), &[1, 2, 3], &edges), BTreeSet::from([2]));
+        assert_eq!(lines_back(None, &[3, 2], &edges), BTreeSet::from([1]));
+    }
 
     /// The edge hanging on one way out of one box, the way out said by its name — what a test reads
     /// where the store keys it (`AMB-D-961`).
@@ -3583,6 +3709,8 @@ mod held_by_a_run {
             "placement_insert",
             "placement_insert_new",
             "step_insert",
+            // Reads a picture handed to it and writes nothing.
+            "lines_back",
         ];
         let mut forgot = Vec::new();
         for (at, _) in ops.match_indices("\npub fn ") {

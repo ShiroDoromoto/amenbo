@@ -1567,6 +1567,11 @@ pub const ERROR_EXIT: &str = "*";
 /// The number of times a way back may be taken for one task before the run is stopped
 /// ([`AutomationEdge::max_times`]). Ten, because the thing it guards against is a loop that never
 /// converges, not a review that goes round three times.
+///
+/// **Every edge into a box is born carrying it, and only a way back is counted by it**
+/// ([`crate::ops::automation::lines_back`]). Whether a line goes back turns on every other line of the
+/// picture, so one drawn going down can come to go back as the picture is drawn on — and then it is
+/// already capped.
 pub const DEFAULT_MAX_TIMES: i64 = 10;
 
 /// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
@@ -1765,7 +1770,8 @@ pub struct AutomationEdge {
     #[serde(default)]
     pub exit_to_id: Option<i64>,
     /// How often this edge may be taken for one task. `None` is no limit, which is the right answer for
-    /// an edge into a box that takes a fresh task.
+    /// an edge into a box that takes a fresh task. **Counted only while the edge goes back**
+    /// ([`crate::ops::automation::lines_back`]); on a line going down it is carried and not counted.
     #[serde(default)]
     pub max_times: Option<i64>,
     pub order_key: String,
@@ -2030,7 +2036,8 @@ pub struct RunDefLine {
     pub placement_id: Option<i64>,
     #[serde(default)]
     pub step_id: Option<i64>,
-    /// How often the line may be taken for one task; `None` is no limit.
+    /// How often the line may be taken for one task; `None` is no limit. Kept only where the line went
+    /// back when the run was launched ([`crate::ops::automation::lines_back`]).
     #[serde(default)]
     pub max_times: Option<i64>,
 }

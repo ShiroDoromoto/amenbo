@@ -109,7 +109,11 @@ export function mountPlate(
    */
   function row(): Row | null {
     if (!(ran || names.has(frame))) return null;
-    return { name: frameLabel(names, frame, folder), dot: { hue, face: faceOf(moving) }, run };
+    // A run's pane is headed with the automation it is running, not with the place: the place is
+    // named by a person for what they do in it, and what is in it now is the run. A folder standing
+    // in for a name would say less still.
+    const name = run !== null && run.automation !== "" ? run.automation : frameLabel(names, frame, folder);
+    return { name, dot: { hue, face: faceOf(moving) }, run };
   }
 
   function redraw(): void {

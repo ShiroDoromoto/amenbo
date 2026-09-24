@@ -3618,6 +3618,10 @@ pub struct AutomationStepRunDto {
     /// same step several times, so it is the count and not the step that says how far in a reader is.
     #[ts(type = "number")]
     pub(crate) seq: i64,
+    /// **The automation the run was launched from**, by the name it holds now. It is what heads the
+    /// row above the pane: a run's pane stands for the run, not for a place a person named
+    /// (`app/src/talk/plate.ts`). Empty where the automation has since been deleted.
+    pub(crate) automation_name: String,
     /// What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
     pub(crate) name: String,
     /// **The action the spot this step was opened from stands on** (`AMB-D-949`). A launch opens a
@@ -3663,6 +3667,10 @@ pub struct AutomationRunTaskDto {
     pub(crate) id: i64,
     pub(crate) r#ref: String,
     pub(crate) title: String,
+    /// **Which task of the run this is**, counted from 1 (`automation_run_task.seq`). A run works one
+    /// stretch per task, so this and not the step count says how many tasks in a reader is.
+    #[ts(type = "number")]
+    pub(crate) seq: i64,
 }
 
 /// **One thing standing in the way of a launch**, as core named it

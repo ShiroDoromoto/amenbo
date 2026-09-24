@@ -597,6 +597,7 @@ export const vi: Translation = {
     "face.auto": "Tự động",
     "face.runStep": "Bước {n}",
     "face.runNo": "Lần chạy {n}",
+    "face.runTask": "Nhiệm vụ {n}",
     "face.dropRunConfirm": "Bỏ khung này? Lần chạy sẽ dừng, việc mà nó đang làm quay lại Cần làm, và một dòng trên việc đó sẽ ghi lại điều này.",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, còn những gì đang chạy trong đó thì không.",
     "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",

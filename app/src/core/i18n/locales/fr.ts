@@ -606,6 +606,7 @@ export const fr: Translation = {
     "face.auto": "Automatisé",
     "face.runStep": "Étape {n}",
     "face.runNo": "Exécution {n}",
+    "face.runTask": "Tâche {n}",
     "face.dropRunConfirm": "Supprimer ce volet ? L'exécution est arrêtée, la tâche sur laquelle elle était repasse À faire, et une ligne sur cette tâche le dit.",
     "quit.confirm": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, pas ce qu'elles exécutaient.",
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",

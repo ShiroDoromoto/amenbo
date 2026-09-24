@@ -101,7 +101,7 @@ describe("the running tab", () => {
   });
 
   it("says what each run is, how far in it is, and what it is on", async () => {
-    await render([run({ stepName: "Take one", actionName: "Groundwork", stepsDone: 2, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab" } })]);
+    await render([run({ stepName: "Take one", actionName: "Groundwork", stepsDone: 2, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab", seq: 1 } })]);
     const row = container.querySelector(".autorun__go")?.textContent ?? "";
     expect(row).toContain("Morning round");
     expect(row).toContain(tf("auto.run.step", {

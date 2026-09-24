@@ -2828,11 +2828,19 @@ body.dragging-row { user-select: none; }
   text-overflow: ellipsis;
   color: var(--c-text);
 }
-.plate-run__seq, .plate-run__no, .plate-run__task { flex: 0 0 auto; }
-/* The task the run is working. It is the ledger's own reference, which is what a person types to
-   reach it — the title is on the panel. */
+.plate-run__seq, .plate-run__no, .plate-run__nth, .plate-run__task { flex: 0 0 auto; }
+/* The task the run is working. The reference is the ledger's own, which is what a person types to
+   reach it; the title beside it says which task it is, and is cut first — the panel has it whole. */
 .plate-run__task { font-variant-numeric: tabular-nums; }
-.plate-run__task[hidden] { display: none; }
-@container (max-width: 15rem) { .plate-run__no { display: none; } }
+.plate-run__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--c-text);
+}
+.plate-run__nth[hidden], .plate-run__task[hidden], .plate-run__title[hidden] { display: none; }
+@container (max-width: 20rem) { .plate-run__title { display: none; } }
+@container (max-width: 15rem) { .plate-run__no, .plate-run__nth { display: none; } }
 @container (max-width: 11rem) { .plate-run__seq { display: none; } }
 @container (max-width: 8rem) { .plate-run__task { display: none; } }

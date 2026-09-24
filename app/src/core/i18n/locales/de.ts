@@ -599,6 +599,7 @@ export const de: Translation = {
     "face.auto": "Automatisch",
     "face.runStep": "Schritt {n}",
     "face.runNo": "Lauf {n}",
+    "face.runTask": "Aufgabe {n}",
     "face.dropRunConfirm": "Diesen Bereich entfernen? Der Lauf wird gestoppt, die Aufgabe, an der er war, geht zurück auf Offen, und eine Zeile auf dieser Aufgabe sagt das.",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",

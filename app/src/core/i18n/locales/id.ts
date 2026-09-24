@@ -597,6 +597,7 @@ export const id: Translation = {
     "face.auto": "Otomatis",
     "face.runStep": "Langkah {n}",
     "face.runNo": "Eksekusi {n}",
+    "face.runTask": "Tugas {n}",
     "face.dropRunConfirm": "Hapus panel ini? Eksekusinya dihentikan, tugas yang sedang dikerjakannya kembali ke Akan dikerjakan, dan satu baris pada tugas itu mengatakannya.",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",

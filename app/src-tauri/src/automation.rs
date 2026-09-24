@@ -1486,6 +1486,9 @@ fn open_one(
                 Some(AutomationStepRunDto {
                     run_step: ready.run_step.id,
                     seq: ready.run_step.seq,
+                    automation_name: read::automation(store.read_model().conn(), run.automation_id)?
+                        .map(|one| one.name)
+                        .unwrap_or_default(),
                     name: def.name.clone(),
                     action_name: placed_action_name(store, def.placement_id)?,
                     task: worked_task(store, ready.run_step.run_task_id)?,
@@ -1567,13 +1570,13 @@ fn worked_task(
 ) -> Result<Option<AutomationRunTaskDto>, CmdError> {
     let Some(stretch_id) = run_task_id else { return Ok(None) };
     let conn = store.read_model().conn();
-    let Some(task_id) = read::automation_run_task(conn, stretch_id)?.and_then(|s| s.task_id) else {
-        return Ok(None);
-    };
+    let Some(stretch) = read::automation_run_task(conn, stretch_id)? else { return Ok(None) };
+    let Some(task_id) = stretch.task_id else { return Ok(None) };
     Ok(read::task_title(conn, task_id)?.map(|title| AutomationRunTaskDto {
         id: task_id,
         r#ref: amenbo_core::idref::task(task_id),
         title,
+        seq: stretch.seq,
     }))
 }
 

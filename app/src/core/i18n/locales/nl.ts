@@ -595,6 +595,7 @@ export const nl: Translation = {
     "face.auto": "Automatisch",
     "face.runStep": "Stap {n}",
     "face.runNo": "Uitvoering {n}",
+    "face.runTask": "Taak {n}",
     "face.dropRunConfirm": "Dit deelvenster verwijderen? De uitvoering wordt gestopt, de taak waaraan die werkte gaat terug naar Te doen, en een regel op die taak zegt dat.",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",

@@ -75,14 +75,15 @@ describe("the row on the page", () => {
 describe("the row above a run's pane", () => {
   /** Where a run has got to, as the face hands it over (`./nameplate`). */
   const RUN = {
+    automation: "家計簿の開発ループ",
     run: 7,
     seq: 3,
     step: "取る",
     action: "下ごしらえ",
-    task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く" },
+    task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
   };
 
-  it("says the four values, and marks the pane as a run's", () => {
+  it("says where the run has got to, and marks the pane as a run's", () => {
     // All four are Amenbo's own — three off the execution row and one off the ledger — which is the
     // whole of why they can be said at all (`AMB-D-858`). What the step printed is not among them:
     // that is in the terminal under the row.
@@ -100,9 +101,13 @@ describe("the row above a run's pane", () => {
       .toBe(tf("auto.run.inAction", { action: "下ごしらえ", step: "取る" }));
     expect(host.querySelector(".plate-run__seq")?.textContent).toContain("3");
     expect(host.querySelector(".plate-run__no")?.textContent).toContain("7");
+    // How many tasks in the run this is, which is not the move count: a run takes several moves over
+    // each task.
+    expect(host.querySelector(".plate-run__nth")?.textContent).toBe(tf("face.runTask", { n: 2 }));
     expect(host.querySelector(".plate-run__task")?.textContent).toBe("AMB-T-5252");
-    // The row has room for the reference and the panel has room for the title, which is what says
-    // which task it is without going to look it up.
+    // The title is on the row too, which is what says which task it is without going to look it up;
+    // the panel has it whole where the row had to cut it.
+    expect(host.querySelector(".plate-run__title")?.textContent).toBe("ペインのヘッダを描く");
     expect(host.querySelector(".plate-peek__task")?.textContent)
       .toBe("AMB-T-5252 ペインのヘッダを描く");
   });

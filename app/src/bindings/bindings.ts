@@ -353,6 +353,44 @@ export type AutomationBuiltinExitDto = {
 name?: string, outputs: Array<AutomationPortDto>, };
 
 /**
+ * **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
+ * terminal while it carries the step out itself (`AMB-D-964`).
+ *
+ * It is told twice: once as the built-in is about to be carried out, and once as it has been. The
+ * second replaces the first in the pane rather than stacking under it — what was done is kept on the
+ * run, and read on the "running" and "history" tabs.
+ */
+export type AutomationBuiltinRunDto = { 
+/**
+ * Which move of the run this is, counted from 1 — the count the row above a step's pane says.
+ */
+seq: number, 
+/**
+ * The automation the run was launched from, by the name it holds now. Empty where it has gone.
+ */
+automationName: string, 
+/**
+ * The built-in, by the name its step was written with.
+ */
+name: string, 
+/**
+ * The built-in's key (`amenbo_core::ops::automation_builtin`).
+ */
+key: string, 
+/**
+ * The action the spot this step was opened from stands on, where it is still there.
+ */
+actionName?: string, 
+/**
+ * The task the built-in is about — absent on one that takes a task, until it has taken one.
+ */
+task?: AutomationRunTaskDto, 
+/**
+ * Whether it has been carried out. False while Amenbo is still at it.
+ */
+finished: boolean, };
+
+/**
  * **One automation in the list** — what the "automations" tab draws a row from.
  */
 export type AutomationCardDto = { id: number, name: string, 
@@ -669,9 +707,10 @@ inputs: Array<AutomationPortDto>, };
  * **A step of a run, opened** — what the workspace stands a terminal on
  * ([`amenbo_core::ops::automation_step::open`]).
  *
- * It carries two outcomes because opening a step has two: the step is ready, or a required input had
- * nothing standing in it and the run was stopped instead. A run that was stopped has no terminal to
- * open, so `step` is absent and `missing` names the inputs, for the sentence a person reads.
+ * It carries the outcomes opening a step has: the step is ready, a built-in is being or has been
+ * carried out in place of it (`builtin`), or a required input had nothing standing in it and the run
+ * was stopped instead. A run that was stopped has no terminal to open, so `step` is absent and
+ * `missing` names the inputs, for the sentence a person reads.
  */
 export type AutomationStepOpenDto = { run: number, 
 /**
@@ -682,6 +721,12 @@ project: number,
  * The step to open a terminal on, or absent where the run was stopped instead.
  */
 step?: AutomationStepRunDto, 
+/**
+ * **A built-in Amenbo is carrying out, or has just carried out**, in place of a terminal
+ * (`AMB-D-964`). The pane draws what it is doing where a step's terminal would stand. Absent for
+ * an agent's step and for a run stopped instead.
+ */
+builtin?: AutomationBuiltinRunDto, 
 /**
  * The required inputs nothing filled, where the run was stopped. Empty otherwise.
  */

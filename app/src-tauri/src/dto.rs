@@ -3639,9 +3639,10 @@ pub struct AutomationRunStartedDto {
 /// **A step of a run, opened** — what the workspace stands a terminal on
 /// ([`amenbo_core::ops::automation_step::open`]).
 ///
-/// It carries two outcomes because opening a step has two: the step is ready, or a required input had
-/// nothing standing in it and the run was stopped instead. A run that was stopped has no terminal to
-/// open, so `step` is absent and `missing` names the inputs, for the sentence a person reads.
+/// It carries the outcomes opening a step has: the step is ready, a built-in is being or has been
+/// carried out in place of it (`builtin`), or a required input had nothing standing in it and the run
+/// was stopped instead. A run that was stopped has no terminal to open, so `step` is absent and
+/// `missing` names the inputs, for the sentence a person reads.
 #[derive(Serialize, TS, Clone)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3655,8 +3656,45 @@ pub struct AutomationStepOpenDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step: Option<AutomationStepRunDto>,
+    /// **A built-in Amenbo is carrying out, or has just carried out**, in place of a terminal
+    /// (`AMB-D-964`). The pane draws what it is doing where a step's terminal would stand. Absent for
+    /// an agent's step and for a run stopped instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) builtin: Option<AutomationBuiltinRunDto>,
     /// The required inputs nothing filled, where the run was stopped. Empty otherwise.
     pub(crate) missing: Vec<String>,
+}
+
+/// **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
+/// terminal while it carries the step out itself (`AMB-D-964`).
+///
+/// It is told twice: once as the built-in is about to be carried out, and once as it has been. The
+/// second replaces the first in the pane rather than stacking under it — what was done is kept on the
+/// run, and read on the "running" and "history" tabs.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationBuiltinRunDto {
+    /// Which move of the run this is, counted from 1 — the count the row above a step's pane says.
+    #[ts(type = "number")]
+    pub(crate) seq: i64,
+    /// The automation the run was launched from, by the name it holds now. Empty where it has gone.
+    pub(crate) automation_name: String,
+    /// The built-in, by the name its step was written with.
+    pub(crate) name: String,
+    /// The built-in's key (`amenbo_core::ops::automation_builtin`).
+    pub(crate) key: String,
+    /// The action the spot this step was opened from stands on, where it is still there.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) action_name: Option<String>,
+    /// The task the built-in is about — absent on one that takes a task, until it has taken one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task: Option<AutomationRunTaskDto>,
+    /// Whether it has been carried out. False while Amenbo is still at it.
+    pub(crate) finished: bool,
 }
 
 /// **One step of a run, as its pane draws it.**

@@ -613,6 +613,8 @@ export const ptBR: Translation = {
     "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 
     "face.ended": "O programa deste terminal foi encerrado.",
+    "face.builtinDoing": "O Amenbo está executando isto",
+    "face.builtinDone": "O Amenbo executou isto",
 
     "face.endedGeminiUnset": "O Gemini CLI não tem um método de autenticação definido. O caminho indicado pertence apenas a este painel e some com ele — o arquivo a editar é o seu próprio ~/.gemini/settings.json.",
     "face.noWayBack": "Esta conversa não pode mais ser aberta.",

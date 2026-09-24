@@ -11,12 +11,21 @@
 // (`crate::automation`).
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
-import type { AutomationStepOpenDto, AutomationStepRunDto } from "../bindings/bindings";
+import type {
+  AutomationBuiltinRunDto,
+  AutomationStepOpenDto,
+  AutomationStepRunDto,
+} from "../bindings/bindings";
 
 /** What one step's terminal is opened with (`crate::dto::AutomationStepRunDto`). */
 export type StepRun = AutomationStepRunDto;
 
-/** A step of a run, opened — or a run stopped instead, which opens no terminal. */
+/** What a run's pane shows while Amenbo carries a built-in out in place of a terminal
+ *  (`crate::dto::AutomationBuiltinRunDto`, `AMB-D-964`). */
+export type BuiltinRun = AutomationBuiltinRunDto;
+
+/** A step of a run, opened — a built-in carried out in its place, or a run stopped instead, which
+ *  opens no terminal. */
 export type StepOpened = AutomationStepOpenDto;
 
 /**

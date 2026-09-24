@@ -1939,7 +1939,7 @@ pub enum AutomationCmd {
         /// the name of the setting or the input the working folder is taken from — a name, not a path
         #[arg(long, value_name = "NAME")]
         work_dir: Option<String>,
-        /// also land this step's report as a comment on the task
+        /// also land this step's report as a comment on the task, unless the task is closed by then
         #[arg(long)]
         report_to_task: bool,
         /// do not hand this step the run's story so far (it is handed on unless this is passed)
@@ -1964,7 +1964,7 @@ pub enum AutomationCmd {
         /// take the working folder from nothing
         #[arg(long)]
         clear_work_dir: bool,
-        /// whether this step's report also lands as a comment on the task (`--report-to-task true|false`)
+        /// whether this step's report also lands as a comment on the task, unless the task is closed by then (`--report-to-task true|false`)
         #[arg(long)]
         report_to_task: Option<bool>,
         /// whether this step is handed the run's story so far (`--history true|false`)

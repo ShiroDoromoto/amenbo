@@ -1666,7 +1666,7 @@ pub struct AutomationStep {
     /// the answer is given where the action is placed rather than baked in here.
     #[serde(default)]
     pub work_dir_ref: Option<String>,
-    /// Does this step's report also land as a comment on the task?
+    /// Does this step's report also land as a comment on the task? Never on one that is closed by then.
     #[serde(default)]
     pub report_to_task: bool,
     /// Is the run's story so far handed to this step? On unless somebody turns it off.

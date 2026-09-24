@@ -4,7 +4,7 @@
 //! **A run ends by exactly one road** ([`ended`]), and says which of three endings it was
 //! ([`Ending`], `AMB-D-955`): completed, failed or canceled. Every ending but completed owes the same
 //! two acts: release the task the run was holding, and leave a line on that task saying what became of
-//! it. A road per ending would have been a place per ending for one of the two to be forgotten.
+//! it — unless the task is closed by then, which takes no line. A road per ending would have been a place per ending for one of the two to be forgotten.
 //!
 //! **Pausing is a request, not a stop.** A step under way cannot be cut in half — it is an agent in a
 //! terminal, mid-sentence — so pressing pause writes `pause_requested` and the run goes on until that
@@ -162,8 +162,9 @@ fn close_stretch(
 /// there by the work rather than by the reservation. A task somebody finished mid-run does not reopen
 /// because the run was then stopped.
 ///
-/// The line is left whatever the task's state, because what a person needs is to know the run is not
-/// coming back — and where it got to, so they can judge what is half done.
+/// The line is left on a task that is still open, because what a person needs is to know the run is
+/// not coming back — and where it got to, so they can judge what is half done. A closed task gets no
+/// line: nobody reads one there, and the run's history already says how it ended (`AMB-D-963`).
 fn hand_the_task_back(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
@@ -173,6 +174,9 @@ fn hand_the_task_back(
     let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(()) };
     if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
         crate::ops::task::set_status(tx, task_id, TaskStatus::Todo)?;
+    }
+    if crate::ops::automation_report::closed(tx, task_id)? {
+        return Ok(());
     }
     crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &said(tx, run, ending)?)?;
     Ok(())
@@ -675,6 +679,46 @@ mod tests {
                 comments_on(tx, task).is_empty(),
                 "nothing went wrong, so there is nothing to tell anybody",
             );
+        });
+    }
+
+    /// **A run that fails after its step closed the task leaves the task as it is** (`AMB-D-963`).
+    ///
+    /// The agent ran `task done` and then the step's program went away before `step-done`. The run
+    /// still fails, the task stays done, and nothing is said on it — nobody reads a closed task.
+    #[test]
+    fn a_run_that_fails_after_its_task_was_closed_leaves_no_line_on_it() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, step.run_step.id);
+            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("the agent closes it");
+
+            let ended = step_ended(tx, step.run_step.id).expect("step ended").expect("a run to end");
+            assert_eq!(ended.run.status, AutomationRunStatus::Failed);
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
+            assert!(comments_on(tx, task).is_empty(), "a closed task is read by nobody");
+        });
+    }
+
+    /// **A restart closes every run in one go, a closed task among them** — one closed task must not
+    /// fail the sweep and leave the other runs `running`.
+    #[test]
+    fn a_restart_stops_a_run_whose_task_was_closed_along_with_the_rest() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let closed = a_run(tx, &p.automation);
+            let step = opened(tx, &closed, &p.first);
+            let task = a_task_in_hand(tx, p.project, step.run_step.id);
+            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("the agent closes it");
+            let another = a_run(tx, &p.automation);
+
+            let caught = sweep(tx).expect("sweep");
+            assert_eq!(caught.len(), 2);
+            assert_eq!(status_of(tx, closed.id), AutomationRunStatus::Failed);
+            assert_eq!(status_of(tx, another.id), AutomationRunStatus::Failed);
+            assert!(comments_on(tx, task).is_empty(), "a closed task is read by nobody");
         });
     }
 

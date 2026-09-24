@@ -1,0 +1,122 @@
+# A task filter says which tasks a step may take, and then one of them has to be the one taken. Which
+# one is the order: the filter's answer carries it beside its parts, and the step's prompt reads it as
+# the `--sort` of the task list it is told to run. A placement nobody gave an order to takes the
+# highest priority first, so a road that only wrote the parts would pass on a build that dropped the
+# order on the way in — which is the failure this road is written against.
+#
+# What the prompt says with the order in it is held by core's own tests
+# (`amenbo_core::ops::automation_step`); what a road can read back is the answer, and that is where
+# the order has to have landed.
+id: take-tasks-in-the-order-you-choose
+title: A task filter is answered with the order its tasks are taken in, and keeps it
+description: >
+  Stand up an automation whose one placement takes a task through a required task filter, and answer
+  that filter with the tasks it takes and the order it takes them in. From a terminal the answer is
+  read back whole, order and all; on the screen the order is chosen off the pulldown in the sentence
+  under the filter's rows, and the setting stops being named as what is in the way.
+given:
+  # The action that takes the task: one step, one named way out handing the task on, and the filter
+  # it takes it through, required so an unanswered one is in the way of a start.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: cfg-add, with: { action: take, name: which, kind: taskfilter, required: true } }
+
+  # The automation, one placement of it, and nothing else in the way of a start but the filter.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — tasks in an order" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_cli:
+  # The parts, and the order beside them — the soonest due first.
+  - type: action
+    domain: automation
+    op: cfg-set
+    with: { target: at_take, name: which, status: todo, sort: due }
+
+  # Read back whole: the order is in the answer, not only the parts.
+  - type: assert
+    domain: automation
+    op: placement-read
+    with:
+      target: auto
+      name: take
+      settings: { which: { status: [todo], sort: due } }
+
+  # Answered again the other way round — the newest first. The answer is replaced, not added to.
+  - type: action
+    domain: automation
+    op: cfg-set
+    with: { target: at_take, name: which, status: todo, sort: "-created" }
+
+  - type: assert
+    domain: automation
+    op: placement-read
+    with:
+      target: auto
+      name: take
+      settings: { which: { status: [todo], sort: "-created" } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      box: take
+      at: which
+      present: true
+
+  # The parts on the rows, then the order off the pulldown in the sentence under them.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: take
+
+  - type: action
+    domain: automation
+    op: answer-filter
+    with:
+      setting: which
+      row: assignee
+      value: My AI
+
+  - type: action
+    domain: automation
+    op: answer-sort
+    with:
+      setting: which
+      value: due
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      box: take
+      at: which
+      present: false

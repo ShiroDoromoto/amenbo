@@ -4113,8 +4113,9 @@ const REGISTRY: &[OpSpec] = &[
     // filter is never one string here**: it is the parts that name it (`assignee`, `status`, `ready`,
     // …), each a list of what is any-of on that part, which is the same reading `--filter`'s
     // expression gives and the same shape the screen's rows take. `clear` leaves it unanswered, which
-    // is a state of its own and not an empty answer.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cfg-set", required: &["target", "name"], refs: &["target"], strings: &["name", "folder", "choice", "text"], binds: false },
+    // is a state of its own and not an empty answer. `sort` is the order a task filter takes its tasks
+    // in — a key `task list --sort` takes — and rides beside the parts, never alone.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cfg-set", required: &["target", "name"], refs: &["target"], strings: &["name", "folder", "choice", "text", "sort"], binds: false },
     // What happens after a way out is taken. The way out is named as the box and the name it carries,
     // because that pair is what the edge hangs on — the unnamed one is the box with no `exit`, and `*`
     // is the error one. The box is a placement, or with `in_action` a step.
@@ -4297,6 +4298,10 @@ const REGISTRY: &[OpSpec] = &[
     // write, and no road here may write one. A setting is answered on a placement, so this is the
     // automation's panel's.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-filter", required: &["setting", "row", "value"], refs: &[], strings: &["setting", "row", "value"], binds: false },
+    // The order the same filter takes its tasks in, off the pulldown in the sentence under its rows.
+    // `value` is the key `cfg-set`'s `sort` writes — `priority`, `due` or `created`, the three the
+    // pulldown offers — so a road answering on the screen and one answering in a terminal name it alike.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-sort", required: &["setting", "value"], refs: &[], strings: &["setting", "value"], binds: false },
     // One of the lines a `choice` setting offers, taken off the pulldown under it. What that
     // pulldown holds is what somebody wrote out under the row (`redeclare`'s `choices`) and nothing
     // else, so a road naming a line by its words is reading that writing back — which is the only

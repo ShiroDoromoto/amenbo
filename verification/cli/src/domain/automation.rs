@@ -778,6 +778,14 @@ fn answer(with: &Args, args: &mut Vec<String>) -> Result<String, String> {
         }
         said.push(format!("{key} `{}`", values.join(",")));
     }
+    // The order the filter takes its tasks in. One word, and only beside the parts: the command
+    // refuses it alone, and that refusal is what a road leaving the parts out is there to read.
+    if let Some(value) = with.get("sort") {
+        let sort = value.as_str().ok_or("`sort` takes a key `task list --sort` takes")?;
+        args.push("--sort".into());
+        args.push(sort.to_string());
+        said.push(format!("sort `{sort}`"));
+    }
     if said.is_empty() {
         return Err(
             "a setting is answered in the shape its kind takes, or left unanswered with `clear`"
@@ -1163,6 +1171,15 @@ mod tests {
             "each part is written out one flag at a time, the command's own way round",
         );
         assert!(said.contains("todo,in_progress"), "{said}");
+    }
+
+    /// The order rides after the parts, as the one `--sort` the command takes beside them.
+    #[test]
+    fn a_task_filter_takes_its_order_after_the_parts() {
+        let mut args: Vec<String> = Vec::new();
+        let said = answer(&with("{ status: todo, sort: \"-due\" }"), &mut args).expect("an answer");
+        assert_eq!(args, ["--status", "todo", "--sort", "-due"].map(String::from).to_vec());
+        assert!(said.contains("sort `-due`"), "{said}");
     }
 
     /// What a library action's row is read for is the line the screen draws under the name, so the

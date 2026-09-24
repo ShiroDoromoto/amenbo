@@ -4194,6 +4194,18 @@ impl Instructor {
                 req(with, "value")?,
                 req(with, "row")?
             ),
+            // The order sits in a sentence under the filter's rows, as a pulldown of three. The line
+            // names the words the pulldown shows rather than the key, which is what the operator reads.
+            (Domain::Automation, "answer-sort") => format!(
+                "In the panel showing what the pressed box holds, under the setting \"{}\", open the pulldown in the sentence that ends \"and take the one on top\" and choose \"{}\".",
+                req(with, "setting")?,
+                match req(with, "value")? {
+                    "priority" => "by priority, highest first",
+                    "due" => "by due date, soonest first",
+                    "created" => "oldest first",
+                    other => return Err(format!("`value` does not know `{other}` — the pulldown offers priority / due / created")),
+                }
+            ),
             // A `choice` is answered off the pulldown under it, which holds what was written out
             // under the row and nothing else. So the line names the words rather than a place in the
             // list: a road that said "the first one" would pass on a build offering anything at all.

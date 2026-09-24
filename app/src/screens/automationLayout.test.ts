@@ -290,6 +290,9 @@ describe("the picture of an automation", () => {
     expect(line.points[1]!.y).toBeGreaterThan(at(picture, 1).y + at(picture, 1).h);
     // The ending is written at the foot of the stub, under the way out's own name.
     expect(line.endAt!.y).toBeGreaterThanOrEqual(line.points[1]!.y);
+    // ...and beside the stub, not off to its left where the neighbouring names are.
+    expect(line.endAt!.x).toBeGreaterThan(line.points[1]!.x);
+    expect(line.endAt!.x - line.points[1]!.x).toBeLessThan(20);
   });
 
   it("puts a + on every edge and on no wire", () => {

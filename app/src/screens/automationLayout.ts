@@ -669,6 +669,7 @@ export function layOut(graph: PicGraph | null): Picture {
       ...line,
       points: line.points.map((p) => ({ x: p.x + dx, y: p.y })),
       at: { x: line.at.x + dx, y: line.at.y },
+      endAt: line.endAt === undefined ? undefined : { x: line.endAt.x + dx, y: line.endAt.y },
     })),
     inserts: inserts.map((one) => ({ ...one, x: one.x + dx })),
     marks: marks.map((one) => ({ ...one, x: one.x + dx })),

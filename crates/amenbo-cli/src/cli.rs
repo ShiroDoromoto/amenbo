@@ -2265,7 +2265,7 @@ pub enum AutomationCmd {
         run: i64,
     },
     /// Stop a run, which ends it canceled: hand the task it was working back, and leave a comment on
-    /// the task saying how far it got
+    /// the task saying how far it got — unless the task is closed (done or rejected), which gets none
     Stop {
         /// run id
         run: i64,

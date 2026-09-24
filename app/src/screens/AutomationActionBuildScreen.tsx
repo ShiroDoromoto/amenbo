@@ -20,9 +20,10 @@
 // action is one row — what it is for, its reach and how far a rewrite carries — and the input and the
 // output are frames over and under the picture of the steps, so the screen reads as what comes in,
 // what is done with it and what goes out. Pressing the row's edit button, either frame or a step opens
-// that one in the panel pinned to the right of the picture rather than stacked under it: a picture
-// that runs long would otherwise carry a low step's contents off the bottom of the window, and the
-// press would show nothing.
+// that one in the panel to the right of the picture rather than stacked under it: a picture that runs
+// long would otherwise carry a low step's contents off the bottom of the window, and the press would
+// show nothing. The panel stands in the shell's right-pane column, where the board's detail does
+// (`../shell/paneSlot`), so it scrolls on its own and is as tall as the window lets it be.
 //
 // **A global action opened from a project is read, not written** (`AMB-D-954`). It is no one
 // project's, so it is changed from the sidebar's entrance and nowhere else: here the panels still open
@@ -39,6 +40,7 @@
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
 import { AutomationHeldBy } from "./AutomationHeldBy";
@@ -51,6 +53,7 @@ import { errText, t, tf, tn } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
+import { usePaneSlot } from "../shell/paneSlot";
 import { useDraft, type Run } from "./automationPanel";
 import type { AutomationActionDetailDto } from "../bindings/bindings";
 
@@ -116,8 +119,9 @@ function AboutRow({
 }
 
 /**
- * The panel pinned to the right of the picture: a head that names what it shows, and a way to close.
- * The automation's build screen pins the same one beside its own picture (`./AutomationBuildScreen`).
+ * The panel to the right of the picture: a head that names what it shows, and a way to close. It is
+ * drawn into the shell's right-pane column, and in place where there is no shell to lend one.
+ * The automation's build screen opens the same one beside its own picture (`./AutomationBuildScreen`).
  */
 export function Panel({
   place,
@@ -133,27 +137,29 @@ export function Panel({
   readOnly?: boolean;
   children: ReactNode;
 }) {
-  return (
+  const pane = usePaneSlot();
+  const panel = (
     <aside className="actpanel">
-      <div className="actpanel__inner">
-        <div className="actpanel__head">
-          <span className="actbuild__sec">{place}</span>
-          <span className="actpanel__title">{title}</span>
-          <button
-            type="button"
-            className="actpanel__close"
-            aria-label={t("auto.act.close")}
-            onClick={onClose}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-        {/* A disabled fieldset shuts every control under it, the panels' own included, without
-            each of them having to be told. */}
-        <fieldset className="actpanel__body" disabled={readOnly}>{children}</fieldset>
+      <div className="actpanel__head">
+        <span className="actbuild__sec">{place}</span>
+        <span className="actpanel__title">{title}</span>
+        <button
+          type="button"
+          className="actpanel__close"
+          aria-label={t("auto.act.close")}
+          onClick={onClose}
+        >
+          <Icon name="close" />
+        </button>
       </div>
+      {/* A disabled fieldset shuts every control under it, the panels' own included, without
+          each of them having to be told. */}
+      <fieldset className="actpanel__body" disabled={readOnly}>{children}</fieldset>
     </aside>
   );
+  if (pane === null) return panel;
+  // The column is drawn on the render after the claim, so the first render has nowhere to go yet.
+  return pane.slot && createPortal(panel, pane.slot);
 }
 
 export function AutomationActionBuildScreen({
@@ -206,7 +212,6 @@ export function AutomationActionBuildScreen({
     setPart(part === one ? null : one);
   };
   const pressed = action?.steps.find((one) => one.id === step) ?? null;
-  const panelOpen = action !== null && (part !== null || pressed !== null);
   const partPlace = {
     about: t("auto.act.aboutPlace"),
     in: t("auto.pic.actionIn"),
@@ -237,103 +242,101 @@ export function AutomationActionBuildScreen({
 
       {action !== null && <AutomationHeldBy runs={action.heldBy} onGoToRun={onGoToRun} />}
 
-      <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
-        <div className="actbuild__canvashead">
-          <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>
-          <span className="actbuild__hint">{t("auto.act.stepsHint")}</span>
-          {action !== null && action.steps.length > 0 && !readOnly && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setAdding({ picture: "action", actionId: action.id })}
-            >
-              {t("auto.act.stepAdd")}
-            </button>
-          )}
-        </div>
-        {action !== null && action.entryStepId === undefined && action.steps.length > 0 && (
-          <div className="auto__notready actbuild__notready">{t("auto.act.noEntry")}</div>
-        )}
-        <div className="actbuild__canvas">
-          <AutomationPicture
-            graph={actionGraph(action)}
-            empty={t("auto.act.empty")}
-            insertLabel={t("auto.act.insert")}
-            selectedBoxId={step ?? undefined}
-            onPickBox={pickBox}
-            onInsert={readOnly ? undefined : (edgeId) => setAdding({ picture: "action", edgeId })}
-            selectedPart={part === "in" || part === "out" ? part : undefined}
-            onPickPart={pickPart}
-          />
-          {action !== null && action.steps.length === 0 && !readOnly && (
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => setAdding({ picture: "action", actionId: action.id })}
-            >
-              {t("auto.act.firstStep")}
-            </button>
-          )}
-        </div>
-
-        {action !== null && part !== null && (
-          <Panel place={partPlace[part]} title={action.name} onClose={() => setPart(null)} readOnly={readOnly}>
-            {part === "about" ? (
-              <>
-                <label className="autostep__field">
-                  <span className="autostep__label">{t("auto.actions.name")}</span>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onBlur={() =>
-                      name !== action.name && void run(editAutomationAction(action.id, { name }))
-                    }
-                  />
-                </label>
-                <label className="autostep__field">
-                  <span className="autostep__label">{t("auto.actions.note")}</span>
-                  <textarea
-                    {...asTyped}
-                    rows={3}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    onBlur={() =>
-                      note !== action.note && void run(editAutomationAction(action.id, { note }))
-                    }
-                  />
-                  <span className="autostep__said">{t("auto.actions.noteWhat")}</span>
-                </label>
-                <div className="autostep__field">
-                  <span className="autostep__label">{t("auto.actions.reach")}</span>
-                  <span>
-                    <ReachChip global={action.global} />
-                  </span>
-                </div>
-                <div className="autostep__field">
-                  <span className="autostep__label">{t("auto.actions.colUsed")}</span>
-                  <span className="autostep__said">
-                    {action.usedBy === 0
-                      ? t("auto.actions.usedNone")
-                      : tf("auto.act.usedWhere", { n: action.usedBy })}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <AutomationActionDeclaresPanel action={action} part={part} run={run} />
-            )}
-          </Panel>
-        )}
-
-        {pressed !== null && part === null && (
-          <Panel place={t("auto.act.step")} title={pressed.name} onClose={() => setStep(null)} readOnly={readOnly}>
-            <AutomationActionStepPanel
-              action={action}
-              stepId={step}
-              onRemoved={() => setStep(null)}
-            />
-          </Panel>
+      <div className="actbuild__canvashead">
+        <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>
+        <span className="actbuild__hint">{t("auto.act.stepsHint")}</span>
+        {action !== null && action.steps.length > 0 && !readOnly && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setAdding({ picture: "action", actionId: action.id })}
+          >
+            {t("auto.act.stepAdd")}
+          </button>
         )}
       </div>
+      {action !== null && action.entryStepId === undefined && action.steps.length > 0 && (
+        <div className="auto__notready actbuild__notready">{t("auto.act.noEntry")}</div>
+      )}
+      <div className="actbuild__canvas">
+        <AutomationPicture
+          graph={actionGraph(action)}
+          empty={t("auto.act.empty")}
+          insertLabel={t("auto.act.insert")}
+          selectedBoxId={step ?? undefined}
+          onPickBox={pickBox}
+          onInsert={readOnly ? undefined : (edgeId) => setAdding({ picture: "action", edgeId })}
+          selectedPart={part === "in" || part === "out" ? part : undefined}
+          onPickPart={pickPart}
+        />
+        {action !== null && action.steps.length === 0 && !readOnly && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => setAdding({ picture: "action", actionId: action.id })}
+          >
+            {t("auto.act.firstStep")}
+          </button>
+        )}
+      </div>
+
+      {action !== null && part !== null && (
+        <Panel place={partPlace[part]} title={action.name} onClose={() => setPart(null)} readOnly={readOnly}>
+          {part === "about" ? (
+            <>
+              <label className="autostep__field">
+                <span className="autostep__label">{t("auto.actions.name")}</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() =>
+                    name !== action.name && void run(editAutomationAction(action.id, { name }))
+                  }
+                />
+              </label>
+              <label className="autostep__field">
+                <span className="autostep__label">{t("auto.actions.note")}</span>
+                <textarea
+                  {...asTyped}
+                  rows={3}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  onBlur={() =>
+                    note !== action.note && void run(editAutomationAction(action.id, { note }))
+                  }
+                />
+                <span className="autostep__said">{t("auto.actions.noteWhat")}</span>
+              </label>
+              <div className="autostep__field">
+                <span className="autostep__label">{t("auto.actions.reach")}</span>
+                <span>
+                  <ReachChip global={action.global} />
+                </span>
+              </div>
+              <div className="autostep__field">
+                <span className="autostep__label">{t("auto.actions.colUsed")}</span>
+                <span className="autostep__said">
+                  {action.usedBy === 0
+                    ? t("auto.actions.usedNone")
+                    : tf("auto.act.usedWhere", { n: action.usedBy })}
+                </span>
+              </div>
+            </>
+          ) : (
+            <AutomationActionDeclaresPanel action={action} part={part} run={run} />
+          )}
+        </Panel>
+      )}
+
+      {pressed !== null && part === null && (
+        <Panel place={t("auto.act.step")} title={pressed.name} onClose={() => setStep(null)} readOnly={readOnly}>
+          <AutomationActionStepPanel
+            action={action}
+            stepId={step}
+            onRemoved={() => setStep(null)}
+          />
+        </Panel>
+      )}
 
       {adding !== null && (
         <AutomationStepAdd

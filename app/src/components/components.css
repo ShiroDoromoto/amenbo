@@ -1659,26 +1659,21 @@ button.feed__target:hover { color: var(--c-accent); }
 .actport--cfg { --tone: var(--c-heed); }
 .actport--exit { --tone: var(--c-accent); color: var(--c-text); background: var(--c-surface-pic) var(--c-surface); }
 .actport--error { --tone: var(--c-stop); color: var(--c-stop); border-style: dashed; background: none; }
-/* The picture and the panel pinned to its right. The panel stands over the stage's right edge, and
-   the picture leaves that much room at its end so no box sits under it. */
-.actbuild__stage { position: relative; }
+/* The picture. Its panel is not beside it here but in the shell's right-pane column
+   (`../shell/paneSlot`), so the picture has the whole width of `.main` and only as much height as it
+   draws. */
 .actbuild__canvashead { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0; }
 .actbuild__canvashead .btn { margin-inline-start: auto; }
 .actbuild__hint { font-size: var(--fs-xs); color: var(--c-text-faint); }
 .actbuild__notready { margin: var(--s-2) var(--s-3) 0; }
 .actbuild__canvas {
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2);
-  padding: var(--s-3) var(--s-3) var(--s-5); min-height: 560px; overflow-x: auto;
+  padding: var(--s-3) var(--s-3) var(--s-5); overflow-x: auto;
 }
 .actbuild__canvas .autopic { max-height: none; align-self: stretch; }
-.actbuild__stage--panel .actbuild__canvas { padding-inline-end: calc(min(430px, 80%) + var(--s-3)); }
-.actpanel {
-  position: absolute; inset-block: 0; inset-inline-end: 0; width: min(430px, 80%);
-  border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
-  background: var(--c-surface-pic) var(--c-surface);
-}
-/* Sticky within the stage, so a press on a low step shows its contents where the reader is looking. */
-.actpanel__inner { position: sticky; inset-block-start: 0; max-height: min(100vh, 100%); overflow: auto; }
+/* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
+   The head stays at the top of that scroll, so the close is in reach under a long body. */
+.actpanel { display: flex; flex-direction: column; min-width: 0; }
 .actpanel__head {
   position: sticky; inset-block-start: 0; z-index: 1; display: flex; align-items: baseline; gap: var(--s-2);
   padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
@@ -1694,6 +1689,8 @@ button.feed__target:hover { color: var(--c-accent); }
   /* A fieldset, so that one attribute can shut the whole body; none of its own frame is wanted. */
   margin: 0; border: 0; min-width: 0;
 }
+/* The press that removes what the panel shows, at its foot. */
+.actpanel__foot { display: flex; gap: var(--s-3); font-size: var(--fs-md); }
 /* Under the action's row, where a global action is only read: where it is changed instead. */
 .actdecl__elsewhere { margin: var(--s-1) 0 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 

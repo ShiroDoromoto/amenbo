@@ -2566,6 +2566,9 @@ body.dragging-row { user-select: none; }
 }
 /* The resize handle on the left edge: a thin hit area straddling the border, showing its
    line only on hover or drag. */
+/* A detail hidden under a build panel (`../shell/paneSlot`). `display: flex` above is an author rule and
+   would beat the user agent's `[hidden]`. */
+.rightpane[hidden] { display: none; }
 .rightpane__resizer {
   position: absolute; left: 0; top: 0; bottom: 0; width: 9px; margin-left: -4px;
   z-index: 5; cursor: col-resize; touch-action: none;

@@ -128,8 +128,6 @@ export function AutomationBuildScreen({
       ? automation?.placements.find((one) => one.id === showing.id) ?? null
       : null;
   const close = () => setShowing(null);
-  const panelOpen =
-    automation !== null && (showing?.kind === "library" || showing?.kind === "about" || pressed !== null);
 
   return (
     <div className="actbuild">
@@ -193,61 +191,59 @@ export function AutomationBuildScreen({
 
       {automation !== null && <AutomationHeldBy runs={automation.heldBy} onGoToRun={onGoToRun} />}
 
-      <div className={panelOpen ? "actbuild__stage actbuild__stage--panel" : "actbuild__stage"}>
-        <div className="actbuild__canvashead">
-          <span className="actbuild__sec">{t("auto.build.picture")}</span>
-        </div>
-        <div className="actbuild__canvas">
-          <AutomationPicture
-            graph={automationGraph(automation)}
-            selectedBoxId={pressed?.id}
-            onPickBox={(box) => setShowing({ kind: "box", id: box })}
-            onInsert={held ? undefined : (edgeId) => setShowing({ kind: "library", target: { edgeId } })}
-          />
-          {automation !== null && automation.placements.length === 0 && !held && (
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
-            >
-              {t("auto.pic.first")}
-            </button>
-          )}
-        </div>
-
-        {automation !== null && showing?.kind === "library" && !held && (
-          <Panel place={t("auto.pic.place")} title="" onClose={close}>
-            <AutomationLibraryPanel
-              // A new line pressed is a new pick: what was typed and opened for one line is not
-              // carried to another.
-              key={"edgeId" in showing.target ? `e${showing.target.edgeId}` : "first"}
-              target={showing.target}
-              projectId={projectId}
-              where={whereTo(automation, showing.target)}
-              onPlaced={close}
-              onMake={() => setMaking(showing.target)}
-            />
-          </Panel>
-        )}
-
-        {automation !== null && showing?.kind === "about" && (
-          <Panel place={t("auto.build.edit")} title={automation.name} onClose={close} readOnly={held}>
-            <AutomationAboutPanel automation={automation} onDeleted={onBack} />
-          </Panel>
-        )}
-
-        {pressed !== null && (
-          <Panel place={t("auto.build.step")} title={pressed.name} onClose={close}>
-            <AutomationStepPanel
-              automation={automation}
-              placementId={pressed.id}
-              onRemoved={close}
-              onOpenAction={onOpenAction}
-              readOnly={held}
-            />
-          </Panel>
+      <div className="actbuild__canvashead">
+        <span className="actbuild__sec">{t("auto.build.picture")}</span>
+      </div>
+      <div className="actbuild__canvas">
+        <AutomationPicture
+          graph={automationGraph(automation)}
+          selectedBoxId={pressed?.id}
+          onPickBox={(box) => setShowing({ kind: "box", id: box })}
+          onInsert={held ? undefined : (edgeId) => setShowing({ kind: "library", target: { edgeId } })}
+        />
+        {automation !== null && automation.placements.length === 0 && !held && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
+          >
+            {t("auto.pic.first")}
+          </button>
         )}
       </div>
+
+      {automation !== null && showing?.kind === "library" && !held && (
+        <Panel place={t("auto.pic.place")} title="" onClose={close}>
+          <AutomationLibraryPanel
+            // A new line pressed is a new pick: what was typed and opened for one line is not
+            // carried to another.
+            key={"edgeId" in showing.target ? `e${showing.target.edgeId}` : "first"}
+            target={showing.target}
+            projectId={projectId}
+            where={whereTo(automation, showing.target)}
+            onPlaced={close}
+            onMake={() => setMaking(showing.target)}
+          />
+        </Panel>
+      )}
+
+      {automation !== null && showing?.kind === "about" && (
+        <Panel place={t("auto.build.edit")} title={automation.name} onClose={close} readOnly={held}>
+          <AutomationAboutPanel automation={automation} onDeleted={onBack} />
+        </Panel>
+      )}
+
+      {pressed !== null && (
+        <Panel place={t("auto.build.step")} title={pressed.name} onClose={close}>
+          <AutomationStepPanel
+            automation={automation}
+            placementId={pressed.id}
+            onRemoved={close}
+            onOpenAction={onOpenAction}
+            readOnly={held}
+          />
+        </Panel>
+      )}
 
       {making !== null && (
         <AutomationActionMake

@@ -18,7 +18,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneStart } from "../talk/terminal";
-import type { StepOpened, StepRun } from "../talk/automationStep";
+import type { BuiltinRun, StepOpened, StepRun } from "../talk/automationStep";
 
 const hoisted = vi.hoisted(() => ({
   /** Every opening the face asked for, in order. */
@@ -130,6 +130,18 @@ function step(over: Partial<StepRun> = {}): StepRun {
     agent: "claude",
     folder: "/work/a",
     interactive: false,
+    ...over,
+  };
+}
+
+function builtin(over: Partial<BuiltinRun> = {}): BuiltinRun {
+  return {
+    seq: 2,
+    automationName: "家計簿の開発ループ",
+    name: "worktree を切る",
+    key: "worktree_cut",
+    task: { id: 5252, ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 1 },
+    finished: false,
     ...over,
   };
 }
@@ -306,5 +318,62 @@ describe("what the row above a run's pane says, and what closing it does", () =>
 
     expect(hoisted.stopped).toEqual([]);
     expect(panes()).toHaveLength(0);
+  });
+});
+
+describe("a built-in on a run's pane", () => {
+  /** The card a built-in stands on, where one is drawn. */
+  const card = () => q(".slot__builtin");
+
+  it("stands the pane on the card when the run starts with one, and opens no terminal", async () => {
+    // A run that starts with a built-in has no terminal to stand its pane on, and the pane is stood
+    // at once all the same (`AMB-D-964`).
+    await mount();
+    await arrive({ step: undefined, builtin: builtin({ seq: 1, task: undefined }) });
+
+    expect(panes()).toHaveLength(1);
+    expect(card()).toHaveLength(1);
+    expect(q(".slot__builtin-name")[0]?.textContent).toBe("worktree を切る");
+    expect(hoisted.opened).toHaveLength(0);
+    // The row above says the run and the built-in, as it says a step.
+    expect(q(".plate__step b")[0]?.textContent).toBe("worktree を切る");
+    expect(q(".slot--run")).toHaveLength(1);
+  });
+
+  it("takes the place of the step before it, and writes itself over when it is done", async () => {
+    await mount();
+    await arrive();
+    await arrive({ step: undefined, builtin: builtin() });
+
+    expect(panes()).toHaveLength(1);
+    expect(card()).toHaveLength(1);
+    expect(q(".workspace__face")).toHaveLength(0);
+    expect(q(".slot__builtin-ref")[0]?.textContent).toBe("AMB-T-5252");
+    const doing = q(".slot__builtin-state")[0]?.textContent;
+
+    await arrive({ step: undefined, builtin: builtin({ finished: true }) });
+
+    // One card, said again — not a second one stacked under it.
+    expect(card()).toHaveLength(1);
+    expect(q(".slot__builtin-state")[0]?.textContent).not.toBe(doing);
+  });
+
+  it("gives the pane back to a terminal when the next step arrives", async () => {
+    await mount();
+    await arrive({ step: undefined, builtin: builtin({ seq: 1 }) });
+
+    await arrive({ step: step({ runStep: 2, seq: 2, session: "step-2" }) });
+
+    expect(panes()).toHaveLength(1);
+    expect(card()).toHaveLength(0);
+    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-2");
+  });
+
+  it("stands for a built-in told before the face was up", async () => {
+    hoisted.standing = [{ run: 7, project: 1, builtin: builtin(), missing: [] }];
+    await mount();
+
+    expect(panes()).toHaveLength(1);
+    expect(card()).toHaveLength(1);
   });
 });

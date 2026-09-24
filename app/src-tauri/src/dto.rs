@@ -3662,7 +3662,7 @@ pub struct AutomationStepRunDto {
 /// Both halves are the ledger's own — the reference a person types to reach the task, and the title
 /// on it — because what a run's pane says about a task is never the agent's word for it
 /// (`AMB-D-858`).
-#[derive(Serialize, TS, Clone)]
+#[derive(Serialize, TS, Clone, PartialEq)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRunTaskDto {

@@ -49,6 +49,9 @@ export type PicBox = {
   name: string;
   exits: readonly AutomationExitDto[];
   inputs: readonly AutomationPortDto[];
+  /** Where the action standing on this box is kept: the device's library, or this project's. Absent
+   *  on an action's picture, whose boxes are its own steps and come from no library. */
+  global?: boolean;
 };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
@@ -94,15 +97,18 @@ export const ACTION_BOUNDARY = 0;
 /** The name core gives the error way out — the one every box of either picture is born with. */
 export const ERROR_EXIT = "*";
 
-/** How big a box is, and how much room is left around it. All of it fixed. */
+/** How big a box is, and how much room is left around it. All of it fixed. Two lines tall — the
+ *  name, and under it where the action comes from or what it is missing — as the mock draws it. */
 const NODE_W = 220;
-const NODE_H = 96;
+const NODE_H = 46;
 /** Between two boxes standing side by side at the same depth. */
 const COL_GAP = 24;
 /** Between one depth and the next — the room a line and its `+` are drawn in. */
 const ROW_GAP = 56;
 /** Inside a stretch's dashed outline, and between one stretch and the next. */
 const LAP_PAD = 16;
+/** Inside the outline's top: a line's room for the word over the box that takes the task. */
+const LAP_TOP = 26;
 const LAP_GAP = 28;
 /** Under the last row of a stretch, where a way out that goes nowhere hangs. */
 const END_ROOM = 56;
@@ -158,6 +164,13 @@ export type PicNode = {
   h: number;
   /** The required inputs nothing reaches. Empty where every one of them is fed. */
   unfed: readonly string[];
+  /** The number the box is shown with — the same one a list naming the boxes gives it
+   *  (`pictureOrder`). Absent on the action's own marks, which are not numbered. */
+  no?: number;
+  /** It goes and takes the next task: a stretch begins here. */
+  takes?: boolean;
+  /** Where the action standing here is kept, on an automation's picture (`PicBox`). */
+  global?: boolean;
 };
 
 /** The dashed outline around the boxes one task is worked by. */
@@ -171,6 +184,12 @@ export type PicLine = {
   points: readonly PicPoint[];
   /** Dashed: it goes back to a box on the way down to the one it leaves. */
   back: boolean;
+  /**
+   * What colour an edge is drawn in, as the legend under the picture reads it: on to the next box,
+   * one of several ways out of a box that branches, or the error way out and a stop. Absent on a
+   * wire and on the line in from the action's top mark, which are told apart otherwise.
+   */
+  tone?: "next" | "branch" | "error";
   /** It crosses the action's own boundary: in from the top mark, or out into a way out's mark. */
   leaves?: boolean;
   /** The way out this edge hangs on, as core names it. Absent for the unnamed one and for a wire. */
@@ -561,9 +580,11 @@ export function layOut(graph: PicGraph | null): Picture {
   let y = PAD + over;
   laps.forEach((lap, nth) => {
     const pad = lap.head === null ? 0 : LAP_PAD;
+    // Over the first row the outline stands higher, for the word over the box that takes the task.
+    const over = lap.head === null ? 0 : LAP_TOP;
     const top = y;
     lap.rows.forEach((row, depth) => {
-      const rowY = top + pad + depth * (NODE_H + ROW_GAP);
+      const rowY = top + over + depth * (NODE_H + ROW_GAP);
       const startX = rowStart(contentW, row.length);
       row.forEach((boxId, column) => {
         const box = boxes.get(boxId)!;
@@ -575,6 +596,9 @@ export function layOut(graph: PicGraph | null): Picture {
           y: rowY,
           w: NODE_W,
           h: NODE_H,
+          no: nodes.length + 1,
+          takes: takesTask(box),
+          global: box.global,
           unfed: !live.has(boxId)
             ? []
             : box.inputs
@@ -584,7 +608,7 @@ export function layOut(graph: PicGraph | null): Picture {
       });
     });
     const inner = lap.rows.length * NODE_H + (lap.rows.length - 1) * ROW_GAP + END_ROOM;
-    const height = inner + pad * 2;
+    const height = inner + over + pad;
     if (lap.head !== null) {
       outlines.push({ headBoxId: lap.head, x: -LAP_PAD, y: top, w: contentW + LAP_PAD * 2, h: height });
     }
@@ -927,6 +951,21 @@ export function layOut(graph: PicGraph | null): Picture {
     }),
   );
   const dx = PAD + leftRoom;
+  // The colour each edge is drawn in (`PicLine.tone`). A box with two or more named ways out is one
+  // the run branches at, and every line out of it says so; the error way out, and a line that stops
+  // the run, are the stop colour.
+  const named = (box: PicBox | undefined) =>
+    box?.exits.filter((exit) => exit.name !== undefined && exit.name !== ERROR_EXIT).length ?? 0;
+  const tones = new Map<string, PicLine["tone"]>(
+    graph.edges.map((edge) => [
+      lineKey("edge", edge.id),
+      edge.exitName === ERROR_EXIT || edge.ends === "halt"
+        ? "error"
+        : named(boxes.get(edge.fromId)) > 1
+          ? "branch"
+          : "next",
+    ]),
+  );
   // And the room the right margin takes: the trunks, and the name written past the outermost one.
   const rightRoom = Math.max(
     LAP_PAD + rightLanes * WIRE_LANE_W,
@@ -939,6 +978,7 @@ export function layOut(graph: PicGraph | null): Picture {
     nodes: nodes.map((one) => ({ ...one, x: one.x + dx })),
     lines: lines.map((line) => ({
       ...line,
+      tone: line.kind === "edge" ? tones.get(line.key) : undefined,
       points: line.points.map((p) => ({ x: p.x + dx, y: p.y })),
       branches: line.branches?.map((branch) => branch.map((p) => ({ x: p.x + dx, y: p.y }))),
       at: { x: line.at.x + dx, y: line.at.y },

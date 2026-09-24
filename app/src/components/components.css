@@ -1349,21 +1349,42 @@ button.feed__target:hover { color: var(--c-accent); }
   position: absolute; transform: translateY(calc(-100% - 4px));
   font-size: var(--fs-xs); line-height: 1; color: var(--c-text-muted); white-space: nowrap;
 }
-/* What comes after a step runs down the left, what is handed on runs down the right, and the two are
-   told apart by weight rather than by colour — a wire is the thinner, quieter of the two because it
-   is read after the order of the steps, never before it. */
-.autopic__line { fill: none; stroke: var(--c-rule); stroke-width: 1.5; }
-.autopic__line--wire { stroke: var(--c-text-faint); stroke-width: 1; }
+/* What comes after a step runs down the left, what is handed on runs down the right. A wire is the
+   thinner, dotted, quieter of the two because it is read after the order of the steps, never before
+   it. The edges are coloured by what they are, as the legend under the picture says
+   (`AMB-T-5424`): on to the next box, one way of several out of a box that branches, or the error
+   way out and a stop. */
+.autopic__line { fill: none; stroke: var(--c-text-muted); stroke-width: 1.5; }
+.autopic__line--branch { stroke: var(--c-heed); }
+.autopic__line--error { stroke: var(--c-stop); }
+.autopic__line--wire { stroke: var(--c-text-faint); stroke-width: 1.2; stroke-dasharray: 2 3; }
 /* It goes back to a row above the one it left. A step's line doing so is red as well as dashed: in
    grey it looked like one more outline, running down the margin beside the real ones. */
 .autopic__line--back { stroke-dasharray: 5 4; }
 .autopic__line--edge.autopic__line--back { stroke: var(--c-stop); }
 .autopic__word { font-size: var(--fs-xs); fill: var(--c-text-muted); }
+/* The arrowheads, one per colour a line can be in: a marker cannot take the stroke of the line it ends. */
+.autopic__arrow--next { fill: var(--c-text-muted); }
+.autopic__arrow--branch { fill: var(--c-heed); }
+.autopic__arrow--error, .autopic__arrow--back { fill: var(--c-stop); }
+.autopic__arrow--leaves { fill: var(--c-accent); }
+.autopic__arrow--wire { fill: var(--c-text-faint); }
+/* What the colours and dashes mean. Each swatch is a short line drawn as the line it stands for. */
+.autopic__legend {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3);
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.autopic__legenditem { display: inline-flex; align-items: center; gap: var(--s-1); }
+.autopic__swatch { display: inline-block; width: 15px; height: 0; border-top: 2px solid var(--c-text-muted); }
+.autopic__swatch--back { border-top-color: var(--c-stop); border-top-style: dashed; }
+.autopic__swatch--branch { border-top-color: var(--c-heed); }
+.autopic__swatch--error { border-top-color: var(--c-stop); }
+.autopic__swatch--wire { border-top-color: var(--c-text-faint); border-top-style: dotted; }
 /* One placement. A button because that is what it is: pressing it is what puts the spot's contents in
    the panel beside the picture. */
 .autopic__node {
   position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 2px;
-  box-sizing: border-box; padding: var(--s-2);
+  box-sizing: border-box; padding: var(--s-1) var(--s-2);
   background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   font: inherit; font-size: var(--fs-md); text-align: start; overflow: hidden; cursor: pointer;
@@ -1374,14 +1395,27 @@ button.feed__target:hover { color: var(--c-accent); }
    says which input — a mark on its own would send the reader to the panel to find out. */
 .autopic__node--unfed { border-color: var(--c-stop); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
-.autopic__nodename {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; overflow-wrap: anywhere;
+/* Two lines: the number and the name, and under them where the action comes from — or what it is
+   missing, which takes that line's place. */
+.autopic__nodehead, .autopic__nodesub { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.autopic__nodename { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.autopic__no {
+  flex: none; min-width: 16px; height: 16px; border-radius: 8px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) solid var(--c-edge);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--c-text-muted);
 }
-/* Where a run opens. A word on the box and not a colour: the picture tells nothing apart by colour,
-   and two stretches nothing joins are otherwise read the same. */
+.autopic__node--on .autopic__no { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
+.autopic__lib { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
+/* A box that takes the next task, said over its top-right corner — where a stretch begins. */
+.autopic__takes {
+  position: absolute; transform: translate(-100%, calc(-100% - 2px));
+  font-size: var(--fs-xs); line-height: 1; font-weight: 700; color: var(--c-ai); white-space: nowrap;
+}
+/* Where a run opens. A word on the box rather than a colour: two stretches nothing joins are
+   otherwise read the same. */
 .autopic__entry {
-  align-self: flex-start;
+  flex: none;
   background: var(--c-accent-weak); color: var(--c-accent-text);
   border-radius: var(--r-sm); padding: 0 var(--s-1); font-size: var(--fs-xs);
 }
@@ -1698,10 +1732,13 @@ button.feed__target:hover { color: var(--c-accent); }
 .actbuild__hint { font-size: var(--fs-xs); color: var(--c-text-faint); }
 .actbuild__notready { margin: var(--s-2) var(--s-3) 0; }
 .actbuild__canvas {
-  display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2);
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
   padding: var(--s-3) var(--s-3) var(--s-5); overflow-x: auto;
 }
 .actbuild__canvas .autopic { max-height: none; align-self: stretch; }
+/* The picture stands in the middle of the place it is drawn in, as the mock has it; a picture wider
+   than the place scrolls from its left edge as before. */
+.actbuild__canvas .autopic__sheet { margin-inline: auto; }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */
 .actpanel { display: flex; flex-direction: column; min-width: 0; }

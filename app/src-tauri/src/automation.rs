@@ -1796,6 +1796,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         id: placement.id,
         name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
         action_id: placement.action_id,
+        global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
         interactive: opens.as_ref().is_some_and(|s| s.interactive),

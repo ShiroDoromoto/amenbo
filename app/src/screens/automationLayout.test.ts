@@ -22,7 +22,7 @@ function step(
   over: Partial<AutomationPlacementDto> & { id: number; name: string },
 ): AutomationPlacementDto {
   return {
-    actionId: 900 + over.id,
+    actionId: 900 + over.id, global: false,
     prompt: "",
     interactive: false,
     reportToTask: false,

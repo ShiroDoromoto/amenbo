@@ -68,7 +68,7 @@ function spot(over: Partial<AutomationPlacementDto> = {}): AutomationPlacementDt
   return {
     id: 1,
     name: "Take the next task",
-    actionId: 4,
+    actionId: 4, global: false,
     stepId: 11,
     prompt: "take one",
     interactive: false,

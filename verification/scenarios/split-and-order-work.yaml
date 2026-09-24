@@ -90,6 +90,7 @@ steps_cli:
     op: done
     with:
       target: blocker
+      report: SCENARIO — the blocking half is carried out
 
   - type: assert
     domain: task

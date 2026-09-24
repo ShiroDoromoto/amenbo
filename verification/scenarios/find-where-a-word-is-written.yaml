@@ -454,6 +454,7 @@ steps_cli:
     op: done
     with:
       target: ran
+      report: SCENARIO — carried out and closed
 
   - type: assert
     domain: task

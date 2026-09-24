@@ -43,5 +43,5 @@ steps_cli:
   # first for the same reason the reservation needed it: a task nobody finished writing has no status
   # to close.
   - { type: action, domain: task, op: finish-creating, with: { target: late } }
-  - { type: action, domain: task, op: done, with: { target: late } }
+  - { type: action, domain: task, op: done, with: { target: late, report: "SCENARIO — carried out, so it leaves the view" } }
   - { type: assert, domain: task, op: status-bucket, with: { target: late, bucket: overdue, present: false } }

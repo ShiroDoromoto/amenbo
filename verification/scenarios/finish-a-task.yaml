@@ -6,10 +6,11 @@
 id: finish-a-task
 title: A task ends either carried out or decided against, the two read apart, and a closed task can be reopened
 description: >
-  Finish a task and read the ending back three ways — the status, the completed flag the listings
-  filter on, and its disappearance from where fresh work is taken. Reopen it and watch all three come
-  back. Then end the other task the other way, with the reason the command insists on, and read that
-  the store closed it without claiming it was carried out.
+  Finish a task with its report and read the ending back four ways — the report on its timeline, the
+  status, the completed flag the listings filter on, and its disappearance from where fresh work is
+  taken. Reopen it and watch the last three come back. Then end the other task the other way, with
+  the reason the command insists on, and read that the store closed it without claiming it was
+  carried out.
 steps_cli:
   - type: action
     domain: task
@@ -31,6 +32,17 @@ steps_cli:
     op: done
     with:
       target: done_one
+      report: SCENARIO — carried out, and here is what was done
+
+  # The report is written in the same move that closes the task, so it is on the timeline the moment
+  # the task is done — a closed task is read by nobody afterwards, and a report written later has no
+  # reader.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: done_one
+      text: SCENARIO — carried out, and here is what was done
 
   - type: assert
     domain: task

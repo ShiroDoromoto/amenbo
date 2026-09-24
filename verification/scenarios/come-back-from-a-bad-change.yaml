@@ -114,6 +114,7 @@ steps_cli:
     op: done
     with:
       target: seed
+      report: SCENARIO — carried out before the bad change
 
   - type: action
     domain: store

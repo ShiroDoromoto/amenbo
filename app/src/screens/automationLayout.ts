@@ -111,12 +111,21 @@ const LANE_W = 16;
 const PAD = 18;
 /** How far in from a box's edge the first line is tied, and how far apart the next ones are. */
 const ATTACH = 28;
-const EXIT_GAP = 22;
-/** How far a line hangs below a box before it turns, and how far a way out that goes nowhere runs. */
+const EXIT_GAP = 28;
+/** How far a line hangs below a box before it turns into a lane. */
 const DROP = 14;
-const STUB = 40;
-/** Where on a line's first leg the `+` that puts a box in sits. */
-const INSERT_DROP = 20;
+/**
+ * A way out that goes nowhere: where its `+` sits on it, how far the shortest of them runs, and how
+ * much further each one to its left runs — one line of words, so every name has a row of its own.
+ */
+const STUB_PLUS = 12;
+const STUB = 26;
+const WORD_H = 15;
+/** How far a name is written from the `+` it sits beside, and from the line it sits over. */
+const BESIDE = 14;
+const OVER = 12;
+/** How much lower a line's `+` sits on its lane for each lane further out. */
+const LANE_PLUS = 24;
 /** The action's input, a frame over the picture: its title, and what it takes in on one line. */
 const IN_W = 260;
 const IN_H = 54;
@@ -162,10 +171,14 @@ export type PicLine = {
   ends?: "done" | "halt";
   /** What is handed on, for a wire: the way out's output and the input it lands in. */
   hands?: { from: string; to: string };
-  /** Where the way out's name is written, beside the line's first leg. */
+  /**
+   * Where the way out's name is written — and, on a line that names no box, how it ends. Over the
+   * middle of the leg that runs across, beside the lane of a line in the margin, under the foot of
+   * one that goes nowhere.
+   */
   at: PicPoint;
-  /** Where the ending is written, at the foot of a line that names no box. */
-  endAt?: PicPoint;
+  /** Which end of the words `at` is: where they start, their middle, or where they finish. */
+  align: "start" | "middle" | "end";
 };
 
 /** The `+` on a line, which puts a box in at that point. */
@@ -490,12 +503,15 @@ function lineKey(kind: "edge" | "wire", id: number): string {
 }
 
 /**
- * Where the name of the nth way out of a box is written: beside the line, and a line further down
- * for each way out after the first. Two names on one line would sit on top of each other — the lines
- * they belong to are only a finger apart at the box they leave.
+ * About how wide a way out's name is written, for the room the left margin keeps for it. Only a
+ * guess: the picture is laid out without a screen to measure on. A wide character (Japanese) takes
+ * the font's size, anything else a little over half of it; the error way out is written as a word
+ * of the reader's language, and none of them runs past five narrow letters.
  */
-function word(sx: number, sy: number, nth: number): PicPoint {
-  return { x: sx + 12, y: sy + 14 + nth * 15 };
+function wordW(exitName: string | undefined): number {
+  if (exitName === undefined) return 0;
+  if (exitName === ERROR_EXIT) return 40;
+  return [...exitName].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
 }
 
 /**
@@ -637,7 +653,13 @@ export function layOut(graph: PicGraph | null): Picture {
   // The lines, in two passes: the ones drawn straight between their boxes, and the ones that have to
   // be given a lane first. An aside line's x is written as an offset from the content, because how
   // far out the lanes reach is not known until all of them are handed out.
-  type Aside = { key: string; top: number; bottom: number; draw: (laneX: number) => PicLine };
+  /** A line in the margin: the rows it runs past, and the line once it has a lane. */
+  type Aside = {
+    key: string;
+    top: number;
+    bottom: number;
+    draw: (laneX: number, lane: number) => PicLine;
+  };
   const lines: PicLine[] = [];
   const inserts: PicInsert[] = [];
   const asideLeft: Aside[] = [];
@@ -658,30 +680,60 @@ export function layOut(graph: PicGraph | null): Picture {
       back: false,
       leaves: true,
       at: { x: sx, y: sy },
+      align: "start",
+    });
+  }
+
+  // Where each edge is tied to its box. Only a way out with a line is counted — the unnamed one and
+  // the error one are there on every box, and counting them would push every named line along. The
+  // lines that leave for the left lane come first, since their first leg turns left; those that go
+  // nowhere come last, so their words have the room to the right of every line.
+  const toOf = (edge: AutomationEdgeDto): number | undefined => {
+    const toId = edge.ends === "go" ? edge.toId : returnsTo(edge);
+    return toId !== undefined && node.has(toId) ? toId : undefined;
+  };
+  const reach = (edge: AutomationEdgeDto): number => {
+    const toId = toOf(edge);
+    if (toId === undefined) return 2;
+    return neighbours(edge.fromId, toId) ? 1 : 0;
+  };
+  const slot = new Map<number, { nth: number; below: number }>();
+  for (const box of graph.boxes) {
+    const exitAt = (edge: AutomationEdgeDto) => box.exits.findIndex((exit) => exit.name === edge.exitName);
+    const own = graph.edges
+      .filter((edge) => edge.fromId === box.id)
+      .sort((a, b) => reach(a) - reach(b) || exitAt(a) - exitAt(b));
+    const nowhere = own.filter((edge) => reach(edge) === 2).length;
+    let seen = 0;
+    own.forEach((edge, nth) => {
+      // How many lines that go nowhere stand to this one's right: its words go that many rows lower.
+      const below = reach(edge) === 2 ? nowhere - 1 - seen++ : 0;
+      slot.set(edge.id, { nth, below });
     });
   }
 
   for (const edge of graph.edges) {
     const from = node.get(edge.fromId);
     if (from === undefined) continue;
-    const box = boxes.get(edge.fromId)!;
-    const nth = Math.max(0, box.exits.findIndex((exit) => exit.name === edge.exitName));
+    const { nth, below } = slot.get(edge.id)!;
     const sx = attach(from, nth, "left");
     const sy = from.y + NODE_H;
     const key = lineKey("edge", edge.id);
-    inserts.push({ edgeId: edge.id, x: sx, y: sy + INSERT_DROP });
 
-    const toId = edge.ends === "go" ? edge.toId : returnsTo(edge);
-    if (toId === undefined || !node.has(toId)) {
+    const toId = toOf(edge);
+    if (toId === undefined) {
+      // The one further left runs further down, so its words pass under the shorter lines to its right.
+      const foot = sy + STUB + below * WORD_H;
+      inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
       lines.push({
         key,
         kind: "edge",
-        points: [{ x: sx, y: sy }, { x: sx, y: sy + STUB }],
+        points: [{ x: sx, y: sy }, { x: sx, y: foot }],
         back: false,
         exitName: edge.exitName,
         ends: edge.ends === "done" || edge.ends === "halt" ? edge.ends : undefined,
-        at: word(sx, sy, nth),
-        endAt: { x: sx + 10, y: sy + STUB + 4 },
+        at: { x: sx - 6, y: foot + OVER },
+        align: "start",
       });
       continue;
     }
@@ -691,6 +743,11 @@ export function layOut(graph: PicGraph | null): Picture {
     const ty = to.y;
     if (neighbours(edge.fromId, toId)) {
       const mid = Math.round((sy + ty) / 2);
+      const across = Math.round((sx + tx) / 2);
+      inserts.push({ edgeId: edge.id, x: across, y: mid });
+      // A line straight down has no leg across to write over: the name goes beside its `+`, on the
+      // left, where the lines that go nowhere do not write theirs.
+      const straight = Math.abs(tx - sx) < BESIDE * 2;
       lines.push({
         key,
         kind: "edge",
@@ -698,33 +755,45 @@ export function layOut(graph: PicGraph | null): Picture {
         back: false,
         leaves: edge.ends === "exit",
         exitName: edge.exitName,
-        at: word(sx, sy, nth),
+        at: straight ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 } : { x: across, y: mid - OVER },
+        align: straight ? "end" : "middle",
       });
       continue;
     }
     // The walk's own reading, not where the two boxes landed: a span stacked by the row it starts at
     // can put a line going forward above the box it leaves.
     const back = goesBack.has(edge.id);
+    const top = Math.min(sy + DROP, ty - DROP);
+    const bottom = Math.max(sy + DROP, ty - DROP);
     asideLeft.push({
       key,
-      top: Math.min(sy + DROP, ty - DROP),
-      bottom: Math.max(sy + DROP, ty - DROP),
-      draw: (laneX) => ({
-        key,
-        kind: "edge",
-        points: [
-          { x: sx, y: sy },
-          { x: sx, y: sy + DROP },
-          { x: laneX, y: sy + DROP },
-          { x: laneX, y: ty - DROP },
-          { x: tx, y: ty - DROP },
-          { x: tx, y: ty },
-        ],
-        back,
-        leaves: edge.ends === "exit",
-        exitName: edge.exitName,
-        at: word(sx, sy, nth),
-      }),
+      top,
+      bottom,
+      draw: (laneX, lane) => {
+        // Halfway down the lane, and a `+` lower for each lane further out: two lines running past
+        // the same rows would otherwise have their `+` side by side, and the inner one's name on the
+        // outer one's `+`.
+        const middle = Math.min(Math.round((top + bottom) / 2) + lane * LANE_PLUS, bottom - LANE_PLUS / 2);
+        inserts.push({ edgeId: edge.id, x: laneX, y: middle });
+        return {
+          key,
+          kind: "edge",
+          points: [
+            { x: sx, y: sy },
+            { x: sx, y: sy + DROP },
+            { x: laneX, y: sy + DROP },
+            { x: laneX, y: ty - DROP },
+            { x: tx, y: ty - DROP },
+            { x: tx, y: ty },
+          ],
+          back,
+          leaves: edge.ends === "exit",
+          exitName: edge.exitName,
+          // Outside the lane, beside its `+`: inside it are the boxes.
+          at: { x: laneX - BESIDE, y: middle + 4 },
+          align: "end",
+        };
+      },
     });
   }
 
@@ -760,6 +829,7 @@ export function layOut(graph: PicGraph | null): Picture {
         back: false,
         hands,
         at: { x: sx, y: mid },
+        align: "start",
       });
       continue;
     }
@@ -782,6 +852,7 @@ export function layOut(graph: PicGraph | null): Picture {
         back,
         hands,
         at: { x: laneX, y: Math.round((sy + ty) / 2) },
+        align: "start",
       }),
     });
   }
@@ -790,11 +861,26 @@ export function layOut(graph: PicGraph | null): Picture {
   const rightAt = lanes(asideRight);
   const leftLanes = asideLeft.length === 0 ? 0 : Math.max(...[...leftAt.values()]) + 1;
   const rightLanes = asideRight.length === 0 ? 0 : Math.max(...[...rightAt.values()]) + 1;
-  for (const line of asideLeft) lines.push(line.draw(-LAP_PAD - (leftAt.get(line.key)! + 1) * LANE_W));
-  for (const line of asideRight) lines.push(line.draw(contentW + LAP_PAD + (rightAt.get(line.key)! + 1) * LANE_W));
+  for (const line of asideLeft) {
+    const lane = leftAt.get(line.key)!;
+    lines.push(line.draw(-LAP_PAD - (lane + 1) * LANE_W, lane));
+  }
+  for (const line of asideRight) {
+    const lane = rightAt.get(line.key)!;
+    lines.push(line.draw(contentW + LAP_PAD + (lane + 1) * LANE_W, lane));
+  }
 
-  // Everything was laid out with the boxes at x=0. Shift it right by the room the left margin took.
-  const dx = PAD + LAP_PAD + leftLanes * LANE_W;
+  // Everything was laid out with the boxes at x=0. Shift it right by the room the left margin took:
+  // the lanes, and any name written further out than the boxes start.
+  const leftRoom = Math.max(
+    LAP_PAD + leftLanes * LANE_W,
+    ...lines.map((line) => {
+      if (line.kind !== "edge") return 0;
+      const wide = wordW(line.exitName);
+      return -(line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x);
+    }),
+  );
+  const dx = PAD + leftRoom;
   return {
     width: dx + contentW + LAP_PAD + rightLanes * LANE_W + PAD,
     height,
@@ -804,7 +890,6 @@ export function layOut(graph: PicGraph | null): Picture {
       ...line,
       points: line.points.map((p) => ({ x: p.x + dx, y: p.y })),
       at: { x: line.at.x + dx, y: line.at.y },
-      endAt: line.endAt === undefined ? undefined : { x: line.endAt.x + dx, y: line.endAt.y },
     })),
     inserts: inserts.map((one) => ({ ...one, x: one.x + dx })),
     marks: marks.map((one) => ({ ...one, x: one.x + dx })),

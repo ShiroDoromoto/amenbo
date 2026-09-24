@@ -1,8 +1,8 @@
 //! Opening one step of a run: the text its terminal is launched with, and the values it is handed.
 //!
 //! **A step's agent never goes looking.** By the time the terminal is open, everything the step is to
-//! work from is already written into the prompt — the preamble, what the run has done so far, and
-//! the values wired into it. An agent that had to fetch would need a
+//! work from is already written into the prompt — the preamble, what the run has done so far, the
+//! values wired into it, and the settings answered where it was placed. An agent that had to fetch would need a
 //! vocabulary for fetching, and every step would spend its first turns on it.
 //!
 //! **What is read from the snapshot, and what is not.** The step's own declarations — its ways out,
@@ -23,9 +23,9 @@
 use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::model::{
-    AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AutomationCfgKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStoppedReason, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
+    AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
 };
 use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
@@ -173,18 +173,48 @@ fn working_folder(def: &AutomationRunDef, handed: &[Handed]) -> Result<Option<St
     let Some(name) = def.work_dir_ref.as_deref() else {
         return Ok(None);
     };
-    let cfg: Vec<crate::model::RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
     if let Some(answer) = cfg.iter().find(|one| one.name == name) {
-        return Ok(answer.value.as_deref().map(written_as_a_path));
+        return Ok(answer.value.as_deref().map(unquoted));
     }
     Ok(handed.iter().find(|one| one.port.name == name).and_then(|one| one.from.value.clone()))
 }
 
-/// One setting's answer as a path. A setting's value is JSON (`automation_cfg.value`), so a folder is
-/// written `"/work/here"` — quotes and all — and a value that is not a JSON string is taken as it
-/// stands rather than refused, a path being the one thing this field is ever asked for.
-fn written_as_a_path(value: &str) -> String {
+/// One setting's answer as the text it says. A setting's value is JSON (`automation_cfg.value`), so a
+/// folder is written `"/work/here"` — quotes and all — and a value that is not a JSON string (a number,
+/// or one written by hand) is taken as it stands rather than refused.
+fn unquoted(value: &str) -> String {
     serde_json::from_str::<String>(value).unwrap_or_else(|_| value.to_string())
+}
+
+/// **A task filter's answer as the expression `task list --filter` takes.**
+///
+/// The answer is kept as one list per part — `{"status":["todo"],"ready":["yes"]}` — because that is the
+/// shape the build screen presses chips into. The expression is the reading filterGrammar gives it: the
+/// values of one part comma-joined (any-of), and the parts space-joined (both). A part written as one
+/// string rather than a list is read as a list of one.
+///
+/// `None` is an answer that is not an object of parts, or one with no part in it. Nothing is checked
+/// against the grammar here: `automation cfg-set` parses the expression before it writes the answer.
+pub fn taskfilter_expr(value: &str) -> Option<String> {
+    let serde_json::Value::Object(parts) = serde_json::from_str(value).ok()? else {
+        return None;
+    };
+    let mut out = Vec::new();
+    for (key, part) in parts {
+        let values: Vec<String> = match part {
+            serde_json::Value::String(one) => vec![one],
+            serde_json::Value::Array(many) => many
+                .into_iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        };
+        if !values.is_empty() {
+            out.push(format!("{key}:{}", values.join(",")));
+        }
+    }
+    (!out.is_empty()).then(|| out.join(" "))
 }
 
 /// One value standing ready for one input: the port it fills, and the row it is copied from.
@@ -382,6 +412,11 @@ fn compose(
         let lines: Vec<String> = handed.iter().map(|h| format!("- {}", one_value(h))).collect();
         push_block(&mut out, &format!("## What you have been handed\n\n{}", lines.join("\n")));
     }
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    if !cfg.is_empty() {
+        let lines: Vec<String> = cfg.iter().map(|c| format!("- {}", one_setting(c))).collect();
+        push_block(&mut out, &format!("## Your settings\n\n{}", lines.join("\n")));
+    }
     push_block(&mut out, &format!("## What to do\n\n{}", def.prompt.as_deref().unwrap_or("").trim()));
     push_block(&mut out, &handing_back(exits));
     Ok(out)
@@ -475,6 +510,26 @@ fn one_value(handed: &Handed) -> String {
                 None => format!("{name}: a task that is gone"),
             }
         }
+    }
+}
+
+/// One setting on one line: its name, and the answer written for the spot this step was placed at.
+///
+/// **A task filter is written as the command that lists what it means.** The agent reads the queue with
+/// `task list` anyway, and an expression it can pass along as it stands is one it cannot mistranscribe.
+/// Every other kind is the text of its answer. A setting nobody answered says so, rather than being left
+/// out: a prompt that names it would otherwise be pointing at nothing.
+fn one_setting(cfg: &RunDefCfg) -> String {
+    let name = &cfg.name;
+    let Some(value) = cfg.value.as_deref() else {
+        return format!("{name}: not answered");
+    };
+    match (cfg.kind, taskfilter_expr(value)) {
+        (AutomationCfgKind::TaskFilter, Some(expr)) => {
+            let cli = crate::config::Paths::command_name();
+            format!("{name}: the tasks `{cli} task list --filter \"{expr}\"` lists")
+        }
+        _ => format!("{name}: {}", unquoted(value)),
     }
 }
 
@@ -797,6 +852,65 @@ mod tests {
                 "the first step is handed nothing: {text}"
             );
         });
+    }
+
+    /// **What was answered where a step was placed reaches its agent** (`AMB-T-5410`). Before, only the
+    /// setting `work_dir_ref` names was read, and a queue somebody chose on the build screen had to be
+    /// written into the prompt by hand — so the same action placed twice could not take two queues.
+    #[test]
+    fn the_text_carries_the_settings_answered_where_the_step_was_placed() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let kind = crate::model::AutomationCfgKind::TaskFilter;
+            automation::cfg_add(tx, p.first_action.id, "受信箱", kind, true, None).expect("filter");
+            let kind = crate::model::AutomationCfgKind::Text;
+            automation::cfg_add(tx, p.first_action.id, "観点", kind, true, None).expect("text");
+            let kind = crate::model::AutomationCfgKind::Number;
+            automation::cfg_add(tx, p.first_action.id, "上限", kind, false, None).expect("number");
+            let filter = r#"{"assignee":["me-ai"],"status":["todo","blocked"]}"#;
+            automation::cfg_set(tx, p.first.id, "受信箱", Some(filter)).expect("answer the filter");
+            automation::cfg_set(tx, p.first.id, "観点", Some("\"速さ\"")).expect("answer the text");
+            let run = a_run(tx, &p.automation);
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+
+            let cli = crate::config::Paths::command_name();
+            assert!(text.contains("## Your settings"), "{text}");
+            assert!(
+                text.contains(&format!(
+                    "- 受信箱: the tasks `{cli} task list --filter \"assignee:me-ai status:todo,blocked\"` lists"
+                )),
+                "{text}"
+            );
+            assert!(text.contains("- 観点: 速さ"), "the quotes are JSON's, not the answer's: {text}");
+            assert!(text.contains("- 上限: not answered"), "{text}");
+            let settings = text.find("## Your settings").expect("settings");
+            let todo = text.find("## What to do").expect("what to do");
+            assert!(settings < todo, "the settings come before the prompt that reads them: {text}");
+        });
+    }
+
+    #[test]
+    fn a_step_placed_with_no_settings_is_told_of_none() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+            assert!(!text.contains("## Your settings"), "{text}");
+        });
+    }
+
+    /// The expression is what `task list --filter` reads: one part's values any-of, the parts both —
+    /// and a part written as one string is a list of one.
+    #[test]
+    fn a_task_filter_answer_reads_as_the_filter_expression() {
+        assert_eq!(
+            taskfilter_expr(r#"{"status":["todo","blocked"],"ready":["yes"]}"#).as_deref(),
+            Some("ready:yes status:todo,blocked")
+        );
+        assert_eq!(taskfilter_expr(r#"{"status":"todo"}"#).as_deref(), Some("status:todo"));
+        assert_eq!(taskfilter_expr(r#"{"status":[]}"#), None, "no part left");
+        assert_eq!(taskfilter_expr(r#""todo""#), None, "not an object of parts");
+        assert_eq!(taskfilter_expr("status:todo"), None, "not JSON");
     }
 
     /// **The preamble is Amenbo's, not the automation's** (`AMB-D-952`). No row carries it, so every

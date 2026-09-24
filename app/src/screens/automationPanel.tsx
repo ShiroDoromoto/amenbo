@@ -25,7 +25,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
-import { ERROR_EXIT, type PicGraph } from "./automationLayout";
+import { ERROR_EXIT, pictureOrder, type PicGraph } from "./automationLayout";
 import type {
   AgentModelListDto,
   AutomationEdgeDto,
@@ -240,8 +240,14 @@ function edgeKey(edge: AutomationEdgeDto | undefined): string {
  * run and calls a person; on any other it leaves a run that takes it with nowhere to go, which the
  * launch check names rather than this row refusing it.
  *
- * The limit is drawn for a `go` edge alone. An edge that closes the task or stops the run is taken
- * once and carries none, and core refuses one there.
+ * **The boxes are offered as the picture numbers them**, and a line back up the picture says so
+ * (`./automationLayout`'s `pictureOrder`). The box this way out leaves is not offered: a step that
+ * wants another go is a line back to where it started, drawn from the step before it.
+ *
+ * The limit is drawn for a line that goes back within one task alone — the loop it is there to cap.
+ * A line on down the picture is taken once per task, and one back to a box that takes a task starts
+ * the next task rather than trying this one again. An edge that closes the task or stops the run
+ * carries none, and core refuses one there.
  */
 export function NextRow({
   graph,
@@ -263,6 +269,19 @@ export function NextRow({
   const [limit, setLimit] = useDraft(
     edge === undefined || edge.maxTimes === undefined ? "" : String(edge.maxTimes),
   );
+  const order = pictureOrder(graph);
+  const numbered = (one: { id: number; name: string }) =>
+    `${order.numberOf.get(one.id) ?? "?"}. ${one.name}`;
+  const loops =
+    edge?.ends === "go" &&
+    edge.toId !== undefined &&
+    order.goesBack(boxId, edge.toId) &&
+    !order.takesTask(edge.toId);
+  // In the picture's order rather than the order they were placed in. The box this way out leaves is
+  // offered only while a line already goes there, so that the pulldown can still say what is written.
+  const others = graph.boxes
+    .filter((one) => one.id !== boxId || edge?.toId === boxId)
+    .sort((a, b) => (order.numberOf.get(a.id) ?? 0) - (order.numberOf.get(b.id) ?? 0));
 
   const pick = (key: string) => {
     if (key === "") {
@@ -299,26 +318,38 @@ export function NextRow({
         onChange={(e) => pick(e.target.value)}
       >
         <option value="">{t("auto.step.nextNothing")}</option>
-        {/* Every box of this picture, the one this way out leaves included: a line back to it is a
-            loop, which is what the limit beside this pulldown is there to cap. */}
-        {graph.boxes.map((one) => (
-          <option key={one.id} value={`go:${one.id}`}>
-            {tf("auto.step.nextGo", { name: one.name })}
-          </option>
-        ))}
-        {/* Inside an action a step may leave it, by one of the ways out the action declares — which
-            is where the placement standing on it goes on from. An automation's picture has none. */}
-        {[...(graph.boundary?.exits ?? [])]
-          .sort((a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT))
-          .map((one) => (
-            <option key={`exit:${one.name ?? ""}`} value={`exit:${one.name ?? ""}`}>
-              {tf("auto.step.nextExit", { name: exitLabel(one.name) })}
+        <optgroup
+          label={t(
+            graph.boundary === undefined ? "auto.step.nextGroupPlacement" : "auto.step.nextGroupStep",
+          )}
+        >
+          {others.map((one) => (
+            <option key={one.id} value={`go:${one.id}`}>
+              {tf(order.goesBack(boxId, one.id) ? "auto.step.nextGoBack" : "auto.step.nextGo", {
+                name: numbered(one),
+              })}
             </option>
           ))}
-        <option value="done">{t("auto.pic.endsDone")}</option>
-        <option value="halt">{t("auto.pic.endsHalt")}</option>
+        </optgroup>
+        {/* Inside an action a step may leave it, by one of the ways out the action declares — which
+            is where the placement standing on it goes on from. An automation's picture has none. */}
+        {graph.boundary !== undefined && (
+          <optgroup label={t("auto.step.nextGroupExit")}>
+            {[...graph.boundary.exits]
+              .sort((a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT))
+              .map((one) => (
+                <option key={`exit:${one.name ?? ""}`} value={`exit:${one.name ?? ""}`}>
+                  {tf("auto.step.nextExit", { name: exitLabel(one.name) })}
+                </option>
+              ))}
+          </optgroup>
+        )}
+        <optgroup label={t("auto.step.nextGroupEnd")}>
+          <option value="done">{t("auto.pic.endsDone")}</option>
+          <option value="halt">{t("auto.pic.endsHalt")}</option>
+        </optgroup>
       </select>
-      {edge?.ends === "go" && (
+      {loops && (
         <label className="autostep__limit">
           <span className="autostep__label">{t("auto.step.maxTimes")}</span>
           <input

@@ -131,65 +131,61 @@ export function AutomationsScreen({
   }
 
   return (
-    <div className="settings">
-      <div className="settings__section">
-        <div className="settings__body">
-          <div className="autotabs" role="tablist" aria-label={t("auto.title")}>
-            {TABS.map((one) => (
-              <button
-                key={one.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === one.id}
-                className={`autotabs__tab ${tab === one.id ? "autotabs__tab--on" : ""}`}
-                onClick={() => setTab(one.id)}
-              >
-                {one.label()}
-              </button>
-            ))}
-          </div>
-
-          {everywhere && (tab === "running" || tab === "history") && (
-            <div className="autotabs__head">
-              <span className="actlib__sec">{tab === "running" ? t("auto.tab.running") : t("auto.tab.history")}</span>
-              <span className="autotabs__scope">{t("auto.scope.device")}</span>
-            </div>
-          )}
-
-          {tab === "running" && <RunningTab projectId={projectId} onGoToRun={onGoToRun} />}
-
-          {tab === "history" && <HistoryTab projectId={projectId} />}
-
-          {tab === "actions" && (
-            <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />
-          )}
-
-          {tab === "automations" && everywhere && (
-            <EveryAutomationList workspaceOpen={workspaceOpen} onGoTo={onGoToAutomation} />
-          )}
-
-          {tab === "automations" && !everywhere && <AutomationNew projectId={projectId} onMade={setOpen} />}
-
-          {tab === "automations" && !everywhere && automations.length === 0 && (
-            <div className="auto__empty">{t("auto.empty")}</div>
-          )}
-
-          {tab === "automations" && !everywhere && automations.length > 0 && (
-            <ul className="autolist">
-              {automations.map((one) => (
-                <li key={one.id}>
-                  <AutomationRow
-                    automation={one}
-                    projectId={projectId}
-                    folders={folders}
-                    onOpen={() => setOpen(one.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+    <div className="autoscreen">
+      <div className="autotabs" role="tablist" aria-label={t("auto.title")}>
+        {TABS.map((one) => (
+          <button
+            key={one.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === one.id}
+            className={`autotabs__tab ${tab === one.id ? "autotabs__tab--on" : ""}`}
+            onClick={() => setTab(one.id)}
+          >
+            {one.label()}
+          </button>
+        ))}
       </div>
+
+      {everywhere && (tab === "running" || tab === "history") && (
+        <div className="autotabs__head">
+          <span className="actlib__sec">{tab === "running" ? t("auto.tab.running") : t("auto.tab.history")}</span>
+          <span className="autotabs__scope">{t("auto.scope.device")}</span>
+        </div>
+      )}
+
+      {tab === "running" && <RunningTab projectId={projectId} onGoToRun={onGoToRun} />}
+
+      {tab === "history" && <HistoryTab projectId={projectId} />}
+
+      {tab === "actions" && (
+        <AutomationActionsTab projectId={projectId} onOpen={setOpenAction} />
+      )}
+
+      {tab === "automations" && everywhere && (
+        <EveryAutomationList workspaceOpen={workspaceOpen} onGoTo={onGoToAutomation} />
+      )}
+
+      {tab === "automations" && !everywhere && <AutomationNew projectId={projectId} onMade={setOpen} />}
+
+      {tab === "automations" && !everywhere && automations.length === 0 && (
+        <div className="auto__empty">{t("auto.empty")}</div>
+      )}
+
+      {tab === "automations" && !everywhere && automations.length > 0 && (
+        <ul className="autolist">
+          {automations.map((one) => (
+            <li key={one.id}>
+              <AutomationRow
+                automation={one}
+                projectId={projectId}
+                folders={folders}
+                onOpen={() => setOpen(one.id)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

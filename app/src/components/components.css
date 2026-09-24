@@ -1267,6 +1267,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .menu__item--apart { margin-top: var(--s-1); border-top: var(--border-w) var(--border-style) var(--c-rule); padding-top: var(--s-2); }
 
 /* ---------- the automations screen (`app/src/screens/AutomationsScreen.tsx`) ---------- */
+/* The screen's own frame: the four lists take the whole width the main column has, with no cap. They
+   are rows read across — names, steps, tasks — and a reading measure would only cut them to "…". It
+   is not the settings screen's frame (`.settings`), which is a column of forms and keeps its 720px. */
+.autoscreen { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
 /* The three tabs, drawn as segments of one control: what a reader chooses between is which of the
    three lists the screen holds, and three buttons sharing no box would read as three things. It is
    the rail's shape (`.rail__tabs`) at the width a screen has rather than a column. */
@@ -1397,6 +1401,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- the "running" and "history" tabs (`app/src/screens/RunningTab.tsx`, `HistoryTab.tsx`) ---------- */
 /* One bordered stack of runs, the shape the list of definitions has (`.autolist`). */
 .autoruns {
+  container: autoruns / inline-size;
   list-style: none; margin: 0; padding: 0;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;
 }
@@ -1410,7 +1415,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorun__go {
   flex: 1 1 auto; min-width: 0;
   display: grid; align-items: center; gap: 2px var(--s-3);
-  grid-template-columns: 7rem minmax(0, 1.2fr) 6rem minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem;
+  grid-template-columns: 7rem minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem;
   padding: var(--s-2) var(--s-3); text-align: start;
   background: none; border: 0; color: var(--c-text); font: inherit; font-size: var(--fs-md); cursor: pointer;
 }
@@ -1437,8 +1442,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorun--failed .autorun__state { color: var(--c-stop); }
 .autorun--canceled .autorun__state { color: var(--c-text-muted); }
 .autorun--failed { background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
-/* A narrow window keeps what says which run this is, and lets the rest go. */
-@media (max-width: 900px) {
+/* A narrow list keeps what says which run this is, and lets the rest go. What is narrow is the list's
+   own width and not the window's: the same rows also stand in the build screen (`AutomationHeldBy`),
+   and the main column is the window less the sidebar, whose width the window does not say. */
+@container autoruns (max-width: 44rem) {
   .autorun__go { grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1.2fr); }
   .autorun__project, .autorun__task, .autorun__when { display: none; }
 }
@@ -1575,7 +1582,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .actlib__field input { width: 18em; max-width: 100%; }
 .actlib__said { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); color: var(--c-text-faint); }
 .actlib__tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
-.actlib__search { flex: 1 1 180px; min-width: 0; }
+/* The search grows with the row it is on, past the cap a box to fill in has (`--measure-form`): it
+   is the width of the list it narrows, not one value. */
+.actlib__search { flex: 1 1 180px; min-width: 0; max-width: none; }
 .actchip {
   font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); border-radius: 999px; cursor: pointer;
   border: var(--border-w) var(--border-style) var(--c-edge); background: none; color: var(--c-text-muted);
@@ -1583,27 +1592,37 @@ button.feed__target:hover { color: var(--c-accent); }
 .actchip:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .actchip--on, .actchip--on:hover { border-color: var(--c-accent); background: var(--c-accent); color: var(--c-on-accent); }
 .actlib__none { padding: var(--s-6) var(--s-2); text-align: center; font-size: var(--fs-md); color: var(--c-text-faint); }
-/* One grid for the heads and every row, so the four columns line up without a table's markup. */
-.actlib__cols, .actlib__row {
-  display: grid; grid-template-columns: minmax(0, 1fr) 9rem 5rem 11rem; align-items: baseline; gap: var(--s-2);
+/* One grid for the heads and every row, so the columns line up without a table's markup. The table owns
+   the tracks and every level down to a row takes them as a subgrid, so a column is as wide as the widest
+   thing in it on any row — the name has the rest. The fifth track is the press that moves a row's
+   reach; the heads leave it empty. */
+.actlib__table {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; column-gap: var(--s-2);
 }
+.actlib__cols, .actlib__rows, .actlib__rows > li, .actlib__line {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid;
+}
+.actlib__row { grid-column: 1 / 5; display: grid; grid-template-columns: subgrid; align-items: baseline; }
 .actlib__cols {
+  align-items: baseline;
   padding: var(--s-1) var(--s-2); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
   font-size: var(--fs-xs); color: var(--c-text-faint);
 }
+/* A row's own end padding sits inside its fourth track; the heads end there too, so the last head
+   keeps the same room to stand over its column. */
+.actlib__cols > :last-child { padding-inline-end: var(--s-2); }
 .actlib__rows { list-style: none; margin: 0; padding: 0; }
 /* A row and the press that moves its reach, which stands beside it rather than inside it — a press
-   inside a press is not one. The slot is one width on every row, so the heads above stay over their
-   columns; which project, and a refusal, go under the row. */
-.actlib__line { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-2); }
-.actlib__line > .actlib__row { flex: 1 1 0; min-width: 0; }
-.actlib__moveslot { flex: none; width: 10rem; display: flex; justify-content: flex-end; padding-inline-end: var(--s-2); }
+   inside a press is not one. The slot is on every row, even empty, so the heads above stay over their
+   columns; which project, and a refusal, go under the row across all of it. */
+.actlib__line { align-items: center; }
+.actlib__line > .actlib__row { min-width: 0; }
+.actlib__moveslot { grid-column: 5; display: flex; justify-content: flex-end; padding-inline-end: var(--s-2); }
 .actlib__moveslot > .btn { white-space: nowrap; }
 .actlib__moveplace {
-  flex: 1 0 100%; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
+  grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
   padding: 0 var(--s-2) var(--s-2);
 }
-.actlib__cols { padding-inline-end: calc(10rem + var(--s-2) + var(--s-2)); }
 .actlib__rows > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
 .actlib__num { text-align: end; font-variant-numeric: tabular-nums; }
 .actlib__zero { font-size: var(--fs-xs); color: var(--c-text-faint); }
@@ -1757,6 +1776,7 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-sunken-pic) var(--c-sunken);
 }
 .autolist__newname { display: flex; flex-direction: column; gap: 2px; flex: 1 1 16em; min-width: 0; }
+.autolist__newname input { max-width: none; }
 .autolist {
   list-style: none; margin: 0; padding: 0;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;

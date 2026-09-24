@@ -165,6 +165,7 @@ steps_cli:
     op: done
     with:
       target: alpha
+      report: SCENARIO — carried out, so it leaves the backlog
 
   - type: assert
     domain: task

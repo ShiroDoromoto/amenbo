@@ -461,7 +461,9 @@ const REGISTRY: &[OpSpec] = &[
     // The progress states, each by the command a user reaches for: `status` is the explicit move
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], strings: &["status"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // A task is finished with its report, the way it is rejected with its reason: what was done is
+    // written in the same move that closes it, since a closed task is read by nobody afterwards.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target", "report"], refs: &["target"], strings: &["report"], binds: false },
     // The other terminal. A reason is required by the command, so it is required here: what separates
     // work decided against from work carried out is why, and it is recorded rather than remembered.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reject", required: &["target", "reason"], refs: &["target"], strings: &["reason"], binds: false },

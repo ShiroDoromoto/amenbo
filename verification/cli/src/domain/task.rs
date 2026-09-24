@@ -93,8 +93,9 @@ impl Driver<'_> {
             }
             "done" => {
                 let target = self.resolve(with)?;
-                self.run_json(&["task", "done", &target.to_string(), "--json"])?;
-                Ok(Outcome::action(format!("marked task {target} done")))
+                let report = req_str(with, "report")?;
+                self.run_json(&["task", "done", &target.to_string(), "--report", report, "--json"])?;
+                Ok(Outcome::action(format!("marked task {target} done: {report}")))
             }
             "reject" => {
                 let target = self.resolve(with)?;

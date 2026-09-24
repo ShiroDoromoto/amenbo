@@ -11,11 +11,12 @@
 // around on would mean the definition carried a spot for each box — and the one who builds an
 // automation is an AI placing actions from the command line, which has nowhere to put one.
 //
-// **Two divisions, in that order.** First the stretch: a run walks one task at a time
+// **Two divisions.** The stretch: a run walks one task at a time
 // (`amenbo_core::model::AutomationRunTask`), and a box that takes a task begins the next
-// stretch, so the boxes reached from it belong to that task's span and are drawn inside one
-// dashed outline. Then the depth: how many boxes from the head of that stretch, with everything
-// at the same depth side by side. Nothing is told apart by colour — the outline is the division.
+// stretch, so the boxes reached from the way out it hands the task on by belong to that task's span
+// and are drawn inside one dashed outline. The row: the longest way down to a box from the entry,
+// leaving out the lines that go back, with everything on the same row side by side. The outline is
+// the division, and nothing is told apart by its fill.
 //
 // **A line is drawn between its two boxes only when they are neighbours in the same stretch.**
 // Anything else goes out to a lane in the margin: what comes after a box to the left, what is
@@ -151,7 +152,7 @@ export type PicLine = {
   key: string;
   kind: "edge" | "wire";
   points: readonly PicPoint[];
-  /** Dashed: it goes back to a row above the one it left. */
+  /** Dashed: it goes back to a box on the way down to the one it leaves. */
   back: boolean;
   /** It crosses the action's own boundary: in from the top mark, or out into a way out's mark. */
   leaves?: boolean;
@@ -223,16 +224,29 @@ type Lap = {
   rows: number[][];
 };
 
-/** What the walk came to: the stretches, and which boxes a run could actually reach. */
-type Walk = { laps: Lap[]; live: Set<number> };
+/** What the walk came to: the stretches, which boxes a run could actually reach, and which lines go back. */
+type Walk = { laps: Lap[]; live: Set<number>; back: Set<number> };
 
 /**
- * Walk the picture from its entry box and hand back the stretches, each cut into rows by depth.
+ * Walk the picture from its entry box and hand back the stretches, each cut into rows.
  *
- * A box that takes a task is not walked into: it is queued as the head of the next stretch, so the
- * span of one task never runs on into the next. **Every box is placed**, reached or not — building
- * is always half-finished, and a box nothing points at yet is exactly the one its builder is
- * looking for.
+ * Three readings, in this order (`AMB-T-5423`):
+ *
+ * - **Which lines go back.** A walk down from the entry, depth first: a line to a box still on the
+ *   path it came down by goes back. What nothing reaches is walked afterwards, in the order the boxes
+ *   are listed, so it has an answer too.
+ * - **The row, by the longest way there.** Every other line goes forward, and a box stands one row
+ *   under the lowest box that leads to it — so a line that goes forward never runs up, and one that
+ *   skips a row is the only one that leaves the column.
+ * - **A task's span, by the way out the task is taken on.** From the box that takes a task, only the
+ *   ways out that hand the task on are followed: the one that finds nothing left does not lead into
+ *   that task's span. From there every line forward is followed, and a box that takes the next task
+ *   is where the span stops. A box two spans reach belongs to the first.
+ *
+ * The spans are stacked by the row their head stands in; the boxes no span holds are stacked the same
+ * way by their own row, and ones that come next to each other share one open stretch. **Every box is
+ * placed**, reached or not — building is always half-finished, and a box nothing points at yet is
+ * exactly the one its builder is looking for.
  */
 function walk(graph: PicGraph): Walk {
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
@@ -244,53 +258,114 @@ function walk(graph: PicGraph): Walk {
     from.push(edge);
     out.set(edge.fromId, from);
   }
+  const hasEntry = graph.entryId !== undefined && boxes.has(graph.entryId);
 
-  const placed = new Set<number>();
   // Reached from the entry along the edges that go on to a box — core's own reading, and the one
   // that decides which boxes its launch check even looks at
   // (`amenbo_core::ops::automation_run::reachable`).
   const live = new Set<number>();
-  const queued: number[] = [];
-  if (graph.entryId !== undefined && boxes.has(graph.entryId)) {
-    queued.push(graph.entryId);
-    live.add(graph.entryId);
+  if (hasEntry) {
+    const queue = [graph.entryId!];
+    live.add(graph.entryId!);
+    while (queue.length > 0) {
+      for (const edge of out.get(queue.shift()!) ?? []) {
+        if (live.has(edge.toId!)) continue;
+        live.add(edge.toId!);
+        queue.push(edge.toId!);
+      }
+    }
   }
 
-  const nextRoot = (): number | undefined => {
-    while (queued.length > 0) {
-      const id = queued.shift();
-      if (id !== undefined && !placed.has(id)) return id;
+  // Which lines go back, and the order the walk first came to each box — what breaks a tie.
+  const back = new Set<number>();
+  const seen = new Map<number, number>();
+  const onPath = new Set<number>();
+  const descend = (id: number): void => {
+    seen.set(id, seen.size);
+    onPath.add(id);
+    for (const edge of out.get(id) ?? []) {
+      const to = edge.toId!;
+      if (onPath.has(to)) back.add(edge.id);
+      else if (!seen.has(to)) descend(to);
     }
-    return graph.boxes.find((box) => !placed.has(box.id))?.id;
+    onPath.delete(id);
   };
+  if (hasEntry) descend(graph.entryId!);
+  for (const box of graph.boxes) if (!seen.has(box.id)) descend(box.id);
+  const order = (id: number): number => seen.get(id)!;
+  const forward = (id: number): AutomationEdgeDto[] => (out.get(id) ?? []).filter((edge) => !back.has(edge.id));
 
-  const laps: Lap[] = [];
-  for (let root = nextRoot(); root !== undefined; root = nextRoot()) {
-    const head = takesTask(boxes.get(root)!) ? root : null;
-    const rows: number[][] = [];
-    let frontier = [root];
-    placed.add(root);
-    while (frontier.length > 0) {
-      rows.push(frontier);
-      const next: number[] = [];
-      for (const from of frontier) {
-        for (const edge of out.get(from) ?? []) {
-          const to = edge.toId!;
-          if (placed.has(to)) continue;
-          if (live.has(from)) live.add(to);
-          if (takesTask(boxes.get(to)!)) {
-            queued.push(to);
-            continue;
-          }
-          placed.add(to);
-          next.push(to);
+  // The row: one under the lowest box that leads to it. Without the lines that go back what is left
+  // has no loop, so a pass per box is enough for the longest way to settle.
+  const rank = new Map(graph.boxes.map((box) => [box.id, 0]));
+  for (let pass = 0; pass <= graph.boxes.length; pass++) {
+    let moved = false;
+    for (const box of graph.boxes) {
+      for (const edge of forward(box.id)) {
+        if (rank.get(edge.toId!)! < rank.get(box.id)! + 1) {
+          rank.set(edge.toId!, rank.get(box.id)! + 1);
+          moved = true;
         }
       }
-      frontier = next;
     }
-    laps.push({ head, rows });
+    if (!moved) break;
   }
-  return { laps, live };
+
+  // The spans, one per box that takes a task, in the order the walk came to them.
+  const owner = new Map<number, number>();
+  const takers = graph.boxes.filter(takesTask).map((box) => box.id).sort((a, b) => order(a) - order(b));
+  for (const head of takers) {
+    const handsOn = new Set(
+      boxes
+        .get(head)!
+        .exits.filter((exit) => exit.outputs.some((port) => port.kind === "task_take"))
+        .map((exit) => exit.name),
+    );
+    owner.set(head, head);
+    const queue = forward(head)
+      .filter((edge) => handsOn.has(edge.exitName))
+      .map((edge) => edge.toId!);
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (owner.has(id) || takesTask(boxes.get(id)!)) continue;
+      owner.set(id, head);
+      for (const edge of forward(id)) queue.push(edge.toId!);
+    }
+  }
+
+  // One group per span, and one per row for the boxes no span holds; stacked by the row they start
+  // at, and where two start at the same row, by which the walk came to first.
+  type Group = { head: number | null; members: number[] };
+  const groups: Group[] = takers.map((head) => ({ head, members: [] }));
+  const loose = new Map<number, Group>();
+  for (const box of [...graph.boxes].sort((a, b) => order(a.id) - order(b.id))) {
+    const head = owner.get(box.id);
+    if (head !== undefined) {
+      groups.find((one) => one.head === head)!.members.push(box.id);
+      continue;
+    }
+    const row = rank.get(box.id)!;
+    const group = loose.get(row) ?? { head: null, members: [] };
+    if (!loose.has(row)) {
+      loose.set(row, group);
+      groups.push(group);
+    }
+    group.members.push(box.id);
+  }
+  const startsAt = (group: Group) => Math.min(...group.members.map((id) => rank.get(id)!));
+  const firstSeen = (group: Group) => Math.min(...group.members.map(order));
+  groups.sort((a, b) => startsAt(a) - startsAt(b) || firstSeen(a) - firstSeen(b));
+
+  const laps: Lap[] = [];
+  for (const group of groups) {
+    const byRow = new Map<number, number[]>();
+    for (const id of group.members) byRow.set(rank.get(id)!, [...(byRow.get(rank.get(id)!) ?? []), id]);
+    const rows = [...byRow.keys()].sort((a, b) => a - b).map((row) => byRow.get(row)!);
+    const last = laps[laps.length - 1];
+    if (group.head === null && last !== undefined && last.head === null) last.rows.push(...rows);
+    else laps.push({ head: group.head, rows });
+  }
+  return { laps, live, back };
 }
 
 /**
@@ -376,7 +451,7 @@ export function layOut(graph: PicGraph | null): Picture {
   if (graph === null || graph.boxes.length === 0) return empty;
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
-  const { laps, live } = walk(graph);
+  const { laps, live, back: goesBack } = walk(graph);
   // The action's ways out, the error one last — the order the declaration lists them in.
   const outs = [...(graph.boundary?.exits ?? [])].sort(
     (a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT),
@@ -569,7 +644,9 @@ export function layOut(graph: PicGraph | null): Picture {
       });
       continue;
     }
-    const back = ty < sy;
+    // The walk's own reading, not where the two boxes landed: a span stacked by the row it starts at
+    // can put a line going forward above the box it leaves.
+    const back = goesBack.has(edge.id);
     asideLeft.push({
       key,
       top: Math.min(sy + DROP, ty - DROP),

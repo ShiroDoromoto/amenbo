@@ -111,7 +111,13 @@ describe("the picture of an automation", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [
-        taker(1, "take", { exits: [{ id: 91, name: "yes", outputs: [] }, { id: 92, name: "no", outputs: [] }] }),
+        // Both ways out hand the task on, so both of what follows are that task's.
+        taker(1, "take", {
+          exits: [
+            { id: 91, name: "yes", outputs: [] },
+            { id: 92, name: "no", outputs: [port("task", "task_take")] },
+          ],
+        }),
         step({ id: 2, name: "left" }),
         step({ id: 3, name: "right" }),
       ],
@@ -139,6 +145,68 @@ describe("the picture of an automation", () => {
     // The second taker heads its own stretch, so it is back at the top of one rather than three deep.
     expect(picture.laps[0]!.y + picture.laps[0]!.h).toBeLessThanOrEqual(picture.laps[1]!.y);
     expect(at(picture, 3).y).toBeGreaterThan(at(picture, 2).y);
+  });
+
+  it("puts a step one row under the lowest step that leads to it, not the nearest", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [
+        taker(1, "take"),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "check" }),
+        step({ id: 4, name: "report" }),
+      ],
+      edges: [
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, toId: 4 }),
+        // A short way to the same step: the long one decides its row.
+        edge({ id: 4, fromId: 2, exitName: "*", toId: 4 }),
+      ],
+    });
+    const picture = layOut(one);
+    expect(at(picture, 4).y).toBeGreaterThan(at(picture, 3).y);
+  });
+
+  it("does not let a line that goes back push the step it goes to further down", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [taker(1, "take"), step({ id: 2, name: "work" }), step({ id: 3, name: "check" })],
+      edges: [
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, exitName: "*", toId: 2 }),
+      ],
+    });
+    const picture = layOut(one);
+    expect(at(picture, 2).y).toBeLessThan(at(picture, 3).y);
+    expect(picture.lines.find((line) => line.key === "edge-3")!.back).toBe(true);
+  });
+
+  it("leaves out of a task's outline what follows the way out that hands no task on", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [
+        taker(1, "take", {
+          exits: [
+            { id: 91, name: "found", outputs: [] },
+            { id: 92, name: "none left", outputs: [] },
+          ],
+        }),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "tidy up" }),
+      ],
+      edges: [
+        edge({ id: 1, fromId: 1, exitName: "found", toId: 2 }),
+        edge({ id: 2, fromId: 1, exitName: "none left", toId: 3 }),
+      ],
+    });
+    const picture = layOut(one);
+    const lap = picture.laps[0]!;
+    const inside = (boxId: number) => at(picture, boxId).y + at(picture, boxId).h <= lap.y + lap.h;
+    expect(picture.laps.map((one) => one.headBoxId)).toEqual([1]);
+    expect(inside(2)).toBe(true);
+    expect(inside(3)).toBe(false);
   });
 
   it("draws no outline around steps that answer to no task, and still places what nothing reaches", () => {

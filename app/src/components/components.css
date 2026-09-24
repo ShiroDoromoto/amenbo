@@ -1341,9 +1341,10 @@ button.feed__target:hover { color: var(--c-accent); }
    screen that has to mean something, and what it would mean is only "these go together", which the
    outline already says. */
 .autopic__lap { fill: none; stroke: var(--c-rule); stroke-width: 1; stroke-dasharray: 6 4; }
+/* Over the outline's top-left corner, outside it. Sitting on the edge, it read as a second outline
+   crossing the first; inside, it would sit on the entry's own mark. */
 .autopic__lapword {
-  position: absolute; transform: translateY(-50%);
-  padding: 0 var(--s-1); background: var(--c-surface-pic) var(--c-surface);
+  position: absolute; transform: translateY(calc(-100% - 4px));
   font-size: var(--fs-xs); line-height: 1; color: var(--c-text-muted); white-space: nowrap;
 }
 /* What comes after a step runs down the left, what is handed on runs down the right, and the two are
@@ -1351,8 +1352,10 @@ button.feed__target:hover { color: var(--c-accent); }
    is read after the order of the steps, never before it. */
 .autopic__line { fill: none; stroke: var(--c-rule); stroke-width: 1.5; }
 .autopic__line--wire { stroke: var(--c-text-faint); stroke-width: 1; }
-/* It goes back to a row above the one it left. */
+/* It goes back to a row above the one it left. A step's line doing so is red as well as dashed: in
+   grey it looked like one more outline, running down the margin beside the real ones. */
 .autopic__line--back { stroke-dasharray: 5 4; }
+.autopic__line--edge.autopic__line--back { stroke: var(--c-stop); }
 .autopic__word { font-size: var(--fs-xs); fill: var(--c-text-muted); }
 /* One placement. A button because that is what it is: pressing it is what puts the spot's contents in
    the panel beside the picture. */

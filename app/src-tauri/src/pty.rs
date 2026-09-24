@@ -1887,29 +1887,13 @@ pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
 /// this one ([`Recent`]).
 const STEP_SIZE: Size = (120, 32);
 
-/// **Start the terminal a step of a run is carried out in** — on the host, whether or not any pane is
-/// on the screen to draw it (`AMB-T-5394`).
+/// **End the terminal of a run's step before**, where one is still standing — as a step's terminal is
+/// started ([`open_step`]), and as a built-in is carried out in its place (`crate::automation`), which
+/// takes the run's pane over from it just the same.
 ///
-/// A pane is drawn only where the reader is looking: the run's pane may be on another page or in
-/// another project, and a step whose terminal waited for its pane to be drawn was a run standing at
-/// "running" with nothing in it moving. So the terminal is started here, and the run's pane takes it
-/// up whenever it is drawn ([`pty_attach`]), reading back what it said meanwhile.
-///
-/// **The terminal of the run's step before it is ended first.** A step ends when its agent reports,
-/// and the program may still be standing there; left running it would go on alongside the step that
-/// replaces it. It is taken out of the registry before it is killed, the way [`pty_close`] does, so
-/// its ending reads as one Amenbo made and not as the program stopping by itself.
-///
-/// The output goes to the window the workspace is drawn in until a pane takes the terminal up: the
-/// talk window where it has been split out, and the board where it has not (`AMB-D-753`).
-pub fn open_step(
-    app: &tauri::AppHandle,
-    run: i64,
-    run_step: i64,
-    folder: Option<String>,
-    agent: String,
-    say: String,
-) -> Result<String, CmdError> {
+/// It is taken out of the registry before it is killed, the way [`pty_close`] does, so its ending
+/// reads as one Amenbo made and not as the program stopping by itself.
+pub fn end_steps_of(app: &tauri::AppHandle, run: i64) {
     let terminals = app.state::<Terminals>();
     let before: Vec<Terminal> = {
         let mut open = terminals.0.lock().expect("terminals lock");
@@ -1922,6 +1906,31 @@ pub fn open_step(
             log::warn!("could not end the terminal of run {run}'s step before: {e}");
         }
     }
+}
+
+/// **Start the terminal a step of a run is carried out in** — on the host, whether or not any pane is
+/// on the screen to draw it (`AMB-T-5394`).
+///
+/// A pane is drawn only where the reader is looking: the run's pane may be on another page or in
+/// another project, and a step whose terminal waited for its pane to be drawn was a run standing at
+/// "running" with nothing in it moving. So the terminal is started here, and the run's pane takes it
+/// up whenever it is drawn ([`pty_attach`]), reading back what it said meanwhile.
+///
+/// **The terminal of the run's step before it is ended first** ([`end_steps_of`]). A step ends when its
+/// agent reports, and the program may still be standing there; left running it would go on alongside
+/// the step that replaces it.
+///
+/// The output goes to the window the workspace is drawn in until a pane takes the terminal up: the
+/// talk window where it has been split out, and the board where it has not (`AMB-D-753`).
+pub fn open_step(
+    app: &tauri::AppHandle,
+    run: i64,
+    run_step: i64,
+    folder: Option<String>,
+    agent: String,
+    say: String,
+) -> Result<String, CmdError> {
+    end_steps_of(app, run);
     let target = if app.get_webview_window(crate::windows::TALK).is_some() {
         crate::windows::TALK
     } else {

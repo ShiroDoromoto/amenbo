@@ -58,7 +58,7 @@ function endWord(line: PicLine): string {
  */
 function lineTitle(line: PicLine): string {
   if (line.kind === "wire" && line.hands !== undefined) {
-    return tf("auto.pic.hands", { from: line.hands.from, to: line.hands.to });
+    return tf("auto.pic.hands", { from: line.hands.from, to: listLabel([...line.hands.to]) });
   }
   return [exitWord(line), endWord(line)].filter((one) => one !== "").join(" — ");
 }
@@ -125,27 +125,42 @@ export function AutomationPicture({
               rx={8}
             />
           ))}
-          {picture.lines.map((line) => (
-            <g key={line.key}>
-              <title>{lineTitle(line)}</title>
-              <polyline
-                className={[
-                  "autopic__line",
-                  `autopic__line--${line.kind}`,
-                  line.back ? "autopic__line--back" : "",
-                  line.leaves ? "autopic__line--leaves" : "",
-                ]
-                  .filter((one) => one !== "")
-                  .join(" ")}
-                points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-              />
-              {line.kind === "edge" && lineTitle(line) !== "" && (
-                <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
-                  {lineTitle(line)}
-                </text>
-              )}
-            </g>
-          ))}
+          {picture.lines.map((line) => {
+            const drawn = [
+              "autopic__line",
+              `autopic__line--${line.kind}`,
+              line.back ? "autopic__line--back" : "",
+              line.leaves ? "autopic__line--leaves" : "",
+            ]
+              .filter((one) => one !== "")
+              .join(" ");
+            return (
+              <g key={line.key}>
+                <title>{lineTitle(line)}</title>
+                <polyline className={drawn} points={line.points.map((p) => `${p.x},${p.y}`).join(" ")} />
+                {/* A wire's legs off its trunk, one into each input it lands in. */}
+                {line.branches?.map((branch, nth) => (
+                  <polyline
+                    key={nth}
+                    className={drawn}
+                    points={branch.map((p) => `${p.x},${p.y}`).join(" ")}
+                  />
+                ))}
+                {line.kind === "edge" && lineTitle(line) !== "" && (
+                  <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
+                    {lineTitle(line)}
+                  </text>
+                )}
+                {/* A wire is named by what it hands on, over its trunk: the sentence saying where it
+                    goes is the title, since the ends it lands in are drawn. */}
+                {line.kind === "wire" && line.hands !== undefined && (
+                  <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
+                    {line.hands.from}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </svg>
 
         {picture.laps.map((lap) => (

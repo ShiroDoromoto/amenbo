@@ -106,8 +106,16 @@ const LAP_PAD = 16;
 const LAP_GAP = 28;
 /** Under the last row of a stretch, where a way out that goes nowhere hangs. */
 const END_ROOM = 56;
-/** One lane in the margin, and the margin outside the outermost one. */
+/** One lane in the left margin, where the edges that skip rows run, and the margin outside it. */
 const LANE_W = 16;
+/** How far apart the wires' trunks stand — wider than an edge's lane, for the name over each one. */
+const WIRE_LANE_W = 28;
+/** How far in from a box's top and bottom a wire leaves it or lands, down its right side. */
+const WIRE_IN = 15;
+/** How far over a box the leg of a wire that comes down into its top runs, per input. */
+const WIRE_OVER = 7;
+/** How far the name over a trunk stands off it, to the right and up. */
+const WIRE_WORD = 4;
 const PAD = 18;
 /** How far in from a box's edge the first line is tied, and how far apart the next ones are. */
 const ATTACH = 28;
@@ -169,8 +177,15 @@ export type PicLine = {
   exitName?: string;
   /** How the run goes on where this edge names no box — it closes the task, or it stops. */
   ends?: "done" | "halt";
-  /** What is handed on, for a wire: the way out's output and the input it lands in. */
-  hands?: { from: string; to: string };
+  /** What is handed on, for a wire: the way out's output, and every input it lands in. */
+  hands?: { from: string; to: readonly string[] };
+  /**
+   * A wire's legs off its trunk, one per input it lands in. `points` is the stem out of the box it
+   * leaves, and each branch runs from where the stem meets the trunk, along the trunk, and into
+   * one input — so one output fed to three boxes is one line with three ends, not three lines
+   * side by side.
+   */
+  branches?: readonly (readonly PicPoint[])[];
   /**
    * Where the way out's name is written — and, on a line that names no box, how it ends. Over the
    * middle of the leg that runs across, beside the lane of a line in the margin, under the foot of
@@ -491,10 +506,10 @@ function lanes(spans: readonly { key: string; top: number; bottom: number }[]): 
   return at;
 }
 
-/** Where a line is tied to a box: the nth way out down the left side, the nth port down the right. */
-function attach(node: PicNode, nth: number, side: "left" | "right"): number {
-  const inward = Math.min(ATTACH + nth * EXIT_GAP, node.w - ATTACH);
-  return side === "left" ? node.x + inward : node.x + node.w - inward;
+/** Where an edge is tied to a box: the nth way out, along its bottom from the left. A wire is tied
+ *  down the box's right side instead, where the trunks are. */
+function attach(node: PicNode, nth: number): number {
+  return node.x + Math.min(ATTACH + nth * EXIT_GAP, node.w - ATTACH);
 }
 
 /** What one line is called, which is also what tells two of them apart. */
@@ -503,10 +518,10 @@ function lineKey(kind: "edge" | "wire", id: number): string {
 }
 
 /**
- * About how wide a way out's name is written, for the room the left margin keeps for it. Only a
- * guess: the picture is laid out without a screen to measure on. A wide character (Japanese) takes
- * the font's size, anything else a little over half of it; the error way out is written as a word
- * of the reader's language, and none of them runs past five narrow letters.
+ * About how wide a name on a line is written, for the room the margins keep for it. Only a guess:
+ * the picture is laid out without a screen to measure on. A wide character (Japanese) takes the
+ * font's size, anything else a little over half of it; the error way out is written as a word of
+ * the reader's language, and none of them runs past five narrow letters.
  */
 function wordW(exitName: string | undefined): number {
   if (exitName === undefined) return 0;
@@ -671,7 +686,7 @@ export function layOut(graph: PicGraph | null): Picture {
   if (graph.boundary !== undefined && entered !== undefined && door !== undefined) {
     const sx = door.x + Math.round(door.w / 2);
     const sy = door.y + door.h;
-    const tx = attach(entered, 0, "left");
+    const tx = attach(entered, 0);
     const mid = Math.round((sy + entered.y) / 2);
     lines.push({
       key: "in",
@@ -716,7 +731,7 @@ export function layOut(graph: PicGraph | null): Picture {
     const from = node.get(edge.fromId);
     if (from === undefined) continue;
     const { nth, below } = slot.get(edge.id)!;
-    const sx = attach(from, nth, "left");
+    const sx = attach(from, nth);
     const sy = from.y + NODE_H;
     const key = lineKey("edge", edge.id);
 
@@ -739,7 +754,7 @@ export function layOut(graph: PicGraph | null): Picture {
     }
 
     const to = node.get(toId)!;
-    const tx = attach(to, 0, "left");
+    const tx = attach(to, 0);
     const ty = to.y;
     if (neighbours(edge.fromId, toId)) {
       const mid = Math.round((sy + ty) / 2);
@@ -797,6 +812,23 @@ export function layOut(graph: PicGraph | null): Picture {
     });
   }
 
+  // The wires, one trunk per output: what one way out of one box hands on is a single line however
+  // many boxes take it, split just before each input it lands in. They all go out to the right,
+  // never straight down between two boxes — a wire under a box would cross the names of the lines
+  // that leave it there.
+  type Trunk = {
+    key: string;
+    fromId: number;
+    port: string;
+    sx: number;
+    sy: number;
+    /** Where each leg ends, and the height it runs across at — the same as the end's, unless it
+     *  comes down into the box from above. */
+    ends: { input: string; x: number; y: number; across: number }[];
+  };
+  const trunks = new Map<string, Trunk>();
+  /** How many trunks each box has put out already — each one leaves a row higher up its right side. */
+  const stems = new Map<number, number>();
   for (const wire of graph.wires) {
     // Out of the action itself comes one of its inputs, from the top mark; into it goes an output of
     // the way out the source step leaves the action by, into that way out's mark.
@@ -809,49 +841,63 @@ export function layOut(graph: PicGraph | null): Picture {
     const from = node.get(wire.fromId);
     const to = toId === undefined ? undefined : node.get(toId);
     if (from === undefined || to === undefined || toId === undefined) continue;
-    const outputs =
-      wire.fromId === ACTION_BOUNDARY
-        ? graph.boundary?.inputs ?? []
-        : boxes.get(wire.fromId)?.exits.find((one) => one.name === wire.fromExitName)?.outputs ?? [];
-    const inputs = boxes.get(toId)?.inputs ?? [];
-    const sx = attach(from, Math.max(0, outputs.findIndex((p) => p.name === wire.fromPortName)), "right");
-    const sy = from.y + from.h;
-    const tx = attach(to, Math.max(0, inputs.findIndex((p) => p.name === wire.toPortName)), "right");
-    const ty = to.y;
-    const key = lineKey("wire", wire.id);
-    const hands = { from: wire.fromPortName, to: wire.toPortName };
-    if (neighbours(wire.fromId, toId)) {
-      const mid = Math.round((sy + ty) / 2);
-      lines.push({
-        key,
-        kind: "wire",
-        points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: ty }],
-        back: false,
-        hands,
-        at: { x: sx, y: mid },
-        align: "start",
-      });
-      continue;
+    const id = `${wire.fromId}\u0000${wire.fromExitName ?? ""}\u0000${wire.fromPortName}`;
+    let trunk = trunks.get(id);
+    if (trunk === undefined) {
+      const nth = stems.get(wire.fromId) ?? 0;
+      stems.set(wire.fromId, nth + 1);
+      trunk = {
+        key: lineKey("wire", wire.id),
+        fromId: wire.fromId,
+        port: wire.fromPortName,
+        sx: from.x + from.w,
+        sy: Math.max(from.y + WIRE_IN, from.y + from.h - WIRE_IN - nth * WORD_H),
+        ends: [],
+      };
+      trunks.set(id, trunk);
     }
-    const back = ty < sy;
+    const inputs = toId === ACTION_BOUNDARY ? [] : boxes.get(toId)?.inputs ?? [];
+    const nth = Math.max(0, inputs.findIndex((p) => p.name === wire.toPortName));
+    // Into the right side, unless another box stands to the right on the same row: a leg across
+    // would run through that one, so it comes over the row and down into this box's top instead.
+    const hemmed = [...nodes, ...spots].some((one) => one.y === to.y && one.x > to.x);
+    trunk.ends.push(
+      hemmed
+        ? {
+            input: wire.toPortName,
+            x: to.x + to.w - WIRE_IN - nth * WORD_H,
+            y: to.y,
+            // A row apart per input, and all of them under the legs of the edges coming into the row.
+            across: to.y - WIRE_OVER - nth * WIRE_OVER,
+          }
+        : {
+            input: wire.toPortName,
+            x: to.x + to.w,
+            y: Math.min(to.y + WIRE_IN + nth * WORD_H, to.y + to.h - WIRE_IN / 2),
+            across: Math.min(to.y + WIRE_IN + nth * WORD_H, to.y + to.h - WIRE_IN / 2),
+          },
+    );
+  }
+  for (const trunk of trunks.values()) {
+    const ys = [trunk.sy, ...trunk.ends.map((one) => one.across)];
     asideRight.push({
-      key,
-      top: Math.min(sy + DROP, ty - DROP),
-      bottom: Math.max(sy + DROP, ty - DROP),
+      key: trunk.key,
+      top: Math.min(...ys),
+      bottom: Math.max(...ys),
       draw: (laneX) => ({
-        key,
+        key: trunk.key,
         kind: "wire",
-        points: [
-          { x: sx, y: sy },
-          { x: sx, y: sy + DROP },
-          { x: laneX, y: sy + DROP },
-          { x: laneX, y: ty - DROP },
-          { x: tx, y: ty - DROP },
-          { x: tx, y: ty },
-        ],
-        back,
-        hands,
-        at: { x: laneX, y: Math.round((sy + ty) / 2) },
+        points: [{ x: trunk.sx, y: trunk.sy }, { x: laneX, y: trunk.sy }],
+        branches: trunk.ends.map((end) => [
+          { x: laneX, y: trunk.sy },
+          { x: laneX, y: end.across },
+          { x: end.x, y: end.across },
+          ...(end.across === end.y ? [] : [{ x: end.x, y: end.y }]),
+        ]),
+        back: false,
+        hands: { from: trunk.port, to: trunk.ends.map((one) => one.input) },
+        // Over the top of the trunk, the way the name of an edge is written over its leg across.
+        at: { x: laneX + WIRE_WORD, y: trunk.sy - WIRE_WORD },
         align: "start",
       }),
     });
@@ -867,7 +913,7 @@ export function layOut(graph: PicGraph | null): Picture {
   }
   for (const line of asideRight) {
     const lane = rightAt.get(line.key)!;
-    lines.push(line.draw(contentW + LAP_PAD + (lane + 1) * LANE_W, lane));
+    lines.push(line.draw(contentW + LAP_PAD + (lane + 1) * WIRE_LANE_W, lane));
   }
 
   // Everything was laid out with the boxes at x=0. Shift it right by the room the left margin took:
@@ -881,14 +927,20 @@ export function layOut(graph: PicGraph | null): Picture {
     }),
   );
   const dx = PAD + leftRoom;
+  // And the room the right margin takes: the trunks, and the name written past the outermost one.
+  const rightRoom = Math.max(
+    LAP_PAD + rightLanes * WIRE_LANE_W,
+    ...lines.map((line) => (line.kind === "wire" ? line.at.x + wordW(line.hands?.from) - contentW : 0)),
+  );
   return {
-    width: dx + contentW + LAP_PAD + rightLanes * LANE_W + PAD,
+    width: dx + contentW + rightRoom + PAD,
     height,
     laps: outlines.map((lap) => ({ ...lap, x: lap.x + dx })),
     nodes: nodes.map((one) => ({ ...one, x: one.x + dx })),
     lines: lines.map((line) => ({
       ...line,
       points: line.points.map((p) => ({ x: p.x + dx, y: p.y })),
+      branches: line.branches?.map((branch) => branch.map((p) => ({ x: p.x + dx, y: p.y }))),
       at: { x: line.at.x + dx, y: line.at.y },
     })),
     inserts: inserts.map((one) => ({ ...one, x: one.x + dx })),

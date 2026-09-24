@@ -586,11 +586,15 @@ describe("the picture inside an action", () => {
     );
     const wires = picture.lines.filter((one) => one.kind === "wire");
     expect(wires.map((one) => one.hands)).toEqual([
-      { from: "title", to: "title" },
-      { from: "reason", to: "reason" },
+      { from: "title", to: ["title"] },
+      { from: "reason", to: ["reason"] },
     ]);
+    // Into the way out's mark — down into its top, since the next way out stands beside it.
     const gaveUp = picture.marks.find((one) => one.exitName === "gave up")!;
-    expect(wires[1]!.points[wires[1]!.points.length - 1]!.y).toBe(gaveUp.y);
+    const end = wires[1]!.branches![0]!.slice(-1)[0]!;
+    expect(end.y).toBe(gaveUp.y);
+    expect(end.x).toBeGreaterThan(gaveUp.x);
+    expect(end.x).toBeLessThan(gaveUp.x + gaveUp.w);
   });
 
   it("draws no marks on an automation's picture", () => {
@@ -601,7 +605,7 @@ describe("the picture inside an action", () => {
 });
 
 describe("what the action itself hands in", () => {
-  it("counts an input wired from the action itself as fed, and draws that wire straight down", () => {
+  it("counts an input wired from the action itself as fed, and draws that wire out to the right", () => {
     const picture = layOut({
       entryId: 1,
       boxes: [step({ id: 1, name: "draft", inputs: [port("title", "value")] })],
@@ -610,7 +614,101 @@ describe("what the action itself hands in", () => {
       boundary: { inputs: [port("title", "value")], exits: [] },
     });
     expect(at(picture, 1).unfed).toEqual([]);
+    // Out past the boxes and back in, never straight down: a wire under a box would cross the names
+    // of the lines that leave it there.
     const line = picture.lines.find((one) => one.kind === "wire")!;
-    expect(line.points).toHaveLength(4);
+    const box = at(picture, 1);
+    expect(line.branches).toHaveLength(1);
+    expect(line.points[1]!.x).toBeGreaterThan(box.x + box.w);
+    expect(line.branches![0]!.slice(-1)[0]!.x).toBe(box.x + box.w);
+  });
+});
+
+describe("the wires", () => {
+  /** A step that hands `draft` on, and three that take it, one under the other. */
+  const fanned = (wires: AutomationWireDto[]) =>
+    layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "write", { exits: [{ id: 91, outputs: [port("draft", "value"), port("notes", "value")] }] }),
+          step({ id: 2, name: "check", inputs: [port("draft", "value")] }),
+          step({ id: 3, name: "fix", inputs: [port("draft", "value")] }),
+          step({ id: 4, name: "ship", inputs: [port("draft", "value"), port("notes", "value")] }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 3, toId: 4 }),
+        ],
+        wires,
+      }),
+    );
+
+  it("draws one output handed to several boxes as one line, split into each of them", () => {
+    const picture = fanned([
+      wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 2, toPortName: "draft" }),
+      wire({ id: 2, fromId: 1, fromPortName: "draft", toId: 3, toPortName: "draft" }),
+      wire({ id: 3, fromId: 1, fromPortName: "draft", toId: 4, toPortName: "draft" }),
+    ]);
+    const wires = picture.lines.filter((one) => one.kind === "wire");
+    expect(wires).toHaveLength(1);
+    expect(wires[0]!.hands).toEqual({ from: "draft", to: ["draft", "draft", "draft"] });
+    // Every branch comes off the one trunk, and ends at the right side of a box that takes it.
+    const trunkX = wires[0]!.points[1]!.x;
+    expect(wires[0]!.branches!.map((branch) => branch[0]!.x)).toEqual([trunkX, trunkX, trunkX]);
+    expect(wires[0]!.branches!.map((branch) => branch.slice(-1)[0]!.x)).toEqual(
+      [2, 3, 4].map((id) => at(picture, id).x + at(picture, id).w),
+    );
+  });
+
+  it("comes down into the top of a box with another beside it, rather than through that one", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "write", {
+            exits: [
+              { id: 91, outputs: [port("draft", "value")] },
+              // Handing the task on too, so both of what follows are that task's and share a row.
+              { id: 92, name: "other", outputs: [port("task", "task_take")] },
+            ],
+          }),
+          step({ id: 2, name: "left", inputs: [port("draft", "value")] }),
+          step({ id: 3, name: "right" }),
+        ],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 1, toId: 3, exitName: "other" })],
+        wires: [wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 2, toPortName: "draft" })],
+      }),
+    );
+    const left = at(picture, 2);
+    const right = at(picture, 3);
+    expect(left.y).toBe(right.y);
+    const branch = picture.lines.find((one) => one.kind === "wire")!.branches![0]!;
+    const end = branch.slice(-1)[0]!;
+    // Into the top, inside the box, and the leg across runs over the row rather than through it.
+    expect(end.y).toBe(left.y);
+    expect(end.x).toBeLessThan(left.x + left.w);
+    expect(branch.slice(-2)[0]!.y).toBeLessThan(right.y);
+  });
+
+  it("gives each output of a box a trunk of its own, and writes its name over it", () => {
+    const picture = fanned([
+      wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 4, toPortName: "draft" }),
+      wire({ id: 2, fromId: 1, fromPortName: "notes", toId: 4, toPortName: "notes" }),
+    ]);
+    const wires = picture.lines.filter((one) => one.kind === "wire");
+    expect(wires.map((one) => one.hands?.from)).toEqual(["draft", "notes"]);
+    // Side by side rather than one over the other: the two run past the same rows.
+    expect(wires[0]!.points[1]!.x).not.toBe(wires[1]!.points[1]!.x);
+    // Each leaves at a height of its own, and lands in the input it names.
+    expect(wires[0]!.points[0]!.y).not.toBe(wires[1]!.points[0]!.y);
+    expect(wires[0]!.branches![0]!.slice(-1)[0]!.y).toBeLessThan(wires[1]!.branches![0]!.slice(-1)[0]!.y);
+    // The name is over the top of its trunk, and the picture is wide enough to hold it.
+    for (const one of wires) {
+      expect(one.at.x).toBeGreaterThan(one.points[1]!.x);
+      expect(one.at.y).toBeLessThan(one.points[1]!.y);
+      expect(one.at.x).toBeLessThan(picture.width);
+    }
   });
 });

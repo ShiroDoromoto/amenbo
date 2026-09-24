@@ -13,6 +13,8 @@
 //!
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
+//! A run that stopped to call a person also gives the task to the human, with the report of the step
+//! that stopped on it (`AMB-D-966`).
 //!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
@@ -165,6 +167,18 @@ fn close_stretch(
 /// The line is left on a task that is still open, because what a person needs is to know the run is
 /// not coming back — and where it got to, so they can judge what is half done. A closed task gets no
 /// line: nobody reads one there, and the run's history already says how it ended (`AMB-D-963`).
+///
+/// **A run that stopped to call a person gives the task to that person** (`AMB-D-966`). Back in `todo`
+/// alone, it is a task any run may take, and the next one takes it at once and stops at the same place.
+/// So it is also assigned to the human — the one who launched the run, since a local store knows a
+/// launcher only by facet, and a launch by the AI facet handed back to the AI would be that loop again.
+/// Taking it up means handing it back to the AI. Only [`Ending::Failed`] with
+/// [`AutomationStoppedReason::Halted`] does this: a way out the picture sends to a person — one the
+/// author drew so, or the error one, which goes there unless drawn elsewhere. Every other failure is
+/// the run's own and not a question for anybody.
+///
+/// What the person reads there is the report of the step that stopped, under the line: that is where
+/// the agent said what it needs, and the line alone says only that it stopped.
 fn hand_the_task_back(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
@@ -178,8 +192,37 @@ fn hand_the_task_back(
     if crate::ops::automation_report::closed(tx, task_id)? {
         return Ok(());
     }
-    crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &said(tx, run, ending)?)?;
+    let line = said(tx, run, ending)?;
+    if ending != Ending::Failed(AutomationStoppedReason::Halted) {
+        crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
+        return Ok(());
+    }
+    crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human))?;
+    match unsaid_report(tx, run)? {
+        Some((run_step_id, report)) => {
+            let text = format!("{line}\n\n{report}");
+            crate::ops::comment::add_report_comment(tx, task_id, ActorKind::Ai, &text, run_step_id)?;
+        }
+        None => {
+            crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
+        }
+    }
     Ok(())
+}
+
+/// The report of the step the run stopped at, with that execution's id — unless it is empty, or the
+/// step already carried it onto the task ([`crate::ops::automation_report::done`]), where a second
+/// copy would say the same thing twice.
+fn unsaid_report(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<Option<(i64, String)>> {
+    let Some(last) = read::automation_run_steps_of(tx.conn(), run.id)?.pop() else {
+        return Ok(None);
+    };
+    if last.report.trim().is_empty() {
+        return Ok(None);
+    }
+    let carried = read::automation_run_def(tx.conn(), last.run_def_id)?
+        .is_some_and(|def| def.report_to_task);
+    Ok((!carried).then_some((last.id, last.report)))
 }
 
 /// What the line on the task says: that the run stopped, why, and how far it got.
@@ -409,7 +452,7 @@ pub fn sweep(tx: &WriteTx<'_>) -> Result<Vec<AutomationRun>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Automation, AutomationPortKind};
+    use crate::model::{Automation, AutomationPortKind, ERROR_EXIT};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
     use crate::ops::automation_run::{launch, Launcher};
@@ -655,6 +698,67 @@ mod tests {
             assert_eq!(said.len(), 1, "one line, saying the run is not coming back");
             assert!(said[0].contains("調べる"), "{}", said[0]);
             assert!(said[0].contains(&format!("run {}", run.id)), "{}", said[0]);
+        });
+    }
+
+    /// **A run that stops to call a person gives the task to the human, with the step's report on it**
+    /// (`AMB-D-966`) — so the next run does not take it straight back and stop at the same place.
+    #[test]
+    fn a_run_that_calls_a_person_gives_the_task_to_the_human_with_the_report() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let on = crate::model::AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, p.second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
+                .expect("error calls a person");
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+            let second = opened(tx, &run, &p.second);
+            let stopped = done(
+                tx,
+                second.run_step.id,
+                way_out(tx, second.run_step.id, ERROR_EXIT),
+                "Which currency should the total be in?",
+            )
+            .expect("done");
+
+            assert!(matches!(stopped, Next::Halted(_)));
+            let after = read::task(tx.conn(), task).expect("read").expect("the task");
+            assert_eq!(after.status, TaskStatus::Todo);
+            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
+            let said = comments_on(tx, task);
+            assert_eq!(said.len(), 1, "{said:?}");
+            assert!(said[0].contains("Which currency should the total be in?"), "{}", said[0]);
+            assert!(said[0].contains(&format!("run {}", run.id)), "{}", said[0]);
+        });
+    }
+
+    /// A step that already carries its report onto the task is not said twice when it calls a person.
+    #[test]
+    fn a_report_already_on_the_task_is_not_said_again_when_the_run_calls_a_person() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let on = crate::model::AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, p.second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
+                .expect("error calls a person");
+            let action = read::automation_action(tx.conn(), p.second.action_id)
+                .expect("read")
+                .expect("the action");
+            let step = action.entry_step_id.expect("an entry step");
+            automation::step_update(tx, step, None, None, None, None, Some(true), None)
+                .expect("report to the task");
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+            let second = opened(tx, &run, &p.second);
+            done(tx, second.run_step.id, way_out(tx, second.run_step.id, ERROR_EXIT), "Stuck on it.")
+                .expect("done");
+
+            let said = comments_on(tx, task);
+            let times = said.iter().filter(|line| line.contains("Stuck on it.")).count();
+            assert_eq!(times, 1, "{said:?}");
         });
     }
 

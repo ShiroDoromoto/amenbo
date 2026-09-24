@@ -1612,6 +1612,12 @@ fn open_one(
             log::info!("run {run_id} asked for {agent}, which this machine cannot start");
             (run.project_id, None, None, Vec::new())
         }
+        // Nothing to name here either: the run failed before this step opened, and its row says why
+        // (`AMB-D-967`). The task before is back in `todo`, with the line core left on it.
+        Opened::LeftTaskOpen { run } => {
+            log::warn!("run {run_id} went for its next task with the last one still in progress");
+            (run.project_id, None, None, Vec::new())
+        }
         // A built-in has already been carried out and has reported (`AMB-D-964`), so there is no
         // terminal to stand a pane on. The run is now standing between two steps — or has ended — and
         // the watch woken below reads which, the same as after an agent's report. What the pane is

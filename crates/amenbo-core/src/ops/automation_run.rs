@@ -1637,6 +1637,7 @@ mod tests {
                     panic!("cannot start {agent}")
                 }
                 crate::ops::automation_step::Opened::Carried { .. } => panic!("not a built-in"),
+                crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
@@ -1644,6 +1645,9 @@ mod tests {
             // report — the refusal that guards a step saying it is done with nothing to show.
             let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
             crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");
+            // The picture ends here, and a run does not complete with its task in progress
+            // (`AMB-D-967`), so the step closes it before it reports.
+            crate::ops::task::set_status(tx, task, crate::model::TaskStatus::Done).expect("close");
 
             // And once it has reported, the answer is read off the way out it took — here the unnamed
             // one, which closes the run, so there is nothing waiting and the run is no longer running.
@@ -1735,6 +1739,7 @@ mod tests {
                 panic!("cannot start {agent}")
             }
             crate::ops::automation_step::Opened::Carried { .. } => panic!("not a built-in"),
+            crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
         crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");

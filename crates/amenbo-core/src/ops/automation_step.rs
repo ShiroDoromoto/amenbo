@@ -53,7 +53,7 @@ pub struct Opening {
     pub folder: Option<String>,
 }
 
-/// The four ways opening a step can end.
+/// The five ways opening a step can end.
 #[derive(Clone, Debug)]
 pub enum Opened {
     /// Open a terminal on this.
@@ -69,6 +69,9 @@ pub enum Opened {
     /// and the run was stopped with [`AutomationStoppedReason::NoAgent`]. `agent` is the one that was
     /// asked for, which is not on the run row and is what the sentence needs.
     NoAgent { run: AutomationRun, agent: String },
+    /// **This step takes a fresh task while the one before is still in progress**, so no terminal was
+    /// opened and the run was failed with [`AutomationStoppedReason::LeftTaskOpen`] (`AMB-D-967`).
+    LeftTaskOpen { run: AutomationRun },
 }
 
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
@@ -132,6 +135,17 @@ pub fn open(
         .iter()
         .any(|e| e.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake));
     let current = read::automation_run_task_last(conn, run_id)?;
+    // **The task before is closed before the next is taken** (`AMB-D-967`). The launch check refuses
+    // a picture with a line that skips closing it, so this is a safety net for a line the check
+    // missed: the run fails rather than leave that task reserved by nobody.
+    if opens_a_stretch && super::automation_stop::left_open(tx, current.as_ref())? {
+        let stopped = super::automation_stop::ended(
+            tx,
+            run,
+            super::automation_stop::Ending::Failed(AutomationStoppedReason::LeftTaskOpen),
+        )?;
+        return Ok(Opened::LeftTaskOpen { run: stopped.run });
+    }
 
     // Every input, and what is actually standing ready to fill it.
     let mut handed: Vec<Handed> = Vec::new();
@@ -751,6 +765,7 @@ mod tests {
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }
 
@@ -1142,6 +1157,7 @@ mod tests {
                 }
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
                 Opened::Carried { .. } => panic!("not a built-in"),
+                Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             }
             assert_eq!(
                 read::automation_run_steps_of(tx.conn(), run.id).expect("read").len(),
@@ -1167,6 +1183,7 @@ mod tests {
             match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
                 Opened::Carried { .. } => panic!("not a built-in"),
+                Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
                 Opened::NoAgent { run: stopped, agent } => {
                     assert_eq!(agent, "claude");

@@ -1242,7 +1242,7 @@ datasets! {
         project_id: fk("project", "RESTRICT"),
         status: enum_col("running", "paused", "completed", "failed", "canceled"),
         pause_requested: bool_col,
-        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted"),
+        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open"),
         started_by_kind: actor_kind,
         started_at: ts_opt,
         ended_at: ts_opt,

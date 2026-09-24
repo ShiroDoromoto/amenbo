@@ -622,7 +622,7 @@ endedAt?: string,
  * still `running` — this is the gap between the button and the pause
  * ([`amenbo_core::ops::automation_stop::pause`]).
  */
-pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | null, 
+pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
 /**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */

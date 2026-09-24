@@ -660,6 +660,13 @@ mod tests {
             assert_eq!(next.builtin.as_deref(), Some("test_stamp"));
             assert_eq!(next.agent, "", "its copy names nobody");
             assert_eq!(next.prompt, None, "and carries no prompt");
+            // The picture ends after the built-in, and a run does not complete with its task still in
+            // progress (`AMB-D-967`), so the task is closed as a step would have closed it.
+            let task = read::automation_run_task_last(tx.conn(), run.id)
+                .expect("read")
+                .and_then(|s| s.task_id)
+                .expect("the task the first step took");
+            crate::ops::task::set_status(tx, task, crate::model::TaskStatus::Done).expect("close");
 
             // Only "claude" can be started here, and the built-in is opened all the same.
             let (run_step_id, next) = match open(tx, run.id, next.id, Some(&startable)).expect("open") {

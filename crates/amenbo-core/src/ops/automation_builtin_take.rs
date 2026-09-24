@@ -131,10 +131,11 @@ mod tests {
     use crate::ops::automation_run::{launch, nothing_asked, Launcher};
     use crate::ops::automation_step::{open, Opened};
     use crate::ops::task::{self, TaskPatch};
-    use crate::ops::test_support::{mk_project, mk_task_in, way_out, with_tx};
+    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, way_out, with_tx};
     use crate::store_engine::{read, WriteTx};
 
-    /// An automation whose entry is the built-in, with both of its ways out closing the run.
+    /// An automation whose entry is the built-in. What it takes goes on to an agent's step, since a run
+    /// does not end with its task still in progress (`AMB-D-967`); nothing to take closes the run.
     fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, AutomationPlacement) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "take".into(), ..Default::default() })
@@ -142,17 +143,19 @@ mod tests {
         let written = action(tx, "take_task").expect("the built-in's action");
         let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
         let on = AutomationPictureOwner::Automation;
-        for exit in [TAKEN, NONE_TO_TAKE] {
-            automation::edge_add(tx, on, spot.id, Some(exit), EdgeTarget::Done, None).expect("closes");
-        }
+        let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
+        automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
+        automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
+        automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("closes");
         let automation = automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry");
         (automation, spot)
     }
 
     /// Launch it and open the entry step, which the built-in carries out on the spot.
     fn carried(tx: &WriteTx<'_>, automation: &Automation) -> (AutomationRun, i64, Next) {
+        let claude = ["claude".to_string()];
         let by = Launcher {
-            startable: Some(&[]),
+            startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
             by: Some(ActorKind::Ai),

@@ -644,6 +644,7 @@ mod tests {
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }
 

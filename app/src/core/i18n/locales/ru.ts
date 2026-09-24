@@ -1121,6 +1121,7 @@ export const ru: Translation = {
     "auto.run.halted": "выход позвал человека",
     "auto.run.step": "Шаг {n} · {step}",
     "auto.run.inAction": "{step} в {action}",
+    "auto.run.noTask": "Задача ещё не взята",
 
     "mcp.title": "Подключение по MCP",
     "mcp.setupTitle": "Работать со своими проектами из ИИ",

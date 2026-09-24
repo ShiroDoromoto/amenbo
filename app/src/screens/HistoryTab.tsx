@@ -70,7 +70,7 @@ export function HistoryTab({
             key={one.id}
             type="button"
             aria-pressed={filter === one.id}
-            className={`autohist__only ${filter === one.id ? "autohist__only--on" : ""}`}
+            className={filter === one.id ? "actchip actchip--on" : "actchip"}
             onClick={() => {
               setFilter(one.id);
               setPage(0);
@@ -83,7 +83,7 @@ export function HistoryTab({
 
       {history !== null && runs.length === 0 && <div className="auto__empty">{t("auto.history.empty")}</div>}
       {runs.length > 0 && (
-        <ul className="autoruns">
+        <ul className="autoruns autoruns--history">
           {runs.map((run) => <RunLine key={run.run} run={run} withProject={projectId === null} />)}
         </ul>
       )}

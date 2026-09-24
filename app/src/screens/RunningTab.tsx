@@ -106,7 +106,16 @@ export function RunLine({
                 : tf("auto.run.inAction", { action: run.actionName, step: run.stepName }),
             })}
         </span>
-        <span className="autorun__task">{run.task !== undefined && `${run.task.ref} ${run.task.title}`}</span>
+        <span className="autorun__task">
+          {run.task !== undefined ? (
+            `${run.task.ref} ${run.task.title}`
+          ) : (
+            // Only while it can still take one: a run that ended without a task never had one to take.
+            (run.status === "running" || run.status === "paused") && (
+              <span className="autorun__notask">{t("auto.run.noTask")}</span>
+            )
+          )}
+        </span>
         <span className="autorun__when" title={at === undefined ? undefined : exactLabel(at)}>
           {at === undefined ? "" : whenLabel(at)}
         </span>

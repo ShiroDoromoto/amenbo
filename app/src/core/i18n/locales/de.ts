@@ -1108,6 +1108,7 @@ export const de: Translation = {
     "auto.run.halted": "ein Ausgang rief nach einem Menschen",
     "auto.run.step": "Schritt {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
+    "auto.run.noTask": "Noch keine Aufgabe übernommen",
 
     "mcp.title": "Über MCP verbinden",
     "mcp.setupTitle": "Deine Projekte aus einer KI heraus nutzen",

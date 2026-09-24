@@ -4087,7 +4087,12 @@ const REGISTRY: &[OpSpec] = &[
     // **The picture.** An action placed on an automation (`target`). What stands on an automation's
     // picture is a placement of an action, never a prompt of its own, and it binds the placement —
     // the id a setting is answered on and an edge leaves from.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target", "action"], refs: &["target", "action"], strings: &[], binds: true },
+    //
+    // What is placed is `action`, a library action bound earlier, or `builtin`, the key of one of
+    // Amenbo's built-ins (`take_task`, …) — one of the two, never both. A built-in is defined in the
+    // code and not in the store, so it is named by its key rather than by a binding. Its ways out
+    // carry the names the code gives them, and an edge off one is written with that name.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin"], binds: true },
     // Who carries one step (`step`) out at one placement (`target`), and the model where one is named.
     // A step a run could open with nobody chosen is refused at launch, so a premise
     // that stands up a definition to be run chooses for every step of every placement. `agent` is the
@@ -4957,6 +4962,18 @@ impl Scenario {
                 }
             }
 
+            // What a placement places, in whichever of its two kinds — one of them, never both and
+            // never neither.
+            if step.domain() == Domain::Automation && step.op() == "place-add" {
+                let action = step.with().contains_key("action");
+                let builtin = step.with().contains_key("builtin");
+                if action && builtin {
+                    errs.push(at(i, "a placement places one thing — name `action` or `builtin`, not both".to_string()));
+                } else if !action && !builtin {
+                    errs.push(at(i, "what is placed is missing — write `action` naming a library action, or `builtin` naming a built-in's key".to_string()));
+                }
+            }
+
             // A number written into text needs text to be written into. On an update that is a title
             // or a notes field, and a step that named neither would be asking for a number to be put
             // nowhere.
@@ -5412,6 +5429,31 @@ steps_cli:
         );
         assert!(errs("number_of: seed, spelled: sideways").contains("`bare`"), "and the shapes are two");
         assert!(errs("number_of: ghost").contains("does not resolve"), "the record is a binding like any other");
+    }
+
+    /// A placement places a library action or a built-in, and a step names one of them. Neither is
+    /// `required` on its own, so this is the check that keeps a road from placing nothing — or two
+    /// things at once.
+    #[test]
+    fn a_placement_names_an_action_or_a_builtin_and_not_both_or_neither() {
+        let road = |with: &str| {
+            format!(
+                "id: x\ntitle: y\ngiven:\n  - {{ type: action, domain: automation, op: action-add, with: {{ name: take }}, as: take }}\n  - {{ type: action, domain: automation, op: create, with: {{ name: auto }}, as: auto }}\n  - {{ type: action, domain: automation, op: place-add, with: {{ target: auto, {with} }} }}\nsteps_cli:\n  - {{ type: assert, domain: automation, op: run, with: {{ status: running }} }}\n"
+            )
+        };
+        let errs = |with: &str| {
+            load_str(&road(with)).unwrap().validate().unwrap_err().iter().map(|e| e.message.clone()).collect::<Vec<_>>().join(" / ")
+        };
+
+        load_str(&road("action: take")).unwrap().validate().expect("a library action alone is a placement");
+        load_str(&road("builtin: take_task")).unwrap().validate().expect("a built-in's key is the other one");
+
+        assert!(
+            errs("action: take, builtin: take_task").contains("not both"),
+            "both at once leaves the driver to pick: {}", errs("action: take, builtin: take_task")
+        );
+        assert!(errs("name: nothing").contains("what is placed is missing"), "neither places nothing");
+        assert!(errs("action: ghost").contains("does not resolve"), "an action is a binding like any other");
     }
 
     /// A number written into one record's text is how a road shows that a number is still asked as a

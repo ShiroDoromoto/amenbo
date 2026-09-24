@@ -1,0 +1,155 @@
+# Taking the task a run works is Amenbo's own step now, not a prompt an agent is asked to follow.
+# The built-in reads the tasks its filter lists and reserves the first one that goes
+# through, all in the transaction the step is opened in — so what a road reads is the task gone to
+# `in_progress` and the next step's pane working it, with no terminal typed into on the way.
+#
+# Both of its ways out are walked, and in the order that keeps them apart: first with nothing to take,
+# where the run leaves by the way out that says there was none and ends, then with a task handed to the AI, which is
+# what the filter takes when nobody answered it. The other order would leave the first run holding the
+# task while the second went looking.
+#
+# The road is the screen's alone. A run started at a terminal opens no step (`automation start`), so
+# a built-in is only ever carried out on a run the window started.
+id: take-a-task-with-the-built-in-that-takes-one
+title: The built-in that takes a task reserves the one handed to the AI, and a run with none to take ends
+description: >
+  Place the built-in "タスクに着手する" as an automation's entry, with the way out that took a task going
+  on to an agent's step and the way out that found none closing the run. Start it while no task is
+  handed to the AI, and read the run over on the history tab. Hand a task to the AI, start it again,
+  and read the task gone to in_progress and the agent's step in the run's pane working it.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+
+  # Left unhanded: the built-in's filter, unanswered, takes the tasks given to the AI, so this one is
+  # not a task the first run can take. Its creation is left open for the same reason.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the built-in takes }, as: seed }
+
+  # The step the taken task goes on to: an agent's, so the run's pane stands on a terminal working it.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: build, prompt: work the task }, as: build }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: build } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: build, exit_to: "" } }
+
+  # The built-in, placed by its key, as the entry. Its ways out carry the names the code gives them.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes a task by itself" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: build, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  # With nothing handed to the AI, there is nothing to take.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: empty_handed
+
+  # Over, and not failed: finding no task is a way out of its own, and this one closes the run.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: empty_handed
+      state: completed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  # Handed to the AI, and written through, so it is a task the built-in can reserve.
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Reserved by the built-in, with nobody typing `step-take`.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  # And the run working it: the pane stands on the agent's step the taken task went on to.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: build
+      action: work
+      task: seed
+      present: true

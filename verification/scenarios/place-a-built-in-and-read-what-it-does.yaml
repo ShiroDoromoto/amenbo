@@ -1,0 +1,119 @@
+# A built-in is one of Amenbo's own actions, defined in its code. Nobody builds or changes one, but a reader
+# placing one still has to be able to see what the run will do there — so the library lists the
+# built-ins under a head of their own, and opening one reads its definition instead of building it.
+#
+# Both entrances to that reading are walked: the actions tab's row, before anything places it, and
+# the placement's own panel, once it is on a line. The count of automations placing it is read at
+# each, because the placement is what moves it. A build that lost the head, the press that places one
+# or the read-only screen would leave a built-in nobody could put on a picture or look inside.
+#
+# The road is the screen's alone. The terminal places a built-in by its key (`place-add`), and reads
+# no library the way the screen draws one.
+id: place-a-built-in-and-read-what-it-does
+title: A built-in is read from the library, put in on a line from its own head, and read again from its placement
+description: >
+  On the actions tab, open the built-in "タスクに着手する" and read what it does, the setting it reads
+  and its two ways out, with no automation running it yet. On an automation, put it in on the line
+  leaving a library action, from the head for the built-ins in the panel the `+` opens, and read it on
+  the picture. Press its box, open the action standing on it, and read the same screen again, now run
+  by one automation.
+given:
+  # One library action to stand before the built-in, with a way out to draw the line it goes in on.
+  - { type: action, domain: automation, op: action-add, with: { name: draft }, as: draft }
+  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
+  - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
+  - { type: action, domain: automation, op: exit-add, with: { action: draft, name: drafted } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one a built-in goes on" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: draft } }
+
+steps_gui:
+  # Before anything places it: the built-in is on the library's list, and opens to be read.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: builtin-open
+    with:
+      name: タスクに着手する
+
+  - type: assert
+    domain: automation
+    op: builtin-read
+    with:
+      name: タスクに着手する
+      settings: [絞り込み]
+      exits: [着手した, 着手できるタスクが無い]
+      used_by: 0
+
+  # The line it goes in on: leaving the library action by its way out finishes the task.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: draft
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      exit: drafted
+      ends: done
+
+  # Put in on that line, off the head for the built-ins in the panel the `+` opens.
+  - type: action
+    domain: automation
+    op: insert-box
+    with:
+      after: draft
+      exit: drafted
+      builtin: タスクに着手する
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: タスクに着手する
+      present: true
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      exit: drafted
+      to: タスクに着手する
+
+  # And read again from where it stands: the placement's panel opens the same screen, and the
+  # placement is now counted on it.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: タスクに着手する
+
+  - type: action
+    domain: automation
+    op: open-placed
+
+  - type: assert
+    domain: automation
+    op: builtin-read
+    with:
+      name: タスクに着手する
+      used_by: 1

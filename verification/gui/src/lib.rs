@@ -1214,6 +1214,11 @@ impl Instructor {
             // The entry's mark is words and not colour, but they are the interface's own and in the
             // machine's language — so it is an eye's for the same reason.
             (Domain::Automation, "pictured") if with.contains_key("unfed") || with.contains_key("entry") => None,
+            // A built-in's name is Amenbo's, but it is the one name its screen is headed by, and the
+            // same in every language the interface is drawn in — so a reading finds it.
+            (Domain::Automation, "builtin-read") => {
+                Some(Expectation { text: arg_str(with, "name")?.to_string(), present: true })
+            }
             (Domain::Automation, "pictured") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
@@ -4071,8 +4076,8 @@ impl Instructor {
                             .to_string(),
                     );
                 }
-                match (arg_str(with, "name"), with.get("action")) {
-                    (Some(name), None) => format!(
+                match (arg_str(with, "name"), with.get("action"), arg_str(with, "builtin")) {
+                    (Some(name), None, None) => format!(
                         "{plus} In the panel that opens beside the picture, press the button that makes a new action and places it. In the dialog, write the name \"{name}\", set where it is kept to {}, and press the button that makes it and opens the action. Confirm the action build screen for \"{name}\" opens, then press the button that goes back — the automation's build screen comes back.",
                         match arg_str(with, "reach") {
                             None | Some("project") => "this project's library",
@@ -4080,15 +4085,20 @@ impl Instructor {
                             Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                         }
                     ),
-                    (None, Some(_)) => format!(
+                    (None, Some(_), None) => format!(
                         "{plus} In the panel that opens beside the picture, press the library action \"{}\", then press the button under it that places it.",
                         self.labels
                             .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
                             .cloned()
                             .unwrap_or_else(|| "<the action>".to_string())
                     ),
+                    // A built-in comes last in that panel, under a head of its own, and opens under
+                    // the row with what it does before the button that places it.
+                    (None, None, Some(builtin)) => format!(
+                        "{plus} In the panel that opens beside the picture, under the head for the built-ins, press \"{builtin}\". Confirm what it does opens under the row, then press the button under it that places it."
+                    ),
                     _ => return Err(
-                        "a box put in on a line is made here (`name`) or picked off the library (`action`), never both and never neither"
+                        "a box put in on a line is made here (`name`), picked off the library (`action`) or picked off the built-ins (`builtin`) — exactly one of the three"
                             .to_string(),
                     ),
                 }
@@ -4190,6 +4200,15 @@ impl Instructor {
             // **The one press on the placement's panel that cannot be taken back**, which is why the
             // road answers the machine's question and does not stop at the press.
             (Domain::Automation, "remove-placement") => "In the panel showing what the pressed placement holds, press the button that takes this placement off, and answer the question the machine asks with the answer that goes ahead.".to_string(),
+            // The press under the action's name on the pressed placement's panel. What it lands on is
+            // the action's own: a library action's build screen, or a built-in's read-only one.
+            (Domain::Automation, "open-placed") => "In the panel showing what the pressed placement holds, press the button that opens the action's build screen — the screen for the action standing on it opens in place of the picture.".to_string(),
+            // A built-in's row on the actions tab, listed after the library's with a chip of its own.
+            // Nothing on it builds or moves, so the press opens it to be read.
+            (Domain::Automation, "builtin-open") => format!(
+                "On the actions tab, press the row for the built-in \"{}\", which is marked as built-in — the screen reading it opens in place of the list.",
+                req(with, "name")?
+            ),
             // One row of the panel, written. Every control there writes on the spot, and a box of
             // text writes as the caret leaves it — so the instruction says to leave the box.
             (Domain::Automation, "panel-set") => format!(
@@ -6268,6 +6287,32 @@ impl Instructor {
                     other => return Err(format!("`tab` does not know `{other}` — it is running / history")),
                 }
             ),
+            // A built-in opened to be read. What it declares is listed as names on its rows, and the
+            // rows are the whole of it: nothing on the screen writes, so the way back is the one press.
+            (Domain::Automation, "builtin-read") => {
+                let rows = |key: &str, row: &str| -> Result<String, String> {
+                    match with.get(key) {
+                        None => Ok(String::new()),
+                        Some(_) => {
+                            let listed = names(with, key)?;
+                            Ok(format!(", the row for {row} listing{listed}"))
+                        }
+                    }
+                };
+                format!(
+                    "Confirm the screen reading the built-in \"{}\" is open: its name over it, what it does beside the chip marking it as built-in, and the line saying it is Amenbo's own and is not changed{}{}{}. Confirm nothing on it can be written in or pressed but the button that goes back.",
+                    req(with, "name")?,
+                    rows("settings", "settings")?,
+                    rows("exits", "ways out")?,
+                    match with.get("used_by") {
+                        Some(_) => match count(with, "used_by")? {
+                            0 => ", saying no automation runs it".to_string(),
+                            n => format!(", saying it is run by {}", counted("automation", n)),
+                        },
+                        None => String::new(),
+                    }
+                )
+            }
             // One box, and the mark it may wear. The mark is drawn as colour — an outline round the
             // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
@@ -8540,6 +8585,44 @@ steps_gui:
         assert!(ins.assert(Domain::Automation, "held-by", &with).is_err());
         with.insert("present".to_string(), serde_yaml::Value::Bool(false));
         assert!(ins.assert(Domain::Automation, "held-by", &with).is_ok());
+    }
+
+    /// A built-in is named on the screen by the name its row draws, at each of the three places a
+    /// road meets one: its row on the actions tab, the head for the built-ins a line's `+` opens, and
+    /// the screen that reads it. The screen is read by that name, which is the same in every language.
+    #[test]
+    fn a_built_in_is_opened_placed_and_read_by_the_name_its_row_draws() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - { type: action, domain: automation, op: builtin-open, with: { name: タスクに着手する } }
+  - { type: assert, domain: automation, op: builtin-read, with: { name: タスクに着手する, settings: [絞り込み], exits: [着手した, 着手できるタスクが無い], used_by: 0 } }
+  - { type: action, domain: automation, op: insert-box, with: { after: draft, exit: drafted, builtin: タスクに着手する } }
+  - { type: action, domain: automation, op: open-placed }
+  - { type: assert, domain: automation, op: builtin-read, with: { name: タスクに着手する, used_by: 1 } }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("\"タスクに着手する\"") && lines[0].contains("built-in"), "{}", lines[0]);
+        assert!(
+            lines[1].contains("settings listing 絞り込み")
+                && lines[1].contains("ways out listing 着手した, 着手できるタスクが無い")
+                && lines[1].contains("no automation runs it"),
+            "{}", lines[1]
+        );
+        assert!(lines[2].contains("head for the built-ins") && lines[2].contains("\"タスクに着手する\""), "{}", lines[2]);
+        assert!(lines[3].contains("opens the action's build screen"), "{}", lines[3]);
+        assert!(lines[4].contains("run by one automation"), "{}", lines[4]);
+
+        let read = ins.expectation(&steps[4]);
+        assert_eq!(read.map(|e| e.text), Some("タスクに着手する".to_string()), "the screen is read by the name over it");
+        let with = serde_yaml::from_str::<Args>("{ after: draft, action: act, builtin: タスクに着手する }").unwrap();
+        assert!(
+            ins.action(Domain::Automation, "insert-box", &with).is_err(),
+            "a box picked off the library and off the built-ins at once is refused"
+        );
     }
 
     /// What the dialog that puts a box in is told to declare on it. One of a thing and several read

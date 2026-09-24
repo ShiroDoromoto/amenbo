@@ -4255,7 +4255,11 @@ const REGISTRY: &[OpSpec] = &[
     // spot (`name`, and `reach` for which library keeps it — this project's where none is named).
     // One made on the spot is asked nothing else: it is born empty, its steps built on its own
     // screen, so a road that names a prompt, ways out or inputs here is refused.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach"], binds: false },
+    //
+    // Or one of Amenbo's built-ins (`builtin`), picked under the library's own head for them. It is
+    // named by the name its row draws and not by its key: a screen road is written in what the
+    // reader sees, and a built-in is defined in the code, so no binding stands for it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach", "builtin"], binds: false },
     // The `+ output artefact` on a way out, and the dialog it opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //
@@ -4294,6 +4298,18 @@ const REGISTRY: &[OpSpec] = &[
     // it, and leaves the action in the library — so the machine's own question stands between the
     // press and the write, the way it does for deleting a step.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "remove-placement", required: &[], refs: &[], strings: &[], binds: false },
+    // The press on the pressed placement's panel that opens the action standing on it. A library
+    // action opens into its build screen, and a built-in into the screen that reads its definition.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-placed", required: &[], refs: &[], strings: &[], binds: false },
+    //
+    // **A built-in, read and never built.** The actions tab lists the built-ins after
+    // the library's rows, and a press on one opens the screen that reads its definition in place of
+    // the list. A built-in is named by the name its row draws, for `insert-box`'s reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "builtin-open", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // That screen, read: the built-in's name over it, the line saying it is Amenbo's own and not
+    // changed, and nothing to press but the way back. `settings` and `exits` are the names its rows
+    // list, and `used_by` the automations placing it — the number a placement has just moved.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "builtin-read", required: &["name"], refs: &[], strings: &["name"], binds: false },
     //
     // The panel beside the picture — what the pressed box holds. `field` is the row it is read on or
     // written in, named the way the panel names it rather than by the column underneath: a road reads

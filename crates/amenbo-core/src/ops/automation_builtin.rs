@@ -31,6 +31,7 @@ use crate::model::{
     AutomationRunStep, RunDefCfg, RunDefExit, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::automation::{self, EdgeTarget, NewStep};
+use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::emit_update;
 use crate::store_engine::{read, record, WriteTx};
@@ -132,12 +133,12 @@ pub struct Carried {
     pub report: String,
 }
 
-/// **Every built-in this build carries.** None yet: the four `AMB-D-964` names arrive one by one on top
-/// of this ground.
+/// **Every built-in this build carries.** The four `AMB-D-964` names arrive one by one on top of this
+/// ground; each is its own module, holding its definition and the work it does.
 #[cfg(not(test))]
-const BUILTINS: &[Builtin] = &[];
+const BUILTINS: &[Builtin] = &[TAKE_TASK];
 #[cfg(test)]
-const BUILTINS: &[Builtin] = &[tests::STAMP, tests::FALLS];
+const BUILTINS: &[Builtin] = &[TAKE_TASK, tests::STAMP, tests::FALLS];
 
 /// Every built-in, in the order a library lists them.
 pub fn all() -> &'static [Builtin] {

@@ -67,7 +67,7 @@ func usage() {
 Usage:
   devtool devgui seed      <id>
   devtool devgui cli       <id> [--no-build] [--vm] -- <amenbo args…>
-  devtool devgui install   <id> --vm
+  devtool devgui install   <id> --vm [--app <path.app|path.zip> | --from-run <run id>]
   devtool devgui pid       [<id>] [--front] [--vm]
   devtool devgui shot      [<id>] [--no-front] [--vm]
   devtool devgui rm        <id> [--vm]
@@ -97,14 +97,17 @@ devgui cli   run an amenbo command against the store the task's own dev GUI
              that store with AMENBO_HOME, not a second CLI built for the task:
              what the app-data name fixes at build time is a directory, and
              that names the same one at run time. Arguments go after '--'.
-             --vm writes the store of the instance in the VM: the same build is
-             sent across (the guest holds no toolchain, and the two are the same
-             arch) and run in there against that store.
+             --vm writes the store of the instance in the VM, with the CLI its
+             bundle carries (so the bundle has to be placed first; --no-build
+             has nothing to skip there).
 devgui install
              put the task's own dev GUI where it is to be driven from. --vm
-             sends the bundle built here into the throwaway VM and gives it a
-             store cloned from this machine's shared dev store; the build stays
-             on the host, so the guest needs neither Rust nor node. This machine
+             sends the bundle into the throwaway VM and gives it a store cloned
+             from this machine's shared dev store; the guest needs neither Rust
+             nor node. The bundle is the worktree's own build, or one a CI run
+             made (devgui-build-manual.yml): --from-run downloads it, --app takes
+             it already downloaded, and either is refused unless it was built
+             from the worktree's HEAD. This machine
              stays the default destination and is the Makefile's own route
              ('make install-gui-dev AMB-T-ID=<id>'), so --vm is not optional
              here. It raises the VM if none is running -- when one is thrown
@@ -275,11 +278,19 @@ func devGUICmd(args []string) {
 		id, extra := parseAroundID(fs, head)
 		refuseExtra(extra)
 		id = mustID(id)
-		seed := taskCLI
+		var code int
+		var err error
 		if *vm {
-			seed = vmTaskCLI
+			// Nothing is built for the VM: the CLI there is the one the bundle carries. Refused rather
+			// than ignored, so a line written for the old route says what changed.
+			if *noBuild {
+				logf("devtool: --no-build has nothing to skip with --vm — the CLI in there is the one the bundle carries, and nothing is built for it")
+				os.Exit(2)
+			}
+			code, err = vmTaskCLI(id, argv)
+		} else {
+			code, err = taskCLI(id, *noBuild, argv)
 		}
-		code, err := seed(id, *noBuild, argv)
 		if err != nil {
 			logf("devtool: %v", err)
 			os.Exit(1)
@@ -292,6 +303,8 @@ func devGUICmd(args []string) {
 		// so a `--vm`-less call is one this command has no answer for.
 		fs := flag.NewFlagSet("devgui install", flag.ExitOnError)
 		vm := fs.Bool("vm", false, "put it in the throwaway VM instead of on this machine")
+		app := fs.String("app", "", "place this bundle (a .app, or the .zip a CI run packs it in) instead of the worktree's build")
+		fromRun := fs.String("from-run", "", "download the bundle from this run of devgui-build-manual.yml instead of taking the worktree's build")
 		id, extra := parseAroundID(fs, args[1:])
 		refuseExtra(extra)
 		id = mustID(id)
@@ -299,7 +312,7 @@ func devGUICmd(args []string) {
 			logf("devtool: devgui install puts an instance somewhere other than this machine — pass --vm; this machine's own is `make install-gui-dev AMB-T-ID=%s`", id)
 			os.Exit(2)
 		}
-		if err := devGUIInstallVM(id); err != nil {
+		if err := devGUIInstallVM(id, *app, *fromRun); err != nil {
 			logf("devtool: %v", err)
 			os.Exit(1)
 		}

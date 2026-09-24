@@ -442,6 +442,7 @@ commands! {
     AutomationActionAdd => "automation action-add",
     AutomationActionList => "automation action-list",
     AutomationActionShow => "automation action-show",
+    AutomationBuiltinList => "automation builtin-list",
     AutomationActionUpdate => "automation action-update",
     AutomationActionEntrySet => "automation action-entry-set",
     AutomationActionScopeSet => "automation action-scope-set",
@@ -539,6 +540,7 @@ impl Cmd {
             | Cmd::AutomationShow
             | Cmd::AutomationActionList
             | Cmd::AutomationActionShow
+            | Cmd::AutomationBuiltinList
             | Cmd::AutomationRunList
             | Cmd::AutomationRunShow
             // The timeline is the step's to write on, a task's and a decision's alike.

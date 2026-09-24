@@ -100,9 +100,9 @@ jobs:
         run: npm ci
 
       # The same target a developer builds a task's throwaway instance with, so the preview and the
-      # instance the work was verified in are the same bundle under the same names. The local
-      # code-signing step inside it is a no-op off a developer's machine (codesign-local.sh), which
-      # leaves tauri's ad-hoc signature — all a build taken by `gh run download` needs.
+      # instance the work was verified in are the same bundle under the same names. Off a developer's
+      # machine the code-signing step inside it has no stable identity, so it re-signs the bundle
+      # ad-hoc as a whole (codesign-local.sh) — without that, the tick cannot be registered from it.
       - name: Build the dev GUI bundle
         env:
           THEME: ${{ inputs.theme }}

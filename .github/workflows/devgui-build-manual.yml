@@ -17,8 +17,20 @@ name: devgui-build-manual
 # Only commits that are pushed can be built. The branch is an input and is checked out explicitly,
 # so the workflow file itself runs from whatever ref it was dispatched on (main is fine) and a task
 # branch cut before this file existed still builds.
+#
+# It also runs on main when a dependency file changes, and only there saves the cargo cache every
+# task's build restores. A task branch's run never saves: an entry saved there is readable from that
+# branch alone. The cache holds compiled dependencies only, so nothing else changes what is in it.
+# That run builds the shared dev names and uploads nothing.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.lock
+      - app/src-tauri/Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/devgui-build-manual.yml
   workflow_dispatch:
     inputs:
       task:
@@ -31,13 +43,13 @@ on:
         required: false
         default: ""
 
-run-name: dev GUI for task ${{ inputs.task }} (${{ inputs.branch || format('task/{0}', inputs.task) }})
+run-name: ${{ github.event_name == 'push' && 'dev GUI cache on main' || format('dev GUI for task {0} ({1})', inputs.task, inputs.branch || format('task/{0}', inputs.task)) }}
 
 # Per task: a second dispatch for the same task replaces the first (its commit is the older one),
 # and no task's build ever cancels another's. Parallel sessions dispatch this at once, and waiting
 # in the queue for the macOS slots is fine.
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.task }}
+  group: ${{ github.workflow }}-${{ inputs.task || 'main' }}
   cancel-in-progress: true
 
 permissions:
@@ -50,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.branch || format('task/{0}', inputs.task) }}
+          ref: ${{ github.event_name == 'push' && github.sha || inputs.branch || format('task/{0}', inputs.task) }}
 
       # The four names, read off the Makefile rather than spelled again here. This is also the
       # front gate: `AMB-T-ID` takes digits only, so a mistyped task stops here and not twelve
@@ -63,6 +75,7 @@ jobs:
         run: |
           # Through a variable rather than a pipe into $GITHUB_OUTPUT: the default shell is
           # `bash -e` without pipefail, so a pipe would swallow make's refusal.
+          # Empty on main's run, which builds the shared dev names.
           names=$(make -s gui-dev-names AMB-T-ID="$TASK")
           echo "$names"
           {
@@ -81,22 +94,16 @@ jobs:
         working-directory: app
         run: npm ci
 
-      # Restore only, and from another job's entry. The cache is over its 10GB budget, and _ci.yml
-      # lets main alone write to it: a task branch's entry is readable by that branch only, and
-      # past the budget it evicts entries main still uses. The entry borrowed here is the one
-      # _ci.yml's `app-rust-mac-win` job saves on main on this same runner OS — naming it as the
-      # shared key gives the same key prefix, and rust-cache's restore key matches on that prefix.
-      # Of what it holds, the root workspace's release build is what this build reuses: the
-      # sidecar step compiles it with `--release` in both places, OpenSSL from source included.
-      # The host crate there is a debug build, which a release bundle cannot use.
-      - name: Cache cargo (restore only)
+      # A key of its own: this build is release throughout, and no other job's entry holds that.
+      # Saved on main only (see the header).
+      - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: app-rust-mac-win
+          shared-key: devgui-build
           workspaces: |
             .
             app/src-tauri
-          save-if: false
+          save-if: ${{ github.event_name == 'push' }}
 
       - name: Build the dev GUI bundle
         env:
@@ -130,6 +137,7 @@ jobs:
       # a .app whose binary is not executable does not open. `ditto -c -k --keepParent` keeps the
       # bundle's permissions, symlinks and signature.
       - name: Pack the .app
+        if: github.event_name != 'push'
         env:
           PRODUCT_NAME: ${{ steps.names.outputs.product_name }}
           BIN_NAME: ${{ steps.names.outputs.bin_name }}
@@ -144,6 +152,7 @@ jobs:
       # `gh run download <run> -n devgui-<task>-macos-arm64`. A dev build is thrown away with its
       # task, so a week is kept rather than the default 90 days.
       - uses: actions/upload-artifact@v7
+        if: github.event_name != 'push'
         with:
           name: devgui-${{ inputs.task }}-macos-arm64
           path: dist/*.zip
@@ -151,6 +160,7 @@ jobs:
           retention-days: 7
 
       - name: Say which commit this is
+        if: github.event_name != 'push'
         env:
           TASK: ${{ inputs.task }}
           SHA: ${{ steps.names.outputs.sha }}

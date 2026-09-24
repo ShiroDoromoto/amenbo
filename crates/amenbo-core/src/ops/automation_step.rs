@@ -354,8 +354,8 @@ fn write_in(
 
 // ───────────────────────── the text ─────────────────────────
 
-/// The whole launch text, in the order the specification sets: what holds for every step, then what
-/// holds for this one, then what it is being asked to do, and last how to hand the work back.
+/// The whole launch text, in the order the specification sets: what holds for every step — ending on
+/// the task the run is working, once one has been taken ([`working_on`]) — then what holds for this one, then what it is being asked to do, and last how to hand the work back.
 ///
 /// **English, like every other sentence this crate writes.** The words that carry the work — the
 /// prompt — is the person's own and arrives in whatever language it was written in; what is added
@@ -368,7 +368,11 @@ fn compose(
     stretch: Option<&AutomationRunTask>,
 ) -> Result<String> {
     let mut out = String::new();
-    push_block(&mut out, &crate::agents::preamble(crate::config::Paths::command_name()));
+    let mut preamble = crate::agents::preamble(crate::config::Paths::command_name());
+    if let Some(task) = stretch.and_then(|s| s.task_id) {
+        preamble.push_str(&format!("\n\n{}", working_on(task)));
+    }
+    push_block(&mut out, &preamble);
     if def.show_history {
         if let Some(story) = story_so_far(tx, stretch)? {
             push_block(&mut out, &story);
@@ -381,6 +385,15 @@ fn compose(
     push_block(&mut out, &format!("## What to do\n\n{}", def.prompt.as_deref().unwrap_or("").trim()));
     push_block(&mut out, &handing_back(exits));
     Ok(out)
+}
+
+/// **The task this run is on**, the line the preamble ends with (`AMB-T-5413`).
+///
+/// It is written at every launch rather than carried along a wire, so a step knows its task wherever it
+/// is placed and nobody has to join anything for it. The step that takes the task is not told one:
+/// it opens a stretch of its own, and the stretch has no task until that step takes it.
+fn working_on(task: i64) -> String {
+    format!("The task this run is working on now is AMB-T-{task}.")
 }
 
 /// Add one block, with a blank line between it and whatever came before. An empty one is left out
@@ -736,6 +749,28 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             assert_eq!(opening.folder, None);
+        });
+    }
+
+    /// **A step is told the task its run is on, at the end of the preamble** (`AMB-T-5413`) — without a
+    /// wire, so it knows its task wherever it is placed. The step that takes it is told none: its
+    /// stretch has no task until it takes one.
+    #[test]
+    fn the_preamble_ends_on_the_task_once_one_is_taken() {
+        with_tx(|tx| {
+            let p = picture(tx, false, false);
+            let run = a_run(tx, &p.automation);
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            assert!(!first.text.contains("working on now"), "{}", first.text);
+
+            let task = crate::ops::test_support::mk_task(tx, "直すもの");
+            crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let preamble = crate::agents::preamble("amenbo");
+            let expected = format!("{preamble}\n\nThe task this run is working on now is AMB-T-{task}.\n\n");
+            assert!(second.text.starts_with(&expected), "{}", second.text);
         });
     }
 

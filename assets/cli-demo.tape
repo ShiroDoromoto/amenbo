@@ -89,7 +89,7 @@ Sleep 800ms
 Type "amenbo agent --command 'task done'" Sleep 400ms Enter
 Sleep 3.5s
 
-Type "amenbo task done 2 --actor ai" Sleep 400ms Enter
+Type "amenbo task done 2 --report 'Signed, notarized and uploaded' --actor ai" Sleep 400ms Enter
 Sleep 3s
 
 Hide

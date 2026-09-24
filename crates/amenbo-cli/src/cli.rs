@@ -1362,8 +1362,14 @@ pub enum TaskCmd {
         #[arg(long)]
         clear_at: bool,
     },
-    /// Mark a task done
-    Done { id: String },
+    /// Mark a task done, with its completion report
+    Done {
+        id: String,
+        /// the completion report — what was done, recorded as a comment in the same write as the
+        /// transition. Pass `-` to read it from stdin
+        #[arg(long)]
+        report: Option<String>,
+    },
     Reopen { id: String },
     /// Explicitly change the progress state (todo / in_progress / done / blocked / rejected). Setting
     /// in_progress reserves it — a compare-and-swap that only succeeds from todo, so a second

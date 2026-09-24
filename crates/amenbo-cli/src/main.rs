@@ -1483,7 +1483,7 @@ mod tests {
         assert!(uses_facet(&Some(Command::Doctor { fix: false })));
         // Writes stamp it.
         assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Status { id: "x".to_string(), status: "in_progress".to_string() } })));
-        assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
+        assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string(), report: None } })));
         assert!(uses_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
         assert!(uses_facet(&Some(Command::Doctor { fix: true })));
     }

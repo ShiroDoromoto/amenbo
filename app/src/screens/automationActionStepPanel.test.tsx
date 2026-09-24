@@ -178,6 +178,15 @@ describe("the panel of one step", () => {
       kind: "value",
     });
   });
+
+  it("says under the report box that a task already closed gets no report (AMB-D-963)", async () => {
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
+    const box = [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
+      .find((one) => one.textContent?.includes(t("auto.step.reportToTask")))!
+      .querySelector("input")!;
+    const note = document.getElementById(box.getAttribute("aria-describedby")!)!;
+    expect(note.textContent).toBe(t("auto.step.reportToTaskNote"));
+  });
 });
 
 describe("what happens after a way out", () => {

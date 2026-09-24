@@ -988,6 +988,7 @@ export const tr: Translation = {
     "auto.step.folderNone": "bu projenin bir bölmesi nerede açılırsa",
     "auto.step.interactive": "Durup bir kişiyi bekleyebilir",
     "auto.step.reportToTask": "Raporu göreve de işlenir",
+    "auto.step.reportToTaskNote": "Zaten \"Bitti\" ya da \"Reddedildi\" olan göreve işlenmez. Rapor çalıştırmanın geçmişinde kalır.",
     "auto.step.history": "O ana kadarki çalışmanın seyri kendisine verilir",
     "auto.step.ready": "Ön koşullar",
     "auto.step.readyYes": "Önünde engel yok",

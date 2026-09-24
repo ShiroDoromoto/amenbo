@@ -1000,6 +1000,7 @@ export const es: Translation = {
     "auto.step.folderNone": "donde se abra un panel de este proyecto",
     "auto.step.interactive": "Puede detenerse y esperar a una persona",
     "auto.step.reportToTask": "Su informe también queda en la tarea",
+    "auto.step.reportToTaskNote": "No en una tarea que ya está «Hecho» o «Descartado». El informe queda en el historial de la ejecución.",
     "auto.step.history": "Recibe lo ocurrido en la ejecución hasta ahora",
     "auto.step.ready": "Premisas",
     "auto.step.readyYes": "Nada lo bloquea",

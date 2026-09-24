@@ -994,6 +994,7 @@ export const ja: Translation = {
     "auto.step.folderNone": "このプロジェクトのペインが開く場所",
     "auto.step.interactive": "人を待って止まってよい",
     "auto.step.reportToTask": "報告をタスクにも残す",
+    "auto.step.reportToTaskNote": "タスクが「完了」か「却下」になっていれば、残さない。報告は実行の履歴に残る。",
     "auto.step.history": "ここまでの歩みを渡す",
     "auto.step.ready": "前提",
     "auto.step.readyYes": "何も引っかかっていない",

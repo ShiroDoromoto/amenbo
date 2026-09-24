@@ -1001,6 +1001,7 @@ export const ptBR: Translation = {
     "auto.step.folderNone": "onde um painel deste projeto abrir",
     "auto.step.interactive": "Pode parar e esperar por uma pessoa",
     "auto.step.reportToTask": "O relatório também fica na tarefa",
+    "auto.step.reportToTaskNote": "Não numa tarefa que já está “Concluída” ou “Recusada”. O relatório fica no histórico da execução.",
     "auto.step.history": "Recebe o que a execução fez até aqui",
     "auto.step.ready": "Premissas",
     "auto.step.readyYes": "Nada no caminho",

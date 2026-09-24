@@ -985,6 +985,7 @@ export const ko: Translation = {
     "auto.step.folderNone": "이 프로젝트의 페인이 열리는 곳",
     "auto.step.interactive": "사람을 기다리며 멈춰도 됩니다",
     "auto.step.reportToTask": "보고를 작업에도 남깁니다",
+    "auto.step.reportToTaskNote": "이미 '완료'나 '기각'인 작업에는 남기지 않습니다. 보고는 실행 기록에 남습니다.",
     "auto.step.history": "지금까지의 경과를 넘겨줍니다",
     "auto.step.ready": "전제",
     "auto.step.readyYes": "걸리는 것이 없음",

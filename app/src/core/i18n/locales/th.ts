@@ -989,6 +989,7 @@ export const th: Translation = {
     "auto.step.folderNone": "ที่ที่เพนของโปรเจกต์นี้เปิดขึ้น",
     "auto.step.interactive": "หยุดรอคนได้",
     "auto.step.reportToTask": "รายงานของมันไปอยู่ที่งานด้วย",
+    "auto.step.reportToTaskNote": "ไม่ลงที่งานที่ \"เสร็จแล้ว\" หรือ \"ตีตก\" ไปแล้ว รายงานยังอยู่ในประวัติของการรัน",
     "auto.step.history": "ได้รับสิ่งที่การรันทำมาถึงตอนนี้",
     "auto.step.ready": "เงื่อนไขก่อนหน้า",
     "auto.step.readyYes": "ไม่มีอะไรติดขัด",

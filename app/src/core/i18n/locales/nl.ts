@@ -988,6 +988,7 @@ export const nl: Translation = {
     "auto.step.folderNone": "waar een venster van dit project opengaat",
     "auto.step.interactive": "Hij mag stoppen en op iemand wachten",
     "auto.step.reportToTask": "Zijn verslag blijft ook bij de taak",
+    "auto.step.reportToTaskNote": "Niet bij een taak die al ‘Klaar’ of ‘Afgewezen’ is. Het verslag blijft in de geschiedenis van de run.",
     "auto.step.history": "Hij krijgt het verloop van de run tot nu toe",
     "auto.step.ready": "Voorwaarden",
     "auto.step.readyYes": "Niets in de weg",

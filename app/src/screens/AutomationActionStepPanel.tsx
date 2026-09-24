@@ -362,12 +362,17 @@ export function AutomationActionStepPanel({
         <input
           type="checkbox"
           checked={step.reportToTask}
+          aria-describedby={`autostep-report-note-${step.id}`}
           onChange={(e) =>
             void run(editAutomationStep(step.id, { reportToTask: e.target.checked }))
           }
         />
         {t("auto.step.reportToTask")}
       </label>
+      {/* A ticked box that leaves nothing on a closed task would read as broken without this (`AMB-D-963`). */}
+      <p id={`autostep-report-note-${step.id}`} className="autostep__note">
+        {t("auto.step.reportToTaskNote")}
+      </p>
 
       <label className="autostep__check">
         <input

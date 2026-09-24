@@ -988,6 +988,7 @@ export const hi: Translation = {
     "auto.step.folderNone": "जहाँ इस प्रोजेक्ट का पेन खुलता है",
     "auto.step.interactive": "रुककर किसी व्यक्ति की प्रतीक्षा कर सकता है",
     "auto.step.reportToTask": "इसकी रिपोर्ट कार्य पर भी रहती है",
+    "auto.step.reportToTaskNote": "जो कार्य पहले से \"पूरा\" या \"अस्वीकृत\" है, उस पर नहीं। रिपोर्ट रन के इतिहास में रहती है।",
     "auto.step.history": "अब तक का पूरा हाल इसे सौंपा जाता है",
     "auto.step.ready": "पूर्वशर्तें",
     "auto.step.readyYes": "कुछ नहीं अटका है",

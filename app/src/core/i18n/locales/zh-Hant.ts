@@ -990,6 +990,7 @@ export const zhHant: Translation = {
     "auto.step.folderNone": "這個專案的窗格開啟的地方",
     "auto.step.interactive": "可以停下來等人",
     "auto.step.reportToTask": "報告也留在任務上",
+    "auto.step.reportToTaskNote": "任務已是「已完成」或「已否決」時不留。報告留在執行記錄裡。",
     "auto.step.history": "把到目前為止的經過交給它",
     "auto.step.ready": "前提",
     "auto.step.readyYes": "沒有被擋住",

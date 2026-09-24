@@ -992,6 +992,7 @@ export const de: Translation = {
     "auto.step.folderNone": "wo ein Bereich dieses Projekts aufgeht",
     "auto.step.interactive": "Er darf anhalten und auf einen Menschen warten",
     "auto.step.reportToTask": "Sein Bericht landet auch an der Aufgabe",
+    "auto.step.reportToTaskNote": "Nicht an einer Aufgabe, die schon „Erledigt“ oder „Verworfen“ ist. Der Bericht bleibt im Verlauf des Laufs.",
     "auto.step.history": "Er bekommt den bisherigen Verlauf des Laufs",
     "auto.step.ready": "Voraussetzungen",
     "auto.step.readyYes": "Nichts steht im Weg",

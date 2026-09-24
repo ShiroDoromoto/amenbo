@@ -1005,6 +1005,7 @@ export const pl: Translation = {
     "auto.step.folderNone": "tam, gdzie otwiera się panel tego projektu",
     "auto.step.interactive": "Może się zatrzymać i poczekać na człowieka",
     "auto.step.reportToTask": "Jego raport zostaje też przy zadaniu",
+    "auto.step.reportToTaskNote": "Nie przy zadaniu, które jest już „Gotowe” lub „Odrzucone”. Raport zostaje w historii przebiegu.",
     "auto.step.history": "Dostaje przebieg uruchomienia do tej pory",
     "auto.step.ready": "Przesłanki",
     "auto.step.readyYes": "Nic nie stoi na przeszkodzie",

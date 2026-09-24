@@ -1005,6 +1005,7 @@ export const ru: Translation = {
     "auto.step.folderNone": "там, где откроется панель этого проекта",
     "auto.step.interactive": "Может остановиться и подождать человека",
     "auto.step.reportToTask": "Его отчёт остаётся и на задаче",
+    "auto.step.reportToTaskNote": "Не на задаче, которая уже «Готово» или «Отклонено». Отчёт остаётся в истории запуска.",
     "auto.step.history": "Ему передаётся ход выполнения до этого момента",
     "auto.step.ready": "Предпосылки",
     "auto.step.readyYes": "Ничто не мешает",

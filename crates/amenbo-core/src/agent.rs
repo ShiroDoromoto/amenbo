@@ -2026,7 +2026,7 @@ fn all_commands() -> Value {
                    { "name": "--to <id>", "help": "go on to this box" },
                    { "name": "--exit-to [name]", "help": "leave the action by the way out it declares under this name — bare, its unnamed one (--in-action only)" },
                    { "name": "--done", "help": "close the run" },
-                   { "name": "--halt", "help": "end the run failed (halted) and call a person" },
+                   { "name": "--halt", "help": "end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it" },
                    { "name": "--max-times <n>", "help": "how often this edge may be taken for one task (default 10)" },
                    { "name": "--no-max", "help": "let it be taken as often as the run reaches it" }]),
             json!(["amenbo automation edge-add --from 11:approved --done",

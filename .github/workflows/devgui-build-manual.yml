@@ -1,0 +1,167 @@
+name: devgui-build-manual
+
+# Build one task's throwaway dev GUI on a macOS runner, and leave the .app in the run's artifacts.
+# This is the build `make install-gui-dev-vm` otherwise does on the developer's Mac: parallel
+# sessions share that one machine's CPU, and the GUI build is the heaviest thing a session runs
+# there — so it runs here, and the host only downloads the bundle and pushes it into the VM.
+#
+# Same target, same names: `make gui-dev AMB-T-ID=<task>` is what runs below, so the bundle carries
+# the task's own product name, bundle identifier, executable name and app-data name — the ones a
+# local build of that task would have. Nothing here is a distribution: no release stamp, no
+# Developer ID signing, no notarization (the reasons are _theme-preview.yml's). The bundle is
+# signed ad-hoc as a whole by codesign-local.sh, which is what lets the tick register from it.
+#
+# The task number is its own input rather than _theme-preview.yml's `theme`: a theme slug starts
+# with a letter, and a task number is digits only (the Makefile checks both).
+#
+# Only commits that are pushed can be built. The branch is an input and is checked out explicitly,
+# so the workflow file itself runs from whatever ref it was dispatched on (main is fine) and a task
+# branch cut before this file existed still builds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: the task number, digits only (e.g. 5436)
+        type: string
+        required: true
+      branch:
+        description: the branch to build; empty builds task/<task>
+        type: string
+        required: false
+        default: ""
+
+run-name: dev GUI for task ${{ inputs.task }} (${{ inputs.branch || format('task/{0}', inputs.task) }})
+
+# Per task: a second dispatch for the same task replaces the first (its commit is the older one),
+# and no task's build ever cancels another's. Parallel sessions dispatch this at once, and waiting
+# in the queue for the macOS slots is fine.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.task }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: dev GUI (.app, arm64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch || format('task/{0}', inputs.task) }}
+
+      # The four names, read off the Makefile rather than spelled again here. This is also the
+      # front gate: `AMB-T-ID` takes digits only, so a mistyped task stops here and not twelve
+      # minutes into the build. The commit is the checked-out one, not `github.sha` — that is the
+      # dispatched ref's, and the bundle has to answer with the commit it was built from.
+      - name: Read the names and the commit
+        id: names
+        env:
+          TASK: ${{ inputs.task }}
+        run: |
+          # Through a variable rather than a pipe into $GITHUB_OUTPUT: the default shell is
+          # `bash -e` without pipefail, so a pipe would swallow make's refusal.
+          names=$(make -s gui-dev-names AMB-T-ID="$TASK")
+          echo "$names"
+          {
+            echo "$names"
+            echo "sha=$(git rev-parse HEAD)"
+            echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install GUI deps
+        working-directory: app
+        run: npm ci
+
+      # Restore only, and from another job's entry. The cache is over its 10GB budget, and _ci.yml
+      # lets main alone write to it: a task branch's entry is readable by that branch only, and
+      # past the budget it evicts entries main still uses. The entry borrowed here is the one
+      # _ci.yml's `app-rust-mac-win` job saves on main on this same runner OS — naming it as the
+      # shared key gives the same key prefix, and rust-cache's restore key matches on that prefix.
+      # Of what it holds, the root workspace's release build is what this build reuses: the
+      # sidecar step compiles it with `--release` in both places, OpenSSL from source included.
+      # The host crate there is a debug build, which a release bundle cannot use.
+      - name: Cache cargo (restore only)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: app-rust-mac-win
+          workspaces: |
+            .
+            app/src-tauri
+          save-if: false
+
+      - name: Build the dev GUI bundle
+        env:
+          TASK: ${{ inputs.task }}
+          AMENBO_BUILD_SHA: ${{ steps.names.outputs.sha }}
+          AMENBO_BUILD_TIME: ${{ steps.names.outputs.built_at }}
+        run: make gui-dev AMB-T-ID="$TASK"
+
+      # Ask the bundle rather than trust the build line above: the CLI it ships says whether it is
+      # stamped and which app-data it opens. A stamped build could migrate a store forward, and a
+      # build on another channel would share app-data with another instance in the VM.
+      - name: The build must be unstamped, and on the task's own channel
+        env:
+          PRODUCT_NAME: ${{ steps.names.outputs.product_name }}
+          APP_NAME: ${{ steps.names.outputs.app_name }}
+        run: |
+          cli="app/src-tauri/target/release/bundle/macos/$PRODUCT_NAME.app/Contents/MacOS/$APP_NAME"
+          "$cli" version --json
+          stamped=$("$cli" version --json | jq -r .release_build)
+          channel=$("$cli" version --json | jq -r .channel)
+          if [ "$stamped" != "false" ]; then
+            echo "::error::this build carries the release stamp — it could migrate a store forward" >&2
+            exit 1
+          fi
+          if [ "$channel" != "$APP_NAME" ]; then
+            echo "::error::this build answers to '$channel', not '$APP_NAME' — it would share app-data with another build" >&2
+            exit 1
+          fi
+
+      # ditto, not upload-artifact over the directory: that zips without the executable bit, and
+      # a .app whose binary is not executable does not open. `ditto -c -k --keepParent` keeps the
+      # bundle's permissions, symlinks and signature.
+      - name: Pack the .app
+        env:
+          PRODUCT_NAME: ${{ steps.names.outputs.product_name }}
+          BIN_NAME: ${{ steps.names.outputs.bin_name }}
+        run: |
+          mkdir -p dist
+          ditto -c -k --keepParent \
+            "app/src-tauri/target/release/bundle/macos/$PRODUCT_NAME.app" \
+            "dist/$BIN_NAME-macos-arm64.zip"
+          ls -l dist
+
+      # Named by the task alone, so the host takes it with
+      # `gh run download <run> -n devgui-<task>-macos-arm64`. A dev build is thrown away with its
+      # task, so a week is kept rather than the default 90 days.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: devgui-${{ inputs.task }}-macos-arm64
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Say which commit this is
+        env:
+          TASK: ${{ inputs.task }}
+          SHA: ${{ steps.names.outputs.sha }}
+          PRODUCT_NAME: ${{ steps.names.outputs.product_name }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## $PRODUCT_NAME
+
+          Built from \`$SHA\`.
+
+          \`\`\`
+          gh run download $GITHUB_RUN_ID -R $GITHUB_REPOSITORY -n devgui-$TASK-macos-arm64
+          \`\`\`
+          EOF

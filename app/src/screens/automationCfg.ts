@@ -19,8 +19,9 @@ export type TaskFilter = Record<string, readonly string[]>;
  * The rows a task filter is taken on, in the order they are drawn.
  *
  * **Three, and the three a person reaching for one wants first**: whose it is, where it has got to,
- * and whether anything is in the way. The parts core's filter accepts are more than these, and the
- * ones not here are not lost — they are the next rows to draw, not a different control.
+ * and whether anything is in the way. Not every spot draws all three (`filterRows`). The parts core's
+ * filter accepts are more than these, and the ones not here are not lost — they are the next rows to
+ * draw, not a different control.
  *
  * `single` is the part core takes one answer for: `ready` is a yes or a no, and pressing the other
  * replaces it rather than asking for both (`amenbo_core::query::Filter::parse`).
@@ -30,6 +31,25 @@ export const FILTER_ROWS: readonly { key: string; single: boolean; values: reado
   { key: "status", single: false, values: ["todo", "in_progress", "done", "blocked", "rejected"] },
   { key: "ready", single: true, values: ["yes", "no"] },
 ];
+
+/** The built-in that takes a task (`amenbo_core::ops::automation_builtin_take::TAKE_TASK`). */
+const TAKE_TASK = "take_task";
+
+/** The parts the built-in that takes a task always puts on its filter, whatever its answer says. */
+const TAKE_TASK_FIXED: readonly string[] = ["status", "ready"];
+
+/**
+ * The rows a task filter is taken on at a spot where `builtin` stands (none where a person's own action
+ * does).
+ *
+ * **The built-in that takes a task draws neither "status" nor "ready"**: it takes only a task that is
+ * not started and is ready, and puts both on whatever it was answered (`AMB-D-964`). A row that
+ * changes nothing it takes would leave a reader asking what "no" in front of "ready" picks.
+ */
+export function filterRows(builtin: string | undefined): typeof FILTER_ROWS {
+  if (builtin !== TAKE_TASK) return FILTER_ROWS;
+  return FILTER_ROWS.filter((row) => !TAKE_TASK_FIXED.includes(row.key));
+}
 
 /**
  * The orders a task filter can take its tasks in, as `task list --sort` spells them, in the order the

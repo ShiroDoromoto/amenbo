@@ -50,7 +50,7 @@ import { ReachChip } from "./AutomationActionsTab";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { CFG_KINDS, exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import {
-  FILTER_ROWS,
+  filterRows,
   pressed,
   readFilter,
   readNumber,
@@ -158,7 +158,12 @@ function DeclChip({ name, kind, required, tone }: { name: string; kind: string; 
 }
 
 /** One setting: what the action declares, read, and the control its kind takes for this spot's answer. */
-function CfgRow({ placementId, cfg, run }: { placementId: number; cfg: AutomationCfgDto; run: Run }) {
+function CfgRow({ placementId, builtin, cfg, run }: {
+  placementId: number;
+  builtin: string | undefined;
+  cfg: AutomationCfgDto;
+  run: Run;
+}) {
   const answer = (value: string | null) =>
     void run(answerAutomationCfg(placementId, cfg.name, value));
   const [text, setText] = useDraft(cfg.kind === "number" ? "" : readText(cfg.value));
@@ -180,7 +185,7 @@ function CfgRow({ placementId, cfg, run }: { placementId: number; cfg: Automatio
 
       {cfg.kind === "taskfilter" && (
         <div className="autostep__rows">
-          {FILTER_ROWS.map((row) => (
+          {filterRows(builtin).map((row) => (
             <div key={row.key} className="autostep__row">
               <span className="autostep__rowname">{rowLabel(row.key)}</span>
               {row.values.map((value) => (
@@ -472,7 +477,7 @@ export function AutomationStepPanel({
             <span className="autostep__said">{t("auto.step.declaresNone")}</span>
           )}
           {placement.settings.map((cfg) => (
-            <CfgRow key={cfg.name} placementId={placement.id} cfg={cfg} run={run} />
+            <CfgRow key={cfg.name} placementId={placement.id} builtin={placement.builtin} cfg={cfg} run={run} />
           ))}
         </div>
 

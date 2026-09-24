@@ -7,10 +7,13 @@
 // with empty lists in it; and **an answer nothing can read draws as nothing**, because a definition
 // hand-written from the command line can hold one. **The order an answer is taken in survives a press
 // on a row** (`AMB-T-5412`): it is kept beside the parts, and a write that dropped it would put an
-// order written on the command line back to the default without anybody choosing that.
+// order written on the command line back to the default without anybody choosing that. **The built-in
+// that takes a task draws no row for what it always puts on** (`AMB-T-5459`), and every other spot
+// draws them all.
 import { describe, expect, it } from "vitest";
 import {
   FILTER_ROWS,
+  filterRows,
   pressed,
   readFilter,
   readNumber,
@@ -95,5 +98,11 @@ describe("a setting's answer", () => {
   it("draws the three rows a person reaches for first, premises taking one answer", () => {
     expect(FILTER_ROWS.map((one) => one.key)).toEqual(["assignee", "status", "ready"]);
     expect(FILTER_ROWS.find((one) => one.key === "ready")?.single).toBe(true);
+  });
+
+  it("leaves out the rows the built-in that takes a task puts on itself", () => {
+    expect(filterRows("take_task").map((one) => one.key)).toEqual(["assignee"]);
+    expect(filterRows(undefined)).toBe(FILTER_ROWS);
+    expect(filterRows("close_task")).toBe(FILTER_ROWS);
   });
 });

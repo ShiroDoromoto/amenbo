@@ -13,10 +13,11 @@
 // may be building, thinking, or waiting on somebody (`AMB-D-858`).
 //
 // **A run's pane is drawn as its own kind of pane** (`AMB-T-5252`). It is headed with the automation
-// the run was launched from rather than with the place's name (`./plate`), beside that is a mark
-// saying nobody is typing in this one, and under it a line: which step is running, how many moves in
-// the run that is, which run it is, how many tasks in the run it is, and the task the run is working
-// — by reference and by title. Every one of those is a value
+// the run was launched from rather than with the place's name (`./plate`), and the header is the
+// run's, in the run's colour (`AMB-T-5428`): the first line says the run — a mark saying nobody is
+// typing in this one, the automation, which run it is, which step is running and how many moves in
+// that is, and how many tasks in the run it is — and the line under it says the task the run is
+// working, by reference and by title. Every one of those is a value
 // Amenbo holds — the execution rows and the ledger — so none of it is the agent's word about itself,
 // which is the whole of what this row stopped saying (`AMB-D-858`). **What the step printed is not
 // here**: that is in the terminal under the row, where a reader can scroll it.
@@ -26,7 +27,8 @@
 // spot of the automation a reader is watching — two spots standing on the same action run steps of
 // the same names. The two are one value and not two, because a language orders them its own way
 // (`auto.run.inAction`), and because the row gives values up whole as a pane narrows: half of "which
-// step" would be a name pointing at nothing.
+// step" would be a name pointing at nothing. The step's own name is the one drawn heavier, because it
+// is the part that changes from one step to the next — the action and the count only move with it.
 //
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
 // (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
@@ -132,17 +134,22 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   // row reads from what it is towards what is happening in it.
   const dot = part("dot");
   dot.setAttribute("aria-hidden", "true");
-  const name = part("name");
-  // The mark that says this pane is a run's. It is beside the name rather than in it because the name
-  // belongs to the place and this belongs to what is running there — and it is a word rather than a
-  // glyph, a mark nobody can read being one more thing to ask about.
+  // The mark that says this pane is a run's. It is in front of the name, the way a run's header reads
+  // from what kind of pane this is towards where it has got to — and it is a word rather than a glyph,
+  // a mark nobody can read being one more thing to ask about.
   const auto = part("auto");
   auto.textContent = t("face.auto");
+  const name = part("name");
+  // Where the run has got to, on the name's own line. They follow the name rather than taking a line
+  // of their own because they are what the name is doing now, and the line under it is the task's.
+  const runNo = part("no");
+  const step = part("step");
+  const nth = part("nth");
   host.append(row);
 
-  // The run's values, on a line of their own under the name. It is a second row and not more of the
-  // first one because the first is one line by construction, and five values elided into a pane's
-  // width would each be a word and a half (`../styles/global.css`).
+  // The task the run is working, on a line of its own under the name. It is a second row and not more
+  // of the first one because the first is one line by construction, and a title elided into what
+  // the run's values leave of a pane's width would be a word and a half (`../styles/global.css`).
   const runRow = document.createElement("div");
   runRow.className = "plate-run";
   const runPart = (kind: string) => {
@@ -151,10 +158,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     runRow.append(el);
     return el;
   };
-  const stepName = runPart("step");
-  const seq = runPart("seq");
-  const runNo = runPart("no");
-  const nth = runPart("nth");
+  const taskLabel = runPart("label");
+  taskLabel.textContent = t("auto.step.task");
   const taskRef = runPart("task");
   const taskTitle = runPart("title");
   host.append(runRow);
@@ -179,7 +184,9 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
 
   return (plate: Plate | null) => {
     row.hidden = plate === null;
-    runRow.hidden = plate === null || plate.run === null;
+    // A run on no task yet has nothing for the second line to say, and an empty band under the first
+    // would read as a task that is there and has no name.
+    runRow.hidden = plate === null || plate.run?.task == null;
     if (plate === null) {
       // The panel comes down with the row it belongs to. It is said here as well as below because the
       // row being taken away is the one path that never reaches the name, and a panel left up is an
@@ -197,22 +204,41 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     peekName.textContent = plate.name ?? "";
     // A run's pane is drawn as its own kind of pane, and an ordinary one is left exactly as it was:
     // the mark is away, the second row is down, and the panel says only the name.
-    auto.hidden = plate.run === null;
+    auto.hidden = runNo.hidden = step.hidden = nth.hidden = plate.run === null;
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
-      stepName.textContent = plate.run.action === null
-        ? plate.run.step
-        : tf("auto.run.inAction", { action: plate.run.action, step: plate.run.step });
-      seq.textContent = tf("face.runStep", { n: plate.run.seq });
       runNo.textContent = tf("face.runNo", { n: plate.run.run });
+      const which = plate.run.action === null
+        ? STEP
+        : tf("auto.run.inAction", { action: plate.run.action, step: STEP });
+      step.replaceChildren(...stepWords(tf("auto.run.step", { n: plate.run.seq, step: which }), plate.run.step));
       nth.textContent = plate.run.task === null ? "" : tf("face.runTask", { n: plate.run.task.seq });
+      nth.hidden = plate.run.task === null;
       taskRef.textContent = plate.run.task?.ref ?? "";
       taskTitle.textContent = plate.run.task?.title ?? "";
-      nth.hidden = taskRef.hidden = taskTitle.hidden = plate.run.task === null;
     }
     peekTask.textContent = plate.run?.task
       ? `${plate.run.task.ref} ${plate.run.task.title}`
       : "";
     peek.hidden = !plate.name && !peekTask.textContent;
   };
+}
+
+/** Where the step's own name goes in the sentence that says which step, until it is drawn in. The
+ *  sentence is put together by the language (`auto.run.step`, `auto.run.inAction`), so the name is
+ *  found in it by this rather than by where it happens to fall in one language's order. */
+const STEP = "\u0000";
+
+/** The sentence that says which step, with the step's own name drawn heavier than the rest. */
+function stepWords(sentence: string, stepName: string): Node[] {
+  const out: Node[] = [];
+  sentence.split(STEP).forEach((text, i) => {
+    if (i > 0) {
+      const b = document.createElement("b");
+      b.textContent = stepName;
+      out.push(b);
+    }
+    if (text !== "") out.push(document.createTextNode(text));
+  });
+  return out;
 }

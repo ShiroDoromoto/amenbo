@@ -86,6 +86,9 @@
   /* ----- semantic ----- */
   --c-human: #3365d4; /* human */
   --c-ai: #884bcf;    /* AI */
+  /* The ground a run's header is laid on (`AMB-T-5428`): the AI's hue faded to a wash, the way
+     `--c-accent-weak` is the accent's. */
+  --c-ai-weak: #f3edfb;
 
   /* ----- what git says about a file (`AMB-D-785`) -----
      Off the ladder below, like `--c-human` and `--c-ai`: these ask nothing of the reader. They say
@@ -139,6 +142,7 @@
   --c-on-heed: #ffffff;
   --c-on-stop: #ffffff;
   --c-on-done: #ffffff;
+  --c-on-ai: #ffffff;
 
   /* status — one colour, for the one status that is said in colour. A task's status is read off
      the word in its select (`StatusSelect`), not off a tint, so todo, in progress and blocked have
@@ -313,6 +317,7 @@
 
   --c-human: #6f97ec;
   --c-ai: #b083ea;
+  --c-ai-weak: #221733;
 
   --c-git-modified: #e0a04a;
   --c-git-added: #46c97e;
@@ -328,6 +333,7 @@
   --c-on-heed: #5a3a10;
   --c-on-stop: #551610;
   --c-on-done: #174c2e;
+  --c-on-ai: #2a1245;
 
   --c-done: #46c97e;
 

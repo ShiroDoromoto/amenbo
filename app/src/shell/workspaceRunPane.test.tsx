@@ -235,14 +235,16 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await mount();
     await arrive();
 
-    expect(q(".plate-run__step")[0]?.textContent).toBe("取る");
-    expect(q(".plate-run__seq")[0]?.textContent).toContain("1");
-    expect(q(".plate-run__no")[0]?.textContent).toContain("7");
+    expect(q(".plate__step b")[0]?.textContent).toBe("取る");
+    expect(q(".plate__step")[0]?.textContent).toContain("1");
+    expect(q(".plate__no")[0]?.textContent).toContain("7");
     expect(q(".plate-run__task")[0]?.textContent).toBe("AMB-T-5252");
     expect(q(".plate-run__title")[0]?.textContent).toBe("ペインのヘッダを描く");
     expect(q(".plate__auto")[0]?.hidden).toBe(false);
     // Headed with the automation the run is running, not with the folder the place stands in.
     expect(q(".plate__name")[0]?.textContent).toBe("家計簿の開発ループ");
+    // Drawn as a run's pane, in the run's colour (`AMB-T-5428`).
+    expect(q(".slot--run")).toHaveLength(1);
   });
 
   it("stops the run when the pane is closed, and takes the place away", async () => {

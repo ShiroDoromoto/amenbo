@@ -54,7 +54,9 @@ import {
   pressed,
   readFilter,
   readNumber,
+  readSort,
   readText,
+  sortChoices,
   writeFilter,
   writeNumber,
   writeText,
@@ -89,6 +91,48 @@ function rowLabel(key: string): string {
   return t("auto.step.ready");
 }
 
+/** One order a task filter can take its tasks in, in words. One written on the command line that the
+ *  list has no words for is shown as `task list --sort` spells it. */
+function sortLabel(sort: string): string {
+  if (sort === "priority") return t("auto.step.sort.priority");
+  if (sort === "due") return t("auto.step.sort.due");
+  if (sort === "created") return t("auto.step.sort.created");
+  return sort;
+}
+
+/**
+ * **Which task the filter takes, said as a sentence with the order in it** — "[ highest priority
+ * first ▾ ] …, and take the one on top". It carries no label: the rows above say which tasks are in,
+ * and this line says what is done with them, so it reads as the end of that rather than one more row.
+ * The sentence is the language's (`auto.step.sortTake`), so the list is put where the language puts
+ * the order rather than always in front.
+ */
+function SortLine({ sort, disabled, onSort }: {
+  sort: string;
+  disabled: boolean;
+  onSort: (sort: string) => void;
+}) {
+  const [before, after = ""] = tf("auto.step.sortTake", { sort: "\u0000" }).split("\u0000");
+  return (
+    <div className="autostep__row">
+      {before !== "" && <span>{before}</span>}
+      <select
+        aria-label={tf("auto.step.sortTake", { sort: sortLabel(sort) })}
+        value={sort}
+        disabled={disabled}
+        onChange={(e) => onSort(e.target.value)}
+      >
+        {sortChoices(sort).map((one) => (
+          <option key={one} value={one}>
+            {sortLabel(one)}
+          </option>
+        ))}
+      </select>
+      {after !== "" && <span>{after}</span>}
+    </div>
+  );
+}
+
 /** The choices a `choice` setting was declared with. One that was not readable offers none. */
 function choicesOf(options: string | undefined): string[] {
   if (options === undefined) return [];
@@ -120,6 +164,7 @@ function CfgRow({ placementId, cfg, run }: { placementId: number; cfg: Automatio
   const [text, setText] = useDraft(cfg.kind === "number" ? "" : readText(cfg.value));
   const [number, setNumber] = useDraft(cfg.kind === "number" ? String(readNumber(cfg.value) ?? "") : "");
   const filter: TaskFilter = readFilter(cfg.value);
+  const sort = readSort(cfg.value);
   const choices = choicesOf(cfg.options);
 
   return (
@@ -144,13 +189,20 @@ function CfgRow({ placementId, cfg, run }: { placementId: number; cfg: Automatio
                   type="button"
                   className={`autostep__chip ${(filter[row.key] ?? []).includes(value) ? "autostep__chip--on" : ""}`}
                   aria-pressed={(filter[row.key] ?? []).includes(value)}
-                  onClick={() => answer(writeFilter(pressed(filter, row.key, value, row.single)))}
+                  onClick={() => answer(writeFilter(pressed(filter, row.key, value, row.single), sort))}
                 >
                   {rowValueLabel(row.key, value)}
                 </button>
               ))}
             </div>
           ))}
+          {/* Nothing pressed is no answer at all, and an order is an order of something: the list waits
+              for a row to be pressed rather than writing an answer with no filter in it. */}
+          <SortLine
+            sort={sort}
+            disabled={Object.keys(filter).length === 0}
+            onSort={(next) => answer(writeFilter(filter, next))}
+          />
         </div>
       )}
 

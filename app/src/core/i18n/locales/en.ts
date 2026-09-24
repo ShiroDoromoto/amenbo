@@ -1235,6 +1235,10 @@ const ui = {
   "auto.step.ready": "Premises",
   "auto.step.readyYes": "Nothing in the way",
   "auto.step.readyNo": "Something in the way",
+  "auto.step.sortTake": "Order them {sort}, and take the one on top",
+  "auto.step.sort.priority": "by priority, highest first",
+  "auto.step.sort.due": "by due date, soonest first",
+  "auto.step.sort.created": "oldest first",
   // The two dialogs the build screen opens: the one that puts a step in on a line, and the one that
   // declares what a way out hands on. `auto.kind.*` names what a port carries, which both take.
   "auto.kind.value": "Value",
